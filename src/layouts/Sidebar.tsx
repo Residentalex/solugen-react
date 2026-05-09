@@ -14,7 +14,6 @@ import {
   DollarOutlined,
   CreditCardOutlined,
   FileTextOutlined,
-  ToolOutlined,
   BuildOutlined,
   DashboardOutlined,
 } from '@ant-design/icons';
@@ -94,7 +93,9 @@ const Sidebar: React.FC = () => {
       })
       .filter(Boolean) as MenuProps['items'];
 
-    items.push(...modulosItems);
+    if (modulosItems) {
+      items.push(...modulosItems);
+    }
     return items;
   }, [usuario?.pantallas]);
 

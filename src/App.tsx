@@ -5,6 +5,7 @@ import Login from './pages/Login/Login';
 import CambiarClave from './pages/CambiarClave/CambiarClave';
 import MainLayout from './layouts/MainLayout';
 import Dashboard from './pages/Dashboard/Dashboard';
+import EntradaAlmacen from './pages/EntradaAlmacen/EntradaAlmacen';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -37,6 +38,7 @@ const App: React.FC = () => {
         >
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="FENP" element={<EntradaAlmacen />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

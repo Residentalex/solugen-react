@@ -1,0 +1,398 @@
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Table, Card, Row, Col, DatePicker, Input, Select, Tag, Space, Button, Typography, Tooltip, message } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import {
+  EyeOutlined,
+  EditOutlined,
+  StopOutlined,
+  SearchOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons';
+import { useAuthStore } from '../../stores/authStore';
+import { useUIStore } from '../../stores/uiStore';
+import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
+import type { MovimientoVistaDTO } from '../../types/entradaAlmacen';
+
+const { Text } = Typography;
+const { RangePicker } = DatePicker;
+
+const ESTADO_MAP: Record<number, { label: string; color: string }> = {
+  0: { label: 'Borrador', color: 'default' },
+  1: { label: 'Aplicado', color: 'success' },
+  2: { label: 'Autorizado', color: 'processing' },
+  3: { label: 'Anulado', color: 'error' },
+  4: { label: 'Pagado', color: 'cyan' },
+  5: { label: 'Abierto', color: 'warning' },
+  6: { label: 'Cerrado', color: 'default' },
+};
+
+const DIAS_POR_DEFECTO = 30;
+const FILAS_POR_PAGINA = 50;
+
+function parseDateRaw(val: string): Date | null {
+  if (!val) return null;
+  const num = val.replace(/\D/g, '');
+  if (num.length === 8) {
+    const y = parseInt(num.slice(0, 4), 10);
+    const m = parseInt(num.slice(4, 6), 10) - 1;
+    const d = parseInt(num.slice(6, 8), 10);
+    return new Date(y, m, d);
+  }
+  if (num.length >= 14) {
+    const y = parseInt(num.slice(0, 4), 10);
+    const m = parseInt(num.slice(4, 6), 10) - 1;
+    const d = parseInt(num.slice(6, 8), 10);
+    return new Date(y, m, d);
+  }
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function formatDate(val: string): string {
+  const d = parseDateRaw(val);
+  if (!d) return val || '-';
+  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function formatCurrency(n: number): string {
+  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
+}
+
+function getMonogramColor(dias: number): string {
+  if (dias < 15) return '#CD5C5C';
+  if (dias < 30) return '#87CEEB';
+  return '#20B2AA';
+}
+
+function getInitials(name: string): string {
+  if (!name) return '?';
+  return name.charAt(0).toUpperCase();
+}
+
+function formatDateParam(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}${m}${day}000000`;
+}
+
+function toTitleCase(str: string): string {
+  if (!str) return str;
+  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const EntradaAlmacen: React.FC = () => {
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const updateToolbar = useUIStore((s) => s.updateToolbar);
+  const resetToolbar = useUIStore((s) => s.resetToolbar);
+  const setActiveModule = useUIStore((s) => s.setActiveModule);
+
+  const [data, setData] = useState<MovimientoVistaDTO[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
+  const [searchText, setSearchText] = useState('');
+  const [selectedRow, setSelectedRow] = useState<MovimientoVistaDTO | null>(null);
+  const [fechaTrigger, setFechaTrigger] = useState(0);
+  const dateParamsRef = useRef({ desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)), hasta: formatDateParam(new Date()) });
+
+  const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
+    setLoading(true);
+    try {
+      const { desde, hasta } = dateParamsRef.current;
+      let resultados: MovimientoVistaDTO[];
+
+      if (busqueda.length > 2) {
+        resultados = await entradaAlmacenApi.filtrar(sucursalActiva, {
+          cantidad: filas,
+          salto: (pagina - 1) * filas,
+          documento: busqueda,
+          nCF: busqueda,
+          concepto: busqueda,
+          entidad: busqueda,
+          almacen: busqueda,
+        });
+      } else {
+        resultados = await entradaAlmacenApi.obtenerVista(
+          sucursalActiva,
+          desde,
+          hasta,
+          filas,
+          (pagina - 1) * filas
+        );
+      }
+
+      setData(resultados);
+      setTotal(resultados.length < filas ? (pagina - 1) * filas + resultados.length : pagina * filas + 1);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
+    } finally {
+      setLoading(false);
+    }
+  }, [sucursalActiva]);
+
+  useEffect(() => {
+    cargarDatos(page, pageSize, searchText);
+  }, [page, pageSize, searchText, fechaTrigger, cargarDatos]);
+
+  useEffect(() => {
+    setActiveModule('FENP');
+    updateToolbar({ nuevo: true, editar: false, anular: false, imprimir: true });
+    return () => resetToolbar();
+  }, [setActiveModule, updateToolbar, resetToolbar]);
+
+  const handleSearch = (value: string) => {
+    setSearchText(value);
+    setPage(1);
+  };
+
+  const handleRefresh = () => {
+    setFechaTrigger(n => n + 1);
+  };
+
+  const handleDateChange = (dates: any) => {
+    if (dates && dates[0] && dates[1]) {
+      const d = dates[0].format('YYYYMMDD') + '000000';
+      const h = dates[1].format('YYYYMMDD') + '000000';
+      dateParamsRef.current = { desde: d, hasta: h };
+    } else {
+      dateParamsRef.current = {
+        desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
+        hasta: formatDateParam(new Date()),
+      };
+    }
+    setPage(1);
+    setFechaTrigger(n => n + 1);
+  };
+
+  const handleTableChange = (pagination: any) => {
+    setPage(pagination.current);
+  };
+
+  const handleRowClick = (record: MovimientoVistaDTO) => {
+    setSelectedRow(record);
+    const editable = record.periodo !== 6 && record.estado === 0;
+    updateToolbar({ editar: editable, anular: editable });
+  };
+
+  const columns: ColumnsType<MovimientoVistaDTO> = [
+    {
+      title: 'Documento',
+      dataIndex: 'documento',
+      key: 'documento',
+      width: 140,
+      fixed: 'left',
+      render: (doc: string) => <Text strong style={{ color: '#556ee6', cursor: 'pointer' }}>{doc}</Text>,
+    },
+    {
+      title: 'Fecha',
+      dataIndex: 'fecha',
+      key: 'fecha',
+      width: 110,
+      render: (f: string) => <Text>{formatDate(f)}</Text>,
+    },
+    {
+      title: 'Entidad',
+      dataIndex: 'entidad',
+      key: 'entidad',
+      width: 220,
+      render: (name: string, record: MovimientoVistaDTO) => (
+        <Space>
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: '50%',
+              background: getMonogramColor(record.diasCredito),
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 13,
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
+          >
+            {getInitials(name)}
+          </div>
+          <Text>{toTitleCase(name) || '-'}</Text>
+        </Space>
+      ),
+    },
+    {
+      title: 'Concepto',
+      dataIndex: 'concepto',
+      key: 'concepto',
+      width: 160,
+      ellipsis: true,
+      render: (concepto: string) => <Text>{toTitleCase(concepto) || '-'}</Text>,
+    },
+    {
+      title: 'Orden Compra',
+      dataIndex: 'ordenCompra',
+      key: 'ordenCompra',
+      width: 130,
+      render: (oc: string) => <Text>{oc || '-'}</Text>,
+    },
+    {
+      title: 'NCF',
+      dataIndex: 'ncf',
+      key: 'ncf',
+      width: 140,
+      render: (ncf: string) => <Text>{ncf || '-'}</Text>,
+    },
+    {
+      title: 'Total',
+      dataIndex: 'total',
+      key: 'total',
+      width: 140,
+      align: 'right',
+      render: (total: number) => (
+        <Text strong style={{ color: '#343a40' }}>{formatCurrency(total)}</Text>
+      ),
+    },
+    {
+      title: 'Estado',
+      dataIndex: 'estado',
+      key: 'estado',
+      width: 110,
+      render: (estado: number, record: MovimientoVistaDTO) => {
+        const esCerrado = record.periodo === 6;
+        const info = ESTADO_MAP[estado] || { label: 'Desconocido', color: 'default' };
+        return (
+          <Space>
+            <Tag color={info.color}>{info.label}</Tag>
+            {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
+          </Space>
+        );
+      },
+    },
+    {
+      title: 'Acciones',
+      key: 'acciones',
+      width: 100,
+      fixed: 'right',
+      render: (_: any, record: MovimientoVistaDTO) => (
+        <Space size="small">
+          <Tooltip title="Ver detalle">
+            <Button type="text" size="small" icon={<EyeOutlined />} />
+          </Tooltip>
+          {record.periodo !== 6 && record.estado === 0 && (
+            <>
+              <Tooltip title="Editar">
+                <Button type="text" size="small" icon={<EditOutlined />} />
+              </Tooltip>
+              <Tooltip title="Anular">
+                <Button type="text" size="small" danger icon={<StopOutlined />} />
+              </Tooltip>
+            </>
+          )}
+        </Space>
+      ),
+    },
+  ];
+
+  return (
+    <Card
+      styles={{
+        body: { padding: 0 },
+      }}
+      style={{
+        borderRadius: 8,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+      }}
+    >
+      <div style={{ padding: '20px 24px 0' }}>
+        <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
+          <Col>
+            <Space size="large" align="center">
+              <Text strong style={{ fontSize: 18, color: '#343a40' }}>
+                Entradas de Almacén
+              </Text>
+              {total > 0 && (
+                <Tag style={{ fontSize: 13, padding: '2px 12px', borderRadius: 12 }}>
+                  {total} registros
+                </Tag>
+              )}
+            </Space>
+          </Col>
+          <Col>
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
+              Actualizar
+            </Button>
+          </Col>
+        </Row>
+
+        <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+          <Col xs={24} sm={12} md={8} lg={6}>
+            <RangePicker
+              style={{ width: '100%' }}
+              format="YYYY-MM-DD"
+              onChange={handleDateChange}
+              placeholder={['Fecha desde', 'Fecha hasta']}
+            />
+          </Col>
+          <Col xs={24} sm={12} md={8} lg={6}>
+            <Input.Search
+              placeholder="Buscar documento, NCF, concepto..."
+              allowClear
+              onSearch={handleSearch}
+              prefix={<SearchOutlined style={{ color: '#aaa' }} />}
+            />
+          </Col>
+          <Col xs={12} sm={6} md={4} lg={3}>
+            <Select
+              style={{ width: '100%' }}
+              value={pageSize}
+              onChange={(v) => { setPageSize(v); setPage(1); }}
+              options={[
+                { value: 25, label: '25 filas' },
+                { value: 50, label: '50 filas' },
+                { value: 100, label: '100 filas' },
+              ]}
+            />
+          </Col>
+        </Row>
+      </div>
+
+      <Table<MovimientoVistaDTO>
+        columns={columns}
+        dataSource={data}
+        rowKey="id"
+        loading={loading}
+        scroll={{ x: 1500 }}
+        size="middle"
+        onRow={(record) => ({
+          onClick: () => handleRowClick(record),
+          style: {
+            cursor: 'pointer',
+            background: selectedRow?.id === record.id ? '#eef0fc' : undefined,
+            transition: 'background 0.15s',
+          },
+          onMouseEnter: (e) => {
+            if (selectedRow?.id !== record.id) {
+              e.currentTarget.style.background = '#f8f9fa';
+            }
+          },
+          onMouseLeave: (e) => {
+            if (selectedRow?.id !== record.id) {
+              e.currentTarget.style.background = 'transparent';
+            }
+          },
+        })}
+        onChange={handleTableChange}
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          showSizeChanger: false,
+          showTotal: (t) => `${t} registros`,
+        }}
+        style={{ borderTop: '1px solid #e9ecef', fontFamily: 'inherit' }}
+      />
+    </Card>
+  );
+};
+
+export default EntradaAlmacen;

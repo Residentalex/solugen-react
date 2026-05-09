@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Layout, Spin, Alert, Dropdown } from 'antd';
+import { Layout, Spin, message, Dropdown } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useCompanyStore } from '../stores/companyStore';
@@ -10,7 +10,7 @@ import Toolbar from './Toolbar';
 import { Outlet } from 'react-router-dom';
 import { MenuFoldOutlined, MenuUnfoldOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
 
-const { Sider, Content } = Layout;
+const { Sider } = Layout;
 
 const pageTitles: Record<string, string> = {
   Dashboard: 'Dashboard',
@@ -57,6 +57,10 @@ const MainLayout: React.FC = () => {
       fetchInitialConfig(1, 0);
     }
   }, [isAuthenticated, data.familias.length, fetchInitialConfig]);
+
+  useEffect(() => {
+    if (error) message.error(error);
+  }, [error]);
 
   if (!isAuthenticated) return null;
 
@@ -139,15 +143,6 @@ const MainLayout: React.FC = () => {
             <div style={{ textAlign: 'center', padding: 50 }}>
               <Spin size="large" tip="Cargando configuración inicial..." />
             </div>
-          )}
-          {error && (
-            <Alert
-              type="error"
-              message="Error al cargar configuración"
-              description={error}
-              showIcon
-              style={{ marginBottom: 24 }}
-            />
           )}
           {!loading && <Outlet />}
         </div>
