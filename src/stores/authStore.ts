@@ -23,6 +23,15 @@ function obtenerSucursales(): AuthSucursalPermitidaDTO[] {
   }
 }
 
+function obtenerSucursalActiva(): Sucursal {
+  try {
+    const raw = localStorage.getItem('sucursalActiva');
+    return raw ? (parseInt(raw, 10) as Sucursal) : SUCURSAL_CONSOLIDADO;
+  } catch {
+    return SUCURSAL_CONSOLIDADO;
+  }
+}
+
 interface AuthState {
   accessToken: string;
   refreshToken: string;
@@ -58,7 +67,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   accessToken: localStorage.getItem('accessToken') || '',
   refreshToken: localStorage.getItem('refreshToken') || '',
   usuario: obtenerUsuario(),
-  sucursalActiva: SUCURSAL_CONSOLIDADO,
+  sucursalActiva: obtenerSucursalActiva(),
   sucursalesPermitidas: obtenerSucursales(),
   compania: SUCURSAL_CONSOLIDADO,
   equipo: localStorage.getItem('equipo') || '',
@@ -94,6 +103,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('sucursalesPermitidas');
     localStorage.removeItem('equipo');
     localStorage.removeItem('ip');
+    localStorage.removeItem('sucursalActiva');
     set({
       accessToken: '',
       refreshToken: '',
@@ -133,6 +143,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   setSucursalActiva: (sucursal) => {
+    localStorage.setItem('sucursalActiva', sucursal.toString());
     set({ sucursalActiva: sucursal });
   },
 }));

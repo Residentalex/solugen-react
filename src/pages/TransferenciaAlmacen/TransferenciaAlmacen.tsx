@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, Tooltip, message, Drawer } from 'antd';
+import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, Tooltip, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   EyeOutlined,
@@ -10,9 +9,8 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
-import { apiClient } from '../../api/client';
-import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
-import type { MovimientoVistaDTO } from '../../types/entradaAlmacen';
+import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
+import type { MovimientoVistaDTO } from '../../types/transferenciaAlmacen';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -59,11 +57,6 @@ function formatCurrency(n: number): string {
   return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
 }
 
-function getInitials(name: string): string {
-  if (!name) return '?';
-  return name.charAt(0).toUpperCase();
-}
-
 function formatDateParam(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -76,13 +69,11 @@ function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const EntradaAlmacen: React.FC = () => {
-  const navigate = useNavigate();
+const TransferenciaAlmacen: React.FC = () => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
-  const setImprimirCallback = useUIStore((s) => s.setImprimirCallback);
 
   const [data, setData] = useState<MovimientoVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -92,7 +83,6 @@ const EntradaAlmacen: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [selectedRow, setSelectedRow] = useState<MovimientoVistaDTO | null>(null);
   const [fechaTrigger, setFechaTrigger] = useState(0);
-  const [pdfPreview, setPdfPreview] = useState<{ url: string; title: string } | null>(null);
   const dateParamsRef = useRef({ desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)), hasta: formatDateParam(new Date()) });
 
   const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
@@ -102,17 +92,15 @@ const EntradaAlmacen: React.FC = () => {
       let resultados: MovimientoVistaDTO[];
 
       if (busqueda.length > 2) {
-        resultados = await entradaAlmacenApi.filtrar(sucursalActiva, {
+        resultados = await transferenciaAlmacenApi.filtrar(sucursalActiva, {
           cantidad: filas,
           salto: (pagina - 1) * filas,
           documento: busqueda,
-          nCF: busqueda,
           concepto: busqueda,
-          entidad: busqueda,
           almacen: busqueda,
         });
       } else {
-        resultados = await entradaAlmacenApi.obtenerVista(
+        resultados = await transferenciaAlmacenApi.obtenerVista(
           sucursalActiva,
           desde,
           hasta,
@@ -135,28 +123,10 @@ const EntradaAlmacen: React.FC = () => {
   }, [page, pageSize, searchText, fechaTrigger, cargarDatos]);
 
   useEffect(() => {
-    setActiveModule('FENP');
-    updateToolbar({ nuevo: true, editar: false, anular: false, imprimir: true });
+    setActiveModule('FTRP');
+    updateToolbar({ nuevo: true, editar: false, imprimir: true });
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
-
-  useEffect(() => {
-    if (selectedRow) {
-      setImprimirCallback(async () => {
-        try {
-          const res = await apiClient.get(`/reportes/inventario/entrada/${sucursalActiva}/${selectedRow.id}`, {
-            responseType: 'blob',
-          });
-          const blobUrl = URL.createObjectURL(res.data);
-          setPdfPreview({ url: blobUrl, title: `ENP-${selectedRow.documento}` });
-        } catch {
-          message.error('Error al generar el PDF');
-        }
-      });
-    } else {
-      setImprimirCallback(undefined);
-    }
-  }, [selectedRow, sucursalActiva, setImprimirCallback]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -189,7 +159,7 @@ const EntradaAlmacen: React.FC = () => {
   const handleRowClick = (record: MovimientoVistaDTO) => {
     setSelectedRow(record);
     const editable = record.periodo !== 6 && record.estado === 0;
-    updateToolbar({ editar: editable, anular: editable });
+    updateToolbar({ editar: editable });
   };
 
   const columns: ColumnsType<MovimientoVistaDTO> = [
@@ -199,9 +169,7 @@ const EntradaAlmacen: React.FC = () => {
   key: 'documento',
   width: 160,
   fixed: 'left',
-  render: (doc: string, record: MovimientoVistaDTO) => (
-    <Text strong style={{ color: '#556ee6', cursor: 'pointer' }} onClick={() => navigate(`/FENP/${record.id}`)}>{doc}</Text>
-  ),
+  render: (doc: string) => <Text strong style={{ color: '#556ee6', cursor: 'pointer' }}>{doc}</Text>,
 },
 {
   title: 'Fecha',
@@ -211,31 +179,18 @@ const EntradaAlmacen: React.FC = () => {
   render: (f: string) => <Text>{formatDate(f)}</Text>,
 },
 {
-  title: 'Entidad',
-  dataIndex: 'entidad',
-  key: 'entidad',
-  render: (name: string) => (
-    <Space>
-      <div
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: '50%',
-          background: '#556ee620',
-          color: '#556ee6',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 14,
-          fontWeight: 600,
-          flexShrink: 0,
-        }}
-      >
-        {getInitials(name)}
-      </div>
-      <Text>{toTitleCase(name) || '-'}</Text>
-    </Space>
-  ),
+  title: 'Almacén Origen',
+  dataIndex: 'almacenOrigen',
+  key: 'almacenOrigen',
+  width: 180,
+  render: (alm: string) => <Text>{alm || '-'}</Text>,
+},
+{
+  title: 'Almacén Destino',
+  dataIndex: 'almacenDestino',
+  key: 'almacenDestino',
+  width: 180,
+  render: (alm: string) => <Text>{alm || '-'}</Text>,
 },
 {
   title: 'Concepto',
@@ -244,20 +199,6 @@ const EntradaAlmacen: React.FC = () => {
   width: 280,
   ellipsis: true,
   render: (concepto: string) => <Text>{toTitleCase(concepto) || '-'}</Text>,
-},
-{
-  title: 'Orden Compra',
-  dataIndex: 'ordenCompra',
-  key: 'ordenCompra',
-  width: 140,
-  render: (oc: string) => <Text>{oc || '-'}</Text>,
-},
-{
-  title: 'NCF',
-  dataIndex: 'ncf',
-  key: 'ncf',
-  width: 120,
-  render: (ncf: string) => <Text>{ncf || '-'}</Text>,
 },
 {
   title: 'Total',
@@ -293,7 +234,7 @@ const EntradaAlmacen: React.FC = () => {
   render: (_: any, record: MovimientoVistaDTO) => (
     <Space size="small">
       <Tooltip title="Ver detalle">
-        <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/FENP/${record.id}`)} />
+        <Button type="text" size="small" icon={<EyeOutlined />} />
       </Tooltip>
       {record.periodo !== 6 && record.estado === 0 && (
         <Tooltip title="Editar">
@@ -330,7 +271,7 @@ const EntradaAlmacen: React.FC = () => {
             placeholder={['Desde', 'Hasta']}
           />
           <Input.Search
-            placeholder="Buscar documento, NCF, concepto..."
+            placeholder="Buscar documento, concepto..."
             allowClear
             onSearch={handleSearch}
             style={{ width: 400 }}
@@ -360,7 +301,7 @@ const EntradaAlmacen: React.FC = () => {
         dataSource={data}
         rowKey="id"
         loading={loading}
-        scroll={{ x: 1500 }}
+        scroll={{ x: 1200 }}
         size="middle"
         onRow={(record) => ({
           onClick: () => handleRowClick(record),
@@ -390,24 +331,8 @@ const EntradaAlmacen: React.FC = () => {
         }}
         style={{ borderTop: '1px solid #e9ecef', fontFamily: 'inherit' }}
       />
-
-      <Drawer
-        title={pdfPreview?.title}
-        open={!!pdfPreview}
-        onClose={() => {
-          if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
-          setPdfPreview(null);
-        }}
-        width="70%"
-      >
-        {pdfPreview && (
-          <div style={{ width: '100%', height: '100%', overflow: 'auto', transform: 'scale(1.1)', transformOrigin: 'top left' }}>
-            <iframe src={pdfPreview.url} style={{ width: '100%', height: '90vh', border: 'none' }} title="PDF" />
-          </div>
-        )}
-      </Drawer>
     </Card>
   );
 };
 
-export default EntradaAlmacen;
+export default TransferenciaAlmacen;

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useUIStore } from '../stores/uiStore';
 import type { MenuProps } from 'antd';
-import type { PantallaDTO } from '../types/auth';
+import type { PantallaDTO, ModuloDTO } from '../types/auth';
 import {
   BankOutlined,
   ShoppingOutlined,
@@ -34,11 +34,17 @@ const ICONOS_MODULOS: Record<string, React.ReactNode> = {
 
 const ICONO_DEFAULT = <FileTextOutlined />;
 
+interface ModuloConPantallas {
+  modulo: ModuloDTO;
+  pantallas: PantallaDTO[];
+}
+
 const Sidebar: React.FC = () => {
   const usuario = useAuthStore((s: any) => s.usuario);
   const activeModule = useUIStore((s: any) => s.activeModule);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const sidebarCollapsed = useUIStore((s: any) => s.sidebarCollapsed);
+  const [openKeys, setOpenKeys] = React.useState<string[]>([]);
   const navigate = useNavigate();
 
   const menuItems: MenuProps['items'] = React.useMemo(() => {
@@ -54,52 +60,122 @@ const Sidebar: React.FC = () => {
 
     if (!pantallas.length) return items;
 
-    const modulosMap = new Map<string, PantallaDTO[]>();
+    const modulosMap = new Map<number, ModuloConPantallas>();
 
     for (const p of pantallas) {
       const modulos = p.modulos || [];
       if (modulos.length > 0) {
         for (const m of modulos) {
-          const nombre = m.nombre || 'Otros';
-          if (!modulosMap.has(nombre)) modulosMap.set(nombre, []);
-          modulosMap.get(nombre)!.push(p);
+          if (!modulosMap.has(m.id)) {
+            modulosMap.set(m.id, { modulo: m, pantallas: [] });
+          }
+          const entry = modulosMap.get(m.id)!;
+          if (!entry.pantallas.some((x) => x.codigo === p.codigo)) {
+            entry.pantallas.push(p);
+          }
         }
-      } else {
-        const nombre = 'Otros';
-        if (!modulosMap.has(nombre)) modulosMap.set(nombre, []);
-        modulosMap.get(nombre)!.push(p);
       }
     }
 
-    const modulosItems = Array.from(modulosMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([moduloNombre, pantallasModulo]) => {
-        const children = pantallasModulo
-          .filter((p, i, arr) => arr.findIndex((x) => x.codigo === p.codigo) === i)
-          .sort((a, b) => a.nombre.localeCompare(b.nombre))
-          .map((p) => ({
+    const buildChildren = (modPantallas: PantallaDTO[], moduloNombre: string): MenuProps['items'] => {
+      const topLevel = modPantallas.filter((p) => !p.pantallaPadreID);
+      const childMap = new Map<number, PantallaDTO[]>();
+      for (const p of modPantallas) {
+        if (p.pantallaPadreID) {
+          const pid = p.pantallaPadreID;
+          if (!childMap.has(pid)) childMap.set(pid, []);
+          childMap.get(pid)!.push(p);
+        }
+      }
+      for (const [, children] of childMap) {
+        children.sort((a, b) => a.orden - b.orden);
+      }
+
+      const grupos = new Map<string, PantallaDTO[]>();
+      const sinGrupo: PantallaDTO[] = [];
+
+      for (const p of topLevel) {
+        if (p.grupo) {
+          if (!grupos.has(p.grupo)) grupos.set(p.grupo, []);
+          grupos.get(p.grupo)!.push(p);
+        } else {
+          sinGrupo.push(p);
+        }
+      }
+
+      for (const [, items] of grupos) {
+        items.sort((a, b) => a.orden - b.orden);
+      }
+      sinGrupo.sort((a, b) => a.orden - b.orden);
+
+      const children: MenuProps['items'] = [];
+
+      const sortedGrupos = Array.from(grupos.entries()).sort(([a], [b]) => a.localeCompare(b));
+
+      for (const [grupoNombre, grupoPantallas] of sortedGrupos) {
+        children.push({
+          key: `submenu_${moduloNombre}_${grupoNombre}`,
+          label: <span className="menu-group-label">{grupoNombre}</span>,
+          children: grupoPantallas.map((p) => {
+            const subItems = childMap.get(p.id);
+            if (subItems && subItems.length > 0) {
+              return {
+                key: p.codigo,
+                label: p.nombre,
+                children: subItems.map((child) => ({
+                  key: child.codigo,
+                  label: child.nombre,
+                })),
+              };
+            }
+            return { key: p.codigo, label: p.nombre };
+          }),
+        });
+      }
+
+      for (const p of sinGrupo) {
+        const subItems = childMap.get(p.id);
+        if (subItems && subItems.length > 0) {
+          children.push({
             key: p.codigo,
             label: p.nombre,
-          }));
+            children: subItems.map((child) => ({
+              key: child.codigo,
+              label: child.nombre,
+            })),
+          });
+        } else {
+          children.push({ key: p.codigo, label: p.nombre });
+        }
+      }
 
-        if (children.length === 0) return null;
+      return children;
+    };
+
+    const sortedModulos = Array.from(modulosMap.entries())
+      .sort(([, a], [, b]) => a.modulo.orden - b.modulo.orden)
+      .map(([, entry]) => entry);
+
+    const modulosItems: MenuProps['items'] = sortedModulos
+      .map(({ modulo, pantallas: modPantallas }) => {
+        const children = buildChildren(modPantallas, modulo.nombre);
+        if (!children || children.length === 0) return null;
 
         return {
-          key: moduloNombre,
-          icon: ICONOS_MODULOS[moduloNombre] || ICONO_DEFAULT,
-          label: moduloNombre,
+          key: modulo.nombre,
+          icon: ICONOS_MODULOS[modulo.nombre] || ICONO_DEFAULT,
+          label: <span className="menu-module-label">{modulo.nombre}</span>,
           children,
         };
       })
       .filter(Boolean) as MenuProps['items'];
 
-    if (modulosItems) {
-      items.push(...modulosItems);
-    }
+    items.push(...(modulosItems || []));
     return items;
   }, [usuario?.pantallas]);
 
   const handleMenuClick = ({ key }: { key: string }) => {
+    if (key.startsWith('_grupo_') || key.startsWith('submenu_')) return;
     setActiveModule(key);
     if (key === 'dashboard') {
       navigate('/');
@@ -108,15 +184,22 @@ const Sidebar: React.FC = () => {
     }
   };
 
+  const handleOpenChange = (keys: string[]) => {
+    setOpenKeys(keys);
+  };
+
   return (
     <Menu
       mode="inline"
       selectedKeys={activeModule ? [activeModule] : []}
+      openKeys={openKeys}
       defaultOpenKeys={[]}
-      style={{ borderRight: 0, fontSize: 14 }}
+      style={{ borderRight: 0, fontSize: 13 }}
       items={menuItems}
       onClick={handleMenuClick}
-      inlineIndent={sidebarCollapsed ? 8 : 20}
+      onOpenChange={handleOpenChange}
+      inlineIndent={sidebarCollapsed ? 8 : 16}
+      className="sidebar-menu"
     />
   );
 };

@@ -57,13 +57,8 @@ const Toolbar: React.FC = () => {
             Desaplicar
           </Button>
         )}
-        {toolbarState.anular && (
-          <Button danger>
-            Anular
-          </Button>
-        )}
         {toolbarState.imprimir && (
-          <Button icon={<PrinterOutlined />}>
+          <Button icon={<PrinterOutlined />} onClick={toolbarState.imprimirCallback}>
             Imprimir
           </Button>
         )}

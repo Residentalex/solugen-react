@@ -6,6 +6,12 @@ import CambiarClave from './pages/CambiarClave/CambiarClave';
 import MainLayout from './layouts/MainLayout';
 import Dashboard from './pages/Dashboard/Dashboard';
 import EntradaAlmacen from './pages/EntradaAlmacen/EntradaAlmacen';
+import EntradaAlmacenDetalle from './pages/EntradaAlmacen/EntradaAlmacenDetalle';
+import SalidaAlmacen from './pages/SalidaAlmacen/SalidaAlmacen';
+import DevolucionCompra from './pages/DevolucionCompra/DevolucionCompra';
+import TransferenciaAlmacen from './pages/TransferenciaAlmacen/TransferenciaAlmacen';
+import DevolucionVenta from './pages/DevolucionVenta/DevolucionVenta';
+import CotizacionVenta from './pages/CotizacionVenta/CotizacionVenta';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -38,8 +44,14 @@ const App: React.FC = () => {
         >
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
-          <Route path="FENP" element={<EntradaAlmacen />} />
-        </Route>
+            <Route path="FENP" element={<EntradaAlmacen />} />
+            <Route path="FENP/:id" element={<EntradaAlmacenDetalle />} />
+            <Route path="FSAP" element={<SalidaAlmacen />} />
+           <Route path="FDVC" element={<DevolucionCompra />} />
+           <Route path="FTRP" element={<TransferenciaAlmacen />} />
+            <Route path="FDEV" element={<DevolucionVenta />} />
+            <Route path="FCotizacion" element={<CotizacionVenta />} />
+         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

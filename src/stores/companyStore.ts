@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { apiClient } from '../api/client';
 
 interface CompanyData {
   familias: any[];
@@ -44,12 +45,10 @@ export const useCompanyStore = create<CompanyState>((set) => ({
   fetchInitialConfig: async (sucursalCompra, sucursalContable) => {
     set({ loading: true, error: '' });
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4002/api';
-      const res = await fetch(
-        `${apiUrl}/configuracion-inicial?sucursalCompra=${sucursalCompra}&sucursalContable=${sucursalContable}`
+      const { data: json } = await apiClient.get(
+        '/app/configuracion-inicial',
+        { params: { sucursalCompra, sucursalContable } }
       );
-      if (!res.ok) throw new Error('Error al cargar configuración inicial');
-      const json = await res.json();
       if (!json.isSuccess) throw new Error(json.errorMessage || 'Error desconocido');
 
       const config = json.data;

@@ -18,7 +18,6 @@ export interface ToolbarState {
   aplicar: boolean;
   desaplicar: boolean;
   postear: boolean;
-  anular: boolean;
   revisado: boolean;
   reversar: boolean;
   imprimir: boolean;
@@ -33,11 +32,15 @@ export interface ToolbarState {
 interface UIState {
   sidebarCollapsed: boolean;
   activeModule: string;
+  pageTitleOverride: string;
   toolbarState: ToolbarState;
+  imprimirCallback?: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setActiveModule: (module: string) => void;
+  setPageTitleOverride: (title: string) => void;
   updateToolbar: (state: Partial<ToolbarState>) => void;
   resetToolbar: () => void;
+  setImprimirCallback: (cb?: () => void) => void;
 }
 
 const defaultToolbarState: ToolbarState = {
@@ -49,7 +52,6 @@ const defaultToolbarState: ToolbarState = {
   aplicar: false,
   desaplicar: false,
   postear: false,
-  anular: false,
   revisado: false,
   reversar: false,
   imprimir: false,
@@ -64,13 +66,17 @@ const defaultToolbarState: ToolbarState = {
 export const useUIStore = create<UIState>((set) => ({
   sidebarCollapsed: false,
   activeModule: '',
+  pageTitleOverride: '',
   toolbarState: { ...defaultToolbarState },
+  imprimirCallback: undefined,
 
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   setActiveModule: (module) => set({ activeModule: module }),
+  setPageTitleOverride: (title) => set({ pageTitleOverride: title }),
   updateToolbar: (state) =>
     set((prev) => ({
       toolbarState: { ...prev.toolbarState, ...state },
     })),
-  resetToolbar: () => set({ toolbarState: { ...defaultToolbarState } }),
+  resetToolbar: () => set({ toolbarState: { ...defaultToolbarState }, imprimirCallback: undefined }),
+  setImprimirCallback: (cb) => set({ imprimirCallback: cb }),
 }));

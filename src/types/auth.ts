@@ -1,10 +1,10 @@
 export const Sucursal = {
-  Consolidado: 0,
-  Compra: 1,
-  OrensePlaza: 2,
-  HiperRomana: 3,
-  OrenseVillaHermosa: 4,
-  ElOfertazo: 5,
+  OrensePlaza: 0,
+  HiperRomana: 1,
+  OrenseVillaHermosa: 2,
+  ElOfertazo: 3,
+  Consolidado: 4,
+  Compra: 5,
 } as const;
 export type Sucursal = (typeof Sucursal)[keyof typeof Sucursal];
 
@@ -36,6 +36,7 @@ export interface RolDTO {
 export interface ModuloDTO {
   id: number;
   nombre: string;
+  orden: number;
 }
 
 export interface PantallaDTO {
@@ -45,6 +46,9 @@ export interface PantallaDTO {
   ruta: string;
   esReporte: boolean;
   moduloID: number;
+  orden: number;
+  pantallaPadreID?: number;
+  grupo?: string;
   modulos: ModuloDTO[];
   acciones: string[];
 }

@@ -27,3 +27,116 @@ export interface FiltroENP {
   referencia?: string;
   almacen?: string;
 }
+
+// Tipos para el detalle completo de una Entrada de Almacen
+export interface EntidadDTO {
+  nombre: string;
+  codigo: string;
+  identificacion: string;
+  telefono?: string;
+  direccion?: string;
+}
+
+export interface ConceptoDTO {
+  nombre: string;
+  codigo: string;
+}
+
+export interface MonedaDTO {
+  nombre: string;
+  simbolo: string;
+  codigo: string;
+}
+
+export interface AlmacenDTO {
+  nombre: string;
+  codigo: string;
+}
+
+export interface SuplidorDTO {
+  nombre: string;
+  codigo: string;
+  telefono?: string;
+  direccion?: string;
+}
+
+export interface OrdenCompraDTO {
+  id: number;
+  noDocumento: string;
+}
+
+export interface DetalleEntradaAlmacenDTO {
+  id: number;
+  codigo: string;
+  articulo: string;
+  referencia: string;
+  cantidad: number;
+  costo: number;
+  precio: number;
+  subTotal: number;
+  descuento: number;
+  porcentajeDescuento: number;
+  impuestos: number;
+  porcentajeImpuesto: number;
+  total: number;
+  tipoArticulo: string;
+  nota?: string;
+  fechaVencimiento?: string;
+  flete: number;
+  costoActual: number;
+  ajustado: boolean;
+  cantidadBonificable: number;
+}
+
+export interface AsientoContableDTO {
+  id: number;
+  cuentaContable: {
+    noCuenta: string;
+    nombre: string;
+  };
+  descripcion: string;
+  tipoAsiento: number | string;
+  monto: number;
+  generado: boolean;
+}
+
+export interface LogDTO {
+  fecha: string;
+  usuario: {
+    nombre: string;
+    nombreUsuario: string;
+  };
+  accion: number;
+  descripcion: string;
+  estacion: string;
+}
+
+export interface EntradaAlmacenDTO {
+  id: number;
+  fechaDocumento: string;
+  tipoDocumento: number;
+  noDocumento: string;
+  estado: number;
+  periodo: number;
+  ncf: string;
+  ncfModificado: string;
+  referencia: string;
+  nota: string;
+  diasCredito: number;
+  subTotal: number;
+  descuento: number;
+  impuestos: number;
+  retenciones: number;
+  total: number;
+  tasa: number;
+  entidad: EntidadDTO;
+  concepto: ConceptoDTO;
+  moneda: MonedaDTO;
+  almacen: AlmacenDTO;
+  suplidor: SuplidorDTO;
+  sucursal: EntidadDTO;
+  ordenCompra: OrdenCompraDTO;
+  detalles: DetalleEntradaAlmacenDTO[];
+  asientos: AsientoContableDTO[];
+  logs: LogDTO[];
+}

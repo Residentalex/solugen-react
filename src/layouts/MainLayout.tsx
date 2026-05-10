@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
-import { Layout, Spin, message, Dropdown } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { Layout, Spin, message, Dropdown, Select } from 'antd';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import { Sucursal } from '../types/auth';
 import { useCompanyStore } from '../stores/companyStore';
 import { useUIStore } from '../stores/uiStore';
 import GenesisLogo from '../components/GenesisLogo';
@@ -24,6 +25,11 @@ const pageTitles: Record<string, string> = {
   FORC: 'Orden de Compra',
   FFAC: 'Facturas Cliente',
   FENP: 'Entradas de Almacén',
+  FSAP: 'Salidas de Almacén',
+  FDVC: 'Devolución de Compra',
+  FTRP: 'Transferencia de Almacén',
+  FDEV: 'Devolución de Venta',
+  FCotizacion: 'Cotizaciones',
   MConcepto: 'Conceptos',
   MDocumento: 'Documentos',
   MCuentaContable: 'Cuentas Contables',
@@ -34,11 +40,17 @@ const MainLayout: React.FC = () => {
   const isAuthenticated = useAuthStore((s: any) => s.isAuthenticated);
   const logout = useAuthStore((s: any) => s.logout);
   const usuario = useAuthStore((s: any) => s.usuario);
+  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const sucursalesPermitidas = useAuthStore((s: any) => s.sucursalesPermitidas);
+  const setSucursalActiva = useAuthStore((s: any) => s.setSucursalActiva);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isDetailPage = /^\/[A-Za-z]+\/\d+$/.test(location.pathname);
   const { data, loading, error, fetchInitialConfig } = useCompanyStore();
   const sidebarCollapsed = useUIStore((s: any) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((s: any) => s.setSidebarCollapsed);
   const activeModule = useUIStore((s: any) => s.activeModule);
+  const pageTitleOverride = useUIStore((s: any) => s.pageTitleOverride);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -54,13 +66,24 @@ const MainLayout: React.FC = () => {
 
   useEffect(() => {
     if (isAuthenticated && !data.familias.length) {
-      fetchInitialConfig(1, 0);
+      fetchInitialConfig(sucursalActiva, Sucursal.Consolidado);
     }
   }, [isAuthenticated, data.familias.length, fetchInitialConfig]);
 
   useEffect(() => {
     if (error) message.error(error);
   }, [error]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth <= 1600 && !sidebarCollapsed) {
+        setSidebarCollapsed(true);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [sidebarCollapsed, setSidebarCollapsed]);
 
   if (!isAuthenticated) return null;
 
@@ -116,6 +139,19 @@ const MainLayout: React.FC = () => {
           </div>
 
           <div className="topbar-right">
+            {sucursalesPermitidas.length > 1 && (
+              <Select
+                value={sucursalActiva}
+                onChange={(val) => setSucursalActiva(val)}
+                disabled={isDetailPage}
+                size="small"
+                style={{ width: 180 }}
+                options={sucursalesPermitidas.map((s: any) => ({
+                  value: s.sucursal,
+                  label: s.nombre,
+                }))}
+              />
+            )}
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
               <div className="topbar-user">
                 <div className="avatar-placeholder">
@@ -130,9 +166,9 @@ const MainLayout: React.FC = () => {
         </div>
 
         <div className="page-header">
-          <h3>{pageTitle}</h3>
+          <h3>{pageTitleOverride || pageTitle}</h3>
           <div className="breadcrumb">
-            {activeModule ? `${pageTitle}` : 'Dashboard'}
+            {activeModule ? pageTitle : 'Dashboard'}
           </div>
         </div>
 
@@ -141,7 +177,8 @@ const MainLayout: React.FC = () => {
         <div className="content-area">
           {loading && (
             <div style={{ textAlign: 'center', padding: 50 }}>
-              <Spin size="large" tip="Cargando configuración inicial..." />
+              <Spin size="large" />
+              <div style={{ marginTop: 12, color: '#666' }}>Cargando configuración inicial...</div>
             </div>
           )}
           {!loading && <Outlet />}
