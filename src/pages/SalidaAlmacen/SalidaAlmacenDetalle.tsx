@@ -1,0 +1,254 @@
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message
+} from 'antd';
+import {
+  ArrowLeftOutlined,
+  PrinterOutlined,
+} from '@ant-design/icons';
+import { useAuthStore } from '../../stores/authStore';
+import { useUIStore } from '../../stores/uiStore';
+import { apiClient } from '../../api/client';
+import { salidaAlmacenApi } from '../../api/salidaAlmacenApi';
+
+const { TabPane } = Tabs;
+
+const ESTADO_MAP: Record<number, { label: string; color: string }> = {
+  0: { label: 'Borrador', color: 'default' },
+  1: { label: 'Aplicado', color: 'success' },
+  2: { label: 'Autorizado', color: 'processing' },
+  3: { label: 'Anulado', color: 'error' },
+  4: { label: 'Pagado', color: 'cyan' },
+  5: { label: 'Abierto', color: 'warning' },
+  6: { label: 'Cerrado', color: 'default' },
+};
+
+function formatCurrency(n: number): string {
+  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
+}
+
+function formatNumber(n: number): string {
+  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+
+function toTitleCase(str: string): string {
+  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatDate(val: string): string {
+  if (!val) return '-';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return val;
+  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+const SalidaAlmacenDetalle: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const setActiveModule = useUIStore((s) => s.setActiveModule);
+  const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [imprimiendo, setImprimiendo] = useState(false);
+  const screens = Grid.useBreakpoint();
+
+  useEffect(() => {
+    setActiveModule('FSAP');
+    return () => setPageTitleOverride('');
+  }, [setActiveModule, setPageTitleOverride]);
+
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setData(res);
+        setPageTitleOverride(`SAP-${res.noDocumento}`);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, setPageTitleOverride]);
+
+  if (loading || !data) {
+    return (
+      <div style={{ textAlign: 'center', padding: 80 }}>
+        <Spin size="large" />
+        <div style={{ marginTop: 16, color: '#666' }}>Cargando documento...</div>
+      </div>
+    );
+  }
+
+  const isLarge = screens.lg ?? true;
+  const estadoInfo = ESTADO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = data.periodo === 6;
+
+  const detalleColumns = [
+    { title: 'Codigo', dataIndex: 'codigo', key: 'codigo', width: 120 },
+    { title: 'Articulo', dataIndex: 'articulo', key: 'articulo', ellipsis: true,
+      render: (v: string) => toTitleCase(v) },
+    { title: 'Cant.', dataIndex: 'cantidad', key: 'cantidad', width: 100, align: 'right' as const,
+      render: (v: number) => formatNumber(v) },
+    { title: 'Costo', dataIndex: 'costo', key: 'costo', width: 120, align: 'right' as const,
+      render: (v: number) => formatNumber(v) },
+    { title: 'Total', dataIndex: 'total', key: 'total', width: 130, align: 'right' as const,
+      render: (v: number) => <strong>{formatNumber(v)}</strong> },
+  ];
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FSAP')}>
+          Volver
+        </Button>
+        <div style={{ flex: 1 }} />
+        <Space>
+          <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
+            setImprimiendo(true);
+            try {
+              const res = await apiClient.get(`/reportes/inventario/salida/${sucursalActiva}/${id}`, {
+                responseType: 'blob',
+              });
+              const blobUrl = URL.createObjectURL(res.data);
+              const iframe = document.createElement('iframe');
+              iframe.style.display = 'none';
+              iframe.src = blobUrl;
+              document.body.appendChild(iframe);
+              setTimeout(() => {
+                iframe.contentWindow?.print();
+                setTimeout(() => {
+                  document.body.removeChild(iframe);
+                  URL.revokeObjectURL(blobUrl);
+                }, 30000);
+              }, 2000);
+            } catch (e) {
+              const ex = e as any;
+              try {
+                const blob = ex?.response?.data;
+                const text = blob instanceof Blob ? await blob.text() : '';
+                const json = JSON.parse(text);
+                message.error(json.errorMessage || 'Error al generar el PDF');
+              } catch {
+                message.error(ex?.message || 'Error al generar el PDF');
+              }
+            } finally {
+              setImprimiendo(false);
+            }
+          }}>Imprimir</Button>
+        </Space>
+      </div>
+
+      {isLarge ? (
+        <Row gutter={16}>
+          <Col lg={18}>
+            <Card
+              title={
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 18, fontWeight: 600 }}>
+                    {data.concepto?.nombre || '-'}
+                  </span>
+                  <Space>
+                    {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
+                    <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
+                  </Space>
+                </div>
+              }
+              style={{ marginBottom: 16 }}
+            >
+              <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 3 }}>
+                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Moneda">{data.moneda?.nombre ? toTitleCase(data.moneda.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Suplidor">{data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : data.entidad?.nombre ? toTitleCase(data.entidad.nombre) : '-'}</Descriptions.Item>
+              </Descriptions>
+            </Card>
+
+            <Tabs defaultActiveKey="detalles" type="card">
+              <TabPane tab={`Detalles (${data.detalles?.length || 0})`} key="detalles">
+                <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 700 }} />
+              </TabPane>
+            </Tabs>
+          </Col>
+
+          <Col lg={6}>
+            <Card title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>} style={{ borderRadius: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 14 }}>
+                  <span style={{ color: '#666' }}>Total</span>
+                  <span style={{ fontWeight: 700 }}>{formatCurrency(data.total)}</span>
+                </div>
+              </div>
+              {data.nota && (
+                <>
+                  <Divider style={{ margin: '12px 0' }} />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#666', marginBottom: 4 }}>Notas</div>
+                    <div style={{ fontSize: 13, color: '#333', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                      {data.nota}
+                    </div>
+                  </div>
+                </>
+              )}
+            </Card>
+          </Col>
+        </Row>
+      ) : (
+        <div>
+          <Card
+            title={
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 18, fontWeight: 600 }}>
+                  {data.concepto?.nombre || '-'}
+                </span>
+                <Space>
+                  {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
+                  <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
+                </Space>
+              </div>
+            }
+            style={{ marginBottom: 16 }}
+          >
+            <Descriptions bordered size="small" column={1}>
+              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Moneda">{data.moneda?.nombre ? toTitleCase(data.moneda.nombre) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Suplidor">{data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : data.entidad?.nombre ? toTitleCase(data.entidad.nombre) : '-'}</Descriptions.Item>
+            </Descriptions>
+          </Card>
+
+          <Tabs defaultActiveKey="detalles" type="card">
+            <TabPane tab={`Detalles (${data.detalles?.length || 0})`} key="detalles">
+              <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 700 }} />
+            </TabPane>
+          </Tabs>
+
+          <Card title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>} style={{ borderRadius: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'right' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 14 }}>
+                <span style={{ fontWeight: 700 }}>{formatCurrency(data.total)}</span>
+              </div>
+            </div>
+            {data.nota && (
+              <>
+                <Divider style={{ margin: '12px 0' }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#666', marginBottom: 4, textAlign: 'right' }}>Notas</div>
+                  <div style={{ fontSize: 13, color: '#333', whiteSpace: 'pre-wrap', lineHeight: 1.5, textAlign: 'right' }}>
+                    {data.nota}
+                  </div>
+                </div>
+              </>
+            )}
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default SalidaAlmacenDetalle;

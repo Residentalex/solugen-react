@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, Tooltip, message } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, Tooltip, message, Drawer } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   EyeOutlined,
@@ -9,6 +10,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { apiClient } from '../../api/client';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 import type { MovimientoVistaDTO } from '../../types/devolucionCompra';
 
@@ -75,10 +77,12 @@ function toTitleCase(str: string): string {
 }
 
 const DevolucionCompra: React.FC = () => {
+  const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
+  const setImprimirCallback = useUIStore((s) => s.setImprimirCallback);
 
   const [data, setData] = useState<MovimientoVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -88,6 +92,7 @@ const DevolucionCompra: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [selectedRow, setSelectedRow] = useState<MovimientoVistaDTO | null>(null);
   const [fechaTrigger, setFechaTrigger] = useState(0);
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; title: string } | null>(null);
   const dateParamsRef = useRef({ desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)), hasta: formatDateParam(new Date()) });
 
   const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
@@ -134,6 +139,31 @@ const DevolucionCompra: React.FC = () => {
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
+  useEffect(() => {
+    if (selectedRow) {
+      setImprimirCallback(async () => {
+        try {
+          const res = await apiClient.get(`/reportes/inventario/devolucion-compra/${sucursalActiva}/${selectedRow.id}`, {
+            responseType: 'blob',
+          });
+          const blobUrl = URL.createObjectURL(res.data);
+          setPdfPreview({ url: blobUrl, title: `DVC-${selectedRow.documento}` });
+        } catch (err: any) {
+          try {
+            const blob = err?.response?.data;
+            const text = blob instanceof Blob ? await blob.text() : '';
+            const json = JSON.parse(text);
+            message.error(json.errorMessage || 'Error al generar el PDF');
+          } catch {
+            message.error(err?.message || 'Error al generar el PDF');
+          }
+        }
+      });
+    } else {
+      setImprimirCallback(undefined);
+    }
+  }, [selectedRow, sucursalActiva, setImprimirCallback]);
+
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
@@ -175,7 +205,9 @@ const DevolucionCompra: React.FC = () => {
   key: 'documento',
   width: 160,
   fixed: 'left',
-  render: (doc: string) => <Text strong style={{ color: '#556ee6', cursor: 'pointer' }}>{doc}</Text>,
+  render: (doc: string, record: MovimientoVistaDTO) => (
+    <Text strong style={{ color: '#556ee6', cursor: 'pointer' }} onClick={() => navigate(`/FDVC/${record.id}`)}>{doc}</Text>
+  ),
 },
 {
   title: 'Fecha',
@@ -260,7 +292,7 @@ const DevolucionCompra: React.FC = () => {
   render: (_: any, record: MovimientoVistaDTO) => (
     <Space size="small">
       <Tooltip title="Ver detalle">
-        <Button type="text" size="small" icon={<EyeOutlined />} />
+        <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/FDVC/${record.id}`)} />
       </Tooltip>
       {record.periodo !== 6 && record.estado === 0 && (
         <Tooltip title="Editar">
@@ -357,6 +389,22 @@ const DevolucionCompra: React.FC = () => {
         }}
         style={{ borderTop: '1px solid #e9ecef', fontFamily: 'inherit' }}
       />
+
+      <Drawer
+        title={pdfPreview?.title}
+        open={!!pdfPreview}
+        onClose={() => {
+          if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
+          setPdfPreview(null);
+        }}
+        width="70%"
+      >
+        {pdfPreview && (
+          <div style={{ width: '100%', height: '100%', overflow: 'auto', transform: 'scale(1.1)', transformOrigin: 'top left' }}>
+            <iframe src={pdfPreview.url} style={{ width: '100%', height: '90vh', border: 'none' }} title="PDF" />
+          </div>
+        )}
+      </Drawer>
     </Card>
   );
 };

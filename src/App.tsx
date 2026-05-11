@@ -8,8 +8,11 @@ import Dashboard from './pages/Dashboard/Dashboard';
 import EntradaAlmacen from './pages/EntradaAlmacen/EntradaAlmacen';
 import EntradaAlmacenDetalle from './pages/EntradaAlmacen/EntradaAlmacenDetalle';
 import SalidaAlmacen from './pages/SalidaAlmacen/SalidaAlmacen';
+import SalidaAlmacenDetalle from './pages/SalidaAlmacen/SalidaAlmacenDetalle';
 import DevolucionCompra from './pages/DevolucionCompra/DevolucionCompra';
+import DevolucionCompraDetalle from './pages/DevolucionCompra/DevolucionCompraDetalle';
 import TransferenciaAlmacen from './pages/TransferenciaAlmacen/TransferenciaAlmacen';
+import TransferenciaAlmacenDetalle from './pages/TransferenciaAlmacen/TransferenciaAlmacenDetalle';
 import DevolucionVenta from './pages/DevolucionVenta/DevolucionVenta';
 import CotizacionVenta from './pages/CotizacionVenta/CotizacionVenta';
 
@@ -47,8 +50,11 @@ const App: React.FC = () => {
             <Route path="FENP" element={<EntradaAlmacen />} />
             <Route path="FENP/:id" element={<EntradaAlmacenDetalle />} />
             <Route path="FSAP" element={<SalidaAlmacen />} />
+            <Route path="FSAP/:id" element={<SalidaAlmacenDetalle />} />
            <Route path="FDVC" element={<DevolucionCompra />} />
+            <Route path="FDVC/:id" element={<DevolucionCompraDetalle />} />
            <Route path="FTRP" element={<TransferenciaAlmacen />} />
+            <Route path="FTRP/:id" element={<TransferenciaAlmacenDetalle />} />
             <Route path="FDEV" element={<DevolucionVenta />} />
             <Route path="FCotizacion" element={<CotizacionVenta />} />
          </Route>
