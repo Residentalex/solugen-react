@@ -2,9 +2,9 @@ import { apiClient } from './client';
 import type { FacturaVistaDTO, FiltroFacturacion } from '../types/facturacion';
 import type { ApiResponse } from '../types/auth';
 
-const BASE = '/DEV';
+const BASE = '/FAC';
 
-export const devolucionVentaApi = {
+export const facturaClienteApi = {
   obtenerVista: async (
     sucursal: number,
     desde?: string,
@@ -47,27 +47,25 @@ export const devolucionVentaApi = {
     return data.data;
   },
 
+  obtenerTotal: async (sucursal: number, desde?: string, hasta?: string): Promise<number> => {
+    const params: Record<string, string> = {};
+    if (desde) params.desde = desde;
+    if (hasta) params.hasta = hasta;
+    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/total/${sucursal}`, { params });
+    return data.data;
+  },
+
+  anular: async (sucursal: number, factura: any): Promise<any> => {
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/anular`, factura);
+    return data.data;
+  },
+
   aplicar: async (sucursal: number, id: number): Promise<any> => {
     const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/aplicar/${id}`);
     return data.data;
   },
 
-  desaplicar: async (sucursal: number, documento: string): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/desaplicar?sucursal=${sucursal}&documento=${documento}`);
-    return data.data;
-  },
-
-  postear: async (sucursal: number, devolucion: any, destino?: number): Promise<any> => {
-    const params: Record<string, string | number> = {};
-    if (destino) params.destino = destino;
-    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postear`, devolucion, { params });
-    return data.data;
-  },
-
-  postearMovimiento: async (sucursal: number, movimiento: any, destino?: number): Promise<any> => {
-    const params: Record<string, string | number> = {};
-    if (destino) params.destino = destino;
-    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postearMovimiento`, movimiento, { params });
-    return data.data;
+  eliminar: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.delete(`${BASE}/${sucursal}/Eliminar/${id}`);
   },
 };

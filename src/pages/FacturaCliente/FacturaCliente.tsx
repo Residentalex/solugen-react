@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, Tooltip, message, Drawer } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -10,7 +11,7 @@ import {
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
-import { devolucionVentaApi } from '../../api/devolucionVentaApi';
+import { facturaClienteApi } from '../../api/facturaClienteApi';
 import type { FacturaVistaDTO } from '../../types/facturacion';
 
 const { Text } = Typography;
@@ -75,7 +76,8 @@ function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const DevolucionVenta: React.FC = () => {
+const FacturaCliente: React.FC = () => {
+  const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
@@ -100,18 +102,17 @@ const DevolucionVenta: React.FC = () => {
       let resultados: FacturaVistaDTO[];
 
       if (busqueda.length > 2) {
-        resultados = await devolucionVentaApi.filtrar(sucursalActiva, {
+        resultados = await facturaClienteApi.filtrar(sucursalActiva, {
           cantidad: filas,
           salto: (pagina - 1) * filas,
           documento: busqueda,
           nCF: busqueda,
           concepto: busqueda,
           cliente: busqueda,
-          referencia: busqueda,
           almacen: busqueda,
         });
       } else {
-        resultados = await devolucionVentaApi.obtenerVista(
+        resultados = await facturaClienteApi.obtenerVista(
           sucursalActiva,
           desde,
           hasta,
@@ -134,7 +135,7 @@ const DevolucionVenta: React.FC = () => {
   }, [page, pageSize, searchText, fechaTrigger, cargarDatos]);
 
   useEffect(() => {
-    setActiveModule('FDEV');
+    setActiveModule('FFAC');
     updateToolbar({ nuevo: true, editar: false, imprimir: true });
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
@@ -143,11 +144,11 @@ const DevolucionVenta: React.FC = () => {
     if (selectedRow) {
       setImprimirCallback(async () => {
         try {
-          const res = await apiClient.get(`/reportes/facturacion/devolucionVenta/${sucursalActiva}/${selectedRow.id}`, {
+          const res = await apiClient.get(`/reportes/contabilidad/facturaCliente/${sucursalActiva}/${selectedRow.id}`, {
             responseType: 'blob',
           });
           const blobUrl = URL.createObjectURL(res.data);
-          setPdfPreview({ url: blobUrl, title: `DEV-${selectedRow.documento}` });
+          setPdfPreview({ url: blobUrl, title: `FAC-${selectedRow.documento}` });
         } catch {
           message.error('Error al generar el PDF');
         }
@@ -199,7 +200,7 @@ const DevolucionVenta: React.FC = () => {
       width: 160,
       fixed: 'left',
       render: (doc: string, record: FacturaVistaDTO) => (
-        <Text strong style={{ color: '#556ee6', cursor: 'pointer' }}>{doc}</Text>
+        <Text strong style={{ color: '#556ee6', cursor: 'pointer' }} onClick={() => navigate(`/FFAC/${record.id}`)}>{doc}</Text>
       ),
     },
     {
@@ -237,13 +238,6 @@ const DevolucionVenta: React.FC = () => {
       ),
     },
     {
-      title: 'Factura',
-      dataIndex: 'referencia',
-      key: 'referencia',
-      width: 150,
-      render: (ref: string) => <Text>{ref || '-'}</Text>,
-    },
-    {
       title: 'Concepto',
       dataIndex: 'concepto',
       key: 'concepto',
@@ -252,17 +246,10 @@ const DevolucionVenta: React.FC = () => {
       render: (concepto: string) => <Text>{toTitleCase(concepto) || '-'}</Text>,
     },
     {
-      title: 'Almacén',
-      dataIndex: 'almacen',
-      key: 'almacen',
-      width: 200,
-      render: (almacen: string) => <Text>{almacen || '-'}</Text>,
-    },
-    {
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
-      width: 150,
+      width: 160,
       align: 'right',
       render: (total: number) => (
         <Text strong style={{ color: '#343a40' }}>{formatCurrency(total)}</Text>
@@ -299,7 +286,7 @@ const DevolucionVenta: React.FC = () => {
       render: (_: any, record: FacturaVistaDTO) => (
         <Space size="small">
           <Tooltip title="Ver detalle">
-            <Button type="text" size="small" icon={<EyeOutlined />} />
+            <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/FFAC/${record.id}`)} />
           </Tooltip>
           {record.periodo !== 6 && record.estado === 0 && (
             <Tooltip title="Editar">
@@ -366,7 +353,7 @@ const DevolucionVenta: React.FC = () => {
         dataSource={data}
         rowKey="id"
         loading={loading}
-        scroll={{ x: 1600 }}
+        scroll={{ x: 1500 }}
         size="middle"
         onRow={(record) => ({
           onClick: () => handleRowClick(record),
@@ -416,4 +403,4 @@ const DevolucionVenta: React.FC = () => {
   );
 };
 
-export default DevolucionVenta;
+export default FacturaCliente;

@@ -15,6 +15,8 @@ import TransferenciaAlmacen from './pages/TransferenciaAlmacen/TransferenciaAlma
 import TransferenciaAlmacenDetalle from './pages/TransferenciaAlmacen/TransferenciaAlmacenDetalle';
 import DevolucionVenta from './pages/DevolucionVenta/DevolucionVenta';
 import CotizacionVenta from './pages/CotizacionVenta/CotizacionVenta';
+import FacturaPOS from './pages/FacturaPOS/FacturaPOS';
+import FacturaCliente from './pages/FacturaCliente/FacturaCliente';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -57,6 +59,8 @@ const App: React.FC = () => {
             <Route path="FTRP/:id" element={<TransferenciaAlmacenDetalle />} />
             <Route path="FDEV" element={<DevolucionVenta />} />
             <Route path="FCotizacion" element={<CotizacionVenta />} />
+            <Route path="FPV" element={<FacturaPOS />} />
+            <Route path="FFAC" element={<FacturaCliente />} />
          </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

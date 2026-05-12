@@ -29,6 +29,8 @@ const pageTitles: Record<string, string> = {
   FDVC: 'Devolución de Compra',
   FTRP: 'Transferencia de Almacén',
   FDEV: 'Devolución de Venta',
+  FPV: 'Facturas POS',
+  FFAC: 'Factura Cliente',
   FCotizacion: 'Cotizaciones',
   MConcepto: 'Conceptos',
   MDocumento: 'Documentos',
