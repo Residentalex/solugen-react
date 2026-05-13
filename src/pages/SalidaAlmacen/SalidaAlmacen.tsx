@@ -257,7 +257,7 @@ const SalidaAlmacen: React.FC = () => {
   dataIndex: 'almacenOrigen',
   key: 'almacenOrigen',
   width: 160,
-  render: (alm: string) => <Text>{alm || '-'}</Text>,
+                  render: (alm: string) => <Text>{toTitleCase(alm) || '-'}</Text>,
 },
 {
   title: 'Total',

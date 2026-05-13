@@ -17,6 +17,10 @@ import DevolucionVenta from './pages/DevolucionVenta/DevolucionVenta';
 import CotizacionVenta from './pages/CotizacionVenta/CotizacionVenta';
 import FacturaPOS from './pages/FacturaPOS/FacturaPOS';
 import FacturaCliente from './pages/FacturaCliente/FacturaCliente';
+import NotaDebito from './pages/NotaDebito/NotaDebito';
+import NotaDebitoDetalle from './pages/NotaDebito/NotaDebitoDetalle';
+import NotaCredito from './pages/NotaCredito/NotaCredito';
+import NotaCreditoDetalle from './pages/NotaCredito/NotaCreditoDetalle';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -61,6 +65,14 @@ const App: React.FC = () => {
             <Route path="FCotizacion" element={<CotizacionVenta />} />
             <Route path="FPV" element={<FacturaPOS />} />
             <Route path="FFAC" element={<FacturaCliente />} />
+            <Route path="FNDSUP" element={<NotaDebito tipoEntidad="SUP" />} />
+            <Route path="FNDSUP/:id" element={<NotaDebitoDetalle tipoEntidad="SUP" />} />
+            <Route path="FNDCLI" element={<NotaDebito tipoEntidad="CLI" />} />
+            <Route path="FNDCLI/:id" element={<NotaDebitoDetalle tipoEntidad="CLI" />} />
+            <Route path="FNCSUP" element={<NotaCredito tipoEntidad="SUP" />} />
+            <Route path="FNCSUP/:id" element={<NotaCreditoDetalle tipoEntidad="SUP" />} />
+            <Route path="FNCCLI" element={<NotaCredito tipoEntidad="CLI" />} />
+            <Route path="FNCCLI/:id" element={<NotaCreditoDetalle tipoEntidad="CLI" />} />
          </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -198,8 +198,8 @@ const DevolucionVenta: React.FC = () => {
       key: 'documento',
       width: 160,
       fixed: 'left',
-      render: (doc: string, record: FacturaVistaDTO) => (
-        <Text strong style={{ color: '#556ee6', cursor: 'pointer' }}>{doc}</Text>
+      render: (doc: string) => (
+        <Text strong style={{ color: '#6c5ffc', cursor: 'pointer' }}>{doc}</Text>
       ),
     },
     {

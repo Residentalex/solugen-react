@@ -20,8 +20,8 @@ const Toolbar: React.FC = () => {
   }
 
   return (
-    <div style={{ background: '#f0f2f5', padding: '8px 24px', borderBottom: '1px solid #d9d9d9' }}>
-      <Space>
+    <div className="paces-toolbar">
+      <Space wrap>
         {toolbarState.nuevo && (
           <Button icon={<PlusOutlined />} type="primary">
             Nuevo

@@ -36,6 +36,36 @@ function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+interface SuplidorCardProps {
+  entidad: { nombre: string; identificacion: string; telefono?: string; direccion?: string } | undefined;
+  suplidor: { nombre: string; telefono?: string; direccion?: string } | undefined;
+}
+
+const SuplidorCard: React.FC<SuplidorCardProps> = ({ entidad, suplidor }) => (
+  <Card
+    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Suplidor</span>}
+    style={{ borderRadius: 8, marginBottom: 16 }}
+  >
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
+      <div style={{ fontSize: 16, fontWeight: 700 }}>
+        {suplidor?.nombre ? toTitleCase(suplidor.nombre) : entidad?.nombre ? toTitleCase(entidad.nombre) : '-'}
+      </div>
+      <div>
+        <span style={{ color: '#666' }}>RNC: </span>
+        <span>{entidad?.identificacion || '-'}</span>
+      </div>
+      <div>
+        <span style={{ color: '#666' }}>Teléfono: </span>
+        <span>{entidad?.telefono || suplidor?.telefono || '-'}</span>
+      </div>
+      <div>
+        <span style={{ color: '#666' }}>Dirección: </span>
+        <span>{entidad?.direccion ? toTitleCase(entidad.direccion) : suplidor?.direccion ? toTitleCase(suplidor.direccion) : '-'}</span>
+      </div>
+    </div>
+  </Card>
+);
+
 function formatDate(val: string): string {
   if (!val) return '-';
   const d = new Date(val);
@@ -165,7 +195,6 @@ const DevolucionCompraDetalle: React.FC = () => {
                 <Descriptions.Item label="Entrada Ref.">{data.documentoReferencia || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Moneda">{data.moneda?.nombre ? toTitleCase(data.moneda.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Suplidor">{data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : data.entidad?.nombre ? toTitleCase(data.entidad.nombre) : '-'}</Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -177,6 +206,7 @@ const DevolucionCompraDetalle: React.FC = () => {
           </Col>
 
           <Col lg={6}>
+            <SuplidorCard entidad={data.entidad} suplidor={data.suplidor} />
             <Card title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>} style={{ borderRadius: 8 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 14 }}>
@@ -232,12 +262,13 @@ const DevolucionCompraDetalle: React.FC = () => {
               <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
               <Descriptions.Item label="Entrada Ref.">{data.documentoReferencia || '-'}</Descriptions.Item>
               <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-              <Descriptions.Item label="Moneda">{data.moneda?.nombre ? toTitleCase(data.moneda.nombre) : '-'}</Descriptions.Item>
-              <Descriptions.Item label="Suplidor">{data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : data.entidad?.nombre ? toTitleCase(data.entidad.nombre) : '-'}</Descriptions.Item>
-            </Descriptions>
-          </Card>
+                <Descriptions.Item label="Moneda">{data.moneda?.nombre ? toTitleCase(data.moneda.nombre) : '-'}</Descriptions.Item>
+              </Descriptions>
+            </Card>
 
-          <Tabs defaultActiveKey="detalles" type="card">
+            <SuplidorCard entidad={data.entidad} suplidor={data.suplidor} />
+
+            <Tabs defaultActiveKey="detalles" type="card">
             <TabPane tab={`Detalles (${data.detalles?.length || 0})`} key="detalles">
               <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
             </TabPane>

@@ -13,9 +13,9 @@ import {
   SettingOutlined,
   DollarOutlined,
   CreditCardOutlined,
-  FileTextOutlined,
   BuildOutlined,
   DashboardOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 
 const ICONOS_MODULOS: Record<string, React.ReactNode> = {
@@ -32,7 +32,7 @@ const ICONOS_MODULOS: Record<string, React.ReactNode> = {
   Produccion: <BuildOutlined />,
 };
 
-const ICONO_DEFAULT = <FileTextOutlined />;
+const ICONO_DEFAULT = <AppstoreOutlined />;
 
 interface ModuloConPantallas {
   modulo: ModuloDTO;
@@ -191,10 +191,11 @@ const Sidebar: React.FC = () => {
   return (
     <Menu
       mode="inline"
+      theme="dark"
       selectedKeys={activeModule ? [activeModule] : []}
       openKeys={openKeys}
       defaultOpenKeys={[]}
-      style={{ borderRight: 0, fontSize: 13 }}
+      style={{ borderRight: 0, fontSize: 13, background: 'transparent' }}
       items={menuItems}
       onClick={handleMenuClick}
       onOpenChange={handleOpenChange}

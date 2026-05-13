@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { Sucursal } from '../../types/auth';
-import { Form, Input, Button, Card, Alert } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
+import { Form, Input, Button, Alert } from 'antd';
+import { UserOutlined, LockOutlined, ArrowRightOutlined } from '@ant-design/icons';
 import GenesisLogo from '../../components/GenesisLogo';
 
 const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
@@ -76,48 +76,72 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', background: '#f0f2f5' }}>
-      <Card style={{ width: 400, padding: '24px 0' }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <GenesisLogo size={40} color="#1890ff" />
+    <div className="paces-login-bg">
+      <div className="paces-login-brand">
+        <div className="paces-login-brand-content">
+          <GenesisLogo size={56} showText={false} />
+          <h1>Bienvenido a Genesis</h1>
+          <p>Sistema de gestión empresarial Solugen ERP</p>
         </div>
+      </div>
 
-        <Form layout="vertical" style={{ padding: '0 24px' }} onFinish={handleSubmit}>
-          {error && (
-            <Alert message={error} type="error" showIcon style={{ marginBottom: 16 }} />
-          )}
+      <div className="paces-login-form">
+        <div className="paces-login-card">
+          <div className="login-header">
+            <GenesisLogo size={40} showText />
+            <h2>Iniciar Sesión</h2>
+            <p>Ingrese sus credenciales para acceder al sistema</p>
+          </div>
 
-          <Form.Item label="Usuario">
-            <Input
-              prefix={<UserOutlined />}
-              value={nombreUsuario}
-              onChange={(e) => setNombreUsuario(e.target.value)}
-              placeholder="Usuario"
-              autoFocus
-            />
-          </Form.Item>
+          <Form layout="vertical" onFinish={handleSubmit}>
+            {error && (
+              <Alert message={error} type="error" showIcon style={{ marginBottom: 20, borderRadius: 8 }} />
+            )}
 
-          <Form.Item label="Contraseña">
-            <Input.Password
-              prefix={<LockOutlined />}
-              value={contrasena}
-              onChange={(e) => setContrasena(e.target.value)}
-              placeholder="Contraseña"
-            />
-          </Form.Item>
+            <Form.Item label="Usuario" style={{ marginBottom: 20 }}>
+              <Input
+                prefix={<UserOutlined style={{ color: '#a2a3b7' }} />}
+                value={nombreUsuario}
+                onChange={(e) => setNombreUsuario(e.target.value)}
+                placeholder="Ingrese su usuario"
+                autoFocus
+                size="large"
+              />
+            </Form.Item>
 
-          <Form.Item>
-            <Button
-              type="primary"
-              htmlType="submit"
-              loading={loading}
-              style={{ width: '100%' }}
-            >
-              Ingresar
-            </Button>
-          </Form.Item>
-        </Form>
-      </Card>
+            <Form.Item label="Contraseña" style={{ marginBottom: 24 }}>
+              <Input.Password
+                prefix={<LockOutlined style={{ color: '#a2a3b7' }} />}
+                value={contrasena}
+                onChange={(e) => setContrasena(e.target.value)}
+                placeholder="Ingrese su contraseña"
+                size="large"
+              />
+            </Form.Item>
+
+            <Form.Item style={{ marginBottom: 0 }}>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={loading}
+                size="large"
+                block
+                style={{
+                  height: 46,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  borderRadius: 10,
+                  background: 'linear-gradient(135deg, #6c5ffc, #9b8cff)',
+                  border: 'none',
+                  boxShadow: '0 4px 14px rgba(108,95,252,0.35)',
+                }}
+              >
+                Ingresar <ArrowRightOutlined />
+              </Button>
+            </Form.Item>
+          </Form>
+        </div>
+      </div>
     </div>
   );
 };

@@ -9,7 +9,7 @@ import GenesisLogo from '../components/GenesisLogo';
 import Sidebar from './Sidebar';
 import Toolbar from './Toolbar';
 import { Outlet } from 'react-router-dom';
-import { MenuFoldOutlined, MenuUnfoldOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
+import { MenuFoldOutlined, MenuUnfoldOutlined, LogoutOutlined, UserOutlined, SettingOutlined } from '@ant-design/icons';
 
 const { Sider } = Layout;
 
@@ -23,7 +23,6 @@ const pageTitles: Record<string, string> = {
   MCliente: 'Clientes',
   MSUP: 'Proveedores',
   FORC: 'Orden de Compra',
-  FFAC: 'Facturas Cliente',
   FENP: 'Entradas de Almacén',
   FSAP: 'Salidas de Almacén',
   FDVC: 'Devolución de Compra',
@@ -32,6 +31,10 @@ const pageTitles: Record<string, string> = {
   FPV: 'Facturas POS',
   FFAC: 'Factura Cliente',
   FCotizacion: 'Cotizaciones',
+  FNDSUP: 'Nota Débito - CXP',
+  FNDCLI: 'Nota Débito - CXC',
+  FNCSUP: 'Nota Crédito - CXP',
+  FNCCLI: 'Nota Crédito - CXC',
   MConcepto: 'Conceptos',
   MDocumento: 'Documentos',
   MCuentaContable: 'Cuentas Contables',
@@ -99,6 +102,12 @@ const MainLayout: React.FC = () => {
     },
     { type: 'divider' as const },
     {
+      key: 'settings',
+      icon: <SettingOutlined />,
+      label: 'Configuración',
+    },
+    { type: 'divider' as const },
+    {
       key: 'logout',
       icon: <LogoutOutlined />,
       label: 'Cerrar Sesión',
@@ -106,6 +115,8 @@ const MainLayout: React.FC = () => {
       onClick: () => { logout(); navigate('/login'); },
     },
   ];
+
+  const siderWidth = sidebarCollapsed ? 80 : 250;
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -115,9 +126,8 @@ const MainLayout: React.FC = () => {
         onCollapse={setSidebarCollapsed}
         trigger={null}
         width={250}
+        className="paces-sidebar"
         style={{
-          background: '#fff',
-          borderRight: '1px solid #e9ecef',
           position: 'fixed',
           left: 0,
           top: 0,
@@ -127,26 +137,27 @@ const MainLayout: React.FC = () => {
         }}
       >
         <div className={`sidebar-logo ${sidebarCollapsed ? 'collapsed' : ''}`}>
-          <GenesisLogo size={28} color="#343a40" showText={!sidebarCollapsed} />
+          <GenesisLogo size={28} dark showText={!sidebarCollapsed} />
         </div>
         <Sidebar />
       </Sider>
 
-      <Layout style={{ marginLeft: sidebarCollapsed ? 80 : 250, transition: 'margin-left 0.2s' }}>
-        <div className="topbar">
-          <div className="topbar-left">
-            <button className="hamburger-btn" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
+      <Layout style={{ marginLeft: siderWidth, transition: 'margin-left 0.2s' }}>
+        <div className="paces-topbar">
+          <div className="paces-topbar-left">
+            <button className="paces-hamburger" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
               {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             </button>
           </div>
 
-          <div className="topbar-right">
+          <div className="paces-topbar-right">
             {sucursalesPermitidas.length > 1 && (
               <Select
                 value={sucursalActiva}
                 onChange={(val) => setSucursalActiva(val)}
                 disabled={isDetailPage}
                 size="small"
+                className="paces-sucursal-select"
                 style={{ width: 180 }}
                 options={sucursalesPermitidas.map((s: any) => ({
                   value: s.sucursal,
@@ -155,11 +166,11 @@ const MainLayout: React.FC = () => {
               />
             )}
             <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
-              <div className="topbar-user">
-                <div className="avatar-placeholder">
+              <div className="paces-topbar-user">
+                <div className="paces-avatar">
                   {usuario?.nombre?.charAt(0)?.toUpperCase() || 'U'}
                 </div>
-                <span className="topbar-user-name">
+                <span className="paces-topbar-user-name">
                   {usuario?.nombreUsuario || 'Usuario'}
                 </span>
               </div>
@@ -167,20 +178,26 @@ const MainLayout: React.FC = () => {
           </div>
         </div>
 
-        <div className="page-header">
-          <h3>{pageTitleOverride || pageTitle}</h3>
-          <div className="breadcrumb">
-            {activeModule ? pageTitle : 'Dashboard'}
+        <div className="paces-page-header">
+          <div className="paces-page-header-inner">
+            <div>
+              <h3>{pageTitleOverride || pageTitle}</h3>
+              <div className="breadcrumb">
+                <span>Inicio</span>
+                <span style={{ color: '#6c757d' }}>/</span>
+                <span>{pageTitle}</span>
+              </div>
+            </div>
           </div>
         </div>
 
         <Toolbar />
 
-        <div className="content-area">
+        <div className="paces-content">
           {loading && (
-            <div style={{ textAlign: 'center', padding: 50 }}>
+            <div style={{ textAlign: 'center', padding: 60 }}>
               <Spin size="large" />
-              <div style={{ marginTop: 12, color: '#666' }}>Cargando configuración inicial...</div>
+              <div style={{ marginTop: 16, color: '#6c757d' }}>Cargando configuración inicial...</div>
             </div>
           )}
           {!loading && <Outlet />}

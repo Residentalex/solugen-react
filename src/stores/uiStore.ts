@@ -27,6 +27,7 @@ export interface ToolbarState {
   modificarPagos: boolean;
   recalcular: boolean;
   recibir: boolean;
+  anular: boolean;
 }
 
 interface UIState {
@@ -61,6 +62,7 @@ const defaultToolbarState: ToolbarState = {
   modificarPagos: false,
   recalcular: false,
   recibir: false,
+  anular: false,
 };
 
 export const useUIStore = create<UIState>((set) => ({

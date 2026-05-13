@@ -12,6 +12,11 @@ export const apiClient = axios.create({
   },
 });
 
+const useMocks = import.meta.env.VITE_USE_MOCKS === 'true';
+if (useMocks) {
+  import('./mockAdapter').then(({ setupMocks }) => setupMocks());
+}
+
 apiClient.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
   if (token) {
