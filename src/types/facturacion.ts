@@ -29,3 +29,28 @@ export interface FiltroFacturacion {
   referencia?: string;
   almacen?: string;
 }
+
+export interface FacturaSuplidorVistaDTO {
+  id: number;
+  fechaDocumento: string;
+  noDocumento: string;
+  nombreEntidad: string;
+  nota: string;
+  total: number;
+  ncf: string;
+  estado: number;
+  periodo: number;
+  referencia: string;
+  diasCredito: number;
+}
+
+export interface FiltroFacturaSuplidor {
+  cantidad?: number;
+  salto?: number;
+  desde?: string;
+  hasta?: string;
+  documento?: string;
+  nCF?: string;
+  concepto?: string;
+  suplidor?: string;
+}

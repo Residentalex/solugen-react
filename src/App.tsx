@@ -17,10 +17,19 @@ import DevolucionVenta from './pages/DevolucionVenta/DevolucionVenta';
 import CotizacionVenta from './pages/CotizacionVenta/CotizacionVenta';
 import FacturaPOS from './pages/FacturaPOS/FacturaPOS';
 import FacturaCliente from './pages/FacturaCliente/FacturaCliente';
+import FacturaSuplidor from './pages/FacturaSuplidor/FacturaSuplidor';
+import FacturaSuplidorDetalle from './pages/FacturaSuplidor/FacturaSuplidorDetalle';
 import NotaDebito from './pages/NotaDebito/NotaDebito';
 import NotaDebitoDetalle from './pages/NotaDebito/NotaDebitoDetalle';
 import NotaCredito from './pages/NotaCredito/NotaCredito';
 import NotaCreditoDetalle from './pages/NotaCredito/NotaCreditoDetalle';
+import DistribucionBalance from './pages/DistribucionBalance/DistribucionBalance';
+import DistribucionBalanceDetalle from './pages/DistribucionBalance/DistribucionBalanceDetalle';
+import ReciboIngreso from './pages/ReciboIngreso/ReciboIngreso';
+import ReciboIngresoDetalle from './pages/ReciboIngreso/ReciboIngresoDetalle';
+import Usuarios from './pages/Usuarios/Usuarios';
+import UsuarioDetalle from './pages/Usuarios/UsuarioDetalle';
+import Roles from './pages/Roles/Roles';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -65,6 +74,8 @@ const App: React.FC = () => {
             <Route path="FCotizacion" element={<CotizacionVenta />} />
             <Route path="FPV" element={<FacturaPOS />} />
             <Route path="FFAC" element={<FacturaCliente />} />
+            <Route path="FRDE" element={<FacturaSuplidor />} />
+            <Route path="FRDE/:id" element={<FacturaSuplidorDetalle />} />
             <Route path="FNDSUP" element={<NotaDebito tipoEntidad="SUP" />} />
             <Route path="FNDSUP/:id" element={<NotaDebitoDetalle tipoEntidad="SUP" />} />
             <Route path="FNDCLI" element={<NotaDebito tipoEntidad="CLI" />} />
@@ -73,7 +84,16 @@ const App: React.FC = () => {
             <Route path="FNCSUP/:id" element={<NotaCreditoDetalle tipoEntidad="SUP" />} />
             <Route path="FNCCLI" element={<NotaCredito tipoEntidad="CLI" />} />
             <Route path="FNCCLI/:id" element={<NotaCreditoDetalle tipoEntidad="CLI" />} />
-         </Route>
+            <Route path="FDBASUP" element={<DistribucionBalance tipoEntidad="SUP" />} />
+            <Route path="FDBASUP/:id" element={<DistribucionBalanceDetalle tipoEntidad="SUP" />} />
+            <Route path="FDBACLI" element={<DistribucionBalance tipoEntidad="CLI" />} />
+            <Route path="FDBACLI/:id" element={<DistribucionBalanceDetalle tipoEntidad="CLI" />} />
+            <Route path="FRI" element={<ReciboIngreso />} />
+            <Route path="FRI/:id" element={<ReciboIngresoDetalle />} />
+            <Route path="MUsuario" element={<Usuarios />} />
+            <Route path="MUsuario/:id" element={<UsuarioDetalle />} />
+            <Route path="MROL" element={<Roles />} />
+          </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

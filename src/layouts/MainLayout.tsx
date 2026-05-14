@@ -30,11 +30,15 @@ const pageTitles: Record<string, string> = {
   FDEV: 'Devolución de Venta',
   FPV: 'Facturas POS',
   FFAC: 'Factura Cliente',
+  FRDE: 'Factura Proveedor',
   FCotizacion: 'Cotizaciones',
   FNDSUP: 'Nota Débito - CXP',
   FNDCLI: 'Nota Débito - CXC',
   FNCSUP: 'Nota Crédito - CXP',
   FNCCLI: 'Nota Crédito - CXC',
+  FDBASUP: 'Distribución Balance CXP',
+  FDBACLI: 'Distribución Balance CXC',
+  FRI: 'Recibo Ingreso',
   MConcepto: 'Conceptos',
   MDocumento: 'Documentos',
   MCuentaContable: 'Cuentas Contables',
@@ -92,7 +96,8 @@ const MainLayout: React.FC = () => {
 
   if (!isAuthenticated) return null;
 
-  const pageTitle = pageTitles[activeModule] || activeModule || 'Dashboard';
+  const pantallaActual = usuario?.pantallas?.find((p: any) => p.codigo === activeModule);
+  const pageTitle = pantallaActual?.nombre || pageTitles[activeModule] || activeModule || 'Dashboard';
 
   const userMenuItems = [
     {
@@ -151,7 +156,7 @@ const MainLayout: React.FC = () => {
           </div>
 
           <div className="paces-topbar-right">
-            {sucursalesPermitidas.length > 1 && (
+            {sucursalesPermitidas.length > 1 && activeModule !== 'MUsuario' && (
               <Select
                 value={sucursalActiva}
                 onChange={(val) => setSucursalActiva(val)}

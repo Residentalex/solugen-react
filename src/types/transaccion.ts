@@ -4,11 +4,11 @@ export interface TransaccionVistaDTO {
   documento: string;
   entidad: string;
   concepto: string;
+  referencia: string;
   ncf: string;
   ncfModificado: string;
-  referencia: string;
-  tipoDocumento: string;
   total: number;
+  nota: string;
   estado: number;
   periodo: number;
 }

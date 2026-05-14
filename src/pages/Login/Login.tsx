@@ -31,13 +31,7 @@ const Login: React.FC = () => {
   };
 
   const getIP = async (): Promise<string> => {
-    try {
-      const res = await fetch('https://api.ipify.org?format=json');
-      const data = await res.json();
-      return data.ip || '127.0.0.1';
-    } catch {
-      return '127.0.0.1';
-    }
+    return '127.0.0.1';
   };
 
   const handleSubmit = async () => {

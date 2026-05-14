@@ -51,7 +51,7 @@ function parseDateRaw(val: string): Date | null {
 
 function formatDate(val: string): string {
   const d = parseDateRaw(val);
-  if (!d) return val || '-';
+  if (!d) return val || '';
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
@@ -208,14 +208,14 @@ const TransferenciaAlmacen: React.FC = () => {
   dataIndex: 'almacenOrigen',
   key: 'almacenOrigen',
   width: 180,
-  render: (alm: string) => <Text>{alm || '-'}</Text>,
+  render: (alm: string) => <Text>{toTitleCase(alm) || ''}</Text>,
 },
 {
   title: 'Almacén Destino',
   dataIndex: 'almacenDestino',
   key: 'almacenDestino',
   width: 180,
-  render: (alm: string) => <Text>{alm || '-'}</Text>,
+  render: (alm: string) => <Text>{toTitleCase(alm) || ''}</Text>,
 },
 {
   title: 'Concepto',
@@ -223,7 +223,7 @@ const TransferenciaAlmacen: React.FC = () => {
   key: 'concepto',
   width: 280,
   ellipsis: true,
-  render: (concepto: string) => <Text>{toTitleCase(concepto) || '-'}</Text>,
+  render: (concepto: string) => <Text>{toTitleCase(concepto) || ''}</Text>,
 },
 {
   title: 'Total',

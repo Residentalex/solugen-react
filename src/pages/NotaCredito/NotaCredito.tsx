@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Table, Input, DatePicker, Select, Tag, message, Drawer } from 'antd';
+import { Table, Input, DatePicker, Select, Tag, message, Drawer, Card, Button } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -24,8 +24,13 @@ const ESTADO_MAP: Record<number, { label: string; color: string }> = {
 const DIAS_POR_DEFECTO = 30;
 const FILAS_POR_PAGINA = 25;
 
+function titlecase(s: string): string {
+  if (!s) return '';
+  return s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
 function formatDate(val: string): string {
-  if (!val) return '-';
+  if (!val) return '';
   const d = new Date(val);
   if (isNaN(d.getTime())) return val;
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -176,26 +181,26 @@ const NotaCredito: React.FC<NotaCreditoProps> = ({ tipoEntidad }) => {
       render: (v: string) => formatDate(v),
     },
     {
-      title: 'Concepto',
-      dataIndex: 'concepto',
-      key: 'concepto',
-      ellipsis: true,
-      render: (v: string) => v || '-',
-    },
-    {
       title: entidadLabel,
       dataIndex: 'entidad',
       key: 'entidad',
-      width: 180,
       ellipsis: true,
-      render: (v: string) => v || '-',
+      render: (v: string) => titlecase(v || ''),
+    },
+    {
+      title: 'Concepto',
+      dataIndex: 'concepto',
+      key: 'concepto',
+      width: 220,
+      ellipsis: true,
+      render: (v: string) => titlecase(v || ''),
     },
     {
       title: 'NCF',
       dataIndex: 'ncf',
       key: 'ncf',
       width: 140,
-      render: (v: string) => v || '-',
+      render: (v: string) => v || '',
     },
     {
       title: 'Total',
@@ -218,58 +223,61 @@ const NotaCredito: React.FC<NotaCreditoProps> = ({ tipoEntidad }) => {
   ];
 
   return (
-    <div>
-      <div style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        <RangePicker onChange={handleDateChange} />
-        <Input.Search
-          placeholder={`Buscar por documento, NCF, concepto, ${entidadLabel.toLowerCase()}...`}
-          onSearch={handleSearch}
-          enterButton={<SearchOutlined />}
-          allowClear
-          style={{ width: 360 }}
-        />
-        <Select
-          value={pageSize}
-          onChange={(v) => { setPageSize(v); setPage(1); }}
-          style={{ width: 100 }}
-          options={[
-            { value: 25, label: '25 filas' },
-            { value: 50, label: '50 filas' },
-            { value: 100, label: '100 filas' },
-          ]}
-        />
-        <a onClick={handleRefresh} style={{ fontSize: 18, color: '#6c757d', cursor: 'pointer' }}>
-          <ReloadOutlined />
-        </a>
+    <Card styles={{ body: { padding: 0 } }} style={{ borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+      <div style={{ padding: '20px 24px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
+          <RangePicker
+            style={{ width: 180 }}
+            format="YYYY-MM-DD"
+            onChange={handleDateChange}
+            placeholder={['Desde', 'Hasta']}
+          />
+          <Input.Search
+            placeholder="Buscar documento, NCF, concepto..."
+            allowClear
+            onSearch={handleSearch}
+            style={{ width: 400 }}
+            prefix={<SearchOutlined style={{ color: '#aaa' }} />}
+          />
+          <Select
+            style={{ width: 65 }}
+            value={pageSize}
+            onChange={(v) => { setPageSize(v); setPage(1); }}
+            options={[
+              { value: 25, label: '25' },
+              { value: 50, label: '50' },
+              { value: 100, label: '100' },
+            ]}
+          />
+          <Button type="primary" icon={<ReloadOutlined />} onClick={handleRefresh} style={{ marginLeft: 'auto' }} />
+        </div>
       </div>
 
-      <div className="paces-card" style={{ padding: 0 }}>
-        <Table<TransaccionVistaDTO>
-          columns={columns}
-          dataSource={data}
-          rowKey="id"
-          loading={loading}
-          size="middle"
-          scroll={{ x: 900 }}
-          pagination={{
-            current: page,
-            pageSize,
-            total,
-            showSizeChanger: false,
-            showTotal: (t) => `Aprox. ${t} registros`,
-          }}
-          onChange={(pagination) => {
-            if (pagination.current) setPage(pagination.current);
-          }}
-          onRow={(record) => ({
-            onClick: () => handleRowClick(record),
-            style: {
-              cursor: 'pointer',
-              background: selectedRow?.id === record.id ? '#f0f1ff' : undefined,
-            },
-          })}
-        />
-      </div>
+      <Table<TransaccionVistaDTO>
+        columns={columns}
+        dataSource={data}
+        rowKey="id"
+        loading={loading}
+        size="middle"
+        scroll={{ x: 900 }}
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          showSizeChanger: false,
+          showTotal: (t) => `Aprox. ${t} registros`,
+        }}
+        onChange={(pagination) => {
+          if (pagination.current) setPage(pagination.current);
+        }}
+        onRow={(record) => ({
+          onClick: () => handleRowClick(record),
+          style: {
+            cursor: 'pointer',
+            background: selectedRow?.id === record.id ? '#f0f1ff' : undefined,
+          },
+        })}
+      />
 
       <Drawer
         title={pdfPreview?.title || 'Vista previa PDF'}
@@ -285,7 +293,7 @@ const NotaCredito: React.FC<NotaCreditoProps> = ({ tipoEntidad }) => {
           <iframe src={pdfPreview.url} style={{ width: '100%', height: '100%', border: 'none' }} title="PDF Preview" />
         )}
       </Drawer>
-    </div>
+    </Card>
   );
 };
 

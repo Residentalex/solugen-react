@@ -9,7 +9,7 @@ import {
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
-import { notaCreditoApi } from '../../api/notaCreditoApi';
+import { reciboIngresoApi } from '../../api/reciboIngresoApi';
 
 const { TabPane } = Tabs;
 
@@ -57,12 +57,11 @@ function toTitleCase(str: string): string {
 
 interface EntidadCardProps {
   entidad: { nombre: string; identificacion: string; telefono?: string } | undefined;
-  tipoEntidad: 'SUP' | 'CLI';
 }
 
-const EntidadCard: React.FC<EntidadCardProps> = ({ entidad, tipoEntidad }) => (
+const EntidadCard: React.FC<EntidadCardProps> = ({ entidad }) => (
   <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>{tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente'}</span>}
+    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Entidad</span>}
     style={{ borderRadius: 8, marginBottom: 16 }}
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
@@ -85,12 +84,13 @@ interface TotalesCardProps {
   subTotal: number;
   descuento: number;
   impuestos: number;
+  retenciones: number;
   total: number;
   nota: string;
   alignRight: boolean;
 }
 
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight }) => (
+const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, retenciones, total, nota, alignRight }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
     style={{ borderRadius: 8 }}
@@ -107,6 +107,10 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
         {!alignRight && <span style={{ color: '#666' }}>Impuestos</span>}
         <span>{formatNumber(impuestos)}</span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
+        {!alignRight && <span style={{ color: '#666' }}>Retenciones</span>}
+        <span>{formatNumber(retenciones)}</span>
       </div>
     </div>
 
@@ -131,11 +135,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
   </Card>
 );
 
-interface NotaCreditoDetalleProps {
-  tipoEntidad: 'SUP' | 'CLI';
-}
-
-const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) => {
+const ReciboIngresoDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
@@ -146,20 +146,18 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
   const [imprimiendo, setImprimiendo] = useState(false);
   const screens = Grid.useBreakpoint();
 
-  const codigoPantalla = tipoEntidad === 'SUP' ? 'FNCSUP' : 'FNCCLI';
-
   useEffect(() => {
-    setActiveModule(codigoPantalla);
+    setActiveModule('FRI');
     return () => setPageTitleOverride('');
-  }, [setActiveModule, setPageTitleOverride, codigoPantalla]);
+  }, [setActiveModule, setPageTitleOverride]);
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    notaCreditoApi.obtenerPorId(sucursalActiva, parseInt(id))
+    reciboIngresoApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
-        setPageTitleOverride(`NC-${res.noDocumento}`);
+        setPageTitleOverride(`RI-${res.noDocumento}`);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -211,14 +209,13 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
   function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
   function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
 
-  const totalDebitos = (data.asientos || []).reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
-  const totalCreditos = (data.asientos || []).reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
+  const totalDebitos = (data.asientos || []).reduce((s: number, r: any) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
+  const totalCreditos = (data.asientos || []).reduce((s: number, r: any) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
 
   return (
     <div>
-      {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/${codigoPantalla}`)}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FRI')}>
           Volver
         </Button>
         <div style={{ flex: 1 }} />
@@ -226,7 +223,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
           <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
             setImprimiendo(true);
             try {
-              const res = await apiClient.get(`/reportes/contabilidad/nota-credito/${sucursalActiva}/${id}`, {
+              const res = await apiClient.get(`/reportes/contabilidad/reciboIngreso/${sucursalActiva}/${id}`, {
                 responseType: 'blob',
               });
               const blobUrl = URL.createObjectURL(res.data);
@@ -254,7 +251,6 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
       </div>
 
       {isLarge ? (
-        /* === DESKTOP LAYOUT (≥ lg) === */
         <Row gutter={16}>
           <Col lg={18}>
             <Card
@@ -305,12 +301,11 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
           </Col>
 
           <Col lg={6}>
-            <EntidadCard entidad={data.entidad} tipoEntidad={tipoEntidad} />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false} />
+            <EntidadCard entidad={data.entidad} />
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={false} />
           </Col>
         </Row>
       ) : (
-        /* === MOBILE LAYOUT (< lg) === */
         <div>
           <Card
             title={
@@ -336,7 +331,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
             </Descriptions>
           </Card>
 
-          <EntidadCard entidad={data.entidad} tipoEntidad={tipoEntidad} />
+          <EntidadCard entidad={data.entidad} />
 
           <Tabs defaultActiveKey="documentos" type="card">
             <TabPane tab={`Documentos (${data.transaccionesAsociadas?.length || 0})`} key="documentos">
@@ -360,11 +355,11 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
             </TabPane>
           </Tabs>
 
-          <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true} />
+          <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={true} />
         </div>
       )}
     </div>
   );
 };
 
-export default NotaCreditoDetalle;
+export default ReciboIngresoDetalle;

@@ -30,6 +30,7 @@ const ICONOS_MODULOS: Record<string, React.ReactNode> = {
   'Cuentas por cobrar': <CreditCardOutlined />,
   Bancos: <BankOutlined />,
   Produccion: <BuildOutlined />,
+  Administracion: <SettingOutlined />,
 };
 
 const ICONO_DEFAULT = <AppstoreOutlined />;
@@ -185,7 +186,11 @@ const Sidebar: React.FC = () => {
   };
 
   const handleOpenChange = (keys: string[]) => {
-    setOpenKeys(keys);
+    const topKeys = keys.filter(k => !k.startsWith('submenu_'));
+    const lastTop = topKeys[topKeys.length - 1];
+    if (!lastTop) { setOpenKeys([]); return; }
+    const related = keys.filter(k => k === lastTop || k.startsWith(`submenu_${lastTop}_`));
+    setOpenKeys(related);
   };
 
   return (

@@ -1,19 +1,14 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, Tooltip, message, Drawer } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import {
-  EyeOutlined,
-  EditOutlined,
-  SearchOutlined,
-  ReloadOutlined,
-} from '@ant-design/icons';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Table, Input, DatePicker, Select, Tag, message, Drawer, Card, Button, Space, Tooltip } from 'antd';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { apiClient } from '../../api/client';
-import { devolucionVentaApi } from '../../api/devolucionVentaApi';
-import type { FacturaVistaDTO } from '../../types/facturacion';
+import type { TransaccionVistaDTO, FiltroTransaccion } from '../../types/transaccion';
+import type { ColumnsType } from 'antd/es/table';
+import { SearchOutlined, ReloadOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
 
-const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
@@ -27,40 +22,22 @@ const ESTADO_MAP: Record<number, { label: string; color: string }> = {
 };
 
 const DIAS_POR_DEFECTO = 30;
-const FILAS_POR_PAGINA = 50;
+const FILAS_POR_PAGINA = 25;
 
-function parseDateRaw(val: string): Date | null {
-  if (!val) return null;
-  const num = val.replace(/\D/g, '');
-  if (num.length === 8) {
-    const y = parseInt(num.slice(0, 4), 10);
-    const m = parseInt(num.slice(4, 6), 10) - 1;
-    const d = parseInt(num.slice(6, 8), 10);
-    return new Date(y, m, d);
-  }
-  if (num.length >= 14) {
-    const y = parseInt(num.slice(0, 4), 10);
-    const m = parseInt(num.slice(4, 6), 10) - 1;
-    const d = parseInt(num.slice(6, 8), 10);
-    return new Date(y, m, d);
-  }
-  const d = new Date(val);
-  return isNaN(d.getTime()) ? null : d;
+function titlecase(s: string): string {
+  if (!s) return '';
+  return s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 }
 
 function formatDate(val: string): string {
-  const d = parseDateRaw(val);
-  if (!d) return val || '';
+  if (!val) return '';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return val;
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function formatCurrency(n: number): string {
   return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
-function getInitials(name: string): string {
-  if (!name) return '?';
-  return name.charAt(0).toUpperCase();
 }
 
 function formatDateParam(d: Date): string {
@@ -70,58 +47,47 @@ function formatDateParam(d: Date): string {
   return `${y}${m}${day}000000`;
 }
 
-function toTitleCase(str: string): string {
-  if (!str) return str;
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
+const FacturaSuplidor: React.FC = () => {
+  const navigate = useNavigate();
+  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const setActiveModule = useUIStore((s: any) => s.setActiveModule);
+  const updateToolbar = useUIStore((s: any) => s.updateToolbar);
+  const resetToolbar = useUIStore((s: any) => s.resetToolbar);
+  const setImprimirCallback = useUIStore((s: any) => s.setImprimirCallback);
 
-const DevolucionVenta: React.FC = () => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const updateToolbar = useUIStore((s) => s.updateToolbar);
-  const resetToolbar = useUIStore((s) => s.resetToolbar);
-  const setActiveModule = useUIStore((s) => s.setActiveModule);
-  const setImprimirCallback = useUIStore((s) => s.setImprimirCallback);
-
-  const [data, setData] = useState<FacturaVistaDTO[]>([]);
+  const [data, setData] = useState<TransaccionVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
   const [searchText, setSearchText] = useState('');
-  const [selectedRow, setSelectedRow] = useState<FacturaVistaDTO | null>(null);
+  const [selectedRow, setSelectedRow] = useState<TransaccionVistaDTO | null>(null);
   const [fechaTrigger, setFechaTrigger] = useState(0);
   const [pdfPreview, setPdfPreview] = useState<{ url: string; title: string } | null>(null);
+
   const dateParamsRef = useRef({ desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)), hasta: formatDateParam(new Date()) });
 
   const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
     setLoading(true);
     try {
-      const { desde, hasta } = dateParamsRef.current;
-      let resultados: FacturaVistaDTO[];
-
+      let result: TransaccionVistaDTO[];
       if (busqueda.length > 2) {
-        resultados = await devolucionVentaApi.filtrar(sucursalActiva, {
+        const filtro: FiltroTransaccion = {
           cantidad: filas,
           salto: (pagina - 1) * filas,
+          ...dateParamsRef.current,
           documento: busqueda,
-          nCF: busqueda,
-          concepto: busqueda,
-          cliente: busqueda,
-          referencia: busqueda,
-          almacen: busqueda,
-        });
+        };
+        result = await facturaSuplidorApi.filtrar(sucursalActiva, filtro);
       } else {
-        resultados = await devolucionVentaApi.obtenerVista(
+        result = await facturaSuplidorApi.obtenerVista(
           sucursalActiva,
-          desde,
-          hasta,
-          filas,
-          (pagina - 1) * filas
+          dateParamsRef.current.desde, dateParamsRef.current.hasta,
+          filas, (pagina - 1) * filas
         );
       }
-
-      setData(resultados);
-      setTotal(resultados.length < filas ? (pagina - 1) * filas + resultados.length : pagina * filas + 1);
+      setData(result);
+      setTotal(result.length < filas ? (pagina - 1) * filas + result.length + 1 : (pagina - 1) * filas + result.length + filas);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
     } finally {
@@ -134,7 +100,7 @@ const DevolucionVenta: React.FC = () => {
   }, [page, pageSize, searchText, fechaTrigger, cargarDatos]);
 
   useEffect(() => {
-    setActiveModule('FDEV');
+    setActiveModule('FRDE');
     updateToolbar({ nuevo: true, editar: false, imprimir: true });
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
@@ -143,11 +109,11 @@ const DevolucionVenta: React.FC = () => {
     if (selectedRow) {
       setImprimirCallback(async () => {
         try {
-          const res = await apiClient.get(`/reportes/facturacion/devolucionVenta/${sucursalActiva}/${selectedRow.id}`, {
+          const res = await apiClient.get(`/reportes/contabilidad/facturaSuplidor/${sucursalActiva}/${selectedRow.id}`, {
             responseType: 'blob',
           });
           const blobUrl = URL.createObjectURL(res.data);
-          setPdfPreview({ url: blobUrl, title: `DEV-${selectedRow.documento}` });
+          setPdfPreview({ url: blobUrl, title: `RDE-${selectedRow.documento}` });
         } catch {
           message.error('Error al generar el PDF');
         }
@@ -162,15 +128,14 @@ const DevolucionVenta: React.FC = () => {
     setPage(1);
   };
 
-  const handleRefresh = () => {
-    setFechaTrigger(n => n + 1);
-  };
+  const handleRefresh = () => setFechaTrigger(n => n + 1);
 
   const handleDateChange = (dates: any) => {
     if (dates && dates[0] && dates[1]) {
-      const d = dates[0].format('YYYYMMDD') + '000000';
-      const h = dates[1].format('YYYYMMDD') + '000000';
-      dateParamsRef.current = { desde: d, hasta: h };
+      dateParamsRef.current = {
+        desde: formatDateParam(dates[0].toDate()),
+        hasta: formatDateParam(dates[1].toDate()),
+      };
     } else {
       dateParamsRef.current = {
         desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
@@ -181,25 +146,21 @@ const DevolucionVenta: React.FC = () => {
     setFechaTrigger(n => n + 1);
   };
 
-  const handleTableChange = (pagination: any) => {
-    setPage(pagination.current);
-  };
-
-  const handleRowClick = (record: FacturaVistaDTO) => {
+  const handleRowClick = (record: TransaccionVistaDTO) => {
     setSelectedRow(record);
     const editable = record.periodo !== 6 && record.estado === 0;
     updateToolbar({ editar: editable });
   };
 
-  const columns: ColumnsType<FacturaVistaDTO> = [
+  const columns: ColumnsType<TransaccionVistaDTO> = [
     {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 160,
+      width: 140,
       fixed: 'left',
-      render: (doc: string) => (
-        <Text strong style={{ color: '#6c5ffc', cursor: 'pointer' }}>{doc}</Text>
+      render: (doc: string, record: TransaccionVistaDTO) => (
+        <a onClick={() => navigate(`/FRDE/${record.id}`)} style={{ fontWeight: 600 }}>{doc}</a>
       ),
     },
     {
@@ -207,41 +168,14 @@ const DevolucionVenta: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (f: string) => <Text>{formatDate(f)}</Text>,
+      render: (f: string) => formatDate(f),
     },
     {
-      title: 'Cliente',
+      title: 'Proveedor',
       dataIndex: 'entidad',
       key: 'entidad',
-      render: (name: string) => (
-        <Space>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              background: '#556ee620',
-              color: '#556ee6',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 14,
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
-          >
-            {getInitials(name)}
-          </div>
-          <Text>{toTitleCase(name) || ''}</Text>
-        </Space>
-      ),
-    },
-    {
-      title: 'Factura',
-      dataIndex: 'referencia',
-      key: 'referencia',
-      width: 150,
-      render: (ref: string) => <Text>{ref || ''}</Text>,
+      ellipsis: true,
+      render: (name: string) => titlecase(name) || '',
     },
     {
       title: 'Concepto',
@@ -249,23 +183,16 @@ const DevolucionVenta: React.FC = () => {
       key: 'concepto',
       width: 280,
       ellipsis: true,
-      render: (concepto: string) => <Text>{toTitleCase(concepto) || ''}</Text>,
-    },
-    {
-      title: 'Almacén',
-      dataIndex: 'almacen',
-      key: 'almacen',
-      width: 200,
-      render: (almacen: string) => <Text>{toTitleCase(almacen) || ''}</Text>,
+      render: (concepto: string) => titlecase(concepto) || '',
     },
     {
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
-      width: 150,
+      width: 160,
       align: 'right',
       render: (total: number) => (
-        <Text strong style={{ color: '#343a40' }}>{formatCurrency(total)}</Text>
+        <span style={{ fontWeight: 600 }}>{formatCurrency(total)}</span>
       ),
     },
     {
@@ -273,21 +200,21 @@ const DevolucionVenta: React.FC = () => {
       dataIndex: 'ncf',
       key: 'ncf',
       width: 150,
-      render: (ncf: string) => <Text>{ncf || ''}</Text>,
+      render: (ncf: string) => ncf || '',
     },
     {
       title: 'Estado',
       dataIndex: 'estado',
       key: 'estado',
       width: 100,
-      render: (estado: number, record: FacturaVistaDTO) => {
+      render: (estado: number, record: TransaccionVistaDTO) => {
         const esCerrado = record.periodo === 6;
         const info = ESTADO_MAP[estado] || { label: 'Desconocido', color: 'default' };
         return (
-          <Space>
+          <>
             <Tag color={info.color}>{info.label}</Tag>
             {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-          </Space>
+          </>
         );
       },
     },
@@ -296,10 +223,10 @@ const DevolucionVenta: React.FC = () => {
       key: 'acciones',
       width: 140,
       fixed: 'right',
-      render: (_: any, record: FacturaVistaDTO) => (
+      render: (_: any, record: TransaccionVistaDTO) => (
         <Space size="small">
           <Tooltip title="Ver detalle">
-            <Button type="text" size="small" icon={<EyeOutlined />} />
+            <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/FRDE/${record.id}`)} />
           </Tooltip>
           {record.periodo !== 6 && record.estado === 0 && (
             <Tooltip title="Editar">
@@ -313,22 +240,11 @@ const DevolucionVenta: React.FC = () => {
 
   return (
     <Card
-      styles={{
-        body: { padding: 0 },
-      }}
-      style={{
-        borderRadius: 8,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-      }}
+      styles={{ body: { padding: 0 } }}
+      style={{ borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}
     >
       <div style={{ padding: '20px 24px 0' }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          marginBottom: 16,
-          flexWrap: 'wrap',
-        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           <RangePicker
             style={{ width: 180 }}
             format="YYYY-MM-DD"
@@ -361,32 +277,20 @@ const DevolucionVenta: React.FC = () => {
         </div>
       </div>
 
-      <Table<FacturaVistaDTO>
+      <Table<TransaccionVistaDTO>
         columns={columns}
         dataSource={data}
         rowKey="id"
         loading={loading}
-        scroll={{ x: 1600 }}
+        scroll={{ x: 1300 }}
         size="middle"
         onRow={(record) => ({
           onClick: () => handleRowClick(record),
           style: {
             cursor: 'pointer',
             background: selectedRow?.id === record.id ? '#eef0fc' : undefined,
-            transition: 'background 0.15s',
-          },
-          onMouseEnter: (e) => {
-            if (selectedRow?.id !== record.id) {
-              e.currentTarget.style.background = '#f8f9fa';
-            }
-          },
-          onMouseLeave: (e) => {
-            if (selectedRow?.id !== record.id) {
-              e.currentTarget.style.background = 'transparent';
-            }
           },
         })}
-        onChange={handleTableChange}
         pagination={{
           current: page,
           pageSize,
@@ -394,7 +298,7 @@ const DevolucionVenta: React.FC = () => {
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
-        style={{ borderTop: '1px solid #e9ecef', fontFamily: 'inherit' }}
+        style={{ borderTop: '1px solid #e9ecef' }}
       />
 
       <Drawer
@@ -407,13 +311,11 @@ const DevolucionVenta: React.FC = () => {
         width="70%"
       >
         {pdfPreview && (
-          <div style={{ width: '100%', height: '100%', overflow: 'auto', transform: 'scale(1.1)', transformOrigin: 'top left' }}>
-            <iframe src={pdfPreview.url} style={{ width: '100%', height: '90vh', border: 'none' }} title="PDF" />
-          </div>
+          <iframe src={pdfPreview.url} style={{ width: '100%', height: '90vh', border: 'none' }} title="PDF" />
         )}
       </Drawer>
     </Card>
   );
 };
 
-export default DevolucionVenta;
+export default FacturaSuplidor;

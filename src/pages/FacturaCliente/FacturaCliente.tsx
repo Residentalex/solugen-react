@@ -51,7 +51,7 @@ function parseDateRaw(val: string): Date | null {
 
 function formatDate(val: string): string {
   const d = parseDateRaw(val);
-  if (!d) return val || '-';
+  if (!d) return val || '';
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
@@ -233,7 +233,7 @@ const FacturaCliente: React.FC = () => {
           >
             {getInitials(name)}
           </div>
-          <Text>{toTitleCase(name) || '-'}</Text>
+          <Text>{toTitleCase(name) || ''}</Text>
         </Space>
       ),
     },
@@ -243,7 +243,7 @@ const FacturaCliente: React.FC = () => {
       key: 'concepto',
       width: 280,
       ellipsis: true,
-      render: (concepto: string) => <Text>{toTitleCase(concepto) || '-'}</Text>,
+      render: (concepto: string) => <Text>{toTitleCase(concepto) || ''}</Text>,
     },
     {
       title: 'Total',
@@ -260,7 +260,7 @@ const FacturaCliente: React.FC = () => {
       dataIndex: 'ncf',
       key: 'ncf',
       width: 150,
-      render: (ncf: string) => <Text>{ncf || '-'}</Text>,
+      render: (ncf: string) => <Text>{ncf || ''}</Text>,
     },
     {
       title: 'Estado',

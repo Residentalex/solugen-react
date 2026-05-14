@@ -51,7 +51,7 @@ function parseDateRaw(val: string): Date | null {
 
 function formatDate(val: string): string {
   const d = parseDateRaw(val);
-  if (!d) return val || '-';
+  if (!d) return val || '';
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
@@ -213,7 +213,7 @@ const DevolucionCompra: React.FC = () => {
   title: 'Fecha',
   dataIndex: 'fecha',
   key: 'fecha',
-  width: 100,
+  width: 110,
   render: (f: string) => <Text>{formatDate(f)}</Text>,
 },
 {
@@ -239,7 +239,7 @@ const DevolucionCompra: React.FC = () => {
       >
         {getInitials(name)}
       </div>
-      <Text>{toTitleCase(name) || '-'}</Text>
+      <Text>{toTitleCase(name) || ''}</Text>
     </Space>
   ),
 },
@@ -249,14 +249,14 @@ const DevolucionCompra: React.FC = () => {
   key: 'concepto',
   width: 350,
   ellipsis: true,
-  render: (concepto: string) => <Text>{toTitleCase(concepto) || '-'}</Text>,
+  render: (concepto: string) => <Text>{toTitleCase(concepto) || ''}</Text>,
 },
 {
   title: 'Orden Compra',
   dataIndex: 'ordenCompra',
   key: 'ordenCompra',
   width: 140,
-  render: (oc: string) => <Text>{oc || '-'}</Text>,
+  render: (oc: string) => <Text>{oc || ''}</Text>,
 },
 {
   title: 'Total',

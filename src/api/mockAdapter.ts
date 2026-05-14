@@ -16,6 +16,7 @@ function crearModulosPantallas(): { pantallas: PantallaDTO[] } {
     { id: 2, nombre: 'Compras', orden: 2 },
     { id: 3, nombre: 'Ventas', orden: 3 },
     { id: 4, nombre: 'Facturacion', orden: 4 },
+    { id: 5, nombre: 'Administracion', orden: 5 },
   ];
 
   const pantallas: PantallaDTO[] = [
@@ -27,6 +28,12 @@ function crearModulosPantallas(): { pantallas: PantallaDTO[] } {
     { id: 6, nombre: 'Devolución de Venta', codigo: 'FDEV', ruta: '/FDEV', esReporte: false, moduloID: 3, orden: 6, grupo: 'Documentos', modulos: [modulos[2]], acciones: ['ver', 'crear', 'aplicar', 'postear'] },
     { id: 7, nombre: 'Facturas POS', codigo: 'FPV', ruta: '/FPV', esReporte: false, moduloID: 4, orden: 7, grupo: undefined, modulos: [modulos[3]], acciones: ['ver', 'crear', 'anular', 'aplicar'] },
     { id: 8, nombre: 'Facturas Cliente', codigo: 'FFAC', ruta: '/FFAC', esReporte: false, moduloID: 4, orden: 8, grupo: undefined, modulos: [modulos[3]], acciones: ['ver', 'crear', 'editar', 'anular', 'aplicar'] },
+    { id: 9, nombre: 'Facturas Proveedor', codigo: 'FRDE', ruta: '/FRDE', esReporte: false, moduloID: 2, orden: 9, grupo: undefined, modulos: [modulos[1]], acciones: ['ver', 'crear', 'editar', 'anular', 'aplicar'] },
+    { id: 10, nombre: 'Distribución Balance CXP', codigo: 'FDBASUP', ruta: '/FDBASUP', esReporte: false, moduloID: 2, orden: 10, grupo: 'Documentos', modulos: [modulos[1]], acciones: ['ver', 'crear', 'aplicar', 'anular'] },
+    { id: 11, nombre: 'Distribución Balance CXC', codigo: 'FDBACLI', ruta: '/FDBACLI', esReporte: false, moduloID: 3, orden: 11, grupo: 'Documentos', modulos: [modulos[2]], acciones: ['ver', 'crear', 'aplicar', 'anular'] },
+    { id: 12, nombre: 'Recibo Ingreso', codigo: 'FRI', ruta: '/FRI', esReporte: false, moduloID: 4, orden: 12, grupo: undefined, modulos: [modulos[3]], acciones: ['ver', 'crear', 'editar', 'anular', 'aplicar'] },
+    { id: 13, nombre: 'Usuarios', codigo: 'MUsuario', ruta: '/MUsuario', esReporte: false, moduloID: 5, orden: 1, grupo: undefined, modulos: [modulos[4]], acciones: ['ver', 'crear', 'editar', 'anular'] },
+    { id: 14, nombre: 'Roles', codigo: 'MROL', ruta: '/MROL', esReporte: false, moduloID: 5, orden: 2, grupo: undefined, modulos: [modulos[4]], acciones: ['ver', 'crear', 'editar', 'anular'] },
   ];
 
   return { pantallas };
@@ -266,6 +273,123 @@ function facturaPOSMock(i: number) {
   };
 }
 
+function facturaSuplidorMock(i: number) {
+  const estados = [0, 0, 1, 1, 4, 3, 6];
+  return {
+    id: i + 1,
+    fechaDocumento: generarFechaYYYYMMDD(i * 2),
+    noDocumento: `RDE-${String(9000 + i).padStart(6, '0')}`,
+    nombreEntidad: toTitleCase(proveedores[i % proveedores.length]),
+    nota: toTitleCase(conceptos[i % conceptos.length]),
+    total: Math.round(Math.random() * 800000 + 10000) / 100,
+    ncf: i % 2 === 0 ? `E31${String(50000000 + i).slice(0, 8)}` : '',
+    estado: estados[i % estados.length],
+    periodo: i < 2 ? 6 : new Date().getMonth() + 1,
+    referencia: i % 3 === 0 ? `OC-${String(500 + i).padStart(6, '0')}` : '',
+    diasCredito: 30,
+  };
+}
+
+function reciboIngresoMock(i: number) {
+  const estados = [0, 0, 1, 1, 3, 4, 6];
+  return {
+    id: i + 1,
+    fecha: generarFechaYYYYMMDD(i * 2),
+    documento: `RI-${String(11000 + i).padStart(6, '0')}`,
+    entidad: toTitleCase(clientesList[i % clientesList.length]),
+    diasCredito: 0,
+    concepto: toTitleCase(conceptos[(i + 1) % conceptos.length]),
+    total: Math.round(Math.random() * 300000 + 5000) / 100,
+    ncf: '',
+    estado: estados[i % estados.length],
+    periodo: i < 1 ? 6 : new Date().getMonth() + 1,
+    referencia: i % 3 === 0 ? `FAC-${String(7000 + i).padStart(6, '0')}` : '',
+    tipoPago: i % 2 === 0 ? 'EFECTIVO' : 'CHEQUE',
+  };
+}
+
+function distribucionMock(i: number) {
+  const estados = [0, 0, 1, 1, 3, 6];
+  const entidad = i % 2 === 0
+    ? toTitleCase(proveedores[i % proveedores.length])
+    : toTitleCase(clientesList[i % clientesList.length]);
+  return {
+    id: i + 1,
+    fecha: generarFechaYYYYMMDD(i * 2),
+    documento: `DBA-${String(10000 + i).padStart(6, '0')}`,
+    entidad,
+    concepto: toTitleCase(conceptos[i % conceptos.length]),
+    total: Math.round(Math.random() * 500000 + 10000) / 100,
+    ncf: '',
+    estado: estados[i % estados.length],
+    periodo: i < 1 ? 6 : new Date().getMonth() + 1,
+  };
+}
+
+const nombresRoles = ['Administrador', 'Supervisor', 'Analista', 'Vendedor', 'Almacenista', 'Contador', 'Auditor', 'Soporte'];
+const accionesDisponibles = ['ver', 'crear', 'editar', 'anular', 'aplicar', 'desaplicar', 'postear'];
+
+function rolMock(i: number) {
+  const pantallasCount = Math.floor(Math.random() * 4) + 3;
+  const selected = new Set<number>();
+  const pantallas: { pantalla: { id: number; nombre: string; codigo: string; ruta: string; moduloID: number; orden: number; modulos: { id: number; nombre: string; orden: number }[]; grupo?: string }; acciones: { id: number; codigo: string; nombre: string }[] }[] = [];
+  for (let j = 0; j < pantallasCount; j++) {
+    let idx;
+    do { idx = Math.floor(Math.random() * 14) + 1; } while (selected.has(idx));
+    selected.add(idx);
+    const accs = accionesDisponibles.slice(0, Math.floor(Math.random() * 4) + 2);
+    pantallas.push({
+      pantalla: {
+        id: idx,
+        nombre: `Pantalla ${idx}`,
+        codigo: `P${idx}`,
+        ruta: `/P${idx}`,
+        moduloID: 1,
+        orden: idx,
+        modulos: [{ id: 1, nombre: 'General', orden: 1 }],
+      },
+      acciones: accs.map((a, ai) => ({ id: ai + 1, codigo: a, nombre: a.charAt(0).toUpperCase() + a.slice(1) })),
+    });
+  }
+  return {
+    id: i + 1,
+    nombre: nombresRoles[i % nombresRoles.length],
+    descripcion: `Rol de ${nombresRoles[i % nombresRoles.length].toLowerCase()} del sistema`,
+    activo: i % 7 !== 0,
+    pantallas,
+    cantidadUsuarios: Math.floor(Math.random() * 8) + 1,
+  };
+}
+
+function usuarioMock(i: number) {
+  const nombres = ['Carlos', 'María', 'Juan', 'Ana', 'Pedro', 'Laura', 'Roberto', 'Sofía', 'Miguel', 'Carmen',
+    'Diego', 'Valentina', 'Andrés', 'Isabella', 'Felipe', 'Gabriela', 'Jorge', 'Rocío', 'Luis', 'Fernanda'];
+  const apellidos = ['García', 'Martínez', 'López', 'Rodríguez', 'Pérez', 'Fernández', 'González', 'Ramírez', 'Torres', 'Flores'];
+  const idx = i % nombres.length;
+  const rolIdx = idx % nombresRoles.length;
+  const diasAtras = Math.floor(Math.random() * 60) + 1;
+  const ultimoLoginDate = new Date(Date.now() - diasAtras * 86400000);
+  return {
+    id: i + 1,
+    nombre: `${nombres[idx]} ${apellidos[idx % apellidos.length]}`,
+    nombreUsuario: nombres[idx].toUpperCase().slice(0, 4) + String(i + 1).padStart(2, '0'),
+    activo: i % 5 !== 0,
+    debeCambiarClave: i % 10 === 0,
+    diasVigencia: 30,
+    ultimoLogin: ultimoLoginDate.toISOString(),
+    roles: [{ id: rolIdx + 1, nombre: nombresRoles[rolIdx] }],
+    sucursalesRoles: [
+      { sucursal: 0, nombreSucursal: 'Orense Plaza', roles: [{ id: rolIdx + 1, nombre: nombresRoles[rolIdx] }] },
+      { sucursal: 1, nombreSucursal: 'Hiper Romana', roles: [{ id: (rolIdx + 1) % nombresRoles.length + 1, nombre: nombresRoles[(rolIdx + 1) % nombresRoles.length] }] },
+    ],
+    pantallas: [],
+    permisosEspeciales: [],
+  };
+}
+
+const ROLES = generarLista(rolMock, 8);
+const USUARIOS = generarLista(usuarioMock, 20);
+
 function detalleArticulos() {
   const count = Math.floor(Math.random() * 4) + 3;
   const items = [];
@@ -416,6 +540,9 @@ const DEV_VENTAS = generarLista(devVentaMock, 14);
 const COTIZACIONES = generarLista(cotizacionMock, 12);
 const FACTURAS = generarLista(facturaMock, 22);
 const FACTURAS_POS = generarLista(facturaPOSMock, 15);
+const FACTURAS_SUPLIDOR = generarLista(facturaSuplidorMock, 18);
+const RECIBOS = generarLista(reciboIngresoMock, 16);
+const DISTRIBUCIONES = generarLista(distribucionMock, 14);
 
 function extractParam(url: string | undefined, regex: RegExp): string | null {
   if (!url) return null;
@@ -554,11 +681,114 @@ export function setupMocks() {
   mock.onPost(new RegExp('/api/PV/\\d+/Anular')).reply(200, okVoid);
   mock.onPut(new RegExp('/api/PV/\\d+/aplicar/\\d+')).reply(200, okVoid);
 
+  mock.onGet(new RegExp('/api/Transaccion/\\d+/tipo/RDE/filtrar')).reply(() => handleList(FACTURAS_SUPLIDOR));
+  mock.onGet(new RegExp('/api/Transaccion/\\d+/\\d+$')).reply((c) => {
+    const m = c.url?.match(/\/api\/Transaccion\/\d+\/(\d+)$/);
+    const id = m ? parseInt(m[1], 10) : 1;
+    const base = FACTURAS_SUPLIDOR[id - 1] || FACTURAS_SUPLIDOR[0];
+    const suplidorNombre = proveedores[(id - 1) % proveedores.length];
+    return okResp({
+      ...detalleGenerico(id, detalleArticulos(), base?.total || 80000, 'RDE', 'Factura Proveedor / Recibo Ingreso'),
+      suplidor: { nombre: toTitleCase(suplidorNombre), codigo: `SUP-${String(id).padStart(3, '0')}`, identificacion: `12345678${String(id).padStart(3, '0')}`, telefono: '809-555-0101', direccion: 'Av. Principal #123' },
+      fechaVencimiento: id % 2 === 0 ? new Date(Date.now() + 30 * 86400000).toISOString() : null,
+      tipoCompra: id % 2 === 0 ? 'C' : 'D',
+    });
+  });
+  mock.onGet(new RegExp('/api/Transaccion/\\d+/tipo/RDE$')).reply(() => handleList(FACTURAS_SUPLIDOR));
+
+  mock.onGet(new RegExp('/api/Transaccion/\\d+/tipo/DBA/filtrar')).reply(() => handleList(DISTRIBUCIONES));
+  mock.onGet(new RegExp('/api/Transaccion/\\d+/tipo/DBA$')).reply(() => handleList(DISTRIBUCIONES));
+  mock.onGet(new RegExp('/api/DBA/\\d+/\\d+$')).reply((c) => handleDetail(c.url!, (id) => {
+    const base = DISTRIBUCIONES[id - 1] || DISTRIBUCIONES[0];
+    const nombreEntidad = base?.entidad || '';
+    return {
+      ...detalleGenerico(id, detalleArticulos(), base?.total || 50000, 'DBA', 'Distribución Balance'),
+      suplidor: undefined,
+      beneficiario: { nombre: nombreEntidad, codigo: `ENT-${id}`, identificacion: `12345678${id}`, telefono: '809-555-0101' },
+    };
+  }, DISTRIBUCIONES));
+
+  mock.onGet(new RegExp('/api/Transaccion/\\d+/tipo/RI/filtrar')).reply(() => handleList(RECIBOS));
+  mock.onGet(new RegExp('/api/Transaccion/\\d+/tipo/RI$')).reply(() => handleList(RECIBOS));
+
+  mock.onPost(new RegExp('/api/Transaccion/\\d+/anular')).reply(200, okVoid);
+  mock.onPut(new RegExp('/api/Transaccion/\\d+/aplicar/\\d+')).reply(200, okVoid);
+
   mock.onGet(new RegExp('/api/reportes/')).reply((_config) => {
     const encoder = new TextEncoder();
     const pdfBytes = encoder.encode('%PDF-1.4 mock binary');
     return [200, pdfBytes, { 'Content-Type': 'application/pdf' }];
   });
+
+  mock.onGet(new RegExp('/api/Rol/\\d+/pantallas-disponibles')).reply(() => {
+    const modulos = [
+      { id: 1, nombre: 'Inventario', orden: 1 },
+      { id: 2, nombre: 'Compras', orden: 2 },
+      { id: 3, nombre: 'Ventas', orden: 3 },
+      { id: 4, nombre: 'Facturacion', orden: 4 },
+      { id: 5, nombre: 'Administracion', orden: 5 },
+    ];
+    const pantallas = [
+      { id: 1, nombre: 'Entradas de Almacén', codigo: 'FENP', ruta: '/FENP', moduloID: 1, orden: 1, grupo: 'Movimientos', modulos: [modulos[0]] },
+      { id: 2, nombre: 'Salidas de Almacén', codigo: 'FSAP', ruta: '/FSAP', moduloID: 1, orden: 2, grupo: 'Movimientos', modulos: [modulos[0]] },
+      { id: 3, nombre: 'Transferencias', codigo: 'FTRP', ruta: '/FTRP', moduloID: 1, orden: 3, grupo: 'Movimientos', modulos: [modulos[0]] },
+      { id: 13, nombre: 'Usuarios', codigo: 'MUsuario', ruta: '/MUsuario', moduloID: 5, orden: 1, modulos: [modulos[4]] },
+      { id: 14, nombre: 'Roles', codigo: 'MROL', ruta: '/MROL', moduloID: 5, orden: 2, modulos: [modulos[4]] },
+    ];
+    const data = pantallas.map((p) => ({
+      pantalla: { ...p, acciones: [] as string[], esReporte: false, pantallaPadreID: undefined },
+      acciones: accionesDisponibles.map((a, ai) => ({ id: ai + 1, codigo: a, nombre: a.charAt(0).toUpperCase() + a.slice(1) })),
+    }));
+    return okResp(data);
+  });
+  mock.onGet(new RegExp('/api/Rol/\\d+/\\d+$')).reply((c) => handleDetail(c.url!, (id) => ROLES[id - 1] || ROLES[0], ROLES));
+  mock.onGet(new RegExp('/api/Rol/\\d+$')).reply(() => handleList(ROLES));
+  mock.onPost(new RegExp('/api/Rol/\\d+$')).reply((c) => {
+    const body = JSON.parse(c.data || '{}');
+    const newRol = { ...body, id: ROLES.length + 1, cantidadUsuarios: 0 };
+    ROLES.push(newRol);
+    return okResp(newRol);
+  });
+  mock.onPut(new RegExp('/api/Rol/\\d+$')).reply((c) => {
+    const body = JSON.parse(c.data || '{}');
+    const idx = ROLES.findIndex((r) => r.id === body.id);
+    if (idx >= 0) ROLES[idx] = { ...ROLES[idx], ...body };
+    return okResp(body);
+  });
+
+  mock.onGet(new RegExp('/api/Usuario/\\d+/filtrar')).reply(() => handleList(USUARIOS));
+  mock.onGet(new RegExp('/api/Usuario/\\d+/\\d+$')).reply((c) => handleDetail(c.url!, (id) => USUARIOS[id - 1] || USUARIOS[0], USUARIOS));
+  mock.onGet(new RegExp('/api/Usuario/\\d+$')).reply(() => handleList(USUARIOS));
+  mock.onPost(new RegExp('/api/Usuario/\\d+$')).reply((c) => {
+    const body = JSON.parse(c.data || '{}');
+    const newUser = {
+      ...body,
+      id: USUARIOS.length + 1,
+      activo: true,
+      debeCambiarClave: true,
+      roles: (body.roles || []).map((r: any) => ({ id: r.rolID, nombre: 'Rol' })),
+      sucursalesRoles: [],
+      pantallas: [],
+      permisosEspeciales: [],
+    };
+    USUARIOS.push(newUser);
+    return okResp(newUser);
+  });
+  mock.onPut(new RegExp('/api/Usuario/\\d+$')).reply((c) => {
+    const body = JSON.parse(c.data || '{}');
+    const idx = USUARIOS.findIndex((u) => u.id === body.id);
+    if (idx >= 0) USUARIOS[idx] = { ...USUARIOS[idx], ...body };
+    return okResp(body);
+  });
+  mock.onPut(new RegExp('/api/Usuario/\\d+/\\d+/estado')).reply((c) => {
+    const m = c.url?.match(/\/api\/Usuario\/(\d+)\/(\d+)\/estado/);
+    const id = m ? parseInt(m[2], 10) : 0;
+    const body = JSON.parse(c.data || '{}');
+    const idx = USUARIOS.findIndex((u) => u.id === id);
+    if (idx >= 0) USUARIOS[idx].activo = body.activo;
+    return okVoid;
+  });
+  mock.onPost(new RegExp('/api/Usuario/\\d+/\\d+/resetear-password')).reply(() => okResp('Temp1234!'));
 
   mock.onAny().passThrough();
 

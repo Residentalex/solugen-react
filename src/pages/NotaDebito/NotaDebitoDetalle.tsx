@@ -4,7 +4,7 @@ import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message
 } from 'antd';
 import {
-  ArrowLeftOutlined, PrinterOutlined
+  ArrowLeftOutlined, PrinterOutlined, EditOutlined
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -38,78 +38,92 @@ function formatDate(val: string): string {
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+const ACCION_MAP: Record<number, string> = {
+  0: 'Crear',
+  1: 'Modificar',
+  2: 'Eliminar',
+  3: 'Aplicar',
+  4: 'Desaplicar',
+  5: 'Postear',
+  6: 'Anular',
+  7: 'Revisar',
+  8: 'Reversar',
+  9: 'Escanear',
+};
+
 function toTitleCase(str: string): string {
-  if (!str) return '-';
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 interface EntidadCardProps {
-  entidad: any;
-  tipoEntidad: string;
+  entidad: { nombre: string; identificacion: string; telefono?: string } | undefined;
+  tipoEntidad: 'SUP' | 'CLI';
 }
 
 const EntidadCard: React.FC<EntidadCardProps> = ({ entidad, tipoEntidad }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>{tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente'}</span>}
-    className="paces-card"
-    style={{ marginBottom: 16 }}
+    style={{ borderRadius: 8, marginBottom: 16 }}
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
       <div style={{ fontSize: 16, fontWeight: 700 }}>
         {entidad?.nombre ? toTitleCase(entidad.nombre) : '-'}
       </div>
       <div>
-        <span style={{ color: '#6c757d' }}>RNC: </span>
+        <span style={{ color: '#666' }}>RNC: </span>
         <span>{entidad?.identificacion || '-'}</span>
       </div>
       <div>
-        <span style={{ color: '#6c757d' }}>Teléfono: </span>
+        <span style={{ color: '#666' }}>Teléfono: </span>
         <span>{entidad?.telefono || '-'}</span>
       </div>
     </div>
   </Card>
 );
 
-const TotalesCard: React.FC<{ data: any }> = ({ data }) => (
-  <Card title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>} className="paces-card">
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <Row justify="space-between">
-        <span style={{ color: '#6c757d' }}>Subtotal</span>
-        <span>{formatNumber(data.subTotal)}</span>
-      </Row>
-      <Row justify="space-between">
-        <span style={{ color: '#6c757d' }}>Descuento</span>
-        <span>{formatNumber(data.descuento)}</span>
-      </Row>
-      <Row justify="space-between">
-        <span style={{ color: '#6c757d' }}>Impuestos</span>
-        <span>{formatNumber(data.impuestos)}</span>
-      </Row>
-      <Row justify="space-between">
-        <span style={{ color: '#6c757d' }}>Retenciones</span>
-        <span>{formatNumber(data.retenciones)}</span>
-      </Row>
-      <Row justify="space-between">
-        <span style={{ color: '#6c757d' }}>Débitos</span>
-        <span>{formatNumber(data.debitos)}</span>
-      </Row>
-      <Row justify="space-between">
-        <span style={{ color: '#6c757d' }}>Créditos</span>
-        <span>{formatNumber(data.creditos)}</span>
-      </Row>
+interface TotalesCardProps {
+  subTotal: number;
+  descuento: number;
+  impuestos: number;
+  total: number;
+  nota: string;
+  alignRight: boolean;
+}
+
+const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight }) => (
+  <Card
+    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
+    style={{ borderRadius: 8 }}
+  >
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
+      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
+        {!alignRight && <span style={{ color: '#666' }}>Subtotal</span>}
+        <span>{formatNumber(subTotal)}</span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
+        {!alignRight && <span style={{ color: '#666' }}>Descuento</span>}
+        <span>{formatNumber(descuento)}</span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
+        {!alignRight && <span style={{ color: '#666' }}>Impuestos</span>}
+        <span>{formatNumber(impuestos)}</span>
+      </div>
     </div>
+
     <Divider style={{ margin: '12px 0' }} />
-    <Row justify="space-between" style={{ fontSize: 16, fontWeight: 700 }}>
-      <span>Total</span>
-      <span style={{ color: '#3f8600' }}>{formatCurrency(data.total)}</span>
-    </Row>
-    {data.nota && (
+
+    <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
+      {!alignRight && <span>Total</span>}
+      <span style={{ color: '#3f8600' }}>{formatCurrency(total)}</span>
+    </div>
+
+    {nota && (
       <>
         <Divider style={{ margin: '12px 0' }} />
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#6c757d', marginBottom: 4 }}>Notas</div>
-          <div style={{ fontSize: 13, color: '#333', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-            {data.nota}
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#666', marginBottom: 4, textAlign: alignRight ? 'right' : undefined }}>Notas</div>
+          <div style={{ fontSize: 13, color: '#333', whiteSpace: 'pre-wrap', lineHeight: 1.5, textAlign: alignRight ? 'right' : undefined }}>
+            {nota}
           </div>
         </div>
       </>
@@ -155,7 +169,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
-        <div style={{ marginTop: 16, color: '#6c757d' }}>Cargando documento...</div>
+        <div style={{ marginTop: 16, color: '#666' }}>Cargando documento...</div>
       </div>
     );
   }
@@ -174,58 +188,35 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
   ];
 
   const asientoColumns = [
-    { title: 'Cuenta', dataIndex: 'noCuenta', key: 'noCuenta', width: 120 },
-    { title: 'Descripción', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true, render: (v: string) => v ? toTitleCase(v) : '-' },
-    { title: 'Débito', dataIndex: 'debito', key: 'debito', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Crédito', dataIndex: 'credito', key: 'credito', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v) },
-  ];
-
-  const impuestoColumns = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
-    { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true },
-    { title: 'Porcentaje', dataIndex: 'porcentaje', key: 'porcentaje', width: 110, align: 'right' as const, render: (v: number) => `${formatNumber(v)}%` },
-    { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v) },
+    { title: 'Cuenta', key: 'cuenta', width: 120,
+      render: (_: any, r: any) => r.cuentaContable?.noCuenta || '-' },
+    { title: 'Nombre', key: 'nombre', ellipsis: true,
+      render: (_: any, r: any) => r.cuentaContable?.nombre ? toTitleCase(r.cuentaContable.nombre) : '-' },
+    { title: 'Descripcion', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
+      render: (v: string) => v ? toTitleCase(v) : '-' },
+    { title: 'Debito', key: 'debito', width: 130, align: 'right' as const,
+      render: (_: any, r: any) => esDebito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
+    { title: 'Credito', key: 'credito', width: 130, align: 'right' as const,
+      render: (_: any, r: any) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
   ];
 
   const logColumns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => v ? new Date(v).toLocaleString('es-DO') : '-' },
-    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 120 },
-    { title: 'Acción', dataIndex: 'accion', key: 'accion', width: 100 },
-    { title: 'Detalle', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
+    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
+    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200, render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-') },
+    { title: 'Estacion', dataIndex: 'estacion', key: 'estacion', width: 200 },
+    { title: 'Accion', dataIndex: 'accion', key: 'accion', width: 120, render: (v: number) => ACCION_MAP[v] || `Accion ${v}` },
+    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
   ];
 
-  const sumDebitos = (data.asientos || []).reduce((s: number, a: any) => s + (a.debito || 0), 0);
-  const sumCreditos = (data.asientos || []).reduce((s: number, a: any) => s + (a.credito || 0), 0);
+  function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
+  function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
 
-  const headerCard = (
-    <Card
-      title={
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 18, fontWeight: 600 }}>
-            {data.concepto?.nombre || '-'}
-          </span>
-          <Space>
-            {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-            <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-          </Space>
-        </div>
-      }
-      className="paces-card"
-      style={{ marginBottom: 16 }}
-    >
-      <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 3 }}>
-        <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
-        <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-        <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-        <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
-        <Descriptions.Item label="Moneda">{data.moneda?.nombre ? toTitleCase(data.moneda.nombre) : '-'}</Descriptions.Item>
-        <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
-      </Descriptions>
-    </Card>
-  );
+  const totalDebitos = (data.asientos || []).reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
+  const totalCreditos = (data.asientos || []).reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
 
   return (
     <div>
+      {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(`/${codigoPantalla}`)}>
           Volver
@@ -250,137 +241,126 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
                   URL.revokeObjectURL(blobUrl);
                 }, 30000);
               }, 2000);
-            } catch (err: any) {
-              try {
-                const blob = err?.response?.data;
-                const text = blob instanceof Blob ? await blob.text() : '';
-                const json = JSON.parse(text);
-                message.error(json.errorMessage || 'Error al generar el PDF');
-              } catch {
-                message.error(err?.message || 'Error al generar el PDF');
-              }
+            } catch {
+              message.error('Error al generar el PDF');
             } finally {
               setImprimiendo(false);
             }
           }}>Imprimir</Button>
+          {data.estado === 0 && data.periodo !== 6 && (
+            <Button type="primary" icon={<EditOutlined />}>Editar</Button>
+          )}
         </Space>
       </div>
 
       {isLarge ? (
+        /* === DESKTOP LAYOUT (≥ lg) === */
         <Row gutter={16}>
           <Col lg={18}>
-            {headerCard}
+            <Card
+              title={
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 18, fontWeight: 600 }}>
+                    {data.concepto?.nombre || '-'}
+                  </span>
+                  <Space>
+                    {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
+                    <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
+                  </Space>
+                </div>
+              }
+              style={{ marginBottom: 16 }}
+            >
+              <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 3 }}>
+                <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Moneda">{data.moneda?.nombre ? toTitleCase(data.moneda.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
+              </Descriptions>
+            </Card>
+
             <Tabs defaultActiveKey="documentos" type="card">
               <TabPane tab={`Documentos (${data.transaccionesAsociadas?.length || 0})`} key="documentos">
-                <Table
-                  dataSource={data.transaccionesAsociadas || []}
-                  columns={asociadasColumns}
-                  rowKey={(r: any) => r.transaccionAsociadaID || r.id}
-                  size="small"
-                  pagination={false}
-                  scroll={{ x: 800 }}
-                />
+                <Table dataSource={data.transaccionesAsociadas || []} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
               </TabPane>
               <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-                <Table
-                  dataSource={data.asientos || []}
-                  columns={asientoColumns}
-                  rowKey={(r: any) => r.id || r.asientoID}
-                  size="small"
-                  pagination={false}
-                  scroll={{ x: 600 }}
-                  summary={() => data.asientos?.length ? (
-                    <Table.Summary.Row>
-                      <Table.Summary.Cell index={0}><strong>Totales</strong></Table.Summary.Cell>
-                      <Table.Summary.Cell index={1} />
-                      <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(sumDebitos)}</strong></Table.Summary.Cell>
-                      <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(sumCreditos)}</strong></Table.Summary.Cell>
-                    </Table.Summary.Row>
-                  ) : null}
+                <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
+                  summary={() => (
+                    <Table.Summary fixed>
+                      <Table.Summary.Row>
+                        <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                        <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                        <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                      </Table.Summary.Row>
+                    </Table.Summary>
+                  )}
                 />
               </TabPane>
-              <TabPane tab={`Impuestos (${data.impuestosFactura?.length || 0})`} key="impuestos">
-                <Table
-                  dataSource={data.impuestosFactura || []}
-                  columns={impuestoColumns}
-                  rowKey={(r: any) => r.id || r.codigo}
-                  size="small"
-                  pagination={false}
-                  scroll={{ x: 500 }}
-                />
-              </TabPane>
-              <TabPane tab={`Historial (${data.logs?.length || 0})`} key="logs">
-                <Table
-                  dataSource={data.logs || []}
-                  columns={logColumns}
-                  rowKey={(r: any) => r.id || r.fecha}
-                  size="small"
-                  pagination={false}
-                  scroll={{ x: 600 }}
-                />
+              <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
+                <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
               </TabPane>
             </Tabs>
           </Col>
+
           <Col lg={6}>
             <EntidadCard entidad={data.entidad} tipoEntidad={tipoEntidad} />
-            <TotalesCard data={data} />
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false} />
           </Col>
         </Row>
       ) : (
+        /* === MOBILE LAYOUT (< lg) === */
         <div>
-          {headerCard}
+          <Card
+            title={
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 18, fontWeight: 600 }}>
+                  {data.concepto?.nombre || '-'}
+                </span>
+                <Space>
+                  {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
+                  <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
+                </Space>
+              </div>
+            }
+            style={{ marginBottom: 16 }}
+          >
+            <Descriptions bordered size="small" column={1}>
+              <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Moneda">{data.moneda?.nombre ? toTitleCase(data.moneda.nombre) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
+            </Descriptions>
+          </Card>
+
           <EntidadCard entidad={data.entidad} tipoEntidad={tipoEntidad} />
+
           <Tabs defaultActiveKey="documentos" type="card">
             <TabPane tab={`Documentos (${data.transaccionesAsociadas?.length || 0})`} key="documentos">
-              <Table
-                dataSource={data.transaccionesAsociadas || []}
-                columns={asociadasColumns}
-                rowKey={(r: any) => r.transaccionAsociadaID || r.id}
-                size="small"
-                pagination={false}
-                scroll={{ x: 800 }}
-              />
+              <Table dataSource={data.transaccionesAsociadas || []} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
             </TabPane>
             <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-              <Table
-                dataSource={data.asientos || []}
-                columns={asientoColumns}
-                rowKey={(r: any) => r.id || r.asientoID}
-                size="small"
-                pagination={false}
-                scroll={{ x: 600 }}
-                summary={() => data.asientos?.length ? (
-                  <Table.Summary.Row>
-                    <Table.Summary.Cell index={0}><strong>Totales</strong></Table.Summary.Cell>
-                    <Table.Summary.Cell index={1} />
-                    <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(sumDebitos)}</strong></Table.Summary.Cell>
-                    <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(sumCreditos)}</strong></Table.Summary.Cell>
-                  </Table.Summary.Row>
-                ) : null}
+              <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
+                summary={() => (
+                  <Table.Summary fixed>
+                    <Table.Summary.Row>
+                      <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                      <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                      <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                    </Table.Summary.Row>
+                  </Table.Summary>
+                )}
               />
             </TabPane>
-            <TabPane tab={`Impuestos (${data.impuestosFactura?.length || 0})`} key="impuestos">
-              <Table
-                dataSource={data.impuestosFactura || []}
-                columns={impuestoColumns}
-                rowKey={(r: any) => r.id || r.codigo}
-                size="small"
-                pagination={false}
-                scroll={{ x: 500 }}
-              />
-            </TabPane>
-            <TabPane tab={`Historial (${data.logs?.length || 0})`} key="logs">
-              <Table
-                dataSource={data.logs || []}
-                columns={logColumns}
-                rowKey={(r: any) => r.id || r.fecha}
-                size="small"
-                pagination={false}
-                scroll={{ x: 600 }}
-              />
+            <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
+              <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
             </TabPane>
           </Tabs>
-          <TotalesCard data={data} />
+
+          <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true} />
         </div>
       )}
     </div>
