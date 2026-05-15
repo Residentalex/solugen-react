@@ -156,7 +156,7 @@ const MainLayout: React.FC = () => {
           </div>
 
           <div className="paces-topbar-right">
-            {sucursalesPermitidas.length > 1 && activeModule !== 'MUsuario' && (
+            {sucursalesPermitidas.length > 1 && activeModule !== 'MUsuario' && activeModule !== 'CFacturasElectronicas' && (
               <Select
                 value={sucursalActiva}
                 onChange={(val) => setSucursalActiva(val)}

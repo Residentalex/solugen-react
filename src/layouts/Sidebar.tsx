@@ -79,10 +79,15 @@ const Sidebar: React.FC = () => {
     }
 
     const buildChildren = (modPantallas: PantallaDTO[], moduloNombre: string): MenuProps['items'] => {
-      const topLevel = modPantallas.filter((p) => !p.pantallaPadreID);
+      const parentIdsPresent = new Set(
+        modPantallas.filter((p) => !p.pantallaPadreID).map((p) => p.id)
+      );
+      const topLevel = modPantallas.filter(
+        (p) => !p.pantallaPadreID || (p.pantallaPadreID && !parentIdsPresent.has(p.pantallaPadreID))
+      );
       const childMap = new Map<number, PantallaDTO[]>();
       for (const p of modPantallas) {
-        if (p.pantallaPadreID) {
+        if (p.pantallaPadreID && parentIdsPresent.has(p.pantallaPadreID)) {
           const pid = p.pantallaPadreID;
           if (!childMap.has(pid)) childMap.set(pid, []);
           childMap.get(pid)!.push(p);

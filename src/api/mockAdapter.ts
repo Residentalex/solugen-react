@@ -34,6 +34,7 @@ function crearModulosPantallas(): { pantallas: PantallaDTO[] } {
     { id: 12, nombre: 'Recibo Ingreso', codigo: 'FRI', ruta: '/FRI', esReporte: false, moduloID: 4, orden: 12, grupo: undefined, modulos: [modulos[3]], acciones: ['ver', 'crear', 'editar', 'anular', 'aplicar'] },
     { id: 13, nombre: 'Usuarios', codigo: 'MUsuario', ruta: '/MUsuario', esReporte: false, moduloID: 5, orden: 1, grupo: undefined, modulos: [modulos[4]], acciones: ['ver', 'crear', 'editar', 'anular'] },
     { id: 14, nombre: 'Roles', codigo: 'MROL', ruta: '/MROL', esReporte: false, moduloID: 5, orden: 2, grupo: undefined, modulos: [modulos[4]], acciones: ['ver', 'crear', 'editar', 'anular'] },
+    { id: 15, nombre: 'Productos', codigo: 'MProducto', ruta: '/MProducto', esReporte: false, moduloID: 1, orden: 1, grupo: 'Maestros', modulos: [modulos[0]], acciones: ['ver', 'crear', 'editar', 'anular'] },
   ];
 
   return { pantallas };
@@ -789,6 +790,50 @@ export function setupMocks() {
     return okVoid;
   });
   mock.onPost(new RegExp('/api/Usuario/\\d+/\\d+/resetear-password')).reply(() => okResp('Temp1234!'));
+
+  const FAMILIAS = ['ABARROTES', 'LACTEOS', 'BEBIDAS', 'LIMPIEZA', 'CARNICOS', 'PANADERIA', 'FRUTAS', 'CONGELADOS'];
+  const PRODUCTOS = Array.from({ length: 80 }, (_, i) => ({
+    codigo: String(100000 + i + 1),
+    nombre: articulosBase[i % articulosBase.length] + (i >= articulosBase.length ? ` #${i + 1}` : ''),
+    precio: Math.round(Math.random() * 5000 + 100) / 100,
+    referencia: i % 4 === 0 ? `REF-${i}` : i % 5 === 0 ? `SKU${String(20000 + i).slice(0, 6)}` : '',
+    refFabricante: i % 3 === 0 ? `FAB-${i}` : '',
+    ultimoCosto: Math.round(Math.random() * 3000 + 50) / 100,
+    activo: i % 8 !== 7,
+    paraVender: i % 6 !== 0,
+    paraComprar: i % 5 !== 0,
+    familia: FAMILIAS[i % FAMILIAS.length],
+    familiaID: (i % FAMILIAS.length) + 1,
+    categoria: i % 2 === 0 ? 'General' : 'Especial',
+    categoriaCodigo: i % 2 === 0 ? 'GEN' : 'ESP',
+    unidadMedida: i % 3 === 0 ? 'UNIDAD' : i % 3 === 1 ? 'LIBRA' : 'CAJA',
+  }));
+
+  mock.onGet(new RegExp('/api/Producto/\\d+$')).reply((c) => {
+    const url = new URL(c.url!, 'http://localhost');
+    const activo = url.searchParams.get('activo');
+    const codigo = url.searchParams.get('codigo');
+    let filtered = [...PRODUCTOS];
+    if (activo === 'true') filtered = filtered.filter((p) => p.activo);
+    else if (activo === 'false') filtered = filtered.filter((p) => !p.activo);
+    if (codigo) filtered = filtered.filter((p) => p.codigo.includes(codigo) || p.nombre.toLowerCase().includes(codigo.toLowerCase()));
+    return okResp(filtered);
+  });
+  mock.onGet(new RegExp('/api/Producto/\\d+/filtrar')).reply((c) => {
+    const url = new URL(c.url!, 'http://localhost');
+    const codigo = url.searchParams.get('codigo');
+    const referencia = url.searchParams.get('referencia');
+    let filtered = [...PRODUCTOS];
+    if (codigo) filtered = filtered.filter((p) => p.codigo.includes(codigo));
+    if (referencia) filtered = filtered.filter((p) => p.referencia?.toLowerCase().includes(referencia.toLowerCase()));
+    return okResp(filtered);
+  });
+  mock.onGet(new RegExp('/api/Producto/\\d+/\\d+$')).reply((c) => {
+    const m = c.url?.match(/\/api\/Producto\/\d+\/(\d+)/);
+    const codigo = m ? m[1] : '';
+    const prod = PRODUCTOS.find((p) => p.codigo === codigo) || PRODUCTOS[0];
+    return okResp(prod);
+  });
 
   mock.onAny().passThrough();
 

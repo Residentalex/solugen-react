@@ -1,56 +1,33 @@
-export interface FacturaVistaDTO {
+export interface ResumenTipoNcfDTO {
+  codigo: string;
+  nombre: string;
+  cantidad: number;
+  totalMonto: number;
+}
+
+export interface ResumenTipoNcfSucursalDTO {
+  codigo: string;
+  nombre: string;
+  sucursal: number;
+  cantidad: number;
+  totalMonto: number;
+}
+
+export interface EnvioDGIIDTO {
   id: number;
   fecha: string;
+  tipoDocumento: number;
+  sucursal: number;
   documento: string;
-  entidad: string;
-  diasCredito: number;
-  concepto: string;
-  almacen: string;
-  ordenCompra: string;
-  referencia: string;
+  cliente: string;
+  transaccionID: number;
+  tipoComprobante: string;
   ncf: string;
-  ncfModificado: string;
-  turnoID: string;
-  tipoDocumento: string;
-  total: number;
-  estado: number;
-  periodo: number;
-}
-
-export interface FiltroFacturacion {
-  cantidad?: number;
-  salto?: number;
-  desde?: string;
-  hasta?: string;
-  documento?: string;
-  nCF?: string;
-  concepto?: string;
-  cliente?: string;
-  referencia?: string;
-  almacen?: string;
-}
-
-export interface FacturaSuplidorVistaDTO {
-  id: number;
-  fechaDocumento: string;
-  noDocumento: string;
-  nombreEntidad: string;
-  nota: string;
-  total: number;
-  ncf: string;
-  estado: number;
-  periodo: number;
-  referencia: string;
-  diasCredito: number;
-}
-
-export interface FiltroFacturaSuplidor {
-  cantidad?: number;
-  salto?: number;
-  desde?: string;
-  hasta?: string;
-  documento?: string;
-  nCF?: string;
-  concepto?: string;
-  suplidor?: string;
+  codigoQR: string;
+  codigoSecuencia: string;
+  fechaEnvio?: string;
+  fechaVencimiento?: string;
+  respuestaDGII: string;
+  firma: string;
+  enviado: boolean;
 }

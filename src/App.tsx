@@ -30,6 +30,9 @@ import ReciboIngresoDetalle from './pages/ReciboIngreso/ReciboIngresoDetalle';
 import Usuarios from './pages/Usuarios/Usuarios';
 import UsuarioDetalle from './pages/Usuarios/UsuarioDetalle';
 import Roles from './pages/Roles/Roles';
+import Productos from './pages/Productos/Productos';
+import Monedas from './pages/Monedas/Monedas';
+import CFacturasElectronicas from './pages/DGII/CFacturasElectronicas';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -93,6 +96,9 @@ const App: React.FC = () => {
             <Route path="MUsuario" element={<Usuarios />} />
             <Route path="MUsuario/:id" element={<UsuarioDetalle />} />
             <Route path="MROL" element={<Roles />} />
+            <Route path="MProducto" element={<Productos />} />
+            <Route path="MMoneda" element={<Monedas />} />
+            <Route path="CFacturasElectronicas" element={<CFacturasElectronicas />} />
           </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
