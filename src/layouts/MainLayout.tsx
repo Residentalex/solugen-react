@@ -176,7 +176,7 @@ const MainLayout: React.FC = () => {
                   {usuario?.nombre?.charAt(0)?.toUpperCase() || 'U'}
                 </div>
                 <span className="paces-topbar-user-name">
-                  {usuario?.nombreUsuario || 'Usuario'}
+                  {usuario?.nombre || usuario?.nombreUsuario || 'Usuario'}
                 </span>
               </div>
             </Dropdown>

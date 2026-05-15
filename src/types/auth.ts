@@ -67,6 +67,7 @@ export interface AuthUsuarioSesionDTO {
   diasVigencia: number;
   activo: boolean;
   empleadoID: string;
+  empleado: string;
   sucursalActiva: Sucursal;
   roles: RolDTO[];
   sucursalesRoles: UsuarioSucursalRolDTO[];

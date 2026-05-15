@@ -41,7 +41,7 @@ const Home: React.FC = () => {
         <Card style={{ width: 500, marginTop: 50 }}>
           <Title level={3}>Bienvenido, {usuario?.nombre || 'Usuario'}</Title>
           <Space direction="vertical" style={{ width: '100%' }}>
-            <Text><strong>Usuario:</strong> {usuario?.nombreUsuario}</Text>
+            <Text><strong>Nombre:</strong> {usuario?.nombre || usuario?.nombreUsuario}</Text>
             <div>
               <Text><strong>Compañía:</strong> <Tag color="blue">Consolidado</Tag></Text>
             </div>

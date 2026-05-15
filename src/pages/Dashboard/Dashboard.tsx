@@ -100,6 +100,10 @@ const Dashboard: React.FC = () => {
                   <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.nombreUsuario || '-'}</Text>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <Text strong style={{ width: 140, color: '#6c757d', fontSize: 13 }}>Empleado:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.empleado || '-'}</Text>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <Text strong style={{ width: 140, color: '#6c757d', fontSize: 13 }}>Roles:</Text>
                   <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.roles?.map(r => r.nombre).join(', ') || 'Sin roles'}</Text>
                 </div>
