@@ -82,33 +82,35 @@ const Login: React.FC = () => {
       <div className="paces-login-form">
         <div className="paces-login-card">
           <div className="login-header">
-            <GenesisLogo size={40} showText />
+            <div className="genesis-logo-wrapper">
+              <GenesisLogo size={40} showText />
+            </div>
             <h2>Iniciar Sesión</h2>
             <p>Ingrese sus credenciales para acceder al sistema</p>
           </div>
 
           <Form layout="vertical" onFinish={handleSubmit}>
             {error && (
-              <Alert message={error} type="error" showIcon style={{ marginBottom: 20, borderRadius: 8 }} />
+              <Alert message={error} type="error" showIcon className="login-alert" />
             )}
 
-            <Form.Item label="Usuario" style={{ marginBottom: 20 }}>
+            <Form.Item label="Usuario" style={{ marginBottom: 18 }}>
               <Input
-                prefix={<UserOutlined style={{ color: '#a2a3b7' }} />}
+                prefix={<UserOutlined />}
                 value={nombreUsuario}
                 onChange={(e) => setNombreUsuario(e.target.value)}
-                placeholder="Ingrese su usuario"
+                placeholder="Ej: JUAN.PEREZ"
                 autoFocus
                 size="large"
               />
             </Form.Item>
 
-            <Form.Item label="Contraseña" style={{ marginBottom: 24 }}>
+            <Form.Item label="Contraseña" style={{ marginBottom: 22 }}>
               <Input.Password
-                prefix={<LockOutlined style={{ color: '#a2a3b7' }} />}
+                prefix={<LockOutlined />}
                 value={contrasena}
                 onChange={(e) => setContrasena(e.target.value)}
-                placeholder="Ingrese su contraseña"
+                placeholder="Su contraseña"
                 size="large"
               />
             </Form.Item>
@@ -120,19 +122,23 @@ const Login: React.FC = () => {
                 loading={loading}
                 size="large"
                 block
+                className="login-submit-btn"
                 style={{
                   height: 46,
                   fontSize: 15,
                   fontWeight: 600,
                   borderRadius: 10,
-                  background: 'linear-gradient(135deg, #6c5ffc, #9b8cff)',
-                  border: 'none',
-                  boxShadow: '0 4px 14px rgba(108,95,252,0.35)',
                 }}
               >
-                Ingresar <ArrowRightOutlined />
+                <span className="btn-content">
+                  Ingresar <ArrowRightOutlined />
+                </span>
               </Button>
             </Form.Item>
+
+            <a className="login-recovery">¿Olvidó su contraseña?</a>
+
+            <div className="login-footer">Genesis ERP · © 2026 Solugen</div>
           </Form>
         </div>
       </div>

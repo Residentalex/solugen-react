@@ -364,9 +364,14 @@ body {
 .paces-login-bg {
   min-height: 100vh;
   display: flex;
-  background: #f5f6fa;
+  background:
+    radial-gradient(600px 600px at 10% 20%, rgba(85,110,230,0.05) 0%, transparent 100%),
+    radial-gradient(800px 800px at 90% 80%, rgba(85,110,230,0.035) 0%, transparent 100%),
+    #f5f6fa;
   position: relative;
 }
+
+/* Brand panel */
 .paces-login-brand {
   display: none;
 }
@@ -386,7 +391,7 @@ body {
     width: 500px;
     height: 500px;
     border-radius: 50%;
-    background: rgba(108,95,252,0.08);
+    background: rgba(85,110,230,0.10);
     top: -100px;
     right: -100px;
   }
@@ -396,7 +401,7 @@ body {
     width: 400px;
     height: 400px;
     border-radius: 50%;
-    background: rgba(108,95,252,0.06);
+    background: rgba(85,110,230,0.06);
     bottom: -80px;
     left: -80px;
   }
@@ -419,6 +424,8 @@ body {
     line-height: 1.5;
   }
 }
+
+/* Form area */
 .paces-login-form {
   flex: 1;
   display: flex;
@@ -432,27 +439,164 @@ body {
     min-height: auto;
   }
 }
+
+/* Login card */
+@keyframes loginCardIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes loginCardIn {
+    from { opacity: 1; transform: none; }
+    to   { opacity: 1; transform: none; }
+  }
+}
+
 .paces-login-card {
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   background: #fff;
-  border-radius: 16px;
-  padding: 40px 36px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  border-radius: 14px;
+  padding: 44px 40px 36px;
+  box-shadow:
+    0 1px 2px rgba(30, 30, 45, 0.04),
+    0 12px 32px -8px rgba(30, 30, 45, 0.12);
+  border: 1px solid rgba(30,30,45,0.04);
+  animation: loginCardIn .28s ease-out both;
 }
+
+/* Header inside card */
 .paces-login-card .login-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 .paces-login-card .login-header h2 {
   font-size: 22px;
   font-weight: 700;
   color: #1e1e2d;
-  margin: 16px 0 4px;
+  margin: 20px 0 6px;
+  letter-spacing: -0.2px;
 }
 .paces-login-card .login-header p {
   color: #6c757d;
   font-size: 14px;
+}
+
+/* Hide logo inside card on desktop (avoid redundancy with brand panel) */
+@media (min-width: 992px) {
+  .paces-login-card .login-header .genesis-logo-wrapper {
+    display: none;
+  }
+  .paces-login-card .login-header h2 {
+    margin-top: 0;
+  }
+}
+
+/* Alert */
+.paces-login-card .login-alert {
+  margin-bottom: 18px;
+  border-radius: 8px;
+}
+
+/* Inputs */
+.paces-login-card .ant-input-affix-wrapper {
+  border-radius: 8px;
+}
+.paces-login-card .ant-input-affix-wrapper-focused,
+.paces-login-card .ant-input-affix-wrapper:focus-within {
+  border-color: #556ee6;
+  box-shadow: 0 0 0 3px rgba(85,110,230,0.15);
+}
+.paces-login-card .ant-input-affix-wrapper .ant-input-prefix {
+  color: #a2a3b7;
+  transition: color 150ms;
+}
+.paces-login-card .ant-input-affix-wrapper-focused .ant-input-prefix,
+.paces-login-card .ant-input-affix-wrapper:focus-within .ant-input-prefix {
+  color: #556ee6;
+}
+.paces-login-card .ant-input:focus {
+  box-shadow: none;
+}
+
+/* Button */
+.paces-login-card .login-submit-btn {
+  background: #556ee6;
+  border-color: #556ee6;
+  box-shadow: 0 6px 14px -4px rgba(85,110,230,0.45);
+  transition: background 180ms, border-color 180ms, box-shadow 180ms;
+}
+.paces-login-card .login-submit-btn:hover {
+  background: #4458d3;
+  border-color: #4458d3;
+}
+.paces-login-card .login-submit-btn:active {
+  background: #3a4cc0;
+  border-color: #3a4cc0;
+}
+.paces-login-card .login-submit-btn .btn-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.paces-login-card .login-submit-btn:hover .btn-content .anticon {
+  transform: translateX(2px);
+}
+.paces-login-card .login-submit-btn .anticon {
+  transition: transform 180ms;
+}
+.paces-login-card .login-submit-btn.ant-btn-loading,
+.paces-login-card .login-submit-btn[disabled] {
+  opacity: 0.7;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Recovery link */
+.paces-login-card .login-recovery {
+  display: block;
+  text-align: center;
+  color: #a2a3b7;
+  font-size: 13px;
+  margin-top: 18px;
+  text-decoration: none;
+  cursor: default;
+}
+
+/* Footer microcopy */
+.paces-login-card .login-footer {
+  text-align: center;
+  color: #a2a3b7;
+  font-size: 12px;
+  margin-top: 14px;
+}
+
+/* Responsive */
+@media (max-width: 575px) {
+  .paces-login-card {
+    padding: 32px 24px;
+    border-radius: 12px;
+    max-width: 100%;
+    margin: 16px;
+  }
+}
+
+@media (max-width: 991px) {
+  .paces-login-card .login-header .genesis-logo-wrapper {
+    display: block;
+  }
+}
+
+/* Reduced motion safety net */
+@media (prefers-reduced-motion: reduce) {
+  .paces-login-card {
+    animation: none;
+  }
+  .paces-login-card .login-submit-btn .anticon,
+  .paces-login-card .ant-input-affix-wrapper .ant-input-prefix {
+    transition: none;
+  }
 }
 
 /* ===== Toolbar ===== */
