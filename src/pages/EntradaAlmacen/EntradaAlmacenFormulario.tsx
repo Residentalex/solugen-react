@@ -20,11 +20,14 @@ import {
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { Sucursal } from '../../types/auth';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
 import BuscarOrdenCompraModal from './BuscarOrdenCompraModal';
 import EntradaAlmacenGuide from './EntradaAlmacenGuide';
+import FloatingField from '../../components/FloatingLabel/FloatingField';
+import '../../components/FloatingLabel/FloatingField.css';
 import type {
   EntradaAlmacenDTO, DetalleEntradaAlmacenDTO, AsientoContableDTO,
   ConceptoDTO, EntidadDTO, AlmacenDTO, SuplidorDTO,
@@ -349,9 +352,9 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
   // ===== Refs para la guía (Tour) =====
   const conceptoRef = useRef<HTMLElement>(null);
-  const suplidorRef = useRef<HTMLElement>(null);
+  const suplidorRef = useRef<HTMLDivElement>(null);
   const ordenCompraRef = useRef<HTMLElement>(null);
-  const almacenRef = useRef<HTMLElement>(null);
+  const almacenRef = useRef<HTMLDivElement>(null);
   const agregarFilaRef = useRef<HTMLElement>(null);
   const ncfRef = useRef<HTMLElement>(null);
 
@@ -398,6 +401,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         setData(res);
         setDetalles(res.detalles || []);
         setSelectedConcepto(res.concepto || null);
+        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
         setSelectedEntidad(res.entidad || null);
         setSelectedAlmacen(res.almacen || null);
 
@@ -418,9 +422,9 @@ const EntradaAlmacenFormulario: React.FC = () => {
           nota: res.nota || '',
         });
 
-        // Cargar suplidores según el concepto
+        // Cargar suplidores según el concepto (desde Sucursal.Compra para que idExterno coincida)
         if (res.concepto?.codigo) {
-          conceptosApi.obtenerSuplidores(sucursalActiva, res.concepto.codigo)
+          conceptosApi.obtenerSuplidores(Sucursal.Compra)
             .then(setEntidadesCache)
             .catch(() => {});
         }
@@ -454,6 +458,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 setData(res);
                 setDetalles(res.detalles || []);
                 setSelectedConcepto(res.concepto || null);
+                setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
 setSelectedEntidad(res.suplidor || null);
                 setSelectedAlmacen(res.almacen || null);
                 setSelectedOC(res.ordenCompra?.id ? { id: res.ordenCompra.id, noDocumento: res.ordenCompra.noDocumento } as any : null);
@@ -477,7 +482,7 @@ suplidor: res.suplidor?.codigo || '',
                 });
 
                 if (res.concepto?.codigo) {
-                  conceptosApi.obtenerSuplidores(sucursalActiva, res.concepto.codigo)
+                  conceptosApi.obtenerSuplidores(Sucursal.Compra)
                     .then(setEntidadesCache)
                     .catch(() => {});
                 }
@@ -667,12 +672,12 @@ suplidor: res.suplidor?.codigo || '',
   // ===== Handlers de concepto =====
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
-    setConceptoSearchText(concepto.nombre);
+    setConceptoSearchText(toTitleCase(concepto.nombre));
     setEditingField(null);
     form.setFieldsValue({ conceptoNombre: concepto.nombre });
 
-    // Cargar suplidores del concepto
-    conceptosApi.obtenerSuplidores(sucursalActiva, concepto.codigo)
+    // Cargar suplidores del concepto (desde Sucursal.Compra para que idExterno coincida)
+    conceptosApi.obtenerSuplidores(Sucursal.Compra)
       .then((ents) => setEntidadesCache(ents))
       .catch(() => {});
 
@@ -738,7 +743,7 @@ suplidor: res.suplidor?.codigo || '',
     // 3. Cargar detalles si confirma
     if (shouldLoad) {
       try {
-        const ocCompleta = await ordenCompraApi.obtenerPorId(sucursalActiva, orden.id);
+        const ocCompleta = await ordenCompraApi.obtenerPorId(Sucursal.Compra, orden.id);
         const ocDetalles = ocCompleta.detalles || [];
         const nuevosDetalles: DetalleEntradaAlmacenDTO[] = ocDetalles
           .filter((d) => {
@@ -796,7 +801,7 @@ suplidor: res.suplidor?.codigo || '',
 
   // ===== Handlers de detalles =====
   const handleAgregarFila = () => {
-    setDetalles((prev) => [...prev, { ...filaVacia(), id: -(prev.length + 1) }]);
+    setDetalles((prev) => [{ ...filaVacia(), id: -(prev.length + 1) }, ...prev]);
   };
 
   const handleEliminarFila = (id: number) => {
@@ -910,47 +915,20 @@ suplidor: res.suplidor?.codigo || '',
   // ===== Grid de detalles editable (responsive) =====
   const detalleColumns = [
     {
-      title: 'Código',
-      dataIndex: 'codigo',
-      key: 'codigo',
-      width: 120,
-      responsive: ['lg' as const],
-      render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
-        <Input
-          size="small"
-          value={detalles[idx]?.codigo || ''}
-          onChange={(e) => handleDetalleChange(detalles[idx].id, 'codigo', e.target.value)}
-          placeholder="Código"
-        />
-      ),
-    },
-    {
       title: 'Artículo',
-      dataIndex: 'articulo',
       key: 'articulo',
       ellipsis: true,
-      render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
-        <Input
-          size="small"
-          value={detalles[idx]?.articulo || ''}
-          onChange={(e) => handleDetalleChange(detalles[idx].id, 'articulo', e.target.value)}
-          placeholder="Artículo"
-        />
-      ),
-    },
-    {
-      title: 'Referencia',
-      dataIndex: 'referencia',
-      key: 'referencia',
-      width: 120,
-      responsive: ['md' as const, 'lg' as const],
-      render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
-        <Input
-          size="small"
-          value={detalles[idx]?.referencia || ''}
-          onChange={(e) => handleDetalleChange(detalles[idx].id, 'referencia', e.target.value)}
-          placeholder="Ref."
-        />
+      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) =>
+        record.articulo !== prevRecord.articulo || record.codigo !== prevRecord.codigo || record.referencia !== prevRecord.referencia,
+      render: (_: any, record: DetalleEntradaAlmacenDTO) => (
+        <div>
+          <div>{toTitleCase(record.articulo || '')}</div>
+          <div style={{ fontSize: 12, color: '#595959', lineHeight: 1.5 }}>
+            {record.codigo && <span>{record.codigo}</span>}
+            {record.codigo && record.referencia && <span>{' | '}</span>}
+            {record.referencia && <span>{record.referencia}</span>}
+          </div>
+        </div>
       ),
     },
     {
@@ -959,12 +937,14 @@ suplidor: res.suplidor?.codigo || '',
       key: 'cantidad',
       width: 100,
       align: 'right' as const,
+      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) => record.cantidad !== prevRecord.cantidad,
       render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
         <InputNumber
           size="small"
           style={{ width: '100%' }}
           min={0}
           step={0.01}
+          precision={2}
           value={detalles[idx]?.cantidad}
           onChange={(val) => handleDetalleChange(detalles[idx].id, 'cantidad', val || 0)}
         />
@@ -977,12 +957,14 @@ suplidor: res.suplidor?.codigo || '',
       width: 110,
       align: 'right' as const,
       responsive: ['sm' as const, 'md' as const, 'lg' as const],
+      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) => record.costo !== prevRecord.costo,
       render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
         <InputNumber
           size="small"
           style={{ width: '100%' }}
           min={0}
           step={0.01}
+          precision={2}
           value={detalles[idx]?.costo}
           onChange={(val) => handleDetalleChange(detalles[idx].id, 'costo', val || 0)}
         />
@@ -995,6 +977,7 @@ suplidor: res.suplidor?.codigo || '',
       width: 90,
       align: 'right' as const,
       responsive: ['lg' as const],
+      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) => record.porcentajeDescuento !== prevRecord.porcentajeDescuento,
       render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
         <InputNumber
           size="small"
@@ -1002,9 +985,19 @@ suplidor: res.suplidor?.codigo || '',
           min={0}
           max={100}
           step={0.01}
+          precision={2}
           value={detalles[idx]?.porcentajeDescuento}
           onChange={(val) => handleDetalleChange(detalles[idx].id, 'porcentajeDescuento', val || 0)}
         />
+      ),
+    },
+    {
+      title: 'Descuento',
+      key: 'descuento',
+      width: 110,
+      align: 'right' as const,
+      render: (_: any, record: DetalleEntradaAlmacenDTO) => (
+        <Text>{formatNumber(record.descuento || 0)}</Text>
       ),
     },
     {
@@ -1017,22 +1010,12 @@ suplidor: res.suplidor?.codigo || '',
       render: (v: number) => <Text>{formatNumber(v || 0)}</Text>,
     },
     {
-      title: '% Imp.',
-      dataIndex: 'porcentajeImpuesto',
-      key: 'porcentajeImpuesto',
-      width: 80,
+      title: 'Impuestos',
+      key: 'impuestos',
+      width: 110,
       align: 'right' as const,
-      responsive: ['lg' as const],
-      render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
-        <InputNumber
-          size="small"
-          style={{ width: '100%' }}
-          min={0}
-          max={100}
-          step={0.01}
-          value={detalles[idx]?.porcentajeImpuesto}
-          onChange={(val) => handleDetalleChange(detalles[idx].id, 'porcentajeImpuesto', val || 0)}
-        />
+      render: (_: any, record: DetalleEntradaAlmacenDTO) => (
+        <Text>{formatNumber(record.impuestos || 0)}</Text>
       ),
     },
     {
@@ -1066,67 +1049,47 @@ suplidor: res.suplidor?.codigo || '',
     const tasaValue = form.getFieldValue('tasa') ?? 1;
 
     return (
-    <Card className="paces-card" style={{ marginBottom: 16 }}>
-      <Form form={form} layout="vertical" size="small">
-        <Row gutter={[16, 16]}>
-          {/* Fila 1: Orden de compra (ancho completo) */}
-          <Col xs={24}>
-            <Form.Item label="Orden Compra">
-              <div ref={ordenCompraRef}>
-                <Space.Compact style={{ width: '100%' }}>
-                  <Input
-                    style={{ width: 'calc(100% - 72px)' }}
-                    placeholder="Seleccionar orden de compra..."
-                    value={ordenCompraNoDoc}
-                    readOnly
-                  />
-                  <Button icon={<SearchOutlined />} onClick={handleBuscarOC} />
-                  <Button icon={<ClearOutlined />} onClick={handleOCUnselect} disabled={!selectedOC} />
-                </Space.Compact>
+    <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+      <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
+        <Row gutter={[16, 24]}>
+          {/* Fila 1: OrdenCompra + Concepto */}
+          <Col xs={24} sm={12} lg={9}>
+            <div ref={ordenCompraRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+              <div style={{ flex: 1 }}>
+                <FloatingField label="Orden Compra" externalValue={ordenCompraNoDoc}>
+                  <Input placeholder=" " value={ordenCompraNoDoc} readOnly />
+                </FloatingField>
               </div>
-            </Form.Item>
+              <Button icon={<SearchOutlined />} onClick={handleBuscarOC} />
+            </div>
             <Form.Item name="ordenCompra" hidden><Input /></Form.Item>
           </Col>
 
-          {/* Fila 2: Fecha Documento | Fecha Recibo */}
-          <Col xs={24} sm={12} lg={12}>
-            <Form.Item name="fechaDocumento" label="Fecha Documento" required>
-              <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} lg={12}>
-            <Form.Item name="fechaRecibo" label="Fecha Recibo">
-              <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-            </Form.Item>
-          </Col>
-
-          {/* Fila 3: Concepto (ancho completo) */}
-          <Col xs={24}>
-            <Form.Item label="Concepto" required>
-              <div ref={conceptoRef}>
-                <Space.Compact style={{ width: '100%' }}>
-                  <Input
-                    style={{ width: 'calc(100% - 72px)' }}
-                    placeholder="Buscar concepto..."
-                    value={conceptoSearchText}
-                    onChange={(e) => setConceptoSearchText(e.target.value)}
-                    readOnly
-                  />
-                  <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
-                  <Button icon={<ClearOutlined />} onClick={handleConceptoClear} disabled={!selectedConcepto} />
-                </Space.Compact>
+          <Col xs={24} sm={12} lg={15}>
+            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+              <div style={{ flex: 1 }}>
+                <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
+                  <Input placeholder=" " value={conceptoSearchText} readOnly />
+                </FloatingField>
               </div>
-            </Form.Item>
+              <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
+            </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
             <Form.Item name="conceptoNombre" hidden><Input /></Form.Item>
           </Col>
 
-          {/* Fila 4: Suplidor */}
-          <Col xs={24} sm={12} lg={8}>
-            <Form.Item name="suplidor" label="Suplidor / Entidad" required>
-              <div ref={suplidorRef}>
+          {/* Fila 2: FechaDocumento + Suplidor */}
+          <Col xs={24} sm={12} lg={9}>
+            <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
+              <FloatingField label="Fecha Documento" required>
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+              </FloatingField>
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} lg={15}>
+            <Form.Item name="suplidor" required style={{ marginBottom: 0 }}>
+              <FloatingField label="Suplidor / Entidad" required ref={suplidorRef}>
                 <Select
-                  placeholder="Seleccionar suplidor"
                   allowClear
                   showSearch
                   optionFilterProp="children"
@@ -1141,21 +1104,22 @@ suplidor: res.suplidor?.codigo || '',
                     </Select.Option>
                   ))}
                 </Select>
-              </div>
+              </FloatingField>
             </Form.Item>
-            {selectedEntidad && (
-              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: -16, marginBottom: 4 }}>
-                {selectedEntidad.identificacion} | {selectedEntidad.telefono || 'Sin teléfono'}
-              </Text>
-            )}
           </Col>
 
-          {/* Fila 5: Almacén */}
-          <Col xs={24} sm={12} lg={8}>
-            <Form.Item name="almacen" label="Almacén" required>
-              <div ref={almacenRef}>
+          {/* Fila 3: FechaRecibo + Almacén */}
+          <Col xs={24} sm={12} lg={9}>
+            <Form.Item name="fechaRecibo" style={{ marginBottom: 0 }}>
+              <FloatingField label="Fecha Recibo">
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+              </FloatingField>
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} lg={15}>
+            <Form.Item name="almacen" required style={{ marginBottom: 0 }}>
+              <FloatingField label="Almacén" required ref={almacenRef}>
                 <Select
-                  placeholder="Seleccionar almacén"
                   allowClear
                   showSearch
                   optionFilterProp="children"
@@ -1170,16 +1134,11 @@ suplidor: res.suplidor?.codigo || '',
                     </Select.Option>
                   ))}
                 </Select>
-              </div>
+              </FloatingField>
             </Form.Item>
-            {selectedAlmacen && (
-              <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: -16, marginBottom: 4 }}>
-                {toTitleCase(selectedAlmacen.nombre)}
-              </Text>
-            )}
           </Col>
 
-          {/* Fila 6: Botones rápidos para campos opcionales */}
+          {/* Fila 4: Botones rápidos para campos opcionales */}
           <Col xs={24}>
             <div style={{ marginBottom: 16 }}>
               <Space size={[8, 8]} wrap>
@@ -1286,10 +1245,12 @@ suplidor: res.suplidor?.codigo || '',
             <Form.Item name="moneda" hidden><Input /></Form.Item>
           </Col>
 
-          {/* Fila 7: Nota */}
+          {/* Fila 5: Nota */}
           <Col xs={24}>
-            <Form.Item name="nota" label="Nota">
-              <TextArea rows={3} placeholder="Notas adicionales..." />
+            <Form.Item name="nota" style={{ marginBottom: 0 }}>
+              <FloatingField label="Nota">
+                <TextArea rows={3} />
+              </FloatingField>
             </Form.Item>
           </Col>
         </Row>
@@ -1312,6 +1273,7 @@ suplidor: res.suplidor?.codigo || '',
         open={ordenCompraModalOpen}
         onClose={() => setOrdenCompraModalOpen(false)}
         onSelect={handleOCSelect}
+        suplidorCodigo={selectedEntidad?.codigo}
       />
 
       {isLarge ? (
@@ -1508,13 +1470,11 @@ suplidor: res.suplidor?.codigo || '',
           ordenCompra={selectedOC}
           almacen={selectedAlmacen}
           detallesCount={detalles.length}
-          ncf={form.getFieldValue('ncf') || ''}
           conceptoRef={conceptoRef}
           suplidorRef={suplidorRef}
           ordenCompraRef={ordenCompraRef}
           almacenRef={almacenRef}
           agregarFilaRef={agregarFilaRef}
-          ncfRef={ncfRef}
         />
       )}
     </div>

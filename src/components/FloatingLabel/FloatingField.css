@@ -1,0 +1,59 @@
+/* ===== FloatingField ===== */
+
+.floating-field {
+  position: relative;
+}
+
+.floating-field .floating-label {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: #bfbfbf;
+  pointer-events: none;
+  transition: all 0.2s ease;
+  background: transparent;
+  padding: 0 4px;
+  z-index: 1;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* --- Estado flotado (enfocado o con valor) --- */
+.floating-field.floating-focused .floating-label,
+.floating-field.floating-has-value .floating-label {
+  top: -8px;
+  transform: translateY(0);
+  font-size: 11px;
+  color: #556ee6;
+  background: #fff;
+}
+
+/* Asterisco requerido siempre (visible en estado flotado y no flotado) */
+.floating-field.floating-required .floating-label::after {
+  content: ' *';
+  color: #ff4d4f;
+}
+
+.floating-field.floating-focused.floating-required .floating-label::after {
+  content: ' *';
+  color: #ff4d4f;
+}
+
+/* --- Variante multiline (TextArea) --- */
+.floating-field.floating-multiline .floating-label {
+  top: 12px;
+  transform: translateY(0);
+}
+
+.floating-field.floating-multiline.floating-focused .floating-label,
+.floating-field.floating-multiline.floating-has-value .floating-label {
+  top: -8px;
+}
+
+/* ===== Dark mode ===== */
+.dark-mode .floating-field.floating-focused .floating-label,
+.dark-mode .floating-field.floating-has-value .floating-label {
+  background: #2d2d44;
+}

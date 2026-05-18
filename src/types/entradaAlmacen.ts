@@ -59,6 +59,7 @@ export interface AlmacenDTO {
 export interface SuplidorDTO {
   nombre: string;
   codigo: string;
+  idExterno?: string;
   identificacion: string;
   telefono?: string;
   direccion?: string;

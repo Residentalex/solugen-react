@@ -1,18 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Modal, Table, Input, Tag, message } from 'antd';
+import { Modal, Table, Input, message } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
+import { Sucursal } from '../../types/auth';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
 import type { OrdenCompraVistaDTO } from '../../types/entradaAlmacen';
-
-const ESTADO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
 
 function toTitleCase(str: string): string {
   if (!str) return str;
@@ -34,21 +25,40 @@ interface BuscarOrdenCompraModalProps {
   open: boolean;
   onClose: () => void;
   onSelect: (orden: OrdenCompraVistaDTO) => void;
+  suplidorCodigo?: string;
 }
 
-const BuscarOrdenCompraModal: React.FC<BuscarOrdenCompraModalProps> = ({ open, onClose, onSelect }) => {
+const BuscarOrdenCompraModal: React.FC<BuscarOrdenCompraModalProps> = ({ open, onClose, onSelect, suplidorCodigo }) => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
 
   const [resultados, setResultados] = useState<OrdenCompraVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const buscar = useCallback(async (documento?: string) => {
+  const formatDateParam = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    return `${y}${m}${dd}${hh}${mm}${ss}`;
+  };
+
+  const buscar = useCallback(async () => {
     setLoading(true);
     try {
-      const params: { documento?: string; cantidad?: number } = { cantidad: 50 };
-      if (documento?.trim()) params.documento = documento.trim();
+      const hoy = new Date();
+      const hace60 = new Date();
+      hace60.setDate(hace60.getDate() - 60);
 
-      const res = await ordenCompraApi.filtrar(sucursalActiva, sucursalActiva, params);
+      const params: { suplidor?: string; cantidad?: number; desde?: string; hasta?: string } = {
+        cantidad: 50,
+        desde: formatDateParam(hace60),
+        hasta: formatDateParam(hoy),
+      };
+      if (suplidorCodigo?.trim()) params.suplidor = suplidorCodigo.trim();
+
+      const res = await ordenCompraApi.obtenerResumido(Sucursal.Compra, sucursalActiva, params);
       setResultados(res || []);
     } catch (err: any) {
       const msg = err?.response?.data?.errorMessage || 'Error al buscar órdenes de compra';
@@ -57,7 +67,7 @@ const BuscarOrdenCompraModal: React.FC<BuscarOrdenCompraModalProps> = ({ open, o
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva]);
+  }, [sucursalActiva, suplidorCodigo]);
 
   useEffect(() => {
     if (open) buscar();
@@ -85,29 +95,12 @@ const BuscarOrdenCompraModal: React.FC<BuscarOrdenCompraModalProps> = ({ open, o
       render: (_: any, record: OrdenCompraVistaDTO) => toTitleCase(record.suplidor?.nombre || ''),
     },
     {
-      title: 'Concepto',
-      key: 'concepto',
-      width: 150,
-      ellipsis: true,
-      render: (_: any, record: OrdenCompraVistaDTO) => record.concepto?.nombre ? toTitleCase(record.concepto.nombre) : '-',
-    },
-    {
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
       width: 130,
       align: 'right' as const,
       render: (v: number) => formatCurrency(v || 0),
-    },
-    {
-      title: 'Estado',
-      dataIndex: 'estado',
-      key: 'estado',
-      width: 110,
-      render: (v: number) => {
-        const info = ESTADO_MAP[v] || { label: 'Desconocido', color: 'default' };
-        return <Tag color={info.color}>{info.label}</Tag>;
-      },
     },
   ];
 
@@ -118,12 +111,12 @@ const BuscarOrdenCompraModal: React.FC<BuscarOrdenCompraModalProps> = ({ open, o
       onCancel={onClose}
       footer={null}
       width={800}
-      destroyOnClose
+      destroyOnHidden
     >
       <Input.Search
-        placeholder="Buscar por documento..."
+        placeholder="Buscar..."
         allowClear
-        onSearch={(val) => buscar(val)}
+        onSearch={() => buscar()}
         style={{ marginBottom: 16 }}
       />
       <Table

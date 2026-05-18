@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Popover } from 'antd';
+import { useUIStore } from '../../stores/uiStore';
 import type { ConceptoDTO, SuplidorDTO, AlmacenDTO, OrdenCompraVistaDTO } from '../../types/entradaAlmacen';
 
 export interface EntradaAlmacenGuideProps {
@@ -16,15 +17,12 @@ export interface EntradaAlmacenGuideProps {
   almacen: AlmacenDTO | null;
   /** Detalles del documento */
   detallesCount: number;
-  /** NCF ingresado */
-  ncf: string;
   /** Refs a los elementos del DOM */
   conceptoRef: React.RefObject<HTMLElement | null>;
   suplidorRef: React.RefObject<HTMLElement | null>;
   ordenCompraRef: React.RefObject<HTMLElement | null>;
   almacenRef: React.RefObject<HTMLElement | null>;
   agregarFilaRef: React.RefObject<HTMLElement | null>;
-  ncfRef: React.RefObject<HTMLElement | null>;
 }
 
 interface GuideStep {
@@ -41,14 +39,13 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
   ordenCompra,
   almacen,
   detallesCount,
-  ncf,
   conceptoRef,
   suplidorRef,
   ordenCompraRef,
   almacenRef,
   agregarFilaRef,
-  ncfRef,
 }) => {
+  const isDarkMode = useUIStore((s) => s.isDarkMode);
   const [open, setOpen] = useState(false);
   const dismissedStepRef = useRef<string | null>(null);
   const currentStepRef = useRef<GuideStep | null>(null);
@@ -86,12 +83,6 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
         description: 'Agregue productos al documento.',
         target: () => agregarFilaRef.current,
       },
-      {
-        key: 'ncf',
-        title: 'NCF',
-        description: "Debe digitar el NCF de la factura. (Solo si concepto.docAGenerar === 'RDE')",
-        target: () => ncfRef.current,
-      },
     ];
 
     // Lógica de prioridad (igual que el escritorio)
@@ -100,10 +91,9 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
     if (suplidor.requiereORC && !ordenCompra) return steps[2];
     if (!almacen) return steps[3];
     if (detallesCount === 0) return steps[4];
-    if (concepto.docAGenerar === 'RDE' && !ncf) return steps[5];
 
     return null;
-  }, [concepto, suplidor, ordenCompra, almacen, detallesCount, ncf, conceptoRef, suplidorRef, ordenCompraRef, almacenRef, agregarFilaRef, ncfRef]);
+  }, [concepto, suplidor, ordenCompra, almacen, detallesCount, conceptoRef, suplidorRef, ordenCompraRef, almacenRef, agregarFilaRef]);
 
   // Mantener ref sincronizada para usar en handlers sin stale closures
   currentStepRef.current = currentStep;
@@ -173,6 +163,7 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
       content={currentStep.description}
       placement="top"
       trigger={[]}
+      color={isDarkMode ? '#1777ff' : '#556ee6'}
     >
       <span
         style={{

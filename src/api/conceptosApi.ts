@@ -36,16 +36,9 @@ export const conceptosApi = {
     return data.data;
   },
 
-  obtenerSuplidores: async (
-    sucursal: number,
-    conceptoCodigo?: string
-  ): Promise<SuplidorDTO[]> => {
-    const params: Record<string, string> = {};
-    if (conceptoCodigo) params.concepto = conceptoCodigo;
-
+  obtenerSuplidores: async (sucursal: number): Promise<SuplidorDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<SuplidorDTO[]>>(
-      `${PROVEEDORES_BASE}/${sucursal}`,
-      { params }
+      `${PROVEEDORES_BASE}/${sucursal}`
     );
     return data.data;
   },
