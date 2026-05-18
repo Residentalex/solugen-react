@@ -131,7 +131,7 @@ const UsuarioDetalle: React.FC = () => {
       <Row gutter={16}>
         <Col xs={24} lg={12}>
           <Card title="Información General" style={{ borderRadius: 8, marginBottom: 16 }}>
-            <Descriptions column={1} size="small" labelStyle={{ fontWeight: 500, color: '#6c757d' }}>
+            <Descriptions column={1} size="small" labelStyle={{ fontWeight: 500 }}>
               <Descriptions.Item label="ID">{data.id}</Descriptions.Item>
               <Descriptions.Item label="Nombre">{data.nombre}</Descriptions.Item>
               <Descriptions.Item label="Usuario">
@@ -148,13 +148,13 @@ const UsuarioDetalle: React.FC = () => {
         <Col xs={24} lg={12}>
           <Card title="Roles por Sucursal" style={{ borderRadius: 8, marginBottom: 16 }}>
             {(data.sucursalesRoles || []).length === 0 ? (
-              <span style={{ color: '#6c757d' }}>Sin sucursales asignadas</span>
+              <span className="paces-text-muted">Sin sucursales asignadas</span>
             ) : (
               <Space direction="vertical" style={{ width: '100%' }} size="small">
                 {(data.sucursalesRoles || []).map((sr) => (
-                  <div key={sr.sucursal} style={{
+                  <div key={sr.sucursal} className="paces-bg-light" style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '8px 12px', borderRadius: 6, background: '#f8f9fa',
+                    padding: '8px 12px', borderRadius: 6,
                   }}>
                     <Tag style={{ margin: 0, fontSize: 12 }}>{sr.nombreSucursal}</Tag>
                     <Space size={4}>

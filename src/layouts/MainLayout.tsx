@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Layout, Spin, message, Dropdown, Select } from 'antd';
+import { Layout, Spin, message, Dropdown, Select, Input } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { Sucursal } from '../types/auth';
@@ -9,7 +9,25 @@ import GenesisLogo from '../components/GenesisLogo';
 import Sidebar from './Sidebar';
 import Toolbar from './Toolbar';
 import { Outlet } from 'react-router-dom';
-import { MenuFoldOutlined, MenuUnfoldOutlined, LogoutOutlined, UserOutlined, SettingOutlined } from '@ant-design/icons';
+import {
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  LogoutOutlined,
+  UserOutlined,
+  SettingOutlined,
+  BellOutlined,
+  MoonOutlined,
+  SunOutlined,
+} from '@ant-design/icons';
+
+function toTitleCase(str?: string | null): string {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
 
 const { Sider } = Layout;
 
@@ -60,6 +78,8 @@ const MainLayout: React.FC = () => {
   const setSidebarCollapsed = useUIStore((s: any) => s.setSidebarCollapsed);
   const activeModule = useUIStore((s: any) => s.activeModule);
   const pageTitleOverride = useUIStore((s: any) => s.pageTitleOverride);
+  const isDarkMode = useUIStore((s: any) => s.isDarkMode);
+  const toggleDarkMode = useUIStore((s: any) => s.toggleDarkMode);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -142,7 +162,7 @@ const MainLayout: React.FC = () => {
         }}
       >
         <div className={`sidebar-logo ${sidebarCollapsed ? 'collapsed' : ''}`}>
-          <GenesisLogo size={28} dark showText={!sidebarCollapsed} />
+          <GenesisLogo size={28} dark={isDarkMode} showText={!sidebarCollapsed} />
         </div>
         <Sidebar />
       </Sider>
@@ -155,7 +175,25 @@ const MainLayout: React.FC = () => {
             </button>
           </div>
 
+          <div className="paces-topbar-center">
+            <Input.Search
+              placeholder="Buscar..."
+              size="middle"
+              className="paces-topbar-search"
+            />
+          </div>
+
           <div className="paces-topbar-right">
+            <button className="paces-topbar-action-btn" title="Notificaciones">
+              <BellOutlined />
+            </button>
+            <button
+              className="paces-topbar-action-btn"
+              title={isDarkMode ? 'Modo claro' : 'Modo oscuro'}
+              onClick={toggleDarkMode}
+            >
+              {isDarkMode ? <SunOutlined /> : <MoonOutlined />}
+            </button>
             {sucursalesPermitidas.length > 1 && activeModule !== 'MUsuario' && activeModule !== 'CFacturasElectronicas' && (
               <Select
                 value={sucursalActiva}
@@ -163,7 +201,6 @@ const MainLayout: React.FC = () => {
                 disabled={isDetailPage}
                 size="small"
                 className="paces-sucursal-select"
-                style={{ width: 180 }}
                 options={sucursalesPermitidas.map((s: any) => ({
                   value: s.sucursal,
                   label: s.nombre,
@@ -176,7 +213,7 @@ const MainLayout: React.FC = () => {
                   {usuario?.nombre?.charAt(0)?.toUpperCase() || 'U'}
                 </div>
                 <span className="paces-topbar-user-name">
-                  {usuario?.nombre || usuario?.nombreUsuario || 'Usuario'}
+                  {toTitleCase(usuario?.nombre) || usuario?.nombreUsuario || 'Usuario'}
                 </span>
               </div>
             </Dropdown>

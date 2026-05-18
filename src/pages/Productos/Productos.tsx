@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Input, Tag, Button, message, Space, Row, Col, Card, Select } from 'antd';
-import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Table, Input, Tag, Button, message, Row, Col, Card, Select } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -11,7 +12,12 @@ function formatCurrency(n: number): string {
   return n.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function toTitleCase(str: string): string {
+  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 const Productos: React.FC = () => {
+  const navigate = useNavigate();
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
@@ -21,32 +27,93 @@ const Productos: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [filtroActivo, setFiltroActivo] = useState<string>('todos');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
 
-  const cargarDatos = useCallback(async (busqueda?: string, soloActivos?: boolean) => {
+  const cargarDatos = useCallback(async (
+    busqueda?: string,
+    soloActivos?: boolean,
+    pagina?: number,
+    tamano?: number
+  ) => {
+    if (sucursalActiva === undefined) return;
     setLoading(true);
     try {
-      const params: { filas?: number; codigo?: string; activo?: boolean } = { filas: 200 };
-      if (soloActivos !== undefined) params.activo = soloActivos;
-      if (busqueda) params.codigo = busqueda;
-      const result = await productoApi.obtenerListado(sucursalActiva, params);
-      setData(result || []);
+      const currentPage = pagina ?? page;
+      const currentSize = tamano ?? pageSize;
+      const salto = (currentPage - 1) * currentSize;
+
+      let resultados: ProductoListaDTO[];
+      let totalCount: number;
+
+      if (busqueda && busqueda.length > 2) {
+        resultados = await productoApi.filtrar(sucursalActiva, {
+          cantidad: currentSize,
+          salto,
+          codigo: busqueda,
+          referencia: busqueda,
+          sku: busqueda,
+          familia: busqueda,
+          activo: soloActivos,
+        });
+        totalCount = await productoApi.obtenerTotal(sucursalActiva, { codigo: busqueda, activo: soloActivos });
+      } else {
+        const params: { filas?: number; salto?: number; codigo?: string; activo?: boolean } = {
+          filas: currentSize,
+          salto,
+        };
+        if (soloActivos !== undefined) params.activo = soloActivos;
+        resultados = await productoApi.obtenerListado(sucursalActiva, params);
+        totalCount = await productoApi.obtenerTotal(sucursalActiva, { activo: soloActivos });
+      }
+
+      setData(resultados || []);
+      setTotal(totalCount ?? 0);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar productos');
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva]);
+  }, [sucursalActiva, page, pageSize]);
 
   useEffect(() => {
     setActiveModule('MProducto');
     updateToolbar({});
-    cargarDatos();
+    cargarDatos(undefined, undefined, 1, pageSize);
     return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setActiveModule, updateToolbar, resetToolbar, sucursalActiva]);
 
-  const handleSearch = () => {
+  // Recargar cuando cambian filtroActivo, page o pageSize (no searchText, eso va por onSearch)
+  useEffect(() => {
     const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
-    cargarDatos(searchText.trim() || undefined, soloActivos);
+    cargarDatos(searchText.trim() || undefined, soloActivos, page, pageSize);
+  }, [filtroActivo, page, pageSize]);
+
+  const handleSearch = (value: string) => {
+    setSearchText(value);
+    setPage(1);
+    const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
+    cargarDatos(value.trim() || undefined, soloActivos, 1, pageSize);
+  };
+
+  const handleReload = () => {
+    const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
+    cargarDatos(searchText.trim() || undefined, soloActivos, page, pageSize);
+  };
+
+  const handlePageChange = (newPage: number, newPageSize: number) => {
+    if (newPageSize !== pageSize) {
+      setPageSize(newPageSize);
+      setPage(1);
+      const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
+      cargarDatos(searchText.trim() || undefined, soloActivos, 1, newPageSize);
+    } else {
+      setPage(newPage);
+      const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
+      cargarDatos(searchText.trim() || undefined, soloActivos, newPage, pageSize);
+    }
   };
 
   const columns: ColumnsType<ProductoListaDTO> = [
@@ -63,21 +130,35 @@ const Productos: React.FC = () => {
       dataIndex: 'nombre',
       key: 'nombre',
       width: 280,
-      render: (val: string) => <span style={{ fontWeight: 500 }}>{val}</span>,
+      render: (val: string) => <span style={{ fontWeight: 500 }}>{toTitleCase(val ?? '')}</span>,
     },
     {
       title: 'Referencia',
       dataIndex: 'referencia',
       key: 'referencia',
       width: 140,
-      render: (val: string) => <span style={{ fontSize: 12, color: '#6c757d' }}>{val || '-'}</span>,
+      render: (val: string) => <span className="paces-text-muted" style={{ fontSize: 12 }}>{val || '-'}</span>,
     },
     {
       title: 'Familia',
       dataIndex: 'familia',
       key: 'familia',
       width: 140,
-      render: (val: string) => val ? <Tag style={{ fontSize: 11 }}>{val}</Tag> : '-',
+      render: (val: { nombre?: string } | null) => val?.nombre ? <Tag style={{ fontSize: 11 }}>{val.nombre}</Tag> : '-',
+    },
+    {
+      title: 'Categoría',
+      dataIndex: 'categoria',
+      key: 'categoria',
+      width: 140,
+      render: (val: { nombre?: string } | null) => val?.nombre ? <Tag style={{ fontSize: 11 }}>{toTitleCase(val.nombre)}</Tag> : '-',
+    },
+    {
+      title: 'U. Medida',
+      dataIndex: 'unidadMedida',
+      key: 'unidadMedida',
+      width: 100,
+      render: (val: { nombre?: string } | null) => val?.nombre ? toTitleCase(val.nombre) : '-',
     },
     {
       title: 'Precio',
@@ -114,21 +195,20 @@ const Productos: React.FC = () => {
 
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }} align="middle">
         <Col>
-          <Input
-            placeholder="Buscar por código..."
-            prefix={<SearchOutlined />}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            onPressEnter={handleSearch}
-            style={{ width: 260 }}
+          <Input.Search
+            placeholder="Buscar por código, nombre, categoría, familia..."
             allowClear
-            onClear={() => { setSearchText(''); cargarDatos(); }}
+            onSearch={handleSearch}
+            style={{ width: 300 }}
           />
         </Col>
         <Col>
           <Select
             value={filtroActivo}
-            onChange={setFiltroActivo}
+            onChange={(val) => {
+              setFiltroActivo(val);
+              setPage(1);
+            }}
             style={{ width: 130 }}
             size="middle"
             options={[
@@ -139,28 +219,32 @@ const Productos: React.FC = () => {
           />
         </Col>
         <Col>
-          <Button icon={<SearchOutlined />} onClick={handleSearch}>Buscar</Button>
-        </Col>
-        <Col>
-          <Button icon={<ReloadOutlined />} onClick={() => { setSearchText(''); setFiltroActivo('todos'); cargarDatos(); }}>
+          <Button icon={<ReloadOutlined />} onClick={handleReload}>
             Recargar
           </Button>
         </Col>
       </Row>
 
-      <Card style={{ borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }} styles={{ body: { padding: 0 } }}>
+      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
         <Table<ProductoListaDTO>
           columns={columns}
           dataSource={data}
           rowKey="codigo"
           loading={loading}
-          scroll={{ x: 1000 }}
+          scroll={{ x: 1240 }}
           size="middle"
+          onRow={(record) => ({
+            onClick: () => navigate(`/MProducto/${record.codigo}`),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
+            current: page,
+            pageSize: pageSize,
+            total: total,
+            onChange: handlePageChange,
             showSizeChanger: true,
             showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} productos`,
             pageSizeOptions: ['10', '20', '50', '100'],
-            defaultPageSize: 20,
           }}
         />
       </Card>

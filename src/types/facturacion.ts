@@ -1,33 +1,35 @@
-export interface ResumenTipoNcfDTO {
+// Basado en EntidadDTO.cs + ClienteDTO.cs del backend
+export interface ClienteDTO {
   codigo: string;
   nombre: string;
-  cantidad: number;
-  totalMonto: number;
+  tipoIdentificacion: string; // enum string
+  identificacion: string;
+  correoElectronico: string;
+  telefono: string;
+  telefonoAdicional: string;
+  direccion: string;
+  nota: string;
+  activo: boolean;
+  idExterno?: string;
+  // De EntidadDTO
+  primerNombre?: string;
+  segundoNombre?: string;
+  primerApellido?: string;
+  segundoApellido?: string;
+  codigoTipoEntidad?: string;
+  // De ClienteDTO extra
+  limiteCredito: number;
+  diasCredito: number;
+  creditoSuspendido: boolean;
+  exentoImpuesto: boolean;
+  margen: number;
+  porcientoDescuento: number;
 }
 
-export interface ResumenTipoNcfSucursalDTO {
-  codigo: string;
+// Basado en PuntoVentaDTO.cs
+export interface PuntoVentaDTO {
   nombre: string;
-  sucursal: number;
-  cantidad: number;
-  totalMonto: number;
-}
-
-export interface EnvioDGIIDTO {
-  id: number;
-  fecha: string;
-  tipoDocumento: number;
-  sucursal: number;
-  documento: string;
-  cliente: string;
-  transaccionID: number;
-  tipoComprobante: string;
-  ncf: string;
-  codigoQR: string;
-  codigoSecuencia: string;
-  fechaEnvio?: string;
-  fechaVencimiento?: string;
-  respuestaDGII: string;
-  firma: string;
-  enviado: boolean;
+  ip: string;
+  ruta: string;
+  idExterno?: string;
 }

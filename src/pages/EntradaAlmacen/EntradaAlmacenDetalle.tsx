@@ -66,22 +66,23 @@ interface SuplidorCardProps {
 const SuplidorCard: React.FC<SuplidorCardProps> = ({ entidad, suplidor }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Suplidor</span>}
-    style={{ borderRadius: 8, marginBottom: 16 }}
+    className="paces-card"
+    style={{ marginBottom: 16 }}
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
       <div style={{ fontSize: 16, fontWeight: 700 }}>
         {suplidor?.nombre ? toTitleCase(suplidor.nombre) : entidad?.nombre ? toTitleCase(entidad.nombre) : '-'}
       </div>
       <div>
-        <span style={{ color: '#666' }}>RNC: </span>
+        <span className="paces-text-secondary">RNC: </span>
         <span>{entidad?.identificacion || '-'}</span>
       </div>
       <div>
-        <span style={{ color: '#666' }}>Teléfono: </span>
+        <span className="paces-text-secondary">Teléfono: </span>
         <span>{entidad?.telefono || suplidor?.telefono || '-'}</span>
       </div>
       <div>
-        <span style={{ color: '#666' }}>Dirección: </span>
+        <span className="paces-text-secondary">Dirección: </span>
         <span>{entidad?.direccion ? toTitleCase(entidad.direccion) : suplidor?.direccion ? toTitleCase(suplidor.direccion) : '-'}</span>
       </div>
     </div>
@@ -100,19 +101,19 @@ interface TotalesCardProps {
 const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    style={{ borderRadius: 8 }}
+    className="paces-card"
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span style={{ color: '#666' }}>Subtotal</span>}
+        {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
         <span>{formatNumber(subTotal)}</span>
       </div>
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span style={{ color: '#666' }}>Descuento</span>}
+        {!alignRight && <span className="paces-text-secondary">Descuento</span>}
         <span>{formatNumber(descuento)}</span>
       </div>
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span style={{ color: '#666' }}>Impuestos</span>}
+        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
         <span>{formatNumber(impuestos)}</span>
       </div>
     </div>
@@ -128,8 +129,8 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
       <>
         <Divider style={{ margin: '12px 0' }} />
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#666', marginBottom: 4, textAlign: alignRight ? 'right' : undefined }}>Notas</div>
-          <div style={{ fontSize: 13, color: '#333', whiteSpace: 'pre-wrap', lineHeight: 1.5, textAlign: alignRight ? 'right' : undefined }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, textAlign: alignRight ? 'right' : undefined }} className="paces-text-secondary">Notas</div>
+          <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.5, textAlign: alignRight ? 'right' : undefined }} className="paces-text-dark">
             {nota}
           </div>
         </div>
@@ -162,9 +163,12 @@ const EntradaAlmacenDetalle: React.FC = () => {
     entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
-        setPageTitleOverride(`ENP-${res.noDocumento}`);
+        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
       })
-      .catch(() => { /* error handled by api client */ })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
+        message.error(msg);
+      })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
@@ -172,7 +176,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
-        <div style={{ marginTop: 16, color: '#666' }}>Cargando documento...</div>
+        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
       </div>
     );
   }
@@ -241,9 +245,16 @@ const EntradaAlmacenDetalle: React.FC = () => {
           <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
             setImprimiendo(true);
             try {
-              const res = await apiClient.get(`/reportes/inventario/entrada/${sucursalActiva}/${id}`, {
+              // POST con el DTO completo
+              const res = await apiClient.post('/reportes/inventario/entrada', data, {
                 responseType: 'blob',
               });
+
+              // Codigo anterior (GET):
+              // const res = await apiClient.get(`/reportes/inventario/entrada/${data.codigoSucursal ? obtenerNombreEnumSucursal(data.codigoSucursal) : sucursalActiva}/${id}`, {
+              //   responseType: 'blob',
+              // });
+
               const blobUrl = URL.createObjectURL(res.data);
               const iframe = document.createElement('iframe');
               iframe.style.display = 'none';
@@ -263,7 +274,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
             }
           }}>Imprimir</Button>
           {data.estado === 0 && data.periodo !== 6 && (
-            <Button type="primary" icon={<EditOutlined />}>Editar</Button>
+            <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FENP/${id}/editar`)}>Editar</Button>
           )}
         </Space>
       </div>
@@ -273,6 +284,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
         <Row gutter={16}>
           <Col lg={18}>
             <Card
+              className="paces-card"
               title={
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 18, fontWeight: 600 }}>
@@ -328,6 +340,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
         /* === MOBILE LAYOUT (< lg) === */
         <div>
           <Card
+            className="paces-card"
             title={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 18, fontWeight: 600 }}>

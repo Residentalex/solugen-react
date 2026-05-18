@@ -68,7 +68,10 @@ function formatDateParam(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
-  return `${y}${m}${day}000000`;
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${y}${m}${day}${hh}${mm}${ss}`;
 }
 
 function toTitleCase(str: string): string {
@@ -83,6 +86,8 @@ const EntradaAlmacen: React.FC = () => {
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setImprimirCallback = useUIStore((s) => s.setImprimirCallback);
+  const setNuevoCallback = useUIStore((s) => s.setNuevoCallback);
+  const setEditarCallback = useUIStore((s) => s.setEditarCallback);
 
   const [data, setData] = useState<MovimientoVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -137,16 +142,40 @@ const EntradaAlmacen: React.FC = () => {
   useEffect(() => {
     setActiveModule('FENP');
     updateToolbar({ nuevo: true, editar: false, anular: false, imprimir: true });
-    return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar]);
+    setNuevoCallback(() => navigate('/FENP/nuevo'));
+    return () => {
+      resetToolbar();
+      setNuevoCallback(undefined);
+    };
+  }, [setActiveModule, updateToolbar, resetToolbar, setNuevoCallback, navigate]);
+
+  useEffect(() => {
+    return () => {
+      setImprimirCallback(undefined);
+      setEditarCallback(undefined);
+    };
+  }, [setImprimirCallback, setEditarCallback]);
 
   useEffect(() => {
     if (selectedRow) {
       setImprimirCallback(async () => {
         try {
-          const res = await apiClient.get(`/reportes/inventario/entrada/${sucursalActiva}/${selectedRow.id}`, {
+          // 1. Obtener el DTO completo del documento
+          const detalle = await entradaAlmacenApi.obtenerPorId(
+            sucursalActiva,
+            selectedRow.id
+          );
+
+          // 2. Enviar el DTO al reporte via POST
+          const res = await apiClient.post('/reportes/inventario/entrada', detalle, {
             responseType: 'blob',
           });
+
+          // Codigo anterior (GET):
+          // const res = await apiClient.get(`/reportes/inventario/entrada/${selectedRow.codigoSucursal ? obtenerNombreEnumSucursal(selectedRow.codigoSucursal) : sucursalActiva}/${selectedRow.id}`, {
+          //   responseType: 'blob',
+          // });
+
           const blobUrl = URL.createObjectURL(res.data);
           setPdfPreview({ url: blobUrl, title: `ENP-${selectedRow.documento}` });
         } catch {
@@ -190,6 +219,11 @@ const EntradaAlmacen: React.FC = () => {
     setSelectedRow(record);
     const editable = record.periodo !== 6 && record.estado === 0;
     updateToolbar({ editar: editable, anular: editable });
+    if (editable) {
+      setEditarCallback(() => navigate(`/FENP/${record.id}/editar`));
+    } else {
+      setEditarCallback(undefined);
+    }
   };
 
   const columns: ColumnsType<MovimientoVistaDTO> = [
@@ -266,7 +300,7 @@ const EntradaAlmacen: React.FC = () => {
   width: 160,
   align: 'right',
   render: (total: number) => (
-    <Text strong style={{ color: '#343a40' }}>{formatCurrency(total)}</Text>
+    <Text strong className="paces-text-total">{formatCurrency(total)}</Text>
   ),
 },
 {
@@ -297,7 +331,7 @@ const EntradaAlmacen: React.FC = () => {
       </Tooltip>
       {record.periodo !== 6 && record.estado === 0 && (
         <Tooltip title="Editar">
-          <Button type="text" size="small" icon={<EditOutlined />} />
+          <Button type="text" size="small" icon={<EditOutlined />} onClick={() => navigate(`/FENP/${record.id}/editar`)} />
         </Tooltip>
       )}
     </Space>
@@ -310,9 +344,9 @@ const EntradaAlmacen: React.FC = () => {
       styles={{
         body: { padding: 0 },
       }}
+      className="paces-card-erp"
       style={{
         borderRadius: 8,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
       }}
     >
       <div style={{ padding: '20px 24px 0' }}>
@@ -334,7 +368,7 @@ const EntradaAlmacen: React.FC = () => {
             allowClear
             onSearch={handleSearch}
             style={{ width: 400 }}
-            prefix={<SearchOutlined style={{ color: '#aaa' }} />}
+            prefix={<SearchOutlined className="paces-text-icon" />}
           />
           <Select
             style={{ width: 65 }}
@@ -362,22 +396,13 @@ const EntradaAlmacen: React.FC = () => {
         loading={loading}
         scroll={{ x: 1500 }}
         size="middle"
+        rowClassName={(record) =>
+          selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'
+        }
         onRow={(record) => ({
           onClick: () => handleRowClick(record),
           style: {
             cursor: 'pointer',
-            background: selectedRow?.id === record.id ? '#eef0fc' : undefined,
-            transition: 'background 0.15s',
-          },
-          onMouseEnter: (e) => {
-            if (selectedRow?.id !== record.id) {
-              e.currentTarget.style.background = '#f8f9fa';
-            }
-          },
-          onMouseLeave: (e) => {
-            if (selectedRow?.id !== record.id) {
-              e.currentTarget.style.background = 'transparent';
-            }
           },
         })}
         onChange={handleTableChange}
@@ -388,7 +413,7 @@ const EntradaAlmacen: React.FC = () => {
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
-        style={{ borderTop: '1px solid #e9ecef', fontFamily: 'inherit' }}
+        className="paces-border-top"
       />
 
       <Drawer
@@ -398,7 +423,7 @@ const EntradaAlmacen: React.FC = () => {
           if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
           setPdfPreview(null);
         }}
-        width="70%"
+        size="70%"
       >
         {pdfPreview && (
           <div style={{ width: '100%', height: '100%', overflow: 'auto', transform: 'scale(1.1)', transformOrigin: 'top left' }}>

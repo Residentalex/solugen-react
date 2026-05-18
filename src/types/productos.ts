@@ -8,11 +8,11 @@ export interface ProductoListaDTO {
   activo: boolean;
   paraVender: boolean;
   paraComprar: boolean;
-  familia: string;
+  familia: { nombre?: string; idExterno?: string } | null;
   familiaID: number;
-  categoria: string;
+  categoria: { nombre?: string; codigo?: string; idExterno?: string } | null;
   categoriaCodigo: string;
-  unidadMedida: string;
+  unidadMedida: { nombre?: string; idExterno?: string } | null;
 }
 
 export interface FiltroProducto {
@@ -22,4 +22,79 @@ export interface FiltroProducto {
   referencia?: string;
   sku?: string;
   familia?: string;
+  activo?: boolean;
+}
+
+export interface FamiliaArticuloDTO {
+  nombre?: string;
+  idExterno?: string;
+  aumentoPrecioMaximo?: number;
+  cuentaCostoVenta?: string;
+  cuentaIngresosVenta?: string;
+  cuentaDescuentoVenta?: string;
+  cuentaDeVolucionVenta?: string;
+  cuentaCostoCompra?: string;
+  cuentaDevolucionCompra?: string;
+}
+
+export interface CategoriaArticuloDTO {
+  nombre?: string;
+  codigo?: string;
+  idExterno?: string;
+  control?: CategoriaArticuloDTO | null;
+  grupo?: CategoriaArticuloDTO | null;
+}
+
+export interface UnidadMedidaDTO {
+  nombre?: string;
+  codigo?: string;
+  factor?: number;
+  idExterno?: number;
+}
+
+export interface ImpuestoProductoDTO {
+  impuesto: {
+    nombre?: string;
+    porcentaje?: number;
+    tipo?: number;
+    ambito?: number;
+    codigo?: string;
+    noCuenta?: string;
+  } | null;
+}
+
+export interface DatosExtraProductoDTO {
+  idExterno?: string;
+  codigoControl?: string;
+  productoControl?: string;
+  unidadMedidaCompra?: UnidadMedidaDTO | null;
+  ubicacion?: string;
+  margenBeneficio?: number;
+  paraAlquilar?: boolean;
+  paraExportar?: boolean;
+  productoTerminado?: boolean;
+  pesado?: boolean;
+  garantia?: number;
+}
+
+export interface ProductoDTO {
+  codigo: string;
+  nombre: string;
+  precio: number;
+  referenciaInterna: string;
+  upc?: string;
+  familia?: FamiliaArticuloDTO | null;
+  categoria?: CategoriaArticuloDTO | null;
+  nota?: string;
+  paraVender: boolean;
+  paraComprar: boolean;
+  activo: boolean;
+  idExterno?: string;
+  fechaCreacion?: string;
+  unidadMedida?: UnidadMedidaDTO | null;
+  impuestos?: ImpuestoProductoDTO[];
+  ultimoCosto: number;
+  pesado?: boolean;
+  productoControl?: ProductoDTO | null;
+  datosExtra?: DatosExtraProductoDTO | null;
 }

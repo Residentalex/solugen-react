@@ -7,6 +7,7 @@ import MainLayout from './layouts/MainLayout';
 import Dashboard from './pages/Dashboard/Dashboard';
 import EntradaAlmacen from './pages/EntradaAlmacen/EntradaAlmacen';
 import EntradaAlmacenDetalle from './pages/EntradaAlmacen/EntradaAlmacenDetalle';
+import EntradaAlmacenFormulario from './pages/EntradaAlmacen/EntradaAlmacenFormulario';
 import SalidaAlmacen from './pages/SalidaAlmacen/SalidaAlmacen';
 import SalidaAlmacenDetalle from './pages/SalidaAlmacen/SalidaAlmacenDetalle';
 import DevolucionCompra from './pages/DevolucionCompra/DevolucionCompra';
@@ -14,9 +15,12 @@ import DevolucionCompraDetalle from './pages/DevolucionCompra/DevolucionCompraDe
 import TransferenciaAlmacen from './pages/TransferenciaAlmacen/TransferenciaAlmacen';
 import TransferenciaAlmacenDetalle from './pages/TransferenciaAlmacen/TransferenciaAlmacenDetalle';
 import DevolucionVenta from './pages/DevolucionVenta/DevolucionVenta';
+import DevolucionVentaDetalle from './pages/DevolucionVenta/DevolucionVentaDetalle';
 import CotizacionVenta from './pages/CotizacionVenta/CotizacionVenta';
 import FacturaPOS from './pages/FacturaPOS/FacturaPOS';
+import FacturaPOSDetalle from './pages/FacturaPOS/FacturaPOSDetalle';
 import FacturaCliente from './pages/FacturaCliente/FacturaCliente';
+import FacturaClienteDetalle from './pages/FacturaCliente/FacturaClienteDetalle';
 import FacturaSuplidor from './pages/FacturaSuplidor/FacturaSuplidor';
 import FacturaSuplidorDetalle from './pages/FacturaSuplidor/FacturaSuplidorDetalle';
 import NotaDebito from './pages/NotaDebito/NotaDebito';
@@ -31,8 +35,16 @@ import Usuarios from './pages/Usuarios/Usuarios';
 import UsuarioDetalle from './pages/Usuarios/UsuarioDetalle';
 import Roles from './pages/Roles/Roles';
 import Productos from './pages/Productos/Productos';
+import ProductoDetalle from './pages/Productos/ProductoDetalle';
 import Monedas from './pages/Monedas/Monedas';
+import TiposCuenta from './pages/TiposCuenta/TiposCuenta';
+import CuentasContables from './pages/CuentasContables/CuentasContables';
+import Impuestos from './pages/Impuestos/Impuestos';
+import AsientosContables from './pages/AsientosContables/AsientosContables';
 import CFacturasElectronicas from './pages/DGII/CFacturasElectronicas';
+import SecuenciasNCF from './pages/SecuenciasNCF/SecuenciasNCF';
+import Clientes from './pages/Clientes/Clientes';
+import PuntosVenta from './pages/PuntosVenta/PuntosVenta';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -66,6 +78,8 @@ const App: React.FC = () => {
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
             <Route path="FENP" element={<EntradaAlmacen />} />
+            <Route path="FENP/nuevo" element={<EntradaAlmacenFormulario />} />
+            <Route path="FENP/:id/editar" element={<EntradaAlmacenFormulario />} />
             <Route path="FENP/:id" element={<EntradaAlmacenDetalle />} />
             <Route path="FSAP" element={<SalidaAlmacen />} />
             <Route path="FSAP/:id" element={<SalidaAlmacenDetalle />} />
@@ -74,9 +88,12 @@ const App: React.FC = () => {
            <Route path="FTRP" element={<TransferenciaAlmacen />} />
             <Route path="FTRP/:id" element={<TransferenciaAlmacenDetalle />} />
             <Route path="FDEV" element={<DevolucionVenta />} />
+            <Route path="FDEV/:id" element={<DevolucionVentaDetalle />} />
             <Route path="FCotizacion" element={<CotizacionVenta />} />
             <Route path="FPV" element={<FacturaPOS />} />
+            <Route path="FPV/:id" element={<FacturaPOSDetalle />} />
             <Route path="FFAC" element={<FacturaCliente />} />
+            <Route path="FFAC/:id" element={<FacturaClienteDetalle />} />
             <Route path="FRDE" element={<FacturaSuplidor />} />
             <Route path="FRDE/:id" element={<FacturaSuplidorDetalle />} />
             <Route path="FNDSUP" element={<NotaDebito tipoEntidad="SUP" />} />
@@ -97,8 +114,16 @@ const App: React.FC = () => {
             <Route path="MUsuario/:id" element={<UsuarioDetalle />} />
             <Route path="MROL" element={<Roles />} />
             <Route path="MProducto" element={<Productos />} />
+          <Route path="MProducto/:codigo" element={<ProductoDetalle />} />
             <Route path="MMoneda" element={<Monedas />} />
+            <Route path="MTipoCuenta" element={<TiposCuenta />} />
+            <Route path="MCuentaContable" element={<CuentasContables />} />
+            <Route path="MImpuesto" element={<Impuestos />} />
+            <Route path="FAsientoContable" element={<AsientosContables />} />
             <Route path="CFacturasElectronicas" element={<CFacturasElectronicas />} />
+            <Route path="MSecuenciaNCF" element={<SecuenciasNCF />} />
+            <Route path="MCliente" element={<Clientes />} />
+            <Route path="MPOS" element={<PuntosVenta />} />
           </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

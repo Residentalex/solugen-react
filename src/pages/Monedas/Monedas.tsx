@@ -8,13 +8,12 @@ import {
   Input,
   InputNumber,
   message,
-  Popconfirm,
   Space,
   Tooltip,
   Empty,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { monedaApi } from '../../api/monedaApi';
@@ -99,16 +98,8 @@ const Monedas: React.FC = () => {
     }
   };
 
-  const handleEliminar = async (moneda: MonedaDTO) => {
-    if (sucursalActiva === undefined) return;
-    try {
-      await monedaApi.eliminar(sucursalActiva, moneda.id);
-      message.success('Moneda eliminada correctamente');
-      cargarDatos();
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al eliminar moneda');
-    }
-  };
+  const toTitleCase = (str: string): string =>
+    str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
   const columns: ColumnsType<MonedaDTO> = [
     {
@@ -122,6 +113,7 @@ const Monedas: React.FC = () => {
       title: 'Nombre',
       dataIndex: 'nombre',
       key: 'nombre',
+      render: (nombre: string) => toTitleCase(nombre ?? ''),
     },
     {
       title: 'Símbolo',
@@ -142,7 +134,7 @@ const Monedas: React.FC = () => {
       title: 'Acciones',
       key: 'acciones',
       fixed: 'right',
-      width: 120,
+      width: 80,
       render: (_, record) => (
         <Space size={0}>
           <Tooltip title="Editar moneda">
@@ -153,23 +145,6 @@ const Monedas: React.FC = () => {
               onClick={() => abrirEditar(record)}
             />
           </Tooltip>
-          <Popconfirm
-            title="¿Eliminar moneda?"
-            description="Esta acción no se puede deshacer."
-            onConfirm={() => handleEliminar(record)}
-            okText="Eliminar"
-            okType="danger"
-            cancelText="Cancelar"
-          >
-            <Tooltip title="Eliminar moneda">
-              <Button
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-              />
-            </Tooltip>
-          </Popconfirm>
         </Space>
       ),
     },
@@ -184,7 +159,7 @@ const Monedas: React.FC = () => {
         </Button>
       </div>
 
-      <Card style={{ borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }} styles={{ body: { padding: 0 } }}>
+      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
         <Table<MonedaDTO>
           columns={columns}
           dataSource={data}

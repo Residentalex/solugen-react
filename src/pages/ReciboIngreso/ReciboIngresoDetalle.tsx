@@ -10,6 +10,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { reciboIngresoApi } from '../../api/reciboIngresoApi';
+import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 
 const { TabPane } = Tabs;
 
@@ -69,11 +70,11 @@ const EntidadCard: React.FC<EntidadCardProps> = ({ entidad }) => (
         {entidad?.nombre ? toTitleCase(entidad.nombre) : '-'}
       </div>
       <div>
-        <span style={{ color: '#666' }}>RNC: </span>
+        <span className="paces-text-secondary">RNC: </span>
         <span>{entidad?.identificacion || '-'}</span>
       </div>
       <div>
-        <span style={{ color: '#666' }}>Teléfono: </span>
+        <span className="paces-text-secondary">Teléfono: </span>
         <span>{entidad?.telefono || '-'}</span>
       </div>
     </div>
@@ -97,19 +98,19 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span style={{ color: '#666' }}>Subtotal</span>}
+        {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
         <span>{formatNumber(subTotal)}</span>
       </div>
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span style={{ color: '#666' }}>Descuento</span>}
+        {!alignRight && <span className="paces-text-secondary">Descuento</span>}
         <span>{formatNumber(descuento)}</span>
       </div>
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span style={{ color: '#666' }}>Impuestos</span>}
+        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
         <span>{formatNumber(impuestos)}</span>
       </div>
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span style={{ color: '#666' }}>Retenciones</span>}
+        {!alignRight && <span className="paces-text-secondary">Retenciones</span>}
         <span>{formatNumber(retenciones)}</span>
       </div>
     </div>
@@ -125,8 +126,8 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
       <>
         <Divider style={{ margin: '12px 0' }} />
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#666', marginBottom: 4, textAlign: alignRight ? 'right' : undefined }}>Notas</div>
-          <div style={{ fontSize: 13, color: '#333', whiteSpace: 'pre-wrap', lineHeight: 1.5, textAlign: alignRight ? 'right' : undefined }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, textAlign: alignRight ? 'right' : undefined }} className="paces-text-secondary">Notas</div>
+          <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.5, textAlign: alignRight ? 'right' : undefined }} className="paces-text-dark">
             {nota}
           </div>
         </div>
@@ -143,6 +144,7 @@ const ReciboIngresoDetalle: React.FC = () => {
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [imprimiendo, setImprimiendo] = useState(false);
   const screens = Grid.useBreakpoint();
 
@@ -154,22 +156,43 @@ const ReciboIngresoDetalle: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
+    setError(null);
     reciboIngresoApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
-        setPageTitleOverride(`RI-${res.noDocumento}`);
+        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
       })
-      .catch(() => {})
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al cargar el documento';
+        setError(msg);
+        message.error(msg);
+      })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
-        <div style={{ marginTop: 16, color: '#666' }}>Cargando documento...</div>
+        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
       </div>
     );
+  }
+
+  if (error) {
+    return (
+      <div style={{ textAlign: 'center', padding: 80 }}>
+        <div style={{ fontSize: 18, color: '#ff4d4f', marginBottom: 16 }}>Error</div>
+        <div style={{ marginBottom: 24 }} className="paces-text-secondary">{error}</div>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FRI')}>
+          Volver
+        </Button>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return null;
   }
 
   const isLarge = screens.lg ?? true;
@@ -223,7 +246,7 @@ const ReciboIngresoDetalle: React.FC = () => {
           <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
             setImprimiendo(true);
             try {
-              const res = await apiClient.get(`/reportes/contabilidad/reciboIngreso/${sucursalActiva}/${id}`, {
+              const res = await apiClient.get(`/reportes/contabilidad/reciboIngreso/${data.codigoSucursal ? obtenerNombreEnumSucursal(data.codigoSucursal) : sucursalActiva}/${id}`, {
                 responseType: 'blob',
               });
               const blobUrl = URL.createObjectURL(res.data);

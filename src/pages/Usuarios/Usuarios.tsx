@@ -151,7 +151,7 @@ const Usuarios: React.FC = () => {
               {record.nombreUsuario}
               <RightOutlined style={{ fontSize: 10, marginLeft: 4, opacity: 0.5 }} />
             </div>
-            <div style={{ fontSize: 12, color: '#6c757d', lineHeight: 1.3 }}>{record.nombre}</div>
+            <div className="paces-text-muted" style={{ fontSize: 12, lineHeight: 1.3 }}>{record.nombre}</div>
           </div>
         </div>
       ),
@@ -186,7 +186,7 @@ const Usuarios: React.FC = () => {
       key: 'ultimoLogin',
       width: 170,
       render: (val: string) => (
-        <span style={{ fontSize: 12, color: '#6c757d' }}>{formatFecha(val)}</span>
+        <span className="paces-text-muted" style={{ fontSize: 12 }}>{formatFecha(val)}</span>
       ),
     },
     {
@@ -253,7 +253,7 @@ const Usuarios: React.FC = () => {
         <Button icon={<ReloadOutlined />} onClick={() => { setSearchText(''); cargarDatos(); }}>Recargar</Button>
       </div>
 
-      <Card style={{ borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }} styles={{ body: { padding: 0 } }}>
+      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
         <Table<UsuarioDTO>
           columns={columns}
           dataSource={data}

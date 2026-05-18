@@ -12,6 +12,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
+import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import type { FacturaVistaDTO } from '../../types/facturacion';
 
 const { Text } = Typography;
@@ -124,7 +125,7 @@ const FacturaPOS: React.FC = () => {
       setData(resultados);
       setTotal(resultados.length < filas ? (pagina - 1) * filas + resultados.length : pagina * filas + 1);
     } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
+      message.error(err?.response?.data?.ErrorMessage || 'Error al cargar datos');
     } finally {
       setLoading(false);
     }
@@ -144,13 +145,22 @@ const FacturaPOS: React.FC = () => {
     if (selectedRow) {
       setImprimirCallback(async () => {
         try {
-          const res = await apiClient.get(`/reportes/facturacion/pos/${sucursalActiva}/${selectedRow.id}`, {
+          // 1. Obtener el DTO completo del documento
+          const detalle = await facturaPOSApi.obtenerPorId(
+            selectedRow.codigoSucursal ? obtenerNombreEnumSucursal(selectedRow.codigoSucursal) : sucursalActiva,
+            selectedRow.id
+          );
+
+          // 2. Enviar el DTO al reporte via POST
+          const res = await apiClient.post('/reportes/facturacion/pos', detalle, {
             responseType: 'blob',
           });
+
           const blobUrl = URL.createObjectURL(res.data);
           setPdfPreview({ url: blobUrl, title: `PV-${selectedRow.documento}` });
-        } catch {
-          message.error('Error al generar el PDF');
+        } catch (err: any) {
+          const msg = err?.response?.data?.ErrorMessage || 'Error al generar el PDF';
+          message.error(msg);
         }
       });
     } else {
@@ -257,9 +267,9 @@ const FacturaPOS: React.FC = () => {
       key: 'total',
       width: 160,
       align: 'right',
-      render: (total: number) => (
-        <Text strong style={{ color: '#343a40' }}>{formatCurrency(total)}</Text>
-      ),
+  render: (total: number) => (
+    <Text strong className="paces-text-total">{formatCurrency(total)}</Text>
+  ),
     },
     {
       title: 'Estado',
@@ -302,9 +312,9 @@ const FacturaPOS: React.FC = () => {
       styles={{
         body: { padding: 0 },
       }}
+      className="paces-card-erp"
       style={{
         borderRadius: 8,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
       }}
     >
       <div style={{ padding: '20px 24px 0' }}>
@@ -326,7 +336,7 @@ const FacturaPOS: React.FC = () => {
             allowClear
             onSearch={handleSearch}
             style={{ width: 400 }}
-            prefix={<SearchOutlined style={{ color: '#aaa' }} />}
+            prefix={<SearchOutlined className="paces-text-icon" />}
           />
           <Select
             style={{ width: 65 }}
@@ -354,22 +364,13 @@ const FacturaPOS: React.FC = () => {
         loading={loading}
         scroll={{ x: 1500 }}
         size="middle"
+        rowClassName={(record) =>
+          selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'
+        }
         onRow={(record) => ({
           onClick: () => handleRowClick(record),
           style: {
             cursor: 'pointer',
-            background: selectedRow?.id === record.id ? '#eef0fc' : undefined,
-            transition: 'background 0.15s',
-          },
-          onMouseEnter: (e) => {
-            if (selectedRow?.id !== record.id) {
-              e.currentTarget.style.background = '#f8f9fa';
-            }
-          },
-          onMouseLeave: (e) => {
-            if (selectedRow?.id !== record.id) {
-              e.currentTarget.style.background = 'transparent';
-            }
           },
         })}
         onChange={handleTableChange}
@@ -380,7 +381,7 @@ const FacturaPOS: React.FC = () => {
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
-        style={{ borderTop: '1px solid #e9ecef', fontFamily: 'inherit' }}
+        className="paces-border-top"
       />
 
       <Drawer

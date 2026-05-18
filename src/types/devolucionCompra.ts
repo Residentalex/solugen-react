@@ -12,6 +12,7 @@ export interface MovimientoVistaDTO {
   total: number;
   estado: number;
   periodo: number;
+  codigoSucursal: string;
 }
 
 export interface FiltroDVC {
@@ -24,4 +25,19 @@ export interface FiltroDVC {
   entidad?: string;
   referencia?: string;
   almacen?: string;
+}
+
+import type { DocumentoDTO } from './documento';
+
+export interface DevolucionCompraDTO {
+  id: number;
+  fechaDocumento: string;
+  noDocumento: string;
+  estado: number;
+  periodo: number;
+  referencia: string;
+  ncf: string;
+  nota: string;
+  total: number;
+  documento: DocumentoDTO;
 }

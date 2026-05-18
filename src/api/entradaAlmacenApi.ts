@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { MovimientoVistaDTO, FiltroENP } from '../types/entradaAlmacen';
+import type { MovimientoVistaDTO, FiltroENP, EntradaAlmacenDTO } from '../types/entradaAlmacen';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/ENP';
@@ -42,8 +42,35 @@ export const entradaAlmacenApi = {
     return data.data;
   },
 
-  obtenerPorId: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.get<ApiResponse<any>>(`${BASE}/${sucursal}/${id}`);
+  obtenerPorId: async (sucursal: number, id: number): Promise<EntradaAlmacenDTO> => {
+    const { data } = await apiClient.get<ApiResponse<EntradaAlmacenDTO>>(`${BASE}/${sucursal}/${id}`);
+    return data.data;
+  },
+
+  crear: async (sucursal: number, entrada: EntradaAlmacenDTO): Promise<EntradaAlmacenDTO> => {
+    const { data } = await apiClient.post<ApiResponse<EntradaAlmacenDTO>>(`${BASE}/${sucursal}`, entrada);
+    return data.data;
+  },
+
+  actualizar: async (sucursal: number, entrada: EntradaAlmacenDTO): Promise<EntradaAlmacenDTO> => {
+    const { data } = await apiClient.put<ApiResponse<EntradaAlmacenDTO>>(`${BASE}/${sucursal}`, entrada);
+    return data.data;
+  },
+
+  aplicar: async (sucursal: number, id: number): Promise<EntradaAlmacenDTO> => {
+    const { data } = await apiClient.put<ApiResponse<EntradaAlmacenDTO>>(`${BASE}/${sucursal}/aplicar/${id}`);
+    return data.data;
+  },
+
+  desaplicar: async (origen: string, destino: string, documento: string): Promise<void> => {
+    const params = { origen, destino, documento };
+    await apiClient.put(`${BASE}/desaplicar`, null, { params });
+  },
+
+  postear: async (sucursal: number, entrada: EntradaAlmacenDTO, destino?: string): Promise<any> => {
+    const params: Record<string, string> = {};
+    if (destino) params.destino = destino;
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postear`, entrada, { params });
     return data.data;
   },
 
@@ -54,5 +81,13 @@ export const entradaAlmacenApi = {
 
   eliminar: async (sucursal: number, id: number): Promise<void> => {
     await apiClient.delete(`${BASE}/${sucursal}/eliminar/${id}`);
+  },
+
+  revisado: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.post(`${BASE}/${sucursal}/${id}/Revisado`);
+  },
+
+  reversar: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.post(`${BASE}/${sucursal}/${id}/Reversar`);
   },
 };

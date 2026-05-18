@@ -11,6 +11,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
+import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 
 const { TabPane } = Tabs;
 
@@ -51,15 +52,15 @@ const SuplidorCard: React.FC<SuplidorCardProps> = ({ entidad, suplidor }) => (
         {suplidor?.nombre ? toTitleCase(suplidor.nombre) : entidad?.nombre ? toTitleCase(entidad.nombre) : '-'}
       </div>
       <div>
-        <span style={{ color: '#666' }}>RNC: </span>
+        <span className="paces-text-secondary">RNC: </span>
         <span>{entidad?.identificacion || '-'}</span>
       </div>
       <div>
-        <span style={{ color: '#666' }}>Teléfono: </span>
+        <span className="paces-text-secondary">Teléfono: </span>
         <span>{entidad?.telefono || suplidor?.telefono || '-'}</span>
       </div>
       <div>
-        <span style={{ color: '#666' }}>Dirección: </span>
+        <span className="paces-text-secondary">Dirección: </span>
         <span>{entidad?.direccion ? toTitleCase(entidad.direccion) : suplidor?.direccion ? toTitleCase(suplidor.direccion) : '-'}</span>
       </div>
     </div>
@@ -95,9 +96,12 @@ const DevolucionCompraDetalle: React.FC = () => {
     devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
-        setPageTitleOverride(`DVC-${res.noDocumento}`);
+        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
       })
-      .catch(() => {})
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
+        message.error(msg);
+      })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
@@ -105,7 +109,7 @@ const DevolucionCompraDetalle: React.FC = () => {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
-        <div style={{ marginTop: 16, color: '#666' }}>Cargando documento...</div>
+        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
       </div>
     );
   }
@@ -141,7 +145,7 @@ const DevolucionCompraDetalle: React.FC = () => {
           <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
             setImprimiendo(true);
             try {
-              const res = await apiClient.get(`/reportes/inventario/devolucion-compra/${sucursalActiva}/${id}`, {
+              const res = await apiClient.post('/reportes/inventario/devolucion-compra', data, {
                 responseType: 'blob',
               });
               const blobUrl = URL.createObjectURL(res.data);
@@ -210,15 +214,15 @@ const DevolucionCompraDetalle: React.FC = () => {
             <Card title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>} style={{ borderRadius: 8 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 14 }}>
-                  <span style={{ color: '#666' }}>Subtotal</span>
+                  <span className="paces-text-secondary">Subtotal</span>
                   <span>{formatNumber(data.subTotal)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 14 }}>
-                  <span style={{ color: '#666' }}>Descuento</span>
+                  <span className="paces-text-secondary">Descuento</span>
                   <span>{formatNumber(data.descuento)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 14 }}>
-                  <span style={{ color: '#666' }}>Impuestos</span>
+                  <span className="paces-text-secondary">Impuestos</span>
                   <span>{formatNumber(data.impuestos)}</span>
                 </div>
               </div>
@@ -231,8 +235,8 @@ const DevolucionCompraDetalle: React.FC = () => {
                 <>
                   <Divider style={{ margin: '12px 0' }} />
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#666', marginBottom: 4 }}>Notas</div>
-                    <div style={{ fontSize: 13, color: '#333', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }} className="paces-text-secondary">Notas</div>
+                    <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.5 }} className="paces-text-dark">
                       {data.nota}
                     </div>
                   </div>

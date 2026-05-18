@@ -11,6 +11,7 @@ export interface TransaccionVistaDTO {
   nota: string;
   estado: number;
   periodo: number;
+  codigoSucursal: string;
 }
 
 export interface FiltroTransaccion {

@@ -13,6 +13,7 @@ export interface MovimientoVistaDTO {
   total: number;
   estado: number;
   periodo: number;
+  codigoSucursal: string;
 }
 
 export interface FiltroTRP {
@@ -23,4 +24,19 @@ export interface FiltroTRP {
   documento?: string;
   concepto?: string;
   almacen?: string;
+}
+
+import type { DocumentoDTO } from './documento';
+
+export interface TransferenciaAlmacenDTO {
+  id: number;
+  fechaDocumento: string;
+  noDocumento: string;
+  estado: number;
+  periodo: number;
+  referencia: string;
+  ncf: string;
+  nota: string;
+  total: number;
+  documento: DocumentoDTO;
 }

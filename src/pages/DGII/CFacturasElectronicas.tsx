@@ -400,7 +400,7 @@ const CFacturasElectronicas: React.FC = () => {
       columnWidthRatio: 0.5,
       label: false,
       colorField: 'sucursal',
-      color: ({ sucursal }: any) => SUCURSAL_COLOR[sucursal] || '#999',
+  color: ({ sucursal }: any) => SUCURSAL_COLOR[sucursal] || undefined,
       xAxis: {
         label: { autoRotate: false, style: { fontSize: 12 } },
         grid: null,
@@ -440,7 +440,7 @@ const CFacturasElectronicas: React.FC = () => {
           <QrcodeOutlined style={{ fontSize: 18, color: '#556ee6' }} />
         </a>
       ) : (
-        <span style={{ color: '#999' }}>-</span>
+        <span className="paces-text-placeholder">-</span>
       ),
     },
     {
@@ -500,7 +500,7 @@ const CFacturasElectronicas: React.FC = () => {
                 <FileDoneOutlined style={{ fontSize: 22, color: '#fff' }} />
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ color: '#8a8a8a', fontSize: 13, marginBottom: 2, whiteSpace: 'nowrap' }}>Total Emitidos</div>
+                <div style={{ fontSize: 13, marginBottom: 2, whiteSpace: 'nowrap' }} className="paces-text-light">Total Emitidos</div>
                 <div style={statValueStyle('#34c38f')}>{totalEmitidos.toLocaleString()}</div>
               </div>
             </div>
@@ -513,7 +513,7 @@ const CFacturasElectronicas: React.FC = () => {
                 <FileSyncOutlined style={{ fontSize: 22, color: '#fff' }} />
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ color: '#8a8a8a', fontSize: 13, marginBottom: 2, whiteSpace: 'nowrap' }}>Total Pendientes</div>
+                <div style={{ fontSize: 13, marginBottom: 2, whiteSpace: 'nowrap' }} className="paces-text-light">Total Pendientes</div>
                 <div style={statValueStyle('#f46a6a')}>{totalPendientes.toLocaleString()}</div>
               </div>
             </div>
@@ -526,7 +526,7 @@ const CFacturasElectronicas: React.FC = () => {
                 <DollarOutlined style={{ fontSize: 22, color: '#fff' }} />
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ color: '#8a8a8a', fontSize: 13, marginBottom: 2, whiteSpace: 'nowrap' }}>Monto Facturado</div>
+                <div style={{ fontSize: 13, marginBottom: 2, whiteSpace: 'nowrap' }} className="paces-text-light">Monto Facturado</div>
                 <div style={statValueStyle('#6f42c1')}>
                   ${montoTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
@@ -541,7 +541,7 @@ const CFacturasElectronicas: React.FC = () => {
                 <ShopOutlined style={{ fontSize: 22, color: '#fff' }} />
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ color: '#8a8a8a', fontSize: 13, marginBottom: 2, whiteSpace: 'nowrap' }}>Sucursales</div>
+                <div style={{ fontSize: 13, marginBottom: 2, whiteSpace: 'nowrap' }} className="paces-text-light">Sucursales</div>
                 <div style={statValueStyle('#f0b345')}>{sucursalesActivas}</div>
               </div>
             </div>
@@ -559,7 +559,7 @@ const CFacturasElectronicas: React.FC = () => {
             {donutTipoData.length > 0 ? (
               <Pie {...(donutTipoConfig as any)} />
             ) : (
-              <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>Sin datos</div>
+              <div style={{ textAlign: 'center', padding: 60 }} className="paces-text-placeholder">Sin datos</div>
             )}
           </Card>
         </Col>
@@ -572,7 +572,7 @@ const CFacturasElectronicas: React.FC = () => {
             {sucursalAgrupada.length > 0 ? (
               <Bar {...(barSucursalConfig as any)} />
             ) : (
-              <div style={{ textAlign: 'center', padding: 60, color: '#999' }}>Sin datos</div>
+              <div style={{ textAlign: 'center', padding: 60 }} className="paces-text-placeholder">Sin datos</div>
             )}
           </Card>
         </Col>
@@ -585,7 +585,7 @@ const CFacturasElectronicas: React.FC = () => {
             {resumenSucursal.length > 0 ? (
               <Column {...(columnSucursalConfig as any)} />
             ) : (
-              <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>Sin datos</div>
+              <div style={{ textAlign: 'center', padding: 40 }} className="paces-text-placeholder">Sin datos</div>
             )}
           </Card>
         </Col>
@@ -610,18 +610,16 @@ const CFacturasElectronicas: React.FC = () => {
         styles={{ body: { padding: 0 } }}
       >
         {vista === 'pendientes' && selectedRowKeys.length > 0 && (
-          <div style={{
+          <div className="paces-border-bottom-light paces-bg-light-2" style={{
             padding: '10px 16px',
-            borderBottom: '1px solid #f0f0f0',
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            background: '#fafbfe',
           }}>
             <span style={{ fontSize: 13, color: '#556ee6', fontWeight: 600, marginRight: 4 }}>
               {selectedRowKeys.length}
             </span>
-            <span style={{ fontSize: 13, color: '#8a8a8a' }}>seleccionado(s)</span>
+            <span style={{ fontSize: 13 }} className="paces-text-light">seleccionado(s)</span>
             <div style={{ flex: 1 }} />
             <Button type="primary" size="small" icon={<SendOutlined />}
               onClick={() => handleEnviar(selectedRowKeys)}>

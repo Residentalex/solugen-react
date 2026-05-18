@@ -11,6 +11,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { salidaAlmacenApi } from '../../api/salidaAlmacenApi';
+import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 
 const { TabPane } = Tabs;
 
@@ -51,15 +52,15 @@ const SuplidorCard: React.FC<SuplidorCardProps> = ({ entidad, suplidor }) => (
         {suplidor?.nombre ? toTitleCase(suplidor.nombre) : entidad?.nombre ? toTitleCase(entidad.nombre) : '-'}
       </div>
       <div>
-        <span style={{ color: '#666' }}>RNC: </span>
+        <span className="paces-text-secondary">RNC: </span>
         <span>{entidad?.identificacion || '-'}</span>
       </div>
       <div>
-        <span style={{ color: '#666' }}>Teléfono: </span>
+        <span className="paces-text-secondary">Teléfono: </span>
         <span>{entidad?.telefono || suplidor?.telefono || '-'}</span>
       </div>
       <div>
-        <span style={{ color: '#666' }}>Dirección: </span>
+        <span className="paces-text-secondary">Dirección: </span>
         <span>{entidad?.direccion ? toTitleCase(entidad.direccion) : suplidor?.direccion ? toTitleCase(suplidor.direccion) : '-'}</span>
       </div>
     </div>
@@ -81,6 +82,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [imprimiendo, setImprimiendo] = useState(false);
   const screens = Grid.useBreakpoint();
 
@@ -92,22 +94,43 @@ const SalidaAlmacenDetalle: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
+    setError(null);
     salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
-        setPageTitleOverride(`SAP-${res.noDocumento}`);
+        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
       })
-      .catch(() => {})
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al cargar el documento';
+        setError(msg);
+        message.error(msg);
+      })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
-        <div style={{ marginTop: 16, color: '#666' }}>Cargando documento...</div>
+        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
       </div>
     );
+  }
+
+  if (error) {
+    return (
+      <div style={{ textAlign: 'center', padding: 80 }}>
+        <div style={{ fontSize: 18, color: '#ff4d4f', marginBottom: 16 }}>Error</div>
+        <div style={{ marginBottom: 24 }} className="paces-text-secondary">{error}</div>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
+          Volver
+        </Button>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return null;
   }
 
   const isLarge = screens.lg ?? true;
@@ -137,7 +160,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
           <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
             setImprimiendo(true);
             try {
-              const res = await apiClient.get(`/reportes/inventario/salida/${sucursalActiva}/${id}`, {
+              const res = await apiClient.post('/reportes/inventario/salida', data, {
                 responseType: 'blob',
               });
               const blobUrl = URL.createObjectURL(res.data);
@@ -207,7 +230,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
             <Card title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>} style={{ borderRadius: 8 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 14 }}>
-                  <span style={{ color: '#666' }}>Total</span>
+                  <span className="paces-text-secondary">Total</span>
                   <span style={{ fontWeight: 700 }}>{formatCurrency(data.total)}</span>
                 </div>
               </div>
@@ -215,8 +238,8 @@ const SalidaAlmacenDetalle: React.FC = () => {
                 <>
                   <Divider style={{ margin: '12px 0' }} />
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#666', marginBottom: 4 }}>Notas</div>
-                    <div style={{ fontSize: 13, color: '#333', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }} className="paces-text-secondary">Notas</div>
+                    <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.5 }} className="paces-text-dark">
                       {data.nota}
                     </div>
                   </div>

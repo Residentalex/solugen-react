@@ -149,7 +149,7 @@ const Roles: React.FC = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{rol.nombre}</div>
-                      <div style={{ color: '#6c757d', fontSize: 13, lineHeight: 1.4, marginBottom: 8 }}>
+                      <div className="paces-text-muted" style={{ fontSize: 13, lineHeight: 1.4, marginBottom: 8 }}>
                         {rol.descripcion || 'Sin descripción'}
                       </div>
                     </div>
@@ -158,13 +158,13 @@ const Roles: React.FC = () => {
                     </Tag>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, color: '#6c757d', fontSize: 13 }}>
+                  <div className="paces-text-muted" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 16, fontSize: 13 }}>
                     <TeamOutlined />
                     <span>{rol.cantidadUsuarios ?? 0} usuarios</span>
                   </div>
 
                   <div style={{ flex: 1, marginBottom: 16 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#6c757d', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                      <div className="paces-text-muted" style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
                       Permisos
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -179,7 +179,7 @@ const Roles: React.FC = () => {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: 8, borderTop: '1px solid #f0f0f0', paddingTop: 12, marginTop: 'auto' }}>
+                  <div className="paces-border-top" style={{ display: 'flex', gap: 8, paddingTop: 12, marginTop: 'auto' }}>
                     <Tooltip title="Editar rol">
                       <Button type="link" size="small" icon={<EditOutlined />} onClick={() => abrirEditar(rol)}>
                         Editar
@@ -226,7 +226,7 @@ const Roles: React.FC = () => {
           {pantallasDisponibles.length === 0 ? (
             <Spin size="small" />
           ) : (
-            <div style={{ maxHeight: 360, overflowY: 'auto', border: '1px solid #f0f0f0', borderRadius: 6, padding: 12 }}>
+            <div className="paces-border-light" style={{ maxHeight: 360, overflowY: 'auto', borderRadius: 6, padding: 12 }}>
               {pantallasDisponibles.map((pp) => {
                 const pantallaId = pp.pantalla.id;
                 const selected = selectedPantallas[pantallaId] || [];
@@ -234,7 +234,7 @@ const Roles: React.FC = () => {
                 const todasSeleccionadas = todas.length > 0 && todas.every((a) => selected.includes(a));
                 const algunaSeleccionada = selected.length > 0;
                 return (
-                  <div key={pantallaId} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #f5f5f5' }}>
+                  <div key={pantallaId} className="paces-border-bottom-light" style={{ marginBottom: 10, paddingBottom: 10 }}>
                     <Checkbox
                       checked={todasSeleccionadas}
                       indeterminate={algunaSeleccionada && !todasSeleccionadas}

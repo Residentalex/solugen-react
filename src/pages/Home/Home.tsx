@@ -34,7 +34,7 @@ const Home: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#001529', padding: '0 24px' }}>
+      <Header className="paces-home-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 24px' }}>
         <GenesisLogo />
       </Header>
       <Content style={{ padding: 24, display: 'flex', justifyContent: 'center' }}>

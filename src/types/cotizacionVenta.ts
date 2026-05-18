@@ -1,3 +1,5 @@
+import type { DocumentoDTO } from './documento';
+
 export interface CotizacionVentaDTO {
   id: number;
   fechaDocumento: string;
@@ -9,6 +11,7 @@ export interface CotizacionVentaDTO {
   estado: number;
   periodo: number;
   nota?: string;
+  documento: DocumentoDTO;
 }
 
 export interface FiltroCotizacionVenta {

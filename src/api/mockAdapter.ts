@@ -625,6 +625,41 @@ export function setupMocks() {
   mock.onGet(new RegExp('/api/ENP/\\d+$')).reply(() => handleList(ENTRADAS));
   mock.onPost(new RegExp('/api/ENP/\\d+/anular')).reply(200, okVoid);
   mock.onDelete(new RegExp('/api/ENP/\\d+/eliminar/\\d+')).reply(200, okVoid);
+  mock.onPost(new RegExp('/api/ENP/\\d+$')).reply((c) => {
+    const body = JSON.parse(c.data || '{}');
+    const newEntrada = {
+      ...body,
+      id: ENTRADAS.length + 1,
+      noDocumento: `ENP-${String(1000 + ENTRADAS.length + 1).padStart(6, '0')}`,
+      estado: 0,
+    };
+    return okResp(newEntrada);
+  });
+  mock.onPut(new RegExp('/api/ENP/\\d+$')).reply((c) => {
+    const body = JSON.parse(c.data || '{}');
+    return okResp(body);
+  });
+  mock.onPut(new RegExp('/api/ENP/\\d+/aplicar/\\d+')).reply((c) => {
+    const m = c.url?.match(/\/api\/ENP\/(\d+)\/aplicar\/(\d+)/);
+    const id = m ? parseInt(m[2], 10) : 1;
+    return okResp({ ...entradaDetalleMock(id), estado: 1 });
+  });
+  mock.onPut(new RegExp('/api/ENP/desaplicar')).reply(200, okVoid);
+  mock.onPost(new RegExp('/api/ENP/\\d+/postear')).reply(200, okVoid);
+  mock.onPost(new RegExp('/api/ENP/\\d+/\\d+/Revisado')).reply(200, okVoid);
+  mock.onPost(new RegExp('/api/ENP/\\d+/\\d+/Reversar')).reply(200, okVoid);
+
+  const CONCEPTOS_MOCK = conceptos.map((c, i) => ({ nombre: c, codigo: `CON-${i + 1}` }));
+  const ENTIDADES_MOCK = proveedores.map((p, i) => ({
+    nombre: p, codigo: `SUP-${String(i + 1).padStart(3, '0')}`,
+    identificacion: `12345678${String(i + 1).padStart(3, '0')}`,
+    telefono: '809-555-0101', direccion: 'Av. Principal #123',
+  }));
+  const ALMACENES_MOCK = almacenes.map((a, i) => ({ nombre: a, codigo: `ALM-${i + 1}` }));
+
+  mock.onGet(new RegExp('/api/Concepto/\\d+')).reply(() => okResp(CONCEPTOS_MOCK));
+  mock.onGet(new RegExp('/api/Entidad/\\d+')).reply(() => okResp(ENTIDADES_MOCK));
+  mock.onGet(new RegExp('/api/Almacen/\\d+')).reply(() => okResp(ALMACENES_MOCK));
 
   mock.onGet(new RegExp('/api/SAP/\\d+/filtrar')).reply(() => handleList(SALIDAS));
   mock.onGet(new RegExp('/api/SAP/\\d+/\\d+$')).reply((c) => handleDetail(c.url!, (id) => detalleGenerico(id, detalleArticulos(), SALIDAS[id - 1]?.total || 50000, 'SAP', 'Salida de Almacén'), SALIDAS));
@@ -796,17 +831,31 @@ export function setupMocks() {
     codigo: String(100000 + i + 1),
     nombre: articulosBase[i % articulosBase.length] + (i >= articulosBase.length ? ` #${i + 1}` : ''),
     precio: Math.round(Math.random() * 5000 + 100) / 100,
-    referencia: i % 4 === 0 ? `REF-${i}` : i % 5 === 0 ? `SKU${String(20000 + i).slice(0, 6)}` : '',
-    refFabricante: i % 3 === 0 ? `FAB-${i}` : '',
+    referencia: `REF-${1000 + i}`,
+    refFabricante: `FAB-${2000 + i}`,
     ultimoCosto: Math.round(Math.random() * 3000 + 50) / 100,
-    activo: i % 8 !== 7,
-    paraVender: i % 6 !== 0,
-    paraComprar: i % 5 !== 0,
-    familia: FAMILIAS[i % FAMILIAS.length],
-    familiaID: (i % FAMILIAS.length) + 1,
-    categoria: i % 2 === 0 ? 'General' : 'Especial',
-    categoriaCodigo: i % 2 === 0 ? 'GEN' : 'ESP',
-    unidadMedida: i % 3 === 0 ? 'UNIDAD' : i % 3 === 1 ? 'LIBRA' : 'CAJA',
+    activo: i % 5 !== 0,
+    paraVender: i % 3 !== 0,
+    paraComprar: i % 2 === 0,
+    familiaID: (i % 8) + 1,
+    familia: { nombre: FAMILIAS[i % 8], idExterno: String((i % 8) + 1) },
+    categoria: { nombre: `Categoría ${i % 4 + 1}`, codigo: `CAT-${i % 4 + 1}`, idExterno: String(i % 4 + 1) },
+    categoriaCodigo: `CAT-${i % 4 + 1}`,
+    unidadMedida: { nombre: ['Unidad', 'Kilogramo', 'Litro', 'Caja'][i % 4], codigo: ['UND', 'KG', 'LT', 'CJA'][i % 4], idExterno: i % 4 + 1 },
+    // Campos adicionales para ProductoDTO completo
+    referenciaInterna: `RI-${1000 + i}`,
+    upc: i % 3 === 0 ? `7501${String(i).padStart(8, '0')}` : undefined,
+    nota: i % 4 === 0 ? `Notas del producto ${i + 1}` : undefined,
+    idExterno: String(100000 + i + 1),
+    fechaCreacion: '2024-01-15T10:30:00',
+    pesado: i % 10 === 0,
+    impuestos: i % 3 === 0
+      ? [{ impuesto: { nombre: 'ITBIS', porcentaje: 18, tipo: 1, ambito: 0, codigo: 'ITBIS18', noCuenta: '610-01' } }]
+      : [],
+    datosExtra: i % 2 === 0
+      ? { idExterno: String(100000 + i + 1), ubicacion: `Pasillo ${i % 5 + 1}-Estante ${i % 3 + 1}`, margenBeneficio: Math.round((Math.random() * 40 + 10) * 100) / 100, paraAlquilar: false, paraExportar: false, productoTerminado: true, pesado: i % 10 === 0, garantia: i % 5 === 0 ? 30 : 0, codigoControl: i % 7 === 0 ? String(200000 + i) : undefined, unidadMedidaCompra: { nombre: 'Unidad', codigo: 'UND', factor: 1, idExterno: 1 } }
+      : null,
+    productoControl: null,
   }));
 
   mock.onGet(new RegExp('/api/Producto/\\d+$')).reply((c) => {
@@ -828,11 +877,12 @@ export function setupMocks() {
     if (referencia) filtered = filtered.filter((p) => p.referencia?.toLowerCase().includes(referencia.toLowerCase()));
     return okResp(filtered);
   });
-  mock.onGet(new RegExp('/api/Producto/\\d+/\\d+$')).reply((c) => {
-    const m = c.url?.match(/\/api\/Producto\/\d+\/(\d+)/);
+  mock.onGet(new RegExp('/api/Producto/\\d+/[^/]+$')).reply((c) => {
+    const m = c.url?.match(/\/api\/Producto\/\d+\/([^/]+)$/);
     const codigo = m ? m[1] : '';
-    const prod = PRODUCTOS.find((p) => p.codigo === codigo) || PRODUCTOS[0];
-    return okResp(prod);
+    const prod = PRODUCTOS.find((p) => p.codigo === codigo);
+    if (prod) return okResp(prod);
+    return [404, { errorMessage: 'Producto no encontrado' }];
   });
 
   mock.onAny().passThrough();

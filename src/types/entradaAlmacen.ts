@@ -13,6 +13,7 @@ export interface MovimientoVistaDTO {
   total: number;
   estado: number;
   periodo: number;
+  codigoSucursal: string;
 }
 
 export interface FiltroENP {
@@ -35,11 +36,13 @@ export interface EntidadDTO {
   identificacion: string;
   telefono?: string;
   direccion?: string;
+  requiereORC?: boolean;
 }
 
 export interface ConceptoDTO {
   nombre: string;
   codigo: string;
+  docAGenerar?: string;
 }
 
 export interface MonedaDTO {
@@ -56,8 +59,11 @@ export interface AlmacenDTO {
 export interface SuplidorDTO {
   nombre: string;
   codigo: string;
+  identificacion: string;
   telefono?: string;
   direccion?: string;
+  requiereORC?: boolean;
+  diasCredito?: number;
 }
 
 export interface OrdenCompraDTO {
@@ -111,6 +117,8 @@ export interface LogDTO {
   estacion: string;
 }
 
+import type { DocumentoDTO } from './documento';
+
 export interface EntradaAlmacenDTO {
   id: number;
   fechaDocumento: string;
@@ -129,14 +137,50 @@ export interface EntradaAlmacenDTO {
   retenciones: number;
   total: number;
   tasa: number;
+  documento: DocumentoDTO;
   entidad: EntidadDTO;
   concepto: ConceptoDTO;
   moneda: MonedaDTO;
   almacen: AlmacenDTO;
   suplidor: SuplidorDTO;
-  sucursal: EntidadDTO;
+  sucursal: any;
+  codigoSucursal?: string;
   ordenCompra: OrdenCompraDTO;
   detalles: DetalleEntradaAlmacenDTO[];
   asientos: AsientoContableDTO[];
   logs: LogDTO[];
+  revisado?: boolean;
+  actualizarCostos?: boolean;
+  codigoAlmacenOrigen?: string;
+  codigoAlmacenDestino?: string;
+  fechaEntrega?: string;
+  recibidoPor?: string;
+}
+
+// ===== Tipos para Orden de Compra (ORC) =====
+export interface OrdenCompraVistaDTO {
+  id: number;
+  noDocumento: string;
+  fechaDocumento: string;
+  suplidor: { id: number; nombre: string; codigo: string; telefono?: string };
+  concepto: { codigo: string; nombre: string };
+  total: number;
+  estado: number;
+}
+
+export interface DetalleOrdenCompraVistaDTO {
+  id: number;
+  codigo: string;
+  articulo: string;
+  referencia: string;
+  cantidad: number;
+  costo: number;
+  subTotal: number;
+  descuento: number;
+  porcentajeDescuento: number;
+  impuestos: number;
+  total: number;
+  cantidadRecibida: number;
+  cantidadBonificable: number;
+  medida: { id: number; nombre: string; factor: number };
 }

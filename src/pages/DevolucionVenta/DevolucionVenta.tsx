@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, Tooltip, message, Drawer } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -11,6 +12,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { devolucionVentaApi } from '../../api/devolucionVentaApi';
+import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import type { FacturaVistaDTO } from '../../types/facturacion';
 
 const { Text } = Typography;
@@ -81,6 +83,7 @@ const DevolucionVenta: React.FC = () => {
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setImprimirCallback = useUIStore((s) => s.setImprimirCallback);
+  const navigate = useNavigate();
 
   const [data, setData] = useState<FacturaVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -123,7 +126,7 @@ const DevolucionVenta: React.FC = () => {
       setData(resultados);
       setTotal(resultados.length < filas ? (pagina - 1) * filas + resultados.length : pagina * filas + 1);
     } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
+      message.error(err?.response?.data?.ErrorMessage || 'Error al cargar datos');
     } finally {
       setLoading(false);
     }
@@ -143,13 +146,22 @@ const DevolucionVenta: React.FC = () => {
     if (selectedRow) {
       setImprimirCallback(async () => {
         try {
-          const res = await apiClient.get(`/reportes/facturacion/devolucionVenta/${sucursalActiva}/${selectedRow.id}`, {
+          // 1. Obtener el DTO completo del documento
+          const detalle = await devolucionVentaApi.obtenerPorId(
+            selectedRow.codigoSucursal ? obtenerNombreEnumSucursal(selectedRow.codigoSucursal) : sucursalActiva,
+            selectedRow.id
+          );
+
+          // 2. Enviar el DTO al reporte via POST
+          const res = await apiClient.post('/reportes/facturacion/devolucion', detalle, {
             responseType: 'blob',
           });
+
           const blobUrl = URL.createObjectURL(res.data);
           setPdfPreview({ url: blobUrl, title: `DEV-${selectedRow.documento}` });
-        } catch {
-          message.error('Error al generar el PDF');
+        } catch (err: any) {
+          const msg = err?.response?.data?.ErrorMessage || 'Error al generar el PDF';
+          message.error(msg);
         }
       });
     } else {
@@ -198,8 +210,8 @@ const DevolucionVenta: React.FC = () => {
       key: 'documento',
       width: 160,
       fixed: 'left',
-      render: (doc: string) => (
-        <Text strong style={{ color: '#6c5ffc', cursor: 'pointer' }}>{doc}</Text>
+      render: (doc: string, record: FacturaVistaDTO) => (
+        <Text strong style={{ color: '#556ee6', cursor: 'pointer' }} onClick={() => navigate(`/FDEV/${record.id}`)}>{doc}</Text>
       ),
     },
     {
@@ -264,9 +276,9 @@ const DevolucionVenta: React.FC = () => {
       key: 'total',
       width: 150,
       align: 'right',
-      render: (total: number) => (
-        <Text strong style={{ color: '#343a40' }}>{formatCurrency(total)}</Text>
-      ),
+  render: (total: number) => (
+    <Text strong className="paces-text-total">{formatCurrency(total)}</Text>
+  ),
     },
     {
       title: 'NCF',
@@ -299,7 +311,7 @@ const DevolucionVenta: React.FC = () => {
       render: (_: any, record: FacturaVistaDTO) => (
         <Space size="small">
           <Tooltip title="Ver detalle">
-            <Button type="text" size="small" icon={<EyeOutlined />} />
+            <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/FDEV/${record.id}`)} />
           </Tooltip>
           {record.periodo !== 6 && record.estado === 0 && (
             <Tooltip title="Editar">
@@ -316,9 +328,9 @@ const DevolucionVenta: React.FC = () => {
       styles={{
         body: { padding: 0 },
       }}
+      className="paces-card-erp"
       style={{
         borderRadius: 8,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
       }}
     >
       <div style={{ padding: '20px 24px 0' }}>
@@ -340,7 +352,7 @@ const DevolucionVenta: React.FC = () => {
             allowClear
             onSearch={handleSearch}
             style={{ width: 400 }}
-            prefix={<SearchOutlined style={{ color: '#aaa' }} />}
+            prefix={<SearchOutlined className="paces-text-icon" />}
           />
           <Select
             style={{ width: 65 }}
@@ -368,22 +380,13 @@ const DevolucionVenta: React.FC = () => {
         loading={loading}
         scroll={{ x: 1600 }}
         size="middle"
+        rowClassName={(record) =>
+          selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'
+        }
         onRow={(record) => ({
           onClick: () => handleRowClick(record),
           style: {
             cursor: 'pointer',
-            background: selectedRow?.id === record.id ? '#eef0fc' : undefined,
-            transition: 'background 0.15s',
-          },
-          onMouseEnter: (e) => {
-            if (selectedRow?.id !== record.id) {
-              e.currentTarget.style.background = '#f8f9fa';
-            }
-          },
-          onMouseLeave: (e) => {
-            if (selectedRow?.id !== record.id) {
-              e.currentTarget.style.background = 'transparent';
-            }
           },
         })}
         onChange={handleTableChange}
@@ -394,7 +397,7 @@ const DevolucionVenta: React.FC = () => {
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
-        style={{ borderTop: '1px solid #e9ecef', fontFamily: 'inherit' }}
+        className="paces-border-top"
       />
 
       <Drawer

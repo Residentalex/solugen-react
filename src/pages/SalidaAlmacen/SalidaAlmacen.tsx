@@ -12,6 +12,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { salidaAlmacenApi } from '../../api/salidaAlmacenApi';
+import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import type { MovimientoVistaDTO } from '../../types/entradaAlmacen';
 
 const { Text } = Typography;
@@ -143,7 +144,12 @@ const SalidaAlmacen: React.FC = () => {
     if (selectedRow) {
       setImprimirCallback(async () => {
         try {
-          const res = await apiClient.get(`/reportes/inventario/salida/${sucursalActiva}/${selectedRow.id}`, {
+          const detalle = await salidaAlmacenApi.obtenerPorId(
+            selectedRow.codigoSucursal ? obtenerNombreEnumSucursal(selectedRow.codigoSucursal) : sucursalActiva,
+            selectedRow.id
+          );
+
+          const res = await apiClient.post('/reportes/inventario/salida', detalle, {
             responseType: 'blob',
           });
           const blobUrl = URL.createObjectURL(res.data);
@@ -266,7 +272,7 @@ const SalidaAlmacen: React.FC = () => {
   width: 160,
   align: 'right',
   render: (total: number) => (
-    <Text strong style={{ color: '#343a40' }}>{formatCurrency(total)}</Text>
+    <Text strong className="paces-text-total">{formatCurrency(total)}</Text>
   ),
 },
 {
@@ -310,9 +316,9 @@ const SalidaAlmacen: React.FC = () => {
       styles={{
         body: { padding: 0 },
       }}
+      className="paces-card-erp"
       style={{
         borderRadius: 8,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
       }}
     >
       <div style={{ padding: '20px 24px 0' }}>
@@ -334,7 +340,7 @@ const SalidaAlmacen: React.FC = () => {
             allowClear
             onSearch={handleSearch}
             style={{ width: 400 }}
-            prefix={<SearchOutlined style={{ color: '#aaa' }} />}
+            prefix={<SearchOutlined className="paces-text-icon" />}
           />
           <Select
             style={{ width: 65 }}
@@ -362,22 +368,13 @@ const SalidaAlmacen: React.FC = () => {
         loading={loading}
         scroll={{ x: 1400 }}
         size="middle"
+        rowClassName={(record) =>
+          selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'
+        }
         onRow={(record) => ({
           onClick: () => handleRowClick(record),
           style: {
             cursor: 'pointer',
-            background: selectedRow?.id === record.id ? '#eef0fc' : undefined,
-            transition: 'background 0.15s',
-          },
-          onMouseEnter: (e) => {
-            if (selectedRow?.id !== record.id) {
-              e.currentTarget.style.background = '#f8f9fa';
-            }
-          },
-          onMouseLeave: (e) => {
-            if (selectedRow?.id !== record.id) {
-              e.currentTarget.style.background = 'transparent';
-            }
           },
         })}
         onChange={handleTableChange}
@@ -388,7 +385,7 @@ const SalidaAlmacen: React.FC = () => {
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
-        style={{ borderTop: '1px solid #e9ecef', fontFamily: 'inherit' }}
+        className="paces-border-top"
       />
 
       <Drawer

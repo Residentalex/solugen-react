@@ -5,6 +5,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { notaDebitoApi } from '../../api/notaDebitoApi';
 import { apiClient } from '../../api/client';
+import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import type { TransaccionVistaDTO, FiltroTransaccion } from '../../types/transaccion';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -117,7 +118,7 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
     if (selectedRow) {
       setImprimirCallback(async () => {
         try {
-          const res = await apiClient.get(`/reportes/contabilidad/nota-debito/${sucursalActiva}/${selectedRow.id}`, {
+          const res = await apiClient.get(`/reportes/contabilidad/nota-debito/${selectedRow.codigoSucursal ? obtenerNombreEnumSucursal(selectedRow.codigoSucursal) : sucursalActiva}/${selectedRow.id}`, {
             responseType: 'blob',
           });
           const blobUrl = URL.createObjectURL(res.data);
@@ -223,7 +224,7 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
   ];
 
   return (
-    <Card styles={{ body: { padding: 0 } }} style={{ borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+    <Card styles={{ body: { padding: 0 } }} className="paces-card-erp" style={{ borderRadius: 8 }}>
       <div style={{ padding: '20px 24px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
           <RangePicker
@@ -270,11 +271,13 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
         onChange={(pagination) => {
           if (pagination.current) setPage(pagination.current);
         }}
+        rowClassName={(record) =>
+          selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'
+        }
         onRow={(record) => ({
           onClick: () => handleRowClick(record),
           style: {
             cursor: 'pointer',
-            background: selectedRow?.id === record.id ? '#f0f1ff' : undefined,
           },
         })}
       />

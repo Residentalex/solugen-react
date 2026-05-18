@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { FacturaVistaDTO, FiltroFacturacion } from '../types/facturacion';
+import type { FacturaClienteDTO } from '../types/facturaCliente';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/FAC';
@@ -42,8 +43,8 @@ export const facturaClienteApi = {
     return data.data;
   },
 
-  obtenerPorId: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.get<ApiResponse<any>>(`${BASE}/${sucursal}/${id}`);
+  obtenerPorId: async (sucursal: number, id: number): Promise<FacturaClienteDTO> => {
+    const { data } = await apiClient.get<ApiResponse<FacturaClienteDTO>>(`${BASE}/${sucursal}/${id}`);
     return data.data;
   },
 
