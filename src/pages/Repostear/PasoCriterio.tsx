@@ -74,6 +74,8 @@ interface Props {
   onEntidadChange: (v: string) => void;
   onConceptoChange: (v: string) => void;
   onCuentaBancariaChange: (v: string) => void;
+  /** Si se pasa, filtra los tipos de documento a solo estos valores */
+  tiposPermitidos?: string[];
 }
 
 function formatDateParamLocal(d: Date): string {
@@ -101,10 +103,15 @@ const PasoCriterio: React.FC<Props> = ({
   onEntidadChange,
   onConceptoChange,
   onCuentaBancariaChange,
+  tiposPermitidos,
 }) => {
   const [conceptos, setConceptos] = useState<{ codigo: string; nombre: string }[]>([]);
   const [loadingConceptos, setLoadingConceptos] = useState(false);
   const isDarkMode = useUIStore((s) => s.isDarkMode);
+
+  const tiposMostrar = tiposPermitidos
+    ? TIPOS_DOCUMENTO.filter((t) => tiposPermitidos.includes(t.value))
+    : TIPOS_DOCUMENTO;
 
   const cargarConceptos = useCallback(async () => {
     if (!tipoDoc) return;
@@ -147,7 +154,7 @@ const PasoCriterio: React.FC<Props> = ({
             value={tipoDoc || undefined}
             onChange={onTipoDocChange}
             style={{ width: 280 }}
-            options={TIPOS_DOCUMENTO}
+            options={tiposMostrar}
           />
           <RangePicker
             onChange={(dates) => {

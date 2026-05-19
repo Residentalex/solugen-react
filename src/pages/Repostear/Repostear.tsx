@@ -13,7 +13,7 @@ import type { Sucursal as SucursalType } from '../../types/auth';
 import type { TransaccionDTO } from '../../types/transaccion';
 import './Repostear.css';
 
-export type MetodoPosteo = 'documento' | 'noCuadrados' | 'criterio';
+export type MetodoPosteo = 'rangoFechas' | 'documento' | 'noCuadrados' | 'criterio';
 export type SubCriterio = 'entidad' | 'concepto' | 'cuentaBancaria' | 'soloFecha';
 
 export interface WizardState {
@@ -90,6 +90,8 @@ const Repostear: React.FC = () => {
     if (!wizard.metodo) return [...base, { title: 'Configuración' }];
 
     switch (wizard.metodo) {
+      case 'rangoFechas':
+        return [...base, { title: 'Criterio' }, { title: 'Procesar' }];
       case 'documento':
         return [...base, { title: 'Documento' }, { title: 'Procesar' }];
       case 'noCuadrados':
@@ -108,6 +110,13 @@ const Repostear: React.FC = () => {
       case 1:
         return wizard.metodo !== null;
       case 2:
+        if (wizard.metodo === 'rangoFechas') {
+          if (!wizard.tipoDoc || !wizard.fechaDesde || !wizard.fechaHasta) return false;
+          if (wizard.subCriterio === 'entidad' && !wizard.entidadCodigo) return false;
+          if (wizard.subCriterio === 'concepto' && !wizard.conceptoCodigo) return false;
+          if (wizard.subCriterio === 'cuentaBancaria' && !wizard.cuentaBancaria) return false;
+          return true;
+        }
         if (wizard.metodo === 'documento') return wizard.transaccionEncontrada !== null;
         if (wizard.metodo === 'noCuadrados') return wizard.documentosSeleccionados.length > 0;
         if (wizard.metodo === 'criterio') {
@@ -178,6 +187,27 @@ const Repostear: React.FC = () => {
           />
         );
       case 2:
+        if (wizard.metodo === 'rangoFechas') {
+          return (
+            <PasoCriterio
+              sucursal={wizard.sucursal!}
+              tipoDoc={wizard.tipoDoc}
+              fechaDesde={wizard.fechaDesde}
+              fechaHasta={wizard.fechaHasta}
+              subCriterio={wizard.subCriterio}
+              entidadCodigo={wizard.entidadCodigo}
+              conceptoCodigo={wizard.conceptoCodigo}
+              cuentaBancaria={wizard.cuentaBancaria}
+              onTipoDocChange={(v) => updateWizard({ tipoDoc: v })}
+              onFechasChange={(d, h) => updateWizard({ fechaDesde: d, fechaHasta: h })}
+              onSubCriterioChange={(sc) => updateWizard({ subCriterio: sc })}
+              onEntidadChange={(v) => updateWizard({ entidadCodigo: v })}
+              onConceptoChange={(v) => updateWizard({ conceptoCodigo: v })}
+              onCuentaBancariaChange={(v) => updateWizard({ cuentaBancaria: v })}
+              tiposPermitidos={['ENP', 'DEV', 'FAC']}
+            />
+          );
+        }
         if (wizard.metodo === 'documento') {
           return (
             <PasoDocumento

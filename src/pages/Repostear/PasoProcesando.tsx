@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Progress, Typography, Button, Space, Statistic, Result } from 'antd';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Progress, Typography, Button, Result } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, FileTextOutlined, CopyOutlined, ClearOutlined } from '@ant-design/icons';
 import { transaccionApi } from '../../api/transaccionApi';
-import { useUIStore } from '../../stores/uiStore';
+import { repostearApi } from '../../api/repostearApi';
+import { posteoHub } from '../../api/posteoHub';
 import type { WizardState } from './Repostear';
-import type { TransaccionDTO } from '../../types/transaccion';
 import './Repostear.css';
 
 const { Text } = Typography;
@@ -24,17 +24,14 @@ interface Props {
 const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
   const [progreso, setProgreso] = useState(0);
   const [total, setTotal] = useState(0);
-  const [procesados, setProcesados] = useState(0);
+  const [exitosos, setExitosos] = useState(0);
+  const [erroresCount, setErroresCount] = useState(0);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [errores, setErrores] = useState<string[]>([]);
   const [cancelado, setCancelado] = useState(false);
   const [procesando, setProcesando] = useState(true);
+  const jobIdRef = useRef<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
-  const isDarkMode = useUIStore((s) => s.isDarkMode);
-
-  useEffect(() => {
-    procesarDocumentos();
-  }, []);
 
   useEffect(() => {
     if (logRef.current) {
@@ -42,9 +39,20 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
     }
   }, [log]);
 
-  const agregarLog = (entry: LogEntry) => {
+  const agregarLog = useCallback((entry: LogEntry) => {
     setLog((prev) => [...prev, entry]);
-  };
+  }, []);
+
+  useEffect(() => {
+    procesarDocumentos();
+    return () => {
+      // Cleanup: desuscribir y desconectar SignalR
+      if (jobIdRef.current) {
+        posteoHub.unsubscribeFromJob(jobIdRef.current).catch(() => {});
+      }
+      posteoHub.disconnect().catch(() => {});
+    };
+  }, []);
 
   const procesarDocumentos = async () => {
     const sucursal = wizard.sucursal!;
@@ -52,6 +60,9 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
 
     try {
       switch (wizard.metodo) {
+        case 'rangoFechas':
+          await procesarPorRangoFechas(sucursal);
+          break;
         case 'documento':
           await procesarDocumentoIndividual(sucursal);
           break;
@@ -70,10 +81,85 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
         timestamp: new Date().toLocaleTimeString(),
       });
       setErrores((prev) => [...prev, err?.message || 'Error inesperado']);
-    } finally {
       setProcesando(false);
     }
   };
+
+  // ─── Flujo nuevo: Rango de Fechas con SignalR ───────────────────────────
+  const procesarPorRangoFechas = async (sucursal: number) => {
+    try {
+      const jobId = await repostearApi.repostear(
+        wizard.tipoDoc,
+        sucursal,
+        wizard.fechaDesde,
+        wizard.fechaHasta
+      );
+      jobIdRef.current = jobId;
+
+      agregarLog({
+        documento: 'Sistema',
+        exito: true,
+        mensaje: `Posteo iniciado (Job: ${jobId.substring(0, 8)}...)`,
+        timestamp: new Date().toLocaleTimeString(),
+      });
+
+      await posteoHub.subscribeToJob(
+        jobId,
+        (progreso) => {
+          // Callback de progreso
+          setTotal(progreso.totalDocumentos);
+          setProgreso(
+            progreso.totalDocumentos > 0
+              ? Math.round((progreso.documentosProcesados / progreso.totalDocumentos) * 100)
+              : 0
+          );
+          agregarLog({
+            documento: progreso.documentoActual || `Doc ${progreso.documentosProcesados}`,
+            exito: progreso.exitoso,
+            mensaje: progreso.mensaje || undefined,
+            timestamp: new Date().toLocaleTimeString(),
+          });
+        },
+        (resultado) => {
+          // Callback de completado
+          setExitosos(resultado.totalExitosos);
+          setErroresCount(resultado.totalErrores);
+          setProcesando(false);
+          setProgreso(100);
+
+          if (resultado.totalErrores > 0) {
+            setErrores(resultado.errores);
+            resultado.errores.forEach((err) =>
+              agregarLog({
+                documento: 'ERROR',
+                exito: false,
+                mensaje: err,
+                timestamp: new Date().toLocaleTimeString(),
+              })
+            );
+          }
+
+          agregarLog({
+            documento: 'Sistema',
+            exito: resultado.totalErrores === 0,
+            mensaje: `Completado: ${resultado.totalExitosos} exitosos, ${resultado.totalErrores} errores`,
+            timestamp: new Date().toLocaleTimeString(),
+          });
+        }
+      );
+    } catch (err: any) {
+      agregarLog({
+        documento: 'ERROR',
+        exito: false,
+        mensaje: err?.response?.data?.errorMessage || err?.message || 'Error al iniciar el reposteo',
+        timestamp: new Date().toLocaleTimeString(),
+      });
+      setErrores((prev) => [...prev, err?.message || 'Error al iniciar reposteo']);
+      setProcesando(false);
+    }
+  };
+
+  // ─── Flujos existentes (sin cambios) ────────────────────────────────────
 
   const procesarDocumentoIndividual = async (sucursal: number) => {
     const t = wizard.transaccionEncontrada;
@@ -89,7 +175,7 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
         exito: true,
         timestamp: new Date().toLocaleTimeString(),
       });
-      setProcesados(1);
+      setExitosos(1);
       setProgreso(100);
     } catch (err: any) {
       agregarLog({
@@ -99,6 +185,9 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
         timestamp: new Date().toLocaleTimeString(),
       });
       setErrores((prev) => [...prev, t.noDocumento || `ID: ${t.id}`]);
+      setErroresCount(1);
+    } finally {
+      setProcesando(false);
     }
   };
 
@@ -106,6 +195,9 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
     const docs = wizard.documentosSeleccionados;
     setTotal(docs.length);
     setProgreso(0);
+
+    let exitososCount = 0;
+    let erroresList: string[] = [];
 
     for (let i = 0; i < docs.length; i++) {
       if (cancelado) break;
@@ -118,6 +210,7 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
           exito: true,
           timestamp: new Date().toLocaleTimeString(),
         });
+        exitososCount++;
       } catch (err: any) {
         agregarLog({
           documento: doc.noDocumento || `ID: ${doc.id}`,
@@ -125,12 +218,16 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
           mensaje: err?.response?.data?.errorMessage || err?.message || 'Error al postear',
           timestamp: new Date().toLocaleTimeString(),
         });
-        setErrores((prev) => [...prev, doc.noDocumento || `ID: ${doc.id}`]);
+        erroresList.push(doc.noDocumento || `ID: ${doc.id}`);
       }
 
-      setProcesados(i + 1);
       setProgreso(Math.round(((i + 1) / docs.length) * 100));
     }
+
+    setExitosos(exitososCount);
+    setErroresCount(erroresList.length);
+    setErrores(erroresList);
+    setProcesando(false);
   };
 
   const procesarPorCriterio = async (sucursal: number) => {
@@ -159,7 +256,7 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
         exito: true,
         timestamp: new Date().toLocaleTimeString(),
       });
-      setProcesados(1);
+      setExitosos(1);
       setProgreso(100);
     } catch (err: any) {
       agregarLog({
@@ -169,6 +266,9 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
         timestamp: new Date().toLocaleTimeString(),
       });
       setErrores((prev) => [...prev, 'Doc Bancario']);
+      setErroresCount(1);
+    } finally {
+      setProcesando(false);
     }
   };
 
@@ -185,6 +285,9 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
       setTotal(transacciones.length);
       setProgreso(0);
 
+      let exitososCount = 0;
+      let erroresList: string[] = [];
+
       for (let i = 0; i < transacciones.length; i++) {
         if (cancelado) break;
 
@@ -197,6 +300,7 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
             exito: true,
             timestamp: new Date().toLocaleTimeString(),
           });
+          exitososCount++;
         } catch (err: any) {
           agregarLog({
             documento: vista.documento || `ID: ${vista.id}`,
@@ -204,12 +308,15 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
             mensaje: err?.response?.data?.errorMessage || err?.message || 'Error al postear',
             timestamp: new Date().toLocaleTimeString(),
           });
-          setErrores((prev) => [...prev, vista.documento || `ID: ${vista.id}`]);
+          erroresList.push(vista.documento || `ID: ${vista.id}`);
         }
 
-        setProcesados(i + 1);
         setProgreso(Math.round(((i + 1) / transacciones.length) * 100));
       }
+
+      setExitosos(exitososCount);
+      setErroresCount(erroresList.length);
+      setErrores(erroresList);
     } catch (err: any) {
       agregarLog({
         documento: 'ERROR',
@@ -218,11 +325,19 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
         timestamp: new Date().toLocaleTimeString(),
       });
       setErrores((prev) => [...prev, 'Error general']);
+      setErroresCount(1);
+    } finally {
+      setProcesando(false);
     }
   };
 
-  const handleCancelar = () => {
+  const handleCancelar = async () => {
     setCancelado(true);
+    if (jobIdRef.current) {
+      await posteoHub.unsubscribeFromJob(jobIdRef.current).catch(() => {});
+    }
+    await posteoHub.disconnect().catch(() => {});
+    setProcesando(false);
   };
 
   const handleCopiarLog = () => {
@@ -236,11 +351,10 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
     setLog([]);
   };
 
-  const exitosos = procesados - errores.length;
-
   // Resultado final visual
-  if (!procesando && !cancelado) {
-    const hasErrors = errores.length > 0;
+  if (!procesando && !cancelado && (progreso >= 100 || total > 0)) {
+    const hasErrors = erroresCount > 0 || errores.length > 0;
+    const totalProcesados = exitosos + erroresCount;
     return (
       <div className="repostear-result">
         <Result
@@ -248,8 +362,8 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
           title={hasErrors ? 'Proceso completado con errores' : 'Proceso completado exitosamente'}
           subTitle={
             hasErrors
-              ? `Se procesaron ${procesados} documentos: ${exitosos} exitosos y ${errores.length} con errores.`
-              : `Se procesaron ${procesados} documentos exitosamente.`
+              ? `Se procesaron ${totalProcesados} documentos: ${exitosos} exitosos y ${erroresCount} con errores.`
+              : `Se procesaron ${totalProcesados} documentos exitosamente.`
           }
           extra={[
             <Button key="log" icon={<FileTextOutlined />} onClick={() => {}}>
@@ -274,7 +388,7 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
             style={{
               fontSize: 18,
               fontWeight: 600,
-              color: procesando ? '#556ee6' : errores.length > 0 ? '#faad14' : '#52c41a',
+              color: procesando ? '#556ee6' : erroresCount > 0 ? '#faad14' : '#52c41a',
             }}
           >
             {procesando ? 'Procesando documentos...' : cancelado ? 'Proceso cancelado' : 'Proceso completado'}
@@ -283,7 +397,7 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
 
         <Progress
           percent={progreso}
-          status={procesando ? 'active' : errores.length > 0 ? 'exception' : 'success'}
+          status={procesando ? 'active' : erroresCount > 0 ? 'exception' : 'success'}
           strokeColor="#556ee6"
           strokeWidth={12}
           style={{ marginBottom: 16 }}
@@ -302,9 +416,9 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
               Exitosos
             </div>
           </div>
-          {errores.length > 0 && (
+          {erroresCount > 0 && (
             <div className="repostear-stat repostear-stat--error">
-              <div className="repostear-stat__value">{errores.length}</div>
+              <div className="repostear-stat__value">{erroresCount}</div>
               <div className="repostear-stat__label">
                 <CloseCircleOutlined style={{ marginRight: 4 }} />
                 Errores

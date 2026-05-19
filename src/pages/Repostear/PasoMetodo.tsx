@@ -5,6 +5,7 @@ import {
   WarningOutlined,
   FilterOutlined,
   CheckCircleFilled,
+  CalendarOutlined,
 } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import type { MetodoPosteo } from './Repostear';
@@ -18,11 +19,18 @@ interface Props {
 
 const METODOS: { value: MetodoPosteo; label: string; description: string; icon: React.ReactNode; color: string }[] = [
   {
+    value: 'rangoFechas',
+    label: 'Por Rango de Fechas',
+    description: 'Repostear documentos por tipo y rango de fechas usando procesamiento por lote',
+    icon: <CalendarOutlined />,
+    color: '#556ee6',
+  },
+  {
     value: 'documento',
     label: 'Un Documento',
     description: 'Buscar y repostear un documento individual por su número',
     icon: <FileSearchOutlined />,
-    color: '#556ee6',
+    color: '#7c8ff5',
   },
   {
     value: 'noCuadrados',
@@ -62,7 +70,7 @@ const PasoMetodo: React.FC<Props> = ({ value, onChange }) => {
           const isSelected = value === m.value;
 
           return (
-            <Col xs={24} md={8} key={m.value}>
+            <Col xs={24} sm={12} md={6} key={m.value}>
               <div
                 className={`repostear-tile ${isSelected ? 'repostear-tile--selected' : ''}`}
                 onClick={() => onChange(m.value)}
