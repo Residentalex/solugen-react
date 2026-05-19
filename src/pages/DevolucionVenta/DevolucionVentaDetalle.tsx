@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -66,7 +66,8 @@ interface ClienteCardProps {
 const ClienteCard: React.FC<ClienteCardProps> = ({ entidad, cliente }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Cliente</span>}
-    style={{ borderRadius: 8, marginBottom: 16 }}
+    className="paces-card"
+    style={{ marginBottom: 16 }}
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
       <div style={{ fontSize: 16, fontWeight: 700 }}>
@@ -100,7 +101,7 @@ interface TotalesCardProps {
 const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    style={{ borderRadius: 8 }}
+    className="paces-card"
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
@@ -121,7 +122,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
 
     <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
       {!alignRight && <span>Total</span>}
-      <span style={{ color: '#3f8600' }}>{formatCurrency(total)}</span>
+      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
     </div>
 
     {nota && (
@@ -150,6 +151,7 @@ const DevolucionVentaDetalle: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [detalleSearch, setDetalleSearch] = useState('');
   const screens = Grid.useBreakpoint();
 
   useEffect(() => {
@@ -204,12 +206,33 @@ const DevolucionVentaDetalle: React.FC = () => {
   const estadoInfo = ESTADO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
+  // ===== Detalles filtrados por búsqueda =====
+  const detallesFiltrados = detalleSearch
+    ? (data?.detalles || []).filter((d: any) => {
+        const q = detalleSearch.toLowerCase();
+        return (
+          (d.codigo || '').toLowerCase().includes(q) ||
+          (d.articulo || '').toLowerCase().includes(q) ||
+          (d.referencia || '').toLowerCase().includes(q)
+        );
+      })
+    : (data?.detalles || []);
+
   const detalleColumns = [
     { title: 'Codigo', dataIndex: 'codigo', key: 'codigo', width: 120 },
     { title: 'Articulo', dataIndex: 'articulo', key: 'articulo', ellipsis: true,
       render: (v: string) => toTitleCase(v) },
     { title: 'Cant.', dataIndex: 'cantidad', key: 'cantidad', width: 100, align: 'right' as const,
-      render: (v: number) => formatNumber(v) },
+      render: (v: number, record: any) => (
+        <div>
+          <div>{formatNumber(v)}</div>
+          {record.medida?.nombre && (
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
+              {record.medida.nombre}
+            </div>
+          )}
+        </div>
+      ) },
     { title: 'Precio', dataIndex: 'precio', key: 'precio', width: 120, align: 'right' as const,
       render: (v: number) => formatNumber(v) },
     { title: 'Subtotal', dataIndex: 'subTotal', key: 'subTotal', width: 130, align: 'right' as const,
@@ -325,8 +348,17 @@ const DevolucionVentaDetalle: React.FC = () => {
             </Card>
 
             <Tabs defaultActiveKey="detalles" type="card">
-              <TabPane tab={`Detalles (${data.detalles?.length || 0})`} key="detalles">
-                <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+              <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                  <Input.Search
+                    placeholder="Buscar detalle..."
+                    allowClear
+                    style={{ maxWidth: 250 }}
+                    onSearch={(value) => setDetalleSearch(value)}
+                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                  />
+                </div>
+                <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
               </TabPane>
               <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
                 <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
@@ -384,8 +416,17 @@ const DevolucionVentaDetalle: React.FC = () => {
           <ClienteCard entidad={data.entidad} cliente={data.cliente} />
 
           <Tabs defaultActiveKey="detalles" type="card">
-            <TabPane tab={`Detalles (${data.detalles?.length || 0})`} key="detalles">
-              <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+            <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                <Input.Search
+                  placeholder="Buscar detalle..."
+                  allowClear
+                  style={{ maxWidth: 250 }}
+                  onSearch={(value) => setDetalleSearch(value)}
+                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                />
+              </div>
+              <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
             </TabPane>
             <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
               <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}

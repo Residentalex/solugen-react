@@ -7,6 +7,8 @@ import {
   EditOutlined,
   SearchOutlined,
   ReloadOutlined,
+  PlusOutlined,
+  PrinterOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -85,8 +87,6 @@ const EntradaAlmacen: React.FC = () => {
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
-  const setImprimirCallback = useUIStore((s) => s.setImprimirCallback);
-  const setNuevoCallback = useUIStore((s) => s.setNuevoCallback);
   const setEditarCallback = useUIStore((s) => s.setEditarCallback);
 
   const [data, setData] = useState<MovimientoVistaDTO[]>([]);
@@ -141,51 +141,17 @@ const EntradaAlmacen: React.FC = () => {
 
   useEffect(() => {
     setActiveModule('FENP');
-    updateToolbar({ nuevo: true, editar: false, anular: false, imprimir: true });
-    setNuevoCallback(() => navigate('/FENP/nuevo'));
+    updateToolbar({ editar: false, anular: false });
     return () => {
       resetToolbar();
-      setNuevoCallback(undefined);
     };
-  }, [setActiveModule, updateToolbar, resetToolbar, setNuevoCallback, navigate]);
+  }, [setActiveModule, updateToolbar, resetToolbar]);
 
   useEffect(() => {
     return () => {
-      setImprimirCallback(undefined);
       setEditarCallback(undefined);
     };
-  }, [setImprimirCallback, setEditarCallback]);
-
-  useEffect(() => {
-    if (selectedRow) {
-      setImprimirCallback(async () => {
-        try {
-          // 1. Obtener el DTO completo del documento
-          const detalle = await entradaAlmacenApi.obtenerPorId(
-            sucursalActiva,
-            selectedRow.id
-          );
-
-          // 2. Enviar el DTO al reporte via POST
-          const res = await apiClient.post('/reportes/inventario/entrada', detalle, {
-            responseType: 'blob',
-          });
-
-          // Codigo anterior (GET):
-          // const res = await apiClient.get(`/reportes/inventario/entrada/${selectedRow.codigoSucursal ? obtenerNombreEnumSucursal(selectedRow.codigoSucursal) : sucursalActiva}/${selectedRow.id}`, {
-          //   responseType: 'blob',
-          // });
-
-          const blobUrl = URL.createObjectURL(res.data);
-          setPdfPreview({ url: blobUrl, title: `ENP-${selectedRow.documento}` });
-        } catch {
-          message.error('Error al generar el PDF');
-        }
-      });
-    } else {
-      setImprimirCallback(undefined);
-    }
-  }, [selectedRow, sucursalActiva, setImprimirCallback]);
+  }, [setEditarCallback]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -195,6 +161,22 @@ const EntradaAlmacen: React.FC = () => {
   const handleRefresh = () => {
     setFechaTrigger(n => n + 1);
   };
+
+  const handleImprimir = useCallback(async () => {
+    if (!selectedRow) {
+      message.warning('Seleccione un documento primero');
+      return;
+    }
+    try {
+      const res = await apiClient.get(`/reportes/inventario/entrada/${sucursalActiva}/${selectedRow.id}`, {
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(res.data);
+      setPdfPreview({ url: blobUrl, title: `ENP-${selectedRow.documento}` });
+    } catch {
+      message.error('Error al generar el PDF');
+    }
+  }, [selectedRow, sucursalActiva]);
 
   const handleDateChange = (dates: any) => {
     if (dates && dates[0] && dates[1]) {
@@ -234,7 +216,7 @@ const EntradaAlmacen: React.FC = () => {
   width: 160,
   fixed: 'left',
   render: (doc: string, record: MovimientoVistaDTO) => (
-    <Text strong style={{ color: '#556ee6', cursor: 'pointer' }} onClick={() => navigate(`/FENP/${record.id}`)}>{doc}</Text>
+    <Text strong className="paces-doc-link" onClick={() => navigate(`/FENP/${record.id}`)}>{doc}</Text>
   ),
 },
 {
@@ -250,21 +232,7 @@ const EntradaAlmacen: React.FC = () => {
   key: 'entidad',
   render: (name: string) => (
     <Space>
-      <div
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: '50%',
-          background: '#556ee620',
-          color: '#556ee6',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 14,
-          fontWeight: 600,
-          flexShrink: 0,
-        }}
-      >
+      <div className="paces-avatar-initials">
         {getInitials(name)}
       </div>
       <Text>{toTitleCase(name) || ''}</Text>
@@ -290,7 +258,7 @@ const EntradaAlmacen: React.FC = () => {
   title: 'NCF',
   dataIndex: 'ncf',
   key: 'ncf',
-  width: 120,
+  width: 140,
   render: (ncf: string) => <Text>{ncf || ''}</Text>,
 },
 {
@@ -347,9 +315,10 @@ const EntradaAlmacen: React.FC = () => {
       className="paces-card-erp"
       style={{
         borderRadius: 8,
+        overflow: 'hidden',
       }}
     >
-      <div style={{ padding: '20px 24px 0' }}>
+      <div style={{ padding: '16px 24px 0' }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -380,12 +349,12 @@ const EntradaAlmacen: React.FC = () => {
               { value: 100, label: '100' },
             ]}
           />
-          <Button
-            type="primary"
-            icon={<ReloadOutlined />}
-            onClick={handleRefresh}
-            style={{ marginLeft: 'auto' }}
-          />
+          <div style={{ flex: 1 }} />
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FENP/nuevo')}>
+            Nuevo
+          </Button>
+          <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>
 
@@ -413,7 +382,7 @@ const EntradaAlmacen: React.FC = () => {
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
-        className="paces-border-top"
+        className="paces-border-top paces-list-table"
       />
 
       <Drawer

@@ -121,7 +121,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
 
     <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
       {!alignRight && <span>Total</span>}
-      <span style={{ color: '#3f8600' }}>{formatCurrency(total)}</span>
+      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
     </div>
 
     {nota && (

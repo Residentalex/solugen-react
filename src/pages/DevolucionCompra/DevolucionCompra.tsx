@@ -7,12 +7,13 @@ import {
   EditOutlined,
   SearchOutlined,
   ReloadOutlined,
+  PlusOutlined,
+  PrinterOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
-import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import type { MovimientoVistaDTO } from '../../types/devolucionCompra';
 
 const { Text } = Typography;
@@ -83,8 +84,6 @@ const DevolucionCompra: React.FC = () => {
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
-  const setImprimirCallback = useUIStore((s) => s.setImprimirCallback);
-
   const [data, setData] = useState<MovimientoVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -136,39 +135,9 @@ const DevolucionCompra: React.FC = () => {
 
   useEffect(() => {
     setActiveModule('FDVC');
-    updateToolbar({ nuevo: true, editar: false, imprimir: true });
+    updateToolbar({ editar: false });
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
-
-  useEffect(() => {
-    if (selectedRow) {
-      setImprimirCallback(async () => {
-        try {
-          const detalle = await devolucionCompraApi.obtenerPorId(
-            selectedRow.codigoSucursal ? obtenerNombreEnumSucursal(selectedRow.codigoSucursal) : sucursalActiva,
-            selectedRow.id
-          );
-
-          const res = await apiClient.post('/reportes/inventario/devolucion-compra', detalle, {
-            responseType: 'blob',
-          });
-          const blobUrl = URL.createObjectURL(res.data);
-          setPdfPreview({ url: blobUrl, title: `DVC-${selectedRow.documento}` });
-        } catch (err: any) {
-          try {
-            const blob = err?.response?.data;
-            const text = blob instanceof Blob ? await blob.text() : '';
-            const json = JSON.parse(text);
-            message.error(json.errorMessage || 'Error al generar el PDF');
-          } catch {
-            message.error(err?.message || 'Error al generar el PDF');
-          }
-        }
-      });
-    } else {
-      setImprimirCallback(undefined);
-    }
-  }, [selectedRow, sucursalActiva, setImprimirCallback]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -178,6 +147,22 @@ const DevolucionCompra: React.FC = () => {
   const handleRefresh = () => {
     setFechaTrigger(n => n + 1);
   };
+
+  const handleImprimir = useCallback(async () => {
+    if (!selectedRow) {
+      message.warning('Seleccione un documento primero');
+      return;
+    }
+    try {
+      const res = await apiClient.get(`/reportes/inventario/devolucion-compra/${sucursalActiva}/${selectedRow.id}`, {
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(res.data);
+      setPdfPreview({ url: blobUrl, title: `DCP-${selectedRow.documento}` });
+    } catch {
+      message.error('Error al generar el PDF');
+    }
+  }, [selectedRow, sucursalActiva]);
 
   const handleDateChange = (dates: any) => {
     if (dates && dates[0] && dates[1]) {
@@ -212,7 +197,7 @@ const DevolucionCompra: React.FC = () => {
   width: 160,
   fixed: 'left',
   render: (doc: string, record: MovimientoVistaDTO) => (
-    <Text strong style={{ color: '#556ee6', cursor: 'pointer' }} onClick={() => navigate(`/FDVC/${record.id}`)}>{doc}</Text>
+    <Text strong className="paces-doc-link" onClick={() => navigate(`/FDVC/${record.id}`)}>{doc}</Text>
   ),
 },
 {
@@ -228,21 +213,7 @@ const DevolucionCompra: React.FC = () => {
   key: 'entidad',
   render: (name: string) => (
     <Space>
-      <div
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: '50%',
-          background: '#556ee620',
-          color: '#556ee6',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 14,
-          fontWeight: 600,
-          flexShrink: 0,
-        }}
-      >
+      <div className="paces-avatar-initials">
         {getInitials(name)}
       </div>
       <Text>{toTitleCase(name) || ''}</Text>
@@ -351,12 +322,12 @@ const DevolucionCompra: React.FC = () => {
               { value: 100, label: '100' },
             ]}
           />
-          <Button
-            type="primary"
-            icon={<ReloadOutlined />}
-            onClick={handleRefresh}
-            style={{ marginLeft: 'auto' }}
-          />
+          <div style={{ flex: 1 }} />
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FNDCP/nuevo')}>
+            Nuevo
+          </Button>
+          <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>
 
@@ -384,7 +355,7 @@ const DevolucionCompra: React.FC = () => {
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
-        className="paces-border-top"
+        className="paces-border-top paces-list-table"
       />
 
       <Drawer

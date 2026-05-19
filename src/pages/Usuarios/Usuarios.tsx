@@ -147,7 +147,7 @@ const Usuarios: React.FC = () => {
             {letraInicial(record.nombre)}
           </div>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3, color: '#556ee6' }}>
+            <div className="paces-text-primary" style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>
               {record.nombreUsuario}
               <RightOutlined style={{ fontSize: 10, marginLeft: 4, opacity: 0.5 }} />
             </div>

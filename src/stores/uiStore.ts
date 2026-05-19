@@ -1,4 +1,8 @@
 import { create } from 'zustand';
+import type { ThemeName } from '../themes';
+import { THEMES, getIsDarkFromTheme } from '../themes';
+
+export type { ThemeName };
 
 export type RibbonGroups = {
   default: boolean;
@@ -45,7 +49,9 @@ interface UIState {
   postearCallback?: () => void;
   revisadoCallback?: () => void;
   reversarCallback?: () => void;
+  themeName: ThemeName;
   isDarkMode: boolean;
+  primaryColor: string;
   setSidebarCollapsed: (collapsed: boolean) => void;
   setActiveModule: (module: string) => void;
   setPageTitleOverride: (title: string) => void;
@@ -61,7 +67,7 @@ interface UIState {
   setPostearCallback: (cb?: () => void) => void;
   setRevisadoCallback: (cb?: () => void) => void;
   setReversarCallback: (cb?: () => void) => void;
-  toggleDarkMode: () => void;
+  setTheme: (name: ThemeName) => void;
 }
 
 const defaultToolbarState: ToolbarState = {
@@ -85,8 +91,20 @@ const defaultToolbarState: ToolbarState = {
   anular: false,
 };
 
-const savedTheme = localStorage.getItem('solugen-theme');
-const initialDarkMode = savedTheme === 'dark';
+const savedRaw = localStorage.getItem('solugen-theme');
+const validThemes: ThemeName[] = [
+  'light-default', 'dark-default',
+  'light-ocean', 'dark-ocean',
+  'light-midnight', 'dark-midnight',
+  'light-rose', 'dark-rose',
+  'light-amber', 'dark-amber',
+];
+let initialTheme: ThemeName = 'light-default';
+if (savedRaw && (validThemes as readonly string[]).includes(savedRaw)) {
+  initialTheme = savedRaw as ThemeName;
+} else if (savedRaw === 'dark' || savedRaw === 'light') {
+  initialTheme = savedRaw === 'dark' ? 'dark-default' : 'light-default';
+}
 
 export const useUIStore = create<UIState>((set) => ({
   sidebarCollapsed: false,
@@ -103,7 +121,9 @@ export const useUIStore = create<UIState>((set) => ({
   postearCallback: undefined,
   revisadoCallback: undefined,
   reversarCallback: undefined,
-  isDarkMode: initialDarkMode,
+  themeName: initialTheme,
+  isDarkMode: getIsDarkFromTheme(initialTheme),
+  primaryColor: THEMES[initialTheme].primaryColor,
 
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   setActiveModule: (module) => set({ activeModule: module }),
@@ -135,10 +155,12 @@ export const useUIStore = create<UIState>((set) => ({
   setPostearCallback: (cb) => set({ postearCallback: cb }),
   setRevisadoCallback: (cb) => set({ revisadoCallback: cb }),
   setReversarCallback: (cb) => set({ reversarCallback: cb }),
-  toggleDarkMode: () =>
-    set((prev) => {
-      const next = !prev.isDarkMode;
-      localStorage.setItem('solugen-theme', next ? 'dark' : 'light');
-      return { isDarkMode: next };
-    }),
+  setTheme: (name) => {
+    localStorage.setItem('solugen-theme', name);
+    set({
+      themeName: name,
+      isDarkMode: getIsDarkFromTheme(name),
+      primaryColor: THEMES[name].primaryColor,
+    });
+  },
 }));

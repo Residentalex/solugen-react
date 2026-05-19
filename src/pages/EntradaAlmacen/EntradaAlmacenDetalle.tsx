@@ -15,6 +15,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
+import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import type { EntradaAlmacenDTO, AsientoContableDTO } from '../../types/entradaAlmacen';
 
 const { Text } = Typography;
@@ -126,7 +127,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
 
     <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
       {!alignRight && <span>Total</span>}
-      <span style={{ color: '#3f8600' }}>{formatCurrency(total)}</span>
+      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
     </div>
 
     {nota && (
@@ -228,13 +229,13 @@ const EntradaAlmacenDetalle: React.FC = () => {
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
-          <div style={{ fontSize: 11, color: '#595959', lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
             <span>
               {record.codigo && <span>{record.codigo}</span>}
               {record.codigo && record.referencia && <span>{' | '}</span>}
               {record.referencia && <span>{record.referencia}</span>}
             </span>
-            {record.fechaVencimiento && <span style={{ color: '#8c8c8c' }}>V: {record.fechaVencimiento}</span>}
+            {record.fechaVencimiento && <span className="paces-text-secondary">V: {formatDate(record.fechaVencimiento)}</span>}
           </div>
         </div>
       ),
@@ -249,7 +250,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
         <div>
           <div>{formatNumber(record.cantidad || 0)}</div>
           {record.medida?.nombre && (
-            <div style={{ fontSize: 11, color: '#595959', lineHeight: 1.5, textAlign: 'left' }}>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
               {record.medida.nombre}
             </div>
           )}
@@ -277,7 +278,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
       render: (_: any, record: any) => (
         <div>
           <div>{formatNumber(record.porcentajeDescuento || 0)}%</div>
-          <div style={{ fontSize: 12, color: '#595959', lineHeight: 1.5, marginTop: 2 }}>
+          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
             {formatNumber(record.descuento || 0)}
           </div>
         </div>
@@ -305,7 +306,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
           {record.impuesto?.nombre && (
-            <div style={{ fontSize: 12, color: '#595959', lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
           )}
         </div>
       ),
@@ -332,7 +333,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
         if (record.tieneVencimiento) {
           items.push({
             key: 'vencimiento',
-            label: record.fechaVencimiento ? `Venc: ${record.fechaVencimiento}` : 'Fecha Vencimiento',
+            label: record.fechaVencimiento ? `Venc: ${formatDate(record.fechaVencimiento)}` : 'Fecha Vencimiento',
             icon: <CalendarOutlined />,
             onClick: () => setFechaVencimientoModal({ open: true, detalleId: record.id }),
           });
@@ -388,15 +389,12 @@ const EntradaAlmacenDetalle: React.FC = () => {
           <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
             setImprimiendo(true);
             try {
-              // POST con el DTO completo
-              const res = await apiClient.post('/reportes/inventario/entrada', data, {
+              const sucursalParam = data.codigoSucursal
+                ? obtenerNombreEnumSucursal(data.codigoSucursal)
+                : sucursalActiva;
+              const res = await apiClient.get(`/reportes/inventario/entrada/${sucursalParam}/${id}`, {
                 responseType: 'blob',
               });
-
-              // Codigo anterior (GET):
-              // const res = await apiClient.get(`/reportes/inventario/entrada/${data.codigoSucursal ? obtenerNombreEnumSucursal(data.codigoSucursal) : sucursalActiva}/${id}`, {
-              //   responseType: 'blob',
-              // });
 
               const blobUrl = URL.createObjectURL(res.data);
               const iframe = document.createElement('iframe');

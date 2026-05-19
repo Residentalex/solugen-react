@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input
 } from 'antd';
 import {
   ArrowLeftOutlined, PrinterOutlined, EditOutlined
@@ -64,7 +64,8 @@ interface EntidadCardProps {
 const EntidadCard: React.FC<EntidadCardProps> = ({ entidad, tipoEntidad }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>{tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente'}</span>}
-    style={{ borderRadius: 8, marginBottom: 16 }}
+    className="paces-card"
+    style={{ marginBottom: 16 }}
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
       <div style={{ fontSize: 16, fontWeight: 700 }}>
@@ -94,7 +95,7 @@ interface TotalesCardProps {
 const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    style={{ borderRadius: 8 }}
+    className="paces-card"
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
@@ -115,7 +116,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
 
     <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
       {!alignRight && <span>Total</span>}
-      <span style={{ color: '#3f8600' }}>{formatCurrency(total)}</span>
+      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
     </div>
 
     {nota && (
@@ -146,6 +147,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [detalleSearch, setDetalleSearch] = useState('');
   const screens = Grid.useBreakpoint();
 
   const codigoPantalla = tipoEntidad === 'SUP' ? 'FNDSUP' : 'FNDCLI';
@@ -200,6 +202,17 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
   const isLarge = screens.lg ?? true;
   const estadoInfo = ESTADO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
+
+  // ===== Documentos filtrados por búsqueda =====
+  const documentosFiltrados = detalleSearch
+    ? (data?.transaccionesAsociadas || []).filter((d: any) => {
+        const q = detalleSearch.toLowerCase();
+        return (
+          (d.documento || '').toLowerCase().includes(q) ||
+          (d.nCF || '').toLowerCase().includes(q)
+        );
+      })
+    : (data?.transaccionesAsociadas || []);
 
   const asociadasColumns = [
     { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
@@ -305,8 +318,17 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
             </Card>
 
             <Tabs defaultActiveKey="documentos" type="card">
-              <TabPane tab={`Documentos (${data.transaccionesAsociadas?.length || 0})`} key="documentos">
-                <Table dataSource={data.transaccionesAsociadas || []} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
+              <TabPane tab={`Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`} key="documentos">
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                  <Input.Search
+                    placeholder="Buscar documento..."
+                    allowClear
+                    style={{ maxWidth: 250 }}
+                    onSearch={(value) => setDetalleSearch(value)}
+                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                  />
+                </div>
+                <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
               </TabPane>
               <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
                 <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
@@ -362,8 +384,17 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
           <EntidadCard entidad={data.entidad} tipoEntidad={tipoEntidad} />
 
           <Tabs defaultActiveKey="documentos" type="card">
-            <TabPane tab={`Documentos (${data.transaccionesAsociadas?.length || 0})`} key="documentos">
-              <Table dataSource={data.transaccionesAsociadas || []} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
+            <TabPane tab={`Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`} key="documentos">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                <Input.Search
+                  placeholder="Buscar documento..."
+                  allowClear
+                  style={{ maxWidth: 250 }}
+                  onSearch={(value) => setDetalleSearch(value)}
+                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                />
+              </div>
+              <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
             </TabPane>
             <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
               <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}

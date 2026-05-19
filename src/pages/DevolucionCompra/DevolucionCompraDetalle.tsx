@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Typography
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -11,8 +11,8 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
-import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 
+const { Text } = Typography;
 const { TabPane } = Tabs;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
@@ -45,7 +45,8 @@ interface SuplidorCardProps {
 const SuplidorCard: React.FC<SuplidorCardProps> = ({ entidad, suplidor }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Suplidor</span>}
-    style={{ borderRadius: 8, marginBottom: 16 }}
+    className="paces-card"
+    style={{ marginBottom: 16 }}
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
       <div style={{ fontSize: 16, fontWeight: 700 }}>
@@ -74,6 +75,56 @@ function formatDate(val: string): string {
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+interface TotalesCardProps {
+  subTotal: number;
+  descuento: number;
+  impuestos: number;
+  total: number;
+  nota: string;
+  alignRight: boolean;
+}
+
+const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight }) => (
+  <Card
+    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
+    className="paces-card"
+  >
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
+      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
+        {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
+        <span>{formatNumber(subTotal)}</span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
+        {!alignRight && <span className="paces-text-secondary">Descuento</span>}
+        <span>{formatNumber(descuento)}</span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
+        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
+        <span>{formatNumber(impuestos)}</span>
+      </div>
+    </div>
+
+    <Divider style={{ margin: '12px 0' }} />
+
+    <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
+      {!alignRight && <span>Total</span>}
+      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
+    </div>
+
+    {nota && (
+      <>
+        <Divider style={{ margin: '12px 0' }} />
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, textAlign: alignRight ? 'right' : undefined }} className="paces-text-secondary">Notas</div>
+          <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.5, textAlign: alignRight ? 'right' : undefined }} className="paces-text-dark">
+            {nota}
+          </div>
+        </div>
+      </>
+    )}
+  </Card>
+);
+
 const DevolucionCompraDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -83,6 +134,7 @@ const DevolucionCompraDetalle: React.FC = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [detalleSearch, setDetalleSearch] = useState('');
   const screens = Grid.useBreakpoint();
 
   useEffect(() => {
@@ -118,20 +170,120 @@ const DevolucionCompraDetalle: React.FC = () => {
   const estadoInfo = ESTADO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
+  // ===== Detalles filtrados por búsqueda =====
+  const detallesFiltrados = detalleSearch
+    ? (data?.detalles || []).filter((d: any) => {
+        const q = detalleSearch.toLowerCase();
+        return (
+          (d.codigo || '').toLowerCase().includes(q) ||
+          (d.articulo || '').toLowerCase().includes(q) ||
+          (d.referencia || '').toLowerCase().includes(q)
+        );
+      })
+    : (data?.detalles || []);
+
   const detalleColumns = [
-    { title: 'Codigo', dataIndex: 'codigo', key: 'codigo', width: 120 },
-    { title: 'Articulo', dataIndex: 'articulo', key: 'articulo', ellipsis: true,
-      render: (v: string) => toTitleCase(v) },
-    { title: 'Cant.', dataIndex: 'cantidad', key: 'cantidad', width: 100, align: 'right' as const,
-      render: (v: number) => formatNumber(v) },
-    { title: 'Costo', dataIndex: 'costo', key: 'costo', width: 120, align: 'right' as const,
-      render: (v: number) => formatNumber(v) },
-    { title: 'Desc.', dataIndex: 'descuento', key: 'descuento', width: 110, align: 'right' as const,
-      render: (v: number) => formatNumber(v) },
-    { title: 'Imp.', dataIndex: 'impuestos', key: 'impuestos', width: 110, align: 'right' as const,
-      render: (v: number) => formatNumber(v) },
-    { title: 'Subtotal', dataIndex: 'subTotal', key: 'subTotal', width: 130, align: 'right' as const,
-      render: (v: number) => <strong>{formatNumber(v)}</strong> },
+    {
+      title: 'Artículo',
+      key: 'articulo',
+      ellipsis: true,
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13 }}>
+          <div>{toTitleCase(record.articulo || '')}</div>
+          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+            <span>
+              {record.codigo && <span>{record.codigo}</span>}
+              {record.codigo && record.referencia && <span>{' | '}</span>}
+              {record.referencia && <span>{record.referencia}</span>}
+            </span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Cantidad',
+      dataIndex: 'cantidad',
+      key: 'cantidad',
+      width: 100,
+      align: 'right' as const,
+      render: (_: any, record: any) => (
+        <div>
+          <div>{formatNumber(record.cantidad || 0)}</div>
+          {record.medida?.nombre && (
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
+              {record.medida.nombre}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: 'Costo',
+      dataIndex: 'costo',
+      key: 'costo',
+      width: 120,
+      align: 'right' as const,
+      render: (_: any, record: any) => (
+        <div>
+          <div>{formatNumber(record.costo || 0)}</div>
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+        </div>
+      ),
+    },
+    {
+      title: 'Descuento',
+      key: 'descuento',
+      width: 120,
+      align: 'right' as const,
+      render: (_: any, record: any) => (
+        <div>
+          <div>{formatNumber(record.porcentajeDescuento || 0)}%</div>
+          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
+            {formatNumber(record.descuento || 0)}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Impuestos',
+      key: 'impuestos',
+      width: 140,
+      align: 'right' as const,
+      render: (_: any, record: any) => (
+        <div>
+          <div>{formatNumber(record.impuestos || 0)}</div>
+          {record.impuesto?.nombre && (
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: 'Total',
+      dataIndex: 'total',
+      key: 'total',
+      width: 130,
+      align: 'right' as const,
+      render: (_: any, record: any) => (
+        <div>
+          <Text strong>{formatNumber(record.total || 0)}</Text>
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+        </div>
+      ),
+    },
+    {
+      title: 'Subtotal',
+      dataIndex: 'subTotal',
+      key: 'subTotal',
+      width: 130,
+      align: 'right' as const,
+      render: (_: any, record: any) => (
+        <div>
+          <Text strong>{formatNumber(record.subTotal || 0)}</Text>
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -203,46 +355,24 @@ const DevolucionCompraDetalle: React.FC = () => {
             </Card>
 
             <Tabs defaultActiveKey="detalles" type="card">
-              <TabPane tab={`Detalles (${data.detalles?.length || 0})`} key="detalles">
-                <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+              <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                  <Input.Search
+                    placeholder="Buscar detalle..."
+                    allowClear
+                    style={{ maxWidth: 250 }}
+                    onSearch={(value) => setDetalleSearch(value)}
+                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                  />
+                </div>
+                <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
               </TabPane>
             </Tabs>
           </Col>
 
           <Col lg={6}>
             <SuplidorCard entidad={data.entidad} suplidor={data.suplidor} />
-            <Card title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>} style={{ borderRadius: 8 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 14 }}>
-                  <span className="paces-text-secondary">Subtotal</span>
-                  <span>{formatNumber(data.subTotal)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 14 }}>
-                  <span className="paces-text-secondary">Descuento</span>
-                  <span>{formatNumber(data.descuento)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 14 }}>
-                  <span className="paces-text-secondary">Impuestos</span>
-                  <span>{formatNumber(data.impuestos)}</span>
-                </div>
-              </div>
-              <Divider style={{ margin: '12px 0' }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
-                <span>Total</span>
-                <span style={{ color: '#3f8600' }}>{formatCurrency(data.total)}</span>
-              </div>
-              {data.nota && (
-                <>
-                  <Divider style={{ margin: '12px 0' }} />
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }} className="paces-text-secondary">Notas</div>
-                    <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.5 }} className="paces-text-dark">
-                      {data.nota}
-                    </div>
-                  </div>
-                </>
-              )}
-            </Card>
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false} />
           </Col>
         </Row>
       ) : (
@@ -273,42 +403,21 @@ const DevolucionCompraDetalle: React.FC = () => {
             <SuplidorCard entidad={data.entidad} suplidor={data.suplidor} />
 
             <Tabs defaultActiveKey="detalles" type="card">
-            <TabPane tab={`Detalles (${data.detalles?.length || 0})`} key="detalles">
-              <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+            <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                <Input.Search
+                  placeholder="Buscar detalle..."
+                  allowClear
+                  style={{ maxWidth: 250 }}
+                  onSearch={(value) => setDetalleSearch(value)}
+                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                />
+              </div>
+              <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
             </TabPane>
           </Tabs>
 
-          <Card title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>} style={{ borderRadius: 8 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'right' }}>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 14 }}>
-                <span>Subtotal</span>
-                <span>{formatNumber(data.subTotal)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 14 }}>
-                <span>Descuento</span>
-                <span>{formatNumber(data.descuento)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 14 }}>
-                <span>Impuestos</span>
-                <span>{formatNumber(data.impuestos)}</span>
-              </div>
-            </div>
-            <Divider style={{ margin: '12px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 16, fontWeight: 700 }}>
-              <span style={{ color: '#3f8600' }}>{formatCurrency(data.total)}</span>
-            </div>
-            {data.nota && (
-              <>
-                <Divider style={{ margin: '12px 0' }} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#666', marginBottom: 4, textAlign: 'right' }}>Notas</div>
-                  <div style={{ fontSize: 13, color: '#333', whiteSpace: 'pre-wrap', lineHeight: 1.5, textAlign: 'right' }}>
-                    {data.nota}
-                  </div>
-                </div>
-              </>
-            )}
-          </Card>
+          <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true} />
         </div>
       )}
     </div>

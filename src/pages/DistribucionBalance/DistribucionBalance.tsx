@@ -5,10 +5,9 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { distribucionBalanceApi } from '../../api/distribucionBalanceApi';
 import { apiClient } from '../../api/client';
-import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import type { TransaccionVistaDTO, FiltroTransaccion } from '../../types/transaccion';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, EyeOutlined, EditOutlined, PlusOutlined, PrinterOutlined } from '@ant-design/icons';
 
 const { RangePicker } = DatePicker;
 
@@ -58,8 +57,6 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
-  const setImprimirCallback = useUIStore((s: any) => s.setImprimirCallback);
-
   const [data, setData] = useState<TransaccionVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -110,27 +107,9 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
 
   useEffect(() => {
     setActiveModule(codigoPantalla);
-    updateToolbar({ nuevo: true, editar: false, imprimir: true });
+    updateToolbar({ editar: false });
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar, codigoPantalla]);
-
-  useEffect(() => {
-    if (selectedRow) {
-      setImprimirCallback(async () => {
-        try {
-          const res = await apiClient.get(`/reportes/contabilidad/distribucionBalance/${selectedRow.codigoSucursal ? obtenerNombreEnumSucursal(selectedRow.codigoSucursal) : sucursalActiva}/${selectedRow.id}`, {
-            responseType: 'blob',
-          });
-          const blobUrl = URL.createObjectURL(res.data);
-          setPdfPreview({ url: blobUrl, title: `DBA-${selectedRow.documento}` });
-        } catch {
-          message.error('Error al generar el PDF');
-        }
-      });
-    } else {
-      setImprimirCallback(undefined);
-    }
-  }, [selectedRow, sucursalActiva, setImprimirCallback]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -138,6 +117,22 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
   };
 
   const handleRefresh = () => setFechaTrigger(n => n + 1);
+
+  const handleImprimir = useCallback(async () => {
+    if (!selectedRow) {
+      message.warning('Seleccione un documento primero');
+      return;
+    }
+    try {
+      const res = await apiClient.get(`/reportes/contabilidad/distribucionBalance/${sucursalActiva}/${selectedRow.id}`, {
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(res.data);
+      setPdfPreview({ url: blobUrl, title: `DB-${selectedRow.documento}` });
+    } catch {
+      message.error('Error al generar el PDF');
+    }
+  }, [selectedRow, sucursalActiva]);
 
   const handleDateChange = (dates: any) => {
     if (dates && dates[0] && dates[1]) {
@@ -205,13 +200,6 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
       ),
     },
     {
-      title: 'NCF',
-      dataIndex: 'ncf',
-      key: 'ncf',
-      width: 150,
-      render: (ncf: string) => ncf || '',
-    },
-    {
       title: 'Estado',
       dataIndex: 'estado',
       key: 'estado',
@@ -261,7 +249,7 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
             placeholder={['Desde', 'Hasta']}
           />
           <Input.Search
-            placeholder="Buscar documento, NCF, concepto..."
+            placeholder="Buscar documento, concepto..."
             allowClear
             onSearch={handleSearch}
             style={{ width: 400 }}
@@ -277,12 +265,12 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
               { value: 100, label: '100' },
             ]}
           />
-          <Button
-            type="primary"
-            icon={<ReloadOutlined />}
-            onClick={handleRefresh}
-            style={{ marginLeft: 'auto' }}
-          />
+          <div style={{ flex: 1 }} />
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FCODB/nuevo')}>
+            Nuevo
+          </Button>
+          <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>
 
@@ -309,7 +297,7 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
-        className="paces-border-top"
+        className="paces-border-top paces-list-table"
       />
 
       <Drawer

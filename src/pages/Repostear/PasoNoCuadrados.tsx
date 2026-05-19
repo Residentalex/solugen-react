@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { DatePicker, Select, Button, Table, Typography, Space, message, Tag, Badge } from 'antd';
+import { DatePicker, Select, Button, Table, Typography, Space, message, Badge } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { transaccionApi, formatDateParam } from '../../api/transaccionApi';
+import { useUIStore } from '../../stores/uiStore';
 import type { TransaccionDTO } from '../../types/transaccion';
 import type { Sucursal } from '../../types/auth';
 
@@ -20,16 +21,6 @@ const TIPOS_DOCUMENTO = [
   { value: 'DEP', label: 'DEP - Documento Bancario' },
   { value: 'EDI', label: 'EDI - Entrada de Diario' },
 ];
-
-const ESTADO_LABELS: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
 
 interface Props {
   sucursal: Sucursal;
@@ -57,6 +48,7 @@ const PasoNoCuadrados: React.FC<Props> = ({
   onSeleccionChange,
 }) => {
   const [loading, setLoading] = useState(false);
+  const primaryColor = useUIStore((s) => s.primaryColor);
 
   const handleBuscar = async () => {
     if (!fechaDesde || !fechaHasta) {
@@ -172,16 +164,6 @@ const PasoNoCuadrados: React.FC<Props> = ({
         );
       },
     },
-    {
-      title: 'Estado',
-      dataIndex: 'estado',
-      key: 'estado',
-      width: 100,
-      render: (v) => {
-        const info = ESTADO_LABELS[v] || { label: 'Desconocido', color: 'default' };
-        return <Tag color={info.color}>{info.label}</Tag>;
-      },
-    },
   ];
 
   return (
@@ -191,7 +173,7 @@ const PasoNoCuadrados: React.FC<Props> = ({
           display: 'block',
           marginBottom: 24,
           fontSize: 16,
-          color: '#556ee6',
+          color: primaryColor,
           fontWeight: 500,
         }}
       >
@@ -244,7 +226,7 @@ const PasoNoCuadrados: React.FC<Props> = ({
             <span>
               <Badge
                 count={seleccionados.length}
-                style={{ backgroundColor: '#556ee6' }}
+                style={{ backgroundColor: primaryColor }}
               />{' '}
               seleccionados
             </span>
@@ -264,7 +246,7 @@ const PasoNoCuadrados: React.FC<Props> = ({
           selectedRowKeys: seleccionados.map((s) => s.id),
           onChange: (_, rows) => onSeleccionChange(rows as TransaccionDTO[]),
         }}
-        scroll={{ x: 1000 }}
+        scroll={{ x: 900 }}
         className="repostear-striped-table"
       />
 

@@ -36,6 +36,7 @@ const PasoDocumento: React.FC<Props> = ({
   const [loading, setLoading] = useState(false);
   const [busqueda, setBusqueda] = useState(documento);
   const isDarkMode = useUIStore((s) => s.isDarkMode);
+  const primaryColor = useUIStore((s) => s.primaryColor);
 
   const handleBuscar = async () => {
     if (!busqueda.trim()) {
@@ -87,7 +88,7 @@ const PasoDocumento: React.FC<Props> = ({
           display: 'block',
           marginBottom: 24,
           fontSize: 16,
-          color: '#556ee6',
+          color: primaryColor,
           fontWeight: 500,
         }}
       >

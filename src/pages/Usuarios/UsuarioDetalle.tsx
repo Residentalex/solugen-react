@@ -111,7 +111,7 @@ const UsuarioDetalle: React.FC = () => {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 20, fontWeight: 600 }}>{data.nombre}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-              <span style={{ fontFamily: 'monospace', fontSize: 14, color: '#6c757d' }}>{data.nombreUsuario}</span>
+              <span className="paces-text-secondary" style={{ fontFamily: 'monospace', fontSize: 14 }}>{data.nombreUsuario}</span>
               <EstadoTag activo={data.activo} />
             </div>
           </div>
@@ -170,7 +170,7 @@ const UsuarioDetalle: React.FC = () => {
 
           <Card title="Pantallas" style={{ borderRadius: 8 }}>
             {(data.pantallas || []).length === 0 ? (
-              <span style={{ color: '#6c757d' }}>Las pantallas se heredan de los roles</span>
+              <span className="paces-text-secondary">Las pantallas se heredan de los roles</span>
             ) : (
               <Space wrap size={4}>
                 {(data.pantallas || []).map((p) => (

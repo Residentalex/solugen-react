@@ -9,6 +9,7 @@ import PasoDocumento from './PasoDocumento';
 import PasoNoCuadrados from './PasoNoCuadrados';
 import PasoCriterio from './PasoCriterio';
 import PasoProcesando from './PasoProcesando';
+import PasoConfirmacion from './PasoConfirmacion';
 import type { Sucursal as SucursalType } from '../../types/auth';
 import type { TransaccionDTO } from '../../types/transaccion';
 import './Repostear.css';
@@ -54,7 +55,7 @@ const STEP_SUBTITLES: Record<string, string> = {
   Documento: 'Busque un documento individual por su número',
   'No Cuadrados': 'Encuentre documentos con asientos descuadrados',
   Criterio: 'Configure los filtros para el reposteo masivo',
-  Procesar: 'Revise y confirme el proceso de reposteo',
+  Confirmación: 'Revise y confirme el proceso de reposteo',
   Configuración: 'Complete los pasos anteriores para continuar',
 };
 
@@ -91,13 +92,13 @@ const Repostear: React.FC = () => {
 
     switch (wizard.metodo) {
       case 'rangoFechas':
-        return [...base, { title: 'Criterio' }, { title: 'Procesar' }];
+        return [...base, { title: 'Criterio' }, { title: 'Confirmación' }];
       case 'documento':
-        return [...base, { title: 'Documento' }, { title: 'Procesar' }];
+        return [...base, { title: 'Documento' }, { title: 'Confirmación' }];
       case 'noCuadrados':
-        return [...base, { title: 'No Cuadrados' }, { title: 'Procesar' }];
+        return [...base, { title: 'No Cuadrados' }, { title: 'Confirmación' }];
       case 'criterio':
-        return [...base, { title: 'Criterio' }, { title: 'Procesar' }];
+        return [...base, { title: 'Criterio' }, { title: 'Confirmación' }];
     }
   }, [wizard.metodo]);
 
@@ -127,6 +128,8 @@ const Repostear: React.FC = () => {
           return true;
         }
         return false;
+      case 3:
+        return true;
       default:
         return false;
     }
@@ -167,6 +170,7 @@ const Repostear: React.FC = () => {
         <PasoProcesando
           wizard={wizard}
           onTerminado={handleTerminado}
+          onReiniciar={handleReiniciar}
         />
       );
     }
@@ -256,6 +260,12 @@ const Repostear: React.FC = () => {
           );
         }
         return null;
+      case 3:
+        return (
+          <PasoConfirmacion
+            wizard={wizard}
+          />
+        );
       default:
         return null;
     }

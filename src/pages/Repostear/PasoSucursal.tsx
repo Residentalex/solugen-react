@@ -22,7 +22,7 @@ const SUCURSALES: { value: Sucursal; label: string; icon: React.ReactNode }[] = 
 const PasoSucursal: React.FC<Props> = ({ value, onChange }) => {
   const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
   const isDarkMode = useUIStore((s) => s.isDarkMode);
-
+  const primaryColor = useUIStore((s) => s.primaryColor);
   const sucursalesMostrar = SUCURSALES.filter((s) =>
     sucursalesPermitidas.some((sp) => sp.sucursal === s.value)
   );
@@ -34,7 +34,7 @@ const PasoSucursal: React.FC<Props> = ({ value, onChange }) => {
           display: 'block',
           marginBottom: 24,
           fontSize: 16,
-          color: '#556ee6',
+          color: primaryColor,
           fontWeight: 500,
         }}
       >
@@ -56,7 +56,7 @@ const PasoSucursal: React.FC<Props> = ({ value, onChange }) => {
 
                 <div className="repostear-tile__icon-circle">
                   {React.cloneElement(s.icon, {
-                    style: { fontSize: 24, color: '#556ee6' },
+                    style: { fontSize: 24, color: primaryColor },
                   })}
                 </div>
 
@@ -65,7 +65,7 @@ const PasoSucursal: React.FC<Props> = ({ value, onChange }) => {
                   className="repostear-tile__label"
                   style={{
                     fontSize: 14,
-                    color: isSelected ? '#556ee6' : isDarkMode ? '#e0e0e0' : '#333',
+                    color: isSelected ? primaryColor : isDarkMode ? '#e0e0e0' : '#333',
                     display: 'block',
                     marginBottom: 6,
                   }}

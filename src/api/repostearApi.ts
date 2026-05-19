@@ -1,5 +1,5 @@
-import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
+import { apiClient } from './client';
 
 function formatDateParam(date: Date): string {
   const y = date.getFullYear();
@@ -11,12 +11,6 @@ function formatDateParam(date: Date): string {
   return `${y}${m}${d}${hh}${mm}${ss}`;
 }
 
-interface RepostearResponse {
-  jobId: string;
-  isSuccess: boolean;
-  errorMessage: string;
-}
-
 const RUTAS: Record<string, string> = {
   ENP: '/ENP',
   DEV: '/DEV',
@@ -24,6 +18,10 @@ const RUTAS: Record<string, string> = {
 };
 
 export const repostearApi = {
+  /** Verifica si el tipo de documento tiene una ruta específica (ENP, DEV, FAC) */
+  tieneRutaEspecifica: (tipoDoc: string): boolean => {
+    return tipoDoc in RUTAS;
+  },
   /** Iniciar reposteo por rango de fechas. Devuelve jobId para suscribirse al progreso via SignalR */
   repostear: async (
     tipoDoc: string,
@@ -43,16 +41,16 @@ export const repostearApi = {
     const params: Record<string, string> = { desde, hasta };
     if (destino !== undefined) params.destino = String(destino);
 
-    const { data } = await apiClient.put<ApiResponse<RepostearResponse>>(
+    const { data } = await apiClient.put<ApiResponse<string>>(
       `${ruta}/${sucursal}/repostear`,
       null,
       { params }
     );
 
-    if (!data.data.isSuccess) {
-      throw new Error(data.data.errorMessage || 'Error al iniciar el reposteo');
+    if (!data.isSuccess) {
+      throw new Error(data.errorMessage || 'Error al iniciar el reposteo');
     }
 
-    return data.data.jobId;
+    return data.data;
   },
 };

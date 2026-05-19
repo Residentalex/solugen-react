@@ -66,6 +66,13 @@ export const facturaClienteApi = {
     return data.data;
   },
 
+  postear: async (sucursal: number, factura: any, destino?: number): Promise<any> => {
+    const params: Record<string, string | number> = {};
+    if (destino) params.destino = destino;
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postear`, factura, { params });
+    return data.data;
+  },
+
   eliminar: async (sucursal: number, id: number): Promise<void> => {
     await apiClient.delete(`${BASE}/${sucursal}/Eliminar/${id}`);
   },

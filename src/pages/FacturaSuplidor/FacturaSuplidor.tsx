@@ -5,10 +5,9 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { apiClient } from '../../api/client';
-import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import type { TransaccionVistaDTO, FiltroTransaccion } from '../../types/transaccion';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined, EyeOutlined, EditOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, EyeOutlined, EditOutlined, PlusOutlined, PrinterOutlined } from '@ant-design/icons';
 
 const { RangePicker } = DatePicker;
 
@@ -54,8 +53,6 @@ const FacturaSuplidor: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
-  const setImprimirCallback = useUIStore((s: any) => s.setImprimirCallback);
-
   const [data, setData] = useState<TransaccionVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -102,27 +99,9 @@ const FacturaSuplidor: React.FC = () => {
 
   useEffect(() => {
     setActiveModule('FRDE');
-    updateToolbar({ nuevo: true, editar: false, imprimir: true });
+    updateToolbar({ editar: false });
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
-
-  useEffect(() => {
-    if (selectedRow) {
-      setImprimirCallback(async () => {
-        try {
-          const res = await apiClient.get(`/reportes/contabilidad/facturaSuplidor/${selectedRow.codigoSucursal ? obtenerNombreEnumSucursal(selectedRow.codigoSucursal) : sucursalActiva}/${selectedRow.id}`, {
-            responseType: 'blob',
-          });
-          const blobUrl = URL.createObjectURL(res.data);
-          setPdfPreview({ url: blobUrl, title: `RDE-${selectedRow.documento}` });
-        } catch {
-          message.error('Error al generar el PDF');
-        }
-      });
-    } else {
-      setImprimirCallback(undefined);
-    }
-  }, [selectedRow, sucursalActiva, setImprimirCallback]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -130,6 +109,22 @@ const FacturaSuplidor: React.FC = () => {
   };
 
   const handleRefresh = () => setFechaTrigger(n => n + 1);
+
+  const handleImprimir = useCallback(async () => {
+    if (!selectedRow) {
+      message.warning('Seleccione un documento primero');
+      return;
+    }
+    try {
+      const res = await apiClient.get(`/reportes/contabilidad/facturaSuplidor/${sucursalActiva}/${selectedRow.id}`, {
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(res.data);
+      setPdfPreview({ url: blobUrl, title: `FS-${selectedRow.documento}` });
+    } catch {
+      message.error('Error al generar el PDF');
+    }
+  }, [selectedRow, sucursalActiva]);
 
   const handleDateChange = (dates: any) => {
     if (dates && dates[0] && dates[1]) {
@@ -269,12 +264,12 @@ const FacturaSuplidor: React.FC = () => {
               { value: 100, label: '100' },
             ]}
           />
-          <Button
-            type="primary"
-            icon={<ReloadOutlined />}
-            onClick={handleRefresh}
-            style={{ marginLeft: 'auto' }}
-          />
+          <div style={{ flex: 1 }} />
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FFCP/nuevo')}>
+            Nuevo
+          </Button>
+          <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>
 
@@ -301,7 +296,7 @@ const FacturaSuplidor: React.FC = () => {
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
-        className="paces-border-top"
+        className="paces-border-top paces-list-table"
       />
 
       <Drawer

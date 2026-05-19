@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Progress, Typography, Button, Result } from 'antd';
-import { CheckCircleOutlined, CloseCircleOutlined, FileTextOutlined, CopyOutlined, ClearOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, FileTextOutlined, CopyOutlined, ClearOutlined, RetweetOutlined } from '@ant-design/icons';
 import { transaccionApi } from '../../api/transaccionApi';
 import { repostearApi } from '../../api/repostearApi';
+import { devolucionVentaApi } from '../../api/devolucionVentaApi';
+import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
+import { facturaClienteApi } from '../../api/facturaClienteApi';
+import { useUIStore } from '../../stores/uiStore';
 import { posteoHub } from '../../api/posteoHub';
 import type { WizardState } from './Repostear';
 import './Repostear.css';
@@ -19,9 +23,29 @@ interface LogEntry {
 interface Props {
   wizard: WizardState;
   onTerminado: () => void;
+  onReiniciar: () => void;
 }
 
-const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
+// Helper: Procesa items en lotes paralelos con límite de concurrencia
+async function procesarEnParalelo<T>(
+  items: T[],
+  concurrency: number,
+  procesarItem: (item: T, index: number) => Promise<void>,
+  onChunkCompletado: (completados: number, total: number) => void,
+  canceladoRef: React.MutableRefObject<boolean>
+): Promise<void> {
+  let completados = 0;
+  for (let i = 0; i < items.length; i += concurrency) {
+    if (canceladoRef.current) break;
+    const chunk = items.slice(i, i + concurrency);
+    await Promise.all(chunk.map((item, idx) => procesarItem(item, i + idx)));
+    completados += chunk.length;
+    onChunkCompletado(completados, items.length);
+  }
+}
+
+const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) => {
+  const primaryColor = useUIStore((s) => s.primaryColor);
   const [progreso, setProgreso] = useState(0);
   const [total, setTotal] = useState(0);
   const [exitosos, setExitosos] = useState(0);
@@ -30,8 +54,11 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
   const [errores, setErrores] = useState<string[]>([]);
   const [cancelado, setCancelado] = useState(false);
   const [procesando, setProcesando] = useState(true);
+  const [showLog, setShowLog] = useState(false);
   const jobIdRef = useRef<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  const startedRef = useRef(false);
+  const canceladoRef = useRef(false);
 
   useEffect(() => {
     if (logRef.current) {
@@ -43,7 +70,19 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
     setLog((prev) => [...prev, entry]);
   }, []);
 
+  // Mapa de APIs específicas por tipo de documento para posteo individual
+  const API_ESPECIFICA: Record<string, {
+    obtenerPorId: (sucursal: number, id: number) => Promise<any>;
+    postear: (sucursal: number, doc: any, destino?: number) => Promise<any>;
+  }> = {
+    DEV: devolucionVentaApi,
+    ENP: entradaAlmacenApi,
+    FAC: facturaClienteApi,
+  };
+
   useEffect(() => {
+    if (startedRef.current) return;
+    startedRef.current = true;
     procesarDocumentos();
     return () => {
       // Cleanup: desuscribir y desconectar SignalR
@@ -169,7 +208,13 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
     setProgreso(0);
 
     try {
-      await transaccionApi.postear(sucursal, t);
+      const api = API_ESPECIFICA[wizard.tipoDoc];
+      if (api) {
+        const dto = await api.obtenerPorId(sucursal, t.id);
+        await api.postear(sucursal, dto);
+      } else {
+        await transaccionApi.postear(sucursal, t);
+      }
       agregarLog({
         documento: t.noDocumento || `ID: ${t.id}`,
         exito: true,
@@ -196,33 +241,43 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
     setTotal(docs.length);
     setProgreso(0);
 
+    const api = API_ESPECIFICA[wizard.tipoDoc];
     let exitososCount = 0;
     let erroresList: string[] = [];
 
-    for (let i = 0; i < docs.length; i++) {
-      if (cancelado) break;
-
-      const doc = docs[i];
-      try {
-        await transaccionApi.postear(sucursal, doc);
-        agregarLog({
-          documento: doc.noDocumento || `ID: ${doc.id}`,
-          exito: true,
-          timestamp: new Date().toLocaleTimeString(),
-        });
-        exitososCount++;
-      } catch (err: any) {
-        agregarLog({
-          documento: doc.noDocumento || `ID: ${doc.id}`,
-          exito: false,
-          mensaje: err?.response?.data?.errorMessage || err?.message || 'Error al postear',
-          timestamp: new Date().toLocaleTimeString(),
-        });
-        erroresList.push(doc.noDocumento || `ID: ${doc.id}`);
-      }
-
-      setProgreso(Math.round(((i + 1) / docs.length) * 100));
-    }
+    await procesarEnParalelo(
+      docs,
+      5,
+      async (doc, _index) => {
+        try {
+          if (api) {
+            const dto = await api.obtenerPorId(sucursal, doc.id);
+            await api.postear(sucursal, dto);
+          } else {
+            const t = await transaccionApi.obtenerPorId(sucursal, doc.id);
+            await transaccionApi.postear(sucursal, t);
+          }
+          agregarLog({
+            documento: doc.noDocumento || `ID: ${doc.id}`,
+            exito: true,
+            timestamp: new Date().toLocaleTimeString(),
+          });
+          exitososCount++;
+        } catch (err: any) {
+          agregarLog({
+            documento: doc.noDocumento || `ID: ${doc.id}`,
+            exito: false,
+            mensaje: err?.response?.data?.errorMessage || err?.message || 'Error al postear',
+            timestamp: new Date().toLocaleTimeString(),
+          });
+          erroresList.push(doc.noDocumento || `ID: ${doc.id}`);
+        }
+      },
+      (completados, totalDocs) => {
+        setProgreso(Math.round((completados / totalDocs) * 100));
+      },
+      canceladoRef
+    );
 
     setExitosos(exitososCount);
     setErroresCount(erroresList.length);
@@ -233,6 +288,8 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
   const procesarPorCriterio = async (sucursal: number) => {
     if (wizard.tipoDoc === 'DEP') {
       await procesarDocBancario(sucursal);
+    } else if (repostearApi.tieneRutaEspecifica(wizard.tipoDoc)) {
+      await procesarPorRangoFechas(sucursal);
     } else {
       await procesarPorTipoYFecha(sucursal);
     }
@@ -288,31 +345,34 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
       let exitososCount = 0;
       let erroresList: string[] = [];
 
-      for (let i = 0; i < transacciones.length; i++) {
-        if (cancelado) break;
-
-        const vista = transacciones[i];
-        try {
-          const t = await transaccionApi.obtenerPorId(sucursal, vista.id);
-          await transaccionApi.postear(sucursal, t);
-          agregarLog({
-            documento: vista.documento || `ID: ${vista.id}`,
-            exito: true,
-            timestamp: new Date().toLocaleTimeString(),
-          });
-          exitososCount++;
-        } catch (err: any) {
-          agregarLog({
-            documento: vista.documento || `ID: ${vista.id}`,
-            exito: false,
-            mensaje: err?.response?.data?.errorMessage || err?.message || 'Error al postear',
-            timestamp: new Date().toLocaleTimeString(),
-          });
-          erroresList.push(vista.documento || `ID: ${vista.id}`);
-        }
-
-        setProgreso(Math.round(((i + 1) / transacciones.length) * 100));
-      }
+      await procesarEnParalelo(
+        transacciones,
+        5,
+        async (vista, _index) => {
+          try {
+            const t = await transaccionApi.obtenerPorId(sucursal, vista.id);
+            await transaccionApi.postear(sucursal, t);
+            agregarLog({
+              documento: vista.documento || `ID: ${vista.id}`,
+              exito: true,
+              timestamp: new Date().toLocaleTimeString(),
+            });
+            exitososCount++;
+          } catch (err: any) {
+            agregarLog({
+              documento: vista.documento || `ID: ${vista.id}`,
+              exito: false,
+              mensaje: err?.response?.data?.errorMessage || err?.message || 'Error al postear',
+              timestamp: new Date().toLocaleTimeString(),
+            });
+            erroresList.push(vista.documento || `ID: ${vista.id}`);
+          }
+        },
+        (completados, totalDocs) => {
+          setProgreso(Math.round((completados / totalDocs) * 100));
+        },
+        canceladoRef
+      );
 
       setExitosos(exitososCount);
       setErroresCount(erroresList.length);
@@ -332,6 +392,7 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
   };
 
   const handleCancelar = async () => {
+    canceladoRef.current = true;
     setCancelado(true);
     if (jobIdRef.current) {
       await posteoHub.unsubscribeFromJob(jobIdRef.current).catch(() => {});
@@ -356,24 +417,78 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
     const hasErrors = erroresCount > 0 || errores.length > 0;
     const totalProcesados = exitosos + erroresCount;
     return (
-      <div className="repostear-result">
-        <Result
-          status={hasErrors ? 'warning' : 'success'}
-          title={hasErrors ? 'Proceso completado con errores' : 'Proceso completado exitosamente'}
-          subTitle={
-            hasErrors
-              ? `Se procesaron ${totalProcesados} documentos: ${exitosos} exitosos y ${erroresCount} con errores.`
-              : `Se procesaron ${totalProcesados} documentos exitosamente.`
-          }
-          extra={[
-            <Button key="log" icon={<FileTextOutlined />} onClick={() => {}}>
-              Ver Log Completo
-            </Button>,
-            <Button key="fin" type="primary" onClick={onTerminado}>
-              Finalizar
-            </Button>,
-          ]}
-        />
+      <div>
+        <div className="repostear-result">
+          <Result
+            status={hasErrors ? 'warning' : 'success'}
+            title={hasErrors ? 'Proceso completado con errores' : 'Proceso completado exitosamente'}
+            subTitle={
+              hasErrors
+                ? `Se procesaron ${totalProcesados} documentos: ${exitosos} exitosos y ${erroresCount} con errores.`
+                : `Se procesaron ${totalProcesados} documentos exitosamente.`
+            }
+            extra={[
+              <Button key="log" icon={<FileTextOutlined />} onClick={() => setShowLog(!showLog)}>
+                {showLog ? 'Ocultar Log' : 'Ver Log Completo'}
+              </Button>,
+              <Button key="reiniciar" icon={<RetweetOutlined />} onClick={onReiniciar}>
+                Nuevo Reposteo
+              </Button>,
+              <Button key="fin" type="primary" onClick={onTerminado}>
+                Finalizar
+              </Button>,
+            ]}
+          />
+        </div>
+
+        {/* Mostrar log cuando hay errores o cuando el usuario hace clic en Ver Log */}
+        {(hasErrors || showLog) && (
+          <div style={{ marginTop: 16 }}>
+            <div className="repostear-terminal">
+              <div className="repostear-terminal__header">
+                <span className="repostear-terminal__header-title">
+                  📋 Log de procesamiento
+                </span>
+                <div className="repostear-terminal__header-actions">
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<CopyOutlined />}
+                    onClick={handleCopiarLog}
+                    style={{ color: '#8b949e', fontSize: 12 }}
+                  >
+                    Copiar
+                  </Button>
+                  <Button
+                    size="small"
+                    type="text"
+                    icon={<ClearOutlined />}
+                    onClick={handleLimpiarLog}
+                    style={{ color: '#8b949e', fontSize: 12 }}
+                  >
+                    Limpiar
+                  </Button>
+                </div>
+              </div>
+              <div className="repostear-terminal__body" ref={logRef}>
+                {log.map((entry, idx) => (
+                  <div key={idx} style={{ marginBottom: 2 }}>
+                    <span className="repostear-terminal__timestamp">[{entry.timestamp}]</span>
+                    <span className={entry.exito ? 'repostear-terminal__success' : 'repostear-terminal__error'}>
+                      {entry.exito ? '✅' : '❌'}
+                    </span>
+                    <span className="repostear-terminal__text" style={{ marginLeft: 4 }}>
+                      {entry.documento}
+                    </span>
+                    {entry.mensaje && (
+                      <span className="repostear-terminal__error-msg"> — {entry.mensaje}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -382,23 +497,34 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
     <div>
       {/* Card de progreso con gradiente */}
       <div className="repostear-progress-card">
-        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 20 }}>
           <Text
             className={procesando ? 'repostear-pulse' : ''}
             style={{
               fontSize: 18,
               fontWeight: 600,
-              color: procesando ? '#556ee6' : erroresCount > 0 ? '#faad14' : '#52c41a',
+              color: procesando ? primaryColor : erroresCount > 0 ? '#faad14' : '#52c41a',
             }}
           >
             {procesando ? 'Procesando documentos...' : cancelado ? 'Proceso cancelado' : 'Proceso completado'}
           </Text>
+          {procesando && (
+            <Button
+              size="small"
+              type="text"
+              icon={<FileTextOutlined />}
+              onClick={() => setShowLog((prev) => !prev)}
+              style={{ fontSize: 12, color: '#8b949e' }}
+            >
+              {showLog ? 'Ocultar Log' : 'Log'}
+            </Button>
+          )}
         </div>
 
         <Progress
           percent={progreso}
           status={procesando ? 'active' : erroresCount > 0 ? 'exception' : 'success'}
-          strokeColor="#556ee6"
+          strokeColor={primaryColor}
           strokeWidth={12}
           style={{ marginBottom: 16 }}
         />
@@ -428,61 +554,68 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado }) => {
         </div>
       </div>
 
-      {/* Log tipo terminal GitHub dark */}
-      <div className="repostear-terminal" style={{ marginBottom: 16 }}>
-        <div className="repostear-terminal__header">
-          <span className="repostear-terminal__header-title">
-            📋 Log de procesamiento
-          </span>
-          <div className="repostear-terminal__header-actions">
-            <Button
-              size="small"
-              type="text"
-              icon={<CopyOutlined />}
-              onClick={handleCopiarLog}
-              style={{ color: '#8b949e', fontSize: 12 }}
-            >
-              Copiar
-            </Button>
-            <Button
-              size="small"
-              type="text"
-              icon={<ClearOutlined />}
-              onClick={handleLimpiarLog}
-              style={{ color: '#8b949e', fontSize: 12 }}
-            >
-              Limpiar
-            </Button>
+      {/* Log tipo terminal GitHub dark (oculto por defecto) */}
+      {showLog && (
+        <div className="repostear-terminal" style={{ marginBottom: 16 }}>
+          <div className="repostear-terminal__header">
+            <span className="repostear-terminal__header-title">
+              📋 Log de procesamiento
+            </span>
+            <div className="repostear-terminal__header-actions">
+              <Button
+                size="small"
+                type="text"
+                icon={<CopyOutlined />}
+                onClick={handleCopiarLog}
+                style={{ color: '#8b949e', fontSize: 12 }}
+              >
+                Copiar
+              </Button>
+              <Button
+                size="small"
+                type="text"
+                icon={<ClearOutlined />}
+                onClick={handleLimpiarLog}
+                style={{ color: '#8b949e', fontSize: 12 }}
+              >
+                Limpiar
+              </Button>
+            </div>
+          </div>
+          <div className="repostear-terminal__body" ref={logRef}>
+            {log.length === 0 && procesando && (
+              <Text style={{ color: '#8b949e', fontFamily: 'inherit', fontSize: 12 }}>
+                Iniciando proceso...
+              </Text>
+            )}
+            {log.map((entry, idx) => (
+              <div key={idx} style={{ marginBottom: 2 }}>
+                <span className="repostear-terminal__timestamp">[{entry.timestamp}]</span>
+                <span className={entry.exito ? 'repostear-terminal__success' : 'repostear-terminal__error'}>
+                  {entry.exito ? '✅' : '❌'}
+                </span>
+                <span className="repostear-terminal__text" style={{ marginLeft: 4 }}>
+                  {entry.documento}
+                </span>
+                {entry.mensaje && (
+                  <span className="repostear-terminal__error-msg"> — {entry.mensaje}</span>
+                )}
+              </div>
+            ))}
           </div>
         </div>
-        <div className="repostear-terminal__body" ref={logRef}>
-          {log.length === 0 && procesando && (
-            <Text style={{ color: '#8b949e', fontFamily: 'inherit', fontSize: 12 }}>
-              Iniciando proceso...
-            </Text>
-          )}
-          {log.map((entry, idx) => (
-            <div key={idx} style={{ marginBottom: 2 }}>
-              <span className="repostear-terminal__timestamp">[{entry.timestamp}]</span>
-              <span className={entry.exito ? 'repostear-terminal__success' : 'repostear-terminal__error'}>
-                {entry.exito ? '✅' : '❌'}
-              </span>
-              <span className="repostear-terminal__text" style={{ marginLeft: 4 }}>
-                {entry.documento}
-              </span>
-              {entry.mensaje && (
-                <span className="repostear-terminal__error-msg"> — {entry.mensaje}</span>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
 
       {/* Botones de acción */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
         {procesando && (
           <Button danger onClick={handleCancelar}>
             Cancelar
+          </Button>
+        )}
+        {!procesando && cancelado && (
+          <Button icon={<RetweetOutlined />} onClick={onReiniciar}>
+            Nuevo Reposteo
           </Button>
         )}
       </div>

@@ -437,7 +437,7 @@ const CFacturasElectronicas: React.FC = () => {
       title: 'QR', dataIndex: 'codigoQR', key: 'codigoQR', width: 80, align: 'center' as const,
       render: (v: string) => v ? (
         <a href={v} target="_blank" rel="noopener noreferrer" title="Ver código QR">
-          <QrcodeOutlined style={{ fontSize: 18, color: '#556ee6' }} />
+          <QrcodeOutlined className="paces-text-primary" style={{ fontSize: 18 }} />
         </a>
       ) : (
         <span className="paces-text-placeholder">-</span>
@@ -616,7 +616,7 @@ const CFacturasElectronicas: React.FC = () => {
             alignItems: 'center',
             gap: 8,
           }}>
-            <span style={{ fontSize: 13, color: '#556ee6', fontWeight: 600, marginRight: 4 }}>
+            <span className="paces-text-primary" style={{ fontSize: 13, fontWeight: 600, marginRight: 4 }}>
               {selectedRowKeys.length}
             </span>
             <span style={{ fontSize: 13 }} className="paces-text-light">seleccionado(s)</span>

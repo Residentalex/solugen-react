@@ -7,6 +7,7 @@ import {
 import {
   SaveOutlined,
   CloseOutlined,
+
   CheckCircleOutlined,
   CloseCircleOutlined,
   DeleteOutlined,
@@ -20,13 +21,14 @@ import {
   CalendarOutlined,
   HolderOutlined,
 } from '@ant-design/icons';
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
+
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
@@ -287,14 +289,23 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
 
     <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
       {!alignRight && <span>Total</span>}
-      <span style={{ color: '#3f8600' }}>{formatCurrency(total)}</span>
+      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
     </div>
   </Card>
 );
 
 // ===== Componente SortableRow para drag-and-drop =====
-const SortableRow: React.FC<any> = ({ record, children, ...rest }) => {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: record.id });
+const SortableRow: React.FC<any> = ({ children, ...rest }) => {
+  // Ant Design Table NO pasa record como prop en esta versión.
+  // En su lugar, data-row-key se asigna automáticamente al <tr> vía rowKey="id".
+  const recordId = rest['data-row-key'];
+
+  // Si no hay data-row-key (expanded row, empty row, etc.), renderizar <tr> normal sin drag
+  if (!recordId) {
+    return <tr {...rest}>{children}</tr>;
+  }
+
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: recordId });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -338,9 +349,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const [agregarFilaBloqueado, setAgregarFilaBloqueado] = useState(false);
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
   const [detalleSearch, setDetalleSearch] = useState('');
+  const [activeId, setActiveId] = useState<number | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   );
 
   // ===== Detalles filtrados por búsqueda =====
@@ -391,6 +404,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
   };
 
   const [form] = Form.useForm();
+
+  // ===== Watchers reactivos para campos usados en el encabezado =====
+  const ncfValue = Form.useWatch('ncf', form) || '';
+  const refValue = Form.useWatch('referencia', form) || '';
+  const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
   // ===== Refs para la guía (Tour) =====
   const conceptoRef = useRef<HTMLElement>(null);
@@ -930,6 +948,7 @@ suplidor: res.suplidor?.codigo || '',
   };
 
   const handleDragEnd = (event: any) => {
+    setActiveId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     setDetalles((prev) => {
@@ -1043,7 +1062,13 @@ suplidor: res.suplidor?.codigo || '',
       title: '',
       key: 'sort',
       width: 40,
-      render: () => <HolderOutlined style={{ cursor: 'grab', color: '#999' }} />,
+      render: () => (
+        <div
+          style={{ cursor: 'grab', touchAction: 'none', userSelect: 'none', display: 'inline-flex' }}
+        >
+          <HolderOutlined style={{ color: '#999' }} />
+        </div>
+      ),
     },
     {
       title: 'Artículo',
@@ -1054,13 +1079,13 @@ suplidor: res.suplidor?.codigo || '',
       render: (_: any, record: DetalleEntradaAlmacenDTO) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
-          <div style={{ fontSize: 11, color: '#595959', lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
             <span>
               {record.codigo && <span>{record.codigo}</span>}
               {record.codigo && record.referencia && <span>{' | '}</span>}
               {record.referencia && <span>{record.referencia}</span>}
             </span>
-            {record.fechaVencimiento && <span style={{ color: '#8c8c8c' }}>V: {record.fechaVencimiento}</span>}
+            {record.fechaVencimiento && <span className="paces-text-secondary">V: {formatDate(record.fechaVencimiento)}</span>}
           </div>
         </div>
       ),
@@ -1085,8 +1110,8 @@ suplidor: res.suplidor?.codigo || '',
             onChange={(val) => handleDetalleChange(detalles[idx].id, 'cantidad', val || 0)}
           />
           {detalles[idx]?.medida?.nombre && (
-            <div style={{ fontSize: 11, color: '#595959', lineHeight: 1.5, textAlign: 'left' }}>
-              {detalles[idx].medida.nombre}
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
+              {toTitleCase(detalles[idx].medida.nombre)}
             </div>
           )}
         </div>
@@ -1135,7 +1160,7 @@ suplidor: res.suplidor?.codigo || '',
             onChange={(val) => handleDetalleChange(detalles[idx].id, 'porcentajeDescuento', val || 0)}
             addonAfter="%"
           />
-          <div style={{ fontSize: 12, color: '#595959', lineHeight: 1.5, marginTop: 2 }}>
+          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
             {formatNumber(detalles[idx]?.descuento || 0)}
           </div>
         </div>
@@ -1164,7 +1189,7 @@ suplidor: res.suplidor?.codigo || '',
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
           {record.impuesto?.nombre && (
-            <div style={{ fontSize: 12, color: '#595959', lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
           )}
         </div>
       ),
@@ -1200,7 +1225,7 @@ suplidor: res.suplidor?.codigo || '',
         if (record.tieneVencimiento) {
           items.unshift({
             key: 'vencimiento',
-            label: record.fechaVencimiento ? `Venc: ${record.fechaVencimiento}` : 'Fecha Vencimiento',
+            label: record.fechaVencimiento ? `Venc: ${formatDate(record.fechaVencimiento)}` : 'Fecha Vencimiento',
             icon: <CalendarOutlined />,
             onClick: () => setFechaVencimientoModal({ open: true, detalleId: detalles[idx].id }),
           });
@@ -1217,10 +1242,7 @@ suplidor: res.suplidor?.codigo || '',
 
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => {
-    const ncfValue = form.getFieldValue('ncf') || '';
-    const refValue = form.getFieldValue('referencia') || '';
-    const tasaValue = form.getFieldValue('tasa') ?? 1;
-
+    // ncfValue, refValue y tasaValue vienen del watcher reactivo (component-level Form.useWatch)
     return (
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
       <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
@@ -1518,7 +1540,7 @@ suplidor: res.suplidor?.codigo || '',
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
-                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(event.active.id); }} onDragEnd={handleDragEnd}>
                         <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                         <Table
                           dataSource={detallesFiltrados}
@@ -1530,6 +1552,16 @@ suplidor: res.suplidor?.codigo || '',
                           components={{ body: { row: SortableRow } }}
                         />
                         </SortableContext>
+                        <DragOverlay>
+                          {activeId ? (
+                            <div style={{ padding: '8px 16px', background: '#fff', border: '2px solid #556ee6', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8, width: 300 }}>
+                              <HolderOutlined style={{ color: '#556ee6' }} />
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {detalles.find((d) => d.id === activeId)?.articulo || 'Arrastrando...'}
+                              </span>
+                            </div>
+                          ) : null}
+                        </DragOverlay>
                       </DndContext>
                     </>
                   ),
@@ -1587,7 +1619,7 @@ suplidor: res.suplidor?.codigo || '',
               alignRight={false}
               monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
               monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
-              tasa={form.getFieldValue('tasa') ?? data?.tasa ?? 1}
+               tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </Col>
         </Row>
@@ -1623,7 +1655,7 @@ suplidor: res.suplidor?.codigo || '',
                         onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                       />
                     </div>
-                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(event.active.id); }} onDragEnd={handleDragEnd}>
                       <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                     <Table
                       dataSource={detallesFiltrados}
@@ -1635,6 +1667,16 @@ suplidor: res.suplidor?.codigo || '',
                       components={{ body: { row: SortableRow } }}
                     />
                     </SortableContext>
+                    <DragOverlay>
+                      {activeId ? (
+                        <div style={{ padding: '8px 16px', background: '#fff', border: '2px solid #556ee6', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8, width: 300 }}>
+                          <HolderOutlined style={{ color: '#556ee6' }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {detalles.find((d) => d.id === activeId)?.articulo || 'Arrastrando...'}
+                          </span>
+                        </div>
+                      ) : null}
+                    </DragOverlay>
                     </DndContext>
                   </>
                 ),
@@ -1691,7 +1733,7 @@ suplidor: res.suplidor?.codigo || '',
             alignRight={true}
             monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
             monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
-            tasa={form.getFieldValue('tasa') ?? data?.tasa ?? 1}
+             tasa={tasaValue ?? data?.tasa ?? 1}
           />
         </div>
       )}

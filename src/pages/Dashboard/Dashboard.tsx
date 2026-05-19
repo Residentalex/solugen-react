@@ -55,7 +55,7 @@ const Dashboard: React.FC = () => {
       label: 'Roles',
       borderColor: '#f0b345',
       change: '0',
-      changeColor: '#6c757d',
+      changeColor: 'var(--paces-text-secondary)',
     },
   ];
 
@@ -92,23 +92,23 @@ const Dashboard: React.FC = () => {
             <div className="paces-card-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <Text strong style={{ width: 140, color: '#6c757d', fontSize: 13 }}>Nombre:</Text>
+                  <Text strong className="paces-text-secondary" style={{ width: 140, fontSize: 13 }}>Nombre:</Text>
                   <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.nombre || '-'}</Text>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <Text strong style={{ width: 140, color: '#6c757d', fontSize: 13 }}>Usuario:</Text>
+                  <Text strong className="paces-text-secondary" style={{ width: 140, fontSize: 13 }}>Usuario:</Text>
                   <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.nombreUsuario || '-'}</Text>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <Text strong style={{ width: 140, color: '#6c757d', fontSize: 13 }}>Empleado:</Text>
+                  <Text strong className="paces-text-secondary" style={{ width: 140, fontSize: 13 }}>Empleado:</Text>
                   <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.empleado || '-'}</Text>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <Text strong style={{ width: 140, color: '#6c757d', fontSize: 13 }}>Roles:</Text>
+                  <Text strong className="paces-text-secondary" style={{ width: 140, fontSize: 13 }}>Roles:</Text>
                   <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.roles?.map(r => r.nombre).join(', ') || 'Sin roles'}</Text>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <Text strong style={{ width: 140, color: '#6c757d', fontSize: 13 }}>Pantallas:</Text>
+                  <Text strong className="paces-text-secondary" style={{ width: 140, fontSize: 13 }}>Pantallas:</Text>
                   <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.pantallas?.length || 0} pantallas asignadas</Text>
                 </div>
               </div>
@@ -119,7 +119,7 @@ const Dashboard: React.FC = () => {
           <div className="paces-card">
             <div className="paces-card-header">
               <span>Accesos Rápidos</span>
-              <span style={{ fontSize: 12, color: '#6c757d', fontWeight: 400 }}>
+              <span className="paces-text-secondary" style={{ fontSize: 12, fontWeight: 400 }}>
                 {usuario?.pantallas?.length || 0} pantallas
               </span>
             </div>

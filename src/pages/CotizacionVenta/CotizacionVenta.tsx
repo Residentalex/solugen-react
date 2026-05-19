@@ -173,7 +173,7 @@ const CotizacionVenta: React.FC = () => {
       width: 160,
       fixed: 'left',
       render: (_: any, record: CotizacionVentaDTO) => (
-        <span style={{ color: '#556ee6', cursor: 'pointer', fontWeight: 600 }}>
+        <span className="paces-doc-link">
           {record.tipoDocumento}-{record.noDocumento}
         </span>
       ),
@@ -191,21 +191,7 @@ const CotizacionVenta: React.FC = () => {
       key: 'cliente',
       render: (name: string) => (
         <Space>
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              background: '#556ee620',
-              color: '#556ee6',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 14,
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
-          >
+          <div className="paces-avatar-initials">
             {getInitials(name)}
           </div>
           <span>{toTitleCase(name) || '-'}</span>

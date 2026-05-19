@@ -8,6 +8,7 @@ import {
   CalendarOutlined,
 } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
+import { hexToRgba } from '../../utils/themeUtils';
 import type { MetodoPosteo } from './Repostear';
 
 const { Text } = Typography;
@@ -50,6 +51,7 @@ const METODOS: { value: MetodoPosteo; label: string; description: string; icon: 
 
 const PasoMetodo: React.FC<Props> = ({ value, onChange }) => {
   const isDarkMode = useUIStore((s) => s.isDarkMode);
+  const primaryColor = useUIStore((s) => s.primaryColor);
 
   return (
     <div>
@@ -58,7 +60,7 @@ const PasoMetodo: React.FC<Props> = ({ value, onChange }) => {
           display: 'block',
           marginBottom: 24,
           fontSize: 16,
-          color: '#556ee6',
+          color: primaryColor,
           fontWeight: 500,
         }}
       >
@@ -80,10 +82,10 @@ const PasoMetodo: React.FC<Props> = ({ value, onChange }) => {
 
                 <div
                   className="repostear-tile__icon-circle"
-                  style={isSelected ? {} : { background: isDarkMode ? 'rgba(85,110,230,0.2)' : '#f0f3ff' }}
+                  style={isSelected ? {} : { background: isDarkMode ? hexToRgba(primaryColor, 0.2) : '#f0f3ff' }}
                 >
                   {React.cloneElement(m.icon, {
-                    style: { fontSize: 28, color: isSelected ? '#fff' : m.color },
+                    style: { fontSize: 28, color: isSelected ? '#fff' : (m.value === 'rangoFechas' ? primaryColor : m.color) },
                   })}
                 </div>
 
@@ -91,7 +93,7 @@ const PasoMetodo: React.FC<Props> = ({ value, onChange }) => {
                   strong
                   style={{
                     fontSize: 16,
-                    color: isSelected ? '#556ee6' : isDarkMode ? '#e0e0e0' : '#333',
+                    color: isSelected ? primaryColor : isDarkMode ? '#e0e0e0' : '#333',
                     display: 'block',
                     marginBottom: 8,
                   }}

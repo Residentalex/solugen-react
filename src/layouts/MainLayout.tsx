@@ -8,6 +8,7 @@ import { useUIStore } from '../stores/uiStore';
 import GenesisLogo from '../components/GenesisLogo';
 import Sidebar from './Sidebar';
 import Toolbar from './Toolbar';
+import ThemeSwitcher from '../components/ThemeSwitcher';
 import { Outlet } from 'react-router-dom';
 import {
   MenuFoldOutlined,
@@ -16,8 +17,6 @@ import {
   UserOutlined,
   SettingOutlined,
   BellOutlined,
-  MoonOutlined,
-  SunOutlined,
 } from '@ant-design/icons';
 
 function toTitleCase(str?: string | null): string {
@@ -78,8 +77,7 @@ const MainLayout: React.FC = () => {
   const setSidebarCollapsed = useUIStore((s: any) => s.setSidebarCollapsed);
   const activeModule = useUIStore((s: any) => s.activeModule);
   const pageTitleOverride = useUIStore((s: any) => s.pageTitleOverride);
-  const isDarkMode = useUIStore((s: any) => s.isDarkMode);
-  const toggleDarkMode = useUIStore((s: any) => s.toggleDarkMode);
+  const themeName = useUIStore((s: any) => s.themeName);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -162,7 +160,7 @@ const MainLayout: React.FC = () => {
         }}
       >
         <div className={`sidebar-logo ${sidebarCollapsed ? 'collapsed' : ''}`}>
-          <GenesisLogo size={28} dark={isDarkMode} showText={!sidebarCollapsed} />
+          <GenesisLogo size={28} dark={themeName.startsWith('dark-')} showText={!sidebarCollapsed} />
         </div>
         <Sidebar />
       </Sider>
@@ -173,9 +171,6 @@ const MainLayout: React.FC = () => {
             <button className="paces-hamburger" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
               {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             </button>
-          </div>
-
-          <div className="paces-topbar-center">
             <Input.Search
               placeholder="Buscar..."
               size="middle"
@@ -184,15 +179,9 @@ const MainLayout: React.FC = () => {
           </div>
 
           <div className="paces-topbar-right">
+            <ThemeSwitcher />
             <button className="paces-topbar-action-btn" title="Notificaciones">
               <BellOutlined />
-            </button>
-            <button
-              className="paces-topbar-action-btn"
-              title={isDarkMode ? 'Modo claro' : 'Modo oscuro'}
-              onClick={toggleDarkMode}
-            >
-              {isDarkMode ? <SunOutlined /> : <MoonOutlined />}
             </button>
             {sucursalesPermitidas.length > 1 && activeModule !== 'MUsuario' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && (
               <Select
@@ -226,7 +215,7 @@ const MainLayout: React.FC = () => {
               <h3>{pageTitleOverride || pageTitle}</h3>
               <div className="breadcrumb">
                 <span>Inicio</span>
-                <span style={{ color: '#6c757d' }}>/</span>
+                <span className="paces-text-secondary">/</span>
                 <span>{pageTitle}</span>
               </div>
             </div>
@@ -239,7 +228,7 @@ const MainLayout: React.FC = () => {
           {loading && (
             <div style={{ textAlign: 'center', padding: 60 }}>
               <Spin size="large" />
-              <div style={{ marginTop: 16, color: '#6c757d' }}>Cargando configuración inicial...</div>
+              <div className="paces-text-secondary" style={{ marginTop: 16 }}>Cargando configuración inicial...</div>
             </div>
           )}
           {!loading && <Outlet />}

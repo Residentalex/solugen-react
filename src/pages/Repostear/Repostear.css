@@ -38,7 +38,7 @@
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #556ee6 0%, #7c8ff5 100%);
+  background: linear-gradient(135deg, var(--paces-primary) 0%, #7c8ff5 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -123,14 +123,14 @@
   overflow: hidden;
 }
 
-.reposteer-tile:hover {
+.repostear-tile:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   transform: translateY(-2px);
 }
 
 .repostear-tile--selected {
-  border-left: 4px solid #556ee6;
-  background: linear-gradient(135deg, #f0f3ff 0%, #fff 100%);
+  border-left: 4px solid var(--paces-primary);
+  background: linear-gradient(135deg, var(--paces-hover-bg) 0%, #fff 100%);
   box-shadow: 0 4px 16px rgba(85, 110, 230, 0.15);
 }
 
@@ -144,7 +144,7 @@
   top: 10px;
   right: 10px;
   font-size: 20px;
-  color: #556ee6;
+  color: var(--paces-primary);
   opacity: 0;
   transition: opacity 0.2s ease;
 }
@@ -173,7 +173,7 @@
 }
 
 .repostear-tile--selected .repostear-tile__icon-circle {
-  background: #556ee6;
+  background: var(--paces-primary);
 }
 
 .repostear-tile--selected .repostear-tile__icon-circle .anticon {
@@ -328,21 +328,41 @@
 }
 
 .repostear-stat--total .repostear-stat__value {
-  color: #556ee6;
+  color: var(--paces-primary);
 }
 
 /* --- Animación de pulso para procesamiento --- */
 .repostear-pulse {
-  animation: repostearPulse 2s ease-in-out infinite;
+  animation: pulse 1.5s ease-in-out infinite !important;
 }
 
-@keyframes repostearPulse {
+@keyframes pulse {
   0%, 100% {
     opacity: 1;
   }
   50% {
     opacity: 0.6;
   }
+}
+
+/* --- Animación de fade-in para las entradas del log --- */
+@keyframes logFadeIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.repostear-terminal__body > div {
+  animation: logFadeIn 0.3s ease-out;
+}
+
+/* --- Animación de contador para las estadísticas --- */
+@keyframes countUp {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.repostear-stat__value {
+  animation: countUp 0.4s ease-out;
 }
 
 /* --- Card de resultado de documento encontrado --- */
@@ -451,12 +471,12 @@
   border-color: #3d3d5c;
 }
 
-.dark-mode .reposteer-tile:hover {
+.dark-mode .repostear-tile:hover {
   box-shadow: 0 4px 16px rgba(85, 110, 230, 0.2);
 }
 
 .dark-mode .repostear-tile--selected {
-  background: linear-gradient(135deg, rgba(85, 110, 230, 0.15) 0%, #2d2d44 100%);
+  background: linear-gradient(135deg, var(--paces-selected-bg) 0%, #2d2d44 100%);
   box-shadow: 0 4px 16px rgba(85, 110, 230, 0.25);
 }
 
@@ -465,11 +485,11 @@
 }
 
 .dark-mode .repostear-tile__icon-circle {
-  background: rgba(85, 110, 230, 0.2);
+  background: var(--paces-hover-bg);
 }
 
 .dark-mode .repostear-tile--selected .repostear-tile__icon-circle {
-  background: #556ee6;
+  background: var(--paces-primary);
 }
 
 /* --- Filtros en dark mode --- */
@@ -489,7 +509,7 @@
 }
 
 .dark-mode .repostear-striped-table .ant-table-tbody > tr:hover > td {
-  background: rgba(85, 110, 230, 0.15) !important;
+  background: var(--paces-selected-bg) !important;
 }
 
 /* --- Stats en dark mode --- */
@@ -522,4 +542,76 @@
 .dark-mode .repostear-progress-card {
   background: linear-gradient(135deg, #2d2d44 0%, #363650 100%);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* --- Card de resumen de confirmación --- */
+.repostear-summary-card {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 20px 24px;
+  border: 1px solid #e8ecf0;
+}
+
+.repostear-summary-card__title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.repostear-summary-card__row {
+  display: flex;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.repostear-summary-card__row:last-child {
+  border-bottom: none;
+}
+
+.repostear-summary-card__label {
+  width: 180px;
+  flex-shrink: 0;
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
+.repostear-summary-card__value {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.repostear-summary-card__divider {
+  height: 1px;
+  background: #e8ecf0;
+  margin: 12px 0;
+}
+
+/* --- Dark mode --- */
+.dark-mode .repostear-summary-card {
+  background: #2d2d44;
+  border-color: #3d3d5c;
+}
+
+.dark-mode .repostear-summary-card__title {
+  color: #e0e0e0;
+}
+
+.dark-mode .repostear-summary-card__row {
+  border-bottom-color: #3d3d5c;
+}
+
+.dark-mode .repostear-summary-card__label {
+  color: #a2a3b7;
+}
+
+.dark-mode .repostear-summary-card__value {
+  color: #e0e0e0;
+}
+
+.dark-mode .repostear-summary-card__divider {
+  background: #3d3d5c;
 }

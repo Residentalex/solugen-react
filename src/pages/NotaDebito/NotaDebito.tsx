@@ -5,10 +5,9 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { notaDebitoApi } from '../../api/notaDebitoApi';
 import { apiClient } from '../../api/client';
-import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import type { TransaccionVistaDTO, FiltroTransaccion } from '../../types/transaccion';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined, PrinterOutlined } from '@ant-design/icons';
 
 const { RangePicker } = DatePicker;
 
@@ -58,8 +57,6 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
-  const setImprimirCallback = useUIStore((s: any) => s.setImprimirCallback);
-
   const [data, setData] = useState<TransaccionVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -110,27 +107,9 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
 
   useEffect(() => {
     setActiveModule(codigoPantalla);
-    updateToolbar({ nuevo: true, editar: false, imprimir: true });
+    updateToolbar({ editar: false });
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar, codigoPantalla]);
-
-  useEffect(() => {
-    if (selectedRow) {
-      setImprimirCallback(async () => {
-        try {
-          const res = await apiClient.get(`/reportes/contabilidad/nota-debito/${selectedRow.codigoSucursal ? obtenerNombreEnumSucursal(selectedRow.codigoSucursal) : sucursalActiva}/${selectedRow.id}`, {
-            responseType: 'blob',
-          });
-          const blobUrl = URL.createObjectURL(res.data);
-          setPdfPreview({ url: blobUrl, title: `ND-${selectedRow.documento}` });
-        } catch {
-          message.error('Error al generar el PDF');
-        }
-      });
-    } else {
-      setImprimirCallback(undefined);
-    }
-  }, [selectedRow, sucursalActiva, setImprimirCallback]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -138,6 +117,22 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
   };
 
   const handleRefresh = () => setFechaTrigger(n => n + 1);
+
+  const handleImprimir = useCallback(async () => {
+    if (!selectedRow) {
+      message.warning('Seleccione un documento primero');
+      return;
+    }
+    try {
+      const res = await apiClient.get(`/reportes/contabilidad/nota-debito/${sucursalActiva}/${selectedRow.id}`, {
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(res.data);
+      setPdfPreview({ url: blobUrl, title: `ND-${selectedRow.documento}` });
+    } catch {
+      message.error('Error al generar el PDF');
+    }
+  }, [selectedRow, sucursalActiva]);
 
   const handleDateChange = (dates: any) => {
     if (dates && dates[0] && dates[1]) {
@@ -250,7 +245,12 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
               { value: 100, label: '100' },
             ]}
           />
-          <Button type="primary" icon={<ReloadOutlined />} onClick={handleRefresh} style={{ marginLeft: 'auto' }} />
+          <div style={{ flex: 1 }} />
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate(`/${codigoPantalla}/nuevo`)}>
+            Nuevo
+          </Button>
+          <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>
 

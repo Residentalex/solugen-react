@@ -79,7 +79,7 @@ const BuscarOrdenCompraModal: React.FC<BuscarOrdenCompraModalProps> = ({ open, o
       dataIndex: 'noDocumento',
       key: 'noDocumento',
       width: 150,
-      render: (v: string) => <span style={{ color: '#556ee6', fontWeight: 500 }}>{v}</span>,
+      render: (v: string) => <span className="paces-text-primary">{v}</span>,
     },
     {
       title: 'Fecha',

@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import { conceptosApi } from '../../api/conceptosApi';
 import { useUIStore } from '../../stores/uiStore';
+import { hexToRgba } from '../../utils/themeUtils';
 import type { SubCriterio } from './Repostear';
 import type { Sucursal } from '../../types/auth';
 
@@ -108,6 +109,7 @@ const PasoCriterio: React.FC<Props> = ({
   const [conceptos, setConceptos] = useState<{ codigo: string; nombre: string }[]>([]);
   const [loadingConceptos, setLoadingConceptos] = useState(false);
   const isDarkMode = useUIStore((s) => s.isDarkMode);
+  const primaryColor = useUIStore((s) => s.primaryColor);
 
   const tiposMostrar = tiposPermitidos
     ? TIPOS_DOCUMENTO.filter((t) => tiposPermitidos.includes(t.value))
@@ -139,7 +141,7 @@ const PasoCriterio: React.FC<Props> = ({
           display: 'block',
           marginBottom: 24,
           fontSize: 16,
-          color: '#556ee6',
+          color: primaryColor,
           fontWeight: 500,
         }}
       >
@@ -198,18 +200,18 @@ const PasoCriterio: React.FC<Props> = ({
                   style={{
                     width: 44,
                     height: 44,
-                    background: isSelected ? undefined : isDarkMode ? 'rgba(85,110,230,0.2)' : sc.color + '18',
+                    background: isSelected ? undefined : isDarkMode ? hexToRgba(primaryColor, 0.2) : sc.color + '18',
                   }}
                 >
                   {React.cloneElement(sc.icon, {
-                    style: { fontSize: 20, color: isSelected ? '#fff' : sc.color },
+                    style: { fontSize: 20, color: isSelected ? '#fff' : (sc.value === 'entidad' ? primaryColor : sc.color) },
                   })}
                 </div>
                 <Text
                   strong
                   style={{
                     fontSize: 12,
-                    color: isSelected ? '#556ee6' : isDarkMode ? '#e0e0e0' : '#333',
+                    color: isSelected ? primaryColor : isDarkMode ? '#e0e0e0' : '#333',
                     display: 'block',
                     marginTop: 8,
                   }}
