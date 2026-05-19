@@ -1,0 +1,84 @@
+import React from 'react';
+import { Row, Col, Typography } from 'antd';
+import { BankOutlined, CheckCircleFilled, ShopOutlined, HomeOutlined, PieChartOutlined } from '@ant-design/icons';
+import { Sucursal } from '../../types/auth';
+import { useAuthStore } from '../../stores/authStore';
+import { useUIStore } from '../../stores/uiStore';
+
+const { Text } = Typography;
+
+interface Props {
+  value: Sucursal | null;
+  onChange: (sucursal: Sucursal) => void;
+}
+
+const SUCURSALES: { value: Sucursal; label: string; icon: React.ReactNode }[] = [
+  { value: Sucursal.OrensePlaza, label: 'Orense Plaza', icon: <ShopOutlined /> },
+  { value: Sucursal.HiperRomana, label: 'Hiper Romana', icon: <BankOutlined /> },
+  { value: Sucursal.OrenseVillaHermosa, label: 'Villa Hermosa', icon: <HomeOutlined /> },
+  { value: Sucursal.Consolidado, label: 'Consolidado', icon: <PieChartOutlined /> },
+];
+
+const PasoSucursal: React.FC<Props> = ({ value, onChange }) => {
+  const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
+  const isDarkMode = useUIStore((s) => s.isDarkMode);
+
+  const sucursalesMostrar = SUCURSALES.filter((s) =>
+    sucursalesPermitidas.some((sp) => sp.sucursal === s.value)
+  );
+
+  return (
+    <div>
+      <Text
+        style={{
+          display: 'block',
+          marginBottom: 24,
+          fontSize: 16,
+          color: '#556ee6',
+          fontWeight: 500,
+        }}
+      >
+        Seleccione la sucursal sobre la cual desea repostear documentos
+      </Text>
+
+      <Row gutter={[16, 16]}>
+        {sucursalesMostrar.map((s) => {
+          const isSelected = value === s.value;
+
+          return (
+            <Col xs={24} sm={12} md={6} key={s.value}>
+              <div
+                className={`repostear-tile ${isSelected ? 'repostear-tile--selected' : ''}`}
+                onClick={() => onChange(s.value)}
+                style={{ padding: '24px 16px', textAlign: 'center', minHeight: 160 }}
+              >
+                <CheckCircleFilled className="repostear-tile__check" />
+
+                <div className="repostear-tile__icon-circle">
+                  {React.cloneElement(s.icon, {
+                    style: { fontSize: 24, color: '#556ee6' },
+                  })}
+                </div>
+
+                <Text
+                  strong
+                  className="repostear-tile__label"
+                  style={{
+                    fontSize: 14,
+                    color: isSelected ? '#556ee6' : isDarkMode ? '#e0e0e0' : '#333',
+                    display: 'block',
+                    marginBottom: 6,
+                  }}
+                >
+                  {s.label}
+                </Text>
+              </div>
+            </Col>
+          );
+        })}
+      </Row>
+    </div>
+  );
+};
+
+export default PasoSucursal;

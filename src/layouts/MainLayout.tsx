@@ -194,7 +194,7 @@ const MainLayout: React.FC = () => {
             >
               {isDarkMode ? <SunOutlined /> : <MoonOutlined />}
             </button>
-            {sucursalesPermitidas.length > 1 && activeModule !== 'MUsuario' && activeModule !== 'CFacturasElectronicas' && (
+            {sucursalesPermitidas.length > 1 && activeModule !== 'MUsuario' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && (
               <Select
                 value={sucursalActiva}
                 onChange={(val) => setSucursalActiva(val)}

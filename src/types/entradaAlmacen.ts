@@ -43,6 +43,12 @@ export interface ConceptoDTO {
   nombre: string;
   codigo: string;
   docAGenerar?: string;
+  noImpuesto?: boolean;
+  noAsientos?: boolean;
+  noActualizaCostos?: boolean;
+  activo?: boolean;
+  moneda?: MonedaDTO;
+  almacen?: AlmacenDTO;
 }
 
 export interface MonedaDTO {
@@ -93,6 +99,12 @@ export interface DetalleEntradaAlmacenDTO {
   costoActual: number;
   ajustado: boolean;
   cantidadBonificable: number;
+  idExterno?: number;
+  idTransaccionExterna?: number;
+  tieneVencimiento?: boolean;
+  familia?: { nombre: string; idExterno: string };
+  medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
+  impuesto?: { nombre: string; porcentaje: number; codigo: string; idExterno: string };
 }
 
 export interface AsientoContableDTO {
@@ -184,4 +196,13 @@ export interface DetalleOrdenCompraVistaDTO {
   cantidadRecibida: number;
   cantidadBonificable: number;
   medida: { id: number; nombre: string; factor: number };
+  idExterno?: number;
+  idTransaccionExterna?: number;
+  tieneVencimiento?: boolean;
+  familia?: { nombre: string; idExterno: string };
+  impuesto?: { nombre: string; porcentaje: number; codigo: string; idExterno: string };
+  porcentajeImpuesto?: number;
+  precio?: number;
+  tipoArticulo?: string;
+  nota?: string;
 }

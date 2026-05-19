@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { ProductoListaDTO, ProductoDTO, FiltroProducto } from '../types/productos';
+import type { ApiResponse } from '../types/auth';
 
 const BASE = '/Producto';
 
@@ -35,5 +36,17 @@ export const productoApi = {
   obtenerDetalle: async (sucursal: number, codigo: string): Promise<ProductoDTO> => {
     const { data } = await apiClient.get<ProductoDTO>(`${BASE}/${sucursal}/${codigo}`);
     return data;
+  },
+
+  /** Obtener códigos de productos con vencimiento */
+  obtenerProductosVencimiento: async (
+    sucursal: number,
+    codigos: string[]
+  ): Promise<string[]> => {
+    const { data } = await apiClient.put<ApiResponse<{ codigo: string }[]>>(
+      `${BASE}/productosVencimiento/${sucursal}`,
+      codigos
+    );
+    return (data.data || []).map((p) => p.codigo);
   },
 };

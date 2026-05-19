@@ -10,7 +10,7 @@
   top: 50%;
   transform: translateY(-50%);
   font-size: 14px;
-  color: #bfbfbf;
+  color: #666666;
   pointer-events: none;
   transition: all 0.2s ease;
   background: transparent;
@@ -53,7 +53,22 @@
 }
 
 /* ===== Dark mode ===== */
+.dark-mode .floating-field .floating-label {
+  color: #a2a3b7;
+}
+
 .dark-mode .floating-field.floating-focused .floating-label,
 .dark-mode .floating-field.floating-has-value .floating-label {
   background: #2d2d44;
+}
+
+/* ===== Forecolor uniforme para inputs readonly y datepicker ===== */
+.floating-field .ant-input[readonly],
+.floating-field .ant-picker {
+  color: rgba(0, 0, 0, 0.88) !important;
+}
+
+.dark-mode .floating-field .ant-input[readonly],
+.dark-mode .floating-field .ant-picker {
+  color: rgba(255, 255, 255, 0.85) !important;
 }

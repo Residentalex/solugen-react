@@ -1442,3 +1442,35 @@ body.dark-mode {
 .dark-mode .ant-upload-list-item:hover {
   background: rgba(85,110,230,0.08) !important;
 }
+
+/* ===== Guide Popover ===== */
+.guide-popover .ant-popover-inner {
+  background: #556ee6 !important;
+  border-radius: 8px !important;
+}
+.guide-popover .ant-popover-title {
+  color: #ffffff !important;
+  border-bottom-color: rgba(255, 255, 255, 0.2) !important;
+  font-weight: 600 !important;
+}
+.guide-popover .ant-popover-inner-content {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+.guide-popover .ant-popover-arrow::before {
+  background: #556ee6 !important;
+}
+
+/* Dark mode */
+.dark-mode .guide-popover .ant-popover-inner {
+  background: #3d3d5c !important;
+}
+.dark-mode .guide-popover .ant-popover-title {
+  color: #ffffff !important;
+  border-bottom-color: rgba(255, 255, 255, 0.15) !important;
+}
+.dark-mode .guide-popover .ant-popover-inner-content {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+.dark-mode .guide-popover .ant-popover-arrow::before {
+  background: #3d3d5c !important;
+}

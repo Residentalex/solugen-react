@@ -45,6 +45,7 @@ import CFacturasElectronicas from './pages/DGII/CFacturasElectronicas';
 import SecuenciasNCF from './pages/SecuenciasNCF/SecuenciasNCF';
 import Clientes from './pages/Clientes/Clientes';
 import PuntosVenta from './pages/PuntosVenta/PuntosVenta';
+import Repostear from './pages/Repostear/Repostear';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -124,6 +125,7 @@ const App: React.FC = () => {
             <Route path="MSecuenciaNCF" element={<SecuenciasNCF />} />
             <Route path="MCliente" element={<Clientes />} />
             <Route path="MPOS" element={<PuntosVenta />} />
+          <Route path="ORepostear" element={<Repostear />} />
           </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

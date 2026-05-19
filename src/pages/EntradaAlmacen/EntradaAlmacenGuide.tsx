@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Popover } from 'antd';
-import { useUIStore } from '../../stores/uiStore';
 import type { ConceptoDTO, SuplidorDTO, AlmacenDTO, OrdenCompraVistaDTO } from '../../types/entradaAlmacen';
 
 export interface EntradaAlmacenGuideProps {
@@ -45,7 +44,6 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
   almacenRef,
   agregarFilaRef,
 }) => {
-  const isDarkMode = useUIStore((s) => s.isDarkMode);
   const [open, setOpen] = useState(false);
   const dismissedStepRef = useRef<string | null>(null);
   const currentStepRef = useRef<GuideStep | null>(null);
@@ -68,13 +66,13 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
       {
         key: 'ordenCompra',
         title: 'Orden de Compra',
-        description: 'Seleccione una orden de compra. (Solo si el suplidor requiere ORC)',
+        description: 'Seleccione una orden de compra si el suplidor requiere ORC, o puede dejarlo vacío.',
         target: () => ordenCompraRef.current,
       },
       {
         key: 'almacen',
         title: 'Almacén',
-        description: 'Debe seleccionar un almacén.',
+        description: 'Seleccione el almacén donde se recibirá la mercancía.',
         target: () => almacenRef.current,
       },
       {
@@ -85,12 +83,13 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
       },
     ];
 
-    // Lógica de prioridad (igual que el escritorio)
+    // Lógica de prioridad
     if (!concepto) return steps[0];
     if (!suplidor) return steps[1];
     if (suplidor.requiereORC && !ordenCompra) return steps[2];
     if (!almacen) return steps[3];
-    if (detallesCount === 0) return steps[4];
+    // Solo pedir productos manuales si no hay OC seleccionada
+    if (!ordenCompra && detallesCount === 0) return steps[4];
 
     return null;
   }, [concepto, suplidor, ordenCompra, almacen, detallesCount, conceptoRef, suplidorRef, ordenCompraRef, almacenRef, agregarFilaRef]);
@@ -163,7 +162,7 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
       content={currentStep.description}
       placement="top"
       trigger={[]}
-      color={isDarkMode ? '#1777ff' : '#556ee6'}
+      rootClassName="guide-popover"
     >
       <span
         style={{

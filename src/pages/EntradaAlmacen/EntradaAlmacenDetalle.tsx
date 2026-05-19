@@ -1,19 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Dropdown, Modal, DatePicker, Typography
 } from 'antd';
 import {
   ArrowLeftOutlined,
   PrinterOutlined,
   EditOutlined,
+  MoreOutlined,
+  CalendarOutlined,
 } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import type { EntradaAlmacenDTO, AsientoContableDTO } from '../../types/entradaAlmacen';
 
+const { Text } = Typography;
 const { TabPane } = Tabs;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
@@ -150,7 +154,37 @@ const EntradaAlmacenDetalle: React.FC = () => {
   const [data, setData] = useState<EntradaAlmacenDTO | null>(null);
   const [loading, setLoading] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [detalleSearch, setDetalleSearch] = useState('');
+  const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
+
+  const handleFechaVencimiento = (date: dayjs.Dayjs | null) => {
+    if (fechaVencimientoModal.detalleId) {
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          detalles: prev.detalles.map((d) => {
+            if (d.id !== fechaVencimientoModal.detalleId) return d;
+            return { ...d, fechaVencimiento: date ? date.format('YYYY-MM-DD') : undefined };
+          }),
+        };
+      });
+    }
+    setFechaVencimientoModal({ open: false, detalleId: 0 });
+  };
   const screens = Grid.useBreakpoint();
+
+  // ===== Detalles filtrados por búsqueda =====
+  const detallesFiltrados = detalleSearch
+    ? (data?.detalles || []).filter((d) => {
+        const q = detalleSearch.toLowerCase();
+        return (
+          (d.codigo || '').toLowerCase().includes(q) ||
+          (d.articulo || '').toLowerCase().includes(q) ||
+          (d.referencia || '').toLowerCase().includes(q)
+        );
+      })
+    : (data?.detalles || []);
 
   useEffect(() => {
     setActiveModule('FENP');
@@ -187,21 +221,130 @@ const EntradaAlmacenDetalle: React.FC = () => {
   const esCerrado = data.periodo === 6;
 
   const detalleColumns = [
-    { title: 'Codigo', dataIndex: 'codigo', key: 'codigo', width: 120 },
-    { title: 'Articulo', dataIndex: 'articulo', key: 'articulo', ellipsis: true,
-      render: (v: string) => toTitleCase(v) },
-    { title: 'Cant.', dataIndex: 'cantidad', key: 'cantidad', width: 100, align: 'right' as const,
-      render: (v: number) => formatNumber(v) },
-    { title: 'Costo', dataIndex: 'costo', key: 'costo', width: 120, align: 'right' as const,
-      render: (v: number) => formatNumber(v) },
-    { title: 'Subtotal', dataIndex: 'subTotal', key: 'subTotal', width: 130, align: 'right' as const,
-      render: (v: number) => formatNumber(v) },
-    { title: 'Desc.', dataIndex: 'descuento', key: 'descuento', width: 110, align: 'right' as const,
-      render: (v: number) => formatNumber(v) },
-    { title: 'Imp.', dataIndex: 'impuestos', key: 'impuestos', width: 110, align: 'right' as const,
-      render: (v: number) => formatNumber(v) },
-    { title: 'Total', dataIndex: 'total', key: 'total', width: 130, align: 'right' as const,
-      render: (v: number) => <strong>{formatNumber(v)}</strong> },
+    {
+      title: 'Artículo',
+      key: 'articulo',
+      ellipsis: true,
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13 }}>
+          <div>{toTitleCase(record.articulo || '')}</div>
+          <div style={{ fontSize: 11, color: '#595959', lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+            <span>
+              {record.codigo && <span>{record.codigo}</span>}
+              {record.codigo && record.referencia && <span>{' | '}</span>}
+              {record.referencia && <span>{record.referencia}</span>}
+            </span>
+            {record.fechaVencimiento && <span style={{ color: '#8c8c8c' }}>V: {record.fechaVencimiento}</span>}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Cantidad',
+      dataIndex: 'cantidad',
+      key: 'cantidad',
+      width: 100,
+      align: 'right' as const,
+      render: (_: any, record: any) => (
+        <div>
+          <div>{formatNumber(record.cantidad || 0)}</div>
+          {record.medida?.nombre && (
+            <div style={{ fontSize: 11, color: '#595959', lineHeight: 1.5, textAlign: 'left' }}>
+              {record.medida.nombre}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: 'Costo',
+      dataIndex: 'costo',
+      key: 'costo',
+      width: 110,
+      align: 'right' as const,
+      render: (_: any, record: any) => (
+        <div>
+          <div>{formatNumber(record.costo || 0)}</div>
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+        </div>
+      ),
+    },
+    {
+      title: 'Descuento',
+      key: 'descuento',
+      width: 120,
+      align: 'right' as const,
+      render: (_: any, record: any) => (
+        <div>
+          <div>{formatNumber(record.porcentajeDescuento || 0)}%</div>
+          <div style={{ fontSize: 12, color: '#595959', lineHeight: 1.5, marginTop: 2 }}>
+            {formatNumber(record.descuento || 0)}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'SubTotal',
+      dataIndex: 'subTotal',
+      key: 'subTotal',
+      width: 120,
+      align: 'right' as const,
+      render: (_: any, record: any) => (
+        <div>
+          <div>{formatNumber(record.subTotal || 0)}</div>
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+        </div>
+      ),
+    },
+    {
+      title: 'Impuestos',
+      key: 'impuestos',
+      width: 140,
+      align: 'right' as const,
+      render: (_: any, record: any) => (
+        <div>
+          <div>{formatNumber(record.impuestos || 0)}</div>
+          {record.impuesto?.nombre && (
+            <div style={{ fontSize: 12, color: '#595959', lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: 'Total',
+      dataIndex: 'total',
+      key: 'total',
+      width: 120,
+      align: 'right' as const,
+      render: (_: any, record: any) => (
+        <div>
+          <Text strong>{formatNumber(record.total || 0)}</Text>
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+        </div>
+      ),
+    },
+    {
+      title: '',
+      key: 'acciones',
+      width: 50,
+      render: (_: any, record: any) => {
+        const items: any[] = [];
+        if (record.tieneVencimiento) {
+          items.push({
+            key: 'vencimiento',
+            label: record.fechaVencimiento ? `Venc: ${record.fechaVencimiento}` : 'Fecha Vencimiento',
+            icon: <CalendarOutlined />,
+            onClick: () => setFechaVencimientoModal({ open: true, detalleId: record.id }),
+          });
+        }
+        if (items.length === 0) return null;
+        return (
+          <Dropdown menu={{ items }} trigger={['click']}>
+            <Button type="text" size="small" icon={<MoreOutlined />} />
+          </Dropdown>
+        );
+      },
+    },
   ];
 
   function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
@@ -309,8 +452,17 @@ const EntradaAlmacenDetalle: React.FC = () => {
             </Card>
 
             <Tabs defaultActiveKey="detalles" type="card">
-              <TabPane tab={`Detalles (${data.detalles?.length || 0})`} key="detalles">
-                <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+              <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                  <Input.Search
+                    placeholder="Buscar detalle..."
+                    allowClear
+                    style={{ maxWidth: 250 }}
+                    onSearch={(value) => setDetalleSearch(value)}
+                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                  />
+                </div>
+                <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
               </TabPane>
               <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
                 <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
@@ -367,8 +519,17 @@ const EntradaAlmacenDetalle: React.FC = () => {
           <SuplidorCard entidad={data.entidad} suplidor={data.suplidor} />
 
           <Tabs defaultActiveKey="detalles" type="card">
-            <TabPane tab={`Detalles (${data.detalles?.length || 0})`} key="detalles">
-              <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+            <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                <Input.Search
+                  placeholder="Buscar detalle..."
+                  allowClear
+                  style={{ maxWidth: 250 }}
+                  onSearch={(value) => setDetalleSearch(value)}
+                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                />
+              </div>
+              <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
             </TabPane>
             <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
               <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
@@ -392,7 +553,21 @@ const EntradaAlmacenDetalle: React.FC = () => {
         </div>
       )}
 
-
+      {/* Modal de Fecha de Vencimiento */}
+      <Modal
+        title="Fecha de Vencimiento"
+        open={fechaVencimientoModal.open}
+        onCancel={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
+        onOk={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
+        footer={null}
+        destroyOnHidden
+      >
+        <DatePicker
+          style={{ width: '100%' }}
+          format="YYYY-MM-DD"
+          onChange={handleFechaVencimiento}
+        />
+      </Modal>
     </div>
   );
 };

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown,
 } from 'antd';
 import {
   SaveOutlined,
@@ -16,7 +16,13 @@ import {
   RedoOutlined,
   ExclamationCircleOutlined,
   EditOutlined,
+  MoreOutlined,
+  CalendarOutlined,
+  HolderOutlined,
 } from '@ant-design/icons';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -24,6 +30,7 @@ import { Sucursal } from '../../types/auth';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
+import { productoApi } from '../../api/productoApi';
 import BuscarOrdenCompraModal from './BuscarOrdenCompraModal';
 import EntradaAlmacenGuide from './EntradaAlmacenGuide';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
@@ -209,31 +216,30 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({ open, onClose
 
 // ===== Componente SuplidorCard (readonly en right column) =====
 interface SuplidorCardProps {
-  entidad: { nombre: string; identificacion: string; telefono?: string; direccion?: string } | undefined;
-  suplidor: { nombre: string; telefono?: string; direccion?: string } | undefined;
+  suplidor: SuplidorDTO | null;
 }
 
-const SuplidorCard: React.FC<SuplidorCardProps> = ({ entidad, suplidor }) => (
+const SuplidorCard: React.FC<SuplidorCardProps> = ({ suplidor }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Suplidor</span>}
     className="paces-card"
     style={{ marginBottom: 16 }}
   >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
-      <div style={{ fontSize: 16, fontWeight: 700 }}>
-        {suplidor?.nombre ? toTitleCase(suplidor.nombre) : entidad?.nombre ? toTitleCase(entidad.nombre) : '-'}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ fontWeight: 600 }}>
+        {suplidor?.nombre ? toTitleCase(suplidor.nombre) : '-'}
       </div>
       <div>
         <span className="paces-text-secondary">RNC: </span>
-        <span>{entidad?.identificacion || '-'}</span>
+        <span>{suplidor?.identificacion || '-'}</span>
       </div>
       <div>
         <span className="paces-text-secondary">Teléfono: </span>
-        <span>{entidad?.telefono || suplidor?.telefono || '-'}</span>
+        <span>{suplidor?.telefono || '-'}</span>
       </div>
       <div>
         <span className="paces-text-secondary">Dirección: </span>
-        <span>{entidad?.direccion ? toTitleCase(entidad.direccion) : suplidor?.direccion ? toTitleCase(suplidor.direccion) : '-'}</span>
+        <span>{suplidor?.direccion ? toTitleCase(suplidor.direccion) : '-'}</span>
       </div>
     </div>
   </Card>
@@ -247,30 +253,31 @@ interface TotalesCardProps {
   total: number;
   alignRight: boolean;
   monedaSimbolo?: string;
+  monedaNombre?: string;
   tasa?: number;
 }
 
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, alignRight, monedaSimbolo, tasa }) => (
+const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
     className="paces-card"
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
       {monedaSimbolo && tasa !== undefined && (
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
+        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
           {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{monedaSimbolo} {formatNumber(tasa)}</span>
+          <span>{monedaNombre || 'Peso Dominicano'} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
         </div>
       )}
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
+      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
         {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
         <span>{formatNumber(subTotal)}</span>
       </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
+      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
         {!alignRight && <span className="paces-text-secondary">Descuento</span>}
         <span>{formatNumber(descuento)}</span>
       </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
+      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
         {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
         <span>{formatNumber(impuestos)}</span>
       </div>
@@ -284,6 +291,21 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
     </div>
   </Card>
 );
+
+// ===== Componente SortableRow para drag-and-drop =====
+const SortableRow: React.FC<any> = ({ record, children, ...rest }) => {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: record.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    cursor: 'move',
+  };
+  return (
+    <tr ref={setNodeRef} style={style} {...attributes} {...listeners} {...rest}>
+      {children}
+    </tr>
+  );
+};
 
 // ===== Componente principal =====
 const EntradaAlmacenFormulario: React.FC = () => {
@@ -312,6 +334,26 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const [ordenCompraModalOpen, setOrdenCompraModalOpen] = useState(false);
   const [selectedOC, setSelectedOC] = useState<OrdenCompraVistaDTO | null>(null);
   const [ordenCompraNoDoc, setOrdenCompraNoDoc] = useState('');
+  const [conceptoInfo, setConceptoInfo] = useState<string>('');
+  const [agregarFilaBloqueado, setAgregarFilaBloqueado] = useState(false);
+  const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
+  const [detalleSearch, setDetalleSearch] = useState('');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
+
+  // ===== Detalles filtrados por búsqueda =====
+  const detallesFiltrados = detalleSearch
+    ? detalles.filter((d) => {
+        const q = detalleSearch.toLowerCase();
+        return (
+          (d.codigo || '').toLowerCase().includes(q) ||
+          (d.articulo || '').toLowerCase().includes(q) ||
+          (d.referencia || '').toLowerCase().includes(q)
+        );
+      })
+    : detalles;
 
   // ===== Estado para campos rápidos (NCF, Referencia, Tasa) =====
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -448,6 +490,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       okButtonProps: { danger: true },
       onOk: () => {
         setEditingField(null);
+        setAgregarFilaBloqueado(false);
         if (mode === 'crear') {
           navigate('/FENP');
         } else {
@@ -681,17 +724,45 @@ suplidor: res.suplidor?.codigo || '',
       .then((ents) => setEntidadesCache(ents))
       .catch(() => {});
 
-    // Si el concepto sugiere un almacén por defecto, seleccionarlo
-    if (almacenesCache.length > 0) {
-      setSelectedAlmacen(almacenesCache[0]);
-      form.setFieldsValue({ almacen: almacenesCache[0].codigo });
+    // === ValidarImpuestosProducto ===
+    // Mostrar avisos si el concepto tiene flags especiales
+    const infoParts: string[] = [];
+    if (concepto.noImpuesto) infoParts.push(' * No Impuestos * ');
+    if (concepto.noAsientos) infoParts.push(' * No Asientos * ');
+    if (concepto.activo === false) infoParts.push(' * Concepto Inactivo * ');
+    if (concepto.noActualizaCostos) infoParts.push(' * No Actualiza Costos * ');
+    setConceptoInfo(infoParts.join(''));
+
+    // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
+    if (concepto.noImpuesto && detalles.some((d) => (d.porcentajeImpuesto || 0) > 0)) {
+      message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+      setDetalles((prev) =>
+        prev.map((d) => ({
+          ...d,
+          porcentajeImpuesto: 0,
+          impuestos: 0,
+        }))
+      );
     }
 
-    // Setear moneda y tasa por defecto
+    // === ConfigurarMoneda ===
+    // Usar la moneda del concepto si viene, sino default a Peso Dominicano
+    const monedaNombre = concepto.moneda?.nombre || 'Peso Dominicano';
+    const tasaDefault = concepto.moneda?.codigo === 'DOP' || !concepto.moneda ? 1 : (concepto.moneda?.codigo ? undefined : 1);
     form.setFieldsValue({
-      moneda: 'Peso Dominicano',
-      tasa: 1,
+      moneda: monedaNombre,
+      tasa: tasaDefault ?? 1,
     });
+
+    // === ConfigurarAlmacenDefecto ===
+    // No asignar automáticamente: la guía mostrará el paso de Almacén
+    // para que el usuario lo seleccione manualmente.
+
+    // Habilitar Orden de Compra
+    // (tOrdenCompra.Enabled = true en desktop — en React ya está habilitado por defecto)
+
+    // Mostrar guía
+    // (MostrarGuia ya se maneja con el componente EntradaAlmacenGuide)
   };
 
   const handleConceptoSearchClick = () => {
@@ -752,40 +823,68 @@ suplidor: res.suplidor?.codigo || '',
           })
           .map((d, idx) => ({
             id: -(idx + 1),
+            idExterno: d.idExterno || d.id,
+            idTransaccionExterna: d.idTransaccionExterna || orden.id,
             codigo: d.codigo,
             articulo: d.articulo,
             referencia: d.referencia || '',
             cantidad: (d.cantidad + (d.cantidadBonificable || 0)) - (d.cantidadRecibida || 0),
             costo: d.costo || 0,
-            precio: d.costo || 0,
+            precio: d.precio || d.costo || 0,
             subTotal: 0,
             descuento: 0,
             porcentajeDescuento: d.porcentajeDescuento || 0,
             impuestos: 0,
-            porcentajeImpuesto: 0,
+            porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
             total: 0,
-            tipoArticulo: 'Producto',
+            tipoArticulo: d.tipoArticulo || 'Producto',
+            nota: d.nota || '',
             flete: 0,
             costoActual: 0,
             ajustado: false,
             cantidadBonificable: d.cantidadBonificable || 0,
+            tieneVencimiento: d.tieneVencimiento || false,
+            familia: d.familia || undefined,
+            medida: d.medida || undefined,
+            impuesto: d.impuesto || undefined,
           }));
         setDetalles(nuevosDetalles.map((d) => calcularFila(d)));
+
+        if (nuevosDetalles.length === 0) {
+          message.warning('Esta orden de compra no tiene productos pendientes.');
+        }
+
+        // Verificar productos con vencimiento
+        try {
+          const codigos = nuevosDetalles.map((d) => d.codigo);
+          const codigosVencimiento = await productoApi.obtenerProductosVencimiento(Sucursal.Compra, codigos);
+          setDetalles((prev) =>
+            prev.map((d) => ({
+              ...d,
+              tieneVencimiento: codigosVencimiento.includes(d.codigo) ? true : d.tieneVencimiento,
+            }))
+          );
+        } catch {
+          // Si falla la consulta de vencimiento, no bloquear el flujo
+        }
       } catch (err: any) {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar detalles de la orden de compra';
         message.error(msg);
       }
     }
 
-    // 4. Asignar suplidor desde la OC
-    const suplidorInfo: SuplidorDTO = {
-      nombre: orden.suplidor.nombre,
-      codigo: orden.suplidor.codigo,
-      identificacion: '',
-      telefono: orden.suplidor.telefono,
-    };
-    setSelectedEntidad(suplidorInfo);
-    form.setFieldsValue({ suplidor: orden.suplidor.codigo });
+    // 4. Asignar suplidor desde la OC solo si no hay uno seleccionado
+    if (!selectedEntidad) {
+      const suplidorInfo: SuplidorDTO = {
+        nombre: orden.suplidor.nombre,
+        codigo: orden.suplidor.codigo,
+        identificacion: '',
+        telefono: orden.suplidor.telefono,
+      };
+      setSelectedEntidad(suplidorInfo);
+      form.setFieldsValue({ suplidor: orden.suplidor.codigo });
+    }
+    setAgregarFilaBloqueado(false);
 
     // 5. Asignar referencia de OC
     setOrdenCompraNoDoc(orden.noDocumento);
@@ -816,6 +915,32 @@ suplidor: res.suplidor?.codigo || '',
         return calcularFila(updated);
       })
     );
+  };
+
+  const handleFechaVencimiento = (date: dayjs.Dayjs | null) => {
+    if (fechaVencimientoModal.detalleId) {
+      setDetalles((prev) =>
+        prev.map((d) => {
+          if (d.id !== fechaVencimientoModal.detalleId) return d;
+          return { ...d, fechaVencimiento: date ? date.format('YYYY-MM-DD') : undefined };
+        })
+      );
+    }
+    setFechaVencimientoModal({ open: false, detalleId: 0 });
+  };
+
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setDetalles((prev) => {
+      const oldIndex = prev.findIndex((d) => d.id === active.id);
+      const newIndex = prev.findIndex((d) => d.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      const updated = [...prev];
+      const [moved] = updated.splice(oldIndex, 1);
+      updated.splice(newIndex, 0, moved);
+      return updated;
+    });
   };
 
   // ===== Totales calculados =====
@@ -915,18 +1040,27 @@ suplidor: res.suplidor?.codigo || '',
   // ===== Grid de detalles editable (responsive) =====
   const detalleColumns = [
     {
+      title: '',
+      key: 'sort',
+      width: 40,
+      render: () => <HolderOutlined style={{ cursor: 'grab', color: '#999' }} />,
+    },
+    {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
       shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) =>
-        record.articulo !== prevRecord.articulo || record.codigo !== prevRecord.codigo || record.referencia !== prevRecord.referencia,
+        record.articulo !== prevRecord.articulo || record.codigo !== prevRecord.codigo || record.referencia !== prevRecord.referencia || record.medida?.nombre !== prevRecord.medida?.nombre || record.fechaVencimiento !== prevRecord.fechaVencimiento,
       render: (_: any, record: DetalleEntradaAlmacenDTO) => (
-        <div>
+        <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
-          <div style={{ fontSize: 12, color: '#595959', lineHeight: 1.5 }}>
-            {record.codigo && <span>{record.codigo}</span>}
-            {record.codigo && record.referencia && <span>{' | '}</span>}
-            {record.referencia && <span>{record.referencia}</span>}
+          <div style={{ fontSize: 11, color: '#595959', lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+            <span>
+              {record.codigo && <span>{record.codigo}</span>}
+              {record.codigo && record.referencia && <span>{' | '}</span>}
+              {record.referencia && <span>{record.referencia}</span>}
+            </span>
+            {record.fechaVencimiento && <span style={{ color: '#8c8c8c' }}>V: {record.fechaVencimiento}</span>}
           </div>
         </div>
       ),
@@ -937,17 +1071,25 @@ suplidor: res.suplidor?.codigo || '',
       key: 'cantidad',
       width: 100,
       align: 'right' as const,
-      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) => record.cantidad !== prevRecord.cantidad,
+      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) =>
+        record.cantidad !== prevRecord.cantidad || record.medida?.nombre !== prevRecord.medida?.nombre,
       render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
-        <InputNumber
-          size="small"
-          style={{ width: '100%' }}
-          min={0}
-          step={0.01}
-          precision={2}
-          value={detalles[idx]?.cantidad}
-          onChange={(val) => handleDetalleChange(detalles[idx].id, 'cantidad', val || 0)}
-        />
+        <div>
+          <InputNumber
+            size="small"
+            style={{ width: '100%' }}
+            min={0}
+            step={0.01}
+            precision={2}
+            value={detalles[idx]?.cantidad}
+            onChange={(val) => handleDetalleChange(detalles[idx].id, 'cantidad', val || 0)}
+          />
+          {detalles[idx]?.medida?.nombre && (
+            <div style={{ fontSize: 11, color: '#595959', lineHeight: 1.5, textAlign: 'left' }}>
+              {detalles[idx].medida.nombre}
+            </div>
+          )}
+        </div>
       ),
     },
     {
@@ -959,45 +1101,44 @@ suplidor: res.suplidor?.codigo || '',
       responsive: ['sm' as const, 'md' as const, 'lg' as const],
       shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) => record.costo !== prevRecord.costo,
       render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
-        <InputNumber
-          size="small"
-          style={{ width: '100%' }}
-          min={0}
-          step={0.01}
-          precision={2}
-          value={detalles[idx]?.costo}
-          onChange={(val) => handleDetalleChange(detalles[idx].id, 'costo', val || 0)}
-        />
-      ),
-    },
-    {
-      title: '% Desc.',
-      dataIndex: 'porcentajeDescuento',
-      key: 'porcentajeDescuento',
-      width: 90,
-      align: 'right' as const,
-      responsive: ['lg' as const],
-      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) => record.porcentajeDescuento !== prevRecord.porcentajeDescuento,
-      render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
-        <InputNumber
-          size="small"
-          style={{ width: '100%' }}
-          min={0}
-          max={100}
-          step={0.01}
-          precision={2}
-          value={detalles[idx]?.porcentajeDescuento}
-          onChange={(val) => handleDetalleChange(detalles[idx].id, 'porcentajeDescuento', val || 0)}
-        />
+        <div>
+          <InputNumber
+            size="small"
+            style={{ width: '100%' }}
+            min={0}
+            step={0.01}
+            precision={2}
+            value={detalles[idx]?.costo}
+            onChange={(val) => handleDetalleChange(detalles[idx].id, 'costo', val || 0)}
+          />
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+        </div>
       ),
     },
     {
       title: 'Descuento',
       key: 'descuento',
-      width: 110,
+      width: 120,
       align: 'right' as const,
-      render: (_: any, record: DetalleEntradaAlmacenDTO) => (
-        <Text>{formatNumber(record.descuento || 0)}</Text>
+      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) =>
+        record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.descuento !== prevRecord.descuento,
+      render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
+        <div>
+          <InputNumber
+            size="small"
+            style={{ width: '100%' }}
+            min={0}
+            max={100}
+            step={0.01}
+            precision={2}
+            value={detalles[idx]?.porcentajeDescuento}
+            onChange={(val) => handleDetalleChange(detalles[idx].id, 'porcentajeDescuento', val || 0)}
+            addonAfter="%"
+          />
+          <div style={{ fontSize: 12, color: '#595959', lineHeight: 1.5, marginTop: 2 }}>
+            {formatNumber(detalles[idx]?.descuento || 0)}
+          </div>
+        </div>
       ),
     },
     {
@@ -1007,15 +1148,25 @@ suplidor: res.suplidor?.codigo || '',
       width: 120,
       align: 'right' as const,
       responsive: ['md' as const, 'lg' as const],
-      render: (v: number) => <Text>{formatNumber(v || 0)}</Text>,
+      render: (_: any, record: DetalleEntradaAlmacenDTO) => (
+        <div>
+          <Text>{formatNumber(record.subTotal || 0)}</Text>
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+        </div>
+      ),
     },
     {
       title: 'Impuestos',
       key: 'impuestos',
-      width: 110,
+      width: 140,
       align: 'right' as const,
       render: (_: any, record: DetalleEntradaAlmacenDTO) => (
-        <Text>{formatNumber(record.impuestos || 0)}</Text>
+        <div>
+          <div>{formatNumber(record.impuestos || 0)}</div>
+          {record.impuesto?.nombre && (
+            <div style={{ fontSize: 12, color: '#595959', lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
+          )}
+        </div>
       ),
     },
     {
@@ -1024,21 +1175,43 @@ suplidor: res.suplidor?.codigo || '',
       key: 'total',
       width: 120,
       align: 'right' as const,
-      render: (v: number) => <Text strong>{formatNumber(v || 0)}</Text>,
+      render: (_: any, record: DetalleEntradaAlmacenDTO) => (
+        <div>
+          <Text strong>{formatNumber(record.total || 0)}</Text>
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+        </div>
+      ),
     },
     {
       title: '',
       key: 'acciones',
-      width: 60,
-      render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
-        <Button
-          type="text"
-          danger
-          size="small"
-          icon={<DeleteOutlined />}
-          onClick={() => handleEliminarFila(detalles[idx].id)}
-        />
-      ),
+      width: 50,
+      render: (_: any, record: DetalleEntradaAlmacenDTO, idx: number) => {
+        const items = [
+          {
+            key: 'eliminar',
+            label: 'Eliminar',
+            icon: <DeleteOutlined />,
+            danger: true,
+            onClick: () => handleEliminarFila(detalles[idx].id),
+          },
+        ];
+
+        if (record.tieneVencimiento) {
+          items.unshift({
+            key: 'vencimiento',
+            label: record.fechaVencimiento ? `Venc: ${record.fechaVencimiento}` : 'Fecha Vencimiento',
+            icon: <CalendarOutlined />,
+            onClick: () => setFechaVencimientoModal({ open: true, detalleId: detalles[idx].id }),
+          });
+        }
+
+        return (
+          <Dropdown menu={{ items }} trigger={['click']}>
+            <Button type="text" size="small" icon={<MoreOutlined />} />
+          </Dropdown>
+        );
+      },
     },
   ];
 
@@ -1078,6 +1251,12 @@ suplidor: res.suplidor?.codigo || '',
             <Form.Item name="conceptoNombre" hidden><Input /></Form.Item>
           </Col>
 
+          {conceptoInfo && (
+            <Col xs={24}>
+              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
+            </Col>
+          )}
+
           {/* Fila 2: FechaDocumento + Suplidor */}
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
@@ -1095,7 +1274,37 @@ suplidor: res.suplidor?.codigo || '',
                   optionFilterProp="children"
                   onChange={(val) => {
                     const ent = entidadesCache.find((e) => e.codigo === val);
-                    setSelectedEntidad(ent || null);
+
+                    // Si el suplidor requiere OC y hay detalles, preguntar si borrar
+                    if (ent?.requiereORC && detalles.length > 0) {
+                      Modal.confirm({
+                        title: 'Cambiar Suplidor',
+                        icon: <ExclamationCircleOutlined />,
+                        content: `El suplidor ${ent.nombre} requiere Orden de Compra, se borrarán los productos agregados. ¿Está seguro que desea hacerlo?`,
+                        okText: 'Sí',
+                        cancelText: 'No',
+                        onOk: () => {
+                          setDetalles([]);
+                          setSelectedEntidad(ent);
+                          setSelectedOC(null);
+                          setOrdenCompraNoDoc('');
+                          form.setFieldsValue({ ordenCompra: '' });
+                          setAgregarFilaBloqueado(true);
+                        },
+                        onCancel: () => {
+                          // Revertir la selección del suplidor
+                          form.setFieldsValue({ suplidor: selectedEntidad?.codigo || undefined });
+                        },
+                      });
+                    } else {
+                      setSelectedEntidad(ent || null);
+                      // Limpiar OC al cambiar de suplidor
+                      setSelectedOC(null);
+                      setOrdenCompraNoDoc('');
+                      form.setFieldsValue({ ordenCompra: '' });
+                      // Si requiere ORC, bloquear agregar fila; si no, desbloquear
+                      setAgregarFilaBloqueado(ent?.requiereORC === true);
+                    }
                   }}
                 >
                   {entidadesCache.map((ent) => (
@@ -1165,11 +1374,11 @@ suplidor: res.suplidor?.codigo || '',
                       }}
                     />
                   ) : ncfValue ? (
-                    <Tag style={{ cursor: 'pointer', fontSize: 13 }} onClick={() => openFieldEditor('ncf')}>
+                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
                       NCF: {ncfValue} <EditOutlined />
                     </Tag>
                   ) : (
-                    <Tag style={{ cursor: 'pointer', fontSize: 13 }} onClick={() => openFieldEditor('ncf')}>
+                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
                       <PlusOutlined /> NCF
                     </Tag>
                   )}
@@ -1196,11 +1405,11 @@ suplidor: res.suplidor?.codigo || '',
                     }}
                   />
                 ) : refValue ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 13 }} onClick={() => openFieldEditor('referencia')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
                     Ref: {refValue} <EditOutlined />
                   </Tag>
                 ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 13 }} onClick={() => openFieldEditor('referencia')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
                     <PlusOutlined /> Referencia
                   </Tag>
                 )}
@@ -1228,11 +1437,11 @@ suplidor: res.suplidor?.codigo || '',
                     }}
                   />
                 ) : tasaValue !== 1 ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 13 }} onClick={() => openFieldEditor('tasa')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
                     Tasa: {tasaValue} <EditOutlined />
                   </Tag>
                 ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 13 }} onClick={() => openFieldEditor('tasa')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
                     <PlusOutlined /> Tasa
                   </Tag>
                 )}
@@ -1289,26 +1498,39 @@ suplidor: res.suplidor?.codigo || '',
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detalles.length})`,
+                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                   children: (
                     <>
-                      <div style={{ marginBottom: 8 }} ref={agregarFilaRef}>
+                      <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
                         <Button
                           type="dashed"
                           icon={<PlusOutlined />}
                           onClick={handleAgregarFila}
+                          disabled={agregarFilaBloqueado}
                         >
                           Agregar fila
                         </Button>
+                        <Input.Search
+                          placeholder="Buscar detalle..."
+                          allowClear
+                          style={{ maxWidth: 250 }}
+                          onSearch={(value) => setDetalleSearch(value)}
+                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                        />
                       </div>
-                      <Table
-                        dataSource={detalles}
-                        columns={detalleColumns}
-                        rowKey="id"
-                        size="small"
-                        pagination={false}
-                        scroll={{ x: 1300 }}
-                      />
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                        <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
+                        <Table
+                          dataSource={detallesFiltrados}
+                          columns={detalleColumns}
+                          rowKey="id"
+                          size="small"
+                          pagination={false}
+                          scroll={{ x: 1300 }}
+                          components={{ body: { row: SortableRow } }}
+                        />
+                        </SortableContext>
+                      </DndContext>
                     </>
                   ),
                 },
@@ -1355,8 +1577,7 @@ suplidor: res.suplidor?.codigo || '',
 
           <Col lg={6}>
             <SuplidorCard
-              entidad={selectedEntidad ?? undefined}
-              suplidor={data?.suplidor ?? selectedEntidad ?? undefined}
+              suplidor={selectedEntidad ?? data?.suplidor ?? null}
             />
             <TotalesCard
               subTotal={totales.subTotal}
@@ -1365,6 +1586,7 @@ suplidor: res.suplidor?.codigo || '',
               total={totales.total}
               alignRight={false}
               monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
+              monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
               tasa={form.getFieldValue('tasa') ?? data?.tasa ?? 1}
             />
           </Col>
@@ -1381,26 +1603,39 @@ suplidor: res.suplidor?.codigo || '',
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${detalles.length})`,
+                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                 children: (
                   <>
-                    <div style={{ marginBottom: 8 }} ref={agregarFilaRef}>
+                    <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
                       <Button
                         type="dashed"
                         icon={<PlusOutlined />}
                         onClick={handleAgregarFila}
+                        disabled={agregarFilaBloqueado}
                       >
                         Agregar fila
                       </Button>
+                      <Input.Search
+                        placeholder="Buscar detalle..."
+                        allowClear
+                        style={{ maxWidth: 250 }}
+                        onSearch={(value) => setDetalleSearch(value)}
+                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                      />
                     </div>
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                      <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                     <Table
-                      dataSource={detalles}
+                      dataSource={detallesFiltrados}
                       columns={detalleColumns}
                       rowKey="id"
                       size="small"
                       pagination={false}
                       scroll={{ x: 1300 }}
+                      components={{ body: { row: SortableRow } }}
                     />
+                    </SortableContext>
+                    </DndContext>
                   </>
                 ),
               },
@@ -1445,8 +1680,7 @@ suplidor: res.suplidor?.codigo || '',
           />
 
           <SuplidorCard
-            entidad={selectedEntidad ?? undefined}
-            suplidor={data?.suplidor ?? selectedEntidad ?? undefined}
+            suplidor={selectedEntidad ?? data?.suplidor ?? null}
           />
 
           <TotalesCard
@@ -1456,6 +1690,7 @@ suplidor: res.suplidor?.codigo || '',
             total={totales.total}
             alignRight={true}
             monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
+            monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
             tasa={form.getFieldValue('tasa') ?? data?.tasa ?? 1}
           />
         </div>
@@ -1477,6 +1712,22 @@ suplidor: res.suplidor?.codigo || '',
           agregarFilaRef={agregarFilaRef}
         />
       )}
+
+      {/* Modal de Fecha de Vencimiento */}
+      <Modal
+        title="Fecha de Vencimiento"
+        open={fechaVencimientoModal.open}
+        onCancel={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
+        onOk={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
+        footer={null}
+        destroyOnHidden
+      >
+        <DatePicker
+          style={{ width: '100%' }}
+          format="YYYY-MM-DD"
+          onChange={handleFechaVencimiento}
+        />
+      </Modal>
     </div>
   );
 };
