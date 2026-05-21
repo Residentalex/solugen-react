@@ -8,13 +8,10 @@ import {
   SaveOutlined,
   CloseOutlined,
 
-  CheckCircleOutlined,
-  CloseCircleOutlined,
   DeleteOutlined,
   PlusOutlined,
   SearchOutlined,
   ClearOutlined,
-  RedoOutlined,
   ExclamationCircleOutlined,
   EditOutlined,
   MoreOutlined,
@@ -40,7 +37,7 @@ import '../../components/FloatingLabel/FloatingField.css';
 import type {
   EntradaAlmacenDTO, DetalleEntradaAlmacenDTO, AsientoContableDTO,
   ConceptoDTO, EntidadDTO, AlmacenDTO, SuplidorDTO,
-  OrdenCompraVistaDTO,
+  OrdenCompraVistaDTO, DetalleOrdenCompraVistaDTO,
 } from '../../types/entradaAlmacen';
 
 const { Text } = Typography;
@@ -106,14 +103,64 @@ function formatDateParam(d: Date): string {
   return `${y}${m}${day}${hh}${mm}${ss}`;
 }
 
+/** Formato ISO 8601 para JSON body (System.Text.Json en ASP.NET Core). */
+function toISOFormat(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${y}-${m}-${day}T${hh}:${mm}:${ss}`;
+}
+
+// ===== Helper para extraer mensaje de error de la respuesta del backend =====
+function extraerMensajeError(err: any, fallback: string): string {
+  const data = err?.response?.data;
+  if (!data) return fallback;
+
+  // Formato ApiResponse<T> (el estandar)
+  if (data.errorMessage) return data.errorMessage;
+
+  // Formato ValidationProblemDetails de ASP.NET Core
+  if (data.errors && typeof data.errors === 'object') {
+    const mensajes: string[] = [];
+    for (const key of Object.keys(data.errors)) {
+      const val = data.errors[key];
+      if (Array.isArray(val)) {
+        mensajes.push(...val);
+      } else if (typeof val === 'string') {
+        mensajes.push(val);
+      }
+    }
+    if (mensajes.length > 0) return mensajes.join('; ');
+  }
+
+  return fallback;
+}
+
 // ===== Cálculo de fila =====
 function calcularFila(fila: DetalleEntradaAlmacenDTO): DetalleEntradaAlmacenDTO {
   const cantidad = fila.cantidad || 0;
   const costo = fila.costo || 0;
   const pctDesc = fila.porcentajeDescuento || 0;
   const pctImp = fila.porcentajeImpuesto || 0;
+  const cantBonif = fila.cantidadBonificable || 0;
+  const ajustado = fila.ajustado || false;
 
-  const subTotal = Math.round(cantidad * costo * 100) / 100;
+  // Si hay bonificable y no se ha ajustado, recalcular costo efectivo
+  let costoEfectivo = costo;
+  let cantidadEfectiva = cantidad;
+  let nuevoAjustado = ajustado;
+
+  if (cantBonif > 0 && !ajustado) {
+    const subTotalOriginal = Math.round(cantidad * costo * 100) / 100;
+    cantidadEfectiva = cantidad + cantBonif;
+    costoEfectivo = subTotalOriginal / cantidadEfectiva;
+    nuevoAjustado = true;
+  }
+
+  const subTotal = Math.round(cantidadEfectiva * costoEfectivo * 100) / 100;
   const descuento = Math.round(subTotal * (pctDesc / 100) * 100) / 100;
   const baseImponible = subTotal - descuento;
   const impuestos = Math.round(baseImponible * (pctImp / 100) * 100) / 100;
@@ -121,10 +168,13 @@ function calcularFila(fila: DetalleEntradaAlmacenDTO): DetalleEntradaAlmacenDTO 
 
   return {
     ...fila,
+    cantidad: cantidadEfectiva,
+    costo: costoEfectivo,
     subTotal,
     descuento,
     impuestos,
     total,
+    ajustado: nuevoAjustado,
   };
 }
 
@@ -294,6 +344,9 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
   </Card>
 );
 
+// ===== Contexto para pasar listeners de drag al handle =====
+const DragListenersContext = React.createContext<any>(null);
+
 // ===== Componente SortableRow para drag-and-drop =====
 const SortableRow: React.FC<any> = ({ children, ...rest }) => {
   // Ant Design Table NO pasa record como prop en esta versión.
@@ -309,12 +362,26 @@ const SortableRow: React.FC<any> = ({ children, ...rest }) => {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    cursor: 'move',
   };
   return (
-    <tr ref={setNodeRef} style={style} {...attributes} {...listeners} {...rest}>
-      {children}
-    </tr>
+    <DragListenersContext.Provider value={listeners}>
+      <tr ref={setNodeRef} style={style} {...attributes} {...rest}>
+        {children}
+      </tr>
+    </DragListenersContext.Provider>
+  );
+};
+
+// ===== Componente DragHandle que inicia el arrastre solo desde el icono =====
+const DragHandle: React.FC = () => {
+  const listeners = React.useContext(DragListenersContext);
+  return (
+    <div
+      {...(listeners ?? {})}
+      style={{ cursor: 'grab', touchAction: 'none', userSelect: 'none', display: 'inline-flex' }}
+    >
+      <HolderOutlined style={{ color: '#999' }} />
+    </div>
   );
 };
 
@@ -344,6 +411,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const [selectedAlmacen, setSelectedAlmacen] = useState<AlmacenDTO | null>(null);
   const [ordenCompraModalOpen, setOrdenCompraModalOpen] = useState(false);
   const [selectedOC, setSelectedOC] = useState<OrdenCompraVistaDTO | null>(null);
+  const [ocDetallesData, setOcDetallesData] = useState<DetalleOrdenCompraVistaDTO[]>([]);
   const [ordenCompraNoDoc, setOrdenCompraNoDoc] = useState('');
   const [conceptoInfo, setConceptoInfo] = useState<string>('');
   const [agregarFilaBloqueado, setAgregarFilaBloqueado] = useState(false);
@@ -462,8 +530,14 @@ const EntradaAlmacenFormulario: React.FC = () => {
         setDetalles(res.detalles || []);
         setSelectedConcepto(res.concepto || null);
         setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
-        setSelectedEntidad(res.entidad || null);
-        setSelectedAlmacen(res.almacen || null);
+		// === DEFENSIVE: asegurar RNC desde entidad si suplidor no lo tiene ===
+		const suplidorFinal = res.suplidor
+		  ? { ...res.suplidor, identificacion: res.suplidor.identificacion || res.entidad?.identificacion || '' }
+		  : res.entidad || null;
+		setSelectedEntidad(suplidorFinal);
+		setSelectedAlmacen(res.almacen || null);
+		setSelectedOC(res.ordenCompra?.id ? { id: res.ordenCompra.id, noDocumento: res.ordenCompra.noDocumento } as any : null);
+		setOrdenCompraNoDoc(res.ordenCompra?.noDocumento || '');
 
         // Poblar formulario
         const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
@@ -471,9 +545,14 @@ const EntradaAlmacenFormulario: React.FC = () => {
         form.setFieldsValue({
           conceptoNombre: res.concepto?.nombre || '',
           concepto: res.concepto?.codigo || '',
-          suplidor: res.entidad?.codigo || '',
+			suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
           almacen: res.almacen?.codigo || '',
           fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          fechaRecibo: res.fechaEntrega
+            ? dayjs(parseDateRaw(res.fechaEntrega))
+            : res.fechaDocumento
+              ? dayjs(parseDateRaw(res.fechaDocumento))
+              : null,
           ncf: res.ncf || '',
           referencia: res.referencia || '',
           ordenCompra: res.ordenCompra?.noDocumento || '',
@@ -520,7 +599,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 setDetalles(res.detalles || []);
                 setSelectedConcepto(res.concepto || null);
                 setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
-setSelectedEntidad(res.suplidor || null);
+                // === DEFENSIVE: asegurar RNC desde entidad si suplidor no lo tiene ===
+                const suplidorFinal = res.suplidor
+                  ? { ...res.suplidor, identificacion: res.suplidor.identificacion || res.entidad?.identificacion || '' }
+                  : res.entidad || null;
+                setSelectedEntidad(suplidorFinal);
                 setSelectedAlmacen(res.almacen || null);
                 setSelectedOC(res.ordenCompra?.id ? { id: res.ordenCompra.id, noDocumento: res.ordenCompra.noDocumento } as any : null);
                 setOrdenCompraNoDoc(res.ordenCompra?.noDocumento || '');
@@ -530,10 +613,14 @@ setSelectedEntidad(res.suplidor || null);
                 form.setFieldsValue({
                   conceptoNombre: res.concepto?.nombre || '',
                   concepto: res.concepto?.codigo || '',
-suplidor: res.suplidor?.codigo || '',
+ suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
                   almacen: res.almacen?.codigo || '',
                   fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-                  fechaRecibo: null,
+                  fechaRecibo: res.fechaEntrega
+                    ? dayjs(parseDateRaw(res.fechaEntrega))
+                    : res.fechaDocumento
+                      ? dayjs(parseDateRaw(res.fechaDocumento))
+                      : null,
                   ncf: res.ncf || '',
                   referencia: res.referencia || '',
                   ordenCompra: res.ordenCompra?.noDocumento || '',
@@ -580,9 +667,9 @@ suplidor: res.suplidor?.codigo || '',
 
     const fechaDoc = values.fechaDocumento
       ? (typeof values.fechaDocumento === 'object' && values.fechaDocumento.toDate
-        ? formatDateParam(values.fechaDocumento.toDate())
+        ? toISOFormat(values.fechaDocumento.toDate())
         : values.fechaDocumento)
-      : formatDateParam(new Date());
+      : toISOFormat(new Date());
 
     const totalSub = detalles.reduce((s, d) => s + (d.subTotal || 0), 0);
     const totalDesc = detalles.reduce((s, d) => s + (d.descuento || 0), 0);
@@ -592,6 +679,11 @@ suplidor: res.suplidor?.codigo || '',
     return {
       id: base.id || 0,
       fechaDocumento: fechaDoc,
+      fechaEntrega: values.fechaRecibo
+        ? (typeof values.fechaRecibo === 'object' && values.fechaRecibo.toDate
+            ? toISOFormat(values.fechaRecibo.toDate())
+            : values.fechaRecibo)
+        : null,
       tipoDocumento: base.tipoDocumento || 1,
       noDocumento: base.noDocumento || '',
       estado: base.estado || 0,
@@ -645,7 +737,7 @@ suplidor: res.suplidor?.codigo || '',
         navigate(`/FENP/${id}`);
       }
     } catch (err: any) {
-      const msg = err?.response?.data?.errorMessage || 'Error al guardar';
+      const msg = extraerMensajeError(err, 'Error al guardar');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -661,7 +753,7 @@ suplidor: res.suplidor?.codigo || '',
       message.success('Documento aplicado exitosamente');
       navigate(`/FENP/${id}`);
     } catch (err: any) {
-      const msg = err?.response?.data?.errorMessage || 'Error al aplicar';
+      const msg = extraerMensajeError(err, 'Error al aplicar');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -677,7 +769,7 @@ suplidor: res.suplidor?.codigo || '',
       message.success('Documento anulado exitosamente');
       navigate(`/FENP/${id}`);
     } catch (err: any) {
-      const msg = err?.response?.data?.errorMessage || 'Error al anular';
+      const msg = extraerMensajeError(err, 'Error al anular');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -693,7 +785,7 @@ suplidor: res.suplidor?.codigo || '',
       message.success('Documento posteado exitosamente');
       navigate(`/FENP/${id}`);
     } catch (err: any) {
-      const msg = err?.response?.data?.errorMessage || 'Error al postear';
+      const msg = extraerMensajeError(err, 'Error al postear');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -708,7 +800,7 @@ suplidor: res.suplidor?.codigo || '',
       message.success('Documento marcado como revisado');
       navigate(`/FENP/${id}`);
     } catch (err: any) {
-      const msg = err?.response?.data?.errorMessage || 'Error al marcar revisado';
+      const msg = extraerMensajeError(err, 'Error al marcar revisado');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -723,7 +815,7 @@ suplidor: res.suplidor?.codigo || '',
       message.success('Documento reversado exitosamente');
       navigate(`/FENP/${id}`);
     } catch (err: any) {
-      const msg = err?.response?.data?.errorMessage || 'Error al reversar';
+      const msg = extraerMensajeError(err, 'Error al reversar');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -755,11 +847,7 @@ suplidor: res.suplidor?.codigo || '',
     if (concepto.noImpuesto && detalles.some((d) => (d.porcentajeImpuesto || 0) > 0)) {
       message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
       setDetalles((prev) =>
-        prev.map((d) => ({
-          ...d,
-          porcentajeImpuesto: 0,
-          impuestos: 0,
-        }))
+        prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0 }))
       );
     }
 
@@ -834,6 +922,7 @@ suplidor: res.suplidor?.codigo || '',
       try {
         const ocCompleta = await ordenCompraApi.obtenerPorId(Sucursal.Compra, orden.id);
         const ocDetalles = ocCompleta.detalles || [];
+        setOcDetallesData(ocDetalles);
         const nuevosDetalles: DetalleEntradaAlmacenDTO[] = ocDetalles
           .filter((d) => {
             const cantidad = (d.cantidad + (d.cantidadBonificable || 0)) - (d.cantidadRecibida || 0);
@@ -912,6 +1001,7 @@ suplidor: res.suplidor?.codigo || '',
 
   const handleOCUnselect = () => {
     setSelectedOC(null);
+    setOcDetallesData([]);
     setOrdenCompraNoDoc('');
     form.setFieldsValue({ ordenCompra: '' });
   };
@@ -925,7 +1015,29 @@ suplidor: res.suplidor?.codigo || '',
     setDetalles((prev) => prev.filter((d) => d.id !== id));
   };
 
-  const handleDetalleChange = (id: number, field: string, value: any) => {
+  const handleDetalleUpdateValue = (id: number, field: string, value: any) => {
+    setDetalles((prev) =>
+      prev.map((d) => (d.id !== id ? d : { ...d, [field]: value }))
+    );
+  };
+
+  const handleDetalleCalculate = (id: number, field: string, value: any) => {
+    // Validar cantidad contra OC vinculada
+    if (field === 'cantidad' && ocDetallesData.length > 0) {
+      const detalle = detalles.find((d) => d.id === id);
+      if (detalle) {
+        const ocDetalle = ocDetallesData.find((d: DetalleOrdenCompraVistaDTO) => d.codigo === detalle.codigo);
+        if (ocDetalle) {
+          const factor = ocDetalle.medida?.factor || 1;
+          const disponible = ((ocDetalle.cantidad + (ocDetalle.cantidadBonificable || 0)) - (ocDetalle.cantidadRecibida || 0));
+          if ((Number(value) * factor) > (disponible * factor) && !ocDetalle.pesado) {
+            message.warning(`La cantidad disponible en la OC es ${disponible}. Se ajustará automáticamente.`);
+            value = disponible;
+          }
+        }
+      }
+    }
+
     setDetalles((prev) =>
       prev.map((d) => {
         if (d.id !== id) return d;
@@ -1029,29 +1141,6 @@ suplidor: res.suplidor?.codigo || '',
         <Button icon={<CloseOutlined />} onClick={handleCancelar}>
           Cancelar
         </Button>
-        {mode === 'editar' && esBorrador && !esCerrado && (
-          <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleAplicar}>
-            Aplicar
-          </Button>
-        )}
-        {mode === 'editar' && !esAnulado && (
-          <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
-            Anular
-          </Button>
-        )}
-        {mode === 'editar' && esAplicado && (
-          <>
-            <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handlePostear}>
-              Postear
-            </Button>
-            <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleRevisado}>
-              Revisado
-            </Button>
-            <Button danger icon={<RedoOutlined />} loading={saving} onClick={handleReversar}>
-              Reversar
-            </Button>
-          </>
-        )}
       </Space>
     </div>
   );
@@ -1062,13 +1151,7 @@ suplidor: res.suplidor?.codigo || '',
       title: '',
       key: 'sort',
       width: 40,
-      render: () => (
-        <div
-          style={{ cursor: 'grab', touchAction: 'none', userSelect: 'none', display: 'inline-flex' }}
-        >
-          <HolderOutlined style={{ color: '#999' }} />
-        </div>
-      ),
+      render: () => <DragHandle />,
     },
     {
       title: 'Artículo',
@@ -1107,7 +1190,9 @@ suplidor: res.suplidor?.codigo || '',
             step={0.01}
             precision={2}
             value={detalles[idx]?.cantidad}
-            onChange={(val) => handleDetalleChange(detalles[idx].id, 'cantidad', val || 0)}
+            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'cantidad', val || 0)}
+            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
+            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
           />
           {detalles[idx]?.medida?.nombre && (
             <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
@@ -1134,7 +1219,9 @@ suplidor: res.suplidor?.codigo || '',
             step={0.01}
             precision={2}
             value={detalles[idx]?.costo}
-            onChange={(val) => handleDetalleChange(detalles[idx].id, 'costo', val || 0)}
+            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'costo', val || 0)}
+            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'costo', detalles[idx]?.costo || 0)}
+            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'costo', detalles[idx]?.costo || 0)}
           />
           <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
         </div>
@@ -1157,7 +1244,9 @@ suplidor: res.suplidor?.codigo || '',
             step={0.01}
             precision={2}
             value={detalles[idx]?.porcentajeDescuento}
-            onChange={(val) => handleDetalleChange(detalles[idx].id, 'porcentajeDescuento', val || 0)}
+            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'porcentajeDescuento', val || 0)}
+            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
+            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
             addonAfter="%"
           />
           <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>

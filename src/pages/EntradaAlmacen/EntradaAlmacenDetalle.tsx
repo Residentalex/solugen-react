@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Dropdown, Modal, DatePicker, Typography
+  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Dropdown, Modal, DatePicker, Typography
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -9,6 +9,9 @@ import {
   EditOutlined,
   MoreOutlined,
   CalendarOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  RedoOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -16,7 +19,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
-import type { EntradaAlmacenDTO, AsientoContableDTO } from '../../types/entradaAlmacen';
+import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
 
 const { Text } = Typography;
 const { TabPane } = Tabs;
@@ -64,31 +67,31 @@ function formatDate(val: string): string {
 }
 
 interface SuplidorCardProps {
-  entidad: { nombre: string; identificacion: string; telefono?: string; direccion?: string } | undefined;
-  suplidor: { nombre: string; telefono?: string; direccion?: string } | undefined;
+  suplidor: SuplidorDTO | null;
+  entidad?: EntidadDTO | null;
 }
 
-const SuplidorCard: React.FC<SuplidorCardProps> = ({ entidad, suplidor }) => (
+const SuplidorCard: React.FC<SuplidorCardProps> = ({ suplidor, entidad }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Suplidor</span>}
     className="paces-card"
     style={{ marginBottom: 16 }}
   >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
-      <div style={{ fontSize: 16, fontWeight: 700 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ fontWeight: 600 }}>
         {suplidor?.nombre ? toTitleCase(suplidor.nombre) : entidad?.nombre ? toTitleCase(entidad.nombre) : '-'}
       </div>
       <div>
         <span className="paces-text-secondary">RNC: </span>
-        <span>{entidad?.identificacion || '-'}</span>
+        <span>{suplidor?.identificacion || entidad?.identificacion || '-'}</span>
       </div>
       <div>
         <span className="paces-text-secondary">Teléfono: </span>
-        <span>{entidad?.telefono || suplidor?.telefono || '-'}</span>
+        <span>{suplidor?.telefono || entidad?.telefono || '-'}</span>
       </div>
       <div>
         <span className="paces-text-secondary">Dirección: </span>
-        <span>{entidad?.direccion ? toTitleCase(entidad.direccion) : suplidor?.direccion ? toTitleCase(suplidor.direccion) : '-'}</span>
+        <span>{suplidor?.direccion ? toTitleCase(suplidor.direccion) : entidad?.direccion ? toTitleCase(entidad.direccion) : '-'}</span>
       </div>
     </div>
   </Card>
@@ -101,14 +104,23 @@ interface TotalesCardProps {
   total: number;
   nota: string;
   alignRight: boolean;
+  monedaSimbolo?: string;
+  monedaNombre?: string;
+  tasa?: number;
 }
 
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight }) => (
+const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
     className="paces-card"
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
+      {monedaSimbolo && tasa !== undefined && (
+        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
+          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
+          <span>{monedaNombre || 'Peso Dominicano'} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
         {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
         <span>{formatNumber(subTotal)}</span>
@@ -154,6 +166,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
 
   const [data, setData] = useState<EntradaAlmacenDTO | null>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
@@ -377,6 +390,102 @@ const EntradaAlmacenDetalle: React.FC = () => {
     { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
   ];
 
+  // ===== Handlers de acciones de estado =====
+  const handleAplicar = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      const result = await entradaAlmacenApi.aplicar(sucursalActiva, parseInt(id));
+      setData(result);
+      message.success('Documento aplicado exitosamente');
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al aplicar');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAnular = async () => {
+    if (!data) return;
+    setSaving(true);
+    try {
+      await entradaAlmacenApi.anular(sucursalActiva, data as any);
+      message.success('Documento anulado exitosamente');
+      const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al anular');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePostear = async () => {
+    if (!data) return;
+    setSaving(true);
+    try {
+      await entradaAlmacenApi.postear(sucursalActiva, data as any);
+      message.success('Documento posteado exitosamente');
+      const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al postear');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRevisado = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await entradaAlmacenApi.revisado(sucursalActiva, parseInt(id));
+      message.success('Documento marcado como revisado');
+      const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al marcar revisado');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReversar = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await entradaAlmacenApi.reversar(sucursalActiva, parseInt(id));
+      message.success('Documento reversado exitosamente');
+      const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al reversar');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  function extraerMensajeError(err: any, fallback: string): string {
+    const data = err?.response?.data;
+    if (!data) return fallback;
+    if (data.errorMessage) return data.errorMessage;
+    if (data.errors && typeof data.errors === 'object') {
+      const mensajes: string[] = [];
+      for (const key of Object.keys(data.errors)) {
+        const val = data.errors[key];
+        if (Array.isArray(val)) mensajes.push(...val);
+        else if (typeof val === 'string') mensajes.push(val);
+      }
+      if (mensajes.length > 0) return mensajes.join('; ');
+    }
+    return fallback;
+  }
+
   return (
     <div>
       {/* Toolbar */}
@@ -417,6 +526,39 @@ const EntradaAlmacenDetalle: React.FC = () => {
           {data.estado === 0 && data.periodo !== 6 && (
             <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FENP/${id}/editar`)}>Editar</Button>
           )}
+          {/* Acciones de estado - solo en consulta */}
+          {data.estado === 0 && data.periodo !== 6 && (
+            <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleAplicar}>
+              Aplicar
+            </Button>
+          )}
+          {data.estado !== 3 && (
+            <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
+              Anular
+            </Button>
+          )}
+          {data.estado === 1 && (
+            <>
+              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handlePostear}>
+                Postear
+              </Button>
+              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleRevisado}>
+                Revisado
+              </Button>
+              <Button danger icon={<RedoOutlined />} loading={saving} onClick={handleReversar}>
+                Reversar
+              </Button>
+            </>
+          )}
+        </Space>
+      </div>
+
+      {/* Concepto / Estado */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <span style={{ fontSize: 18, fontWeight: 600 }}>{data.concepto?.nombre || '-'}</span>
+        <Space>
+          {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
+          <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
         </Space>
       </div>
 
@@ -424,29 +566,68 @@ const EntradaAlmacenDetalle: React.FC = () => {
         /* === DESKTOP LAYOUT (≥ lg) === */
         <Row gutter={16}>
           <Col lg={18}>
-            <Card
-              className="paces-card"
-              title={
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 18, fontWeight: 600 }}>
-                    {data.concepto?.nombre || '-'}
-                  </span>
-                  <Space>
-                    {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-                    <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-                  </Space>
-                </div>
-              }
-              style={{ marginBottom: 16 }}
-            >
-              <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 3 }}>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Orden Compra">{data.ordenCompra?.noDocumento ? toTitleCase(data.ordenCompra.noDocumento) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Moneda">{data.moneda?.nombre ? toTitleCase(data.moneda.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-              </Descriptions>
+            <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+              <div style={{ paddingTop: 16 }}>
+                <Row gutter={[16, 24]}>
+                  {/* Fila 1: OrdenCompra + Concepto */}
+                  <Col xs={24} sm={12} lg={9}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Orden Compra</div>
+                      <div style={{ fontSize: 14 }}>{data.ordenCompra?.noDocumento || '-'}</div>
+                    </div>
+                  </Col>
+                  <Col xs={24} sm={12} lg={15}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Concepto</div>
+                      <div style={{ fontSize: 14 }}>{toTitleCase(data.concepto?.nombre || '-')}</div>
+                    </div>
+                  </Col>
+
+                  {/* Fila 2: FechaDocumento + Suplidor */}
+                  <Col xs={24} sm={12} lg={9}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Fecha Documento</div>
+                      <div style={{ fontSize: 14 }}>{formatDate(data.fechaDocumento)}</div>
+                    </div>
+                  </Col>
+                  <Col xs={24} sm={12} lg={15}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Suplidor / Entidad</div>
+                      <div style={{ fontSize: 14 }}>{toTitleCase(data.suplidor?.nombre || data.entidad?.nombre || '-')}</div>
+                    </div>
+                  </Col>
+
+                  {/* Fila 3: FechaRecibo + Almacén */}
+                  <Col xs={24} sm={12} lg={9}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Fecha Recibo</div>
+                      <div style={{ fontSize: 14 }}>{data.fechaEntrega ? formatDate(data.fechaEntrega) : '-'}</div>
+                    </div>
+                  </Col>
+                  <Col xs={24} sm={12} lg={15}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Almacén</div>
+                      <div style={{ fontSize: 14 }}>{toTitleCase(data.almacen?.nombre || '-')}</div>
+                    </div>
+                  </Col>
+
+                  {/* Fila 4: Tags informativos */}
+                  <Col xs={24}>
+                    <Space size={[8, 8]} wrap>
+                      <span><span className="paces-text-secondary">NCF: </span>{data.ncf || '-'}</span>
+                      <span><span className="paces-text-secondary">Ref: </span>{data.referencia || '-'}</span>
+                    </Space>
+                  </Col>
+
+                  {/* Fila 5: Nota */}
+                  <Col xs={24}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Nota</div>
+                      <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</div>
+                    </div>
+                  </Col>
+                </Row>
+              </div>
             </Card>
 
             <Tabs defaultActiveKey="detalles" type="card">
@@ -482,39 +663,82 @@ const EntradaAlmacenDetalle: React.FC = () => {
           </Col>
 
           <Col lg={6}>
-            <SuplidorCard entidad={data.entidad} suplidor={data.suplidor} />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false} />
+            <SuplidorCard suplidor={data.suplidor} entidad={data.entidad} />
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false}
+              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              tasa={data.tasa ?? 1}
+            />
           </Col>
         </Row>
       ) : (
         /* === MOBILE LAYOUT (< lg) === */
         <div>
-          <Card
-            className="paces-card"
-            title={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 18, fontWeight: 600 }}>
-                  {data.concepto?.nombre || '-'}
-                </span>
-                <Space>
-                  {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-                  <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-                </Space>
-              </div>
-            }
-            style={{ marginBottom: 16 }}
-          >
-            <Descriptions bordered size="small" column={1}>
-              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Orden Compra">{data.ordenCompra?.noDocumento ? toTitleCase(data.ordenCompra.noDocumento) : '-'}</Descriptions.Item>
-              <Descriptions.Item label="Moneda">{data.moneda?.nombre ? toTitleCase(data.moneda.nombre) : '-'}</Descriptions.Item>
-              <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-            </Descriptions>
-          </Card>
+            <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+              <div style={{ paddingTop: 16 }}>
+                <Row gutter={[16, 24]}>
+                  {/* Fila 1: OrdenCompra + Concepto */}
+                  <Col xs={24} sm={12} lg={9}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Orden Compra</div>
+                      <div style={{ fontSize: 14 }}>{data.ordenCompra?.noDocumento || '-'}</div>
+                    </div>
+                  </Col>
+                  <Col xs={24} sm={12} lg={15}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Concepto</div>
+                      <div style={{ fontSize: 14 }}>{toTitleCase(data.concepto?.nombre || '-')}</div>
+                    </div>
+                  </Col>
 
-          <SuplidorCard entidad={data.entidad} suplidor={data.suplidor} />
+                  {/* Fila 2: FechaDocumento + Suplidor */}
+                  <Col xs={24} sm={12} lg={9}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Fecha Documento</div>
+                      <div style={{ fontSize: 14 }}>{formatDate(data.fechaDocumento)}</div>
+                    </div>
+                  </Col>
+                  <Col xs={24} sm={12} lg={15}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Suplidor / Entidad</div>
+                      <div style={{ fontSize: 14 }}>{toTitleCase(data.suplidor?.nombre || data.entidad?.nombre || '-')}</div>
+                    </div>
+                  </Col>
+
+                  {/* Fila 3: FechaRecibo + Almacén */}
+                  <Col xs={24} sm={12} lg={9}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Fecha Recibo</div>
+                      <div style={{ fontSize: 14 }}>{data.fechaEntrega ? formatDate(data.fechaEntrega) : '-'}</div>
+                    </div>
+                  </Col>
+                  <Col xs={24} sm={12} lg={15}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Almacén</div>
+                      <div style={{ fontSize: 14 }}>{toTitleCase(data.almacen?.nombre || '-')}</div>
+                    </div>
+                  </Col>
+
+                  {/* Fila 4: Tags informativos */}
+                  <Col xs={24}>
+                    <Space size={[8, 8]} wrap>
+                      <span><span className="paces-text-secondary">NCF: </span>{data.ncf || '-'}</span>
+                      <span><span className="paces-text-secondary">Ref: </span>{data.referencia || '-'}</span>
+                    </Space>
+                  </Col>
+
+                  {/* Fila 5: Nota */}
+                  <Col xs={24}>
+                    <div>
+                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Nota</div>
+                      <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</div>
+                    </div>
+                  </Col>
+                </Row>
+              </div>
+            </Card>
+
+          <SuplidorCard suplidor={data.suplidor} entidad={data.entidad} />
 
           <Tabs defaultActiveKey="detalles" type="card">
             <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
@@ -547,7 +771,11 @@ const EntradaAlmacenDetalle: React.FC = () => {
             </TabPane>
           </Tabs>
 
-          <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true} />
+          <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true}
+            monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+            monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+            tasa={data.tasa ?? 1}
+          />
         </div>
       )}
 

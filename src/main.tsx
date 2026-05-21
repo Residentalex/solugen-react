@@ -27,17 +27,17 @@ function getThemeConfig(themeName: ThemeName) {
     colorBgLayout: t.bgLayout,
     colorBgContainer: t.bgContainer,
     colorBgElevated: t.bgElevated,
-    borderRadius: 8,
-    borderRadiusLG: 12,
+    borderRadius: 6,
+    borderRadiusLG: 8,
     fontFamily: "'Google Sans', 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
     colorText: t.text,
     colorTextSecondary: t.textSecondary,
     colorTextHeading: t.textHeading,
     colorBorder: t.border,
     colorBorderSecondary: t.borderSecondary,
-    controlHeight: 38,
-    controlHeightLG: 44,
-    controlHeightSM: 32,
+    controlHeight: 34,
+    controlHeightLG: 40,
+    controlHeightSM: 28,
     ...shadows,
   };
 
@@ -57,6 +57,7 @@ function getThemeConfig(themeName: ThemeName) {
     Card: {
       boxShadow: shadows.boxShadow,
       boxShadowSecondary: shadows.boxShadowSecondary,
+      paddingLG: 16,
     },
     Button: {
       primaryShadow: t.primaryShadow,
@@ -68,6 +69,7 @@ function getThemeConfig(themeName: ThemeName) {
       borderColor: t.border,
       cellFontSize: t.tableCellFontSize,
       cellFontSizeMD: t.tableCellFontSize,
+      headerBorderRadius: 6,
     },
     Form: {
       labelColor: t.text,

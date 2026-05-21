@@ -8,7 +8,8 @@ export type ThemeName =
   | 'light-rose'
   | 'dark-rose'
   | 'light-amber'
-  | 'dark-amber';
+  | 'dark-amber'
+  | 'light-genesis';
 
 export interface ThemeConfig {
   isDark: boolean;
@@ -275,6 +276,30 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     selectedBg: 'rgba(230,153,10,0.18)',
     tableHeaderFontSize: 13,
     tableCellFontSize: 12,
+  },
+  'light-genesis': {
+    isDark: false,
+    primaryColor: '#4361ee',
+    primaryHover: '#5c7af5',
+    primaryActive: '#3651d4',
+    primaryShadow: '0 2px 6px rgba(67,97,238,0.2)',
+    bgLayout: '#f0f2f5',
+    bgContainer: '#ffffff',
+    bgElevated: '#ffffff',
+    text: '#2d3748',
+    textSecondary: '#718096',
+    textHeading: '#1a202c',
+    border: '#e2e8f0',
+    borderSecondary: '#edf2f7',
+    sidebarBg: '#1e1e2d',
+    sidebarBorder: 'transparent',
+    topbarBg: '#ffffff',
+    topbarBorder: '#e2e8f0',
+    topbarSearchBg: '#f0f2f5',
+    hoverBg: 'rgba(67,97,238,0.08)',
+    selectedBg: 'rgba(67,97,238,0.12)',
+    tableHeaderFontSize: 12,
+    tableCellFontSize: 11,
   },
 };
 

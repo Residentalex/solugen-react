@@ -45,6 +45,7 @@ export interface PantallaDTO {
   codigo: string;
   ruta: string;
   esReporte: boolean;
+  activo?: boolean;
   moduloID: number;
   orden: number;
   pantallaPadreID?: number;

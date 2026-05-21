@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Table, Input, DatePicker, Select, Tag, message, Drawer, Card, Button, Space, Tooltip } from 'antd';
+import { Table, Input, DatePicker, Select, Tag, message, Drawer, Card, Button } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -7,7 +7,7 @@ import { distribucionBalanceApi } from '../../api/distribucionBalanceApi';
 import { apiClient } from '../../api/client';
 import type { TransaccionVistaDTO, FiltroTransaccion } from '../../types/transaccion';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined, EyeOutlined, EditOutlined, PlusOutlined, PrinterOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined, PrinterOutlined } from '@ant-design/icons';
 
 const { RangePicker } = DatePicker;
 
@@ -215,24 +215,6 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
         );
       },
     },
-    {
-      title: 'Acciones',
-      key: 'acciones',
-      width: 140,
-      fixed: 'right',
-      render: (_: any, record: TransaccionVistaDTO) => (
-        <Space size="small">
-          <Tooltip title="Ver detalle">
-            <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/${codigoPantalla}/${record.id}`)} />
-          </Tooltip>
-          {record.periodo !== 6 && record.estado === 0 && (
-            <Tooltip title="Editar">
-              <Button type="text" size="small" icon={<EditOutlined />} />
-            </Tooltip>
-          )}
-        </Space>
-      ),
-    },
   ];
 
   return (
@@ -279,7 +261,7 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
         dataSource={data}
         rowKey="id"
         loading={loading}
-        scroll={{ x: 1300 }}
+        scroll={{ x: 1150 }}
         size="middle"
         rowClassName={(record) =>
           selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'

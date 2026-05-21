@@ -1,10 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, Tooltip, message, Drawer } from 'antd';
+import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, message, Drawer } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
-  EyeOutlined,
-  EditOutlined,
   SearchOutlined,
   ReloadOutlined,
   PlusOutlined,
@@ -249,24 +247,6 @@ const TransferenciaAlmacen: React.FC = () => {
     );
   },
 },
-{
-  title: 'Acciones',
-  key: 'acciones',
-  width: 140,
-  fixed: 'right',
-  render: (_: any, record: MovimientoVistaDTO) => (
-    <Space size="small">
-      <Tooltip title="Ver detalle">
-        <Button type="text" size="small" icon={<EyeOutlined />} onClick={() => navigate(`/FTRP/${record.id}`)} />
-      </Tooltip>
-      {record.periodo !== 6 && record.estado === 0 && (
-        <Tooltip title="Editar">
-          <Button type="text" size="small" icon={<EditOutlined />} />
-        </Tooltip>
-      )}
-    </Space>
-  ),
-},
   ];
 
   return (
@@ -324,7 +304,7 @@ const TransferenciaAlmacen: React.FC = () => {
         dataSource={data}
         rowKey="id"
         loading={loading}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1060 }}
         size="middle"
         rowClassName={(record) =>
           selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'

@@ -1,9 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Tooltip, message } from 'antd';
+import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
-  EyeOutlined,
-  EditOutlined,
   SearchOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
@@ -232,24 +230,6 @@ const CotizacionVenta: React.FC = () => {
         );
       },
     },
-    {
-      title: 'Acciones',
-      key: 'acciones',
-      width: 140,
-      fixed: 'right',
-      render: (_: any, record: CotizacionVentaDTO) => (
-        <Space size="small">
-          <Tooltip title="Ver detalle">
-            <Button type="text" size="small" icon={<EyeOutlined />} />
-          </Tooltip>
-            {record.periodo !== 6 && record.estado === 0 && (
-              <Tooltip title="Editar">
-                <Button type="text" size="small" icon={<EditOutlined />} />
-              </Tooltip>
-            )}
-        </Space>
-      ),
-    },
   ];
 
   return (
@@ -307,7 +287,7 @@ const CotizacionVenta: React.FC = () => {
         dataSource={data}
         rowKey="id"
         loading={loading}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1060 }}
         size="middle"
         onRow={(record) => ({
           onClick: () => handleRowClick(record),

@@ -37,6 +37,7 @@ import Roles from './pages/Roles/Roles';
 import Productos from './pages/Productos/Productos';
 import ProductoDetalle from './pages/Productos/ProductoDetalle';
 import Monedas from './pages/Monedas/Monedas';
+import Pantallas from './pages/Pantallas/Pantallas';
 import TiposCuenta from './pages/TiposCuenta/TiposCuenta';
 import CuentasContables from './pages/CuentasContables/CuentasContables';
 import Impuestos from './pages/Impuestos/Impuestos';
@@ -117,6 +118,7 @@ const App: React.FC = () => {
             <Route path="MProducto" element={<Productos />} />
           <Route path="MProducto/:codigo" element={<ProductoDetalle />} />
             <Route path="MMoneda" element={<Monedas />} />
+            <Route path="MPantalla" element={<Pantallas />} />
             <Route path="MTipoCuenta" element={<TiposCuenta />} />
             <Route path="MCuentaContable" element={<CuentasContables />} />
             <Route path="MImpuesto" element={<Impuestos />} />

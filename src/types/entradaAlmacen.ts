@@ -205,4 +205,5 @@ export interface DetalleOrdenCompraVistaDTO {
   precio?: number;
   tipoArticulo?: string;
   nota?: string;
+  pesado?: boolean;
 }

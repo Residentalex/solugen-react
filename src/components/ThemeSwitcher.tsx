@@ -12,6 +12,7 @@ const themeList: ThemeName[] = [
   'light-midnight', 'dark-midnight',
   'light-rose', 'dark-rose',
   'light-amber', 'dark-amber',
+  'light-genesis',
 ];
 
 const ThemeSwitcher: React.FC = () => {
@@ -58,7 +59,7 @@ const ThemeSwitcher: React.FC = () => {
               {theme.isDark ? <MoonOutlined /> : <SunOutlined />}
             </div>
             <span style={{ fontSize: 10, color: '#666', textAlign: 'center' }}>
-              {name.replace('-', ' ')}
+              {name === 'light-genesis' ? 'Genesis' : name.replace('-', ' ')}
             </span>
           </div>
         );

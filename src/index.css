@@ -358,6 +358,83 @@ body.theme-dark-amber {
   --paces-table-cell-font-size: 11px;
 }
 
+/* liga - hibrido neutral entre dark y light */
+body.theme-liga {
+  --paces-bg-layout: #e8e5df;
+  --paces-bg-container: #f5f2eb;
+  --paces-bg-elevated: #fcfaf5;
+  --paces-text: #4a4540;
+  --paces-text-secondary: #8a8580;
+  --paces-text-heading: #2d2a26;
+  --paces-border: #d6d2ca;
+  --paces-border-secondary: #e8e5df;
+  --paces-primary: #556ee6;
+  --paces-primary-hover: #6c7ff0;
+  --paces-primary-active: #4458d3;
+  --paces-primary-shadow: 0 2px 6px rgba(85,110,230,0.25);
+  --paces-sidebar-bg: #1c1a17;
+  --paces-sidebar-border: transparent;
+  --paces-topbar-bg: #1c1a17;
+  --paces-topbar-border: #2e2a25;
+  --paces-topbar-search-bg: #24211d;
+  --paces-hover-bg: rgba(85,110,230,0.08);
+  --paces-selected-bg: rgba(85,110,230,0.12);
+  --paces-scrollbar-thumb: #2e2a25;
+  --paces-scrollbar-thumb-hover: #3e3a35;
+  --paces-menu-item-hover-color: #ffffff;
+  --paces-menu-item-selected-color: #ffffff;
+  --paces-logo-border: rgba(255,255,255,0.06);
+  --paces-shadow-sm: 0 1px 3px rgba(0,0,0,0.25);
+  --paces-card-border: #d6d2ca;
+  --paces-login-card-bg: #fcfaf5;
+  --paces-login-card-border: rgba(0,0,0,0.04);
+  --paces-table-header-font-size: 12px;
+  --paces-table-cell-font-size: 11px;
+}
+
+/* liga - Sidebar text overrides */
+body.theme-liga .paces-sidebar .sidebar-menu .ant-menu-item {
+  color: #c8c0b8 !important;
+}
+body.theme-liga .paces-sidebar .sidebar-menu .ant-menu-submenu-title {
+  color: #c8c0b8 !important;
+}
+body.theme-liga .paces-sidebar .sidebar-menu .ant-menu-sub .ant-menu-item {
+  color: #a89888 !important;
+}
+body.theme-liga .paces-sidebar .sidebar-menu .ant-menu-item:hover {
+  color: #ffffff !important;
+}
+body.theme-liga .paces-sidebar .sidebar-menu .ant-menu-submenu-title:hover {
+  color: #ffffff !important;
+}
+
+/* liga - Topbar text overrides */
+body.theme-liga .paces-topbar-user-name {
+  color: #c8c0b8 !important;
+}
+body.theme-liga .paces-topbar-action-btn {
+  color: #a89888 !important;
+  border-color: #2e2a25;
+}
+body.theme-liga .paces-topbar-action-btn:hover {
+  color: #ffffff !important;
+  border-color: var(--paces-primary);
+}
+body.theme-liga .paces-hamburger {
+  color: #a89888 !important;
+}
+body.theme-liga .paces-hamburger:hover {
+  color: #ffffff !important;
+}
+body.theme-liga .paces-sucursal-select .ant-select-selector {
+  background: #24211d !important;
+  border-color: #2e2a25 !important;
+}
+body.theme-liga .paces-sucursal-select .ant-select-selection-item {
+  color: #c8c0b8 !important;
+}
+
 /* ===== Scrollbar ===== */
 ::-webkit-scrollbar {
   width: 6px;
@@ -760,7 +837,8 @@ body.theme-dark-default .paces-login-bg,
 body.theme-dark-ocean .paces-login-bg,
 body.theme-dark-midnight .paces-login-bg,
 body.theme-dark-rose .paces-login-bg,
-body.theme-dark-amber .paces-login-bg {
+body.theme-dark-amber .paces-login-bg,
+body.theme-liga .paces-login-bg {
   background:
     radial-gradient(600px 600px at 10% 20%, rgba(85,110,230,0.05) 0%, transparent 100%),
     radial-gradient(800px 800px at 90% 80%, rgba(85,110,230,0.035) 0%, transparent 100%),
@@ -1170,7 +1248,8 @@ body.theme-dark-default .paces-home-header,
 body.theme-dark-ocean .paces-home-header,
 body.theme-dark-midnight .paces-home-header,
 body.theme-dark-rose .paces-home-header,
-body.theme-dark-amber .paces-home-header {
+body.theme-dark-amber .paces-home-header,
+body.theme-liga .paces-home-header {
   background: var(--paces-bg-layout);
   border-bottom: 1px solid var(--paces-border);
 }

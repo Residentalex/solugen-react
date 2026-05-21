@@ -98,6 +98,7 @@ const validThemes: ThemeName[] = [
   'light-midnight', 'dark-midnight',
   'light-rose', 'dark-rose',
   'light-amber', 'dark-amber',
+  'light-genesis',
 ];
 let initialTheme: ThemeName = 'light-default';
 if (savedRaw && (validThemes as readonly string[]).includes(savedRaw)) {
