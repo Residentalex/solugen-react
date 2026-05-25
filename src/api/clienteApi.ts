@@ -9,8 +9,8 @@ export const clienteApi = {
     sucursal: number,
     params?: { filas?: number; salto?: number; codigo?: string; activo?: boolean }
   ): Promise<ClienteDTO[]> => {
-    const { data } = await apiClient.get<ClienteDTO[]>(`${BASE}/${sucursal}`, { params });
-    return data;
+    const { data } = await apiClient.get<ApiResponse<ClienteDTO[]>>(`${BASE}/${sucursal}`, { params });
+    return data.data;
   },
 
   obtenerTotal: async (
@@ -22,18 +22,18 @@ export const clienteApi = {
   },
 
   obtenerActivos: async (sucursal: number): Promise<ClienteDTO[]> => {
-    const { data } = await apiClient.get<ClienteDTO[]>(`${BASE}/${sucursal}/activos`);
-    return data;
+    const { data } = await apiClient.get<ApiResponse<ClienteDTO[]>>(`${BASE}/${sucursal}/activos`);
+    return data.data;
   },
 
   obtenerPorCodigo: async (sucursal: number, codigo: string): Promise<ClienteDTO> => {
-    const { data } = await apiClient.get<ClienteDTO>(`${BASE}/${sucursal}/${codigo}`);
-    return data;
+    const { data } = await apiClient.get<ApiResponse<ClienteDTO>>(`${BASE}/${sucursal}/${codigo}`);
+    return data.data;
   },
 
   crear: async (sucursal: number, cliente: ClienteDTO): Promise<ClienteDTO> => {
-    const { data } = await apiClient.post<ClienteDTO>(`${BASE}/${sucursal}`, cliente);
-    return data;
+    const { data } = await apiClient.post<ApiResponse<ClienteDTO>>(`${BASE}/${sucursal}`, cliente);
+    return data.data;
   },
 
   filtrar: async (
@@ -46,12 +46,12 @@ export const clienteApi = {
     if (filtro.codigo) params.codigo = filtro.codigo;
     if (filtro.activo !== undefined) params.activo = filtro.activo;
 
-    const { data } = await apiClient.get<ClienteDTO[]>(`${BASE}/${sucursal}/filtrar`, { params });
-    return data;
+    const { data } = await apiClient.get<ApiResponse<ClienteDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params });
+    return data.data;
   },
 
   actualizar: async (sucursal: number, cliente: ClienteDTO): Promise<ClienteDTO> => {
-    const { data } = await apiClient.put<ClienteDTO>(`${BASE}/${sucursal}`, cliente);
-    return data;
+    const { data } = await apiClient.put<ApiResponse<ClienteDTO>>(`${BASE}/${sucursal}`, cliente);
+    return data.data;
   },
 };

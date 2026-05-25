@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Input, Tag, Button, message, Space, Row, Col, Card, Modal, Descriptions, Tooltip, Form, Switch } from 'antd';
-import { SearchOutlined, ReloadOutlined, EyeOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import { Table, Input, Tag, Button, message, Space, Row, Col, Card, Modal, Descriptions, Tooltip, Form, Switch, Typography, Select } from 'antd';
+import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -12,9 +13,16 @@ const ORIGEN_LABEL: Record<number, string> = {
   [OrigenCuenta.Debito]: 'Débito',
   [OrigenCuenta.Credito]: 'Crédito',
   [OrigenCuenta.Desconocido]: 'Desconocido',
-};
+}
+
+const { Text } = Typography;
+
+function toTitleCase(str: string): string {
+  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 const CuentasContables: React.FC = () => {
+  const navigate = useNavigate();
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
@@ -22,7 +30,10 @@ const CuentasContables: React.FC = () => {
 
   const [data, setData] = useState<CuentaContableDTO[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchText, setSearchText] = useState('');
+  const [total, setTotal] = useState(0);
+  const [filtro, setFiltro] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [detalleItem, setDetalleItem] = useState<CuentaContableDTO | null>(null);
 
@@ -67,7 +78,7 @@ const CuentasContables: React.FC = () => {
         message.success('Cuenta contable creada correctamente');
       }
       setModalVisible(false);
-      cargarDatos();
+      cargarDatos(page, pageSize, filtro);
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar cuenta contable');
@@ -76,12 +87,14 @@ const CuentasContables: React.FC = () => {
     }
   };
 
-  const cargarDatos = useCallback(async () => {
+  const cargarDatos = useCallback(async (pag: number, size: number, texto: string) => {
     if (sucursalActiva === undefined) return;
     setLoading(true);
     try {
-      const result = await cuentaContableApi.obtenerListado(sucursalActiva);
-      setData(result || []);
+      const skip = (pag - 1) * size;
+      const result = await cuentaContableApi.obtenerListadoPaginado(sucursalActiva, skip, size, texto);
+      setData(result.data);
+      setTotal(result.total);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar cuentas contables');
     } finally {
@@ -92,22 +105,13 @@ const CuentasContables: React.FC = () => {
   useEffect(() => {
     setActiveModule('MCuentaContable');
     updateToolbar({});
-    cargarDatos();
+    cargarDatos(page, pageSize, filtro);
     return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
+  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos, page, pageSize, filtro]);
 
-  const handleSearch = () => {
-    if (!searchText.trim()) {
-      cargarDatos();
-      return;
-    }
-    const text = searchText.trim().toLowerCase();
-    const filtered = data.filter(
-      (item) =>
-        item.noCuenta.toLowerCase().includes(text) ||
-        item.nombre.toLowerCase().includes(text)
-    );
-    setData(filtered);
+  const handleSearch = (value: string) => {
+    setFiltro(value);
+    setPage(1);
   };
 
   const columns: ColumnsType<CuentaContableDTO> = [
@@ -117,14 +121,14 @@ const CuentasContables: React.FC = () => {
       key: 'noCuenta',
       width: 140,
       fixed: 'left',
-      render: (val: string) => <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{val}</span>,
+      render: (val: string) => <Text strong className="paces-doc-link" style={{ fontFamily: 'monospace' }} onClick={() => navigate('/FCuentaContable/' + val)}>{val}</Text>,
     },
     {
       title: 'Nombre',
       dataIndex: 'nombre',
       key: 'nombre',
       width: 280,
-      render: (val: string) => <span style={{ fontWeight: 500 }}>{val}</span>,
+      render: (val: string) => <Text strong>{toTitleCase(val ?? '')}</Text>,
     },
     {
       title: 'Tipo Cuenta',
@@ -147,14 +151,14 @@ const CuentasContables: React.FC = () => {
       dataIndex: 'moneda',
       key: 'moneda',
       width: 90,
-      render: (moneda: { codigo: string }) => moneda?.codigo || '-',
+      render: (moneda: { codigo: string }) => <Text>{moneda?.codigo || '-'}</Text>,
     },
     {
       title: 'Origen',
       dataIndex: 'origen',
       key: 'origen',
       width: 100,
-      render: (origen: OrigenCuenta) => ORIGEN_LABEL[origen] || 'Desconocido',
+      render: (origen: OrigenCuenta) => <Text>{ORIGEN_LABEL[origen] || 'Desconocido'}</Text>,
     },
     {
       title: 'Activo',
@@ -165,82 +169,75 @@ const CuentasContables: React.FC = () => {
         <Tag color={activo ? 'green' : 'default'}>{activo ? 'Activo' : 'Inactivo'}</Tag>
       ),
     },
-    {
-      title: 'Acciones',
-      key: 'acciones',
-      fixed: 'right',
-      width: 120,
-      render: (_: any, record: CuentaContableDTO) => (
-        <Space size={0}>
-          <Tooltip title="Editar cuenta contable">
-            <Button
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => abrirEditar(record)}
-            />
-          </Tooltip>
-          <Tooltip title="Ver detalle">
-            <Button
-              type="link"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => abrirDetalle(record)}
-            />
-          </Tooltip>
-        </Space>
-      ),
-    },
+
   ];
+
+  const handleRefresh = useCallback(() => {
+    setFiltro('');
+    setPage(1);
+    cargarDatos(1, pageSize, '');
+  }, [cargarDatos, pageSize]);
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Cuentas Contables</h4>
-        <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-          Nueva Cuenta Contable
-        </Button>
+    <Card
+      className="paces-card-erp"
+      style={{ borderRadius: 8, overflow: 'hidden' }}
+      styles={{ body: { padding: 0 } }}
+    >
+      <div style={{ padding: '16px 24px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          <Input.Search
+            placeholder="Buscar por número o nombre..."
+            allowClear
+            onSearch={handleSearch}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                (e.target as HTMLInputElement).blur();
+                handleSearch('');
+              }
+            }}
+            style={{ width: 320 }}
+            prefix={<SearchOutlined className="paces-text-icon" />}
+          />
+          <Select
+            style={{ width: 65 }}
+            value={pageSize}
+            onChange={(v) => { setPageSize(v); setPage(1); }}
+            options={[
+              { value: 25, label: '25' },
+              { value: 50, label: '50' },
+              { value: 100, label: '100' },
+            ]}
+          />
+          <div style={{ flex: 1 }} />
+          <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
+            Nueva
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+        </div>
       </div>
 
-      <Row gutter={[12, 12]} style={{ marginBottom: 16 }} align="middle">
-        <Col>
-          <Input
-            placeholder="Buscar por número o nombre..."
-            prefix={<SearchOutlined />}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            onPressEnter={handleSearch}
-            style={{ width: 300 }}
-            allowClear
-            onClear={() => { setSearchText(''); cargarDatos(); }}
-          />
-        </Col>
-        <Col>
-          <Button icon={<SearchOutlined />} onClick={handleSearch}>Buscar</Button>
-        </Col>
-        <Col>
-          <Button icon={<ReloadOutlined />} onClick={() => { setSearchText(''); cargarDatos(); }}>
-            Recargar
-          </Button>
-        </Col>
-      </Row>
-
-      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
-        <Table<CuentaContableDTO>
-          columns={columns}
-          dataSource={data}
-          rowKey="noCuenta"
-          loading={loading}
-          scroll={{ x: 1100 }}
-          size="middle"
-          pagination={{
-            showSizeChanger: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} cuentas contables`,
-            pageSizeOptions: ['10', '20', '50', '100'],
-            defaultPageSize: 10,
-          }}
-        />
-      </Card>
+      <Table<CuentaContableDTO>
+        columns={columns}
+        dataSource={data}
+        rowKey="noCuenta"
+        loading={loading}
+        scroll={{ x: 1100 }}
+        size="middle"
+        className="paces-border-top paces-list-table"
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          showSizeChanger: false,
+          showTotal: (t) => `${t} registros`,
+        }}
+        onChange={(pagination) => {
+          setPage(pagination.current || 1);
+        }}
+      />
+    </Card>
 
       <Modal
         title={`Detalle de Cuenta: ${detalleItem?.noCuenta || ''}`}

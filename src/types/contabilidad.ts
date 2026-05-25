@@ -22,11 +22,12 @@ export interface GrupoCuentaContableDTO {
   notas: string;
 }
 
-export enum OrigenCuenta {
-  Debito = 0,
-  Credito = 1,
-  Desconocido = 2,
-}
+export const OrigenCuenta = {
+  Debito: 0,
+  Credito: 1,
+  Desconocido: 2,
+} as const;
+export type OrigenCuenta = (typeof OrigenCuenta)[keyof typeof OrigenCuenta];
 
 export interface CuentaContableDTO {
   nombre: string;
@@ -44,29 +45,33 @@ export interface CuentaContableDTO {
 }
 
 // --- Impuestos ---
-export enum MetodoCalculoImpuesto {
-  Porcentaje = 0,
-  Fijo = 1,
-}
+export const MetodoCalculoImpuesto = {
+  Porcentaje: 0,
+  Fijo: 1,
+} as const;
+export type MetodoCalculoImpuesto = (typeof MetodoCalculoImpuesto)[keyof typeof MetodoCalculoImpuesto];
 
-export enum TipoImpuesto {
-  I = 'I',  // Impuesto
-  L = 'L',  // Liquidación
-  V = 'V',  // Informativo
-  R = 'R',  // Retencion
-}
+export const TipoImpuesto = {
+  I: 'I',  // Impuesto
+  L: 'L',  // Liquidación
+  V: 'V',  // Informativo
+  R: 'R',  // Retencion
+} as const;
+export type TipoImpuesto = (typeof TipoImpuesto)[keyof typeof TipoImpuesto];
 
-export enum AmbitoImpuesto {
-  Venta = 0,
-  Compra = 1,
-  Ninguno = 2,
-}
+export const AmbitoImpuesto = {
+  Venta: 0,
+  Compra: 1,
+  Ninguno: 2,
+} as const;
+export type AmbitoImpuesto = (typeof AmbitoImpuesto)[keyof typeof AmbitoImpuesto];
 
-export enum BaseCalculoImpuesto {
-  Indefinido = 0,
-  MontoNeto = 1,
-  MontoTotal = 2,
-}
+export const BaseCalculoImpuesto = {
+  Indefinido: 0,
+  MontoNeto: 1,
+  MontoTotal: 2,
+} as const;
+export type BaseCalculoImpuesto = (typeof BaseCalculoImpuesto)[keyof typeof BaseCalculoImpuesto];
 
 export interface ImpuestoDTO {
   nombre: string;
@@ -158,6 +163,27 @@ export interface TransaccionDTO {
   concepto: ConceptoApiDTO;
   /** Objeto Entidad del backend */
   entidad: EntidadApiDTO;
+}
+
+// --- Movimientos de Cuenta ---
+export interface MovimientoCuentaDTO {
+  id: number;
+  fecha: string;
+  documento: string;       // formato "CODIGO-NUM_DOC" (ej. "FAC-00123")
+  noDocumento: string;     // NUM_DOC
+  codigoDocumento: string; // CODIGO de ENTDOC
+  entidad: string;         // nombre de entidad
+  concepto: string;
+  debe: number;
+  haber: number;
+}
+
+export interface BalanceCuentaDTO {
+  totalDebe: number;
+  totalHaber: number;
+  saldo: number;
+  balanceBase?: number | null;
+  fechaUltimoCierre?: string | null;
 }
 
 // --- Secuencias NCF ---

@@ -84,7 +84,7 @@ const PasoMetodo: React.FC<Props> = ({ value, onChange }) => {
                   className="repostear-tile__icon-circle"
                   style={isSelected ? {} : { background: isDarkMode ? hexToRgba(primaryColor, 0.2) : '#f0f3ff' }}
                 >
-                  {React.cloneElement(m.icon, {
+                  {React.isValidElement(m.icon) && React.cloneElement(m.icon as React.ReactElement<{style?: React.CSSProperties}>, {
                     style: { fontSize: 28, color: isSelected ? '#fff' : (m.value === 'rangoFechas' ? primaryColor : m.color) },
                   })}
                 </div>

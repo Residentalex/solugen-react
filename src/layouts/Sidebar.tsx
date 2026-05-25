@@ -30,7 +30,6 @@ const ICONOS_MODULOS: Record<string, React.ReactNode> = {
   'Cuentas por cobrar': <CreditCardOutlined />,
   Bancos: <BankOutlined />,
   Produccion: <BuildOutlined />,
-  Administracion: <SettingOutlined />,
 };
 
 const ICONO_DEFAULT = <AppstoreOutlined />;
@@ -116,7 +115,13 @@ const Sidebar: React.FC = () => {
 
       const children: MenuProps['items'] = [];
 
-      const sortedGrupos = Array.from(grupos.entries()).sort(([a], [b]) => a.localeCompare(b));
+      const sortedGrupos = Array.from(grupos.entries()).sort(([, aItems], [, bItems]) => {
+        const minA = Math.min(...aItems.map((p) => p.orden ?? 999));
+        const minB = Math.min(...bItems.map((p) => p.orden ?? 999));
+        return minA - minB;
+      });
+
+const makeKey = (codigo: string) => `${moduloNombre}__${codigo}`;
 
       for (const [grupoNombre, grupoPantallas] of sortedGrupos) {
         children.push({
@@ -126,15 +131,15 @@ const Sidebar: React.FC = () => {
             const subItems = childMap.get(p.id);
             if (subItems && subItems.length > 0) {
               return {
-                key: p.codigo,
+                key: makeKey(p.codigo),
                 label: p.nombre,
                 children: subItems.map((child) => ({
-                  key: child.codigo,
+                  key: makeKey(child.codigo),
                   label: child.nombre,
                 })),
               };
             }
-            return { key: p.codigo, label: p.nombre };
+            return { key: makeKey(p.codigo), label: p.nombre };
           }),
         });
       }
@@ -143,15 +148,15 @@ const Sidebar: React.FC = () => {
         const subItems = childMap.get(p.id);
         if (subItems && subItems.length > 0) {
           children.push({
-            key: p.codigo,
+            key: makeKey(p.codigo),
             label: p.nombre,
             children: subItems.map((child) => ({
-              key: child.codigo,
+              key: makeKey(child.codigo),
               label: child.nombre,
             })),
           });
         } else {
-          children.push({ key: p.codigo, label: p.nombre });
+          children.push({ key: makeKey(p.codigo), label: p.nombre });
         }
       }
 
@@ -182,11 +187,13 @@ const Sidebar: React.FC = () => {
 
   const handleMenuClick = ({ key }: { key: string }) => {
     if (key.startsWith('_grupo_') || key.startsWith('submenu_')) return;
-    setActiveModule(key);
-    if (key === 'dashboard') {
+    const codigo = key.includes('__') ? key.split('__')[1] : key;
+    const codigoUpper = codigo.toUpperCase();
+    setActiveModule(codigoUpper);
+    if (codigo === 'dashboard') {
       navigate('/');
     } else {
-      navigate(`/${key}`);
+      navigate(`/${codigoUpper}`);
     }
   };
 
@@ -202,7 +209,28 @@ const Sidebar: React.FC = () => {
     <Menu
       mode="inline"
       theme="dark"
-      selectedKeys={activeModule ? [activeModule] : []}
+      selectedKeys={
+        activeModule
+          ? (() => {
+              const found = menuItems?.find(
+                (item: any) =>
+                  item?.key === activeModule ||
+                  item?.key?.endsWith(`__${activeModule}`) ||
+                  item?.children?.some(
+                    (child: any) =>
+                      child?.key === activeModule ||
+                      child?.key?.endsWith(`__${activeModule}`) ||
+                      child?.children?.some(
+                        (sub: any) =>
+                          sub?.key === activeModule ||
+                          sub?.key?.endsWith(`__${activeModule}`)
+                      )
+                  )
+              );
+              return found ? [found.key] : [];
+            })()
+          : []
+      }
       openKeys={openKeys}
       defaultOpenKeys={[]}
       style={{ borderRight: 0, fontSize: 13, background: 'transparent' }}

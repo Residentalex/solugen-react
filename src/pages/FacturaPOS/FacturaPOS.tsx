@@ -1,17 +1,19 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, message, Drawer } from 'antd';
+import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, message, Drawer, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined,
   ReloadOutlined,
   PlusOutlined,
   PrinterOutlined,
+  LockFilled,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
+import PermissionGate from '../../components/PermissionGate';
 import type { FacturaVistaDTO } from '../../types/facturacion';
 
 const { Text } = Typography;
@@ -28,7 +30,7 @@ const ESTADO_MAP: Record<number, { label: string; color: string }> = {
 };
 
 const DIAS_POR_DEFECTO = 30;
-const FILAS_POR_PAGINA = 50;
+const FILAS_POR_PAGINA = 25;
 
 function parseDateRaw(val: string): Date | null {
   if (!val) return null;
@@ -184,7 +186,7 @@ const FacturaPOS: React.FC = () => {
 
   const handleRowClick = (record: FacturaVistaDTO) => {
     setSelectedRow(record);
-    const editable = record.periodo !== 6 && record.estado === 0;
+    const editable = Number(record.periodo) !== 6 && Number(record.estado) === 0;
     updateToolbar({ editar: editable });
   };
 
@@ -244,18 +246,28 @@ const FacturaPOS: React.FC = () => {
   ),
     },
     {
+      title: 'Turno',
+      dataIndex: 'turno',
+      key: 'turno',
+      width: 120,
+    },
+    {
       title: 'Estado',
       dataIndex: 'estado',
       key: 'estado',
       width: 100,
       render: (estado: number, record: FacturaVistaDTO) => {
-        const esCerrado = record.periodo === 6;
+        const esCerrado = Number(record.periodo) === 6;
         const info = ESTADO_MAP[estado] || { label: 'Desconocido', color: 'default' };
         return (
-          <Space>
-            <Tag color={info.color}>{info.label}</Tag>
-            {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-          </Space>
+          <Tag color={info.color}>
+            {info.label}
+            {esCerrado && (
+              <Tooltip title="Período contable cerrado">
+                <LockFilled style={{ marginLeft: 4, fontSize: 12, color: '#595959' }} />
+              </Tooltip>
+            )}
+          </Tag>
         );
       },
     },
@@ -303,10 +315,14 @@ const FacturaPOS: React.FC = () => {
             ]}
           />
           <div style={{ flex: 1 }} />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FPOS/nuevo')}>
-            Nuevo
-          </Button>
-          <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          <PermissionGate accion="CREAR">
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FPV/nuevo')}>
+              Nuevo
+            </Button>
+          </PermissionGate>
+          <PermissionGate accion="IMPRIMIR">
+            <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          </PermissionGate>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>

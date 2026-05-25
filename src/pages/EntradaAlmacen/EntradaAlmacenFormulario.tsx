@@ -11,7 +11,6 @@ import {
   DeleteOutlined,
   PlusOutlined,
   SearchOutlined,
-  ClearOutlined,
   ExclamationCircleOutlined,
   EditOutlined,
   MoreOutlined,
@@ -36,7 +35,7 @@ import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type {
   EntradaAlmacenDTO, DetalleEntradaAlmacenDTO, AsientoContableDTO,
-  ConceptoDTO, EntidadDTO, AlmacenDTO, SuplidorDTO,
+  ConceptoDTO, AlmacenDTO, SuplidorDTO,
   OrdenCompraVistaDTO, DetalleOrdenCompraVistaDTO,
 } from '../../types/entradaAlmacen';
 
@@ -93,6 +92,7 @@ function parseDateRaw(val: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+/* unused
 function formatDateParam(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -101,7 +101,7 @@ function formatDateParam(d: Date): string {
   const mm = String(d.getMinutes()).padStart(2, '0');
   const ss = String(d.getSeconds()).padStart(2, '0');
   return `${y}${m}${day}${hh}${mm}${ss}`;
-}
+}*/
 
 /** Formato ISO 8601 para JSON body (System.Text.Json en ASP.NET Core). */
 function toISOFormat(d: Date): string {
@@ -479,12 +479,12 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
   // ===== Refs para la guía (Tour) =====
-  const conceptoRef = useRef<HTMLElement>(null);
+  const conceptoRef = useRef<HTMLDivElement>(null);
   const suplidorRef = useRef<HTMLDivElement>(null);
-  const ordenCompraRef = useRef<HTMLElement>(null);
+  const ordenCompraRef = useRef<HTMLDivElement>(null);
   const almacenRef = useRef<HTMLDivElement>(null);
-  const agregarFilaRef = useRef<HTMLElement>(null);
-  const ncfRef = useRef<HTMLElement>(null);
+  const agregarFilaRef = useRef<HTMLDivElement>(null);
+  const ncfRef = useRef<HTMLDivElement>(null);
 
   const isLarge = screens.lg ?? true;
 
@@ -492,8 +492,6 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const estado = data?.estado ?? 0;
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
-  const esAplicado = estado === 1;
-  const esAnulado = estado === 3;
 
   // ===== Cargar datos de apoyo al montar =====
   useEffect(() => {
@@ -744,84 +742,6 @@ const EntradaAlmacenFormulario: React.FC = () => {
     }
   };
 
-  const handleAplicar = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      const result = await entradaAlmacenApi.aplicar(sucursalActiva, parseInt(id));
-      setData(result);
-      message.success('Documento aplicado exitosamente');
-      navigate(`/FENP/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAnular = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await entradaAlmacenApi.anular(sucursalActiva, dto);
-      message.success('Documento anulado exitosamente');
-      navigate(`/FENP/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al anular');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePostear = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await entradaAlmacenApi.postear(sucursalActiva, dto);
-      message.success('Documento posteado exitosamente');
-      navigate(`/FENP/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al postear');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRevisado = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      await entradaAlmacenApi.revisado(sucursalActiva, parseInt(id));
-      message.success('Documento marcado como revisado');
-      navigate(`/FENP/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al marcar revisado');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleReversar = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      await entradaAlmacenApi.reversar(sucursalActiva, parseInt(id));
-      message.success('Documento reversado exitosamente');
-      navigate(`/FENP/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al reversar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // ===== Handlers de concepto =====
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
@@ -875,13 +795,6 @@ const EntradaAlmacenFormulario: React.FC = () => {
     setConceptoModalOpen(true);
   };
 
-  const handleConceptoClear = () => {
-    setSelectedConcepto(null);
-    setConceptoSearchText('');
-    setEntidadesCache([]);
-    form.setFieldsValue({ conceptoNombre: '', suplidor: undefined });
-  };
-
   // ===== Handlers de OrdenCompra =====
   const handleBuscarOC = () => {
     setOrdenCompraModalOpen(true);
@@ -924,11 +837,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
         const ocDetalles = ocCompleta.detalles || [];
         setOcDetallesData(ocDetalles);
         const nuevosDetalles: DetalleEntradaAlmacenDTO[] = ocDetalles
-          .filter((d) => {
+          .filter((d: any) => {
             const cantidad = (d.cantidad + (d.cantidadBonificable || 0)) - (d.cantidadRecibida || 0);
             return cantidad > 0;
           })
-          .map((d, idx) => ({
+          .map((d: any, idx: number) => ({
             id: -(idx + 1),
             idExterno: d.idExterno || d.id,
             idTransaccionExterna: d.idTransaccionExterna || orden.id,
@@ -997,13 +910,6 @@ const EntradaAlmacenFormulario: React.FC = () => {
     setOrdenCompraNoDoc(orden.noDocumento);
     form.setFieldsValue({ ordenCompra: orden.noDocumento });
     setSelectedOC(orden);
-  };
-
-  const handleOCUnselect = () => {
-    setSelectedOC(null);
-    setOcDetallesData([]);
-    setOrdenCompraNoDoc('');
-    form.setFieldsValue({ ordenCompra: '' });
   };
 
   // ===== Handlers de detalles =====
@@ -1316,6 +1222,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
             key: 'vencimiento',
             label: record.fechaVencimiento ? `Venc: ${formatDate(record.fechaVencimiento)}` : 'Fecha Vencimiento',
             icon: <CalendarOutlined />,
+            danger: false,
             onClick: () => setFechaVencimientoModal({ open: true, detalleId: detalles[idx].id }),
           });
         }
@@ -1629,7 +1536,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
-                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(event.active.id); }} onDragEnd={handleDragEnd}>
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(Number(event.active.id)); }} onDragEnd={handleDragEnd}>
                         <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                         <Table
                           dataSource={detallesFiltrados}
@@ -1744,7 +1651,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                         onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                       />
                     </div>
-                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(event.active.id); }} onDragEnd={handleDragEnd}>
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(Number(event.active.id)); }} onDragEnd={handleDragEnd}>
                       <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                     <Table
                       dataSource={detallesFiltrados}

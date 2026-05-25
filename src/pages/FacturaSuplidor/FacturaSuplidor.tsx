@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Table, Input, DatePicker, Select, Tag, message, Drawer, Card, Button } from 'antd';
+import { Table, Input, DatePicker, Select, Tag, message, Drawer, Card, Button, Tooltip, Typography, Space } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { apiClient } from '../../api/client';
+import PermissionGate from '../../components/PermissionGate';
 import type { TransaccionVistaDTO, FiltroTransaccion } from '../../types/transaccion';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined, PlusOutlined, PrinterOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined, PrinterOutlined, LockFilled } from '@ant-design/icons';
 
 const { RangePicker } = DatePicker;
+const { Text } = Typography;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
@@ -34,6 +36,11 @@ function formatDate(val: string): string {
   const d = new Date(val);
   if (isNaN(d.getTime())) return val;
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function getInitials(name: string): string {
+  if (!name) return '?';
+  return name.charAt(0).toUpperCase();
 }
 
 function formatCurrency(n: number): string {
@@ -153,10 +160,10 @@ const FacturaSuplidor: React.FC = () => {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 140,
+      width: 160,
       fixed: 'left',
       render: (doc: string, record: TransaccionVistaDTO) => (
-        <a onClick={() => navigate(`/FRDE/${record.id}`)} style={{ fontWeight: 600 }}>{doc}</a>
+        <Text strong className="paces-doc-link" onClick={() => navigate(`/FRDE/${record.id}`)}>{doc}</Text>
       ),
     },
     {
@@ -164,14 +171,21 @@ const FacturaSuplidor: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (f: string) => formatDate(f),
+      render: (f: string) => <Text>{formatDate(f)}</Text>,
     },
     {
       title: 'Proveedor',
       dataIndex: 'entidad',
       key: 'entidad',
       ellipsis: true,
-      render: (name: string) => titlecase(name) || '',
+      render: (name: string) => (
+        <Space>
+          <div className="paces-avatar-initials">
+            {getInitials(name)}
+          </div>
+          <Text>{titlecase(name) || ''}</Text>
+        </Space>
+      ),
     },
     {
       title: 'Concepto',
@@ -179,7 +193,7 @@ const FacturaSuplidor: React.FC = () => {
       key: 'concepto',
       width: 280,
       ellipsis: true,
-      render: (concepto: string) => titlecase(concepto) || '',
+      render: (concepto: string) => <Text>{titlecase(concepto) || ''}</Text>,
     },
     {
       title: 'Total',
@@ -188,7 +202,7 @@ const FacturaSuplidor: React.FC = () => {
       width: 160,
       align: 'right',
       render: (total: number) => (
-        <span style={{ fontWeight: 600 }}>{formatCurrency(total)}</span>
+        <Text strong className="paces-text-total">{formatCurrency(total)}</Text>
       ),
     },
     {
@@ -196,7 +210,7 @@ const FacturaSuplidor: React.FC = () => {
       dataIndex: 'ncf',
       key: 'ncf',
       width: 150,
-      render: (ncf: string) => ncf || '',
+      render: (ncf: string) => <Text>{ncf || ''}</Text>,
     },
     {
       title: 'Estado',
@@ -207,10 +221,14 @@ const FacturaSuplidor: React.FC = () => {
         const esCerrado = record.periodo === 6;
         const info = ESTADO_MAP[estado] || { label: 'Desconocido', color: 'default' };
         return (
-          <>
-            <Tag color={info.color}>{info.label}</Tag>
-            {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-          </>
+          <Tag color={info.color}>
+            {info.label}
+            {esCerrado && (
+              <Tooltip title="Período contable cerrado">
+                <LockFilled style={{ marginLeft: 4, fontSize: 12, color: '#595959' }} />
+              </Tooltip>
+            )}
+          </Tag>
         );
       },
     },
@@ -247,10 +265,14 @@ const FacturaSuplidor: React.FC = () => {
             ]}
           />
           <div style={{ flex: 1 }} />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FFCP/nuevo')}>
-            Nuevo
-          </Button>
-          <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          <PermissionGate accion="CREAR">
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FRDE/nuevo')}>
+              Nuevo
+            </Button>
+          </PermissionGate>
+          <PermissionGate accion="IMPRIMIR">
+            <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          </PermissionGate>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>

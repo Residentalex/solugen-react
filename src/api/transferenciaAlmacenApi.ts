@@ -1,5 +1,6 @@
 import { apiClient } from './client';
-import type { MovimientoVistaDTO, FiltroTRP } from '../types/transferenciaAlmacen';
+import type { MovimientoVistaDTO, FiltroTRP, TransferenciaAlmacenFullDTO } from '../types/transferenciaAlmacen';
+import type { ConceptoDTO, AlmacenDTO } from '../types/entradaAlmacen';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/TRP';
@@ -39,18 +40,51 @@ export const transferenciaAlmacenApi = {
     return data.data;
   },
 
-  obtenerPorId: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.get<ApiResponse<any>>(`${BASE}/${sucursal}/${id}`);
+  obtenerPorId: async (sucursal: number, id: number): Promise<TransferenciaAlmacenFullDTO> => {
+    const { data } = await apiClient.get<ApiResponse<TransferenciaAlmacenFullDTO>>(`${BASE}/${sucursal}/${id}`);
     return data.data;
   },
 
-  aplicar: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/aplicar/${id}`);
+  crear: async (sucursal: number, trp: TransferenciaAlmacenFullDTO): Promise<TransferenciaAlmacenFullDTO> => {
+    const { data } = await apiClient.post<ApiResponse<TransferenciaAlmacenFullDTO>>(`${BASE}/${sucursal}`, trp);
+    return data.data;
+  },
+
+  actualizar: async (sucursal: number, trp: TransferenciaAlmacenFullDTO): Promise<TransferenciaAlmacenFullDTO> => {
+    const { data } = await apiClient.put<ApiResponse<TransferenciaAlmacenFullDTO>>(`${BASE}/${sucursal}`, trp);
+    return data.data;
+  },
+
+  aplicar: async (sucursal: number, id: number): Promise<TransferenciaAlmacenFullDTO> => {
+    const { data } = await apiClient.put<ApiResponse<TransferenciaAlmacenFullDTO>>(`${BASE}/${sucursal}/aplicar/${id}`);
+    return data.data;
+  },
+
+  postear: async (sucursal: number, trp: TransferenciaAlmacenFullDTO): Promise<any> => {
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postear`, trp);
+    return data.data;
+  },
+
+  anular: async (sucursal: number, trp: any): Promise<any> => {
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/anular`, trp);
     return data.data;
   },
 
   desaplicar: async (sucursal: number, documento: string): Promise<any> => {
     const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/desaplicar?sucursal=${sucursal}&documento=${documento}`);
+    return data.data;
+  },
+
+  // Catálogos para selects
+  obtenerConceptos: async (sucursal: number, tipoDocumento?: string): Promise<ConceptoDTO[]> => {
+    const params: Record<string, string> = {};
+    if (tipoDocumento) params.documento = tipoDocumento;
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}`, { params });
+    return data.data;
+  },
+
+  obtenerAlmacenes: async (sucursal: number): Promise<AlmacenDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<AlmacenDTO[]>>(`/Almacen/${sucursal}`);
     return data.data;
   },
 };

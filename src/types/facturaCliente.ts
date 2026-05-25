@@ -29,6 +29,14 @@ export type {
   LogDTO,
 };
 
+// ===== Tipo de documento para Factura Cliente =====
+export interface TipoDTO {
+  idExterno: number;
+  codigo: string;
+  nombre: string;
+  requiereReferencia: boolean;
+}
+
 export interface DetalleFacturaClienteDTO {
   id: number;
   idExterno?: number;
@@ -94,4 +102,35 @@ export interface FacturaClienteDTO {
   logs: LogDTO[];
   cobros?: any[];
   transaccionNCF?: any;
+}
+
+// ===== FullDTO para formulario (crear/editar) con campos anulables =====
+export interface FacturaClienteFullDTO {
+  id: number;
+  fechaDocumento: string;
+  fechaVencimiento: string;
+  noDocumento: string;
+  estado: number;
+  periodo: number;
+  ncf: string;
+  nota: string;
+  referencia: string;
+  tasa: number;
+  diasCredito: number;
+
+  concepto: ConceptoDTO | null;
+  cliente: ClienteDTO | null;
+  almacen: AlmacenDTO | null;
+  tipo: TipoDTO | null;
+  moneda: MonedaDTO | null;
+  documento: DocumentoDTO;
+
+  subTotal: number;
+  descuento: number;
+  impuestos: number;
+  total: number;
+
+  detalles: DetalleFacturaClienteDTO[];
+  asientos?: AsientoContableDTO[];
+  logs?: LogDTO[];
 }

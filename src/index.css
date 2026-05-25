@@ -46,8 +46,8 @@ body {
   --paces-card-border: #f0f2f5;
   --paces-login-card-bg: #ffffff;
   --paces-login-card-border: rgba(30,30,45,0.04);
-  --paces-table-header-font-size: 12px;
-  --paces-table-cell-font-size: 11px;
+  --paces-table-header-font-size: 10px;
+  --paces-table-cell-font-size: 9px;
 }
 
 /* ===== 10 Temas ===== */
@@ -82,8 +82,8 @@ body.theme-dark-default {
   --paces-card-border: #2e2e48;
   --paces-login-card-bg: #1e1e32;
   --paces-login-card-border: #2e2e48;
-  --paces-table-header-font-size: 12px;
-  --paces-table-cell-font-size: 11px;
+  --paces-table-header-font-size: 10px;
+  --paces-table-cell-font-size: 9px;
 }
 
 /* light-ocean */
@@ -116,8 +116,8 @@ body.theme-light-ocean {
   --paces-card-border: #eef4fb;
   --paces-login-card-bg: #ffffff;
   --paces-login-card-border: rgba(30,30,45,0.04);
-  --paces-table-header-font-size: 12px;
-  --paces-table-cell-font-size: 11px;
+  --paces-table-header-font-size: 10px;
+  --paces-table-cell-font-size: 9px;
 }
 
 /* dark-ocean */
@@ -150,8 +150,8 @@ body.theme-dark-ocean {
   --paces-card-border: #28344a;
   --paces-login-card-bg: #1c263a;
   --paces-login-card-border: #28344a;
-  --paces-table-header-font-size: 12px;
-  --paces-table-cell-font-size: 11px;
+  --paces-table-header-font-size: 10px;
+  --paces-table-cell-font-size: 9px;
 }
 
 /* light-midnight */
@@ -184,8 +184,8 @@ body.theme-light-midnight {
   --paces-card-border: #eef0f9;
   --paces-login-card-bg: #ffffff;
   --paces-login-card-border: rgba(30,30,45,0.04);
-  --paces-table-header-font-size: 12px;
-  --paces-table-cell-font-size: 11px;
+  --paces-table-header-font-size: 10px;
+  --paces-table-cell-font-size: 9px;
 }
 
 /* dark-midnight */
@@ -218,8 +218,8 @@ body.theme-dark-midnight {
   --paces-card-border: #2a2a44;
   --paces-login-card-bg: #1c1c30;
   --paces-login-card-border: #2a2a44;
-  --paces-table-header-font-size: 12px;
-  --paces-table-cell-font-size: 11px;
+  --paces-table-header-font-size: 10px;
+  --paces-table-cell-font-size: 9px;
 }
 
 /* light-rose */
@@ -252,8 +252,8 @@ body.theme-light-rose {
   --paces-card-border: #faf0f9;
   --paces-login-card-bg: #ffffff;
   --paces-login-card-border: rgba(30,30,45,0.04);
-  --paces-table-header-font-size: 12px;
-  --paces-table-cell-font-size: 11px;
+  --paces-table-header-font-size: 10px;
+  --paces-table-cell-font-size: 9px;
 }
 
 /* dark-rose */
@@ -286,8 +286,8 @@ body.theme-dark-rose {
   --paces-card-border: #3a2844;
   --paces-login-card-bg: #2a1c30;
   --paces-login-card-border: #3a2844;
-  --paces-table-header-font-size: 12px;
-  --paces-table-cell-font-size: 11px;
+  --paces-table-header-font-size: 10px;
+  --paces-table-cell-font-size: 9px;
 }
 
 /* light-amber */
@@ -320,8 +320,8 @@ body.theme-light-amber {
   --paces-card-border: #fcf7ef;
   --paces-login-card-bg: #ffffff;
   --paces-login-card-border: rgba(30,30,45,0.04);
-  --paces-table-header-font-size: 12px;
-  --paces-table-cell-font-size: 11px;
+  --paces-table-header-font-size: 10px;
+  --paces-table-cell-font-size: 9px;
 }
 
 /* dark-amber */
@@ -354,8 +354,8 @@ body.theme-dark-amber {
   --paces-card-border: #3a3428;
   --paces-login-card-bg: #2a241c;
   --paces-login-card-border: #3a3428;
-  --paces-table-header-font-size: 12px;
-  --paces-table-cell-font-size: 11px;
+  --paces-table-header-font-size: 10px;
+  --paces-table-cell-font-size: 9px;
 }
 
 /* liga - hibrido neutral entre dark y light */
@@ -388,8 +388,8 @@ body.theme-liga {
   --paces-card-border: #d6d2ca;
   --paces-login-card-bg: #fcfaf5;
   --paces-login-card-border: rgba(0,0,0,0.04);
-  --paces-table-header-font-size: 12px;
-  --paces-table-cell-font-size: 11px;
+  --paces-table-header-font-size: 10px;
+  --paces-table-cell-font-size: 9px;
 }
 
 /* liga - Sidebar text overrides */
@@ -461,7 +461,7 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
   flex-direction: column;
 }
 .paces-sidebar .sidebar-logo {
-  height: 64px;
+  height: 56px;
   display: flex;
   align-items: center;
   padding: 0 20px;
@@ -480,17 +480,17 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
   padding: 8px 0;
 }
 .paces-sidebar .sidebar-menu .ant-menu-item {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--paces-text) !important;
   border-radius: 8px;
   margin: 2px 10px;
   padding: 0 12px !important;
-  height: 40px;
-  line-height: 40px;
+  height: 36px;
+  line-height: 36px;
   transition: all 0.15s ease;
 }
 .paces-sidebar .sidebar-menu .ant-menu-item .ant-menu-item-icon {
-  font-size: 16px;
+  font-size: 14px;
   color: inherit;
 }
 .paces-sidebar .sidebar-menu .ant-menu-item:hover {
@@ -506,13 +506,13 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
   display: none;
 }
 .paces-sidebar .sidebar-menu .ant-menu-submenu-title {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--paces-text) !important;
   border-radius: 8px;
   margin: 2px 10px;
   padding: 0 12px !important;
-  height: 42px;
-  line-height: 42px;
+  height: 38px;
+  line-height: 38px;
   transition: all 0.15s ease;
 }
 .paces-sidebar .sidebar-menu .ant-menu-submenu-title .ant-menu-item-icon {
@@ -532,9 +532,9 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
 .paces-sidebar .sidebar-menu .ant-menu-sub .ant-menu-item {
   padding-left: 40px !important;
   margin: 1px 10px;
-  height: 36px;
-  line-height: 36px;
-  font-size: 12.5px;
+  height: 32px;
+  line-height: 32px;
+  font-size: 11.5px;
   color: var(--paces-text-secondary) !important;
 }
 .paces-sidebar .sidebar-menu .ant-menu-sub .ant-menu-item:hover {
@@ -546,10 +546,10 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
 }
 .paces-sidebar .sidebar-menu .menu-module-label {
   font-weight: 500;
-  font-size: 13px;
+  font-size: 12px;
 }
 .paces-sidebar .sidebar-menu .menu-group-label {
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--paces-text-secondary);
   text-transform: uppercase;
@@ -583,7 +583,7 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
 
 /* ===== Topbar ===== */
 .paces-topbar {
-  height: 64px;
+  height: 56px;
   background: var(--paces-topbar-bg);
   border-bottom: 1px solid var(--paces-topbar-border);
   display: flex;
@@ -620,11 +620,11 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
   gap: 12px;
 }
 .paces-hamburger {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   background: none;
   border: none;
-  font-size: 20px;
+  font-size: 18px;
   color: var(--paces-text-secondary);
   cursor: pointer;
   border-radius: 8px;
@@ -671,19 +671,19 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
   border-color: var(--paces-border);
 }
 .paces-avatar {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: var(--paces-primary);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 10px;
   font-weight: 600;
 }
 .paces-topbar-user-name {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--paces-text);
   font-weight: 500;
   max-width: 150px;
@@ -694,7 +694,7 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
 
 /* ===== Page Header ===== */
 .paces-page-header {
-  padding: 12px 24px 0;
+  padding: 8px 20px 0;
   margin-bottom: 0;
 }
 .paces-page-header-inner {
@@ -704,7 +704,7 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
 }
 .paces-page-header h3 {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--paces-text-heading);
 }
@@ -722,15 +722,15 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
 
 /* ===== Content Area ===== */
 .paces-content {
-  padding: 8px 24px 24px;
-  min-height: calc(100vh - 64px);
+  padding: 4px 20px 20px;
+  min-height: calc(100vh - 56px);
 }
 
 /* ===== Stat Cards (Dashboard) ===== */
 .paces-stat-card {
   background: var(--paces-bg-container);
   border-radius: 12px;
-  padding: 24px;
+  padding: 20px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   display: flex;
   align-items: center;
@@ -764,13 +764,13 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
   flex-shrink: 0;
 }
 .paces-stat-value {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--paces-text-heading);
   line-height: 1.2;
 }
 .paces-stat-label {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--paces-text-secondary);
   margin: 2px 0 0;
   font-weight: 400;
@@ -784,6 +784,23 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
   gap: 3px;
 }
 
+/* Stat card inner structure */
+.paces-stat-card-body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+.paces-stat-card-content {
+  flex: 1;
+}
+
+/* Stat card modifier classes for left bar */
+.paces-stat-card--primary::before { background: var(--paces-primary); }
+.paces-stat-card--success::before { background: #34c38f; }
+.paces-stat-card--warning::before { background: #f0b345; }
+.paces-stat-card--danger::before { background: #f46a6a; }
+
 /* ===== Paces Card ===== */
 .paces-card {
   background: var(--paces-bg-container);
@@ -792,17 +809,17 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 .paces-card-header {
-  padding: 18px 24px;
+  padding: 14px 20px;
   border-bottom: 1px solid var(--paces-card-border);
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--paces-text-heading);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 .paces-card-body {
-  padding: 24px;
+  padding: 16px;
 }
 
 /* ===== Quick Access Items ===== */
@@ -1075,7 +1092,7 @@ body.theme-liga .paces-login-bg {
 
 /* ===== Toolbar ===== */
 .paces-toolbar {
-  padding: 8px 24px;
+  padding: 4px 20px;
   background: transparent;
   border-bottom: none;
   display: flex;
@@ -1086,7 +1103,7 @@ body.theme-liga .paces-login-bg {
 .paces-toolbar .ant-btn {
   border-radius: 8px;
   font-weight: 500;
-  font-size: 13px;
+  font-size: 12px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1116,8 +1133,8 @@ body.theme-liga .paces-login-bg {
   margin-bottom: 0;
 }
 .paces-tabs .ant-tabs-tab {
-  font-size: 13px;
-  padding: 8px 16px;
+  font-size: 12px;
+  padding: 6px 12px;
   transition: all 0.15s;
 }
 .paces-tabs .ant-tabs-tab-active {
@@ -1131,7 +1148,7 @@ body.theme-liga .paces-login-bg {
 }
 .paces-table-wrapper .ant-table-thead > tr > th {
   font-weight: 600;
-  font-size: 12px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
@@ -1148,19 +1165,19 @@ body.theme-liga .paces-login-bg {
 }
 
 .paces-card-erp .ant-table-thead > tr > th {
-  padding-top: 14px !important;
-  padding-bottom: 14px !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
 }
 
 .paces-card-erp .ant-table-tbody > tr > td {
-  padding-top: 12px !important;
-  padding-bottom: 12px !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
 }
 
 /* ===== Acciones column (fixed-right) ===== */
 .paces-card-erp .ant-table-cell-fix-right {
-  padding-top: 4px !important;
-  padding-bottom: 4px !important;
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
 }
 
 /* ===== Utility ===== */
@@ -1173,28 +1190,29 @@ body.theme-liga .paces-login-bg {
 .mt-3 { margin-top: 16px; }
 .mt-4 { margin-top: 24px; }
 
-/* ===== Documento link (negrita, sin color azul) ===== */
+/* ===== Documento link (azul, sin negrita) ===== */
 .paces-doc-link {
-  color: var(--paces-text) !important;
+  color: var(--paces-primary) !important;
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 500;
   transition: color 0.15s;
 }
 .paces-doc-link:hover {
-  color: var(--paces-text-heading) !important;
+  color: var(--paces-primary-hover) !important;
+  text-decoration: underline;
 }
 
 /* ===== Avatar inicial (círculo con iniciales) ===== */
 .paces-avatar-initials {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--paces-hover-bg);
   color: var(--paces-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 10px;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -1233,11 +1251,11 @@ a:hover {
 
 /* ===== List view table font size (smaller) ===== */
 .paces-list-table.ant-table-medium .ant-table-thead > tr > th {
-  font-size: 12px !important;
+  font-size: 10px !important;
 }
 
 .paces-list-table.ant-table-medium .ant-table-tbody > tr > td {
-  font-size: 11px !important;
+  font-size: 9px !important;
 }
 
 /* ===== Home ===== */

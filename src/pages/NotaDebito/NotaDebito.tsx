@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Table, Input, DatePicker, Select, Tag, message, Drawer, Card, Button } from 'antd';
+import { Table, Input, DatePicker, Select, Tag, message, Drawer, Card, Button, Tooltip, Typography, Space } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { notaDebitoApi } from '../../api/notaDebitoApi';
 import { apiClient } from '../../api/client';
+import PermissionGate from '../../components/PermissionGate';
 import type { TransaccionVistaDTO, FiltroTransaccion } from '../../types/transaccion';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined, PlusOutlined, PrinterOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined, PrinterOutlined, LockFilled } from '@ant-design/icons';
 
+const { Text } = Typography;
 const { RangePicker } = DatePicker;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
@@ -34,6 +36,11 @@ function formatDate(val: string): string {
   const d = new Date(val);
   if (isNaN(d.getTime())) return val;
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function getInitials(name: string): string {
+  if (!name) return '?';
+  return name.charAt(0).toUpperCase();
 }
 
 function formatCurrency(n: number): string {
@@ -161,12 +168,12 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 140,
+      width: 160,
       fixed: 'left',
       render: (doc: string, record: TransaccionVistaDTO) => (
-        <a onClick={() => navigate(`/${codigoPantalla}/${record.id}`)} style={{ color: '#6c5ffc', fontWeight: 500 }}>
+        <Text strong className="paces-doc-link" onClick={() => navigate(`/${codigoPantalla}/${record.id}`)}>
           {doc}
-        </a>
+        </Text>
       ),
     },
     {
@@ -174,14 +181,21 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (v: string) => formatDate(v),
+      render: (v: string) => <Text>{formatDate(v)}</Text>,
     },
     {
       title: entidadLabel,
       dataIndex: 'entidad',
       key: 'entidad',
       ellipsis: true,
-      render: (v: string) => titlecase(v || ''),
+      render: (v: string) => (
+        <Space>
+          <div className="paces-avatar-initials">
+            {getInitials(v)}
+          </div>
+          <Text>{titlecase(v || '')}</Text>
+        </Space>
+      ),
     },
     {
       title: 'Concepto',
@@ -189,14 +203,14 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
       key: 'concepto',
       width: 220,
       ellipsis: true,
-      render: (v: string) => titlecase(v || ''),
+      render: (v: string) => <Text>{titlecase(v || '')}</Text>,
     },
     {
       title: 'NCF',
       dataIndex: 'ncf',
       key: 'ncf',
       width: 140,
-      render: (v: string) => v || '',
+      render: (v: string) => <Text>{v || ''}</Text>,
     },
     {
       title: 'Total',
@@ -204,16 +218,26 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
       key: 'total',
       width: 140,
       align: 'right',
-      render: (v: number) => <strong>{formatCurrency(v)}</strong>,
+      render: (v: number) => <Text strong className="paces-text-total">{formatCurrency(v)}</Text>,
     },
     {
       title: 'Estado',
       dataIndex: 'estado',
       key: 'estado',
       width: 110,
-      render: (est: number) => {
+      render: (est: number, record: TransaccionVistaDTO) => {
+        const esCerrado = record.periodo === 6;
         const info = ESTADO_MAP[est] || { label: 'Desconocido', color: 'default' };
-        return <Tag color={info.color}>{info.label}</Tag>;
+        return (
+          <Tag color={info.color}>
+            {info.label}
+            {esCerrado && (
+              <Tooltip title="Período contable cerrado">
+                <LockFilled style={{ marginLeft: 4, fontSize: 12, color: '#595959' }} />
+              </Tooltip>
+            )}
+          </Tag>
+        );
       },
     },
   ];
@@ -246,10 +270,14 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
             ]}
           />
           <div style={{ flex: 1 }} />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate(`/${codigoPantalla}/nuevo`)}>
-            Nuevo
-          </Button>
-          <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          <PermissionGate accion="CREAR" codigoPantalla={codigoPantalla}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate(`/${codigoPantalla}/nuevo`)}>
+              Nuevo
+            </Button>
+          </PermissionGate>
+          <PermissionGate accion="IMPRIMIR" codigoPantalla={codigoPantalla}>
+            <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          </PermissionGate>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>
@@ -260,14 +288,15 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
         rowKey="id"
         loading={loading}
         size="middle"
-        scroll={{ x: 900 }}
+        scroll={{ x: 1350 }}
         pagination={{
           current: page,
           pageSize,
           total,
           showSizeChanger: false,
-          showTotal: (t) => `Aprox. ${t} registros`,
+          showTotal: (t) => `${t} registros`,
         }}
+        className="paces-border-top paces-list-table"
         onChange={(pagination) => {
           if (pagination.current) setPage(pagination.current);
         }}

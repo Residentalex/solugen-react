@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Card,
   Table,
@@ -8,25 +8,32 @@ import {
   Input,
   InputNumber,
   message,
-  Space,
-  Tooltip,
   Empty,
+  Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { monedaApi } from '../../api/monedaApi';
 import type { MonedaDTO } from '../../types/contabilidad';
+import PermissionGate from '../../components/PermissionGate';
+
+const { Text } = Typography;
 
 const Monedas: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.usuario?.sucursalActiva);
+  const usuario = useAuthStore((s: any) => s.usuario);
+  const pantallaActual = usuario?.pantallas.find((p: any) => p.codigo === 'MMoneda');
+  const puedeEditar = pantallaActual?.acciones.includes('EDITAR') ?? false;
+  const puedeCrear = pantallaActual?.acciones.includes('CREAR') ?? false;
 
   const [data, setData] = useState<MonedaDTO[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<MonedaDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -52,13 +59,29 @@ const Monedas: React.FC = () => {
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
 
+  const handleSearch = (value: string) => {
+    setSearchText(value);
+  };
+
+  const filteredData = useMemo(() => {
+    if (!searchText) return data;
+    const lower = searchText.toLowerCase();
+    return data.filter(
+      (item) =>
+        item.codigo.toLowerCase().includes(lower) ||
+        item.nombre.toLowerCase().includes(lower)
+    );
+  }, [data, searchText]);
+
   const abrirNuevo = () => {
+    if (!puedeCrear) return;
     setEditando(null);
     form.resetFields();
     setModalVisible(true);
   };
 
   const abrirEditar = (moneda: MonedaDTO) => {
+    if (!puedeEditar) return;
     setEditando(moneda);
     form.setFieldsValue({
       nombre: moneda.nombre,
@@ -108,12 +131,25 @@ const Monedas: React.FC = () => {
       key: 'codigo',
       fixed: 'left',
       width: 120,
+      render: (val: string, record: MonedaDTO) =>
+        puedeEditar ? (
+          <Button
+            type="link"
+            size="small"
+            style={{ padding: 0, fontWeight: 500 }}
+            onClick={() => abrirEditar(record)}
+          >
+            {val}
+          </Button>
+        ) : (
+          <Text>{val}</Text>
+        ),
     },
     {
       title: 'Nombre',
       dataIndex: 'nombre',
       key: 'nombre',
-      render: (nombre: string) => toTitleCase(nombre ?? ''),
+      render: (nombre: string) => <Text>{toTitleCase(nombre ?? '')}</Text>,
     },
     {
       title: 'Símbolo',
@@ -121,6 +157,7 @@ const Monedas: React.FC = () => {
       key: 'simbolo',
       width: 100,
       align: 'center',
+      render: (val: string) => <Text>{val}</Text>,
     },
     {
       title: 'Tasa',
@@ -128,41 +165,40 @@ const Monedas: React.FC = () => {
       key: 'tasa',
       width: 120,
       align: 'right',
-      render: (tasa: number) => tasa?.toFixed(2),
-    },
-    {
-      title: 'Acciones',
-      key: 'acciones',
-      fixed: 'right',
-      width: 80,
-      render: (_, record) => (
-        <Space size={0}>
-          <Tooltip title="Editar moneda">
-            <Button
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => abrirEditar(record)}
-            />
-          </Tooltip>
-        </Space>
-      ),
+      render: (tasa: number) => <Text>{tasa?.toFixed(2)}</Text>,
     },
   ];
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Monedas</h4>
-        <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-          Nueva Moneda
-        </Button>
-      </div>
-
       <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+        <div style={{ padding: '16px 24px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
+            <Input.Search
+              placeholder="Buscar por código o nombre..."
+              allowClear
+              onSearch={handleSearch}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  (e.target as HTMLInputElement).blur();
+                  handleSearch('');
+                }
+              }}
+              style={{ width: 400 }}
+              prefix={<SearchOutlined className="paces-text-icon" />}
+            />
+            <div style={{ flex: 1 }} />
+            <PermissionGate accion="CREAR">
+              <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
+                Nuevo
+              </Button>
+            </PermissionGate>
+            <Button icon={<ReloadOutlined />} onClick={() => cargarDatos()} />
+          </div>
+        </div>
         <Table<MonedaDTO>
           columns={columns}
-          dataSource={data}
+          dataSource={filteredData}
           rowKey="id"
           loading={loading}
           scroll={{ x: 700 }}

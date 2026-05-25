@@ -1,6 +1,6 @@
 import { apiClient } from './client';
-import type { ApiResponse } from '../types/auth';
-import type { RolFullDTO, PantallaFullDTO } from '../types/administracion';
+import type { ApiResponse, PantallaDTO } from '../types/auth';
+import type { RolFullDTO } from '../types/administracion';
 
 const BASE = '/Rol';
 
@@ -25,8 +25,8 @@ export const rolApi = {
     return data.data;
   },
 
-  obtenerPantallasDisponibles: async (sucursal: number): Promise<PantallaFullDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<PantallaFullDTO[]>>(`${BASE}/${sucursal}/pantallas-disponibles`);
+  obtenerPantallasDisponibles: async (sucursal: number): Promise<PantallaDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<PantallaDTO[]>>(`${BASE}/${sucursal}/pantallas-disponibles`);
     return data.data;
   },
 };

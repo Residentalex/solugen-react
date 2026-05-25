@@ -32,7 +32,6 @@ interface GuideStep {
 }
 
 const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
-  mode,
   concepto,
   suplidor,
   ordenCompra,

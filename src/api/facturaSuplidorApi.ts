@@ -1,5 +1,7 @@
 import { apiClient } from './client';
 import type { TransaccionVistaDTO, FiltroTransaccion } from '../types/transaccion';
+import type { TipoDTO } from '../types/facturaSuplidor';
+import type { ConceptoDTO, SuplidorDTO } from '../types/entradaAlmacen';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/Transaccion';
@@ -73,6 +75,41 @@ export const facturaSuplidorApi = {
 
   postear: async (sucursal: number, transaccion: any): Promise<any> => {
     const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postear`, transaccion);
+    return data.data;
+  },
+
+  // ===== Catálogos para formulario =====
+  obtenerTipos: async (sucursal: number): Promise<TipoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<TipoDTO[]>>(`/Tipo/${sucursal}/documento/RDE`);
+    return data.data;
+  },
+
+  obtenerConceptos: async (sucursal: number, tipoId?: number): Promise<ConceptoDTO[]> => {
+    const params: Record<string, any> = { documento: 'RDE' };
+    if (tipoId) params.tipoId = tipoId;
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}`, { params });
+    return data.data;
+  },
+
+  obtenerSuplidores: async (sucursal: number): Promise<SuplidorDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<SuplidorDTO[]>>(`/Proveedor/${sucursal}`);
+    return data.data;
+  },
+
+  obtenerEntradasAlmacen: async (sucursal: number, params?: any): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`/ENP/${sucursal}/vista`, { params });
+    return data.data;
+  },
+
+  obtenerDetalleEntrada: async (sucursal: number, id: number): Promise<any> => {
+    const { data } = await apiClient.get<ApiResponse<any>>(`/ENP/${sucursal}/${id}`);
+    return data.data;
+  },
+
+  verificarNCF: async (sucursal: number, ncf: string, suplidorCodigo: string): Promise<boolean> => {
+    const { data } = await apiClient.get<ApiResponse<boolean>>(
+      `${BASE}/${sucursal}/ncf-verificar?ncf=${encodeURIComponent(ncf)}&suplidor=${encodeURIComponent(suplidorCodigo)}`
+    );
     return data.data;
   },
 };

@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { ProductoListaDTO, ProductoDTO, FiltroProducto } from '../types/productos';
+import type { ProductoListaDTO, ProductoDTO, FiltroProducto, ResultadoImportacionDTO } from '../types/productos';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/Producto';
@@ -48,5 +48,23 @@ export const productoApi = {
       codigos
     );
     return (data.data || []).map((p) => p.codigo);
+  },
+
+  descargarPlantilla: async (sucursal: number): Promise<Blob> => {
+    const { data } = await apiClient.get(`${BASE}/${sucursal}/plantilla`, {
+      responseType: 'blob',
+    });
+    return data;
+  },
+
+  importarExcel: async (sucursal: number, file: File): Promise<ResultadoImportacionDTO> => {
+    const formData = new FormData();
+    formData.append('archivo', file);
+    const { data } = await apiClient.post<{ isSuccess: boolean; data: ResultadoImportacionDTO; errorMessage: string }>(
+      `${BASE}/${sucursal}/importar`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return data.data;
   },
 };

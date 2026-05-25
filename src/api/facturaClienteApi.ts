@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { FacturaVistaDTO, FiltroFacturacion } from '../types/facturacion';
-import type { FacturaClienteDTO } from '../types/facturaCliente';
+import type { FacturaClienteDTO, FacturaClienteFullDTO, TipoDTO, ConceptoDTO, AlmacenDTO, ClienteDTO } from '../types/facturaCliente';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/FAC';
@@ -56,6 +56,17 @@ export const facturaClienteApi = {
     return data.data;
   },
 
+  // ===== CRUD formulario =====
+  crear: async (sucursal: number, factura: FacturaClienteFullDTO): Promise<FacturaClienteFullDTO> => {
+    const { data } = await apiClient.post<ApiResponse<FacturaClienteFullDTO>>(`${BASE}/${sucursal}`, factura);
+    return data.data;
+  },
+
+  actualizar: async (sucursal: number, factura: FacturaClienteFullDTO): Promise<FacturaClienteFullDTO> => {
+    const { data } = await apiClient.put<ApiResponse<FacturaClienteFullDTO>>(`${BASE}/${sucursal}`, factura);
+    return data.data;
+  },
+
   anular: async (sucursal: number, factura: any): Promise<any> => {
     const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/anular`, factura);
     return data.data;
@@ -75,5 +86,28 @@ export const facturaClienteApi = {
 
   eliminar: async (sucursal: number, id: number): Promise<void> => {
     await apiClient.delete(`${BASE}/${sucursal}/Eliminar/${id}`);
+  },
+
+  // ===== Catálogos =====
+  obtenerConceptos: async (sucursal: number, tipoDocumento?: string): Promise<ConceptoDTO[]> => {
+    const params: Record<string, string> = {};
+    if (tipoDocumento) params.documento = tipoDocumento;
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}`, { params });
+    return data.data;
+  },
+
+  obtenerAlmacenes: async (sucursal: number): Promise<AlmacenDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<AlmacenDTO[]>>(`/Almacen/${sucursal}`);
+    return data.data;
+  },
+
+  obtenerClientes: async (sucursal: number): Promise<ClienteDTO[]> => {
+    const { data } = await apiClient.get<ClienteDTO[]>(`/Cliente/${sucursal}/activos`);
+    return data;
+  },
+
+  obtenerTipos: async (sucursal: number): Promise<TipoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<TipoDTO[]>>(`/Tipo/${sucursal}/documento/FFAC`);
+    return data.data;
   },
 };

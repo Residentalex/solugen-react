@@ -60,6 +60,7 @@ export interface ImpuestoProductoDTO {
     ambito?: number;
     codigo?: string;
     noCuenta?: string;
+    idExterno?: string;
   } | null;
 }
 
@@ -75,6 +76,7 @@ export interface DatosExtraProductoDTO {
   productoTerminado?: boolean;
   pesado?: boolean;
   garantia?: number;
+  esComodin?: boolean;
 }
 
 export interface ProductoDTO {
@@ -97,4 +99,18 @@ export interface ProductoDTO {
   pesado?: boolean;
   productoControl?: ProductoDTO | null;
   datosExtra?: DatosExtraProductoDTO | null;
+  requiereFechaVenc?: boolean;
+  diasVencimiento?: number;
+}
+
+export interface ResultadoImportacionDTO {
+  total: number;
+  insertados: number;
+  actualizados: number;
+  errores: ErrorImportacionDTO[];
+}
+
+export interface ErrorImportacionDTO {
+  fila: number;
+  mensaje: string;
 }

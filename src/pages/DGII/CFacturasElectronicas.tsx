@@ -167,7 +167,7 @@ const CFacturasElectronicas: React.FC = () => {
 
         const nextTask = async (item: EnvioDGIIDTO) => {
           try {
-            await dgiiApi.cargarYEnviarFactura(item.sucursal, item.transaccionID, item.tipoDocumento);
+            await dgiiApi.cargarYEnviarFactura(item.sucursal, item.transaccionID, item.tipoDocumento!);
           } catch (err: any) {
             errores.push(`ID ${item.transaccionID}: ${err?.message || err}`);
           }

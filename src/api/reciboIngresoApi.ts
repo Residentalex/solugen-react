@@ -69,4 +69,19 @@ export const reciboIngresoApi = {
     const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/aplicar/${id}`);
     return data.data;
   },
+
+  desaplicar: async (sucursal: number, documento: string): Promise<any> => {
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/desaplicar?sucursal=${sucursal}&documento=${documento}`);
+    return data.data;
+  },
+
+  postear: async (sucursal: number, transaccion: any): Promise<any> => {
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postear`, transaccion);
+    return data.data;
+  },
+
+  recalcularPagos: async (sucursal: number, id: number): Promise<any> => {
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/recalcularPagos/${id}`);
+    return data.data;
+  },
 };

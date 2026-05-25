@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Dropdown, Modal, DatePicker, Typography
+  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Dropdown, Modal, DatePicker, Typography, Tooltip, Descriptions
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -12,6 +12,12 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   RedoOutlined,
+  LockFilled,
+  FileTextOutlined,
+  FileSearchOutlined,
+  IdcardOutlined,
+  PhoneOutlined,
+  EnvironmentOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -19,10 +25,10 @@ import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
+import PermissionGate from '../../components/PermissionGate';
 import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
 
 const { Text } = Typography;
-const { TabPane } = Tabs;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
@@ -71,31 +77,40 @@ interface SuplidorCardProps {
   entidad?: EntidadDTO | null;
 }
 
-const SuplidorCard: React.FC<SuplidorCardProps> = ({ suplidor, entidad }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Suplidor</span>}
-    className="paces-card"
-    style={{ marginBottom: 16 }}
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ fontWeight: 600 }}>
-        {suplidor?.nombre ? toTitleCase(suplidor.nombre) : entidad?.nombre ? toTitleCase(entidad.nombre) : '-'}
+const SuplidorCard: React.FC<SuplidorCardProps> = ({ suplidor, entidad }) => {
+  const identificacion = suplidor?.identificacion || entidad?.identificacion || '';
+  const telefono = suplidor?.telefono || entidad?.telefono || '';
+  const direccion = suplidor?.direccion ? toTitleCase(suplidor.direccion) : entidad?.direccion ? toTitleCase(entidad.direccion) : '-';
+
+  return (
+    <Card
+      title={<span style={{ fontSize: 16, fontWeight: 600 }}>{toTitleCase(suplidor?.nombre || entidad?.nombre || 'Suplidor')}</span>}
+      className="paces-card"
+      style={{ marginBottom: 16 }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {identificacion && identificacion !== '-' && (
+          <div style={{ fontSize: 13 }}>
+            <IdcardOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+            {identificacion}
+          </div>
+        )}
+        {telefono && telefono !== '-' && (
+          <div style={{ fontSize: 13 }}>
+            <PhoneOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+            {telefono}
+          </div>
+        )}
+        {direccion && direccion !== '-' && (
+          <div style={{ fontSize: 13, color: '#595959' }}>
+            <EnvironmentOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+            {direccion}
+          </div>
+        )}
       </div>
-      <div>
-        <span className="paces-text-secondary">RNC: </span>
-        <span>{suplidor?.identificacion || entidad?.identificacion || '-'}</span>
-      </div>
-      <div>
-        <span className="paces-text-secondary">Teléfono: </span>
-        <span>{suplidor?.telefono || entidad?.telefono || '-'}</span>
-      </div>
-      <div>
-        <span className="paces-text-secondary">Dirección: </span>
-        <span>{suplidor?.direccion ? toTitleCase(suplidor.direccion) : entidad?.direccion ? toTitleCase(entidad.direccion) : '-'}</span>
-      </div>
-    </div>
-  </Card>
-);
+    </Card>
+  );
+};
 
 interface TotalesCardProps {
   subTotal: number;
@@ -118,7 +133,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
       {monedaSimbolo && tasa !== undefined && (
         <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
           {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{monedaNombre || 'Peso Dominicano'} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
+          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
@@ -170,6 +185,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
   const [imprimiendo, setImprimiendo] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
+  const [tieneScan, setTieneScan] = useState<boolean | null>(null);
 
   const handleFechaVencimiento = (date: dayjs.Dayjs | null) => {
     if (fechaVencimientoModal.detalleId) {
@@ -212,6 +228,10 @@ const EntradaAlmacenDetalle: React.FC = () => {
       .then((res) => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        // Verificar si tiene factura escaneada
+        entradaAlmacenApi.verificarScan(sucursalActiva, parseInt(id))
+          .then((scanRes) => setTieneScan(scanRes.existe))
+          .catch(() => setTieneScan(false));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
@@ -391,8 +411,34 @@ const EntradaAlmacenDetalle: React.FC = () => {
   ];
 
   // ===== Handlers de acciones de estado =====
+  const handleDesaplicar = async () => {
+    if (!id || !data) return;
+    setSaving(true);
+    try {
+      const origen = obtenerNombreEnumSucursal(data.codigoSucursal || String(sucursalActiva));
+      const destino = origen;
+      const documento = `${data.documento.codigo}-${data.noDocumento}`;
+      await entradaAlmacenApi.desaplicar(origen, destino, documento);
+      message.success('Documento desaplicado exitosamente');
+      const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al desaplicar');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleAplicar = async () => {
     if (!id) return;
+
+    // Verificación temprana del scanner
+    if (tieneScan === false) {
+      message.warning('Debe escanear la factura antes de aplicar.');
+      return;
+    }
+
     setSaving(true);
     try {
       const result = await entradaAlmacenApi.aplicar(sucursalActiva, parseInt(id));
@@ -495,171 +541,188 @@ const EntradaAlmacenDetalle: React.FC = () => {
         </Button>
         <div style={{ flex: 1 }} />
         <Space>
-          <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
-            setImprimiendo(true);
-            try {
-              const sucursalParam = data.codigoSucursal
-                ? obtenerNombreEnumSucursal(data.codigoSucursal)
-                : sucursalActiva;
-              const res = await apiClient.get(`/reportes/inventario/entrada/${sucursalParam}/${id}`, {
-                responseType: 'blob',
-              });
+          <PermissionGate accion="IMPRIMIR">
+            <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
+              setImprimiendo(true);
+              try {
+                const sucursalParam = data.codigoSucursal
+                  ? obtenerNombreEnumSucursal(data.codigoSucursal)
+                  : sucursalActiva;
+                const res = await apiClient.get(`/reportes/inventario/entrada/${sucursalParam}/${id}`, {
+                  responseType: 'blob',
+                });
 
-              const blobUrl = URL.createObjectURL(res.data);
-              const iframe = document.createElement('iframe');
-              iframe.style.display = 'none';
-              iframe.src = blobUrl;
-              document.body.appendChild(iframe);
-              setTimeout(() => {
-                iframe.contentWindow?.print();
+                const blobUrl = URL.createObjectURL(res.data);
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = blobUrl;
+                document.body.appendChild(iframe);
                 setTimeout(() => {
-                  document.body.removeChild(iframe);
-                  URL.revokeObjectURL(blobUrl);
-                }, 30000);
-              }, 2000);
-            } catch {
-              message.error('Error al generar el PDF');
-            } finally {
-              setImprimiendo(false);
-            }
-          }}>Imprimir</Button>
-          {data.estado === 0 && data.periodo !== 6 && (
-            <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FENP/${id}/editar`)}>Editar</Button>
+                  iframe.contentWindow?.print();
+                  setTimeout(() => {
+                    document.body.removeChild(iframe);
+                    URL.revokeObjectURL(blobUrl);
+                  }, 30000);
+                }, 2000);
+              } catch {
+                message.error('Error al generar el PDF');
+              } finally {
+                setImprimiendo(false);
+              }
+              }} />
+          </PermissionGate>
+
+          {data.estado === 0 && data.periodo !== 6 && data.revisado === false && (
+            <PermissionGate accion="EDITAR">
+              <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FENP/${id}/editar`)}>Editar</Button>
+            </PermissionGate>
           )}
           {/* Acciones de estado - solo en consulta */}
           {data.estado === 0 && data.periodo !== 6 && (
-            <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleAplicar}>
-              Aplicar
-            </Button>
+            <PermissionGate accion="APLICAR">
+              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleAplicar}>
+                Aplicar
+              </Button>
+            </PermissionGate>
           )}
-          {data.estado !== 3 && (
-            <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
-              Anular
-            </Button>
+          {data.revisado === false && data.estado !== 3 && (
+            <PermissionGate accion="ANULAR">
+              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
+                Anular
+              </Button>
+            </PermissionGate>
+          )}
+          {data.revisado === false && (
+            <PermissionGate accion="POSTEAR">
+              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handlePostear}>Postear</Button>
+            </PermissionGate>
           )}
           {data.estado === 1 && (
             <>
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handlePostear}>
-                Postear
-              </Button>
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleRevisado}>
-                Revisado
-              </Button>
-              <Button danger icon={<RedoOutlined />} loading={saving} onClick={handleReversar}>
-                Reversar
-              </Button>
+              {data.revisado === false && (
+                <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleRevisado}>
+                  Revisado
+                </Button>
+              )}
+              {data.revisado === false && (
+                <PermissionGate accion="DESAPLICAR">
+                  <Button icon={<RedoOutlined />} loading={saving} onClick={handleDesaplicar}>
+                    Desaplicar
+                  </Button>
+                </PermissionGate>
+              )}
+              {data.revisado === true && (
+                <Button danger icon={<RedoOutlined />} loading={saving} onClick={handleReversar}>
+                  Reversar
+                </Button>
+              )}
             </>
           )}
         </Space>
       </div>
-
-      {/* Concepto / Estado */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <span style={{ fontSize: 18, fontWeight: 600 }}>{data.concepto?.nombre || '-'}</span>
-        <Space>
-          {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-          <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-        </Space>
-      </div>
-
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */
         <Row gutter={16}>
           <Col lg={18}>
-            <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-              <div style={{ paddingTop: 16 }}>
-                <Row gutter={[16, 24]}>
-                  {/* Fila 1: OrdenCompra + Concepto */}
-                  <Col xs={24} sm={12} lg={9}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Orden Compra</div>
-                      <div style={{ fontSize: 14 }}>{data.ordenCompra?.noDocumento || '-'}</div>
-                    </div>
-                  </Col>
-                  <Col xs={24} sm={12} lg={15}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Concepto</div>
-                      <div style={{ fontSize: 14 }}>{toTitleCase(data.concepto?.nombre || '-')}</div>
-                    </div>
-                  </Col>
-
-                  {/* Fila 2: FechaDocumento + Suplidor */}
-                  <Col xs={24} sm={12} lg={9}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Fecha Documento</div>
-                      <div style={{ fontSize: 14 }}>{formatDate(data.fechaDocumento)}</div>
-                    </div>
-                  </Col>
-                  <Col xs={24} sm={12} lg={15}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Suplidor / Entidad</div>
-                      <div style={{ fontSize: 14 }}>{toTitleCase(data.suplidor?.nombre || data.entidad?.nombre || '-')}</div>
-                    </div>
-                  </Col>
-
-                  {/* Fila 3: FechaRecibo + Almacén */}
-                  <Col xs={24} sm={12} lg={9}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Fecha Recibo</div>
-                      <div style={{ fontSize: 14 }}>{data.fechaEntrega ? formatDate(data.fechaEntrega) : '-'}</div>
-                    </div>
-                  </Col>
-                  <Col xs={24} sm={12} lg={15}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Almacén</div>
-                      <div style={{ fontSize: 14 }}>{toTitleCase(data.almacen?.nombre || '-')}</div>
-                    </div>
-                  </Col>
-
-                  {/* Fila 4: Tags informativos */}
-                  <Col xs={24}>
-                    <Space size={[8, 8]} wrap>
-                      <span><span className="paces-text-secondary">NCF: </span>{data.ncf || '-'}</span>
-                      <span><span className="paces-text-secondary">Ref: </span>{data.referencia || '-'}</span>
-                    </Space>
-                  </Col>
-
-                  {/* Fila 5: Nota */}
-                  <Col xs={24}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Nota</div>
-                      <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</div>
-                    </div>
-                  </Col>
-                </Row>
+            <Card className="paces-card" size="small" title={
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 16, fontWeight: 600 }}>Datos Generales</span>
+                <Space>
+                  {esCerrado && (
+                    <Tooltip title="Período contable cerrado">
+                      <LockFilled style={{ fontSize: 14, color: '#595959' }} />
+                    </Tooltip>
+                  )}
+                  <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
+                  {tieneScan === true && <Tag icon={<FileTextOutlined />} color="success" />}
+                  {tieneScan === false && <Tag icon={<FileSearchOutlined />} color="warning" />}
+                </Space>
               </div>
+            } style={{ marginBottom: 16 }}>
+              <Descriptions
+                bordered
+                size="small"
+                column={3}
+                styles={{ content: { background: 'transparent' } }}
+              >
+                <Descriptions.Item label="Orden Compra:">
+                  {data.ordenCompra?.noDocumento || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Concepto:">
+                  {toTitleCase(data.concepto?.nombre || '-')}
+                </Descriptions.Item>
+                <Descriptions.Item label="NCF:">
+                  {data.ncf || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Fecha Doc.:">
+                  {formatDate(data.fechaDocumento)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Suplidor:">
+                  {toTitleCase(data.suplidor?.nombre || data.entidad?.nombre || '-')}
+                </Descriptions.Item>
+                <Descriptions.Item label="Referencia:">
+                  {data.referencia || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Fecha Recibo:">
+                  {data.fechaEntrega ? formatDate(data.fechaEntrega) : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Almacén:" span={2}>
+                  {toTitleCase(data.almacen?.nombre || '-')}
+                </Descriptions.Item>
+                <Descriptions.Item label="Nota:" span={3}>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+                </Descriptions.Item>
+              </Descriptions>
             </Card>
 
-            <Tabs defaultActiveKey="detalles" type="card">
-              <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                  <Input.Search
-                    placeholder="Buscar detalle..."
-                    allowClear
-                    style={{ maxWidth: 250 }}
-                    onSearch={(value) => setDetalleSearch(value)}
-                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                  />
-                </div>
-                <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-              </TabPane>
-              <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-                <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
-                  summary={() => (
-                    <Table.Summary fixed>
-                      <Table.Summary.Row>
-                        <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                      </Table.Summary.Row>
-                    </Table.Summary>
-                  )}
-                />
-              </TabPane>
-              <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
-                <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-              </TabPane>
-            </Tabs>
+            <Tabs
+              defaultActiveKey="detalles"
+              type="card"
+              items={[
+                {
+                  key: 'detalles',
+                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                  children: (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                        <Input.Search
+                          placeholder="Buscar detalle..."
+                          allowClear
+                          style={{ maxWidth: 250 }}
+                          onSearch={(value) => setDetalleSearch(value)}
+                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                        />
+                      </div>
+                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                    </>
+                  ),
+                },
+                {
+                  key: 'asientos',
+                  label: `Asientos (${data.asientos?.length || 0})`,
+                  children: (
+                    <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
+                      summary={() => (
+                        <Table.Summary fixed>
+                          <Table.Summary.Row>
+                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                            <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                            <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      )}
+                    />
+                  ),
+                },
+                {
+                  key: 'historial',
+                  label: `Historial (${data.logs?.length || 0})`,
+                  children: (
+                    <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                  ),
+                },
+              ]}
+            />
           </Col>
 
           <Col lg={6}>
@@ -674,102 +737,107 @@ const EntradaAlmacenDetalle: React.FC = () => {
       ) : (
         /* === MOBILE LAYOUT (< lg) === */
         <div>
-            <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-              <div style={{ paddingTop: 16 }}>
-                <Row gutter={[16, 24]}>
-                  {/* Fila 1: OrdenCompra + Concepto */}
-                  <Col xs={24} sm={12} lg={9}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Orden Compra</div>
-                      <div style={{ fontSize: 14 }}>{data.ordenCompra?.noDocumento || '-'}</div>
-                    </div>
-                  </Col>
-                  <Col xs={24} sm={12} lg={15}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Concepto</div>
-                      <div style={{ fontSize: 14 }}>{toTitleCase(data.concepto?.nombre || '-')}</div>
-                    </div>
-                  </Col>
-
-                  {/* Fila 2: FechaDocumento + Suplidor */}
-                  <Col xs={24} sm={12} lg={9}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Fecha Documento</div>
-                      <div style={{ fontSize: 14 }}>{formatDate(data.fechaDocumento)}</div>
-                    </div>
-                  </Col>
-                  <Col xs={24} sm={12} lg={15}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Suplidor / Entidad</div>
-                      <div style={{ fontSize: 14 }}>{toTitleCase(data.suplidor?.nombre || data.entidad?.nombre || '-')}</div>
-                    </div>
-                  </Col>
-
-                  {/* Fila 3: FechaRecibo + Almacén */}
-                  <Col xs={24} sm={12} lg={9}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Fecha Recibo</div>
-                      <div style={{ fontSize: 14 }}>{data.fechaEntrega ? formatDate(data.fechaEntrega) : '-'}</div>
-                    </div>
-                  </Col>
-                  <Col xs={24} sm={12} lg={15}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Almacén</div>
-                      <div style={{ fontSize: 14 }}>{toTitleCase(data.almacen?.nombre || '-')}</div>
-                    </div>
-                  </Col>
-
-                  {/* Fila 4: Tags informativos */}
-                  <Col xs={24}>
-                    <Space size={[8, 8]} wrap>
-                      <span><span className="paces-text-secondary">NCF: </span>{data.ncf || '-'}</span>
-                      <span><span className="paces-text-secondary">Ref: </span>{data.referencia || '-'}</span>
-                    </Space>
-                  </Col>
-
-                  {/* Fila 5: Nota */}
-                  <Col xs={24}>
-                    <div>
-                      <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Nota</div>
-                      <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</div>
-                    </div>
-                  </Col>
-                </Row>
+            <Card className="paces-card" size="small" title={
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 16, fontWeight: 600 }}>Datos Generales</span>
+                <Space>
+                  {esCerrado && (
+                    <Tooltip title="Período contable cerrado">
+                      <LockFilled style={{ fontSize: 14, color: '#595959' }} />
+                    </Tooltip>
+                  )}
+                  <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
+                  {tieneScan === true && <Tag icon={<FileTextOutlined />} color="success" />}
+                  {tieneScan === false && <Tag icon={<FileSearchOutlined />} color="warning" />}
+                </Space>
               </div>
+            } style={{ marginBottom: 16 }}>
+              <Descriptions
+                bordered
+                size="small"
+                column={1}
+                styles={{ content: { background: 'transparent' } }}
+              >
+                <Descriptions.Item label="Orden Compra:">
+                  {data.ordenCompra?.noDocumento || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Concepto:">
+                  {toTitleCase(data.concepto?.nombre || '-')}
+                </Descriptions.Item>
+                <Descriptions.Item label="NCF:">
+                  {data.ncf || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Fecha Doc.:">
+                  {formatDate(data.fechaDocumento)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Suplidor:">
+                  {toTitleCase(data.suplidor?.nombre || data.entidad?.nombre || '-')}
+                </Descriptions.Item>
+                <Descriptions.Item label="Referencia:">
+                  {data.referencia || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Fecha Recibo:">
+                  {data.fechaEntrega ? formatDate(data.fechaEntrega) : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Almacén:">
+                  {toTitleCase(data.almacen?.nombre || '-')}
+                </Descriptions.Item>
+                <Descriptions.Item label="Nota:">
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+                </Descriptions.Item>
+              </Descriptions>
             </Card>
 
           <SuplidorCard suplidor={data.suplidor} entidad={data.entidad} />
 
-          <Tabs defaultActiveKey="detalles" type="card">
-            <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                <Input.Search
-                  placeholder="Buscar detalle..."
-                  allowClear
-                  style={{ maxWidth: 250 }}
-                  onSearch={(value) => setDetalleSearch(value)}
-                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                />
-              </div>
-              <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-            </TabPane>
-            <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-              <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
-                summary={() => (
-                  <Table.Summary fixed>
-                    <Table.Summary.Row>
-                      <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                      <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                      <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                    </Table.Summary.Row>
-                  </Table.Summary>
-                )}
-              />
-            </TabPane>
-            <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
-              <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-            </TabPane>
-          </Tabs>
+          <Tabs
+            defaultActiveKey="detalles"
+            type="card"
+            items={[
+              {
+                key: 'detalles',
+                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                children: (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                      <Input.Search
+                        placeholder="Buscar detalle..."
+                        allowClear
+                        style={{ maxWidth: 250 }}
+                        onSearch={(value) => setDetalleSearch(value)}
+                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                      />
+                    </div>
+                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                  </>
+                ),
+              },
+              {
+                key: 'asientos',
+                label: `Asientos (${data.asientos?.length || 0})`,
+                children: (
+                  <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
+                    summary={() => (
+                      <Table.Summary fixed>
+                        <Table.Summary.Row>
+                          <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                          <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                          <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                        </Table.Summary.Row>
+                      </Table.Summary>
+                    )}
+                  />
+                ),
+              },
+              {
+                key: 'historial',
+                label: `Historial (${data.logs?.length || 0})`,
+                children: (
+                  <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                ),
+              },
+            ]}
+          />
 
           <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true}
             monedaSimbolo={data.moneda?.simbolo || 'RD$'}

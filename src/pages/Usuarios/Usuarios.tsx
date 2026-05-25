@@ -1,9 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Input, Tag, Button, Modal, Form, Input as AntInput, Switch, message, Space, Tooltip, Popconfirm, Row, Col, Typography, Card } from 'antd';
-import { PlusOutlined, SearchOutlined, ReloadOutlined, EditOutlined, KeyOutlined, StopOutlined, CheckCircleOutlined, UserOutlined, RightOutlined } from '@ant-design/icons';
+import { Table, Input, Tag, Button, Modal, Form, Input as AntInput, Switch, message, Space, Tooltip, Popconfirm, Row, Col, Card, Typography } from 'antd';
+import { PlusOutlined, SearchOutlined, ReloadOutlined, EditOutlined, KeyOutlined, StopOutlined, CheckCircleOutlined, RightOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
-import { useAuthStore } from '../../stores/authStore';
 import { Sucursal } from '../../types/auth';
 import { useUIStore } from '../../stores/uiStore';
 import { usuarioApi } from '../../api/usuarioApi';
@@ -25,6 +24,8 @@ function colorDesdeTexto(texto: string): string {
   for (let i = 0; i < texto.length; i++) hash = texto.charCodeAt(i) + ((hash << 5) - hash);
   return colores[Math.abs(hash) % colores.length];
 }
+
+const { Text } = Typography;
 
 const Usuarios: React.FC = () => {
   const navigate = useNavigate();
@@ -147,11 +148,12 @@ const Usuarios: React.FC = () => {
             {letraInicial(record.nombre)}
           </div>
           <div>
-            <div className="paces-text-primary" style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.3 }}>
+            <Text className="paces-text-primary" strong style={{ fontSize: 13, lineHeight: 1.3 }}>
               {record.nombreUsuario}
               <RightOutlined style={{ fontSize: 10, marginLeft: 4, opacity: 0.5 }} />
-            </div>
-            <div className="paces-text-muted" style={{ fontSize: 12, lineHeight: 1.3 }}>{record.nombre}</div>
+            </Text>
+            <br />
+            <Text type="secondary" style={{ lineHeight: 1.3 }}>{record.nombre}</Text>
           </div>
         </div>
       ),
@@ -186,7 +188,7 @@ const Usuarios: React.FC = () => {
       key: 'ultimoLogin',
       width: 170,
       render: (val: string) => (
-        <span className="paces-text-muted" style={{ fontSize: 12 }}>{formatFecha(val)}</span>
+        <Text type="secondary">{formatFecha(val)}</Text>
       ),
     },
     {

@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Table, Button, message } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { Card, Table, Button, Input, Select, Empty, message, Typography } from 'antd';
+import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -11,6 +11,8 @@ function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const { Text } = Typography;
+
 const PuntosVenta: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
@@ -19,6 +21,9 @@ const PuntosVenta: React.FC = () => {
 
   const [data, setData] = useState<PuntoVentaDTO[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const cargarDatos = useCallback(async () => {
     if (sucursalActiva === undefined) return;
@@ -40,50 +45,112 @@ const PuntosVenta: React.FC = () => {
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
 
+  const handleSearch = (value: string) => {
+    setSearchText(value);
+    setPage(1);
+  };
+
+  const handleRefresh = useCallback(() => {
+    setSearchText('');
+    setPage(1);
+    cargarDatos();
+  }, [cargarDatos]);
+
+  const filteredData = useMemo(() => {
+    if (!searchText.trim()) return data;
+    const text = searchText.trim().toLowerCase();
+    return data.filter(
+      (item) =>
+        item.nombre?.toLowerCase().includes(text) ||
+        item.ip?.toLowerCase().includes(text) ||
+        item.ruta?.toLowerCase().includes(text)
+    );
+  }, [data, searchText]);
+
   const columns: ColumnsType<PuntoVentaDTO> = [
     {
       title: 'Nombre',
       dataIndex: 'nombre',
       key: 'nombre',
-      render: (val: string) => <span style={{ fontWeight: 500 }}>{toTitleCase(val ?? '')}</span>,
+      render: (val: string) => <Text strong>{toTitleCase(val ?? '')}</Text>,
     },
     {
       title: 'IP',
       dataIndex: 'ip',
       key: 'ip',
       width: 180,
-      render: (val: string) => <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{val || '-'}</span>,
+      render: (val: string) => <Text style={{ fontFamily: 'monospace' }}>{val || '-'}</Text>,
     },
     {
       title: 'Ruta',
       dataIndex: 'ruta',
       key: 'ruta',
-      width: 250,
-      render: (val: string) => <span className="paces-text-muted" style={{ fontSize: 12 }}>{val || '-'}</span>,
+      width: 280,
+      render: (val: string) => <Text type="secondary" style={{ fontFamily: 'monospace' }}>{val || '-'}</Text>,
     },
   ];
 
   return (
-    <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Puntos de Venta</h4>
-        <Button icon={<ReloadOutlined />} onClick={cargarDatos}>
-          Recargar
-        </Button>
+    <Card
+      className="paces-card-erp"
+      style={{ borderRadius: 8, overflow: 'hidden' }}
+      styles={{ body: { padding: 0 } }}
+    >
+      <div style={{ padding: '16px 24px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          <Input.Search
+            placeholder="Buscar por nombre, IP o ruta..."
+            allowClear
+            onSearch={handleSearch}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                (e.target as HTMLInputElement).blur();
+                handleSearch('');
+              }
+            }}
+            style={{ width: 400 }}
+            prefix={<SearchOutlined className="paces-text-icon" />}
+          />
+          <Select
+            style={{ width: 65 }}
+            value={pageSize}
+            onChange={(v) => { setPageSize(v); setPage(1); }}
+            options={[
+              { value: 25, label: '25' },
+              { value: 50, label: '50' },
+              { value: 100, label: '100' },
+            ]}
+          />
+          <div style={{ flex: 1 }} />
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+        </div>
       </div>
 
-      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
-        <Table<PuntoVentaDTO>
-          columns={columns}
-          dataSource={data}
-          rowKey="nombre"
-          loading={loading}
-          scroll={{ x: 600 }}
-          size="middle"
-          pagination={false}
-        />
-      </Card>
-    </>
+      <Table<PuntoVentaDTO>
+        columns={columns}
+        dataSource={filteredData}
+        rowKey="nombre"
+        loading={loading}
+        scroll={{ x: 600 }}
+        size="middle"
+        className="paces-border-top paces-list-table"
+        pagination={{
+          current: page,
+          pageSize,
+          total: filteredData.length,
+          showSizeChanger: false,
+          showTotal: (t) => `${t} registros`,
+        }}
+        onChange={(pagination) => {
+          setPage(pagination.current || 1);
+        }}
+        locale={{
+          emptyText: searchText
+            ? <Empty description="Sin resultados para la búsqueda" />
+            : <Empty description="No hay puntos de venta configurados" />
+        }}
+      />
+    </Card>
   );
 };
 

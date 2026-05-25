@@ -17,9 +17,13 @@ import {
   Empty,
   Row,
   Col,
+  Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons';
+
+const { Text } = Typography;
+const FILAS_POR_PAGINA = 25;
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { pantallaApi } from '../../api/pantallaApi';
@@ -100,7 +104,7 @@ const Pantallas: React.FC = () => {
   const filteredData = useMemo(() => {
     let result = data;
     if (filtroModulo !== undefined) {
-      result = result.filter((p) => p.moduloID === filtroModulo);
+      result = result.filter((p) => p.modulos?.some((m) => m.id === filtroModulo));
     }
     if (filtroGrupo) {
       result = result.filter((p) => p.grupo === filtroGrupo);
@@ -129,7 +133,7 @@ const Pantallas: React.FC = () => {
   const abrirNuevo = () => {
     setEditando(null);
     form.resetFields();
-    form.setFieldsValue({ activo: true, esReporte: false, orden: 0 });
+    form.setFieldsValue({ activo: true, esReporte: false, orden: 0, modulos: [] });
     setSelectedAcciones(['VISUALIZAR']);
     setModalVisible(true);
   };
@@ -139,7 +143,8 @@ const Pantallas: React.FC = () => {
     form.setFieldsValue({
       codigo: pantalla.codigo,
       nombre: pantalla.nombre,
-      moduloID: pantalla.moduloID,
+      tipo: pantalla.tipo,
+      modulos: pantalla.modulos?.map((m) => m.id) || [],
       grupo: pantalla.grupo,
       ruta: pantalla.ruta,
       orden: pantalla.orden,
@@ -161,12 +166,12 @@ const Pantallas: React.FC = () => {
         codigo: values.codigo,
         nombre: values.nombre,
         ruta: values.ruta,
-        moduloID: values.moduloID,
+        tipo: values.tipo || undefined,
         grupo: values.grupo || undefined,
         orden: values.orden ?? 0,
         esReporte: values.esReporte ?? false,
         activo: values.activo ?? true,
-        modulos: [],
+        modulos: (values.modulos || []).map((id: number) => ({ id, nombre: '', orden: 0 })),
         acciones: selectedAcciones,
       };
 
@@ -193,7 +198,7 @@ const Pantallas: React.FC = () => {
       dataIndex: 'codigo',
       key: 'codigo',
       fixed: 'left',
-      width: 120,
+      width: 240,
     },
     {
       title: 'Nombre',
@@ -201,11 +206,14 @@ const Pantallas: React.FC = () => {
       key: 'nombre',
     },
     {
-      title: 'Módulo',
+      title: 'Módulos',
       dataIndex: 'modulos',
       key: 'modulo',
-      width: 150,
-      render: (modulos: ModuloDTO[]) => modulos?.[0]?.nombre || '-',
+      width: 400,
+      render: (modulos: ModuloDTO[]) =>
+        modulos && modulos.length > 0
+          ? modulos.map((m) => <Tag key={m.id} style={{ marginBottom: 2 }}>{m.nombre}</Tag>)
+          : <Tag style={{ color: '#999' }}>Sin módulo</Tag>,
     },
     {
       title: 'Grupo',
@@ -277,7 +285,14 @@ const Pantallas: React.FC = () => {
           <Input.Search
             placeholder="Buscar por nombre o código"
             allowClear
+            prefix={<SearchOutlined className="paces-text-icon" />}
             onSearch={handleSearch}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                (e.target as HTMLInputElement).blur();
+                handleSearch('');
+              }
+            }}
           />
         </Col>
         <Col xs={12} sm={6} md={4}>
@@ -312,12 +327,9 @@ const Pantallas: React.FC = () => {
         </Col>
       </Row>
 
-      <Card
-        className="paces-card-erp"
-        style={{ borderRadius: 8 }}
-        styles={{ body: { padding: 0 } }}
-      >
+      <div className="paces-border-top">
         <Table<PantallaDTO>
+          className="paces-list-table"
           columns={columns}
           dataSource={filteredData}
           rowKey="id"
@@ -329,13 +341,13 @@ const Pantallas: React.FC = () => {
             showTotal: (total, range) =>
               `${range[0]}-${range[1]} de ${total} pantallas`,
             pageSizeOptions: ['10', '20', '50'],
-            defaultPageSize: 10,
+            defaultPageSize: FILAS_POR_PAGINA,
           }}
           locale={{
             emptyText: <Empty description="No hay pantallas registradas" />,
           }}
         />
-      </Card>
+      </div>
 
       <Modal
         title={editando ? 'Editar Pantalla' : 'Nueva Pantalla'}
@@ -372,15 +384,10 @@ const Pantallas: React.FC = () => {
 
           <Row gutter={[16, 0]}>
             <Col xs={24} sm={12}>
-              <Form.Item
-                name="moduloID"
-                label="Módulo"
-                rules={[
-                  { required: true, message: 'Debe seleccionar un módulo' },
-                ]}
-              >
+              <Form.Item name="modulos" label="Módulos">
                 <Select
-                  placeholder="Seleccione un módulo"
+                  mode="multiple"
+                  placeholder="Seleccione módulos"
                   showSearch
                   optionFilterProp="children"
                   loading={catalogosLoading}
@@ -407,6 +414,15 @@ const Pantallas: React.FC = () => {
           </Row>
 
           <Row gutter={[16, 0]}>
+            <Col xs={24} sm={12}>
+              <Form.Item name="tipo" label="Tipo">
+                <Select placeholder="Seleccione tipo" allowClear>
+                  {['MAESTRO','DOCUMENTO','CONFIGURACION','CONSULTA','OPERACION','REPORTE','ENCABEZADO'].map((t) => (
+                    <Select.Option key={t} value={t}>{t}</Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
             <Col xs={24} sm={12}>
               <Form.Item name="ruta" label="Ruta">
                 <Input placeholder="Ej. /admin/pantallas" maxLength={200} />

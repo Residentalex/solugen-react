@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Input, Tag, Button, message, Row, Col, Card, Select } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { Table, Input, Tag, Button, message, Card, Select, Typography, Tooltip } from 'antd';
+import { ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -11,6 +11,8 @@ import type { ProductoListaDTO } from '../../types/productos';
 function formatCurrency(n: number): string {
   return n.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+const { Text } = Typography;
 
 function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -30,6 +32,10 @@ const Productos: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [total, setTotal] = useState(0);
+
+  const usuario = useAuthStore((s: any) => s.usuario);
+  const pantallaActual = usuario?.pantallas.find((p: any) => p.codigo === 'MProducto');
+  const puedeEditar = pantallaActual?.acciones.includes('EDITAR') ?? false;
 
   const cargarDatos = useCallback(async (
     busqueda?: string,
@@ -123,42 +129,54 @@ const Productos: React.FC = () => {
       key: 'codigo',
       width: 120,
       fixed: 'left',
-      render: (val: string) => <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{val}</span>,
+      render: (val: string, record: ProductoListaDTO) =>
+        puedeEditar ? (
+          <Button
+            type="link"
+            size="small"
+            style={{ padding: 0, fontWeight: 500 }}
+            onClick={() => navigate(`/MProducto/${record.codigo}`)}
+          >
+            {val}
+          </Button>
+        ) : (
+          <Text style={{ fontFamily: 'monospace' }}>{val}</Text>
+        ),
     },
     {
       title: 'Nombre',
       dataIndex: 'nombre',
       key: 'nombre',
       width: 280,
-      render: (val: string) => <span style={{ fontWeight: 500 }}>{toTitleCase(val ?? '')}</span>,
+      render: (val: string) => <Text>{toTitleCase(val ?? '')}</Text>,
     },
     {
       title: 'Referencia',
       dataIndex: 'referencia',
       key: 'referencia',
       width: 140,
-      render: (val: string) => <span className="paces-text-muted" style={{ fontSize: 12 }}>{val || '-'}</span>,
+      render: (val: string) => <Text type="secondary">{val || '-'}</Text>,
     },
     {
       title: 'Familia',
       dataIndex: 'familia',
       key: 'familia',
       width: 140,
-      render: (val: { nombre?: string } | null) => val?.nombre ? <Tag style={{ fontSize: 11 }}>{val.nombre}</Tag> : '-',
+      render: (val: { nombre?: string } | null) => val?.nombre ? <Tag style={{ fontSize: 11 }}>{val.nombre}</Tag> : <Text>{'-'}</Text>,
     },
     {
       title: 'Categoría',
       dataIndex: 'categoria',
       key: 'categoria',
       width: 140,
-      render: (val: { nombre?: string } | null) => val?.nombre ? <Tag style={{ fontSize: 11 }}>{toTitleCase(val.nombre)}</Tag> : '-',
+      render: (val: { nombre?: string } | null) => val?.nombre ? <Tag style={{ fontSize: 11 }}>{toTitleCase(val.nombre)}</Tag> : <Text>{'-'}</Text>,
     },
     {
       title: 'U. Medida',
       dataIndex: 'unidadMedida',
       key: 'unidadMedida',
       width: 100,
-      render: (val: { nombre?: string } | null) => val?.nombre ? toTitleCase(val.nombre) : '-',
+      render: (val: { nombre?: string } | null) => <Text>{val?.nombre ? toTitleCase(val.nombre) : '-'}</Text>,
     },
     {
       title: 'Precio',
@@ -166,7 +184,7 @@ const Productos: React.FC = () => {
       key: 'precio',
       width: 110,
       align: 'right',
-      render: (val: number) => <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{formatCurrency(val)}</span>,
+      render: (val: number) => <Text style={{ fontFamily: 'monospace' }}>{formatCurrency(val)}</Text>,
     },
     {
       title: 'Ult. Costo',
@@ -174,7 +192,7 @@ const Productos: React.FC = () => {
       key: 'ultimoCosto',
       width: 110,
       align: 'right',
-      render: (val: number) => <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{formatCurrency(val)}</span>,
+      render: (val: number) => <Text style={{ fontFamily: 'monospace' }}>{formatCurrency(val)}</Text>,
     },
     {
       title: 'Estado',
@@ -188,27 +206,25 @@ const Productos: React.FC = () => {
   ];
 
   return (
-    <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Productos</h4>
-      </div>
-
-      <Row gutter={[12, 12]} style={{ marginBottom: 16 }} align="middle">
-        <Col>
+    <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+      <div style={{ padding: '16px 24px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
           <Input.Search
-            placeholder="Buscar por código, nombre, categoría, familia..."
+            placeholder="Buscar por código o nombre..."
             allowClear
             onSearch={handleSearch}
-            style={{ width: 300 }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                (e.target as HTMLInputElement).blur();
+                handleSearch('');
+              }
+            }}
+            style={{ width: 400 }}
+            prefix={<SearchOutlined className="paces-text-icon" />}
           />
-        </Col>
-        <Col>
           <Select
             value={filtroActivo}
-            onChange={(val) => {
-              setFiltroActivo(val);
-              setPage(1);
-            }}
+            onChange={(val) => { setFiltroActivo(val); setPage(1); }}
             style={{ width: 130 }}
             size="middle"
             options={[
@@ -217,38 +233,34 @@ const Productos: React.FC = () => {
               { value: 'inactivos', label: 'Solo inactivos' },
             ]}
           />
-        </Col>
-        <Col>
-          <Button icon={<ReloadOutlined />} onClick={handleReload}>
-            Recargar
-          </Button>
-        </Col>
-      </Row>
-
-      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
-        <Table<ProductoListaDTO>
-          columns={columns}
-          dataSource={data}
-          rowKey="codigo"
-          loading={loading}
-          scroll={{ x: 1240 }}
-          size="middle"
-          onRow={(record) => ({
-            onClick: () => navigate(`/MProducto/${record.codigo}`),
-            style: { cursor: 'pointer' },
-          })}
-          pagination={{
-            current: page,
-            pageSize: pageSize,
-            total: total,
-            onChange: handlePageChange,
-            showSizeChanger: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} productos`,
-            pageSizeOptions: ['10', '20', '50', '100'],
-          }}
-        />
-      </Card>
-    </>
+          <div style={{ flex: 1 }} />
+          <Button icon={<ReloadOutlined />} onClick={handleReload} />
+          <Tooltip title="Importar desde Excel">
+            <Button icon={<UploadOutlined />} onClick={() => navigate('/MProducto/importar')} />
+          </Tooltip>
+        </div>
+      </div>
+      <Table<ProductoListaDTO>
+        columns={columns}
+        dataSource={data}
+        rowKey="codigo"
+        loading={loading}
+        scroll={{ x: 1240 }}
+        size="middle"
+        onRow={() => ({
+          style: { cursor: 'default' },
+        })}
+        pagination={{
+          current: page,
+          pageSize: pageSize,
+          total: total,
+          onChange: handlePageChange,
+          showSizeChanger: true,
+          showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} productos`,
+          pageSizeOptions: ['10', '20', '50', '100'],
+        }}
+      />
+    </Card>
   );
 };
 

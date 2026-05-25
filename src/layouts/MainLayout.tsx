@@ -1,14 +1,17 @@
 import React, { useEffect } from 'react';
 import { Layout, Spin, message, Dropdown, Select, Input } from 'antd';
+import type { MenuProps } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { Sucursal } from '../types/auth';
 import { useCompanyStore } from '../stores/companyStore';
 import { useUIStore } from '../stores/uiStore';
+import { useNotificacionesStore } from '../stores/notificacionesStore';
 import GenesisLogo from '../components/GenesisLogo';
 import Sidebar from './Sidebar';
 import Toolbar from './Toolbar';
 import ThemeSwitcher from '../components/ThemeSwitcher';
+import NotificacionDropdown from '../components/NotificacionDropdown';
 import { Outlet } from 'react-router-dom';
 import {
   MenuFoldOutlined,
@@ -16,7 +19,6 @@ import {
   LogoutOutlined,
   UserOutlined,
   SettingOutlined,
-  BellOutlined,
 } from '@ant-design/icons';
 
 function toTitleCase(str?: string | null): string {
@@ -60,6 +62,23 @@ const pageTitles: Record<string, string> = {
   MDocumento: 'Documentos',
   MCuentaContable: 'Cuentas Contables',
   FAsientoContable: 'Asientos Contables',
+  MProveedor: 'Proveedores',
+  MSUP: 'Proveedores',
+  MBanco: 'Bancos',
+  MCuentaBancaria: 'Cuentas Bancarias',
+  MCuentaBanco: 'Cuentas Bancarias',
+  MMedida: 'Unidades de Medida',
+  MUnidadMedida: 'Unidades de Medida',
+  MCategoriaArticulo: 'Categorías de Artículos',
+  MCategoria: 'Categorías de Artículos',
+  MPerfil: 'Mi Perfil',
+  MFamilia: 'Familias de Artículos',
+  FSPA: 'Solicitud de Pago',
+  MMarca: 'Marcas',
+  MAtributo: 'Atributos',
+  MPaquete: 'Paquetes',
+  MAutomatizacion: 'Automatizaciones',
+  MReceta: 'Recetas',
 };
 
 const MainLayout: React.FC = () => {
@@ -101,6 +120,27 @@ const MainLayout: React.FC = () => {
     if (error) message.error(error);
   }, [error]);
 
+  // Notificaciones: conexion SignalR y carga inicial
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let activo = true;
+
+    const cargarNotificaciones = async () => {
+      useNotificacionesStore.getState().cargarPendientes();
+      if (activo) {
+        await useNotificacionesStore.getState().conectarSignalR();
+      }
+    };
+
+    cargarNotificaciones();
+
+    return () => {
+      activo = false;
+      useNotificacionesStore.getState().desconectarSignalR();
+    };
+  }, [isAuthenticated]);
+
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth <= 1600 && !sidebarCollapsed) {
@@ -117,7 +157,12 @@ const MainLayout: React.FC = () => {
   const pantallaActual = usuario?.pantallas?.find((p: any) => p.codigo === activeModule);
   const pageTitle = pantallaActual?.nombre || pageTitles[activeModule] || activeModule || 'Dashboard';
 
-  const userMenuItems = [
+  const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'profile') navigate('/MPerfil');
+    if (key === 'logout') { logout(); navigate('/login'); }
+  };
+
+  const userMenuItems: MenuProps['items'] = [
     {
       key: 'profile',
       icon: <UserOutlined />,
@@ -135,7 +180,6 @@ const MainLayout: React.FC = () => {
       icon: <LogoutOutlined />,
       label: 'Cerrar Sesión',
       danger: true,
-      onClick: () => { logout(); navigate('/login'); },
     },
   ];
 
@@ -180,10 +224,8 @@ const MainLayout: React.FC = () => {
 
           <div className="paces-topbar-right">
             <ThemeSwitcher />
-            <button className="paces-topbar-action-btn" title="Notificaciones">
-              <BellOutlined />
-            </button>
-            {sucursalesPermitidas.length > 1 && activeModule !== 'MUsuario' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && (
+            <NotificacionDropdown />
+            {sucursalesPermitidas.length > 1 && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && (
               <Select
                 value={sucursalActiva}
                 onChange={(val) => setSucursalActiva(val)}
@@ -196,7 +238,7 @@ const MainLayout: React.FC = () => {
                 }))}
               />
             )}
-            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
+            <Dropdown menu={{ items: userMenuItems, onClick: handleMenuClick }} placement="bottomRight" trigger={['click']}>
               <div className="paces-topbar-user">
                 <div className="paces-avatar">
                   {usuario?.nombre?.charAt(0)?.toUpperCase() || 'U'}
@@ -215,6 +257,12 @@ const MainLayout: React.FC = () => {
               <h3>{pageTitleOverride || pageTitle}</h3>
               <div className="breadcrumb">
                 <span>Inicio</span>
+                {pantallaActual?.modulos?.[0]?.nombre && (
+                  <>
+                    <span className="paces-text-secondary">/</span>
+                    <span>{pantallaActual.modulos[0].nombre}</span>
+                  </>
+                )}
                 <span className="paces-text-secondary">/</span>
                 <span>{pageTitle}</span>
               </div>

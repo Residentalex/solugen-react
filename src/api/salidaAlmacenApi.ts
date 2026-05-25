@@ -1,6 +1,6 @@
 import { apiClient } from './client';
-import type { MovimientoVistaDTO } from '../types/entradaAlmacen';
-import type { FiltroSAP } from '../types/salidaAlmacen';
+import type { MovimientoVistaDTO, ConceptoDTO, AlmacenDTO, SuplidorDTO } from '../types/entradaAlmacen';
+import type { FiltroSAP, SalidaAlmacenFullDTO } from '../types/salidaAlmacen';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/SAP';
@@ -41,8 +41,28 @@ export const salidaAlmacenApi = {
     return data.data;
   },
 
-  obtenerPorId: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.get<ApiResponse<any>>(`${BASE}/${sucursal}/${id}`);
+  obtenerPorId: async (sucursal: number, id: number): Promise<SalidaAlmacenFullDTO> => {
+    const { data } = await apiClient.get<ApiResponse<SalidaAlmacenFullDTO>>(`${BASE}/${sucursal}/${id}`);
+    return data.data;
+  },
+
+  crear: async (sucursal: number, salida: SalidaAlmacenFullDTO): Promise<SalidaAlmacenFullDTO> => {
+    const { data } = await apiClient.post<ApiResponse<SalidaAlmacenFullDTO>>(`${BASE}/${sucursal}`, salida);
+    return data.data;
+  },
+
+  actualizar: async (sucursal: number, salida: SalidaAlmacenFullDTO): Promise<SalidaAlmacenFullDTO> => {
+    const { data } = await apiClient.put<ApiResponse<SalidaAlmacenFullDTO>>(`${BASE}/${sucursal}`, salida);
+    return data.data;
+  },
+
+  aplicar: async (sucursal: number, id: number): Promise<SalidaAlmacenFullDTO> => {
+    const { data } = await apiClient.put<ApiResponse<SalidaAlmacenFullDTO>>(`${BASE}/${sucursal}/aplicar/${id}`);
+    return data.data;
+  },
+
+  postear: async (sucursal: number, salida: SalidaAlmacenFullDTO): Promise<any> => {
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postear`, salida);
     return data.data;
   },
 
@@ -53,5 +73,23 @@ export const salidaAlmacenApi = {
 
   eliminar: async (sucursal: number, id: number): Promise<void> => {
     await apiClient.delete(`${BASE}/${sucursal}/eliminar/${id}`);
+  },
+
+  // Catálogos para selects
+  obtenerConceptos: async (sucursal: number, tipoDocumento?: string): Promise<ConceptoDTO[]> => {
+    const params: Record<string, string> = {};
+    if (tipoDocumento) params.documento = tipoDocumento;
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}`, { params });
+    return data.data;
+  },
+
+  obtenerAlmacenes: async (sucursal: number): Promise<AlmacenDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<AlmacenDTO[]>>(`/Almacen/${sucursal}`);
+    return data.data;
+  },
+
+  obtenerSuplidores: async (sucursal: number): Promise<SuplidorDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<SuplidorDTO[]>>(`/Proveedor/${sucursal}`);
+    return data.data;
   },
 };

@@ -44,3 +44,8 @@ npx tsc --noEmit
   - El botón limpiar (X) de `allowClear` dispara `onSearch('')`, que restaura el listado completo.
   - No usar `onChange` para actualizar `searchText` en tiempo real; solo `onSearch`.
   - Si se necesita búsqueda automática al escribir, usar debounce con al menos 300ms.
+- Visualmente, la barra de búsqueda debe replicar EXACTAMENTE el layout de `EntradaAlmacen.tsx`:
+  - `Input.Search` sin `enterButton`, con `prefix={<SearchOutlined className="paces-text-icon" />}` y `style={{ width: 400 }}`.
+  - Botón de recargar con solo icono `ReloadOutlined`, sin texto.
+  - Layout flex con `gap: '8px'`, `flexWrap: 'wrap'`, `<div style={{ flex: 1 }} />` como spacer antes de botones.
+  - Ver `docs-ai/frontend-patron-listado.md` sección "Barra de búsqueda y filtros (layout visual)" para el patrón completo.

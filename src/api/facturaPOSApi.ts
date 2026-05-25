@@ -5,6 +5,8 @@ import type { ApiResponse } from '../types/auth';
 
 const BASE = '/PV';
 
+import type { FacturaPOSFormularioDTO } from '../types/facturaPOS';
+
 export const facturaPOSApi = {
   obtenerVista: async (
     sucursal: number,
@@ -56,13 +58,47 @@ export const facturaPOSApi = {
     return data.data;
   },
 
+  // ===== CRUD formulario =====
+  crear: async (sucursal: number, factura: FacturaPOSFormularioDTO): Promise<FacturaPOSDTO> => {
+    const { data } = await apiClient.post<ApiResponse<FacturaPOSDTO>>(`${BASE}/${sucursal}`, factura);
+    return data.data;
+  },
+
+  actualizar: async (sucursal: number, factura: FacturaPOSFormularioDTO): Promise<FacturaPOSDTO> => {
+    const { data } = await apiClient.put<ApiResponse<FacturaPOSDTO>>(`${BASE}/${sucursal}`, factura);
+    return data.data;
+  },
+
   anular: async (sucursal: number, factura: any): Promise<any> => {
-    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/Anular`, factura);
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/anular`, factura);
     return data.data;
   },
 
   aplicar: async (sucursal: number, id: number): Promise<any> => {
     const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/aplicar/${id}`);
     return data.data;
+  },
+
+  postear: async (sucursal: number, factura: any): Promise<any> => {
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postear`, factura);
+    return data.data;
+  },
+
+  // ===== Catálogos =====
+  obtenerConceptos: async (sucursal: number, tipoDocumento?: string): Promise<any[]> => {
+    const params: Record<string, string> = {};
+    if (tipoDocumento) params.documento = tipoDocumento;
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`/Concepto/${sucursal}`, { params });
+    return data.data;
+  },
+
+  obtenerAlmacenes: async (sucursal: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`/Almacen/${sucursal}`);
+    return data.data;
+  },
+
+  obtenerClientes: async (sucursal: number): Promise<any[]> => {
+    const { data } = await apiClient.get<any[]>(`/Cliente/${sucursal}/activos`);
+    return data;
   },
 };

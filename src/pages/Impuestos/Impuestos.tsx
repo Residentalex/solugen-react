@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Tag, message, Card, Button, Modal, Descriptions, Tooltip, Form, Input, InputNumber, Select, Space } from 'antd';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { Table, message, Card, Button, Modal, Form, Input, InputNumber, Select, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { EyeOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { impuestoApi } from '../../api/impuestoApi';
@@ -12,6 +12,7 @@ import {
   AmbitoImpuesto,
   BaseCalculoImpuesto,
 } from '../../types/contabilidad';
+import PermissionGate from '../../components/PermissionGate';
 
 const TIPO_IMPUESTO_LABEL: Record<string, { label: string; color: string }> = {
   I: { label: 'Impuesto', color: 'blue' },
@@ -26,27 +27,25 @@ const AMBITO_LABEL: Record<number, string> = {
   [AmbitoImpuesto.Ninguno]: 'Ninguno',
 };
 
-const METODO_LABEL: Record<number, string> = {
-  [MetodoCalculoImpuesto.Porcentaje]: 'Porcentaje',
-  [MetodoCalculoImpuesto.Fijo]: 'Fijo',
-};
+const { Text } = Typography;
 
-const BASE_CALCULO_LABEL: Record<number, string> = {
-  [BaseCalculoImpuesto.Indefinido]: 'Indefinido',
-  [BaseCalculoImpuesto.MontoNeto]: 'Monto Neto',
-  [BaseCalculoImpuesto.MontoTotal]: 'Monto Total',
-};
+function toTitleCase(str: string): string {
+  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 const Impuestos: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const usuario = useAuthStore((s: any) => s.usuario);
+  const pantallaActual = usuario?.pantallas.find((p: any) => p.codigo === 'MImpuesto');
+  const puedeEditar = pantallaActual?.acciones.includes('EDITAR') ?? false;
+  const puedeCrear = pantallaActual?.acciones.includes('CREAR') ?? false;
 
   const [data, setData] = useState<ImpuestoDTO[]>([]);
   const [loading, setLoading] = useState(false);
-  const [detalleVisible, setDetalleVisible] = useState(false);
-  const [detalleItem, setDetalleItem] = useState<ImpuestoDTO | null>(null);
+  const [searchText, setSearchText] = useState('');
 
   // Estados para crear/editar
   const [modalVisible, setModalVisible] = useState(false);
@@ -54,12 +53,22 @@ const Impuestos: React.FC = () => {
   const [guardando, setGuardando] = useState(false);
   const [form] = Form.useForm();
 
-  const abrirDetalle = (item: ImpuestoDTO) => {
-    setDetalleItem(item);
-    setDetalleVisible(true);
+  const handleSearch = (value: string) => {
+    setSearchText(value);
   };
 
+  const filteredData = useMemo(() => {
+    if (!searchText) return data;
+    const lower = searchText.toLowerCase();
+    return data.filter(
+      (item) =>
+        item.codigo.toLowerCase().includes(lower) ||
+        item.nombre.toLowerCase().includes(lower)
+    );
+  }, [data, searchText]);
+
   const abrirNuevo = () => {
+    if (!puedeCrear) return;
     setEditando(null);
     form.resetFields();
     form.setFieldsValue({
@@ -72,6 +81,7 @@ const Impuestos: React.FC = () => {
   };
 
   const abrirEditar = (item: ImpuestoDTO) => {
+    if (!puedeEditar) return;
     setEditando(item);
     form.setFieldsValue({
       codigo: item.codigo,
@@ -136,12 +146,26 @@ const Impuestos: React.FC = () => {
       key: 'codigo',
       width: 100,
       fixed: 'left',
+      render: (val: string, record: ImpuestoDTO) =>
+        puedeEditar ? (
+          <Button
+            type="link"
+            size="small"
+            style={{ padding: 0, fontWeight: 500 }}
+            onClick={() => abrirEditar(record)}
+          >
+            {val}
+          </Button>
+        ) : (
+          <Text>{val}</Text>
+        ),
     },
     {
       title: 'Nombre',
       dataIndex: 'nombre',
       key: 'nombre',
       width: 220,
+      render: (val: string) => <Text>{val}</Text>,
     },
     {
       title: 'Porcentaje',
@@ -149,88 +173,62 @@ const Impuestos: React.FC = () => {
       key: 'porcentaje',
       width: 110,
       align: 'right',
-      render: (val: number) => `${(val ?? 0).toFixed(2)} %`,
+      render: (val: number) => <Text>{`${(val ?? 0).toFixed(2)} %`}</Text>,
     },
     {
       title: 'Tipo',
       dataIndex: 'tipo',
       key: 'tipo',
       width: 120,
-      render: (tipo: TipoImpuesto) => {
-        const info = TIPO_IMPUESTO_LABEL[tipo];
-        return info ? <Tag color={info.color}>{info.label}</Tag> : tipo;
-      },
+      render: (tipo: TipoImpuesto) => <Text>{TIPO_IMPUESTO_LABEL[tipo]?.label || tipo}</Text>,
     },
     {
       title: 'Ámbito',
       dataIndex: 'ambito',
       key: 'ambito',
       width: 100,
-      render: (ambito: AmbitoImpuesto) => AMBITO_LABEL[ambito] || 'Ninguno',
-    },
-    {
-      title: 'Método Cálculo',
-      dataIndex: 'metodoCalculo',
-      key: 'metodoCalculo',
-      width: 140,
-      render: (metodo: MetodoCalculoImpuesto) => METODO_LABEL[metodo] || '-',
+      render: (ambito: AmbitoImpuesto) => <Text>{AMBITO_LABEL[ambito] || 'Ninguno'}</Text>,
     },
     {
       title: 'Cuenta Contable',
       dataIndex: 'cuentaContable',
       key: 'cuentaContable',
-      width: 140,
-      render: (val: string) => val || '-',
+      width: 220,
+      render: (val: string) => <Text>{toTitleCase(val ?? '') || '-'}</Text>,
     },
-    {
-      title: 'Base Cálculo',
-      dataIndex: 'baseCalculo',
-      key: 'baseCalculo',
-      width: 120,
-      render: (val?: BaseCalculoImpuesto) =>
-        val !== undefined && val !== null ? BASE_CALCULO_LABEL[val] || '-' : '-',
-    },
-    {
-      title: 'Acciones',
-      key: 'acciones',
-      fixed: 'right',
-      width: 120,
-      render: (_: any, record: ImpuestoDTO) => (
-        <Space size={0}>
-          <Tooltip title="Editar impuesto">
-            <Button
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => abrirEditar(record)}
-            />
-          </Tooltip>
-          <Tooltip title="Ver detalle">
-            <Button
-              type="link"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => abrirDetalle(record)}
-            />
-          </Tooltip>
-        </Space>
-      ),
-    },
+
   ];
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Impuestos</h4>
-        <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-          Nuevo Impuesto
-        </Button>
-      </div>
-
       <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+        <div style={{ padding: '16px 24px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
+            <Input.Search
+              placeholder="Buscar por código o nombre..."
+              allowClear
+              onSearch={handleSearch}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  (e.target as HTMLInputElement).blur();
+                  handleSearch('');
+                }
+              }}
+              style={{ width: 400 }}
+              prefix={<SearchOutlined className="paces-text-icon" />}
+            />
+            <div style={{ flex: 1 }} />
+            <PermissionGate accion="CREAR">
+              <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
+                Nuevo
+              </Button>
+            </PermissionGate>
+            <Button icon={<ReloadOutlined />} onClick={() => cargarDatos()} />
+          </div>
+        </div>
         <Table<ImpuestoDTO>
           columns={columns}
-          dataSource={data}
+          dataSource={filteredData}
           rowKey="idExterno"
           loading={loading}
           scroll={{ x: 1100 }}
@@ -243,28 +241,6 @@ const Impuestos: React.FC = () => {
           }}
         />
       </Card>
-
-      <Modal
-        title={`Detalle de Impuesto: ${detalleItem?.nombre || ''}`}
-        open={detalleVisible}
-        onCancel={() => setDetalleVisible(false)}
-        footer={null}
-        width={640}
-      >
-        {detalleItem && (
-          <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
-            <Descriptions.Item label="Código">{detalleItem.codigo}</Descriptions.Item>
-            <Descriptions.Item label="Nombre">{detalleItem.nombre}</Descriptions.Item>
-            <Descriptions.Item label="Porcentaje">{`${(detalleItem.porcentaje ?? 0).toFixed(2)} %`}</Descriptions.Item>
-            <Descriptions.Item label="Tipo">{TIPO_IMPUESTO_LABEL[detalleItem.tipo]?.label || detalleItem.tipo}</Descriptions.Item>
-            <Descriptions.Item label="Ámbito">{AMBITO_LABEL[detalleItem.ambito] || 'Ninguno'}</Descriptions.Item>
-            <Descriptions.Item label="Método Cálculo">{METODO_LABEL[detalleItem.metodoCalculo] || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Cuenta Contable">{detalleItem.cuentaContable || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Base Cálculo">{detalleItem.baseCalculo !== undefined && detalleItem.baseCalculo !== null ? BASE_CALCULO_LABEL[detalleItem.baseCalculo] || '-' : '-'}</Descriptions.Item>
-            <Descriptions.Item label="Indicador DGII">{detalleItem.indicadorDGII ?? '-'}</Descriptions.Item>
-          </Descriptions>
-        )}
-      </Modal>
 
       {/* Modal de crear/editar */}
       <Modal

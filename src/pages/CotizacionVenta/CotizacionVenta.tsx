@@ -1,16 +1,23 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, message } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, message, Tooltip, Typography, Drawer } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined,
   ReloadOutlined,
+  LockFilled,
+  PlusOutlined,
+  PrinterOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { apiClient } from '../../api/client';
 import { cotizacionVentaApi } from '../../api/cotizacionVentaApi';
-import type { CotizacionVentaDTO } from '../../types/cotizacionVenta';
+import PermissionGate from '../../components/PermissionGate';
+import type { FacturaVistaDTO } from '../../types/facturacion';
 
 const { RangePicker } = DatePicker;
+const { Text } = Typography;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
@@ -23,7 +30,7 @@ const ESTADO_MAP: Record<number, { label: string; color: string }> = {
 };
 
 const DIAS_POR_DEFECTO = 30;
-const FILAS_POR_PAGINA = 50;
+const FILAS_POR_PAGINA = 25;
 
 function parseDateRaw(val: string): Date | null {
   if (!val) return null;
@@ -72,26 +79,28 @@ function toTitleCase(str: string): string {
 }
 
 const CotizacionVenta: React.FC = () => {
+  const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
 
-  const [data, setData] = useState<CotizacionVentaDTO[]>([]);
+  const [data, setData] = useState<FacturaVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
   const [searchText, setSearchText] = useState('');
-  const [selectedRow, setSelectedRow] = useState<CotizacionVentaDTO | null>(null);
+  const [selectedRow, setSelectedRow] = useState<FacturaVistaDTO | null>(null);
   const [fechaTrigger, setFechaTrigger] = useState(0);
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; title: string } | null>(null);
   const dateParamsRef = useRef({ desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)), hasta: formatDateParam(new Date()) });
 
   const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
     setLoading(true);
     try {
       const { desde, hasta } = dateParamsRef.current;
-      let resultados: CotizacionVentaDTO[];
+      let resultados: FacturaVistaDTO[];
 
       if (busqueda.length > 2) {
         resultados = await cotizacionVentaApi.filtrar(sucursalActiva, {
@@ -100,7 +109,7 @@ const CotizacionVenta: React.FC = () => {
           documento: busqueda,
           concepto: busqueda,
           cliente: busqueda,
-        });
+        }) as unknown as FacturaVistaDTO[];
       } else {
         resultados = await cotizacionVentaApi.obtenerVista(
           sucursalActiva,
@@ -108,7 +117,7 @@ const CotizacionVenta: React.FC = () => {
           hasta,
           filas,
           (pagina - 1) * filas
-        );
+        ) as unknown as FacturaVistaDTO[];
       }
 
       setData(resultados);
@@ -139,6 +148,22 @@ const CotizacionVenta: React.FC = () => {
     setFechaTrigger(n => n + 1);
   };
 
+  const handleImprimir = useCallback(async () => {
+    if (!selectedRow) {
+      message.warning('Seleccione un documento primero');
+      return;
+    }
+    try {
+      const res = await apiClient.get(`/reportes/facturacion/cotizacionVenta/${sucursalActiva}/${selectedRow.id}`, {
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(res.data);
+      setPdfPreview({ url: blobUrl, title: `Cotización-${selectedRow.documento}` });
+    } catch {
+      message.error('Error al generar el PDF');
+    }
+  }, [selectedRow, sucursalActiva]);
+
   const handleDateChange = (dates: any) => {
     if (dates && dates[0] && dates[1]) {
       const d = dates[0].format('YYYYMMDD') + '000000';
@@ -158,41 +183,43 @@ const CotizacionVenta: React.FC = () => {
     setPage(pagination.current);
   };
 
-  const handleRowClick = (record: CotizacionVentaDTO) => {
+  const handleRowClick = (record: FacturaVistaDTO) => {
     setSelectedRow(record);
-    const editable = record.periodo !== 6 && record.estado === 0;
+    const periodoNum = record.periodo ? Number(record.periodo) : 0;
+    const editable = periodoNum !== 6 && Number(record.estado) === 0;
     updateToolbar({ editar: editable });
   };
 
-  const columns: ColumnsType<CotizacionVentaDTO> = [
+  const columns: ColumnsType<FacturaVistaDTO> = [
     {
       title: 'Documento',
+      dataIndex: 'documento',
       key: 'documento',
       width: 160,
       fixed: 'left',
-      render: (_: any, record: CotizacionVentaDTO) => (
-        <span className="paces-doc-link">
-          {record.tipoDocumento}-{record.noDocumento}
-        </span>
+      render: (doc: string, record: FacturaVistaDTO) => (
+        <Text strong className="paces-doc-link" onClick={() => navigate(`/FCotizacion/${record.id}`)}>
+          {doc}
+        </Text>
       ),
     },
     {
       title: 'Fecha',
-      dataIndex: 'fechaDocumento',
+      dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (f: string) => <span>{formatDate(f)}</span>,
+      render: (f: string) => <Text>{formatDate(f)}</Text>,
     },
     {
       title: 'Cliente',
-      dataIndex: 'cliente',
-      key: 'cliente',
+      dataIndex: 'entidad',
+      key: 'entidad',
       render: (name: string) => (
         <Space>
           <div className="paces-avatar-initials">
             {getInitials(name)}
           </div>
-          <span>{toTitleCase(name) || '-'}</span>
+          <Text>{toTitleCase(name) || '-'}</Text>
         </Space>
       ),
     },
@@ -202,7 +229,7 @@ const CotizacionVenta: React.FC = () => {
       key: 'concepto',
       width: 280,
       ellipsis: true,
-      render: (concepto: string) => <span>{toTitleCase(concepto) || '-'}</span>,
+      render: (concepto: string) => <Text>{toTitleCase(concepto) || '-'}</Text>,
     },
     {
       title: 'Total',
@@ -211,7 +238,7 @@ const CotizacionVenta: React.FC = () => {
       width: 160,
       align: 'right',
       render: (total: number) => (
-        <span style={{ fontWeight: 600, color: '#343a40' }}>{formatCurrency(total)}</span>
+        <Text strong className="paces-text-total">{formatCurrency(total)}</Text>
       ),
     },
     {
@@ -219,14 +246,19 @@ const CotizacionVenta: React.FC = () => {
       dataIndex: 'estado',
       key: 'estado',
       width: 100,
-      render: (estado: number, record: CotizacionVentaDTO) => {
-        const esCerrado = record.periodo === 6;
-        const info = ESTADO_MAP[estado] || { label: 'Desconocido', color: 'default' };
+      render: (estado: string, record: FacturaVistaDTO) => {
+        const estadoNum = Number(estado);
+        const esCerrado = record.periodo ? Number(record.periodo) === 6 : false;
+        const info = ESTADO_MAP[estadoNum] || { label: 'Desconocido', color: 'default' };
         return (
-          <Space>
-            <Tag color={info.color}>{info.label}</Tag>
-            {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-          </Space>
+          <Tag color={info.color}>
+            {info.label}
+            {esCerrado && (
+              <Tooltip title="Período contable cerrado">
+                <LockFilled style={{ marginLeft: 4, fontSize: 12, color: '#595959' }} />
+              </Tooltip>
+            )}
+          </Tag>
         );
       },
     },
@@ -237,9 +269,9 @@ const CotizacionVenta: React.FC = () => {
       styles={{
         body: { padding: 0 },
       }}
+      className="paces-card-erp"
       style={{
         borderRadius: 8,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
       }}
     >
       <div style={{ padding: '20px 24px 0' }}>
@@ -273,39 +305,32 @@ const CotizacionVenta: React.FC = () => {
               { value: 100, label: '100' },
             ]}
           />
-          <Button
-            type="primary"
-            icon={<ReloadOutlined />}
-            onClick={handleRefresh}
-            style={{ marginLeft: 'auto' }}
-          />
+          <div style={{ flex: 1 }} />
+          <PermissionGate accion="CREAR">
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FCotizacion/nuevo')}>
+              Nuevo
+            </Button>
+          </PermissionGate>
+          <PermissionGate accion="IMPRIMIR">
+            <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          </PermissionGate>
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>
 
-      <Table<CotizacionVentaDTO>
+      <Table<FacturaVistaDTO>
         columns={columns}
         dataSource={data}
         rowKey="id"
         loading={loading}
-        scroll={{ x: 1060 }}
+        scroll={{ x: 1350 }}
         size="middle"
+        rowClassName={(record) =>
+          selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'
+        }
         onRow={(record) => ({
           onClick: () => handleRowClick(record),
-          style: {
-            cursor: 'pointer',
-            background: selectedRow?.id === record.id ? '#eef0fc' : undefined,
-            transition: 'background 0.15s',
-          },
-          onMouseEnter: (e) => {
-            if (selectedRow?.id !== record.id) {
-              e.currentTarget.style.background = '#f8f9fa';
-            }
-          },
-          onMouseLeave: (e) => {
-            if (selectedRow?.id !== record.id) {
-              e.currentTarget.style.background = 'transparent';
-            }
-          },
+          style: { cursor: 'pointer' },
         })}
         onChange={handleTableChange}
         pagination={{
@@ -315,8 +340,24 @@ const CotizacionVenta: React.FC = () => {
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
-        style={{ borderTop: '1px solid #e9ecef', fontFamily: 'inherit' }}
+        className="paces-border-top paces-list-table"
       />
+
+      <Drawer
+        title={pdfPreview?.title}
+        open={!!pdfPreview}
+        onClose={() => {
+          if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
+          setPdfPreview(null);
+        }}
+        width="70%"
+      >
+        {pdfPreview && (
+          <div style={{ width: '100%', height: '100%', overflow: 'auto', transform: 'scale(1.1)', transformOrigin: 'top left' }}>
+            <iframe src={pdfPreview.url} style={{ width: '100%', height: '90vh', border: 'none' }} title="PDF" />
+          </div>
+        )}
+      </Drawer>
     </Card>
   );
 };

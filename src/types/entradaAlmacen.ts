@@ -39,6 +39,13 @@ export interface EntidadDTO {
   requiereORC?: boolean;
 }
 
+export interface TipoEntidadDTO {
+  nombre: string;
+  codigo: string;
+  origenCuenta?: number;
+  idExterno?: string;
+}
+
 export interface ConceptoDTO {
   nombre: string;
   codigo: string;
@@ -49,6 +56,10 @@ export interface ConceptoDTO {
   activo?: boolean;
   moneda?: MonedaDTO;
   almacen?: AlmacenDTO;
+  cuentaContable?: CuentaContableDTO;
+  tipoIngreso?: number;
+  entidades?: TipoEntidadDTO[];
+  documentos?: DocumentoDTO[];
 }
 
 export interface MonedaDTO {
@@ -60,6 +71,10 @@ export interface MonedaDTO {
 export interface AlmacenDTO {
   nombre: string;
   codigo: string;
+  fechaInicial?: string;
+  fechaCierre?: string;
+  idExterno?: string;
+  cuentaContable?: string;
 }
 
 export interface SuplidorDTO {
@@ -130,6 +145,7 @@ export interface LogDTO {
   estacion: string;
 }
 
+import type { CuentaContableDTO } from './contabilidad';
 import type { DocumentoDTO } from './documento';
 
 export interface EntradaAlmacenDTO {

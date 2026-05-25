@@ -92,8 +92,6 @@ function formatDateParamLocal(d: Date): string {
 const PasoCriterio: React.FC<Props> = ({
   sucursal,
   tipoDoc,
-  fechaDesde,
-  fechaHasta,
   subCriterio,
   entidadCodigo,
   conceptoCodigo,
@@ -203,7 +201,7 @@ const PasoCriterio: React.FC<Props> = ({
                     background: isSelected ? undefined : isDarkMode ? hexToRgba(primaryColor, 0.2) : sc.color + '18',
                   }}
                 >
-                  {React.cloneElement(sc.icon, {
+                  {React.isValidElement(sc.icon) && React.cloneElement(sc.icon as React.ReactElement<{style?: React.CSSProperties}>, {
                     style: { fontSize: 20, color: isSelected ? '#fff' : (sc.value === 'entidad' ? primaryColor : sc.color) },
                   })}
                 </div>

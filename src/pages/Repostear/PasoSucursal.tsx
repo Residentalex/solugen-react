@@ -55,7 +55,7 @@ const PasoSucursal: React.FC<Props> = ({ value, onChange }) => {
                 <CheckCircleFilled className="repostear-tile__check" />
 
                 <div className="repostear-tile__icon-circle">
-                  {React.cloneElement(s.icon, {
+                  {React.isValidElement(s.icon) && React.cloneElement(s.icon as React.ReactElement<{style?: React.CSSProperties}>, {
                     style: { fontSize: 24, color: primaryColor },
                   })}
                 </div>

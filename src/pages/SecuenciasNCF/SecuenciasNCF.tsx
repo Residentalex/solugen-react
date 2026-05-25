@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, message, Card, Button, Tooltip, Space } from 'antd';
+import { Table, message, Card, Button, Tooltip, Space, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
@@ -20,7 +20,9 @@ const formatearFecha = (fecha?: string): string => {
   } catch {
     return fecha;
   }
-};
+}
+
+const { Text } = Typography;
 
 const SecuenciasNCF: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
@@ -60,19 +62,21 @@ const SecuenciasNCF: React.FC = () => {
       dataIndex: 'tipoComprobante',
       key: 'tipoComprobante',
       width: 200,
-      render: (val: string) => toTitleCase(val ?? ''),
+      render: (val: string) => <Text>{toTitleCase(val ?? '')}</Text>,
     },
     {
       title: 'Secuencia Inicial',
       dataIndex: 'secuenciaInicial',
       key: 'secuenciaInicial',
       width: 150,
+      render: (val: string) => <Text>{val}</Text>,
     },
     {
       title: 'Secuencia Final',
       dataIndex: 'secuenciaFinal',
       key: 'secuenciaFinal',
       width: 150,
+      render: (val: string) => <Text>{val}</Text>,
     },
     {
       title: 'Cantidad',
@@ -80,7 +84,7 @@ const SecuenciasNCF: React.FC = () => {
       key: 'cantidad',
       width: 100,
       align: 'right',
-      render: (val: number) => (val ?? 0).toLocaleString('es-DO'),
+      render: (val: number) => <Text>{(val ?? 0).toLocaleString('es-DO')}</Text>,
     },
     {
       title: 'Mínimo',
@@ -88,7 +92,7 @@ const SecuenciasNCF: React.FC = () => {
       key: 'minimo',
       width: 100,
       align: 'right',
-      render: (val: number) => (val ?? 0).toLocaleString('es-DO'),
+      render: (val: number) => <Text>{(val ?? 0).toLocaleString('es-DO')}</Text>,
     },
     {
       title: 'Usado',
@@ -96,7 +100,7 @@ const SecuenciasNCF: React.FC = () => {
       key: 'usado',
       width: 100,
       align: 'right',
-      render: (val: number) => (val ?? 0).toLocaleString('es-DO'),
+      render: (val: number) => <Text>{(val ?? 0).toLocaleString('es-DO')}</Text>,
     },
     {
       title: 'Fecha Vencimiento',
@@ -104,14 +108,14 @@ const SecuenciasNCF: React.FC = () => {
       key: 'fechaVencimiento',
       width: 140,
       align: 'right',
-      render: (val?: string) => formatearFecha(val),
+      render: (val?: string) => <Text>{formatearFecha(val)}</Text>,
     },
     {
       title: 'Acciones',
       key: 'acciones',
       fixed: 'right',
       width: 80,
-      render: (_: any, record: SecuenciaNCFListDTO) => (
+      render: () => (
         <Space size={0}>
           <Tooltip title="Ver detalle">
             <Button

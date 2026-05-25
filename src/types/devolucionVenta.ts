@@ -92,3 +92,42 @@ export interface DevolucionVentaDTO {
   asientos: AsientoContableDTO[];
   logs: LogDTO[];
 }
+
+// ===== DTO completo para Devolucion Venta (FDEV) usado en formulario =====
+export interface DevolucionVentaFullDTO {
+  id: number;
+  fechaDocumento: string;
+  noDocumento: string;
+  estado: number;
+  periodo: number;
+  ncf: string;
+  referencia: string;
+  nota: string;
+  tasa: number;
+  tipoDocumento?: number;
+
+  // Objetos anidados
+  concepto: ConceptoDTO | null;
+  almacen: AlmacenDTO | null;
+  cliente: ClienteDTO | null;
+  entidad?: EntidadDTO | null;
+  factura?: FacturaPOSDTO | null;
+  moneda: MonedaDTO | null;
+  documento: DocumentoDTO;
+  creadoPor?: { id: number; nombre: string; nombreUsuario: string };
+  validadoPor?: { id: number; nombre: string; nombreUsuario: string };
+
+  // Totales
+  subTotal: number;
+  descuento: number;
+  impuestos: number;
+  total: number;
+
+  // Detalles
+  detalles: DetalleDevolucionVentaDTO[];
+
+  // Adicionales
+  asientos?: AsientoContableDTO[];
+  logs?: LogDTO[];
+  noDocumentoGenerado?: string;
+}

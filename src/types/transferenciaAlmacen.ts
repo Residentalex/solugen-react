@@ -27,6 +27,10 @@ export interface FiltroTRP {
 }
 
 import type { DocumentoDTO } from './documento';
+import type {
+  ConceptoDTO, AlmacenDTO, MonedaDTO,
+  AsientoContableDTO, LogDTO,
+} from './entradaAlmacen';
 
 export interface TransferenciaAlmacenDTO {
   id: number;
@@ -39,4 +43,50 @@ export interface TransferenciaAlmacenDTO {
   nota: string;
   total: number;
   documento: DocumentoDTO;
+}
+
+// ===== DTO completo para Transferencia Almacén (FTRP) =====
+
+export interface DetalleTransferenciaAlmacenDTO {
+  id: number;
+  idExterno?: number;
+  codigo: string;
+  articulo: string;
+  referencia: string;
+  cantidad: number;
+  subTotal: number;
+  total: number;
+  tipoArticulo: string;
+  nota?: string;
+  familia?: { nombre: string; idExterno: string };
+  medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
+}
+
+export interface TransferenciaAlmacenFullDTO {
+  id: number;
+  fechaDocumento: string;
+  noDocumento: string;
+  estado: number;
+  periodo: number;
+  referencia: string;
+  ncf: string;
+  nota: string;
+  tasa: number;
+
+  concepto: ConceptoDTO | null;
+  almacen: AlmacenDTO | null;           // Origen
+  almacenDestino: AlmacenDTO | null;    // Destino
+  moneda: MonedaDTO | null;
+  documento: DocumentoDTO;
+  creadoPor?: { id: number; nombre: string; nombreUsuario: string };
+  validadoPor?: { id: number; nombre: string; nombreUsuario: string };
+
+  subTotal: number;
+  total: number;
+
+  detalles: DetalleTransferenciaAlmacenDTO[];
+
+  asientos?: AsientoContableDTO[];
+  logs?: LogDTO[];
+  noDocumentoGenerado?: string;
 }

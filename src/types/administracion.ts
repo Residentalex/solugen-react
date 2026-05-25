@@ -1,9 +1,10 @@
-import type { Sucursal, RolDTO, PantallaDTO, AuthPermisoEspecialDTO, UsuarioSucursalRolDTO } from './auth';
+import type { RolDTO, PantallaDTO, AuthPermisoEspecialDTO, UsuarioSucursalRolDTO } from './auth';
 
 export interface AccionDTO {
   id: number;
   codigo: string;
   nombre: string;
+  activo: boolean;
 }
 
 export interface PantallaFullDTO {
@@ -18,6 +19,7 @@ export interface RolFullDTO {
   activo: boolean;
   pantallas: PantallaFullDTO[];
   cantidadUsuarios?: number;
+  nombresUsuarios?: string[];
 }
 
 export interface UsuarioDTO {

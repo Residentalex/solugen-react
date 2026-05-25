@@ -94,6 +94,49 @@ import type { DocumentoDTO } from './documento';
 export type { EntidadDTO, ConceptoDTO, MonedaDTO, AlmacenDTO, AsientoContableDTO, LogDTO };
 export type { EnvioDGIIDTO };
 
+// ===== Tipos para Cobros POS =====
+export interface CobroDTO {
+  efectivo: number;
+  cheque: number;
+  transferencia: number;
+  tarjetaCredito: number;
+  tarjetaDebito: number;
+  bono: number;
+  tarjetaRegalo: number;
+  notaCredito: number;
+}
+
+// ===== FullDTO para formulario Factura POS (crear/editar) =====
+export interface FacturaPOSFormularioDTO {
+  id: number;
+  fechaDocumento: string;
+  noDocumento: string;
+  estado: number;
+  periodo: number;
+  ncf: string;
+  nota: string;
+  referencia: string;
+  tasa: number;
+  diasCredito: number;
+  turno?: string;
+
+  concepto: ConceptoDTO | null;
+  cliente: ClienteDTO | null;
+  almacen: AlmacenDTO | null;
+  moneda: MonedaDTO | null;
+  documento: DocumentoDTO;
+
+  subTotal: number;
+  descuento: number;
+  impuestos: number;
+  total: number;
+
+  detalles: DetalleFacturaPOSDTO[];
+  cobros?: CobroDTO;
+  asientos?: AsientoContableDTO[];
+  logs?: LogDTO[];
+}
+
 export interface FacturaPOSDTO {
   id: number;
   fechaDocumento: string;

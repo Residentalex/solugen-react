@@ -1,17 +1,19 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, message, Drawer } from 'antd';
+import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, message, Drawer, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined,
   ReloadOutlined,
   PlusOutlined,
   PrinterOutlined,
+  LockFilled,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
+import PermissionGate from '../../components/PermissionGate';
 import type { MovimientoVistaDTO } from '../../types/devolucionCompra';
 
 const { Text } = Typography;
@@ -28,7 +30,7 @@ const ESTADO_MAP: Record<number, { label: string; color: string }> = {
 };
 
 const DIAS_POR_DEFECTO = 30;
-const FILAS_POR_PAGINA = 50;
+const FILAS_POR_PAGINA = 25;
 
 function parseDateRaw(val: string): Date | null {
   if (!val) return null;
@@ -252,10 +254,14 @@ const DevolucionCompra: React.FC = () => {
     const esCerrado = record.periodo === 6;
     const info = ESTADO_MAP[estado] || { label: 'Desconocido', color: 'default' };
     return (
-      <Space>
-        <Tag color={info.color}>{info.label}</Tag>
-        {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-      </Space>
+      <Tag color={info.color}>
+        {info.label}
+        {esCerrado && (
+          <Tooltip title="Período contable cerrado">
+            <LockFilled style={{ marginLeft: 4, fontSize: 12, color: '#595959' }} />
+          </Tooltip>
+        )}
+      </Tag>
     );
   },
 },
@@ -303,10 +309,14 @@ const DevolucionCompra: React.FC = () => {
             ]}
           />
           <div style={{ flex: 1 }} />
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FNDCP/nuevo')}>
-            Nuevo
-          </Button>
-          <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          <PermissionGate accion="CREAR">
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FDVC/nuevo')}>
+              Nuevo
+            </Button>
+          </PermissionGate>
+          <PermissionGate accion="IMPRIMIR">
+            <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+          </PermissionGate>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>

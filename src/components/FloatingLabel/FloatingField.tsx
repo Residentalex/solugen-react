@@ -19,7 +19,7 @@ interface FloatingFieldProps {
 /** Wrapper que transforma el placeholder de cualquier input Ant Design
  *  en un floating label estilo Material Design. */
 const FloatingField = React.forwardRef<HTMLDivElement, FloatingFieldProps>(
-  ({ label, required, children, value, onChange, externalValue }, ref) => {
+  ({ label, required, children, value, onChange, externalValue: _externalValue }, ref) => {
     const [focused, setFocused] = useState(false);
 
     // El label siempre se muestra arriba

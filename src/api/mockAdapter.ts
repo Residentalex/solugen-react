@@ -20,21 +20,21 @@ function crearModulosPantallas(): { pantallas: PantallaDTO[] } {
   ];
 
   const pantallas: PantallaDTO[] = [
-    { id: 1, nombre: 'Entradas de Almacén', codigo: 'FENP', ruta: '/FENP', esReporte: false, moduloID: 1, orden: 1, grupo: 'Movimientos', modulos: [modulos[0]], acciones: ['ver', 'crear', 'editar', 'anular'] },
-    { id: 2, nombre: 'Salidas de Almacén', codigo: 'FSAP', ruta: '/FSAP', esReporte: false, moduloID: 1, orden: 2, grupo: 'Movimientos', modulos: [modulos[0]], acciones: ['ver', 'crear', 'editar', 'anular'] },
-    { id: 3, nombre: 'Transferencias', codigo: 'FTRP', ruta: '/FTRP', esReporte: false, moduloID: 1, orden: 3, grupo: 'Movimientos', modulos: [modulos[0]], acciones: ['ver', 'crear', 'aplicar', 'desaplicar'] },
-    { id: 4, nombre: 'Devolución de Compra', codigo: 'FDVC', ruta: '/FDVC', esReporte: false, moduloID: 2, orden: 4, grupo: undefined, modulos: [modulos[1]], acciones: ['ver', 'crear', 'aplicar', 'anular'] },
-    { id: 5, nombre: 'Cotizaciones', codigo: 'FCotizacion', ruta: '/FCotizacion', esReporte: false, moduloID: 3, orden: 5, grupo: 'Documentos', modulos: [modulos[2]], acciones: ['ver', 'crear', 'postear'] },
-    { id: 6, nombre: 'Devolución de Venta', codigo: 'FDEV', ruta: '/FDEV', esReporte: false, moduloID: 3, orden: 6, grupo: 'Documentos', modulos: [modulos[2]], acciones: ['ver', 'crear', 'aplicar', 'postear'] },
-    { id: 7, nombre: 'Facturas POS', codigo: 'FPV', ruta: '/FPV', esReporte: false, moduloID: 4, orden: 7, grupo: undefined, modulos: [modulos[3]], acciones: ['ver', 'crear', 'anular', 'aplicar'] },
-    { id: 8, nombre: 'Facturas Cliente', codigo: 'FFAC', ruta: '/FFAC', esReporte: false, moduloID: 4, orden: 8, grupo: undefined, modulos: [modulos[3]], acciones: ['ver', 'crear', 'editar', 'anular', 'aplicar'] },
-    { id: 9, nombre: 'Facturas Proveedor', codigo: 'FRDE', ruta: '/FRDE', esReporte: false, moduloID: 2, orden: 9, grupo: undefined, modulos: [modulos[1]], acciones: ['ver', 'crear', 'editar', 'anular', 'aplicar'] },
-    { id: 10, nombre: 'Distribución Balance CXP', codigo: 'FDBASUP', ruta: '/FDBASUP', esReporte: false, moduloID: 2, orden: 10, grupo: 'Documentos', modulos: [modulos[1]], acciones: ['ver', 'crear', 'aplicar', 'anular'] },
-    { id: 11, nombre: 'Distribución Balance CXC', codigo: 'FDBACLI', ruta: '/FDBACLI', esReporte: false, moduloID: 3, orden: 11, grupo: 'Documentos', modulos: [modulos[2]], acciones: ['ver', 'crear', 'aplicar', 'anular'] },
-    { id: 12, nombre: 'Recibo Ingreso', codigo: 'FRI', ruta: '/FRI', esReporte: false, moduloID: 4, orden: 12, grupo: undefined, modulos: [modulos[3]], acciones: ['ver', 'crear', 'editar', 'anular', 'aplicar'] },
-    { id: 13, nombre: 'Usuarios', codigo: 'MUsuario', ruta: '/MUsuario', esReporte: false, moduloID: 5, orden: 1, grupo: undefined, modulos: [modulos[4]], acciones: ['ver', 'crear', 'editar', 'anular'] },
-    { id: 14, nombre: 'Roles', codigo: 'MROL', ruta: '/MROL', esReporte: false, moduloID: 5, orden: 2, grupo: undefined, modulos: [modulos[4]], acciones: ['ver', 'crear', 'editar', 'anular'] },
-    { id: 15, nombre: 'Productos', codigo: 'MProducto', ruta: '/MProducto', esReporte: false, moduloID: 1, orden: 1, grupo: 'Maestros', modulos: [modulos[0]], acciones: ['ver', 'crear', 'editar', 'anular'] },
+    { id: 1, nombre: 'Entradas de Almacén', codigo: 'FENP', ruta: '/FENP', esReporte: false, orden: 1, grupo: 'Movimientos', modulos: [modulos[0]], acciones: ['ver', 'crear', 'editar', 'anular'] },
+    { id: 2, nombre: 'Salidas de Almacén', codigo: 'FSAP', ruta: '/FSAP', esReporte: false, orden: 2, grupo: 'Movimientos', modulos: [modulos[0]], acciones: ['ver', 'crear', 'editar', 'anular'] },
+    { id: 3, nombre: 'Transferencias', codigo: 'FTRP', ruta: '/FTRP', esReporte: false, orden: 3, grupo: 'Movimientos', modulos: [modulos[0]], acciones: ['ver', 'crear', 'aplicar', 'desaplicar'] },
+    { id: 4, nombre: 'Devolución de Compra', codigo: 'FDVC', ruta: '/FDVC', esReporte: false, orden: 4, grupo: undefined, modulos: [modulos[1]], acciones: ['ver', 'crear', 'aplicar', 'anular'] },
+    { id: 5, nombre: 'Cotizaciones', codigo: 'FCotizacion', ruta: '/FCotizacion', esReporte: false, orden: 5, grupo: 'Documentos', modulos: [modulos[2]], acciones: ['ver', 'crear', 'postear'] },
+    { id: 6, nombre: 'Devolución de Venta', codigo: 'FDEV', ruta: '/FDEV', esReporte: false, orden: 6, grupo: 'Documentos', modulos: [modulos[2]], acciones: ['ver', 'crear', 'aplicar', 'postear'] },
+    { id: 7, nombre: 'Facturas POS', codigo: 'FPV', ruta: '/FPV', esReporte: false, orden: 7, grupo: undefined, modulos: [modulos[3]], acciones: ['ver', 'crear', 'anular', 'aplicar'] },
+    { id: 8, nombre: 'Facturas Cliente', codigo: 'FFAC', ruta: '/FFAC', esReporte: false, orden: 8, grupo: undefined, modulos: [modulos[3]], acciones: ['ver', 'crear', 'editar', 'anular', 'aplicar'] },
+    { id: 9, nombre: 'Facturas Proveedor', codigo: 'FRDE', ruta: '/FRDE', esReporte: false, orden: 9, grupo: undefined, modulos: [modulos[1]], acciones: ['ver', 'crear', 'editar', 'anular', 'aplicar'] },
+    { id: 10, nombre: 'Distribución Balance CXP', codigo: 'FDBASUP', ruta: '/FDBASUP', esReporte: false, orden: 10, grupo: 'Documentos', modulos: [modulos[1]], acciones: ['ver', 'crear', 'aplicar', 'anular'] },
+    { id: 11, nombre: 'Distribución Balance CXC', codigo: 'FDBACLI', ruta: '/FDBACLI', esReporte: false, orden: 11, grupo: 'Documentos', modulos: [modulos[2]], acciones: ['ver', 'crear', 'aplicar', 'anular'] },
+    { id: 12, nombre: 'Recibo Ingreso', codigo: 'FRI', ruta: '/FRI', esReporte: false, orden: 12, grupo: undefined, modulos: [modulos[3]], acciones: ['ver', 'crear', 'editar', 'anular', 'aplicar'] },
+    { id: 13, nombre: 'Usuarios', codigo: 'MUsuario', ruta: '/MUsuario', esReporte: false, orden: 1, grupo: undefined, modulos: [modulos[4]], acciones: ['ver', 'crear', 'editar', 'anular'] },
+    { id: 14, nombre: 'Roles', codigo: 'MROL', ruta: '/MROL', esReporte: false, orden: 2, grupo: undefined, modulos: [modulos[4]], acciones: ['ver', 'crear', 'editar', 'anular'] },
+    { id: 15, nombre: 'Productos', codigo: 'MProducto', ruta: '/MProducto', esReporte: false, orden: 1, grupo: 'Maestros', modulos: [modulos[0]], acciones: ['ver', 'crear', 'editar', 'anular'] },
   ];
 
   return { pantallas };
@@ -50,6 +50,7 @@ function crearUsuarioMock(): AuthUsuarioSesionDTO {
     diasVigencia: 30,
     activo: true,
     empleadoID: 'EMP-001',
+    empleado: 'Administrador Demo',
     sucursalActiva: 0,
     roles: [{ id: 1, nombre: 'Administrador' }],
     sucursalesRoles: [
@@ -333,7 +334,7 @@ const accionesDisponibles = ['ver', 'crear', 'editar', 'anular', 'aplicar', 'des
 function rolMock(i: number) {
   const pantallasCount = Math.floor(Math.random() * 4) + 3;
   const selected = new Set<number>();
-  const pantallas: { pantalla: { id: number; nombre: string; codigo: string; ruta: string; moduloID: number; orden: number; modulos: { id: number; nombre: string; orden: number }[]; grupo?: string }; acciones: { id: number; codigo: string; nombre: string }[] }[] = [];
+  const pantallas: { pantalla: { id: number; nombre: string; codigo: string; ruta: string; orden: number; modulos: { id: number; nombre: string; orden: number }[]; grupo?: string }; acciones: { id: number; codigo: string; nombre: string }[] }[] = [];
   for (let j = 0; j < pantallasCount; j++) {
     let idx;
     do { idx = Math.floor(Math.random() * 14) + 1; } while (selected.has(idx));
@@ -345,7 +346,6 @@ function rolMock(i: number) {
         nombre: `Pantalla ${idx}`,
         codigo: `P${idx}`,
         ruta: `/P${idx}`,
-        moduloID: 1,
         orden: idx,
         modulos: [{ id: 1, nombre: 'General', orden: 1 }],
       },
@@ -765,11 +765,11 @@ export function setupMocks() {
       { id: 5, nombre: 'Administracion', orden: 5 },
     ];
     const pantallas = [
-      { id: 1, nombre: 'Entradas de Almacén', codigo: 'FENP', ruta: '/FENP', moduloID: 1, orden: 1, grupo: 'Movimientos', modulos: [modulos[0]] },
-      { id: 2, nombre: 'Salidas de Almacén', codigo: 'FSAP', ruta: '/FSAP', moduloID: 1, orden: 2, grupo: 'Movimientos', modulos: [modulos[0]] },
-      { id: 3, nombre: 'Transferencias', codigo: 'FTRP', ruta: '/FTRP', moduloID: 1, orden: 3, grupo: 'Movimientos', modulos: [modulos[0]] },
-      { id: 13, nombre: 'Usuarios', codigo: 'MUsuario', ruta: '/MUsuario', moduloID: 5, orden: 1, modulos: [modulos[4]] },
-      { id: 14, nombre: 'Roles', codigo: 'MROL', ruta: '/MROL', moduloID: 5, orden: 2, modulos: [modulos[4]] },
+      { id: 1, nombre: 'Entradas de Almacén', codigo: 'FENP', ruta: '/FENP', orden: 1, grupo: 'Movimientos', modulos: [modulos[0]] },
+      { id: 2, nombre: 'Salidas de Almacén', codigo: 'FSAP', ruta: '/FSAP', orden: 2, grupo: 'Movimientos', modulos: [modulos[0]] },
+      { id: 3, nombre: 'Transferencias', codigo: 'FTRP', ruta: '/FTRP', orden: 3, grupo: 'Movimientos', modulos: [modulos[0]] },
+      { id: 13, nombre: 'Usuarios', codigo: 'MUsuario', ruta: '/MUsuario', orden: 1, modulos: [modulos[4]] },
+      { id: 14, nombre: 'Roles', codigo: 'MROL', ruta: '/MROL', orden: 2, modulos: [modulos[4]] },
     ];
     const data = pantallas.map((p) => ({
       pantalla: { ...p, acciones: [] as string[], esReporte: false, pantallaPadreID: undefined },

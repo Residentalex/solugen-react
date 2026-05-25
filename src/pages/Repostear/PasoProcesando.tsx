@@ -73,7 +73,7 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
   // Mapa de APIs específicas por tipo de documento para posteo individual
   const API_ESPECIFICA: Record<string, {
     obtenerPorId: (sucursal: number, id: number) => Promise<any>;
-    postear: (sucursal: number, doc: any, destino?: number) => Promise<any>;
+    postear: (sucursal: number, doc: any, destino?: any) => Promise<any>;
   }> = {
     DEV: devolucionVentaApi,
     ENP: entradaAlmacenApi,

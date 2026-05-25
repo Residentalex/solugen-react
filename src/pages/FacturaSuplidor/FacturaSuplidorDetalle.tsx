@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Tooltip
 } from 'antd';
 import {
-  ArrowLeftOutlined, PrinterOutlined, EditOutlined
+  ArrowLeftOutlined, PrinterOutlined, EditOutlined, LockFilled,
+  CheckCircleOutlined, CloseCircleOutlined,
+  IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
+import PermissionGate from '../../components/PermissionGate';
 
 const { TabPane } = Tabs;
 
@@ -57,30 +60,44 @@ function toTitleCase(str: string): string {
 }
 
 interface SuplidorCardProps {
-  suplidor: { nombre: string; identificacion: string; telefono?: string } | undefined;
+  suplidor: { nombre: string; identificacion: string; telefono?: string; direccion?: string } | undefined;
+  entidad?: { nombre: string; identificacion: string; telefono?: string; direccion?: string } | undefined;
 }
 
-const SuplidorCard: React.FC<SuplidorCardProps> = ({ suplidor }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Suplidor</span>}
-    className="paces-card"
-    style={{ marginBottom: 16 }}
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
-      <div style={{ fontSize: 16, fontWeight: 700 }}>
-        {suplidor?.nombre ? toTitleCase(suplidor.nombre) : '-'}
+const SuplidorCard: React.FC<SuplidorCardProps> = ({ suplidor, entidad }) => {
+  const identificacion = suplidor?.identificacion || entidad?.identificacion || '';
+  const telefono = suplidor?.telefono || entidad?.telefono || '';
+  const direccion = suplidor?.direccion ? toTitleCase(suplidor.direccion) : entidad?.direccion ? toTitleCase(entidad.direccion) : '-';
+
+  return (
+    <Card
+      title={<span style={{ fontSize: 16, fontWeight: 600 }}>{toTitleCase(suplidor?.nombre || entidad?.nombre || 'Suplidor')}</span>}
+      className="paces-card"
+      style={{ marginBottom: 16 }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {identificacion && identificacion !== '-' && (
+          <div style={{ fontSize: 13 }}>
+            <IdcardOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+            {identificacion}
+          </div>
+        )}
+        {telefono && telefono !== '-' && (
+          <div style={{ fontSize: 13 }}>
+            <PhoneOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+            {telefono}
+          </div>
+        )}
+        {direccion && direccion !== '-' && (
+          <div style={{ fontSize: 13, color: '#595959' }}>
+            <EnvironmentOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+            {direccion}
+          </div>
+        )}
       </div>
-      <div>
-        <span className="paces-text-secondary">RNC: </span>
-        <span>{suplidor?.identificacion || '-'}</span>
-      </div>
-      <div>
-        <span className="paces-text-secondary">Teléfono: </span>
-        <span>{suplidor?.telefono || '-'}</span>
-      </div>
-    </div>
-  </Card>
-);
+    </Card>
+  );
+};
 
 interface TotalesCardProps {
   subTotal: number;
@@ -90,14 +107,23 @@ interface TotalesCardProps {
   total: number;
   nota: string;
   alignRight: boolean;
+  monedaSimbolo?: string;
+  monedaNombre?: string;
+  tasa?: number;
 }
 
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, retenciones, total, nota, alignRight }) => (
+const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, retenciones, total, nota, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
     className="paces-card"
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
+      {monedaSimbolo && tasa !== undefined && (
+        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
+          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
+          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
         {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
         <span>{formatNumber(subTotal)}</span>
@@ -145,6 +171,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
@@ -248,6 +275,71 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const totalDebitos = (data.asientos || []).reduce((s: number, r: any) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
   const totalCreditos = (data.asientos || []).reduce((s: number, r: any) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
 
+  // ===== Handlers de acciones de estado =====
+  const handleAplicar = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await facturaSuplidorApi.aplicar(sucursalActiva, parseInt(id));
+      message.success('Documento aplicado exitosamente');
+      const res = await facturaSuplidorApi.obtenerPorId(sucursalActiva, parseInt(id));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al aplicar');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAnular = async () => {
+    if (!data) return;
+    setSaving(true);
+    try {
+      await facturaSuplidorApi.anular(sucursalActiva, data as any);
+      message.success('Documento anulado exitosamente');
+      const res = await facturaSuplidorApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al anular');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePostear = async () => {
+    if (!data) return;
+    setSaving(true);
+    try {
+      await facturaSuplidorApi.postear(sucursalActiva, data as any);
+      message.success('Documento posteado exitosamente');
+      const res = await facturaSuplidorApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al postear');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  function extraerMensajeError(err: any, fallback: string): string {
+    const data = err?.response?.data;
+    if (!data) return fallback;
+    if (data.errorMessage) return data.errorMessage;
+    if (data.errors && typeof data.errors === 'object') {
+      const mensajes: string[] = [];
+      for (const key of Object.keys(data.errors)) {
+        const val = data.errors[key];
+        if (Array.isArray(val)) mensajes.push(...val);
+        else if (typeof val === 'string') mensajes.push(val);
+      }
+      if (mensajes.length > 0) return mensajes.join('; ');
+    }
+    return fallback;
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
@@ -256,7 +348,8 @@ const FacturaSuplidorDetalle: React.FC = () => {
         </Button>
         <div style={{ flex: 1 }} />
         <Space>
-          <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
+          <PermissionGate accion="IMPRIMIR">
+            <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
             setImprimiendo(true);
             try {
               const res = await apiClient.get(`/reportes/contabilidad/facturaSuplidor/${data.codigoSucursal ? obtenerNombreEnumSucursal(data.codigoSucursal) : sucursalActiva}/${id}`, {
@@ -279,9 +372,31 @@ const FacturaSuplidorDetalle: React.FC = () => {
             } finally {
               setImprimiendo(false);
             }
-          }}>Imprimir</Button>
+          }} />
+          </PermissionGate>
           {data.estado === 0 && data.periodo !== 6 && (
-            <Button type="primary" icon={<EditOutlined />}>Editar</Button>
+            <PermissionGate accion="EDITAR">
+              <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FRDE/${id}/editar`)}>Editar</Button>
+            </PermissionGate>
+          )}
+          {data.estado === 0 && data.periodo !== 6 && (
+            <PermissionGate accion="APLICAR">
+              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleAplicar}>
+                Aplicar
+              </Button>
+            </PermissionGate>
+          )}
+          {data.estado !== 3 && (
+            <PermissionGate accion="ANULAR">
+              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
+                Anular
+              </Button>
+            </PermissionGate>
+          )}
+          {data.estado === 1 && (
+            <PermissionGate accion="POSTEAR">
+              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handlePostear}>Postear</Button>
+            </PermissionGate>
           )}
         </Space>
       </div>
@@ -289,26 +404,30 @@ const FacturaSuplidorDetalle: React.FC = () => {
       {isLarge ? (
         <Row gutter={16}>
           <Col lg={18}>
-            <Card
-              title={
+            <Card className="paces-card" size="small" title={
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 18, fontWeight: 600 }}>
-                    {data.concepto?.nombre || '-'}
+                  <span style={{ fontSize: 16, fontWeight: 600 }}>
+                    Datos Generales
                   </span>
                   <Space>
-                    {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
+                    {esCerrado && (
+  <Tooltip title="Período contable cerrado">
+    <LockFilled style={{ marginLeft: 4, fontSize: 14, color: '#595959' }} />
+  </Tooltip>
+)}
                     <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
                   </Space>
                 </div>
               }
               style={{ marginBottom: 16 }}
             >
-              <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 3 }}>
+              <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Moneda">{data.moneda?.nombre ? toTitleCase(data.moneda.nombre) : '-'}</Descriptions.Item>
+
                 <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Vencimiento">{data.fechaVencimiento ? formatDate(data.fechaVencimiento) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Tipo Compra">{data.tipoCompra === 'C' ? 'Contado' : data.tipoCompra === 'D' ? 'Crédito' : data.tipoCompra || '-'}</Descriptions.Item>
@@ -348,38 +467,46 @@ const FacturaSuplidorDetalle: React.FC = () => {
           </Col>
 
           <Col lg={6}>
-            <SuplidorCard suplidor={data.suplidor || data.entidad} />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={false} />
+            <SuplidorCard suplidor={data.suplidor} entidad={data.entidad} />
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={false}
+              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              tasa={data.tasa ?? 1}
+            />
           </Col>
         </Row>
       ) : (
         <div>
-          <Card
-            title={
+          <Card className="paces-card" size="small" title={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 18, fontWeight: 600 }}>
-                  {data.concepto?.nombre || '-'}
-                </span>
-                <Space>
-                  {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-                  <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-                </Space>
-              </div>
-            }
-            style={{ marginBottom: 16 }}
-          >
-            <Descriptions bordered size="small" column={1}>
-              <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Moneda">{data.moneda?.nombre ? toTitleCase(data.moneda.nombre) : '-'}</Descriptions.Item>
-              <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
-              <Descriptions.Item label="Vencimiento">{data.fechaVencimiento ? formatDate(data.fechaVencimiento) : '-'}</Descriptions.Item>
-            </Descriptions>
+                  <span style={{ fontSize: 16, fontWeight: 600 }}>
+                    Datos Generales
+                  </span>
+                  <Space>
+                    {esCerrado && (
+  <Tooltip title="Período contable cerrado">
+    <LockFilled style={{ marginLeft: 4, fontSize: 14, color: '#595959' }} />
+  </Tooltip>
+)}
+                    <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
+                  </Space>
+                </div>
+              }
+              style={{ marginBottom: 16 }}
+            >
+              <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
+                <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+
+                <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Vencimiento">{data.fechaVencimiento ? formatDate(data.fechaVencimiento) : '-'}</Descriptions.Item>
+              </Descriptions>
           </Card>
 
-          <SuplidorCard suplidor={data.suplidor || data.entidad} />
+          <SuplidorCard suplidor={data.suplidor} entidad={data.entidad} />
 
           <Tabs defaultActiveKey="documentos" type="card">
             <TabPane tab={`Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`} key="documentos">
@@ -412,7 +539,11 @@ const FacturaSuplidorDetalle: React.FC = () => {
             </TabPane>
           </Tabs>
 
-          <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={true} />
+          <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={true}
+            monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+            monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+            tasa={data.tasa ?? 1}
+          />
         </div>
       )}
     </div>

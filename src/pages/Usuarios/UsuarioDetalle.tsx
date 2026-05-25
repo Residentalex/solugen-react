@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Spin, Button, Space, Row, Col, message, Grid, Modal } from 'antd';
+import { Card, Descriptions, Tag, Spin, Button, Space, Row, Col, message, Modal } from 'antd';
 import { ArrowLeftOutlined, KeyOutlined, StopOutlined, CheckCircleOutlined } from '@ant-design/icons';
-import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
 import { usuarioApi } from '../../api/usuarioApi';
@@ -42,7 +41,6 @@ const UsuarioDetalle: React.FC = () => {
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
   const [data, setData] = useState<UsuarioDTO | null>(null);
   const [loading, setLoading] = useState(false);
-  const screens = Grid.useBreakpoint();
 
   useEffect(() => {
     setActiveModule('MUsuario');
@@ -89,8 +87,6 @@ const UsuarioDetalle: React.FC = () => {
 
   if (loading) return <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>;
   if (!data) return null;
-
-  const isSmall = !screens.md;
 
   return (
     <div>

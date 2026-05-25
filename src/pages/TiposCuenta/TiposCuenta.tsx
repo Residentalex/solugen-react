@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Card,
   Table,
@@ -7,25 +7,32 @@ import {
   Form,
   Input,
   message,
-  Space,
-  Tooltip,
   Empty,
+  Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { tipoCuentaApi } from '../../api/tipoCuentaApi';
 import type { TipoCuentaDTO } from '../../types/contabilidad';
+import PermissionGate from '../../components/PermissionGate';
+
+const { Text } = Typography;
 
 const TiposCuenta: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const usuario = useAuthStore((s: any) => s.usuario);
+  const pantallaActual = usuario?.pantallas.find((p: any) => p.codigo === 'MTipoCuenta');
+  const puedeEditar = pantallaActual?.acciones.includes('EDITAR') ?? false;
+  const puedeCrear = pantallaActual?.acciones.includes('CREAR') ?? false;
 
   const [data, setData] = useState<TipoCuentaDTO[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<TipoCuentaDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -51,13 +58,29 @@ const TiposCuenta: React.FC = () => {
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
 
+  const handleSearch = (value: string) => {
+    setSearchText(value);
+  };
+
+  const filteredData = useMemo(() => {
+    if (!searchText) return data;
+    const lower = searchText.toLowerCase();
+    return data.filter(
+      (item) =>
+        item.idExterno.toLowerCase().includes(lower) ||
+        item.nombre.toLowerCase().includes(lower)
+    );
+  }, [data, searchText]);
+
   const abrirNuevo = () => {
+    if (!puedeCrear) return;
     setEditando(null);
     form.resetFields();
     setModalVisible(true);
   };
 
   const abrirEditar = (tipo: TipoCuentaDTO) => {
+    if (!puedeEditar) return;
     setEditando(tipo);
     form.setFieldsValue({
       idExterno: tipo.idExterno,
@@ -103,47 +126,59 @@ const TiposCuenta: React.FC = () => {
       key: 'idExterno',
       fixed: 'left',
       width: 120,
+      render: (val: string, record: TipoCuentaDTO) =>
+        puedeEditar ? (
+          <Button
+            type="link"
+            size="small"
+            style={{ padding: 0, fontWeight: 500 }}
+            onClick={() => abrirEditar(record)}
+          >
+            {val}
+          </Button>
+        ) : (
+          <Text>{val}</Text>
+        ),
     },
     {
       title: 'Nombre',
       dataIndex: 'nombre',
       key: 'nombre',
-      render: (nombre: string) => toTitleCase(nombre ?? ''),
-    },
-    {
-      title: 'Acciones',
-      key: 'acciones',
-      fixed: 'right',
-      width: 80,
-      render: (_, record) => (
-        <Space size={0}>
-          <Tooltip title="Editar tipo de cuenta">
-            <Button
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => abrirEditar(record)}
-            />
-          </Tooltip>
-        </Space>
-      ),
+      render: (nombre: string) => <Text>{toTitleCase(nombre ?? '')}</Text>,
     },
   ];
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Tipos de Cuenta</h4>
-        <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-          Nuevo Tipo de Cuenta
-        </Button>
-      </div>
-
       <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+        <div style={{ padding: '16px 24px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
+            <Input.Search
+              placeholder="Buscar por código o nombre..."
+              allowClear
+              onSearch={handleSearch}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  (e.target as HTMLInputElement).blur();
+                  handleSearch('');
+                }
+              }}
+              style={{ width: 400 }}
+              prefix={<SearchOutlined className="paces-text-icon" />}
+            />
+            <div style={{ flex: 1 }} />
+            <PermissionGate accion="CREAR">
+              <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
+                Nuevo
+              </Button>
+            </PermissionGate>
+            <Button icon={<ReloadOutlined />} onClick={() => cargarDatos()} />
+          </div>
+        </div>
         <Table<TipoCuentaDTO>
           columns={columns}
-          dataSource={data}
-          rowKey="id"
+          dataSource={filteredData}
+          rowKey="idExterno"
           loading={loading}
           scroll={{ x: 500 }}
           size="middle"

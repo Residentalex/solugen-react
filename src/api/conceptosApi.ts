@@ -22,6 +22,13 @@ export const conceptosApi = {
     return data.data;
   },
 
+  obtenerConcepto: async (sucursal: number, codigo: string): Promise<ConceptoDTO> => {
+    const { data } = await apiClient.get<ConceptoDTO>(
+      `${CONCEPTOS_BASE}/${sucursal}/${codigo}`
+    );
+    return data;
+  },
+
   obtenerEntidades: async (
     sucursal: number,
     conceptoCodigo?: string

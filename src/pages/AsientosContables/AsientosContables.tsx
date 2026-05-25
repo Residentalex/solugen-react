@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Table, DatePicker, Select, Tag, message, Card, Button } from 'antd';
+import { Table, DatePicker, Select, Tag, message, Card, Button, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -19,6 +19,8 @@ const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   5: { label: 'Abierto', color: 'warning' },
   6: { label: 'Cerrado', color: 'default' },
 };
+
+const { Text } = Typography;
 
 const DIAS_POR_DEFECTO = 30;
 const FILAS_POR_PAGINA = 25;
@@ -126,12 +128,12 @@ const AsientosContables: React.FC = () => {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 140,
+      width: 160,
       fixed: 'left',
       render: (doc: string, record: TransaccionVistaDTO) => (
-        <a onClick={() => navigate(`/FAsientoContable/${record.id}`)} style={{ color: '#6c5ffc', fontWeight: 500 }}>
+        <Text strong className="paces-doc-link" onClick={() => navigate(`/FAsientoContable/${record.id}`)}>
           {doc}
-        </a>
+        </Text>
       ),
     },
     {
@@ -139,14 +141,14 @@ const AsientosContables: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (v: string) => formatDate(v),
+      render: (v: string) => <Text>{formatDate(v)}</Text>,
     },
     {
       title: 'Entidad',
       dataIndex: 'entidad',
       key: 'entidad',
       ellipsis: true,
-      render: (v: string) => titlecase(v || ''),
+      render: (v: string) => <Text>{titlecase(v || '')}</Text>,
     },
     {
       title: 'Concepto',
@@ -154,14 +156,14 @@ const AsientosContables: React.FC = () => {
       key: 'concepto',
       width: 220,
       ellipsis: true,
-      render: (v: string) => titlecase(v || ''),
+      render: (v: string) => <Text>{titlecase(v || '')}</Text>,
     },
     {
       title: 'NCF',
       dataIndex: 'ncf',
       key: 'ncf',
       width: 140,
-      render: (v: string) => v || '',
+      render: (v: string) => <Text>{v || ''}</Text>,
     },
     {
       title: 'Total',
@@ -169,7 +171,7 @@ const AsientosContables: React.FC = () => {
       key: 'total',
       width: 140,
       align: 'right',
-      render: (v: number) => <strong>{formatCurrency(v)}</strong>,
+      render: (v: number) => <Text strong>{formatCurrency(v)}</Text>,
     },
     {
       title: 'Estado',

@@ -1,6 +1,8 @@
 import { apiClient } from './client';
 import type { FacturaVistaDTO, FiltroFacturacion } from '../types/facturacion';
-import type { DevolucionVentaDTO } from '../types/devolucionVenta';
+import type { DevolucionVentaDTO, DevolucionVentaFullDTO } from '../types/devolucionVenta';
+import type { ConceptoDTO, AlmacenDTO } from '../types/entradaAlmacen';
+import type { ClienteDTO } from '../types/facturaPOS';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/DEV';
@@ -48,6 +50,16 @@ export const devolucionVentaApi = {
     return data.data;
   },
 
+  crear: async (sucursal: number, devolucion: DevolucionVentaFullDTO): Promise<DevolucionVentaFullDTO> => {
+    const { data } = await apiClient.post<ApiResponse<DevolucionVentaFullDTO>>(`${BASE}/${sucursal}`, devolucion);
+    return data.data;
+  },
+
+  actualizar: async (sucursal: number, devolucion: DevolucionVentaFullDTO): Promise<DevolucionVentaFullDTO> => {
+    const { data } = await apiClient.put<ApiResponse<DevolucionVentaFullDTO>>(`${BASE}/${sucursal}`, devolucion);
+    return data.data;
+  },
+
   aplicar: async (sucursal: number, id: number): Promise<any> => {
     const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/aplicar/${id}`);
     return data.data;
@@ -69,6 +81,34 @@ export const devolucionVentaApi = {
     const params: Record<string, string | number> = {};
     if (destino) params.destino = destino;
     const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postearMovimiento`, movimiento, { params });
+    return data.data;
+  },
+
+  anular: async (sucursal: number, devolucion: any): Promise<any> => {
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/anular`, devolucion);
+    return data.data;
+  },
+
+  // ===== Catálogos para selects =====
+  obtenerConceptos: async (sucursal: number, tipoDocumento?: string): Promise<ConceptoDTO[]> => {
+    const params: Record<string, string> = {};
+    if (tipoDocumento) params.documento = tipoDocumento;
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}`, { params });
+    return data.data;
+  },
+
+  obtenerClientes: async (sucursal: number): Promise<ClienteDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<ClienteDTO[]>>(`/Cliente/${sucursal}`);
+    return data.data;
+  },
+
+  obtenerAlmacenes: async (sucursal: number): Promise<AlmacenDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<AlmacenDTO[]>>(`/Almacen/${sucursal}`);
+    return data.data;
+  },
+
+  obtenerFacturaPOS: async (sucursal: number, id: number): Promise<any> => {
+    const { data } = await apiClient.get<ApiResponse<any>>(`/FPV/${sucursal}/${id}`);
     return data.data;
   },
 };

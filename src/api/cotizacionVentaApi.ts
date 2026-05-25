@@ -60,4 +60,19 @@ export const cotizacionVentaApi = {
     const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postear`, cotizacion, { params });
     return data.data;
   },
+
+  crear: async (sucursal: number, cotizacion: any): Promise<any> => {
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}`, cotizacion);
+    return data.data;
+  },
+
+  actualizar: async (sucursal: number, id: number, cotizacion: any): Promise<any> => {
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/${id}`, cotizacion);
+    return data.data;
+  },
+
+  anular: async (sucursal: number, id: number): Promise<any> => {
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/anular/${id}`);
+    return data.data;
+  },
 };

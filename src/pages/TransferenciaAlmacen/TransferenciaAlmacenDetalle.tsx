@@ -1,16 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Typography
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Typography, Tooltip
 } from 'antd';
 import {
   ArrowLeftOutlined,
   PrinterOutlined,
+  LockFilled,
+  EditOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
+import PermissionGate from '../../components/PermissionGate';
 
 const { Text } = Typography;
 const { TabPane } = Tabs;
@@ -37,6 +42,19 @@ function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const ACCION_MAP: Record<number, string> = {
+  0: 'Crear',
+  1: 'Modificar',
+  2: 'Eliminar',
+  3: 'Aplicar',
+  4: 'Desaplicar',
+  5: 'Postear',
+  6: 'Anular',
+  7: 'Revisar',
+  8: 'Reversar',
+  9: 'Escanear',
+};
+
 function formatDate(val: string): string {
   if (!val) return '-';
   const d = new Date(val);
@@ -51,14 +69,23 @@ interface TotalesCardProps {
   total: number;
   nota: string;
   alignRight: boolean;
+  monedaSimbolo?: string;
+  monedaNombre?: string;
+  tasa?: number;
 }
 
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight }) => (
+const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
     className="paces-card"
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
+      {monedaSimbolo && tasa !== undefined && (
+        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
+          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
+          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
         {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
         <span>{formatNumber(subTotal)}</span>
@@ -102,6 +129,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
@@ -274,6 +302,98 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
     },
   ];
 
+  function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
+  function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
+
+  const totalDebitos = (data.asientos || []).reduce((s: number, r: any) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
+  const totalCreditos = (data.asientos || []).reduce((s: number, r: any) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
+
+  const asientoColumns = [
+    { title: 'Cuenta', key: 'cuenta', width: 120,
+      render: (_: any, r: any) => r.cuentaContable?.noCuenta || '-' },
+    { title: 'Nombre', key: 'nombre', ellipsis: true,
+      render: (_: any, r: any) => r.cuentaContable?.nombre ? toTitleCase(r.cuentaContable.nombre) : '-' },
+    { title: 'Descripcion', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
+      render: (v: string) => v ? toTitleCase(v) : '-' },
+    { title: 'Debito', key: 'debito', width: 130, align: 'right' as const,
+      render: (_: any, r: any) => esDebito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
+    { title: 'Credito', key: 'credito', width: 130, align: 'right' as const,
+      render: (_: any, r: any) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
+  ];
+
+  const logColumns = [
+    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
+    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200, render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-') },
+    { title: 'Estacion', dataIndex: 'estacion', key: 'estacion', width: 200 },
+    { title: 'Accion', dataIndex: 'accion', key: 'accion', width: 120, render: (v: number) => ACCION_MAP[v] || `Accion ${v}` },
+    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
+  ];
+
+  // ===== Handlers de acciones de estado =====
+  const handleAplicar = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await transferenciaAlmacenApi.aplicar(sucursalActiva, parseInt(id));
+      message.success('Documento aplicado exitosamente');
+      const res = await transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al aplicar');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAnular = async () => {
+    if (!data) return;
+    setSaving(true);
+    try {
+      await transferenciaAlmacenApi.anular(sucursalActiva, data as any);
+      message.success('Documento anulado exitosamente');
+      const res = await transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al anular');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePostear = async () => {
+    if (!data) return;
+    setSaving(true);
+    try {
+      await transferenciaAlmacenApi.postear(sucursalActiva, data as any);
+      message.success('Documento posteado exitosamente');
+      const res = await transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al postear');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  function extraerMensajeError(err: any, fallback: string): string {
+    const data = err?.response?.data;
+    if (!data) return fallback;
+    if (data.errorMessage) return data.errorMessage;
+    if (data.errors && typeof data.errors === 'object') {
+      const mensajes: string[] = [];
+      for (const key of Object.keys(data.errors)) {
+        const val = data.errors[key];
+        if (Array.isArray(val)) mensajes.push(...val);
+        else if (typeof val === 'string') mensajes.push(val);
+      }
+      if (mensajes.length > 0) return mensajes.join('; ');
+    }
+    return fallback;
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
@@ -282,7 +402,13 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         </Button>
         <div style={{ flex: 1 }} />
         <Space>
-          <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
+          {data.estado === 0 && data.periodo !== 6 && (
+            <PermissionGate accion="EDITAR">
+              <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FTRP/${id}/editar`)}>Editar</Button>
+            </PermissionGate>
+          )}
+          <PermissionGate accion="IMPRIMIR">
+            <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
             setImprimiendo(true);
             try {
               const res = await apiClient.post('/reportes/inventario/transferencia', data, {
@@ -305,34 +431,55 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
             } finally {
               setImprimiendo(false);
             }
-          }}>Imprimir</Button>
+          }} />
+          </PermissionGate>
+          {data.estado === 0 && data.periodo !== 6 && (
+            <PermissionGate accion="APLICAR">
+              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleAplicar}>
+                Aplicar
+              </Button>
+            </PermissionGate>
+          )}
+          {data.estado !== 3 && (
+            <PermissionGate accion="ANULAR">
+              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
+                Anular
+              </Button>
+            </PermissionGate>
+          )}
+          {data.estado === 1 && (
+            <PermissionGate accion="POSTEAR">
+              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handlePostear}>Postear</Button>
+            </PermissionGate>
+          )}
         </Space>
       </div>
 
       {isLarge ? (
         <Row gutter={16}>
           <Col lg={18}>
-            <Card
-              title={
+            <Card className="paces-card" size="small" title={
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 18, fontWeight: 600 }}>
-                    {data.concepto?.nombre || '-'}
+                  <span style={{ fontSize: 16, fontWeight: 600 }}>
+                    Datos Generales
                   </span>
                   <Space>
-                    {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
+                    {esCerrado && (
+  <Tooltip title="Período contable cerrado">
+    <LockFilled style={{ marginLeft: 4, fontSize: 14, color: '#595959' }} />
+  </Tooltip>
+)}
                     <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
                   </Space>
                 </div>
               }
               style={{ marginBottom: 16 }}
             >
-              <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 3 }}>
+              <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Almacen Origen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Almacen Destino">{data.almacenDestino?.nombre ? toTitleCase(data.almacenDestino.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Moneda">{data.moneda?.nombre ? toTitleCase(data.moneda.nombre) : '-'}</Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -349,36 +496,58 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
                 </div>
                 <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
               </TabPane>
+              <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
+                <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
+                  summary={() => (
+                    <Table.Summary fixed>
+                      <Table.Summary.Row>
+                        <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                        <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                        <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                      </Table.Summary.Row>
+                    </Table.Summary>
+                  )}
+                />
+              </TabPane>
+              <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
+                <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+              </TabPane>
             </Tabs>
           </Col>
 
           <Col lg={6}>
-            <TotalesCard subTotal={data.subTotal || 0} descuento={data.descuento || 0} impuestos={data.impuestos || 0} total={data.total} nota={data.nota} alignRight={false} />
+            <TotalesCard subTotal={data.subTotal || 0} descuento={data.descuento || 0} impuestos={data.impuestos || 0} total={data.total} nota={data.nota} alignRight={false}
+              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              tasa={data.tasa ?? 1}
+            />
           </Col>
         </Row>
       ) : (
         <div>
-          <Card
-            title={
+          <Card className="paces-card" size="small" title={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 18, fontWeight: 600 }}>
-                  {data.concepto?.nombre || '-'}
-                </span>
-                <Space>
-                  {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-                  <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-                </Space>
-              </div>
-            }
-            style={{ marginBottom: 16 }}
-          >
-            <Descriptions bordered size="small" column={1}>
-              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-              <Descriptions.Item label="Almacen Origen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-              <Descriptions.Item label="Almacen Destino">{data.almacenDestino?.nombre ? toTitleCase(data.almacenDestino.nombre) : '-'}</Descriptions.Item>
-              <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
-              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-            </Descriptions>
+                  <span style={{ fontSize: 16, fontWeight: 600 }}>
+                    Datos Generales
+                  </span>
+                  <Space>
+                    {esCerrado && (
+  <Tooltip title="Período contable cerrado">
+    <LockFilled style={{ marginLeft: 4, fontSize: 14, color: '#595959' }} />
+  </Tooltip>
+)}
+                    <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
+                  </Space>
+                </div>
+              }
+              style={{ marginBottom: 16 }}
+            >
+              <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
+                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Almacen Origen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Almacen Destino">{data.almacenDestino?.nombre ? toTitleCase(data.almacenDestino.nombre) : '-'}</Descriptions.Item>
+              </Descriptions>
           </Card>
 
           <Tabs defaultActiveKey="detalles" type="card">
@@ -394,9 +563,29 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
               </div>
               <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
             </TabPane>
+            <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
+              <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
+                summary={() => (
+                  <Table.Summary fixed>
+                    <Table.Summary.Row>
+                      <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                      <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                      <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                    </Table.Summary.Row>
+                  </Table.Summary>
+                )}
+              />
+            </TabPane>
+            <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
+              <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+            </TabPane>
           </Tabs>
 
-          <TotalesCard subTotal={data.subTotal || 0} descuento={data.descuento || 0} impuestos={data.impuestos || 0} total={data.total} nota={data.nota} alignRight={true} />
+          <TotalesCard subTotal={data.subTotal || 0} descuento={data.descuento || 0} impuestos={data.impuestos || 0} total={data.total} nota={data.nota} alignRight={true}
+            monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+            monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+            tasa={data.tasa ?? 1}
+          />
         </div>
       )}
     </div>
