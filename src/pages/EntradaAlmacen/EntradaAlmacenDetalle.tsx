@@ -18,6 +18,7 @@ import {
   IdcardOutlined,
   PhoneOutlined,
   EnvironmentOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -640,6 +641,14 @@ const EntradaAlmacenDetalle: React.FC = () => {
                 setImprimiendo(false);
               }
               }} />
+          </PermissionGate>
+
+          <PermissionGate codigoPantalla="FDVC" accion="CREAR">
+            <Button icon={<RollbackOutlined />} onClick={() =>
+              navigate('/FDVC/nuevo', { state: { entradaId: data?.id } })
+            }>
+              Devolver
+            </Button>
           </PermissionGate>
 
           {data.estado === 0 && data.periodo !== 6 && data.revisado === false && (

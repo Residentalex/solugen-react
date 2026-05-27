@@ -11,7 +11,6 @@ import {
   DeleteOutlined,
   PlusOutlined,
   SearchOutlined,
-  ClearOutlined,
   ExclamationCircleOutlined,
   EditOutlined,
   MoreOutlined,
@@ -266,7 +265,7 @@ interface SuplidorCardProps {
 
 const SuplidorCard: React.FC<SuplidorCardProps> = ({ suplidor }) => (
   <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Entidad</span>}
+    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Suplidor</span>}
     className="paces-card"
     style={{ marginBottom: 16 }}
   >
@@ -756,6 +755,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
   // ===== Handlers de concepto =====
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
+    setConceptoSearchText(toTitleCase(concepto.nombre));
     setEditingField(null);
     form.setFieldsValue({ concepto: concepto.codigo });
 
@@ -1348,19 +1348,16 @@ const SalidaAlmacenFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={9}>
             <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
               <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required>
+                <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
                   <Input
                     placeholder=" "
-                    value={selectedConcepto ? toTitleCase(selectedConcepto.nombre) : conceptoSearchText}
+                    value={conceptoSearchText}
                     readOnly
                     onClick={handleConceptoSearchClick}
                   />
                 </FloatingField>
               </div>
               <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
-              {selectedConcepto && (
-                <Button icon={<ClearOutlined />} onClick={handleConceptoClear} />
-              )}
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
@@ -1381,7 +1378,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
           </Col>
           <Col xs={24} sm={12} lg={15}>
             <Form.Item name="suplidor" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Entidad" required ref={suplidorRef}>
+              <FloatingField label="Suplidor / Entidad" required ref={suplidorRef}>
                 <Select
                   allowClear
                   showSearch
