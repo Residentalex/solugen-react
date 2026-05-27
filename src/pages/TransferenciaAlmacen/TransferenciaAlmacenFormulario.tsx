@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Popover,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Popover, Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -297,6 +297,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<TransferenciaAlmacenFullDTO | null>(null);
   const [detalles, setDetalles] = useState<DetalleTRPInterno[]>([]);
@@ -430,6 +431,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
+        setLoadingError(true);
         navigate('/FTRP');
       })
       .finally(() => setLoading(false));
@@ -1260,9 +1262,57 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
     </Card>
   );
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setData(res);
+        setDetalles((res.detalles || []).map((d: any) => ({ ...d, _costo: d.total && d.cantidad ? d.total / d.cantidad : 0 })));
+        setSelectedConcepto(res.concepto || null);
+        setSelectedAlmacen(res.almacen || null);
+        setSelectedAlmacenDestino(res.almacenDestino || null);
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          concepto: res.concepto?.codigo || '',
+          almacen: res.almacen?.codigo || '',
+          almacenDestino: res.almacenDestino?.codigo || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          ncf: res.ncf || '',
+          referencia: res.referencia || '',
+          moneda: res.moneda?.nombre || '',
+          tasa: res.tasa || 1,
+          nota: res.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   return (
     <div>
       {renderToolbar()}
+
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de transferencia de almacén"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
       {modalConcepto}
       <BuscarProductoModal
         open={productoModalOpen}

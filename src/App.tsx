@@ -58,7 +58,9 @@ import CuentasContables from './pages/CuentasContables/CuentasContables';
 import CuentaContableDetalle from './pages/CuentasContables/CuentaContableDetalle';
 import Impuestos from './pages/Impuestos/Impuestos';
 import AsientosContables from './pages/AsientosContables/AsientosContables';
+import AsientoContableDetalle from './pages/AsientosContables/AsientoContableDetalle';
 import CFacturasElectronicas from './pages/DGII/CFacturasElectronicas';
+import CierreFiscal from './pages/CierreFiscal/CierreFiscal';
 import SecuenciasNCF from './pages/SecuenciasNCF/SecuenciasNCF';
 import Clientes from './pages/Clientes/Clientes';
 import ClienteDetalle from './pages/Clientes/ClienteDetalle';
@@ -75,6 +77,7 @@ import OrdenCompraFormulario from './pages/OrdenCompra/OrdenCompraFormulario';
 import Proveedores from './pages/Proveedores/Proveedores';
 import ProveedorDetalle from './pages/Proveedores/ProveedorDetalle';
 import Bancos from './pages/Bancos/Bancos';
+import Ofertas from './pages/Ofertas/Ofertas';
 import CuentasBancarias from './pages/CuentasBancarias/CuentasBancarias';
 import UnidadesMedida from './pages/UnidadesMedida/UnidadesMedida';
 import CategoriasArticulo from './pages/CategoriasArticulo/CategoriasArticulo';
@@ -84,9 +87,24 @@ import SolicitudPagoDetalle from './pages/SolicitudPago/SolicitudPagoDetalle';
 import SolicitudPagoFormulario from './pages/SolicitudPago/SolicitudPagoFormulario';
 import Notificaciones from './pages/Notificaciones/Notificaciones';
 import NotificacionesConfig from './pages/Notificaciones/Configuracion';
+import NotificacionesPersonalizadas from './pages/Notificaciones/NotificacionesPersonalizadas';
 import Recetas from './pages/Recetas/Recetas';
 import Automatizaciones from './pages/Automatizaciones/Automatizaciones';
 import MiPerfil from './pages/MiPerfil/MiPerfil';
+import Servicios from './pages/Servicios/Servicios';
+import ActualizacionPrecio from './pages/ActualizacionPrecio/ActualizacionPrecio';
+import Turnos from './pages/Turnos/Turnos';
+import Conteos from './pages/Conteos/Conteos';
+import MovimientosProductos from './pages/MovimientosProductos/MovimientosProductos';
+import ImportarInventario from './pages/ImportarInventario/ImportarInventario';
+import ActualizacionCostos from './pages/ActualizacionCostos/ActualizacionCostos';
+import AntiguedadSaldos from './pages/AntiguedadSaldos/AntiguedadSaldos';
+import CierreInventario from './pages/CierreInventario/CierreInventario';
+import CierreDetalle from './pages/CierreInventario/CierreDetalle';
+import GeneradorORC from './pages/GeneradorORC/GeneradorORC';
+import GeneradorORCDetalle from './pages/GeneradorORC/GeneradorORCDetalle';
+import Tickets from './pages/Tickets/Tickets';
+import VisualizarConsulta from './pages/Notificaciones/VisualizarConsulta';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -106,7 +124,7 @@ const PantallaGuard: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   // Extraer el código de la pantalla desde el primer segmento de la ruta
   const segmentos = location.pathname.split('/').filter(Boolean);
   const codigoRuta = segmentos[0] || '';
-  if (codigoRuta && !['dashboard', 'cambiar-clave', 'MPERFIL', 'MPerfil'].includes(codigoRuta)) {
+  if (codigoRuta && !['dashboard', 'cambiar-clave', 'MPERFIL', 'MPerfil', 'notificaciones', 'MTicket', 'visualizar-consulta'].includes(codigoRuta)) {
     const tieneAcceso = pantallas.some((p) => p.codigo.toLowerCase() === codigoRuta.toLowerCase());
     if (!tieneAcceso) {
       return <Navigate to="/" replace />;
@@ -145,6 +163,7 @@ const App: React.FC = () => {
             <Route path="FENP/:id/editar" element={<EntradaAlmacenFormulario />} />
             <Route path="FENP/:id" element={<EntradaAlmacenDetalle />} />
             <Route path="FSAP" element={<SalidaAlmacen />} />
+            <Route path="FSORC" element={<Proximamente modulo="Solicitud de Compra" codigo="FSORC" />} />
             <Route path="FSAP/nuevo" element={<SalidaAlmacenFormulario />} />
             <Route path="FSAP/:id/editar" element={<SalidaAlmacenFormulario />} />
             <Route path="FSAP/:id" element={<SalidaAlmacenDetalle />} />
@@ -217,9 +236,10 @@ const App: React.FC = () => {
             <Route path="MPantalla" element={<Pantallas />} />
             <Route path="MTipoCuenta" element={<TiposCuenta />} />
             <Route path="MCuentaContable" element={<CuentasContables />} />
-            <Route path="FCuentaContable/:noCuenta" element={<CuentaContableDetalle />} />
+            <Route path="MCuentaContable/:noCuenta" element={<CuentaContableDetalle />} />
             <Route path="MImpuesto" element={<Impuestos />} />
             <Route path="FAsientoContable" element={<AsientosContables />} />
+            <Route path="FAsientoContable/:id" element={<AsientoContableDetalle />} />
             <Route path="CFacturasElectronicas" element={<CFacturasElectronicas />} />
             <Route path="MSecuenciaNCF" element={<SecuenciasNCF />} />
             <Route path="MCliente" element={<Clientes />} />
@@ -228,6 +248,11 @@ const App: React.FC = () => {
             <Route path="MPOS" element={<PuntosVenta />} />
             <Route path="MMetodosPago" element={<MetodosPago />} />
             <Route path="MAlmacen" element={<Almacenes />} />
+            <Route path="MServicio" element={<Servicios />} />
+            <Route path="FActPrecio" element={<ActualizacionPrecio />} />
+            <Route path="FTarifas" element={<Proximamente modulo="Tarifas" codigo="FTarifas" />} />
+            <Route path="CCUADRECAJA" element={<Proximamente modulo="Cuadre de Caja" codigo="CCUADRECAJA" />} />
+            <Route path="CCENTRALSUPERVISION" element={<Proximamente modulo="Central de Supervisión" codigo="CCENTRALSUPERVISION" />} />
             <Route path="MPlanPago" element={<PlanesPago />} />
             <Route path="FORC" element={<OrdenCompra />} />
             <Route path="FORC/nuevo" element={<OrdenCompraFormulario />} />
@@ -236,6 +261,7 @@ const App: React.FC = () => {
             <Route path="MSUP" element={<Proveedores />} />
             <Route path="MSUP/:codigo" element={<ProveedorDetalle />} />
             <Route path="MBanco" element={<Bancos />} />
+            <Route path="FOfertas" element={<Ofertas />} />
             <Route path="MCuentaBanco" element={<CuentasBancarias />} />
             <Route path="MUnidadMedida" element={<UnidadesMedida />} />
             <Route path="MCategoria" element={<CategoriasArticulo />} />
@@ -243,16 +269,44 @@ const App: React.FC = () => {
             <Route path="MMarca" element={<Proximamente modulo="Marcas" codigo="MMarca" />} />
             <Route path="MAtributo" element={<Proximamente modulo="Atributos" codigo="MAtributo" />} />
             <Route path="MPaquete" element={<Proximamente modulo="Paquetes" codigo="MPaquete" />} />
+            <Route path="RCIERREFISCAL" element={<CierreFiscal />} />
+            <Route path="OCierreMes" element={<Proximamente modulo="Cierre de Mes" codigo="OCierreMes" />} />
+            <Route path="OPROCESOS" element={<Proximamente modulo="Procesos Contables" codigo="OPROCESOS" />} />
             <Route path="MReceta" element={<Recetas />} />
             <Route path="MAutomatizacion" element={<Automatizaciones />} />
             <Route path="MPerfil" element={<MiPerfil />} />
-            <Route path="FSPA" element={<SolicitudPago />} />
-            <Route path="FSPA/nuevo" element={<SolicitudPagoFormulario />} />
-            <Route path="FSPA/:id/editar" element={<SolicitudPagoFormulario />} />
-            <Route path="FSPA/:id" element={<SolicitudPagoDetalle />} />
+            <Route path="FTURNOS" element={<Turnos />} />
+            <Route path="FConteos" element={<Conteos />} />
+            <Route path="CMovimientosProductos" element={<MovimientosProductos />} />
+            <Route path="CDocRevisados" element={<Proximamente modulo="Documentos Revisados" codigo="CDocRevisados" />} />
+            <Route path="FPRODPEND" element={<Proximamente modulo="Productos Pendientes" codigo="FPRODPEND" />} />
+            <Route path="OPROCESARCONTEO" element={<Proximamente modulo="Procesar Conteos" codigo="OPROCESARCONTEO" />} />
+          <Route path="OReglasAbastecimiento" element={<Proximamente modulo="Reglas de Abastecimiento" codigo="OReglasAbastecimiento" />} />
+          <Route path="FSPA" element={<SolicitudPago />} />
+          <Route path="FSPA/nuevo" element={<SolicitudPagoFormulario />} />
+          <Route path="FSPA/:id/editar" element={<SolicitudPagoFormulario />} />
+          <Route path="FSPA/:id" element={<SolicitudPagoDetalle />} />
+          <Route path="OImportarINV" element={<ImportarInventario />} />
+          <Route path="OCierreINV" element={<CierreInventario />} />
+          <Route path="OCierreINV/detalle/:cierreId" element={<CierreDetalle />} />
+          <Route path="FGORC" element={<GeneradorORC />} />
+          <Route path="FGORC/:id" element={<GeneradorORCDetalle />} />
+          <Route path="OActualizacionCostos" element={<ActualizacionCostos />} />
+          <Route path="RAntiguedaCXC" element={<AntiguedadSaldos tipoEntidad="CLI" />} />
+          <Route path="RAntiguedadCXP" element={<AntiguedadSaldos tipoEntidad="SUP" />} />
           <Route path="ORepostear" element={<Repostear />} />
           <Route path="notificaciones" element={<Notificaciones />} />
           <Route path="notificaciones/config" element={<NotificacionesConfig />} />
+          <Route path="notificaciones/personalizadas" element={<NotificacionesPersonalizadas />} />
+          <Route path="visualizar-consulta/:configID" element={<VisualizarConsulta />} />
+          <Route path="MTicket" element={<Tickets />} />
+          <Route path="MSucursal" element={<Proximamente modulo="Sucursales" codigo="MSucursal" />} />
+          <Route path="MServidor" element={<Proximamente modulo="Servidores" codigo="MServidor" />} />
+          <Route path="MPermiso" element={<Proximamente modulo="Permisos" codigo="MPermiso" />} />
+          <Route path="MAuditoria" element={<Proximamente modulo="Historial y Auditoría" codigo="MAuditoria" />} />
+          <Route path="MEmpresa" element={<Proximamente modulo="Configuración de la Empresa" codigo="MEmpresa" />} />
+          <Route path="MTerminal" element={<Proximamente modulo="Terminales" codigo="MTerminal" />} />
+          <Route path="MSincronizacion" element={<Proximamente modulo="Sincronización" codigo="MSincronizacion" />} />
           </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

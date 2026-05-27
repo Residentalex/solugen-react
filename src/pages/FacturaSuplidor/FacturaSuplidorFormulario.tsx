@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -491,6 +491,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<FacturaSuplidorFullDTO | null>(null);
   const [detalles, setDetalles] = useState<DetalleFacturaSuplidorDTO[]>([]);
@@ -613,7 +614,8 @@ const FacturaSuplidorFormulario: React.FC = () => {
 
     setLoading(true);
     facturaSuplidorApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
+      .then((_res) => {
+        const res = _res as any;
         setData(res);
         setDetalles(res.detalles || []);
         setSelectedTipo(res.tipo || null);
@@ -653,6 +655,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
+        setLoadingError(true);
         navigate('/FRDE');
       })
       .finally(() => setLoading(false));
@@ -675,7 +678,8 @@ const FacturaSuplidorFormulario: React.FC = () => {
           if (id) {
             setLoading(true);
             facturaSuplidorApi.obtenerPorId(sucursalActiva, parseInt(id))
-              .then((res) => {
+              .then((_res) => {
+                const res = _res as any;
                 setData(res);
                 setDetalles(res.detalles || []);
                 setSelectedTipo(res.tipo || null);
@@ -877,7 +881,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
     setSaving(true);
     try {
       const result = await facturaSuplidorApi.aplicar(sucursalActiva, parseInt(id));
-      setData(result);
+      setData(result as any);
       message.success('Documento aplicado exitosamente');
       navigate(`/FRDE/${id}`);
     } catch (err: any) {
@@ -1785,9 +1789,55 @@ const FacturaSuplidorFormulario: React.FC = () => {
     },
   ];
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    facturaSuplidorApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((_res) => {
+        const res = _res as any;
+        setData(res); setDetalles(res.detalles || []);
+        setSelectedTipo(res.tipo || null); setSelectedConcepto(res.concepto || null);
+        setSelectedEntidad(res.suplidor || res.entidad || null);
+        setSelectedEntrada(res.entradaAlmacen || null);
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          tipo: res.tipo?.codigo || '', concepto: res.concepto?.codigo || '',
+          suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          fechaVencimiento: res.fechaVencimiento ? dayjs(parseDateRaw(res.fechaVencimiento)) : null,
+          fechaEntrega: res.fechaEntrega ? dayjs(parseDateRaw(res.fechaEntrega)) : null,
+          ncf: res.ncf || '', referencia: res.referencia || '',
+          diasCredito: res.diasCredito || 0, moneda: res.moneda?.nombre || '',
+          tasa: res.tasa || 1, nota: res.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg); setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   return (
     <div>
       {renderToolbar()}
+
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de factura de suplidor"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
       <BuscarProductoModal
         open={productoModalOpen}
         onClose={() => setProductoModalOpen(false)}

@@ -7,6 +7,9 @@ export interface NotificacionVista {
   tipo: string;
   fechaCreacion: string;
   leida: boolean;
+  urlAccion?: string;
+  referenciaID?: number;
+  referenciaTipo?: string;
 }
 
 export interface NotificacionConfig {
@@ -30,9 +33,10 @@ export interface NotificacionConfigDestino {
 
 export interface EnviarNotificacionRequest {
   deUsuarioID: number;
-  paraUsuarioID: number;
+  paraUsuariosID: number[];
   titulo: string;
   mensaje: string;
+  tipo?: string;
 }
 
 export interface NotificacionSignalR {
@@ -44,4 +48,34 @@ export interface NotificacionSignalR {
   tipo: string;
   fechaCreacion: string;
   leida: boolean;
+}
+
+/* ── Notificaciones Personalizadas SQL ── */
+
+export interface NotificacionSQLConfig {
+  id: number;
+  sucursalIDs?: string; // "0,1,2"
+  nombre: string;
+  sqlConsulta: string;
+  columnaTitulo?: string;
+  columnaMensaje?: string;
+  tipo: string;
+  activo: boolean;
+  intervaloMinutos: number;
+  ultimaEjecucion?: string;
+  fechaCreacion: string;
+  creadoPor?: number;
+  destinos: NotificacionConfigDestino[];
+}
+
+export interface NotificacionSQLRequest {
+  nombre: string;
+  sqlConsulta: string;
+  sucursalIDs?: string; // "0,1,2"
+  columnaTitulo?: string;
+  columnaMensaje?: string;
+  tipo: string;
+  activo: boolean;
+  intervaloMinutos: number;
+  destinos: { destinoTipo: string; destinoID: number }[];
 }

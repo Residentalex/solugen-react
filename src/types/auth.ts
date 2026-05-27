@@ -52,6 +52,7 @@ export interface PantallaDTO {
   grupo?: string;
   modulos: ModuloDTO[];
   acciones: string[];
+  sucursalesAutorizadas?: AuthSucursalPermitidaDTO[];
 }
 
 export interface AuthPermisoEspecialDTO {

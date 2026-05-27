@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -386,6 +386,7 @@ const FacturaPOSFormulario: React.FC = () => {
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<FacturaPOSFormularioDTO | null>(null);
   const [detalles, setDetalles] = useState<DetalleFacturaPOSDTO[]>([]);
@@ -550,6 +551,7 @@ const FacturaPOSFormulario: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
+        setLoadingError(true);
         navigate('/FPV');
       })
       .finally(() => setLoading(false));
@@ -675,7 +677,7 @@ const FacturaPOSFormulario: React.FC = () => {
     setSaving(true);
     try {
       const result = await facturaPOSApi.aplicar(sucursalActiva, parseInt(id));
-      setData(result);
+      setData(result as any);
       message.success('Documento aplicado exitosamente');
       navigate(`/FPV/${id}`);
     } catch (err: any) {
@@ -691,7 +693,7 @@ const FacturaPOSFormulario: React.FC = () => {
     setSaving(true);
     try {
       const dto = construirDTO();
-      await facturaPOSApi.anular(sucursalActiva, dto);
+      await facturaPOSApi.anular(sucursalActiva, dto as any);
       message.success('Documento anulado exitosamente');
       navigate(`/FPV/${id}`);
     } catch (err: any) {
@@ -707,7 +709,7 @@ const FacturaPOSFormulario: React.FC = () => {
     setSaving(true);
     try {
       const dto = construirDTO();
-      await facturaPOSApi.postear(sucursalActiva, dto);
+      await facturaPOSApi.postear(sucursalActiva, dto as any);
       message.success('Documento posteado exitosamente');
       navigate(`/FPV/${id}`);
     } catch (err: any) {
@@ -1543,9 +1545,62 @@ const FacturaPOSFormulario: React.FC = () => {
     </div>
   );
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    facturaPOSApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        const full: FacturaPOSFormularioDTO = {
+          id: res.id, fechaDocumento: res.fechaDocumento, noDocumento: res.noDocumento,
+          estado: res.estado, periodo: res.periodo, ncf: res.ncf || '', nota: res.nota || '',
+          referencia: res.referencia || '', tasa: res.tasa || 1, diasCredito: res.diasCredito || 0,
+          turno: res.turno || '', concepto: res.concepto || null, cliente: res.cliente || null,
+          almacen: res.almacen || null, moneda: res.moneda || null, documento: res.documento,
+          subTotal: res.subTotal, descuento: res.descuento, impuestos: res.impuestos, total: res.total,
+          detalles: (res.detalles || []).map((d: any) => ({
+            ...d, porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
+            tieneVencimiento: d.tieneVencimiento ?? false,
+          })),
+          cobros: (res.cobros || cobrosVacios()) as unknown as CobroDTO,
+          asientos: res.asientos || [], logs: res.logs || [],
+        };
+        setData(full); setDetalles(full.detalles); setCobros(full.cobros || cobrosVacios());
+        setSelectedConcepto(full.concepto); setSelectedCliente(full.cliente); setSelectedAlmacen(full.almacen);
+        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
+        form.setFieldsValue({
+          concepto: full.concepto?.codigo || '', cliente: full.cliente?.codigo || '',
+          almacen: full.almacen?.codigo || '', fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          turno: full.turno || '', ncf: full.ncf || '', referencia: full.referencia || '',
+          diasCredito: full.diasCredito || 0, tasa: full.tasa || 1, nota: full.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg); setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   return (
     <div>
       {renderToolbar()}
+
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de factura POS"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
       {modalConcepto}
       <BuscarProductoModal
         open={productoModalOpen}

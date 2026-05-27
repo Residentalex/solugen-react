@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Button, Form, Input, Switch, Checkbox, Spin, message, Grid, Collapse } from 'antd';
+import { Card, Row, Col, Button, Form, Input, Switch, Checkbox, Spin, message, Grid, Collapse, Alert } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
@@ -20,6 +20,7 @@ const RolFormulario: React.FC = () => {
   const screens = Grid.useBreakpoint();
 
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [pantallasDisponibles, setPantallasDisponibles] = useState<PantallaDTO[]>([]);
 
@@ -107,11 +108,17 @@ const RolFormulario: React.FC = () => {
       }
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
+      setLoadingError(true);
       if (id) navigate('/MROL');
     } finally {
       setLoading(false);
     }
   };
+
+  const handleRefresh = useCallback(() => {
+    cargarDatos();
+    setLoadingError(false);
+  }, [id]);
 
   const handleToggleAccion = (pantallaId: number, accionCodigo: string, checked: boolean) => {
     setSelectedPantallas((prev) => {
@@ -149,10 +156,10 @@ const RolFormulario: React.FC = () => {
         pantallas: pantallasPayload,
       };
       if (id) {
-        await rolApi.actualizar(SUCURSAL_SEGURIDAD, payload);
+        await rolApi.actualizar(SUCURSAL_SEGURIDAD, payload as any);
         message.success('Rol actualizado correctamente');
       } else {
-        await rolApi.crear(SUCURSAL_SEGURIDAD, payload);
+        await rolApi.crear(SUCURSAL_SEGURIDAD, payload as any);
         message.success('Rol creado correctamente');
       }
       navigate('/MROL');
@@ -177,6 +184,19 @@ const RolFormulario: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 140px)' }}>
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de rol"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       {/* Toolbar */}
       <div
         style={{
@@ -205,7 +225,7 @@ const RolFormulario: React.FC = () => {
         <Col xs={24} md={8}>
           {/* Formulario */}
           <Card className="paces-card" style={{ height: '100%' }}>
-            <Form form={form} layout="vertical" size={isSmall ? 'middle' : 'default'}>
+            <Form form={form} layout="vertical" size={isSmall ? 'middle' : undefined}>
               <Form.Item
                 name="nombre"
                 label="Nombre"

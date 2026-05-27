@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Typography, Tooltip
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Typography, Tooltip, Alert
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -173,6 +173,7 @@ const DevolucionCompraDetalle: React.FC = () => {
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
@@ -194,6 +195,40 @@ const DevolucionCompraDetalle: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, setPageTitleOverride]);
+
+  function extraerMensajeError(err: any, fallback: string): string {
+    const data = err?.response?.data;
+    if (!data) return fallback;
+    if (data.errorMessage) return data.errorMessage;
+    if (data.errors && typeof data.errors === 'object') {
+      const mensajes: string[] = [];
+      for (const key of Object.keys(data.errors)) {
+        const val = data.errors[key];
+        if (Array.isArray(val)) mensajes.push(...val);
+        else if (typeof val === 'string') mensajes.push(val);
+      }
+      if (mensajes.length > 0) return mensajes.join('; ');
+    }
+    return fallback;
+  }
+
+  const handleRefresh = useCallback(() => {
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setData(res);
+        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
@@ -435,24 +470,21 @@ const DevolucionCompraDetalle: React.FC = () => {
     }
   };
 
-  function extraerMensajeError(err: any, fallback: string): string {
-    const data = err?.response?.data;
-    if (!data) return fallback;
-    if (data.errorMessage) return data.errorMessage;
-    if (data.errors && typeof data.errors === 'object') {
-      const mensajes: string[] = [];
-      for (const key of Object.keys(data.errors)) {
-        const val = data.errors[key];
-        if (Array.isArray(val)) mensajes.push(...val);
-        else if (typeof val === 'string') mensajes.push(val);
-      }
-      if (mensajes.length > 0) return mensajes.join('; ');
-    }
-    return fallback;
-  }
-
   return (
     <div>
+      {loadingError && (
+        <Alert
+          message="Error al cargar detalle de devolución de compra"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FDVC')}>
           Volver

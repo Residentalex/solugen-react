@@ -1,23 +1,19 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Card, DatePicker, Input, Tag, Space, Button, Typography, message, Tooltip, Drawer } from 'antd';
+import { Table, Card, Input, Tag, Space, Button, Typography, message, Tooltip, Drawer, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined,
   ReloadOutlined,
-  PlusOutlined,
-  PrinterOutlined,
   LockFilled,
 } from '@ant-design/icons';
+import FiltrosDocumento from '../../components/FiltrosDocumento/FiltrosDocumento';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
-import { apiClient } from '../../api/client';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
-import PermissionGate from '../../components/PermissionGate';
-import type { SolicitudPagoVistaDTO } from '../../types/solicitudPago';
+import type { TransaccionBancariaVistaDTO } from '../../types/transaccion';
 
 const { Text } = Typography;
-const { RangePicker } = DatePicker;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
@@ -66,53 +62,64 @@ const SolicitudPago: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
+  const setEditarCallback = useUIStore((s: any) => s.setEditarCallback);
 
-  const [data, setData] = useState<SolicitudPagoVistaDTO[]>([]);
+  const [data, setData] = useState<TransaccionBancariaVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
+  const [pageSize] = useState(FILAS_POR_PAGINA);
   const [searchText, setSearchText] = useState('');
-  const [selectedRow, setSelectedRow] = useState<SolicitudPagoVistaDTO | null>(null);
-  const [fechaTrigger, setFechaTrigger] = useState(0);
+  const [selectedRow, setSelectedRow] = useState<TransaccionBancariaVistaDTO | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [pdfPreview, setPdfPreview] = useState<{ url: string; title: string } | null>(null);
+  const [loadingError, setLoadingError] = useState(false);
+  const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
 
-  const dateParamsRef = useRef({ desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)), hasta: formatDateParam(new Date()) });
+  const rangoDefault = useMemo(() => ({
+    desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
+    hasta: formatDateParam(new Date()),
+  }), []);
 
   const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
     setLoading(true);
     try {
-      let resultados: SolicitudPagoVistaDTO[];
+      const desde = filtros.desde ?? rangoDefault.desde;
+      const hasta = filtros.hasta ?? rangoDefault.hasta;
+      let resultados: TransaccionBancariaVistaDTO[];
       if (busqueda.length > 2) {
-        resultados = await solicitudPagoApi.filtrar(sucursalActiva, {
+        resultados = (await solicitudPagoApi.filtrar(sucursalActiva, {
           cantidad: filas,
           salto: (pagina - 1) * filas,
-          ...dateParamsRef.current,
+          desde,
+          hasta,
           documento: busqueda,
           entidad: busqueda,
           concepto: busqueda,
-        });
+        })) as unknown as TransaccionBancariaVistaDTO[];
       } else {
-        resultados = await solicitudPagoApi.obtenerResumido(
+        resultados = await solicitudPagoApi.obtenerVista(
           sucursalActiva,
-          dateParamsRef.current.desde,
-          dateParamsRef.current.hasta,
+          desde,
+          hasta,
           filas,
-          (pagina - 1) * filas
+          (pagina - 1) * filas,
+          filtros.estado
         );
       }
       setData(resultados);
       setTotal(resultados.length < filas ? (pagina - 1) * filas + resultados.length + 1 : (pagina - 1) * filas + resultados.length + filas);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva]);
+  }, [sucursalActiva, filtros.desde, filtros.hasta, filtros.estado]);
 
   useEffect(() => {
     cargarDatos(page, pageSize, searchText);
-  }, [page, pageSize, searchText, fechaTrigger, cargarDatos]);
+  }, [page, pageSize, searchText, refreshTrigger, filtros, cargarDatos]);
 
   useEffect(() => {
     setActiveModule('FSPA');
@@ -120,58 +127,35 @@ const SolicitudPago: React.FC = () => {
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
+  useEffect(() => {
+    return () => {
+      setEditarCallback(undefined);
+    };
+  }, [setEditarCallback]);
+
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
   };
 
-  const handleRefresh = () => setFechaTrigger(n => n + 1);
-
-  const handleDateChange = (dates: any) => {
-    if (dates && dates[0] && dates[1]) {
-      dateParamsRef.current = {
-        desde: formatDateParam(dates[0].toDate()),
-        hasta: formatDateParam(dates[1].toDate()),
-      };
-    } else {
-      dateParamsRef.current = {
-        desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
-        hasta: formatDateParam(new Date()),
-      };
-    }
-    setPage(1);
-    setFechaTrigger(n => n + 1);
+  const handleRefresh = () => {
+    setLoadingError(false);
+    setRefreshTrigger(n => n + 1);
   };
 
-  const handleImprimir = useCallback(async () => {
-    if (!selectedRow) {
-      message.warning('Seleccione un documento primero');
-      return;
-    }
-    try {
-      const res = await apiClient.get(`/reportes/contabilidad/solicitudPago/${sucursalActiva}/${selectedRow.id}`, {
-        responseType: 'blob',
-      });
-      const blobUrl = URL.createObjectURL(res.data);
-      setPdfPreview({ url: blobUrl, title: `SPA-${selectedRow.documento}` });
-    } catch {
-      message.error('Error al generar el PDF');
-    }
-  }, [selectedRow, sucursalActiva]);
-
-  const handleRowClick = (record: SolicitudPagoVistaDTO) => {
+  const handleRowClick = (record: TransaccionBancariaVistaDTO) => {
     setSelectedRow(record);
   };
 
-  const columns: ColumnsType<SolicitudPagoVistaDTO> = [
+  const columns: ColumnsType<TransaccionBancariaVistaDTO> = [
     {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
       width: 160,
       fixed: 'left',
-      render: (doc: string, record: SolicitudPagoVistaDTO) => (
-        <Text strong className="paces-doc-link" onClick={() => navigate(`/FSPA/${record.id}`)}>{doc}</Text>
+      render: (doc: any, record: TransaccionBancariaVistaDTO) => (
+        <Text strong className="paces-doc-link" onClick={() => navigate(`/FSPA/${record.id}`)}>{typeof doc === 'string' ? doc : doc?.codigo || doc?.nombre || JSON.stringify(doc)}</Text>
       ),
     },
     {
@@ -203,11 +187,11 @@ const SolicitudPago: React.FC = () => {
     },
     {
       title: 'Cuenta Bancaria',
-      dataIndex: 'cuentaBancaria',
-      key: 'cuentaBancaria',
-      width: 180,
+      dataIndex: 'ctaBancaria',
+      key: 'ctaBancaria',
+      width: 260,
       ellipsis: true,
-      render: (val: string) => <Text>{val || '-'}</Text>,
+      render: (val: string) => <Text>{val ? titlecase(val) : '-'}</Text>,
     },
     {
       title: 'Total',
@@ -224,7 +208,7 @@ const SolicitudPago: React.FC = () => {
       dataIndex: 'estado',
       key: 'estado',
       width: 100,
-      render: (estado: number, record: SolicitudPagoVistaDTO) => {
+      render: (estado: number, record: TransaccionBancariaVistaDTO) => {
         const esCerrado = record.periodo === 6;
         const info = ESTADO_MAP[estado] || { label: 'Desconocido', color: 'default' };
         return (
@@ -242,17 +226,38 @@ const SolicitudPago: React.FC = () => {
   ];
 
   return (
-    <Card
-      styles={{ body: { padding: 0 } }}
-      className="paces-card-erp" style={{ borderRadius: 8 }}
-    >
-      <div style={{ padding: '20px 24px 0' }}>
+    <>
+      {loadingError && (
+        <Alert
+          message="Error al cargar solicitudes de pago"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+      <Card
+        styles={{ body: { padding: 0 } }}
+        className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }}
+      >
+      <div style={{ padding: '16px 24px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <RangePicker
-            style={{ width: 180 }}
-            format="YYYY-MM-DD"
-            onChange={handleDateChange}
-            placeholder={['Desde', 'Hasta']}
+          <FiltrosDocumento
+            filtros={filtros}
+            onAplicar={(nuevos) => {
+              setFiltros(nuevos);
+              setPage(1);
+            }}
+            opcionesEstado={[
+              { value: 0, label: 'Borrador' },
+              { value: 1, label: 'Aplicado' },
+              { value: 3, label: 'Anulado' },
+            ]}
+            rangoDefault={rangoDefault}
           />
           <Input.Search
             placeholder="Buscar documento, entidad, concepto..."
@@ -266,7 +271,7 @@ const SolicitudPago: React.FC = () => {
         </div>
       </div>
 
-      <Table<SolicitudPagoVistaDTO>
+      <Table<TransaccionBancariaVistaDTO>
         columns={columns}
         dataSource={data}
         rowKey="id"
@@ -283,7 +288,7 @@ const SolicitudPago: React.FC = () => {
         pagination={{
           current: page,
           pageSize,
-          total,
+          total: total,
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
@@ -297,13 +302,16 @@ const SolicitudPago: React.FC = () => {
           if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
           setPdfPreview(null);
         }}
-        width="70%"
+        size="70%"
       >
         {pdfPreview && (
-          <iframe src={pdfPreview.url} style={{ width: '100%', height: '90vh', border: 'none' }} title="PDF" />
+          <div style={{ width: '100%', height: '100%', overflow: 'auto', transform: 'scale(1.1)', transformOrigin: 'top left' }}>
+            <iframe src={pdfPreview.url} style={{ width: '100%', height: '90vh', border: 'none' }} title="PDF" />
+          </div>
         )}
       </Drawer>
     </Card>
+    </>
   );
 };
 export default SolicitudPago;

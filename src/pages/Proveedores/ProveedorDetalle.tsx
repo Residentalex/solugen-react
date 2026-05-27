@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Tag, Spin, Button, Grid, message, Typography,
+  Card, Descriptions, Tag, Spin, Button, Grid, message, Alert,
 } from 'antd';
 import {
   ArrowLeftOutlined, IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
@@ -10,8 +10,6 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { proveedorApi } from '../../api/proveedorApi';
 import type { SuplidorDTO } from '../../types/entradaAlmacen';
-
-const { Text } = Typography;
 
 function toTitleCase(str: string): string {
   if (!str) return str;
@@ -28,6 +26,7 @@ const ProveedorDetalle: React.FC = () => {
 
   const [data, setData] = useState<SuplidorDTO | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
 
   useEffect(() => {
     setActiveModule('MSUP');
@@ -45,6 +44,24 @@ const ProveedorDetalle: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el proveedor';
         message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [codigo, sucursalActiva, setPageTitleOverride]);
+
+  const handleRefresh = useCallback(() => {
+    if (!codigo) return;
+    setLoadingError(false);
+    setLoading(true);
+    proveedorApi.obtenerPorCodigo(sucursalActiva, codigo)
+      .then((res) => {
+        setData(res);
+        setPageTitleOverride(toTitleCase(res.nombre || codigo));
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
       })
       .finally(() => setLoading(false));
   }, [codigo, sucursalActiva, setPageTitleOverride]);
@@ -62,6 +79,19 @@ const ProveedorDetalle: React.FC = () => {
 
   return (
     <div>
+      {loadingError && (
+        <Alert
+          message="Error al cargar detalle de proveedor"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/MProveedor')}>
           Volver

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Table, Card, Input, Button, message, Typography } from 'antd';
+import { Alert, Table, Card, Input, Button, message, Modal, Descriptions, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -23,6 +23,9 @@ const Bancos: React.FC = () => {
   const [data, setData] = useState<BancoDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [loadingError, setLoadingError] = useState(false);
+  const [detalleVisible, setDetalleVisible] = useState(false);
+  const [detalleItem, setDetalleItem] = useState<BancoDTO | null>(null);
 
   const cargarDatos = useCallback(async () => {
     if (sucursalActiva === undefined) return;
@@ -32,6 +35,7 @@ const Bancos: React.FC = () => {
       setData(result || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar bancos');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -47,6 +51,16 @@ const Bancos: React.FC = () => {
   const handleSearch = (value: string) => {
     setSearchText(value);
   };
+
+  const abrirDetalle = (item: BancoDTO) => {
+    setDetalleItem(item);
+    setDetalleVisible(true);
+  };
+
+  const handleRefresh = useCallback(() => {
+    setLoadingError(false);
+    cargarDatos();
+  }, [cargarDatos]);
 
   const filteredData = useMemo(() => {
     if (!searchText) return data;
@@ -65,7 +79,11 @@ const Bancos: React.FC = () => {
       key: 'codigo',
       width: 120,
       fixed: 'left',
-      render: (val: string) => <Text strong>{val}</Text>,
+      render: (val: string, record: BancoDTO) => (
+        <Text strong className="paces-doc-link" style={{ cursor: 'pointer' }} onClick={() => abrirDetalle(record)}>
+          {val}
+        </Text>
+      ),
     },
     {
       title: 'Nombre',
@@ -99,6 +117,19 @@ const Bancos: React.FC = () => {
   ];
 
   return (
+    <>{loadingError && (
+      <Alert
+        message="Error al cargar bancos"
+        type="error"
+        showIcon
+        style={{ marginBottom: 16 }}
+        action={
+          <Button size="small" onClick={handleRefresh}>
+            Reintentar
+          </Button>
+        }
+      />
+    )}
     <Card
       className="paces-card-erp"
       style={{ borderRadius: 8 }}
@@ -114,7 +145,7 @@ const Bancos: React.FC = () => {
             prefix={<SearchOutlined className="paces-text-icon" />}
           />
           <div style={{ flex: 1 }} />
-          <Button icon={<ReloadOutlined />} onClick={() => cargarDatos()} />
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>
       <Table<BancoDTO>
@@ -131,7 +162,26 @@ const Bancos: React.FC = () => {
           defaultPageSize: 10,
         }}
       />
-    </Card>
+      </Card>
+
+      <Modal
+        title={`Detalle: ${detalleItem?.codigo || ''}`}
+        open={detalleVisible}
+        onCancel={() => setDetalleVisible(false)}
+        footer={null}
+        width={520}
+      >
+        {detalleItem && (
+          <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
+            <Descriptions.Item label="Código">{detalleItem.codigo}</Descriptions.Item>
+            <Descriptions.Item label="Nombre">{toTitleCase(detalleItem.nombre ?? '')}</Descriptions.Item>
+            <Descriptions.Item label="Tipo Entidad">{detalleItem.tipoEntidad || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Correo Electrónico">{detalleItem.correoElectronico || '-'}</Descriptions.Item>
+            <Descriptions.Item label="ID Externo">{detalleItem.idExterno || '-'}</Descriptions.Item>
+          </Descriptions>
+        )}
+      </Modal>
+    </>
   );
 };
 

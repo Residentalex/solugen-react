@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { ApiResponse } from '../types/auth';
+import type { ApiResponse, PantallaDTO } from '../types/auth';
 import type { UsuarioDTO, CrearUsuarioRequest } from '../types/administracion';
 
 const BASE = '/Usuario';
@@ -42,5 +42,12 @@ export const usuarioApi = {
 
   cambiarEstado: async (sucursal: number, id: number, activo: boolean): Promise<void> => {
     await apiClient.put(`${BASE}/${sucursal}/${id}/estado`, { activo });
+  },
+
+  obtenerPantallasPorRoles: async (sucursal: number, roleIds: number[]): Promise<PantallaDTO[]> => {
+    const { data } = await apiClient.post(`${BASE}/${sucursal}/pantallas-por-roles`, roleIds);
+    if (Array.isArray(data)) return data as PantallaDTO[];
+    if (data?.data && Array.isArray(data.data)) return data.data as PantallaDTO[];
+    return [];
   },
 };

@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Card, DatePicker, Input, Select, Tag, Button, Typography, message, Drawer, Tooltip } from 'antd';
+import { Table, Card, Input, Select, Tag, Button, Typography, message, Drawer, Tooltip, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined,
@@ -13,11 +13,11 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
+import FiltrosDocumento from '../../components/FiltrosDocumento/FiltrosDocumento';
 import PermissionGate from '../../components/PermissionGate';
 import type { MovimientoVistaDTO } from '../../types/transferenciaAlmacen';
 
 const { Text } = Typography;
-const { RangePicker } = DatePicker;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
@@ -79,6 +79,7 @@ const TransferenciaAlmacen: React.FC = () => {
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
+  const setEditarCallback = useUIStore((s) => s.setEditarCallback);
   const [data, setData] = useState<MovimientoVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -86,14 +87,21 @@ const TransferenciaAlmacen: React.FC = () => {
   const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
   const [searchText, setSearchText] = useState('');
   const [selectedRow, setSelectedRow] = useState<MovimientoVistaDTO | null>(null);
-  const [fechaTrigger, setFechaTrigger] = useState(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [pdfPreview, setPdfPreview] = useState<{ url: string; title: string } | null>(null);
-  const dateParamsRef = useRef({ desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)), hasta: formatDateParam(new Date()) });
+  const [loadingError, setLoadingError] = useState(false);
+  const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
+
+  const rangoDefault = useMemo(() => ({
+    desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
+    hasta: formatDateParam(new Date()),
+  }), []);
 
   const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
     setLoading(true);
     try {
-      const { desde, hasta } = dateParamsRef.current;
+      const desde = filtros.desde ?? rangoDefault.desde;
+      const hasta = filtros.hasta ?? rangoDefault.hasta;
       let resultados: MovimientoVistaDTO[];
 
       if (busqueda.length > 2) {
@@ -110,7 +118,8 @@ const TransferenciaAlmacen: React.FC = () => {
           desde,
           hasta,
           filas,
-          (pagina - 1) * filas
+          (pagina - 1) * filas,
+          filtros.estado
         );
       }
 
@@ -118,14 +127,15 @@ const TransferenciaAlmacen: React.FC = () => {
       setTotal(resultados.length < filas ? (pagina - 1) * filas + resultados.length : pagina * filas + 1);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva]);
+  }, [sucursalActiva, filtros.desde, filtros.hasta, filtros.estado]);
 
   useEffect(() => {
     cargarDatos(page, pageSize, searchText);
-  }, [page, pageSize, searchText, fechaTrigger, cargarDatos]);
+  }, [page, pageSize, searchText, refreshTrigger, filtros, cargarDatos]);
 
   useEffect(() => {
     setActiveModule('FTRP');
@@ -133,13 +143,20 @@ const TransferenciaAlmacen: React.FC = () => {
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
+  useEffect(() => {
+    return () => {
+      setEditarCallback(undefined);
+    };
+  }, [setEditarCallback]);
+
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
   };
 
   const handleRefresh = () => {
-    setFechaTrigger(n => n + 1);
+    setLoadingError(false);
+    setRefreshTrigger(n => n + 1);
   };
 
   const handleImprimir = useCallback(async () => {
@@ -158,21 +175,6 @@ const TransferenciaAlmacen: React.FC = () => {
     }
   }, [selectedRow, sucursalActiva]);
 
-  const handleDateChange = (dates: any) => {
-    if (dates && dates[0] && dates[1]) {
-      const d = dates[0].format('YYYYMMDD') + '000000';
-      const h = dates[1].format('YYYYMMDD') + '000000';
-      dateParamsRef.current = { desde: d, hasta: h };
-    } else {
-      dateParamsRef.current = {
-        desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
-        hasta: formatDateParam(new Date()),
-      };
-    }
-    setPage(1);
-    setFechaTrigger(n => n + 1);
-  };
-
   const handleTableChange = (pagination: any) => {
     setPage(pagination.current);
   };
@@ -180,7 +182,12 @@ const TransferenciaAlmacen: React.FC = () => {
   const handleRowClick = (record: MovimientoVistaDTO) => {
     setSelectedRow(record);
     const editable = record.periodo !== 6 && record.estado === 0;
-    updateToolbar({ editar: editable });
+    updateToolbar({ editar: editable, anular: editable });
+    if (editable) {
+      setEditarCallback(() => navigate(`/FTRP/${record.id}/editar`));
+    } else {
+      setEditarCallback(undefined);
+    }
   };
 
   const columns: ColumnsType<MovimientoVistaDTO> = [
@@ -256,16 +263,31 @@ const TransferenciaAlmacen: React.FC = () => {
   ];
 
   return (
-    <Card
-      styles={{
-        body: { padding: 0 },
-      }}
-      className="paces-card-erp"
-      style={{
-        borderRadius: 8,
-      }}
-    >
-      <div style={{ padding: '20px 24px 0' }}>
+    <>
+      {loadingError && (
+        <Alert
+          message="Error al cargar transferencias"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+      <Card
+        styles={{
+          body: { padding: 0 },
+        }}
+        className="paces-card-erp"
+        style={{
+          borderRadius: 8,
+          overflow: 'hidden',
+        }}
+      >
+      <div style={{ padding: '16px 24px 0' }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -273,11 +295,18 @@ const TransferenciaAlmacen: React.FC = () => {
           marginBottom: 16,
           flexWrap: 'wrap',
         }}>
-          <RangePicker
-            style={{ width: 180 }}
-            format="YYYY-MM-DD"
-            onChange={handleDateChange}
-            placeholder={['Desde', 'Hasta']}
+          <FiltrosDocumento
+            filtros={filtros}
+            onAplicar={(nuevos) => {
+              setFiltros(nuevos);
+              setPage(1);
+            }}
+            opcionesEstado={[
+              { value: 0, label: 'Borrador' },
+              { value: 1, label: 'Aplicado' },
+              { value: 3, label: 'Anulado' },
+            ]}
+            rangoDefault={rangoDefault}
           />
           <Input.Search
             placeholder="Buscar documento, concepto..."
@@ -329,7 +358,7 @@ const TransferenciaAlmacen: React.FC = () => {
         pagination={{
           current: page,
           pageSize,
-          total,
+          total: total,
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
@@ -352,6 +381,7 @@ const TransferenciaAlmacen: React.FC = () => {
         )}
       </Drawer>
     </Card>
+    </>
   );
 };
 

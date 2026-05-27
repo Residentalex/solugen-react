@@ -227,7 +227,7 @@ const makeKey = (codigo: string) => `${moduloNombre}__${codigo}`;
                       )
                   )
               );
-              return found ? [found.key] : [];
+              return found ? [found.key as string] : [];
             })()
           : []
       }

@@ -11,13 +11,15 @@ export const facturaClienteApi = {
     desde?: string,
     hasta?: string,
     cantidad?: number,
-    salto?: number
+    salto?: number,
+    estado?: number
   ): Promise<FacturaVistaDTO[]> => {
     const params: Record<string, string | number> = {};
     if (desde) params.desde = desde;
     if (hasta) params.hasta = hasta;
     if (cantidad) params.cantidad = cantidad;
     if (salto) params.salto = salto;
+    if (estado !== undefined) params.estado = estado;
 
     const { data } = await apiClient.get<ApiResponse<FacturaVistaDTO[]>>(`${BASE}/${sucursal}`, { params });
     return data.data;

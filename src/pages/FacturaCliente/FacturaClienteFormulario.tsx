@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -398,6 +398,7 @@ const FacturaClienteFormulario: React.FC = () => {
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<FacturaClienteFullDTO | null>(null);
   const [detalles, setDetalles] = useState<DetalleFacturaClienteDTO[]>([]);
@@ -590,6 +591,7 @@ const FacturaClienteFormulario: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
+        setLoadingError(true);
         navigate('/FFAC');
       })
       .finally(() => setLoading(false));
@@ -1666,9 +1668,66 @@ const FacturaClienteFormulario: React.FC = () => {
     </Card>
   );
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    facturaClienteApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        const full: FacturaClienteFullDTO = {
+          id: res.id, fechaDocumento: res.fechaDocumento,
+          fechaVencimiento: (res as any).fechaVencimiento || '', noDocumento: res.noDocumento,
+          estado: res.estado, periodo: res.periodo, ncf: res.ncf || '', nota: res.nota || '',
+          referencia: res.referencia || '', tasa: res.tasa || 1, diasCredito: res.diasCredito || 0,
+          concepto: res.concepto || null, cliente: res.cliente || null, almacen: res.almacen || null,
+          tipo: (res as any).tipo || null, moneda: res.moneda || null, documento: res.documento,
+          subTotal: res.subTotal, descuento: res.descuento, impuestos: res.impuestos, total: res.total,
+          detalles: (res.detalles || []).map((d: any) => ({
+            ...d, porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
+            tieneVencimiento: d.tieneVencimiento ?? false,
+          })),
+          asientos: res.asientos || [], logs: res.logs || [],
+        };
+        setData(full); setDetalles(full.detalles);
+        setSelectedConcepto(full.concepto); setSelectedCliente(full.cliente);
+        setSelectedAlmacen(full.almacen); setSelectedTipo(full.tipo);
+        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
+        const fechaVenc = full.fechaVencimiento ? parseDateRaw(full.fechaVencimiento) : null;
+        form.setFieldsValue({
+          concepto: full.concepto?.codigo || '', cliente: full.cliente?.codigo || '',
+          almacen: full.almacen?.codigo || '', tipo: full.tipo?.codigo || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          fechaVencimiento: fechaVenc ? dayjs(fechaVenc) : null,
+          ncf: full.ncf || '', referencia: full.referencia || '',
+          diasCredito: full.diasCredito || 0, tasa: full.tasa || 1, nota: full.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg); setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   return (
     <div>
       {renderToolbar()}
+
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de factura de cliente"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
       {modalConcepto}
       <BuscarProductoModal
         open={productoModalOpen}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Table, Input, Button, Typography, message, Tag } from 'antd';
+import { Card, Table, Input, Button, Typography, message, Tag, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -17,6 +17,11 @@ function formatDecimal(n: number): string {
   return n.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function toTitleCase(str: string): string {
+  if (!str) return str;
+  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 const Recetas: React.FC = () => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
@@ -25,6 +30,7 @@ const Recetas: React.FC = () => {
 
   const [productos, setProductos] = useState<ProductoRecetaDTO[]>([]);
   const [loadingLista, setLoadingLista] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [searchText, setSearchText] = useState('');
 
   const [productoSeleccionado, setProductoSeleccionado] = useState<string | null>(null);
@@ -40,6 +46,7 @@ const Recetas: React.FC = () => {
       setProductos(result);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar productos con receta');
+      setLoadingError(true);
     } finally {
       setLoadingLista(false);
     }
@@ -74,6 +81,7 @@ const Recetas: React.FC = () => {
   };
 
   const handleRefresh = () => {
+    setLoadingError(false);
     setSearchText('');
     handleVolver();
     cargarProductos();
@@ -152,11 +160,25 @@ const Recetas: React.FC = () => {
   ];
 
   return (
-    <Card
-      styles={{ body: { padding: 0 } }}
-      className="paces-card-erp"
-      style={{ borderRadius: 8, overflow: 'hidden' }}
-    >
+    <>
+      {loadingError && (
+        <Alert
+          message="Error al cargar recetas"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+      <Card
+        styles={{ body: { padding: 0 } }}
+        className="paces-card-erp"
+        style={{ borderRadius: 8, overflow: 'hidden' }}
+      >
       <div style={{ padding: '16px 24px 0' }}>
         {/* Toolbar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
@@ -221,6 +243,7 @@ const Recetas: React.FC = () => {
         )}
       </div>
     </Card>
+    </>
   );
 };
 

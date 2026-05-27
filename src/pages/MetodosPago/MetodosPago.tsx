@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Card, Table, Input, Select, Button, Tag, message, Typography, Empty, Modal, Descriptions } from 'antd';
+import { Card, Table, Input, Select, Button, Tag, message, Typography, Empty, Modal, Descriptions, Alert } from 'antd';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -24,6 +24,7 @@ const MetodosPago: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [loadingError, setLoadingError] = useState(false);
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [detalleItem, setDetalleItem] = useState<MetodoPagoDTO | null>(null);
 
@@ -35,6 +36,7 @@ const MetodosPago: React.FC = () => {
       setData(result || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar métodos de pago');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -53,6 +55,7 @@ const MetodosPago: React.FC = () => {
   };
 
   const handleRefresh = useCallback(() => {
+    setLoadingError(false);
     setSearchText('');
     setPage(1);
     cargarDatos();
@@ -115,11 +118,25 @@ const MetodosPago: React.FC = () => {
   ];
 
   return (
-    <Card
-      className="paces-card-erp"
-      style={{ borderRadius: 8, overflow: 'hidden' }}
-      styles={{ body: { padding: 0 } }}
-    >
+    <>
+      {loadingError && (
+        <Alert
+          title="Error al cargar métodos de pago"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+      <Card
+        className="paces-card-erp"
+        style={{ borderRadius: 8, overflow: 'hidden' }}
+        styles={{ body: { padding: 0 } }}
+      >
       <div style={{ padding: '16px 24px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           <Input.Search
@@ -197,6 +214,7 @@ const MetodosPago: React.FC = () => {
         )}
       </Modal>
     </Card>
+    </>
   );
 };
 

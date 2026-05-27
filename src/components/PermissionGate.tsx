@@ -18,7 +18,7 @@ const PermissionGate: React.FC<PermissionGateProps> = ({ codigoPantalla, accion,
     return null;
   }
 
-  const pantalla = usuario.pantallas.find((p) => p.codigo === codigo);
+  const pantalla = usuario.pantallas.find((p) => p.codigo?.toUpperCase() === codigo?.toUpperCase());
   if (!pantalla) {
     return null;
   }

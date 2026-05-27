@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Row, Col, Typography, message
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Row, Col, Typography, message, Alert
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -11,6 +11,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { productoApi } from '../../api/productoApi';
 import type { ProductoDTO, ImpuestoProductoDTO } from '../../types/productos';
+import ErrorBoundary from '../../components/ErrorBoundary';
 
 const { Text } = Typography;
 
@@ -55,6 +56,7 @@ const ProductoDetalle: React.FC = () => {
 
   const [data, setData] = useState<ProductoDTO | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
 
   useEffect(() => {
     setActiveModule('MProducto');
@@ -63,23 +65,37 @@ const ProductoDetalle: React.FC = () => {
 
   useEffect(() => {
     if (!codigo) return;
+    const abortController = new AbortController();
     setLoading(true);
-    productoApi.obtenerDetalle(sucursalActiva, codigo)
+    productoApi.obtenerDetalle(sucursalActiva, codigo, abortController.signal)
       .then((res) => {
+        if (abortController.signal.aborted) return;
         setData(res);
         setPageTitleOverride(res.nombre || codigo);
       })
       .catch((err: any) => {
+        if (err?.name === 'CanceledError' || abortController.signal.aborted) return;
         message.error(err?.response?.data?.errorMessage || 'Error al cargar el producto');
+        setLoadingError(true);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!abortController.signal.aborted) setLoading(false);
+      });
+    return () => abortController.abort();
   }, [codigo, sucursalActiva, setPageTitleOverride]);
 
-  if (loading || !data) {
+  if (!data) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando producto...</div>
+        <div style={{ marginTop: 16 }} className="paces-text-secondary">
+          {loadingError ? 'Error al cargar producto' : 'Cargando producto...'}
+        </div>
+        {loadingError && (
+          <Button size="small" onClick={handleRefresh} style={{ marginTop: 16 }}>
+            Reintentar
+          </Button>
+        )}
       </div>
     );
   }
@@ -162,8 +178,42 @@ const ProductoDetalle: React.FC = () => {
     },
   ];
 
+  const handleRefresh = () => {
+    if (!codigo) return;
+    setLoadingError(false);
+    setLoading(true);
+    const abortController = new AbortController();
+    productoApi.obtenerDetalle(sucursalActiva, codigo, abortController.signal)
+      .then((res) => {
+        if (abortController.signal.aborted) return;
+        setData(res);
+        setPageTitleOverride(res.nombre || codigo);
+      })
+      .catch((err: any) => {
+        if (err?.name === 'CanceledError' || abortController.signal.aborted) return;
+        message.error(err?.response?.data?.errorMessage || 'Error al recargar');
+        setLoadingError(true);
+      })
+      .finally(() => {
+        if (!abortController.signal.aborted) setLoading(false);
+      });
+  };
+
   return (
     <div>
+      {loadingError && (
+        <Alert
+          message="Error al cargar detalle de producto"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/MProducto')}>
@@ -266,4 +316,10 @@ const ProductoDetalle: React.FC = () => {
   );
 };
 
-export default ProductoDetalle;
+const ProductoDetalleWithBoundary: React.FC = () => (
+  <ErrorBoundary>
+    <ProductoDetalle />
+  </ErrorBoundary>
+);
+
+export default ProductoDetalleWithBoundary;

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Card, Table, Button, Input, Select, Empty, message, Typography } from 'antd';
+import { Card, Table, Button, Input, Select, Empty, message, Modal, Descriptions, Typography } from 'antd';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -24,6 +24,8 @@ const PuntosVenta: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [detalleVisible, setDetalleVisible] = useState(false);
+  const [detalleItem, setDetalleItem] = useState<PuntoVentaDTO | null>(null);
 
   const cargarDatos = useCallback(async () => {
     if (sucursalActiva === undefined) return;
@@ -50,6 +52,11 @@ const PuntosVenta: React.FC = () => {
     setPage(1);
   };
 
+  const abrirDetalle = (item: PuntoVentaDTO) => {
+    setDetalleItem(item);
+    setDetalleVisible(true);
+  };
+
   const handleRefresh = useCallback(() => {
     setSearchText('');
     setPage(1);
@@ -72,7 +79,11 @@ const PuntosVenta: React.FC = () => {
       title: 'Nombre',
       dataIndex: 'nombre',
       key: 'nombre',
-      render: (val: string) => <Text strong>{toTitleCase(val ?? '')}</Text>,
+      render: (val: string, record: PuntoVentaDTO) => (
+        <Text strong className="paces-doc-link" style={{ cursor: 'pointer' }} onClick={() => abrirDetalle(record)}>
+          {toTitleCase(val ?? '')}
+        </Text>
+      ),
     },
     {
       title: 'IP',
@@ -91,7 +102,7 @@ const PuntosVenta: React.FC = () => {
   ];
 
   return (
-    <Card
+    <><Card
       className="paces-card-erp"
       style={{ borderRadius: 8, overflow: 'hidden' }}
       styles={{ body: { padding: 0 } }}
@@ -150,7 +161,25 @@ const PuntosVenta: React.FC = () => {
             : <Empty description="No hay puntos de venta configurados" />
         }}
       />
-    </Card>
+      </Card>
+
+      <Modal
+        title={`Detalle: ${detalleItem?.nombre || ''}`}
+        open={detalleVisible}
+        onCancel={() => setDetalleVisible(false)}
+        footer={null}
+        width={520}
+      >
+        {detalleItem && (
+          <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
+            <Descriptions.Item label="Nombre">{toTitleCase(detalleItem.nombre ?? '')}</Descriptions.Item>
+            <Descriptions.Item label="IP">{detalleItem.ip || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Ruta">{detalleItem.ruta || '-'}</Descriptions.Item>
+            <Descriptions.Item label="ID Externo">{detalleItem.idExterno || '-'}</Descriptions.Item>
+          </Descriptions>
+        )}
+      </Modal>
+    </>
   );
 };
 

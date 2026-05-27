@@ -1,21 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Tooltip, Typography
+  Card, Descriptions, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Tooltip,
 } from 'antd';
 import {
-  ArrowLeftOutlined, PrinterOutlined, EditOutlined, LockFilled,
-  CheckCircleOutlined, CloseCircleOutlined,
+  ArrowLeftOutlined, EditOutlined, LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
-import { apiClient } from '../../api/client';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
-import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import PermissionGate from '../../components/PermissionGate';
-
-const { Text } = Typography;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
@@ -41,12 +36,6 @@ function formatDate(val: string): string {
   if (isNaN(d.getTime())) return val;
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
-
-const ACCION_MAP: Record<number, string> = {
-  0: 'Crear', 1: 'Modificar', 2: 'Eliminar', 3: 'Aplicar',
-  4: 'Desaplicar', 5: 'Postear', 6: 'Anular', 7: 'Revisar',
-  8: 'Reversar', 9: 'Escanear',
-};
 
 function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());

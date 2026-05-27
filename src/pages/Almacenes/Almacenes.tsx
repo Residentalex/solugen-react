@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Card, Table, Input, Select, Button, Modal, Descriptions, Tag, message, Typography, Empty } from 'antd';
+import { Alert, Card, Table, Input, Select, Button, Modal, Descriptions, message, Typography, Empty } from 'antd';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -26,6 +26,7 @@ const Almacenes: React.FC = () => {
   const [pageSize, setPageSize] = useState(25);
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [detalleItem, setDetalleItem] = useState<AlmacenDTO | null>(null);
+  const [loadingError, setLoadingError] = useState(false);
 
   const cargarDatos = useCallback(async () => {
     if (sucursalActiva === undefined) return;
@@ -35,6 +36,7 @@ const Almacenes: React.FC = () => {
       setData(result || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar almacenes');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -53,6 +55,7 @@ const Almacenes: React.FC = () => {
   };
 
   const handleRefresh = useCallback(() => {
+    setLoadingError(false);
     setSearchText('');
     setPage(1);
     cargarDatos();
@@ -102,6 +105,19 @@ const Almacenes: React.FC = () => {
 
   return (
     <>
+      {loadingError && (
+        <Alert
+          message="Error al cargar almacenes"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <Card
         className="paces-card-erp"
         style={{ borderRadius: 8, overflow: 'hidden' }}

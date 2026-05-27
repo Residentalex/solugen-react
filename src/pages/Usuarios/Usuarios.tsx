@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Input, Tag, Button, Modal, Form, Input as AntInput, Switch, message, Space, Tooltip, Popconfirm, Row, Col, Card, Typography } from 'antd';
-import { PlusOutlined, SearchOutlined, ReloadOutlined, EditOutlined, KeyOutlined, StopOutlined, CheckCircleOutlined, RightOutlined } from '@ant-design/icons';
+import { Table, Input, Tag, Button, Modal, Form, Input as AntInput, Switch, message, Space, Row, Col, Card, Typography, Alert } from 'antd';
+import { PlusOutlined, SearchOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { Sucursal } from '../../types/auth';
@@ -37,7 +37,8 @@ const Usuarios: React.FC = () => {
 
   const [data, setData] = useState<UsuarioDTO[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchText, setSearchText] = useState('');
+  const [_searchText, setSearchText] = useState('');
+  const [loadingError, setLoadingError] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<UsuarioDTO | null>(null);
   const [form] = Form.useForm();
@@ -55,6 +56,7 @@ const Usuarios: React.FC = () => {
       setData(result || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar usuarios');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -67,24 +69,14 @@ const Usuarios: React.FC = () => {
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
 
-  const handleSearch = () => {
-    cargarDatos(searchText.trim() || undefined);
+  const handleSearch = (value: string) => {
+    setSearchText(value);
+    cargarDatos(value.trim() || undefined);
   };
 
   const abrirNuevo = () => {
     setEditando(null);
     form.resetFields();
-    setModalVisible(true);
-  };
-
-  const abrirEditar = (usuario: UsuarioDTO) => {
-    setEditando(usuario);
-    form.setFieldsValue({
-      nombre: usuario.nombre,
-      nombreUsuario: usuario.nombreUsuario,
-      activo: usuario.activo,
-      diasVigencia: usuario.diasVigencia,
-    });
     setModalVisible(true);
   };
 
@@ -106,28 +98,6 @@ const Usuarios: React.FC = () => {
       message.error(err?.response?.data?.errorMessage || 'Error al guardar usuario');
     } finally {
       setGuardando(false);
-    }
-  };
-
-  const handleResetPassword = async (id: number) => {
-    try {
-      const nuevaClave = await usuarioApi.resetearPassword(SUCURSAL_SEGURIDAD, id);
-      Modal.success({
-        title: 'Contraseña reseteada',
-        content: `La nueva contraseña temporal es: ${nuevaClave}`,
-      });
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al resetear contraseña');
-    }
-  };
-
-  const handleToggleEstado = async (usuario: UsuarioDTO) => {
-    try {
-      await usuarioApi.cambiarEstado(SUCURSAL_SEGURIDAD, usuario.id, !usuario.activo);
-      message.success(`Usuario ${usuario.activo ? 'desactivado' : 'activado'} correctamente`);
-      cargarDatos();
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cambiar estado');
     }
   };
 
@@ -200,59 +170,43 @@ const Usuarios: React.FC = () => {
         <Tag color={activo ? 'green' : 'default'}>{activo ? 'Activo' : 'Inactivo'}</Tag>
       ),
     },
-    {
-      title: 'Acciones',
-      key: 'acciones',
-      width: 130,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space size={0}>
-          <Tooltip title="Editar usuario">
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => abrirEditar(record)} />
-          </Tooltip>
-          <Tooltip title="Resetear contraseña">
-            <Button type="link" size="small" icon={<KeyOutlined />} onClick={() => handleResetPassword(record.id)} />
-          </Tooltip>
-          <Popconfirm
-            title={`¿${record.activo ? 'Desactivar' : 'Activar'} usuario?`}
-            onConfirm={() => handleToggleEstado(record)}
-          >
-            <Tooltip title={record.activo ? 'Desactivar' : 'Activar'}>
-              <Button
-                type="link"
-                size="small"
-                danger={record.activo}
-                icon={record.activo ? <StopOutlined /> : <CheckCircleOutlined />}
-              />
-            </Tooltip>
-          </Popconfirm>
-        </Space>
-      ),
-    },
+
   ];
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Administrar Usuarios</h4>
+      {loadingError && (
+        <Alert
+          title="Error al cargar usuarios"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={() => { setLoadingError(false); setSearchText(''); cargarDatos(); }}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        marginBottom: 16,
+        flexWrap: 'wrap',
+      }}>
+        <Input.Search
+          placeholder="Buscar por usuario o nombre..."
+          allowClear
+          onSearch={handleSearch}
+          style={{ width: 400 }}
+          prefix={<SearchOutlined className="paces-text-icon" />}
+        />
+        <div style={{ flex: 1 }} />
         <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
           Nuevo Usuario
         </Button>
-      </div>
-
-      <div style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <Input
-          placeholder="Buscar por usuario o nombre..."
-          prefix={<SearchOutlined />}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          onPressEnter={handleSearch}
-          style={{ width: 320 }}
-          allowClear
-          onClear={() => { setSearchText(''); cargarDatos(); }}
-        />
-        <Button icon={<SearchOutlined />} onClick={handleSearch}>Buscar</Button>
-        <Button icon={<ReloadOutlined />} onClick={() => { setSearchText(''); cargarDatos(); }}>Recargar</Button>
+        <Button icon={<ReloadOutlined />} onClick={() => { setLoadingError(false); setSearchText(''); cargarDatos(); }} />
       </div>
 
       <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
@@ -261,7 +215,7 @@ const Usuarios: React.FC = () => {
           dataSource={data}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 1050 }}
+          scroll={{ x: 920 }}
           size="middle"
           pagination={{
             showSizeChanger: true,

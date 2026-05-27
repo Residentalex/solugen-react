@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  Card,
   Table,
   Button,
   Modal,
@@ -17,15 +16,19 @@ import {
   Empty,
   Row,
   Col,
-  Typography,
+  Descriptions,
+  Spin,
+  Alert,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons';
 
-const { Text } = Typography;
 const FILAS_POR_PAGINA = 25;
 import { useUIStore } from '../../stores/uiStore';
+import { Typography } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
+
+const { Text } = Typography;
 import { pantallaApi } from '../../api/pantallaApi';
 import type { PantallaDTO, ModuloDTO } from '../../types/auth';
 import type { AccionDTO } from '../../types/administracion';
@@ -54,6 +57,9 @@ const Pantallas: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<PantallaDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [detalleVisible, setDetalleVisible] = useState(false);
+  const [detalleItem, setDetalleItem] = useState<PantallaDTO | null>(null);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [form] = Form.useForm();
 
   // Catálogos para el modal
@@ -61,6 +67,7 @@ const Pantallas: React.FC = () => {
   const [accionesCatalogo, setAccionesCatalogo] = useState<AccionDTO[]>([]);
   const [selectedAcciones, setSelectedAcciones] = useState<string[]>([]);
   const [catalogosLoading, setCatalogosLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
 
   const cargarDatos = useCallback(async () => {
     if (sucursalActiva === undefined) return;
@@ -70,6 +77,7 @@ const Pantallas: React.FC = () => {
       setData(result || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar pantallas');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -87,6 +95,7 @@ const Pantallas: React.FC = () => {
       setAccionesCatalogo(acciones || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar catálogos');
+      setLoadingError(true);
     } finally {
       setCatalogosLoading(false);
     }
@@ -128,6 +137,20 @@ const Pantallas: React.FC = () => {
 
   const handleSearch = (value: string) => {
     setSearchText(value);
+  };
+
+  const abrirDetalle = async (pantalla: PantallaDTO) => {
+    setDetalleItem(pantalla);
+    setDetalleVisible(true);
+    setCargandoDetalle(true);
+    try {
+      const completo = await pantallaApi.obtenerPorId(sucursalActiva, pantalla.id);
+      setDetalleItem(completo);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al cargar detalle de pantalla');
+    } finally {
+      setCargandoDetalle(false);
+    }
   };
 
   const abrirNuevo = () => {
@@ -199,6 +222,11 @@ const Pantallas: React.FC = () => {
       key: 'codigo',
       fixed: 'left',
       width: 240,
+      render: (val: string, record: PantallaDTO) => (
+        <Text strong className="paces-doc-link" style={{ cursor: 'pointer' }} onClick={() => abrirDetalle(record)}>
+          {val}
+        </Text>
+      ),
     },
     {
       title: 'Nombre',
@@ -263,6 +291,19 @@ const Pantallas: React.FC = () => {
 
   return (
     <>
+      {loadingError && (
+        <Alert
+          title="Error al cargar pantallas"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={() => { setLoadingError(false); cargarDatos(); }}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <div
         style={{
           display: 'flex',
@@ -486,6 +527,41 @@ const Pantallas: React.FC = () => {
             </Row>
           </Checkbox.Group>
         </Form>
+      </Modal>
+
+      <Modal
+        title={`Detalle: ${detalleItem?.codigo || ''}`}
+        open={detalleVisible}
+        onCancel={() => setDetalleVisible(false)}
+        footer={null}
+        width={640}
+      >
+        <Spin spinning={cargandoDetalle}>
+          {detalleItem && (
+            <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
+              <Descriptions.Item label="Código">{detalleItem.codigo}</Descriptions.Item>
+              <Descriptions.Item label="Nombre">{detalleItem.nombre}</Descriptions.Item>
+              <Descriptions.Item label="Ruta">{detalleItem.ruta || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Grupo">{detalleItem.grupo || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Tipo">{detalleItem.tipo || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Orden">{detalleItem.orden}</Descriptions.Item>
+              <Descriptions.Item label="¿Es Reporte?">{detalleItem.esReporte ? 'Sí' : 'No'}</Descriptions.Item>
+              <Descriptions.Item label="Módulos">
+                {detalleItem.modulos?.length
+                  ? detalleItem.modulos.map((m) => <Tag key={m.id} style={{ marginBottom: 2 }}>{m.nombre}</Tag>)
+                  : <Tag>Sin módulo</Tag>}
+              </Descriptions.Item>
+              <Descriptions.Item label="Acciones">
+                {detalleItem.acciones?.length
+                  ? detalleItem.acciones.map((a) => <Tag key={a} color="blue">{a}</Tag>)
+                  : '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Activo">
+                <Tag color={detalleItem.activo ? 'green' : 'red'}>{detalleItem.activo ? 'Activo' : 'Inactivo'}</Tag>
+              </Descriptions.Item>
+            </Descriptions>
+          )}
+        </Spin>
       </Modal>
     </>
   );

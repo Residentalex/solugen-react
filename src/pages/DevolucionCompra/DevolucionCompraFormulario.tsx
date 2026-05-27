@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Popover,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Popover, Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -493,6 +493,7 @@ const DevolucionCompraFormulario: React.FC = () => {
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<DevolucionCompraFullDTO | null>(null);
   const [detalles, setDetalles] = useState<DetalleDevolucionCompraDTO[]>([]);
@@ -655,6 +656,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
+        setLoadingError(true);
         navigate('/FDVC');
       })
       .finally(() => setLoading(false));
@@ -1767,9 +1769,60 @@ const DevolucionCompraFormulario: React.FC = () => {
     },
   ];
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setData(res);
+        setDetalles(res.detalles || []);
+        setSelectedTipo(res.tipo || null);
+        setSelectedConcepto(res.concepto || null);
+        setSelectedEntidad(res.suplidor || res.entidad || null);
+        setSelectedAlmacen(res.almacen || null);
+        setSelectedEntrada(res.entrada || null);
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          tipo: res.tipo?.codigo || '',
+          concepto: res.concepto?.codigo || '',
+          suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
+          almacen: res.almacen?.codigo || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          ncf: res.ncf || '',
+          referencia: res.referencia || '',
+          moneda: res.moneda?.nombre || '',
+          tasa: res.tasa || 1,
+          nota: res.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   return (
     <div>
       {renderToolbar()}
+
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de devolución de compra"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
       <BuscarProductoModal
         open={productoModalOpen}
         onClose={() => setProductoModalOpen(false)}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Table, Card, Input, Button, message, Typography } from 'antd';
+import { Table, Card, Input, Button, message, Typography, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -23,6 +23,7 @@ const FamiliasArticulo: React.FC = () => {
   const [data, setData] = useState<FamiliaArticuloDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [loadingError, setLoadingError] = useState(false);
 
   const cargarDatos = useCallback(async () => {
     if (sucursalActiva === undefined) return;
@@ -32,6 +33,7 @@ const FamiliasArticulo: React.FC = () => {
       setData(result || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar familias de artículos');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -127,6 +129,20 @@ const FamiliasArticulo: React.FC = () => {
   ];
 
   return (
+    <>
+      {loadingError && (
+        <Alert
+          title="Error al cargar familias de artículos"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={() => { setLoadingError(false); cargarDatos(); }}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
     <Card
       className="paces-card-erp"
       style={{ borderRadius: 8 }}
@@ -142,7 +158,7 @@ const FamiliasArticulo: React.FC = () => {
             prefix={<SearchOutlined className="paces-text-icon" />}
           />
           <div style={{ flex: 1 }} />
-          <Button icon={<ReloadOutlined />} onClick={() => cargarDatos()} />
+          <Button icon={<ReloadOutlined />} onClick={() => { setLoadingError(false); cargarDatos(); }} />
         </div>
       </div>
       <Table<FamiliaArticuloDTO>
@@ -160,6 +176,7 @@ const FamiliasArticulo: React.FC = () => {
         }}
       />
     </Card>
+    </>
   );
 };
 

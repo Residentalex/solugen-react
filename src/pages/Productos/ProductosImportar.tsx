@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Card, Button, Upload, Table, Steps, message, Typography, Space, Tag, Result, Spin, Alert,
+  Card, Button, Upload, Table, Steps, message, Typography, Space, Tag, Result, Alert, Spin,
 } from 'antd';
 import { ArrowLeftOutlined, DownloadOutlined, UploadOutlined, InboxOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
@@ -12,7 +12,6 @@ import type { ResultadoImportacionDTO } from '../../types/productos';
 
 const { Text, Title } = Typography;
 const { Dragger } = Upload;
-const { Step } = Steps;
 
 const ProductosImportar: React.FC = () => {
   const navigate = useNavigate();
@@ -24,6 +23,12 @@ const ProductosImportar: React.FC = () => {
   const [importando, setImportando] = useState(false);
   const [resultado, setResultado] = useState<ResultadoImportacionDTO | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [loadingError, setLoadingError] = useState(false);
+
+  const handleRefresh = () => {
+    setLoadingError(false);
+    handleDescargarPlantilla();
+  };
 
   React.useEffect(() => {
     setActiveModule('MProducto');
@@ -40,6 +45,7 @@ const ProductosImportar: React.FC = () => {
       window.URL.revokeObjectURL(url);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al descargar plantilla');
+      setLoadingError(true);
     }
   };
 
@@ -105,6 +111,19 @@ const ProductosImportar: React.FC = () => {
         )}
       </div>
 
+      {loadingError && (
+        <Alert
+          message="Error al cargar importación"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       {/* Steps Indicator */}
       <Card className="paces-card-erp" style={{ borderRadius: 8, marginBottom: 16 }}>
         <div style={{ padding: '16px 24px' }}>
@@ -155,7 +174,7 @@ const ProductosImportar: React.FC = () => {
       )}
 
       {/* Step 1: File selected - Preview and confirm */}
-      {step === 1 && file && (
+      {step === 1 && file && !importando && (
         <Card className="paces-card-erp" style={{ borderRadius: 8 }}>
           <div style={{ padding: 24, textAlign: 'center' }}>
             <Space orientation="vertical" size="large" style={{ width: '100%', maxWidth: 500 }}>
@@ -176,6 +195,19 @@ const ProductosImportar: React.FC = () => {
                 Importar Productos
               </Button>
             </Space>
+          </div>
+        </Card>
+      )}
+
+      {/* Step 1: Processing visual feedback */}
+      {step === 1 && importando && (
+        <Card className="paces-card-erp" style={{ borderRadius: 8, textAlign: 'center' }}>
+          <div style={{ padding: '40px 24px' }}>
+            <Spin size="large" />
+            <div style={{ marginTop: 16 }}>
+              <Title level={4}>Procesando importación...</Title>
+              <Text type="secondary">Esto puede tomar unos segundos. Por favor espere.</Text>
+            </div>
           </div>
         </Card>
       )}
@@ -213,6 +245,33 @@ const ProductosImportar: React.FC = () => {
                     <Button key="back" onClick={() => navigate('/MProducto')}>Volver a Productos</Button>,
                   ]}
                 />
+
+                {resultado.productos && resultado.productos.length > 0 && (
+                  <Card
+                    title="Productos importados"
+                    size="small"
+                    style={{ marginTop: 16 }}
+                    className="paces-card"
+                  >
+                    <Table
+                      dataSource={resultado.productos}
+                      columns={[
+                        { title: 'Fila', dataIndex: 'fila', key: 'fila', width: 60 },
+                        { title: 'Nombre', dataIndex: 'nombre', key: 'nombre' },
+                        {
+                          title: 'Código Generado',
+                          dataIndex: 'codigoGenerado',
+                          key: 'codigoGenerado',
+                          width: 140,
+                          render: (val: string) => <Text code>{val}</Text>,
+                        },
+                      ]}
+                      rowKey="fila"
+                      size="small"
+                      pagination={false}
+                    />
+                  </Card>
+                )}
 
                 {resultado.errores.length > 0 && (
                   <Card

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Table, Card, Input, Button, Modal, Form, InputNumber, message, Typography } from 'antd';
+import { Table, Card, Input, Button, Modal, Form, InputNumber, message, Typography, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -27,6 +27,7 @@ const UnidadesMedida: React.FC = () => {
   const [data, setData] = useState<UnidadMedidaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [loadingError, setLoadingError] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [form] = Form.useForm();
@@ -39,6 +40,7 @@ const UnidadesMedida: React.FC = () => {
       setData(result || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar unidades de medida');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -130,6 +132,19 @@ const UnidadesMedida: React.FC = () => {
 
   return (
     <>
+      {loadingError && (
+        <Alert
+          title="Error al cargar unidades de medida"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={() => { setLoadingError(false); cargarDatos(); }}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <Card
         className="paces-card-erp"
         style={{ borderRadius: 8 }}
@@ -150,7 +165,7 @@ const UnidadesMedida: React.FC = () => {
                 Nuevo
               </Button>
             </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={() => cargarDatos()} />
+            <Button icon={<ReloadOutlined />} onClick={() => { setLoadingError(false); cargarDatos(); }} />
           </div>
         </div>
         <Table<UnidadMedidaDTO>

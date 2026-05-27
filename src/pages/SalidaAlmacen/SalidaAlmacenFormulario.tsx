@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Popover,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Popover, Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -389,6 +389,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<SalidaAlmacenFullDTO | null>(null);
   const [detalles, setDetalles] = useState<DetalleSalidaAlmacenDTO[]>([]);
@@ -541,6 +542,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
+        setLoadingError(true);
         navigate('/FSAP');
       })
       .finally(() => setLoading(false));
@@ -1534,9 +1536,59 @@ const SalidaAlmacenFormulario: React.FC = () => {
     </Card>
   );
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setData(res);
+        setDetalles(res.detalles || []);
+        setSelectedConcepto(res.concepto || null);
+        setSelectedEntidad(res.suplidor || res.entidad || null);
+        setSelectedAlmacen(res.almacen || null);
+
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          concepto: res.concepto?.codigo || '',
+          suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
+          almacen: res.almacen?.codigo || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          fechaRecibo: res.fechaRecibo ? dayjs(parseDateRaw(res.fechaRecibo)) : null,
+          ncf: res.ncf || '',
+          referencia: res.referencia || '',
+          moneda: res.moneda?.nombre || '',
+          tasa: res.tasa || 1,
+          nota: res.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   return (
     <div>
       {renderToolbar()}
+
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de salida de almacén"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
       {modalConcepto}
       <BuscarProductoModal
         open={productoModalOpen}

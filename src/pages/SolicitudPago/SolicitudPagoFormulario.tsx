@@ -1,9 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Button, Typography } from 'antd';
+import { Button } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-
-const { Text } = Typography;
 
 const SolicitudPagoFormulario: React.FC = () => {
   const navigate = useNavigate();

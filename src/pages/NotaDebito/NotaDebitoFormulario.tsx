@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -508,6 +508,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<NotaDebitoFullDTO | null>(null);
   const [entidadesCache, setEntidadesCache] = useState<EntidadDTO[]>([]);
@@ -643,6 +644,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
+        setLoadingError(true);
         navigate(`/${codigoPantalla}`);
       })
       .finally(() => setLoading(false));
@@ -964,7 +966,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     setSaving(true);
     try {
       await notaDebitoApi.recalcularPagos(sucursalActiva, parseInt(id));
-      const updated = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id));
+      const updated = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id)) as any;
       setData((prev) => prev ? { ...prev, asientos: updated.asientos || [] } : prev);
       message.success('Asientos generados exitosamente');
     } catch (err: any) {
@@ -1393,9 +1395,66 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     </Tabs>
   );
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res: any) => {
+        const full: NotaDebitoFullDTO = {
+          id: res.id, fechaDocumento: res.fechaDocumento, noDocumento: res.noDocumento,
+          estado: res.estado, periodo: res.periodo, referencia: res.referencia || '',
+          ncf: res.ncf || '', ncfModificado: res.ncfModificado || '', nota: res.nota || '',
+          total: res.total || 0, subTotal: res.subTotal || 0, descuento: res.descuento || 0,
+          impuestos: res.impuestos || 0, retenciones: res.retenciones || 0, tasa: res.tasa || 1,
+          debitos: res.debitos || 0, creditos: res.creditos || 0,
+          documento: res.documento || { codigo: 'ND' }, concepto: res.concepto || null,
+          tipo: res.tipo || null, entidad: res.entidad || null, moneda: res.moneda || null,
+          transaccionesAsociadas: res.transaccionesAsociadas || [],
+          devoluciones: res.devoluciones || [],
+          impuestosRetenciones: res.impuestosRetenciones || [],
+          asientos: res.asientos || [], logs: res.logs || [],
+        };
+        setData(full); setSelectedConcepto(full.concepto || null);
+        setSelectedTipo(full.tipo || null); setSelectedEntidad(full.entidad || null);
+        setDocumentosRelacionados(full.transaccionesAsociadas || []);
+        setDevoluciones(full.devoluciones || []);
+        setImpuestosRetenciones(full.impuestosRetenciones || []);
+        setNcfModificadoVal(full.ncfModificado || '');
+        setNcfTipo(full.ncfModificado ? 'modificado' : 'documento');
+        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
+        form.setFieldsValue({
+          concepto: full.concepto?.codigo || '', tipo: full.tipo?.codigo || '',
+          entidad: full.entidad?.codigo || '', fecha: fechaDoc ? dayjs(fechaDoc) : null,
+          montoTotal: full.total || 0, ncf: full.ncf || '', tasa: full.tasa || 1,
+          referencia: full.referencia || '', nota: full.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg); setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   return (
     <div>
       {renderToolbar()}
+
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de nota de débito"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
 
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */

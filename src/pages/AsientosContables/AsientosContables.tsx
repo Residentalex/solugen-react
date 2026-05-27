@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Table, DatePicker, Select, Tag, message, Card, Button, Typography } from 'antd';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Alert, Table, Select, Tag, message, Card, Button, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { asientoContableApi } from '../../api/asientoContableApi';
+import FiltrosDocumento from '../../components/FiltrosDocumento/FiltrosDocumento';
 import type { TransaccionVistaDTO } from '../../types/transaccion';
 import type { ColumnsType } from 'antd/es/table';
 import { ReloadOutlined } from '@ant-design/icons';
-
-const { RangePicker } = DatePicker;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
@@ -61,22 +60,27 @@ const AsientosContables: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
   const [selectedRow, setSelectedRow] = useState<TransaccionVistaDTO | null>(null);
-  const [fechaTrigger, setFechaTrigger] = useState(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [loadingError, setLoadingError] = useState(false);
+  const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
 
-  const dateParamsRef = useRef({
+  const rangoDefault = useMemo(() => ({
     desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
     hasta: formatDateParam(new Date()),
-  });
+  }), []);
 
   const cargarDatos = useCallback(async (pagina: number, filas: number) => {
     setLoading(true);
     try {
+      const desde = filtros.desde ?? rangoDefault.desde;
+      const hasta = filtros.hasta ?? rangoDefault.hasta;
       const result = await asientoContableApi.obtenerVista(
         sucursalActiva,
-        dateParamsRef.current.desde,
-        dateParamsRef.current.hasta,
+        desde,
+        hasta,
         filas,
-        (pagina - 1) * filas
+        (pagina - 1) * filas,
+        filtros.estado
       );
       setData(result);
       setTotal(
@@ -86,14 +90,15 @@ const AsientosContables: React.FC = () => {
       );
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva]);
+  }, [sucursalActiva, filtros.desde, filtros.hasta, filtros.estado]);
 
   useEffect(() => {
     cargarDatos(page, pageSize);
-  }, [page, pageSize, fechaTrigger, cargarDatos]);
+  }, [page, pageSize, refreshTrigger, filtros, cargarDatos]);
 
   useEffect(() => {
     setActiveModule('FAsientoContable');
@@ -101,22 +106,9 @@ const AsientosContables: React.FC = () => {
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
-  const handleRefresh = () => setFechaTrigger(n => n + 1);
-
-  const handleDateChange = (dates: any) => {
-    if (dates && dates[0] && dates[1]) {
-      dateParamsRef.current = {
-        desde: formatDateParam(dates[0].toDate()),
-        hasta: formatDateParam(dates[1].toDate()),
-      };
-    } else {
-      dateParamsRef.current = {
-        desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
-        hasta: formatDateParam(new Date()),
-      };
-    }
-    setPage(1);
-    setFechaTrigger(n => n + 1);
+  const handleRefresh = () => {
+    setLoadingError(false);
+    setRefreshTrigger(n => n + 1);
   };
 
   const handleRowClick = (record: TransaccionVistaDTO) => {
@@ -130,9 +122,9 @@ const AsientosContables: React.FC = () => {
       key: 'documento',
       width: 160,
       fixed: 'left',
-      render: (doc: string, record: TransaccionVistaDTO) => (
+      render: (doc: any, record: TransaccionVistaDTO) => (
         <Text strong className="paces-doc-link" onClick={() => navigate(`/FAsientoContable/${record.id}`)}>
-          {doc}
+          {typeof doc === 'string' ? doc : doc?.codigo || doc?.nombre || JSON.stringify(doc)}
         </Text>
       ),
     },
@@ -185,17 +177,36 @@ const AsientosContables: React.FC = () => {
     },
   ];
 
-  return (
+  return (<>
+    {loadingError && (
+      <Alert
+        message="Error al cargar asientos contables"
+        type="error"
+        showIcon
+        style={{ marginBottom: 16 }}
+        action={
+          <Button size="small" onClick={handleRefresh}>
+            Reintentar
+          </Button>
+        }
+      />
+    )}
     <Card styles={{ body: { padding: 0 } }} className="paces-card-erp" style={{ borderRadius: 8 }}>
       <div style={{ padding: '20px 24px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-          <RangePicker
-            style={{ width: 180 }}
-            format="YYYY-MM-DD"
-            onChange={handleDateChange}
-            placeholder={['Desde', 'Hasta']}
+          <FiltrosDocumento
+            filtros={filtros}
+            onAplicar={(nuevos) => {
+              setFiltros(nuevos);
+              setPage(1);
+            }}
+            opcionesEstado={[
+              { value: 0, label: 'Borrador' },
+              { value: 1, label: 'Aplicado' },
+              { value: 3, label: 'Anulado' },
+            ]}
+            rangoDefault={rangoDefault}
           />
-
           <Select
             style={{ width: 65 }}
             value={pageSize}
@@ -220,7 +231,7 @@ const AsientosContables: React.FC = () => {
         pagination={{
           current: page,
           pageSize,
-          total,
+          total: total,
           showSizeChanger: false,
           showTotal: (t) => `Aprox. ${t} registros`,
         }}
@@ -236,6 +247,7 @@ const AsientosContables: React.FC = () => {
         })}
       />
     </Card>
+    </>
   );
 };
 

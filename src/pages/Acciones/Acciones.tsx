@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
+  Alert,
   Card,
   Table,
   Button,
@@ -35,6 +36,7 @@ const Acciones: React.FC = () => {
   const [editando, setEditando] = useState<AccionDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [loadingError, setLoadingError] = useState(false);
   const [form] = Form.useForm();
 
   const cargarDatos = useCallback(async () => {
@@ -45,10 +47,16 @@ const Acciones: React.FC = () => {
       setData(result || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar acciones');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
   }, [sucursalActiva]);
+
+  const handleRefresh = useCallback(() => {
+    setLoadingError(false);
+    cargarDatos();
+  }, [cargarDatos]);
 
   useEffect(() => {
     setActiveModule('MAccion');
@@ -201,6 +209,19 @@ const Acciones: React.FC = () => {
         </Button>
       </div>
 
+      {loadingError && (
+        <Alert
+          message="Error al cargar acciones"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '16px 16px 0 16px' }}>
           <Input.Search

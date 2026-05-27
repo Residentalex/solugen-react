@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Input, Tag, Button, message, Space, Row, Col, Card, Modal, Descriptions, Tooltip, Form, Switch, Typography, Select } from 'antd';
+import { Table, Input, Tag, Button, message, Card, Modal, Descriptions, Form, Switch, Typography, Select, Alert } from 'antd';
 import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -34,8 +34,9 @@ const CuentasContables: React.FC = () => {
   const [filtro, setFiltro] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [loadingError, setLoadingError] = useState(false);
   const [detalleVisible, setDetalleVisible] = useState(false);
-  const [detalleItem, setDetalleItem] = useState<CuentaContableDTO | null>(null);
+  const [detalleItem] = useState<CuentaContableDTO | null>(null);
 
   // Estados para crear/editar
   const [modalVisible, setModalVisible] = useState(false);
@@ -43,25 +44,9 @@ const CuentasContables: React.FC = () => {
   const [guardando, setGuardando] = useState(false);
   const [form] = Form.useForm();
 
-  const abrirDetalle = (item: CuentaContableDTO) => {
-    setDetalleItem(item);
-    setDetalleVisible(true);
-  };
-
   const abrirNuevo = () => {
     setEditando(null);
     form.resetFields();
-    setModalVisible(true);
-  };
-
-  const abrirEditar = (item: CuentaContableDTO) => {
-    setEditando(item);
-    form.setFieldsValue({
-      noCuenta: item.noCuenta,
-      nombre: item.nombre,
-      nota: item.nota,
-      activo: item.activo,
-    });
     setModalVisible(true);
   };
 
@@ -97,6 +82,7 @@ const CuentasContables: React.FC = () => {
       setTotal(result.total);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar cuentas contables');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -121,7 +107,7 @@ const CuentasContables: React.FC = () => {
       key: 'noCuenta',
       width: 140,
       fixed: 'left',
-      render: (val: string) => <Text strong className="paces-doc-link" style={{ fontFamily: 'monospace' }} onClick={() => navigate('/FCuentaContable/' + val)}>{val}</Text>,
+      render: (val: string) => <Text strong className="paces-doc-link" style={{ fontFamily: 'monospace' }} onClick={() => navigate('/MCuentaContable/' + val)}>{val}</Text>,
     },
     {
       title: 'Nombre',
@@ -173,6 +159,7 @@ const CuentasContables: React.FC = () => {
   ];
 
   const handleRefresh = useCallback(() => {
+    setLoadingError(false);
     setFiltro('');
     setPage(1);
     cargarDatos(1, pageSize, '');
@@ -180,6 +167,19 @@ const CuentasContables: React.FC = () => {
 
   return (
     <>
+      {loadingError && (
+        <Alert
+          title="Error al cargar cuentas contables"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
     <Card
       className="paces-card-erp"
       style={{ borderRadius: 8, overflow: 'hidden' }}

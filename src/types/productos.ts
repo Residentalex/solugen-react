@@ -108,9 +108,16 @@ export interface ResultadoImportacionDTO {
   insertados: number;
   actualizados: number;
   errores: ErrorImportacionDTO[];
+  productos?: ProductoImportadoDTO[];
 }
 
 export interface ErrorImportacionDTO {
   fila: number;
   mensaje: string;
+}
+
+export interface ProductoImportadoDTO {
+  fila: number;
+  nombre: string;
+  codigoGenerado: string;
 }

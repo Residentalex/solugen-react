@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Input, Tag, Button, message, Card, Select, Typography, Tooltip } from 'antd';
+import { Table, Input, Tag, Button, message, Card, Select, Typography, Tooltip, Alert } from 'antd';
 import { ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
@@ -27,6 +27,7 @@ const Productos: React.FC = () => {
 
   const [data, setData] = useState<ProductoListaDTO[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [filtroActivo, setFiltroActivo] = useState<string>('todos');
   const [page, setPage] = useState(1);
@@ -74,10 +75,11 @@ const Productos: React.FC = () => {
         totalCount = await productoApi.obtenerTotal(sucursalActiva, { activo: soloActivos });
       }
 
-      setData(resultados || []);
+      setData((resultados || []).sort((a, b) => b.codigo.localeCompare(a.codigo)));
       setTotal(totalCount ?? 0);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar productos');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -105,6 +107,7 @@ const Productos: React.FC = () => {
   };
 
   const handleReload = () => {
+    setLoadingError(false);
     const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
     cargarDatos(searchText.trim() || undefined, soloActivos, page, pageSize);
   };
@@ -206,7 +209,21 @@ const Productos: React.FC = () => {
   ];
 
   return (
-    <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+    <>
+      {loadingError && (
+        <Alert
+          message="Error al cargar productos"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleReload}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
       <div style={{ padding: '16px 24px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
           <Input.Search
@@ -261,6 +278,7 @@ const Productos: React.FC = () => {
         }}
       />
     </Card>
+    </>
   );
 };
 

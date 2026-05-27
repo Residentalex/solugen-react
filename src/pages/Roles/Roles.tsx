@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Tag, Button, Spin, message, Empty, Grid, Tooltip, Avatar } from 'antd';
-import { PlusOutlined, EditOutlined, TeamOutlined } from '@ant-design/icons';
+import { Card, Row, Col, Tag, Button, Spin, message, Empty, Grid, Tooltip, Avatar, Alert, Modal, Descriptions, Typography } from 'antd';
+import { PlusOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
 import { rolApi } from '../../api/rolApi';
 import type { RolFullDTO } from '../../types/administracion';
+
+const { Text } = Typography;
 
 const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
 
@@ -18,6 +20,10 @@ const Roles: React.FC = () => {
 
   const [roles, setRoles] = useState<RolFullDTO[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
+  const [detalleVisible, setDetalleVisible] = useState(false);
+  const [detalleItem, setDetalleItem] = useState<RolFullDTO | null>(null);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
 
   const cargarRoles = useCallback(async () => {
     setLoading(true);
@@ -26,6 +32,7 @@ const Roles: React.FC = () => {
       setRoles(data || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar roles');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -38,11 +45,43 @@ const Roles: React.FC = () => {
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar, cargarRoles]);
 
+  const abrirDetalle = async (rol: RolFullDTO) => {
+    setDetalleItem(rol);
+    setDetalleVisible(true);
+    setCargandoDetalle(true);
+    try {
+      const completo = await rolApi.obtenerPorId(SUCURSAL_SEGURIDAD, rol.id);
+      setDetalleItem(completo);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al cargar detalle del rol');
+    } finally {
+      setCargandoDetalle(false);
+    }
+  };
+
+  const handleRefresh = useCallback(() => {
+    setLoadingError(false);
+    cargarRoles();
+  }, [cargarRoles]);
+
   const isSmall = !screens.md;
   const cardSpan = isSmall ? 24 : screens.xl ? 8 : screens.lg ? 12 : 12;
 
   return (
     <>
+      {loadingError && (
+        <Alert
+          message="Error al cargar roles"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Administrar Roles</h4>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MROL/nuevo')}>
@@ -83,8 +122,6 @@ const Roles: React.FC = () => {
                         );
                       }
                       const maxShow = 3;
-                      const show = users.slice(0, maxShow);
-                      const rest = users.length - maxShow;
                       return (
                         <Avatar.Group max={{ count: maxShow, style: { backgroundColor: '#f0f0f0', color: '#595959', fontSize: 11, fontWeight: 600 } }}>
                           {users.map((nombre, i) => {
@@ -118,6 +155,11 @@ const Roles: React.FC = () => {
                   </div>
 
                   <div className="paces-border-top" style={{ display: 'flex', gap: 8, paddingTop: 12, marginTop: 'auto' }}>
+                    <Tooltip title="Ver detalle">
+                      <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => abrirDetalle(rol)}>
+                        Ver detalle
+                      </Button>
+                    </Tooltip>
                     <Tooltip title="Editar rol">
                         <Button type="link" size="small" icon={<EditOutlined />} onClick={() => navigate(`/MROL/${rol.id}/editar`)}>
                           Editar
@@ -130,6 +172,60 @@ const Roles: React.FC = () => {
           </Row>
         )}
       </Spin>
+
+      <Modal
+        title={`Detalle del Rol: ${detalleItem?.nombre || ''}`}
+        open={detalleVisible}
+        onCancel={() => setDetalleVisible(false)}
+        footer={null}
+        width={640}
+      >
+        <Spin spinning={cargandoDetalle}>
+          {detalleItem && (
+            <>
+              <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
+                <Descriptions.Item label="Nombre">{detalleItem.nombre}</Descriptions.Item>
+                <Descriptions.Item label="Descripción">{detalleItem.descripcion || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Estado">
+                  <Tag color={detalleItem.activo ? 'green' : 'default'}>{detalleItem.activo ? 'Activo' : 'Inactivo'}</Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="Usuarios">
+                  {detalleItem.cantidadUsuarios != null ? detalleItem.cantidadUsuarios : (detalleItem.nombresUsuarios?.length || 0)}
+                </Descriptions.Item>
+              </Descriptions>
+
+              <div style={{ marginTop: 24 }}>
+                <h5 style={{ marginBottom: 12, fontWeight: 600 }}>Pantallas y Permisos ({detalleItem.pantallas?.length || 0})</h5>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(detalleItem.pantallas || []).map((pp) => (
+                    <Card key={pp.pantalla.id} size="small" className="paces-card" style={{ borderRadius: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text strong>{pp.pantalla.nombre}</Text>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {pp.acciones.map((acc) => (
+                            <Tag key={acc.codigo} color="blue" style={{ fontSize: 11 }}>{acc.nombre}</Tag>
+                          ))}
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+
+              {detalleItem.nombresUsuarios && detalleItem.nombresUsuarios.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <h5 style={{ marginBottom: 8, fontWeight: 600 }}>Usuarios Asignados</h5>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {detalleItem.nombresUsuarios.map((nombre, i) => (
+                      <Tag key={i} color="geekblue">{nombre}</Tag>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </Spin>
+      </Modal>
     </>
   );
 };

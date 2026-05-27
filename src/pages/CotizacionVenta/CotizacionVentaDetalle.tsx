@@ -169,7 +169,7 @@ const CotizacionVentaDetalle: React.FC = () => {
     setLoading(true);
     setError(null);
     cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
+      .then((res: any) => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
       })
@@ -351,7 +351,7 @@ const CotizacionVentaDetalle: React.FC = () => {
     try {
       await cotizacionVentaApi.aplicar(sucursalActiva, parseInt(id));
       message.success('Documento aplicado exitosamente');
-      const res = await cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id));
+      const res: any = await cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al aplicar');
@@ -367,7 +367,7 @@ const CotizacionVentaDetalle: React.FC = () => {
     try {
       await cotizacionVentaApi.anular(sucursalActiva, data.id);
       message.success('Documento anulado exitosamente');
-      const res = await cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      const res: any = await cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');

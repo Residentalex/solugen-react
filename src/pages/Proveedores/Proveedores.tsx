@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Card, Input, Button, message, Typography, Space } from 'antd';
+import { Table, Card, Input, Button, message, Typography, Space, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -31,9 +31,10 @@ const Proveedores: React.FC = () => {
 
   const [data, setData] = useState<SuplidorDTO[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
+  const [pageSize] = useState(FILAS_POR_PAGINA);
   const [searchText, setSearchText] = useState('');
 
   const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
@@ -49,6 +50,7 @@ const Proveedores: React.FC = () => {
       setTotal(resultados.length < filas ? (pagina - 1) * filas + resultados.length : pagina * filas + 1);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar proveedores');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -70,6 +72,7 @@ const Proveedores: React.FC = () => {
   };
 
   const handleRefresh = () => {
+    setLoadingError(false);
     cargarDatos(page, pageSize, searchText);
   };
 
@@ -135,11 +138,25 @@ const Proveedores: React.FC = () => {
   ];
 
   return (
-    <Card
-      className="paces-card-erp"
-      style={{ borderRadius: 8 }}
-      styles={{ body: { padding: 0 } }}
-    >
+    <>
+      {loadingError && (
+        <Alert
+          message="Error al cargar proveedores"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+      <Card
+        className="paces-card-erp"
+        style={{ borderRadius: 8 }}
+        styles={{ body: { padding: 0 } }}
+      >
       <div style={{ padding: '16px 24px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
           <Input.Search
@@ -172,6 +189,7 @@ const Proveedores: React.FC = () => {
         className="paces-border-top paces-list-table"
       />
     </Card>
+    </>
   );
 };
 

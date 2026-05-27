@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Modal,
+  message, Form, Input, InputNumber, Select, DatePicker, Modal, Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -123,6 +123,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<any>(null);
   const [tiposCache, setTiposCache] = useState<TipoDocumentoDTO[]>([]);
@@ -271,6 +272,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
+        setLoadingError(true);
         navigate(`/${codigoPantalla}`);
       })
       .finally(() => setLoading(false));
@@ -511,7 +513,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     if (!id) return;
     setSaving(true);
     try {
-      const result = await distribucionBalanceApi.recalcular(sucursalActiva, parseInt(id));
+      const result = await distribucionBalanceApi.recalcular(sucursalActiva, parseInt(id)) as any;
       if (result?.asientos) {
         setAsientos(result.asientos);
       }
@@ -1134,10 +1136,56 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     ),
   });
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res: any) => {
+        setData(res);
+        setTransaccionesAsociadas(res.transaccionesAsociadas || []);
+        setAsientos(res.asientos || []);
+        setLogs(res.logs || []);
+        setSelectedConcepto(res.concepto || null);
+        setSelectedEntidad(res.entidad || null);
+        if (res.tipo) setSelectedTipo(res.tipo);
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          tipo: res.tipo?.codigo || res.codigoTipo || '',
+          concepto: res.concepto?.codigo || '',
+          entidad: res.entidad?.codigo || res.codigoEntidad || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          ncf: res.ncf || '', referencia: res.referencia || '',
+          tasa: res.tasa || 1, nota: res.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg); setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   // ===== Render principal =====
   return (
     <div>
       {renderToolbar()}
+
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de distribución de balance"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
       {modalConcepto}
 
       {isLarge ? (

@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { FiltroSolicitudPago, SolicitudPagoVistaDTO } from '../types/solicitudPago';
+import type { TransaccionBancariaVistaDTO } from '../types/transaccion';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/SPA';
@@ -10,13 +11,15 @@ export const solicitudPagoApi = {
     desde?: string,
     hasta?: string,
     cantidad?: number,
-    salto?: number
+    salto?: number,
+    estado?: number
   ): Promise<SolicitudPagoVistaDTO[]> => {
     const params: Record<string, string | number> = {};
     if (desde) params.desde = desde;
     if (hasta) params.hasta = hasta;
     if (cantidad) params.cantidad = cantidad;
     if (salto) params.salto = salto;
+    if (estado !== undefined) params.estado = estado;
     const { data } = await apiClient.get<ApiResponse<SolicitudPagoVistaDTO[]>>(`${BASE}/${sucursal}`, { params });
     return data.data;
   },
@@ -36,6 +39,24 @@ export const solicitudPagoApi = {
     return data.data;
   },
 
+  obtenerVista: async (
+    sucursal: number,
+    desde?: string,
+    hasta?: string,
+    cantidad?: number,
+    salto?: number,
+    estado?: number
+  ): Promise<TransaccionBancariaVistaDTO[]> => {
+    const params: Record<string, string | number> = {};
+    if (desde) params.desde = desde;
+    if (hasta) params.hasta = hasta;
+    if (cantidad) params.cantidad = cantidad;
+    if (salto) params.salto = salto;
+    if (estado !== undefined) params.estado = estado;
+    const { data } = await apiClient.get<ApiResponse<TransaccionBancariaVistaDTO[]>>(`${BASE}/${sucursal}/vista`, { params });
+    return data.data;
+  },
+
   obtenerTotal: async (
     sucursal: number,
     desde?: string,
@@ -44,7 +65,7 @@ export const solicitudPagoApi = {
     const params: Record<string, string> = {};
     if (desde) params.desde = desde;
     if (hasta) params.hasta = hasta;
-    const { data } = await apiClient.get<number>(`${BASE}/total/${sucursal}`, { params });
-    return data;
+    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/total/${sucursal}`, { params });
+    return data.data;
   },
 };

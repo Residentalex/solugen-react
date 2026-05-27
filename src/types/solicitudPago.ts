@@ -1,5 +1,3 @@
-import type { TransaccionDTO } from './transaccion';
-
 /** SolicitudPagoDTO extiende TransaccionDTO - vista resumida para listado */
 export interface SolicitudPagoVistaDTO {
   id: number;

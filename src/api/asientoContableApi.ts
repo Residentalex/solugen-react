@@ -14,13 +14,15 @@ export async function obtenerAsientosContables(
   desde?: string,
   hasta?: string,
   cantidad?: number,
-  salto?: number
+  salto?: number,
+  estado?: number
 ): Promise<TransaccionVistaDTO[]> {
   const params: Record<string, string | number> = {};
   if (desde) params.desde = desde;
   if (hasta) params.hasta = hasta;
   if (cantidad) params.cantidad = cantidad;
   if (salto) params.salto = salto;
+  if (estado !== undefined) params.estado = estado;
 
   const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO[]>>(
     `${BASE}/${sucursal}/conAsientos/vista`, { params }

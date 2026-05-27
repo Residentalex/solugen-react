@@ -26,8 +26,12 @@ export const clienteApi = {
     return data.data;
   },
 
-  obtenerPorCodigo: async (sucursal: number, codigo: string): Promise<ClienteDTO> => {
-    const { data } = await apiClient.get<ApiResponse<ClienteDTO>>(`${BASE}/${sucursal}/${codigo}`);
+  obtenerPorCodigo: async (
+    sucursal: number,
+    codigo: string,
+    signal?: AbortSignal
+  ): Promise<ClienteDTO> => {
+    const { data } = await apiClient.get<ApiResponse<ClienteDTO>>(`${BASE}/${sucursal}/${codigo}`, { signal });
     return data.data;
   },
 

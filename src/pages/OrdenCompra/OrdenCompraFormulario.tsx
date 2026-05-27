@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal,
+  Card, Table, Tabs, Spin, Button, Space, Row, Col, Divider,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -147,12 +147,12 @@ const OrdenCompraFormulario: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
-  const screens = Grid.useBreakpoint();
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
   const destino = Sucursal.Compra;
 
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<any>(null);
   const [detalles, setDetalles] = useState<DetalleOrcEditable[]>([]);
@@ -162,8 +162,6 @@ const OrdenCompraFormulario: React.FC = () => {
   const [suplidoresCache, setSuplidoresCache] = useState<SuplidorDTO[]>([]);
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
   const [form] = Form.useForm();
-
-  const isLarge = screens.lg ?? true;
 
   useEffect(() => {
     setActiveModule('FORC');
@@ -180,7 +178,8 @@ const OrdenCompraFormulario: React.FC = () => {
     if (!id) return;
     setLoading(true);
     ordenCompraApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
+      .then((_res) => {
+        const res = _res as any;
         setData(res);
         const detallesMap = (res.detalles || []).map((d: any, idx: number) => ({
           id: -(idx + 1),
@@ -216,6 +215,7 @@ const OrdenCompraFormulario: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar la orden';
         message.error(msg);
+        setLoadingError(true);
         navigate('/FORC');
       })
       .finally(() => setLoading(false));
@@ -452,9 +452,70 @@ const OrdenCompraFormulario: React.FC = () => {
     </div>
   );
 
+  const handleRefresh = useCallback(() => {
+    setLoadingError(false);
+    if (!id) return;
+    setLoading(true);
+    ordenCompraApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((_res) => {
+        const res = _res as any;
+        setData(res);
+        const detallesMap = (res.detalles || []).map((d: any, idx: number) => ({
+          id: -(idx + 1),
+          codigo: d.codigo || '',
+          articulo: d.articulo || '',
+          referencia: d.referencia || '',
+          cantidad: d.cantidad || 0,
+          costo: d.costo || 0,
+          subTotal: d.subTotal || 0,
+          descuento: d.descuento || 0,
+          porcentajeDescuento: d.porcentajeDescuento || 0,
+          impuestos: d.impuestos || 0,
+          porcentajeImpuesto: d.porcentajeImpuesto || 0,
+          total: d.total || 0,
+          cantidadBonificable: d.cantidadBonificable || 0,
+          tipoArticulo: d.tipoArticulo || 'Producto',
+        }));
+        setDetalles(detallesMap);
+        setSelectedConcepto(res.concepto || null);
+        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+        setSelectedSuplidor(res.suplidor || null);
+
+        form.setFieldsValue({
+          conceptoNombre: res.concepto?.nombre || '',
+          suplidor: res.suplidor?.codigo || '',
+          fechaDocumento: res.fechaDocumento ? dayjs(res.fechaDocumento) : null,
+          ncf: res.ncf || '',
+          referencia: res.referencia || '',
+          nota: res.nota || '',
+          diasCredito: res.diasCredito || 0,
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form]);
+
   return (
     <div>
       {renderToolbar()}
+
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de orden de compra"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
 
       <Row gutter={16}>
         <Col lg={18} xs={24}>

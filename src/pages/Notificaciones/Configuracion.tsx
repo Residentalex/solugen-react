@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Table, Card, Button, Modal, Form, Select, Input, Switch, Tag, Tooltip,
+  Table, Card, Button, Modal, Form, Select, Input, Switch, Tag, Tooltip, Alert,
   message, Empty, Space, Row, Col,
 } from 'antd';
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -24,6 +24,7 @@ const TIPOS_OPCIONES = [
   { label: 'Error', value: 'Error' },
   { label: 'Advertencia', value: 'Advertencia' },
   { label: 'Exito', value: 'Exito' },
+  { label: 'Ticket', value: 'Ticket' },
 ];
 
 const DESTINO_TIPOS = [
@@ -104,6 +105,7 @@ const Configuracion: React.FC = () => {
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [form] = Form.useForm();
+  const [loadingError, setLoadingError] = useState(false);
 
   const cargarConfigs = useCallback(async () => {
     if (!sucursal) return;
@@ -113,10 +115,16 @@ const Configuracion: React.FC = () => {
       setConfigs(data || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar configuración');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
   }, [sucursal]);
+
+  const handleRefresh = useCallback(() => {
+    setLoadingError(false);
+    cargarConfigs();
+  }, [cargarConfigs]);
 
   const cargarUsuarios = async () => {
     try {
@@ -231,7 +239,7 @@ const Configuracion: React.FC = () => {
       width: 120,
       render: (text: string) => {
         const colores: Record<string, string> = {
-          Alerta: 'gold', Info: 'blue', Error: 'red', Advertencia: 'orange', Exito: 'green',
+          Alerta: 'gold', Info: 'blue', Error: 'red', Advertencia: 'orange', Exito: 'green', Ticket: 'purple',
         };
         return <Tag color={colores[text] || 'default'}>{text}</Tag>;
       },
@@ -287,6 +295,19 @@ const Configuracion: React.FC = () => {
         </Button>
       </div>
 
+      {loadingError && (
+        <Alert
+          message="Error al cargar configuración"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '16px 24px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>

@@ -1,11 +1,9 @@
 import { apiClient } from './client';
 import type { FacturaVistaDTO, FiltroFacturacion } from '../types/facturacion';
-import type { FacturaPOSDTO } from '../types/facturaPOS';
+import type { FacturaPOSDTO, FacturaPOSFormularioDTO } from '../types/facturaPOS';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/PV';
-
-import type { FacturaPOSFormularioDTO } from '../types/facturaPOS';
 
 export const facturaPOSApi = {
   obtenerVista: async (
@@ -13,13 +11,15 @@ export const facturaPOSApi = {
     desde?: string,
     hasta?: string,
     cantidad?: number,
-    salto?: number
+    salto?: number,
+    estado?: number
   ): Promise<FacturaVistaDTO[]> => {
     const params: Record<string, string | number> = {};
     if (desde) params.desde = desde;
     if (hasta) params.hasta = hasta;
     if (cantidad) params.cantidad = cantidad;
     if (salto) params.salto = salto;
+    if (estado !== undefined) params.estado = estado;
 
     const { data } = await apiClient.get<ApiResponse<FacturaVistaDTO[]>>(`${BASE}/${sucursal}`, { params });
     return data.data;
@@ -69,18 +69,18 @@ export const facturaPOSApi = {
     return data.data;
   },
 
-  anular: async (sucursal: number, factura: any): Promise<any> => {
-    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/anular`, factura);
+  anular: async (sucursal: number, factura: FacturaPOSDTO): Promise<FacturaPOSDTO> => {
+    const { data } = await apiClient.post<ApiResponse<FacturaPOSDTO>>(`${BASE}/${sucursal}/anular`, factura);
     return data.data;
   },
 
-  aplicar: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/aplicar/${id}`);
+  aplicar: async (sucursal: number, id: number): Promise<FacturaPOSDTO> => {
+    const { data } = await apiClient.put<ApiResponse<FacturaPOSDTO>>(`${BASE}/${sucursal}/aplicar/${id}`);
     return data.data;
   },
 
-  postear: async (sucursal: number, factura: any): Promise<any> => {
-    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postear`, factura);
+  postear: async (sucursal: number, factura: FacturaPOSDTO): Promise<FacturaPOSDTO> => {
+    const { data } = await apiClient.post<ApiResponse<FacturaPOSDTO>>(`${BASE}/${sucursal}/postear`, factura);
     return data.data;
   },
 

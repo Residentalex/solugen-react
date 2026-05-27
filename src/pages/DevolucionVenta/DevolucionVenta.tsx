@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Card, DatePicker, Input, Select, Tag, Space, Button, Typography, message, Drawer, Tooltip } from 'antd';
+import { Table, Card, Input, Select, Tag, Space, Button, Typography, message, Drawer, Tooltip, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined,
@@ -13,11 +13,11 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { devolucionVentaApi } from '../../api/devolucionVentaApi';
+import FiltrosDocumento from '../../components/FiltrosDocumento/FiltrosDocumento';
 import PermissionGate from '../../components/PermissionGate';
 import type { FacturaVistaDTO } from '../../types/facturacion';
 
 const { Text } = Typography;
-const { RangePicker } = DatePicker;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
@@ -83,6 +83,7 @@ const DevolucionVenta: React.FC = () => {
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
+  const setEditarCallback = useUIStore((s) => s.setEditarCallback);
   const navigate = useNavigate();
 
   const [data, setData] = useState<FacturaVistaDTO[]>([]);
@@ -92,14 +93,21 @@ const DevolucionVenta: React.FC = () => {
   const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
   const [searchText, setSearchText] = useState('');
   const [selectedRow, setSelectedRow] = useState<FacturaVistaDTO | null>(null);
-  const [fechaTrigger, setFechaTrigger] = useState(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [pdfPreview, setPdfPreview] = useState<{ url: string; title: string } | null>(null);
-  const dateParamsRef = useRef({ desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)), hasta: formatDateParam(new Date()) });
+  const [loadingError, setLoadingError] = useState(false);
+  const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
+
+  const rangoDefault = useMemo(() => ({
+    desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
+    hasta: formatDateParam(new Date()),
+  }), []);
 
   const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
     setLoading(true);
     try {
-      const { desde, hasta } = dateParamsRef.current;
+      const desde = filtros.desde ?? rangoDefault.desde;
+      const hasta = filtros.hasta ?? rangoDefault.hasta;
       let resultados: FacturaVistaDTO[];
 
       if (busqueda.length > 2) {
@@ -119,7 +127,8 @@ const DevolucionVenta: React.FC = () => {
           desde,
           hasta,
           filas,
-          (pagina - 1) * filas
+          (pagina - 1) * filas,
+          filtros.estado
         );
       }
 
@@ -127,14 +136,15 @@ const DevolucionVenta: React.FC = () => {
       setTotal(resultados.length < filas ? (pagina - 1) * filas + resultados.length : pagina * filas + 1);
     } catch (err: any) {
       message.error(err?.response?.data?.ErrorMessage || 'Error al cargar datos');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva]);
+  }, [sucursalActiva, filtros.desde, filtros.hasta, filtros.estado]);
 
   useEffect(() => {
     cargarDatos(page, pageSize, searchText);
-  }, [page, pageSize, searchText, fechaTrigger, cargarDatos]);
+  }, [page, pageSize, searchText, refreshTrigger, filtros, cargarDatos]);
 
   useEffect(() => {
     setActiveModule('FDEV');
@@ -142,13 +152,20 @@ const DevolucionVenta: React.FC = () => {
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
+  useEffect(() => {
+    return () => {
+      setEditarCallback(undefined);
+    };
+  }, [setEditarCallback]);
+
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
   };
 
   const handleRefresh = () => {
-    setFechaTrigger(n => n + 1);
+    setLoadingError(false);
+    setRefreshTrigger(n => n + 1);
   };
 
   const handleImprimir = useCallback(async () => {
@@ -167,21 +184,6 @@ const DevolucionVenta: React.FC = () => {
     }
   }, [selectedRow, sucursalActiva]);
 
-  const handleDateChange = (dates: any) => {
-    if (dates && dates[0] && dates[1]) {
-      const d = dates[0].format('YYYYMMDD') + '000000';
-      const h = dates[1].format('YYYYMMDD') + '000000';
-      dateParamsRef.current = { desde: d, hasta: h };
-    } else {
-      dateParamsRef.current = {
-        desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
-        hasta: formatDateParam(new Date()),
-      };
-    }
-    setPage(1);
-    setFechaTrigger(n => n + 1);
-  };
-
   const handleTableChange = (pagination: any) => {
     setPage(pagination.current);
   };
@@ -189,7 +191,12 @@ const DevolucionVenta: React.FC = () => {
   const handleRowClick = (record: FacturaVistaDTO) => {
     setSelectedRow(record);
     const editable = Number(record.periodo) !== 6 && Number(record.estado) === 0;
-    updateToolbar({ editar: editable });
+    updateToolbar({ editar: editable, anular: editable });
+    if (editable) {
+      setEditarCallback(() => navigate(`/FDEV/${record.id}/editar`));
+    } else {
+      setEditarCallback(undefined);
+    }
   };
 
   const columns: ColumnsType<FacturaVistaDTO> = [
@@ -285,16 +292,31 @@ const DevolucionVenta: React.FC = () => {
   ];
 
   return (
-    <Card
-      styles={{
-        body: { padding: 0 },
-      }}
-      className="paces-card-erp"
-      style={{
-        borderRadius: 8,
-      }}
-    >
-      <div style={{ padding: '20px 24px 0' }}>
+    <>
+      {loadingError && (
+        <Alert
+          message="Error al cargar devoluciones de venta"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+      <Card
+        styles={{
+          body: { padding: 0 },
+        }}
+        className="paces-card-erp"
+        style={{
+          borderRadius: 8,
+          overflow: 'hidden',
+        }}
+      >
+      <div style={{ padding: '16px 24px 0' }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -302,11 +324,18 @@ const DevolucionVenta: React.FC = () => {
           marginBottom: 16,
           flexWrap: 'wrap',
         }}>
-          <RangePicker
-            style={{ width: 180 }}
-            format="YYYY-MM-DD"
-            onChange={handleDateChange}
-            placeholder={['Desde', 'Hasta']}
+          <FiltrosDocumento
+            filtros={filtros}
+            onAplicar={(nuevos) => {
+              setFiltros(nuevos);
+              setPage(1);
+            }}
+            opcionesEstado={[
+              { value: 0, label: 'Borrador' },
+              { value: 1, label: 'Aplicado' },
+              { value: 3, label: 'Anulado' },
+            ]}
+            rangoDefault={rangoDefault}
           />
           <Input.Search
             placeholder="Buscar documento, NCF, concepto..."
@@ -358,7 +387,7 @@ const DevolucionVenta: React.FC = () => {
         pagination={{
           current: page,
           pageSize,
-          total,
+          total: total,
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
@@ -381,6 +410,7 @@ const DevolucionVenta: React.FC = () => {
         )}
       </Drawer>
     </Card>
+    </>
   );
 };
 

@@ -33,8 +33,12 @@ export const productoApi = {
     return data;
   },
 
-  obtenerDetalle: async (sucursal: number, codigo: string): Promise<ProductoDTO> => {
-    const { data } = await apiClient.get<ProductoDTO>(`${BASE}/${sucursal}/${codigo}`);
+  obtenerDetalle: async (
+    sucursal: number,
+    codigo: string,
+    signal?: AbortSignal
+  ): Promise<ProductoDTO> => {
+    const { data } = await apiClient.get<ProductoDTO>(`${BASE}/${sucursal}/${codigo}`, { signal });
     return data;
   },
 

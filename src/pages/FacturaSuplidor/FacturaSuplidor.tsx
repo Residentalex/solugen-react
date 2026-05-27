@@ -1,16 +1,22 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Table, Input, DatePicker, Select, Tag, message, Drawer, Card, Button, Tooltip, Typography, Space } from 'antd';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Table, Card, Input, Select, Tag, Space, Button, Typography, message, Drawer, Tooltip, Alert } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+import {
+  SearchOutlined,
+  ReloadOutlined,
+  PlusOutlined,
+  PrinterOutlined,
+  LockFilled,
+} from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
-import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { apiClient } from '../../api/client';
+import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
+import FiltrosDocumento from '../../components/FiltrosDocumento/FiltrosDocumento';
 import PermissionGate from '../../components/PermissionGate';
 import type { TransaccionVistaDTO, FiltroTransaccion } from '../../types/transaccion';
-import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined, PlusOutlined, PrinterOutlined, LockFilled } from '@ant-design/icons';
 
-const { RangePicker } = DatePicker;
 const { Text } = Typography;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
@@ -26,16 +32,33 @@ const ESTADO_MAP: Record<number, { label: string; color: string }> = {
 const DIAS_POR_DEFECTO = 30;
 const FILAS_POR_PAGINA = 25;
 
-function titlecase(s: string): string {
-  if (!s) return '';
-  return s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+function parseDateRaw(val: string): Date | null {
+  if (!val) return null;
+  const num = val.replace(/\D/g, '');
+  if (num.length === 8) {
+    const y = parseInt(num.slice(0, 4), 10);
+    const m = parseInt(num.slice(4, 6), 10) - 1;
+    const d = parseInt(num.slice(6, 8), 10);
+    return new Date(y, m, d);
+  }
+  if (num.length >= 14) {
+    const y = parseInt(num.slice(0, 4), 10);
+    const m = parseInt(num.slice(4, 6), 10) - 1;
+    const d = parseInt(num.slice(6, 8), 10);
+    return new Date(y, m, d);
+  }
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 function formatDate(val: string): string {
-  if (!val) return '';
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
+  const d = parseDateRaw(val);
+  if (!d) return val || '';
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function formatCurrency(n: number): string {
+  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
 }
 
 function getInitials(name: string): string {
@@ -43,23 +66,29 @@ function getInitials(name: string): string {
   return name.charAt(0).toUpperCase();
 }
 
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
 function formatDateParam(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
-  return `${y}${m}${day}000000`;
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${y}${m}${day}${hh}${mm}${ss}`;
+}
+
+function toTitleCase(str: string): string {
+  if (!str) return str;
+  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 const FacturaSuplidor: React.FC = () => {
   const navigate = useNavigate();
-  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
-  const setActiveModule = useUIStore((s: any) => s.setActiveModule);
-  const updateToolbar = useUIStore((s: any) => s.updateToolbar);
-  const resetToolbar = useUIStore((s: any) => s.resetToolbar);
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const updateToolbar = useUIStore((s) => s.updateToolbar);
+  const resetToolbar = useUIStore((s) => s.resetToolbar);
+  const setActiveModule = useUIStore((s) => s.setActiveModule);
+  const setEditarCallback = useUIStore((s) => s.setEditarCallback);
+
   const [data, setData] = useState<TransaccionVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -67,55 +96,78 @@ const FacturaSuplidor: React.FC = () => {
   const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
   const [searchText, setSearchText] = useState('');
   const [selectedRow, setSelectedRow] = useState<TransaccionVistaDTO | null>(null);
-  const [fechaTrigger, setFechaTrigger] = useState(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [pdfPreview, setPdfPreview] = useState<{ url: string; title: string } | null>(null);
+  const [loadingError, setLoadingError] = useState(false);
+  const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
 
-  const dateParamsRef = useRef({ desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)), hasta: formatDateParam(new Date()) });
+  const rangoDefault = useMemo(() => ({
+    desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
+    hasta: formatDateParam(new Date()),
+  }), []);
 
   const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
     setLoading(true);
     try {
-      let result: TransaccionVistaDTO[];
+      const desde = filtros.desde ?? rangoDefault.desde;
+      const hasta = filtros.hasta ?? rangoDefault.hasta;
+      let resultados: TransaccionVistaDTO[];
+
       if (busqueda.length > 2) {
         const filtro: FiltroTransaccion = {
           cantidad: filas,
           salto: (pagina - 1) * filas,
-          ...dateParamsRef.current,
+          desde,
+          hasta,
           documento: busqueda,
         };
-        result = await facturaSuplidorApi.filtrar(sucursalActiva, filtro);
+        resultados = await facturaSuplidorApi.filtrar(sucursalActiva, filtro);
       } else {
-        result = await facturaSuplidorApi.obtenerVista(
+        resultados = await facturaSuplidorApi.obtenerVista(
           sucursalActiva,
-          dateParamsRef.current.desde, dateParamsRef.current.hasta,
-          filas, (pagina - 1) * filas
+          desde, hasta,
+          filas, (pagina - 1) * filas,
+          filtros.estado
         );
       }
-      setData(result);
-      setTotal(result.length < filas ? (pagina - 1) * filas + result.length + 1 : (pagina - 1) * filas + result.length + filas);
+
+      setData(resultados);
+      setTotal(resultados.length < filas ? (pagina - 1) * filas + resultados.length : pagina * filas + 1);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva]);
+  }, [sucursalActiva, filtros.desde, filtros.hasta, filtros.estado]);
 
   useEffect(() => {
     cargarDatos(page, pageSize, searchText);
-  }, [page, pageSize, searchText, fechaTrigger, cargarDatos]);
+  }, [page, pageSize, searchText, refreshTrigger, filtros, cargarDatos]);
 
   useEffect(() => {
     setActiveModule('FRDE');
     updateToolbar({ editar: false });
-    return () => resetToolbar();
+    return () => {
+      resetToolbar();
+    };
   }, [setActiveModule, updateToolbar, resetToolbar]);
+
+  useEffect(() => {
+    return () => {
+      setEditarCallback(undefined);
+    };
+  }, [setEditarCallback]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
   };
 
-  const handleRefresh = () => setFechaTrigger(n => n + 1);
+  const handleRefresh = () => {
+    setLoadingError(false);
+    setRefreshTrigger((n) => n + 1);
+  };
 
   const handleImprimir = useCallback(async () => {
     if (!selectedRow) {
@@ -133,26 +185,19 @@ const FacturaSuplidor: React.FC = () => {
     }
   }, [selectedRow, sucursalActiva]);
 
-  const handleDateChange = (dates: any) => {
-    if (dates && dates[0] && dates[1]) {
-      dateParamsRef.current = {
-        desde: formatDateParam(dates[0].toDate()),
-        hasta: formatDateParam(dates[1].toDate()),
-      };
-    } else {
-      dateParamsRef.current = {
-        desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
-        hasta: formatDateParam(new Date()),
-      };
-    }
-    setPage(1);
-    setFechaTrigger(n => n + 1);
+  const handleTableChange = (pagination: any) => {
+    setPage(pagination.current);
   };
 
   const handleRowClick = (record: TransaccionVistaDTO) => {
     setSelectedRow(record);
     const editable = record.periodo !== 6 && record.estado === 0;
     updateToolbar({ editar: editable });
+    if (editable) {
+      setEditarCallback(() => navigate(`/FRDE/${record.id}/editar`));
+    } else {
+      setEditarCallback(undefined);
+    }
   };
 
   const columns: ColumnsType<TransaccionVistaDTO> = [
@@ -180,10 +225,8 @@ const FacturaSuplidor: React.FC = () => {
       ellipsis: true,
       render: (name: string) => (
         <Space>
-          <div className="paces-avatar-initials">
-            {getInitials(name)}
-          </div>
-          <Text>{titlecase(name) || ''}</Text>
+          <div className="paces-avatar-initials">{getInitials(name)}</div>
+          <Text>{toTitleCase(name) || ''}</Text>
         </Space>
       ),
     },
@@ -193,7 +236,7 @@ const FacturaSuplidor: React.FC = () => {
       key: 'concepto',
       width: 280,
       ellipsis: true,
-      render: (concepto: string) => <Text>{titlecase(concepto) || ''}</Text>,
+      render: (concepto: string) => <Text>{toTitleCase(concepto) || ''}</Text>,
     },
     {
       title: 'Total',
@@ -235,88 +278,112 @@ const FacturaSuplidor: React.FC = () => {
   ];
 
   return (
-    <Card
-      styles={{ body: { padding: 0 } }}
-      className="paces-card-erp" style={{ borderRadius: 8 }}
-    >
-      <div style={{ padding: '20px 24px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <RangePicker
-            style={{ width: 180 }}
-            format="YYYY-MM-DD"
-            onChange={handleDateChange}
-            placeholder={['Desde', 'Hasta']}
-          />
-          <Input.Search
-            placeholder="Buscar documento, NCF, concepto..."
-            allowClear
-            onSearch={handleSearch}
-            style={{ width: 400 }}
-            prefix={<SearchOutlined className="paces-text-icon" />}
-          />
-          <Select
-            style={{ width: 65 }}
-            value={pageSize}
-            onChange={(v) => { setPageSize(v); setPage(1); }}
-            options={[
-              { value: 25, label: '25' },
-              { value: 50, label: '50' },
-              { value: 100, label: '100' },
-            ]}
-          />
-          <div style={{ flex: 1 }} />
-          <PermissionGate accion="CREAR">
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FRDE/nuevo')}>
-              Nuevo
+    <>
+      {loadingError && (
+        <Alert
+          message="Error al cargar facturas de suplidor"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
             </Button>
-          </PermissionGate>
-          <PermissionGate accion="IMPRIMIR">
-            <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
-          </PermissionGate>
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-        </div>
-      </div>
-
-      <Table<TransaccionVistaDTO>
-        columns={columns}
-        dataSource={data}
-        rowKey="id"
-        loading={loading}
-        scroll={{ x: 1150 }}
-        size="middle"
-        rowClassName={(record) =>
-          selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'
-        }
-        onRow={(record) => ({
-          onClick: () => handleRowClick(record),
-          style: {
-            cursor: 'pointer',
-          },
-        })}
-        pagination={{
-          current: page,
-          pageSize,
-          total,
-          showSizeChanger: false,
-          showTotal: (t) => `${t} registros`,
-        }}
-        className="paces-border-top paces-list-table"
-      />
-
-      <Drawer
-        title={pdfPreview?.title}
-        open={!!pdfPreview}
-        onClose={() => {
-          if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
-          setPdfPreview(null);
-        }}
-        width="70%"
+          }
+        />
+      )}
+      <Card
+        styles={{ body: { padding: 0 } }}
+        className="paces-card-erp"
+        style={{ borderRadius: 8, overflow: 'hidden' }}
       >
-        {pdfPreview && (
-          <iframe src={pdfPreview.url} style={{ width: '100%', height: '90vh', border: 'none' }} title="PDF" />
-        )}
-      </Drawer>
-    </Card>
+        <div style={{ padding: '16px 24px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
+            <FiltrosDocumento
+              filtros={filtros}
+              onAplicar={(nuevos) => {
+                setFiltros(nuevos);
+                setPage(1);
+              }}
+              opcionesEstado={[
+                { value: 0, label: 'Borrador' },
+                { value: 1, label: 'Aplicado' },
+                { value: 3, label: 'Anulado' },
+              ]}
+              rangoDefault={rangoDefault}
+            />
+            <Input.Search
+              placeholder="Buscar documento, NCF, concepto..."
+              allowClear
+              onSearch={handleSearch}
+              style={{ width: 400 }}
+              prefix={<SearchOutlined className="paces-text-icon" />}
+            />
+            <Select
+              style={{ width: 65 }}
+              value={pageSize}
+              onChange={(v) => { setPageSize(v); setPage(1); }}
+              options={[
+                { value: 25, label: '25' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
+              ]}
+            />
+            <div style={{ flex: 1 }} />
+            <PermissionGate accion="CREAR">
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FRDE/nuevo')}>
+                Nuevo
+              </Button>
+            </PermissionGate>
+            <PermissionGate accion="IMPRIMIR">
+              <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
+            </PermissionGate>
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+          </div>
+        </div>
+
+        <Table<TransaccionVistaDTO>
+          columns={columns}
+          dataSource={data}
+          rowKey="id"
+          loading={loading}
+          scroll={{ x: 1150 }}
+          size="middle"
+          rowClassName={(record) =>
+            selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'
+          }
+          onRow={(record) => ({
+            onClick: () => handleRowClick(record),
+            style: { cursor: 'pointer' },
+          })}
+          onChange={handleTableChange}
+          pagination={{
+            current: page,
+            pageSize,
+            total: total,
+            showSizeChanger: false,
+            showTotal: (t) => `${t} registros`,
+          }}
+          className="paces-border-top paces-list-table"
+        />
+
+        <Drawer
+          title={pdfPreview?.title}
+          open={!!pdfPreview}
+          onClose={() => {
+            if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);
+            setPdfPreview(null);
+          }}
+          size="70%"
+        >
+          {pdfPreview && (
+            <div style={{ width: '100%', height: '100%', overflow: 'auto', transform: 'scale(1.1)', transformOrigin: 'top left' }}>
+              <iframe src={pdfPreview.url} style={{ width: '100%', height: '90vh', border: 'none' }} title="PDF" />
+            </div>
+          )}
+        </Drawer>
+      </Card>
+    </>
   );
 };
 

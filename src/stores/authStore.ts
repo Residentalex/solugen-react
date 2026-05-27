@@ -32,6 +32,16 @@ function obtenerSucursalActiva(): Sucursal {
   }
 }
 
+function obtenerSucursalActivaInicial(): Sucursal {
+  const sucursales = obtenerSucursales();
+  // Si solo hay 1 sucursal permitida, forzarla como activa
+  if (sucursales.length === 1) {
+    return sucursales[0].sucursal as Sucursal;
+  }
+  // Si hay varias, usar la que estaba guardada o Consolidado por defecto
+  return obtenerSucursalActiva();
+}
+
 interface AuthState {
   accessToken: string;
   refreshToken: string;
@@ -67,7 +77,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   accessToken: localStorage.getItem('accessToken') || '',
   refreshToken: localStorage.getItem('refreshToken') || '',
   usuario: obtenerUsuario(),
-  sucursalActiva: obtenerSucursalActiva(),
+  sucursalActiva: obtenerSucursalActivaInicial(),
   sucursalesPermitidas: obtenerSucursales(),
   compania: SUCURSAL_CONSOLIDADO,
   equipo: localStorage.getItem('equipo') || '',
@@ -82,6 +92,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem('sucursalesPermitidas', JSON.stringify(sesion.sucursalesPermitidas));
     localStorage.setItem('equipo', request.equipo);
     localStorage.setItem('ip', request.ip);
+    localStorage.setItem('sucursalActiva', String(sesion.sucursalActiva));
 
     set({
       accessToken: sesion.accessToken,
@@ -122,6 +133,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.setItem('refreshToken', session.refreshToken);
     localStorage.setItem('usuario', JSON.stringify(session.usuario));
     localStorage.setItem('sucursalesPermitidas', JSON.stringify(session.sucursalesPermitidas));
+    localStorage.setItem('sucursalActiva', String(session.sucursalActiva));
     set({
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,

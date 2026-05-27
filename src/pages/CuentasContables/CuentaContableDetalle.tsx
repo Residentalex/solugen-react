@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Spin, message, Button, Row, Col, Table, Statistic, Typography, Empty } from 'antd';
+import { Card, Descriptions, Tag, Spin, message, Button, Row, Col, Table, Statistic, Typography, Empty, Alert } from 'antd';
 import { ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined, EditOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -29,6 +29,7 @@ const CuentaContableDetalle: React.FC = () => {
   const [totalMovimientos, setTotalMovimientos] = useState(0);
   const [balance, setBalance] = useState<BalanceCuentaDTO | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [loadingMovimientos, setLoadingMovimientos] = useState(false);
   const [pagina, setPagina] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -49,6 +50,7 @@ const CuentaContableDetalle: React.FC = () => {
       })
       .catch((err: any) => {
         message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
+        setLoadingError(true);
         navigate('/MCuentaContable');
       })
       .finally(() => setLoading(false));
@@ -77,6 +79,26 @@ const CuentaContableDetalle: React.FC = () => {
     cargarMovimientos(pagina, pageSize);
   }, [pagina, pageSize, cargarMovimientos]);
 
+  const handleRefresh = useCallback(() => {
+    if (!noCuenta) return;
+    setLoadingError(false);
+    setLoading(true);
+    Promise.all([
+      cuentaContableApi.obtenerPorId(sucursalActiva, noCuenta),
+      cuentaContableApi.obtenerBalance(sucursalActiva, noCuenta),
+    ])
+      .then(([cta, bal]) => {
+        setItem(cta);
+        setPageTitleOverride(cta.noCuenta);
+        setBalance(bal);
+      })
+      .catch((err: any) => {
+        message.error(err?.response?.data?.errorMessage || 'Error al recargar');
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [noCuenta, sucursalActiva]);
+
   if (loading || !item) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
@@ -98,6 +120,19 @@ const CuentaContableDetalle: React.FC = () => {
 
   return (
     <div>
+      {loadingError && (
+        <Alert
+          message="Error al cargar detalle de cuenta contable"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/MCuentaContable')}>
           Volver

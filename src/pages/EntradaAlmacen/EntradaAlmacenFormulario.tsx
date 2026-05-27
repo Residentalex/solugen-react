@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Tooltip,
 } from 'antd';
 import {
   SaveOutlined,
@@ -16,6 +16,7 @@ import {
   MoreOutlined,
   CalendarOutlined,
   HolderOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -144,7 +145,7 @@ function calcularFila(fila: DetalleEntradaAlmacenDTO): DetalleEntradaAlmacenDTO 
   const cantidad = fila.cantidad || 0;
   const costo = fila.costo || 0;
   const pctDesc = fila.porcentajeDescuento || 0;
-  const pctImp = fila.porcentajeImpuesto || 0;
+  const pctImp = fila.impuesto?.porcentaje ?? (fila.porcentajeImpuesto || 0);
   const cantBonif = fila.cantidadBonificable || 0;
   const ajustado = fila.ajustado || false;
 
@@ -399,6 +400,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<EntradaAlmacenDTO | null>(null);
   const [detalles, setDetalles] = useState<DetalleEntradaAlmacenDTO[]>([]);
@@ -525,7 +527,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
-        setDetalles(res.detalles || []);
+        setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
         setSelectedConcepto(res.concepto || null);
         setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
 		// === DEFENSIVE: asegurar RNC desde entidad si suplidor no lo tiene ===
@@ -569,6 +571,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
+        setLoadingError(true);
         navigate('/FENP');
       })
       .finally(() => setLoading(false));
@@ -594,7 +597,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
             entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
               .then((res) => {
                 setData(res);
-                setDetalles(res.detalles || []);
+                setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
                 setSelectedConcepto(res.concepto || null);
                 setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
                 // === DEFENSIVE: asegurar RNC desde entidad si suplidor no lo tiene ===
@@ -702,7 +705,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         ? { nombre: entidadSel.nombre, codigo: entidadSel.codigo, identificacion: entidadSel.identificacion || '', telefono: entidadSel.telefono, direccion: entidadSel.direccion }
         : { nombre: '', codigo: '', identificacion: '' },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
-      moneda: base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+      moneda: selectedConcepto?.moneda || base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
       almacen: selectedAlmacen || { nombre: '', codigo: '' },
       suplidor: entidadSel || { nombre: '', codigo: '', identificacion: '' },
       sucursal: base.sucursal || { nombre: '', codigo: '', identificacion: '' },
@@ -767,17 +770,23 @@ const EntradaAlmacenFormulario: React.FC = () => {
     if (concepto.noImpuesto && detalles.some((d) => (d.porcentajeImpuesto || 0) > 0)) {
       message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
       setDetalles((prev) =>
-        prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0 }))
+        prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
       );
     }
 
     // === ConfigurarMoneda ===
     // Usar la moneda del concepto si viene, sino default a Peso Dominicano
-    const monedaNombre = concepto.moneda?.nombre || 'Peso Dominicano';
-    const tasaDefault = concepto.moneda?.codigo === 'DOP' || !concepto.moneda ? 1 : (concepto.moneda?.codigo ? undefined : 1);
+    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    const monedaNombre = monedaObj.nombre;
+    const tasaDefault = monedaObj.codigo === 'DOP' ? 1 : (concepto.moneda?.codigo ? undefined : 1);
     form.setFieldsValue({
       moneda: monedaNombre,
       tasa: tasaDefault ?? 1,
+    });
+    // Actualizar data local para que construirDTO y la UI lo reflejen
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, moneda: monedaObj };
     });
 
     // === ConfigurarAlmacenDefecto ===
@@ -833,7 +842,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     // 3. Cargar detalles si confirma
     if (shouldLoad) {
       try {
-        const ocCompleta = await ordenCompraApi.obtenerPorId(Sucursal.Compra, orden.id);
+        const ocCompleta = await ordenCompraApi.obtenerPorId(Sucursal.Compra, orden.id) as any;
         const ocDetalles = ocCompleta.detalles || [];
         setOcDetallesData(ocDetalles);
         const nuevosDetalles: DetalleEntradaAlmacenDTO[] = ocDetalles
@@ -1017,6 +1026,53 @@ const EntradaAlmacenFormulario: React.FC = () => {
     { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
   ];
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setData(res);
+        setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
+        setSelectedConcepto(res.concepto || null);
+        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+        const suplidorFinal = res.suplidor
+          ? { ...res.suplidor, identificacion: res.suplidor.identificacion || res.entidad?.identificacion || '' }
+          : res.entidad || null;
+        setSelectedEntidad(suplidorFinal);
+        setSelectedAlmacen(res.almacen || null);
+        setSelectedOC(res.ordenCompra?.id ? { id: res.ordenCompra.id, noDocumento: res.ordenCompra.noDocumento } as any : null);
+        setOrdenCompraNoDoc(res.ordenCompra?.noDocumento || '');
+
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          conceptoNombre: res.concepto?.nombre || '',
+          concepto: res.concepto?.codigo || '',
+          suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
+          almacen: res.almacen?.codigo || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          fechaRecibo: res.fechaEntrega
+            ? dayjs(parseDateRaw(res.fechaEntrega))
+            : res.fechaDocumento
+              ? dayjs(parseDateRaw(res.fechaDocumento))
+              : null,
+          ncf: res.ncf || '',
+          referencia: res.referencia || '',
+          ordenCompra: res.ordenCompra?.noDocumento || '',
+          moneda: res.moneda?.nombre || '',
+          tasa: res.tasa || 1,
+          nota: res.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   // ===== Loading state =====
   if (loading) {
     return (
@@ -1065,19 +1121,25 @@ const EntradaAlmacenFormulario: React.FC = () => {
       ellipsis: true,
       shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) =>
         record.articulo !== prevRecord.articulo || record.codigo !== prevRecord.codigo || record.referencia !== prevRecord.referencia || record.medida?.nombre !== prevRecord.medida?.nombre || record.fechaVencimiento !== prevRecord.fechaVencimiento,
-      render: (_: any, record: DetalleEntradaAlmacenDTO) => (
-        <div style={{ fontSize: 13 }}>
-          <div>{toTitleCase(record.articulo || '')}</div>
-          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
-            <span>
-              {record.codigo && <span>{record.codigo}</span>}
-              {record.codigo && record.referencia && <span>{' | '}</span>}
-              {record.referencia && <span>{record.referencia}</span>}
-            </span>
-            {record.fechaVencimiento && <span className="paces-text-secondary">V: {formatDate(record.fechaVencimiento)}</span>}
+      render: (_: any, record: DetalleEntradaAlmacenDTO) => {
+        const ocMatch = ocDetallesData.length > 0 && ocDetallesData.some((d: DetalleOrdenCompraVistaDTO) => d.codigo === record.codigo && d.cantidad === record.cantidad && d.costo === record.costo);
+        return (
+          <div style={{ fontSize: 13 }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <span style={{ flex: 1 }}>{toTitleCase(record.articulo || '')}</span>
+              {ocMatch && <Tooltip title="Coincide con OC"><CheckCircleOutlined style={{ color: '#34c38f', fontSize: 12 }} /></Tooltip>}
+            </div>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+              <span>
+                {record.codigo && <span>{record.codigo}</span>}
+                {record.codigo && record.referencia && <span>{' | '}</span>}
+                {record.referencia && <span>{record.referencia}</span>}
+              </span>
+              {record.fechaVencimiento && <span className="paces-text-secondary">V: {formatDate(record.fechaVencimiento)}</span>}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: 'Cantidad',
@@ -1142,19 +1204,21 @@ const EntradaAlmacenFormulario: React.FC = () => {
         record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.descuento !== prevRecord.descuento,
       render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
         <div>
-          <InputNumber
-            size="small"
-            style={{ width: '100%' }}
-            min={0}
-            max={100}
-            step={0.01}
-            precision={2}
-            value={detalles[idx]?.porcentajeDescuento}
-            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'porcentajeDescuento', val || 0)}
-            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
-            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
-            addonAfter="%"
-          />
+          <Space.Compact style={{ width: '100%' }}>
+            <InputNumber
+              size="small"
+              style={{ width: '100%' }}
+              min={0}
+              max={100}
+              step={0.01}
+              precision={2}
+              value={detalles[idx]?.porcentajeDescuento}
+              onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'porcentajeDescuento', val || 0)}
+              onBlur={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
+              onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
+            />
+            <div style={{ padding: '0 8px', display: 'flex', alignItems: 'center', background: '#f5f5f5', border: '1px solid #d9d9d9', borderLeft: 'none', borderRadius: '0 6px 6px 0', fontSize: 12 }}>%</div>
+          </Space.Compact>
           <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
             {formatNumber(detalles[idx]?.descuento || 0)}
           </div>
@@ -1490,6 +1554,20 @@ const EntradaAlmacenFormulario: React.FC = () => {
     <div>
       {renderToolbar()}
 
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de entrada de almacén"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
       <BuscarConceptoModal
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
@@ -1613,8 +1691,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
               impuestos={totales.impuestos}
               total={totales.total}
               alignRight={false}
-              monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
-              monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
                tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </Col>
@@ -1727,8 +1805,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
             impuestos={totales.impuestos}
             total={totales.total}
             alignRight={true}
-            monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
-            monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
+            monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+            monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
              tasa={tasaValue ?? data?.tasa ?? 1}
           />
         </div>

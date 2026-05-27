@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Card, Tag, Button, Typography, Row, Col, Space, message } from 'antd';
+import { Card, Tag, Button, Typography, Row, Col, Space, message, Alert } from 'antd';
 import {
   KeyOutlined,
   SafetyOutlined,
@@ -39,6 +39,12 @@ const MiPerfil: React.FC = () => {
   }, [setActiveModule, resetToolbar]);
 
   const [recargando, setRecargando] = React.useState(false);
+  const [loadingError, setLoadingError] = React.useState(false);
+
+  const handleRefresh = () => {
+    setLoadingError(false);
+    handleRecargarPermisos();
+  };
 
   const handleRecargarPermisos = async () => {
     setRecargando(true);
@@ -54,6 +60,7 @@ const MiPerfil: React.FC = () => {
       message.success('Permisos recargados correctamente');
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al recargar permisos');
+      setLoadingError(true);
     } finally {
       setRecargando(false);
     }
@@ -95,6 +102,19 @@ const MiPerfil: React.FC = () => {
 
   return (
     <div>
+      {loadingError && (
+        <Alert
+          message="Error al cargar perfil"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       {/* ===== Identity Card ===== */}
       <Card className="paces-card-erp" style={{ borderRadius: 10, marginBottom: 24 }}>
         <div style={{ padding: '24px 28px', display: 'flex', alignItems: 'center', gap: 18 }}>

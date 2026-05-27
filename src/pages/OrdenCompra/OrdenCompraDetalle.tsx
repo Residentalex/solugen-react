@@ -1,17 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Tooltip, Typography,
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Typography, Alert,
 } from 'antd';
 import {
-  ArrowLeftOutlined, PrinterOutlined, EditOutlined, LockFilled, ReloadOutlined,
-  CheckCircleOutlined, CloseCircleOutlined,
+  ArrowLeftOutlined, EditOutlined, ReloadOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
-import { apiClient } from '../../api/client';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
-import { Sucursal } from '../../types/auth';
 import PermissionGate from '../../components/PermissionGate';
 
 const { Text } = Typography;
@@ -62,8 +59,7 @@ const OrdenCompraDetalle: React.FC = () => {
 
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [imprimiendo, setImprimiendo] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
 
   useEffect(() => {
     setActiveModule('FORC');
@@ -81,6 +77,24 @@ const OrdenCompraDetalle: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar la orden de compra';
         message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, setPageTitleOverride]);
+
+  const handleRefresh = useCallback(() => {
+    setLoadingError(false);
+    if (!id) return;
+    setLoading(true);
+    ordenCompraApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setData(res);
+        setPageTitleOverride(`ORC-${res.noDocumento || id}`);
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
@@ -185,6 +199,19 @@ const OrdenCompraDetalle: React.FC = () => {
 
   return (
     <div>
+      {loadingError && (
+        <Alert
+          message="Error al cargar detalle de orden de compra"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FORC')}>
           Volver

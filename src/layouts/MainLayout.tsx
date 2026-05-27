@@ -3,7 +3,7 @@ import { Layout, Spin, message, Dropdown, Select, Input } from 'antd';
 import type { MenuProps } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
-import { Sucursal } from '../types/auth';
+import { Sucursal, type AuthSucursalPermitidaDTO, type PantallaDTO } from '../types/auth';
 import { useCompanyStore } from '../stores/companyStore';
 import { useUIStore } from '../stores/uiStore';
 import { useNotificacionesStore } from '../stores/notificacionesStore';
@@ -37,6 +37,12 @@ const pageTitles: Record<string, string> = {
   MUsuario: 'Usuarios',
   MROL: 'Roles',
   MSucursal: 'Sucursales',
+  MServidor: 'Servidores',
+  MPermiso: 'Permisos',
+  MAuditoria: 'Historial y Auditoría',
+  MEmpresa: 'Configuración de la Empresa',
+  MTerminal: 'Terminales',
+  MSincronizacion: 'Sincronización',
   MProducto: 'Productos',
   MAlmacen: 'Almacenes',
   MCliente: 'Clientes',
@@ -44,6 +50,7 @@ const pageTitles: Record<string, string> = {
   FORC: 'Orden de Compra',
   FENP: 'Entradas de Almacén',
   FSAP: 'Salidas de Almacén',
+  FSORC: 'Solicitud de Compra',
   FDVC: 'Devolución de Compra',
   FTRP: 'Transferencia de Almacén',
   FDEV: 'Devolución de Venta',
@@ -63,8 +70,8 @@ const pageTitles: Record<string, string> = {
   MCuentaContable: 'Cuentas Contables',
   FAsientoContable: 'Asientos Contables',
   MProveedor: 'Proveedores',
-  MSUP: 'Proveedores',
   MBanco: 'Bancos',
+  FOfertas: 'Ofertas',
   MCuentaBancaria: 'Cuentas Bancarias',
   MCuentaBanco: 'Cuentas Bancarias',
   MMedida: 'Unidades de Medida',
@@ -73,12 +80,43 @@ const pageTitles: Record<string, string> = {
   MCategoria: 'Categorías de Artículos',
   MPerfil: 'Mi Perfil',
   MFamilia: 'Familias de Artículos',
+  MSecuenciaNCF: 'Secuencias NCF',
   FSPA: 'Solicitud de Pago',
   MMarca: 'Marcas',
   MAtributo: 'Atributos',
   MPaquete: 'Paquetes',
+  RCIERREFISCAL: 'Cierre Fiscal',
+  OPROCESOS: 'Procesos Contables',
   MAutomatizacion: 'Automatizaciones',
   MReceta: 'Recetas',
+  MServicio: 'Servicios',
+  FActPrecio: 'Actualización de Precios',
+  FTarifas: 'Tarifas',
+  CCUADRECAJA: 'Cuadre de Caja',
+  CCENTRALSUPERVISION: 'Central de Supervisión',
+  FTURNOS: 'Turnos',
+  FPRODPEND: 'Productos Pendientes',
+  OPROCESARCONTEO: 'Procesar Conteos',
+  FConteos: 'Listado de Conteos',
+  CMovimientosProductos: 'Movimientos de Productos',
+  CDocRevisados: 'Documentos Revisados',
+  OImportarINV: 'Importar Inventario',
+  OActualizacionCostos: 'Actualización de Costos',
+  OCierreINV: 'Cierre de Inventario',
+  OCierreMes: 'Cierre de Mes',
+  MPantalla: 'Pantallas',
+  MPOS: 'Puntos de Venta',
+  MAccion: 'Acciones',
+  MPlanPago: 'Planes de Pago',
+  MMetodosPago: 'Métodos de Pago',
+  MImpuesto: 'Impuestos',
+  MMoneda: 'Monedas',
+  MTipoCuenta: 'Tipos de Cuenta',
+  CFacturasElectronicas: 'Facturas Electrónicas',
+  ORepostear: 'Repostear Documentos',
+  FGORC: 'Generador ORC',
+  notificaciones: 'Notificaciones',
+  MTicket: 'Tickets',
 };
 
 const MainLayout: React.FC = () => {
@@ -154,8 +192,25 @@ const MainLayout: React.FC = () => {
 
   if (!isAuthenticated) return null;
 
-  const pantallaActual = usuario?.pantallas?.find((p: any) => p.codigo === activeModule);
+  const pantallaActual: PantallaDTO | undefined = usuario?.pantallas?.find(
+    (p: PantallaDTO) => p.codigo?.toUpperCase() === activeModule?.toUpperCase()
+  );
   const pageTitle = pantallaActual?.nombre || pageTitles[activeModule] || activeModule || 'Dashboard';
+
+  // Filtrar sucursales: si la pantalla tiene sucursalesAutorizadas, usarlas; si no, mostrar todas
+  const sucursalesFiltradas = pantallaActual?.sucursalesAutorizadas?.length
+    ? sucursalesPermitidas.filter((s: AuthSucursalPermitidaDTO) =>
+        pantallaActual!.sucursalesAutorizadas!.some((sa: AuthSucursalPermitidaDTO) => sa.sucursal === s.sucursal)
+      )
+    : sucursalesPermitidas;
+
+  // Si la sucursal activa no está en las filtradas, cambiar a la primera disponible
+  React.useEffect(() => {
+    if (sucursalesFiltradas.length > 0 &&
+        !sucursalesFiltradas.some((s: AuthSucursalPermitidaDTO) => s.sucursal === sucursalActiva)) {
+      setSucursalActiva(sucursalesFiltradas[0].sucursal);
+    }
+  }, [activeModule, sucursalesFiltradas, sucursalActiva, setSucursalActiva]);
 
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
     if (key === 'profile') navigate('/MPerfil');
@@ -225,14 +280,14 @@ const MainLayout: React.FC = () => {
           <div className="paces-topbar-right">
             <ThemeSwitcher />
             <NotificacionDropdown />
-            {sucursalesPermitidas.length > 1 && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && (
+            {sucursalesFiltradas.length > 1 && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && activeModule !== 'MTicket' && activeModule !== 'notificaciones' && (
               <Select
                 value={sucursalActiva}
                 onChange={(val) => setSucursalActiva(val)}
                 disabled={isDetailPage}
                 size="small"
                 className="paces-sucursal-select"
-                options={sucursalesPermitidas.map((s: any) => ({
+                options={sucursalesFiltradas.map((s: AuthSucursalPermitidaDTO) => ({
                   value: s.sucursal,
                   label: s.nombre,
                 }))}
@@ -254,7 +309,7 @@ const MainLayout: React.FC = () => {
         <div className="paces-page-header">
           <div className="paces-page-header-inner">
             <div>
-              <h3>{pageTitleOverride || pageTitle}</h3>
+              <h3>{pageTitleOverride || toTitleCase(pageTitle)}</h3>
               <div className="breadcrumb">
                 <span>Inicio</span>
                 {pantallaActual?.modulos?.[0]?.nombre && (
@@ -264,7 +319,7 @@ const MainLayout: React.FC = () => {
                   </>
                 )}
                 <span className="paces-text-secondary">/</span>
-                <span>{pageTitle}</span>
+                <span>{toTitleCase(pageTitle)}</span>
               </div>
             </div>
           </div>

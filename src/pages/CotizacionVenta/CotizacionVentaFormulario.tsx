@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -351,6 +351,7 @@ const CotizacionVentaFormulario: React.FC = () => {
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<CotizacionVentaDetalleDTO | null>(null);
   const [detalles, setDetalles] = useState<DetalleFacturaPOSDTO[]>([]);
@@ -446,7 +447,7 @@ const CotizacionVentaFormulario: React.FC = () => {
 
     setLoading(true);
     cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res: CotizacionVentaDetalleDTO) => {
+      .then((res: any) => {
         setData(res);
         const detallesMapeados: DetalleFacturaPOSDTO[] = (res.detalles || []).map((d: any) => ({
           id: d.id,
@@ -506,6 +507,7 @@ const CotizacionVentaFormulario: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar la cotización';
         message.error(msg);
+        setLoadingError(true);
         navigate('/FCotizacion');
       })
       .finally(() => setLoading(false));
@@ -1367,9 +1369,65 @@ const CotizacionVentaFormulario: React.FC = () => {
     </Card>
   );
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res: any) => {
+        setData(res);
+        const detallesMapeados: DetalleFacturaPOSDTO[] = (res.detalles || []).map((d: any) => ({
+          id: d.id, codigo: d.codigo || '', articulo: d.articulo || '', referencia: d.referencia || '',
+          cantidad: d.cantidad || 0, costo: d.costo || 0, precio: d.precio || 0,
+          subTotal: d.subTotal || 0, porcentajeDescuento: d.porcentajeDescuento || 0,
+          descuento: d.descuento || 0, porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
+          impuestos: d.impuestos || 0, total: d.total || 0, tipoArticulo: d.tipoArticulo || 'Producto',
+          tieneVencimiento: d.tieneVencimiento ?? false, idTransaccion: d.idTransaccion || 0,
+          impuesto: d.impuesto, familia: d.familia, medida: d.medida,
+        }));
+        setDetalles(detallesMapeados);
+        setSelectedConcepto(res.concepto || null);
+        setSelectedAlmacen(res.almacen || null);
+        const clienteObj: ClienteDTO = {
+          nombre: res.entidad?.nombre || res.cliente || '', codigo: res.entidad?.codigo || '',
+          identificacion: res.entidad?.identificacion || '', telefono: res.entidad?.telefono || '',
+          direccion: res.entidad?.direccion || '',
+        };
+        setSelectedCliente(clienteObj);
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          concepto: res.concepto?.codigo || '', cliente: res.entidad?.codigo || '',
+          almacen: res.almacen?.codigo || '', fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          ncf: res.ncf || '', referencia: res.referencia || '', tasa: res.tasa || 1, nota: res.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   return (
     <div>
       {renderToolbar()}
+
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de cotización de venta"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
       {modalConcepto}
       <BuscarProductoModal
         open={productoModalOpen}

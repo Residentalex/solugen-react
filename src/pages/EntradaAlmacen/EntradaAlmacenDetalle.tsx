@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Dropdown, Modal, DatePicker, Typography, Tooltip, Descriptions
+  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Dropdown, Modal, DatePicker, Typography, Tooltip, Descriptions, Alert
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -21,9 +21,11 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
+import { Sucursal } from '../../types/auth';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
+import { ordenCompraApi } from '../../api/ordenCompraApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import PermissionGate from '../../components/PermissionGate';
 import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
@@ -181,11 +183,53 @@ const EntradaAlmacenDetalle: React.FC = () => {
 
   const [data, setData] = useState<EntradaAlmacenDTO | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
   const [tieneScan, setTieneScan] = useState<boolean | null>(null);
+  const [scannerModalOpen, setScannerModalOpen] = useState(false);
+  const [scannerUrl, setScannerUrl] = useState<string | null>(null);
+  const [scannerLoading, setScannerLoading] = useState(false);
+  const [ocDetallesData, setOcDetallesData] = useState<any[]>([]);
+
+  const handleRefresh = useCallback(() => {
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setData(res);
+        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        if (res.ordenCompra?.id) {
+          ordenCompraApi.obtenerPorId(Sucursal.Compra, res.ordenCompra.id)
+            .then((oc: any) => setOcDetallesData(oc.detalles || []))
+            .catch(() => {});
+        }
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, setPageTitleOverride]);
+
+  const handleVerScanner = async () => {
+    if (!id) return;
+    setScannerLoading(true);
+    try {
+      const blob = await entradaAlmacenApi.descargarScan(sucursalActiva, parseInt(id));
+      const url = URL.createObjectURL(blob);
+      setScannerUrl(url);
+      setScannerModalOpen(true);
+    } catch (err: any) {
+      message.error('Error al cargar el archivo escaneado');
+    } finally {
+      setScannerLoading(false);
+    }
+  };
 
   const handleFechaVencimiento = (date: dayjs.Dayjs | null) => {
     if (fechaVencimientoModal.detalleId) {
@@ -228,6 +272,11 @@ const EntradaAlmacenDetalle: React.FC = () => {
       .then((res) => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        if (res.ordenCompra?.id) {
+          ordenCompraApi.obtenerPorId(Sucursal.Compra, res.ordenCompra.id)
+            .then((oc: any) => setOcDetallesData(oc.detalles || []))
+            .catch(() => {});
+        }
         // Verificar si tiene factura escaneada
         entradaAlmacenApi.verificarScan(sucursalActiva, parseInt(id))
           .then((scanRes) => setTieneScan(scanRes.existe))
@@ -236,6 +285,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
+        setLoadingError(true);
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
@@ -261,7 +311,14 @@ const EntradaAlmacenDetalle: React.FC = () => {
       ellipsis: true,
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
-          <div>{toTitleCase(record.articulo || '')}</div>
+<div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{ flex: 1 }}>{toTitleCase(record.articulo || '')}</span>
+                  {ocDetallesData.some((d: any) => d.codigo === record.codigo && d.cantidad === record.cantidad && d.costo === record.costo) && (
+                    <Tooltip title="Coincide con OC">
+                      <CheckCircleOutlined style={{ color: '#34c38f', fontSize: 12 }} />
+                    </Tooltip>
+                  )}
+                </div>
           <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
             <span>
               {record.codigo && <span>{record.codigo}</span>}
@@ -534,6 +591,19 @@ const EntradaAlmacenDetalle: React.FC = () => {
 
   return (
     <div>
+      {loadingError && (
+        <Alert
+          message="Error al cargar detalle de entrada de almacén"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FENP')}>
@@ -634,7 +704,16 @@ const EntradaAlmacenDetalle: React.FC = () => {
                     </Tooltip>
                   )}
                   <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-                  {tieneScan === true && <Tag icon={<FileTextOutlined />} color="success" />}
+                  {tieneScan === true && (
+                    <Tooltip title="Ver factura escaneada">
+                      <Tag
+                        icon={<FileTextOutlined />}
+                        color="success"
+                        style={{ cursor: 'pointer' }}
+                        onClick={handleVerScanner}
+                      />
+                    </Tooltip>
+                  )}
                   {tieneScan === false && <Tag icon={<FileSearchOutlined />} color="warning" />}
                 </Space>
               </div>
@@ -747,7 +826,16 @@ const EntradaAlmacenDetalle: React.FC = () => {
                     </Tooltip>
                   )}
                   <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-                  {tieneScan === true && <Tag icon={<FileTextOutlined />} color="success" />}
+                  {tieneScan === true && (
+                    <Tooltip title="Ver factura escaneada">
+                      <Tag
+                        icon={<FileTextOutlined />}
+                        color="success"
+                        style={{ cursor: 'pointer' }}
+                        onClick={handleVerScanner}
+                      />
+                    </Tooltip>
+                  )}
                   {tieneScan === false && <Tag icon={<FileSearchOutlined />} color="warning" />}
                 </Space>
               </div>
@@ -861,6 +949,29 @@ const EntradaAlmacenDetalle: React.FC = () => {
           format="YYYY-MM-DD"
           onChange={handleFechaVencimiento}
         />
+      </Modal>
+
+      {/* Modal de Visor de Scanner */}
+      <Modal
+        title="Factura Escaneada"
+        open={scannerModalOpen}
+        onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
+        width="80%"
+        style={{ top: 20 }}
+        footer={null}
+        destroyOnHidden
+      >
+        {scannerLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin />
+          </div>
+        ) : scannerUrl ? (
+          <iframe src={scannerUrl} style={{ width: '100%', height: '70vh', border: 'none' }} title="Scanner" />
+        ) : (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin />
+          </div>
+        )}
       </Modal>
     </div>
   );

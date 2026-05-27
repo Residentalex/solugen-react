@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Table, Card, Input, Button, message, Tag, Typography } from 'antd';
+import { Table, Card, Input, Button, message, Tag, Modal, Descriptions, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -23,6 +23,8 @@ const CuentasBancarias: React.FC = () => {
   const [data, setData] = useState<CuentaBancariaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [detalleVisible, setDetalleVisible] = useState(false);
+  const [detalleItem, setDetalleItem] = useState<CuentaBancariaDTO | null>(null);
 
   const cargarDatos = useCallback(async () => {
     if (sucursalActiva === undefined) return;
@@ -43,6 +45,11 @@ const CuentasBancarias: React.FC = () => {
     cargarDatos();
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
+
+  const abrirDetalle = (item: CuentaBancariaDTO) => {
+    setDetalleItem(item);
+    setDetalleVisible(true);
+  };
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -66,7 +73,11 @@ const CuentasBancarias: React.FC = () => {
       key: 'noCuenta',
       width: 160,
       fixed: 'left',
-      render: (val: string) => <Text strong>{val}</Text>,
+      render: (val: string, record: CuentaBancariaDTO) => (
+        <Text strong className="paces-doc-link" style={{ cursor: 'pointer' }} onClick={() => abrirDetalle(record)}>
+          {val}
+        </Text>
+      ),
     },
     {
       title: 'Nombre',
@@ -117,7 +128,7 @@ const CuentasBancarias: React.FC = () => {
   ];
 
   return (
-    <Card
+    <><Card
       className="paces-card-erp"
       style={{ borderRadius: 8 }}
       styles={{ body: { padding: 0 } }}
@@ -149,7 +160,31 @@ const CuentasBancarias: React.FC = () => {
           defaultPageSize: 10,
         }}
       />
-    </Card>
+      </Card>
+
+      <Modal
+        title={`Detalle: ${detalleItem?.noCuenta || ''}`}
+        open={detalleVisible}
+        onCancel={() => setDetalleVisible(false)}
+        footer={null}
+        width={520}
+      >
+        {detalleItem && (
+          <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
+            <Descriptions.Item label="No. Cuenta">{detalleItem.noCuenta}</Descriptions.Item>
+            <Descriptions.Item label="Nombre">{toTitleCase(detalleItem.nombre ?? '')}</Descriptions.Item>
+            <Descriptions.Item label="Banco">{toTitleCase(detalleItem.banco ?? '')}</Descriptions.Item>
+            <Descriptions.Item label="Cuenta Contable">{detalleItem.cuentaContable || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Agente">{toTitleCase(detalleItem.agente ?? '') || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Activo">
+              <Tag color={detalleItem.activo ? 'success' : 'error'}>{detalleItem.activo ? 'Sí' : 'No'}</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="Nota">{detalleItem.nota || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Código">{detalleItem.codigo}</Descriptions.Item>
+          </Descriptions>
+        )}
+      </Modal>
+    </>
   );
 };
 

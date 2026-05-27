@@ -22,6 +22,7 @@ import {
   Segmented,
   Alert,
   Empty,
+  Descriptions,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -35,6 +36,7 @@ import {
   DeleteOutlined,
   ClockCircleOutlined,
   CopyOutlined,
+  InfoCircleOutlined,
 } from '@ant-design/icons';
 import { hangfireApi } from '../../api/hangfireApi';
 import { useUIStore } from '../../stores/uiStore';
@@ -162,8 +164,13 @@ const Automatizaciones: React.FC = () => {
   const [filtroModulo, setFiltroModulo] = useState<string | undefined>(undefined);
   const [kpiActiveCell, setKpiActiveCell] = useState<'total' | 'exitosos' | 'fallidos' | 'activos' | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [loadingError, setLoadingError] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [errorModal, setErrorModal] = useState<{ visible: boolean; job: JobHangfire | null }>({
+    visible: false,
+    job: null,
+  });
+  const [detalleJobModal, setDetalleJobModal] = useState<{ visible: boolean; job: JobHangfire | null }>({
     visible: false,
     job: null,
   });
@@ -234,6 +241,7 @@ const Automatizaciones: React.FC = () => {
       });
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar automatizaciones');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -294,6 +302,7 @@ const Automatizaciones: React.FC = () => {
   };
 
   const handleRefresh = () => {
+    setLoadingError(false);
     cargarDatos();
   };
 
@@ -363,6 +372,10 @@ const Automatizaciones: React.FC = () => {
     if (record.ultimoEstado === 'Fallido' && record.error) {
       setErrorModal({ visible: true, job: record });
     }
+  };
+
+  const abrirDetalleJob = (job: JobHangfire) => {
+    setDetalleJobModal({ visible: true, job });
   };
 
   // ── Handlers KPI ──
@@ -598,10 +611,18 @@ const Automatizaciones: React.FC = () => {
       key: 'nombre',
       fixed: 'left',
       width: 220,
-      render: (nombre: string) => (
-        <Text strong style={{ color: 'var(--paces-primary)' }}>
+      render: (nombre: string, record: JobHangfire) => (
+        <span
+          className="paces-doc-link"
+          style={{ cursor: 'pointer', color: 'var(--paces-primary)', fontWeight: 600 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            abrirDetalleJob(record);
+          }}
+        >
+          <InfoCircleOutlined style={{ marginRight: 6, fontSize: 13 }} />
           {nombre}
-        </Text>
+        </span>
       ),
     },
     {
@@ -975,6 +996,68 @@ const Automatizaciones: React.FC = () => {
       </Card>
     );
   };
+
+  // ── Render: Modal de detalle de job ──
+  const renderDetalleJobModal = () => (
+    <Modal
+      open={detalleJobModal.visible}
+      onCancel={() => setDetalleJobModal({ visible: false, job: null })}
+      width={600}
+      title={
+        <Space>
+          <InfoCircleOutlined style={{ color: 'var(--paces-primary)', fontSize: 18 }} />
+          <span>
+            Detalle del Job: <Text strong>{detalleJobModal.job?.nombre || ''}</Text>
+          </span>
+        </Space>
+      }
+      footer={
+        <Button type="primary" onClick={() => setDetalleJobModal({ visible: false, job: null })}>
+          Cerrar
+        </Button>
+      }
+    >
+      {detalleJobModal.job && (
+        <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
+          <Descriptions.Item label="Nombre">{detalleJobModal.job.nombre}</Descriptions.Item>
+          <Descriptions.Item label="Módulo">{detalleJobModal.job.modulo || '-'}</Descriptions.Item>
+          <Descriptions.Item label="Sucursal">{detalleJobModal.job.sucursal || '-'}</Descriptions.Item>
+          <Descriptions.Item label="Cron">
+            <Text code>{detalleJobModal.job.cron}</Text>
+          </Descriptions.Item>
+          <Descriptions.Item label="Último Estado">
+            <Badge status={ESTADO_BADGE[detalleJobModal.job.ultimoEstado]?.status || 'default'} />
+            {ESTADO_BADGE[detalleJobModal.job.ultimoEstado]?.text || detalleJobModal.job.ultimoEstado}
+          </Descriptions.Item>
+          <Descriptions.Item label="Última Ejecución">{formatFecha(detalleJobModal.job.ultimaEjecucion)}</Descriptions.Item>
+          <Descriptions.Item label="Próxima Ejecución">{formatFecha(detalleJobModal.job.proximaEjecucion)}</Descriptions.Item>
+          <Descriptions.Item label="Duración">{formatDuracion(detalleJobModal.job.duracionSegundos)}</Descriptions.Item>
+          <Descriptions.Item label="Activo">
+            <Switch size="small" checked={detalleJobModal.job.activo} disabled />
+          </Descriptions.Item>
+          {detalleJobModal.job.ultimoEstado === 'Fallido' && detalleJobModal.job.error && (
+            <Descriptions.Item label="Error">
+              <pre style={{
+                background: 'var(--paces-topbar-search-bg)',
+                padding: 12,
+                borderRadius: 6,
+                fontSize: 12,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                maxHeight: 200,
+                overflow: 'auto',
+                color: '#f46a6a',
+                border: '1px solid var(--paces-border)',
+                margin: 0,
+              }}>
+                {detalleJobModal.job.error}
+              </pre>
+            </Descriptions.Item>
+          )}
+        </Descriptions>
+      )}
+    </Modal>
+  );
 
   // ── Render: Modal de error mejorado ──
   const renderErrorModal = () => (
@@ -1478,6 +1561,7 @@ const Automatizaciones: React.FC = () => {
       {renderKpiStrip()}
       {renderJobsTable()}
       {renderErrorModal()}
+      {renderDetalleJobModal()}
     </>
   );
 
@@ -1530,6 +1614,19 @@ const Automatizaciones: React.FC = () => {
 
   return (
     <div>
+      {loadingError && (
+        <Alert
+          message="Error al cargar automatizaciones"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       {renderPageHeader()}
       <Tabs
         activeKey={activeTab}

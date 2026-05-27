@@ -14,6 +14,11 @@ export interface TransaccionVistaDTO {
   codigoSucursal: string;
 }
 
+export interface TransaccionBancariaVistaDTO extends TransaccionVistaDTO {
+  ctaBancaria?: string;
+  codigoCuentaBancaria?: string;
+}
+
 export interface FiltroTransaccion {
   cantidad?: number;
   salto?: number;

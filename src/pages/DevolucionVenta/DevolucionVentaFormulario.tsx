@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -416,6 +416,7 @@ const DevolucionVentaFormulario: React.FC = () => {
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<DevolucionVentaFullDTO | null>(null);
   const [detalles, setDetalles] = useState<DetalleDevolucionVentaDTO[]>([]);
@@ -529,6 +530,7 @@ const DevolucionVentaFormulario: React.FC = () => {
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
+        setLoadingError(true);
         navigate('/FDEV');
       })
       .finally(() => setLoading(false));
@@ -1482,9 +1484,85 @@ const DevolucionVentaFormulario: React.FC = () => {
     </Card>
   );
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    devolucionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        const full: DevolucionVentaFullDTO = {
+          id: res.id,
+          fechaDocumento: res.fechaDocumento,
+          noDocumento: res.noDocumento,
+          estado: res.estado,
+          periodo: res.periodo,
+          ncf: res.ncf,
+          referencia: res.referencia,
+          nota: res.nota,
+          tasa: res.tasa,
+          tipoDocumento: res.tipoDocumento,
+          concepto: res.concepto,
+          almacen: res.almacen,
+          cliente: res.cliente,
+          entidad: res.entidad,
+          factura: res.factura || null,
+          moneda: res.moneda,
+          documento: res.documento,
+          subTotal: res.subTotal,
+          descuento: res.descuento,
+          impuestos: res.impuestos,
+          total: res.total,
+          detalles: res.detalles || [],
+          asientos: res.asientos || [],
+          logs: res.logs || [],
+        };
+        setData(full);
+        setDetalles(res.detalles || []);
+        setSelectedConcepto(res.concepto || null);
+        setSelectedCliente(res.cliente || null);
+        setSelectedAlmacen(res.almacen || null);
+        setSelectedFactura(res.factura || null);
+
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          concepto: res.concepto?.codigo || '',
+          cliente: res.cliente?.codigo || '',
+          almacen: res.almacen?.codigo || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          ncf: res.ncf || '',
+          referencia: res.referencia || '',
+          moneda: res.moneda?.nombre || '',
+          tasa: res.tasa || 1,
+          nota: res.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   return (
     <div>
       {renderToolbar()}
+
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de devolución de venta"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
       {modalConcepto}
 
       <BuscarProductoModal

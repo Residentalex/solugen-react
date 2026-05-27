@@ -29,6 +29,12 @@ npx tsc --noEmit
 
 - Cargar `docs-ai/frontend.md` solo si el cambio requiere detalles de estructura, UI o API.
 
+## Listados sin columna Acciones redundante
+
+- En las vistas de listado, si la columna primaria (Código, Nombre, Documento, Tipo Comprobante, etc.) ya es clickeable para abrir el detalle, **no debe existir una columna "Acciones" separada** con botón `EyeOutlined`.
+- La acción de ver detalle se realiza mediante clic en el campo primario de la fila.
+- Esto aplica a todos los módulos de catálogo y listados.
+
 ## Manejo de errores de API
 
 - En llamadas a API dentro de `useEffect` o handlers, los errores deben mostrarse al usuario via Ant Design `message.error()`.
@@ -49,3 +55,10 @@ npx tsc --noEmit
   - Botón de recargar con solo icono `ReloadOutlined`, sin texto.
   - Layout flex con `gap: '8px'`, `flexWrap: 'wrap'`, `<div style={{ flex: 1 }} />` como spacer antes de botones.
   - Ver `docs-ai/frontend-patron-listado.md` sección "Barra de búsqueda y filtros (layout visual)" para el patrón completo.
+
+## Reglas de hooks de React
+
+- Todos los hooks (useState, useEffect, useCallback, useMemo, useContext, etc.) deben declararse SIEMPRE antes de cualquier early return (return condicional).
+- Un early return con `if (condicion) return <Componente />` hace que los hooks declarados DESPUES de esa linea no se ejecuten en ese render, rompiendo las Reglas de los Hooks.
+- Esto aplica especialmente a hooks como `useCallback` y `useMemo` que suelen definirse tarde en el componente.
+- Patron correcto: hooks al inicio, early return despues, handlers y JSX al final.

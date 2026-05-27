@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Spin, Button, message, Form, Input, Select, Switch, Row, Col, Typography,
-  Tabs, Descriptions, InputNumber, Tag,
+  Tabs, Descriptions, InputNumber, Tag, Alert,
 } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, EditOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { clienteApi } from '../../api/clienteApi';
 import type { ClienteDTO } from '../../types/facturacion';
+import ErrorBoundary from '../../components/ErrorBoundary';
 
 const { Text } = Typography;
 
@@ -37,6 +38,7 @@ const ClienteDetalle: React.FC = () => {
 
   const [data, setData] = useState<ClienteDTO | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [editando, setEditando] = useState(false);
   const [form] = Form.useForm();
@@ -54,9 +56,13 @@ const ClienteDetalle: React.FC = () => {
       return;
     }
     if (!codigo) return;
+
+    const abortController = new AbortController();
     setLoading(true);
-    clienteApi.obtenerPorCodigo(sucursalActiva, codigo)
+
+    clienteApi.obtenerPorCodigo(sucursalActiva, codigo, abortController.signal)
       .then((res) => {
+        if (abortController.signal.aborted) return;
         setData(res);
         setPageTitleOverride(res.nombre || codigo);
         form.setFieldsValue({
@@ -82,9 +88,15 @@ const ClienteDetalle: React.FC = () => {
         });
       })
       .catch((err: any) => {
+        if (err?.name === 'CanceledError' || abortController.signal.aborted) return;
         message.error(err?.response?.data?.errorMessage || 'Error al cargar cliente');
+        setLoadingError(true);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!abortController.signal.aborted) setLoading(false);
+      });
+
+    return () => abortController.abort();
   }, [codigo, sucursalActiva, setPageTitleOverride, esNuevo, form]);
 
   // Permisos
@@ -184,8 +196,51 @@ const ClienteDetalle: React.FC = () => {
     },
   ];
 
+  const handleRefresh = () => {
+    if (esNuevo || !codigo) return;
+    setLoadingError(false);
+    setLoading(true);
+    const abortController = new AbortController();
+    clienteApi.obtenerPorCodigo(sucursalActiva, codigo, abortController.signal)
+      .then((res) => {
+        if (abortController.signal.aborted) return;
+        setData(res);
+        setPageTitleOverride(res.nombre || codigo);
+        form.setFieldsValue({
+          codigo: res.codigo, nombre: res.nombre, tipoIdentificacion: res.tipoIdentificacion,
+          identificacion: res.identificacion, telefono: res.telefono, telefonoAdicional: res.telefonoAdicional,
+          correoElectronico: res.correoElectronico, direccion: res.direccion, sexo: res.sexo,
+          estadoCivil: res.estadoCivil, fechaNacimiento: res.fechaNacimiento, nota: res.nota,
+          activo: res.activo, limiteCredito: res.limiteCredito, diasCredito: res.diasCredito,
+          creditoSuspendido: res.creditoSuspendido, exentoImpuesto: res.exentoImpuesto,
+          margen: res.margen, porcientoDescuento: res.porcientoDescuento,
+        });
+      })
+      .catch((err: any) => {
+        if (err?.name === 'CanceledError' || abortController.signal.aborted) return;
+        message.error(err?.response?.data?.errorMessage || 'Error al recargar');
+        setLoadingError(true);
+      })
+      .finally(() => {
+        if (!abortController.signal.aborted) setLoading(false);
+      });
+  };
+
   return (
     <div>
+      {loadingError && (
+        <Alert
+          message="Error al cargar detalle de cliente"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/MCliente')}>
@@ -363,7 +418,7 @@ const ClienteDetalle: React.FC = () => {
               <Descriptions bordered size="small" column={1}>
                 <Descriptions.Item label="Límite Crédito">
                   {esSoloLectura ? (
-                    <Text>{data?.limiteCredito?.toLocaleString('es-DO', { minimumFractionDigits: 2 }) ?? '0.00'}</Text>
+                    <Text>{typeof data?.limiteCredito === 'number' ? data.limiteCredito.toLocaleString('es-DO', { minimumFractionDigits: 2 }) : '0.00'}</Text>
                   ) : (
                     <Form.Item name="limiteCredito" noStyle initialValue={0}>
                       <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
@@ -381,7 +436,7 @@ const ClienteDetalle: React.FC = () => {
                 </Descriptions.Item>
                 <Descriptions.Item label="% Descuento">
                   {esSoloLectura ? (
-                    <Text>{data?.porcientoDescuento?.toLocaleString('es-DO', { minimumFractionDigits: 2 }) ?? '0.00'}</Text>
+                    <Text>{typeof data?.porcientoDescuento === 'number' ? data.porcientoDescuento.toLocaleString('es-DO', { minimumFractionDigits: 2 }) : '0.00'}</Text>
                   ) : (
                     <Form.Item name="porcientoDescuento" noStyle initialValue={0}>
                       <InputNumber min={0} max={100} step={0.01} style={{ width: '100%' }} />
@@ -390,7 +445,7 @@ const ClienteDetalle: React.FC = () => {
                 </Descriptions.Item>
                 <Descriptions.Item label="Margen">
                   {esSoloLectura ? (
-                    <Text>{data?.margen?.toLocaleString('es-DO', { minimumFractionDigits: 2 }) ?? '0.00'}</Text>
+                    <Text>{typeof data?.margen === 'number' ? data.margen.toLocaleString('es-DO', { minimumFractionDigits: 2 }) : '0.00'}</Text>
                   ) : (
                     <Form.Item name="margen" noStyle initialValue={0}>
                       <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
@@ -431,4 +486,10 @@ const ClienteDetalle: React.FC = () => {
   );
 };
 
-export default ClienteDetalle;
+const ClienteDetalleWithBoundary: React.FC = () => (
+  <ErrorBoundary>
+    <ClienteDetalle />
+  </ErrorBoundary>
+);
+
+export default ClienteDetalleWithBoundary;

@@ -198,7 +198,8 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
     distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
-        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        const data = res as any;
+        setPageTitleOverride(`${data.documento.codigo}-${data.noDocumento}`);
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al cargar el documento';

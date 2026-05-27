@@ -10,13 +10,15 @@ export const cotizacionVentaApi = {
     desde?: string,
     hasta?: string,
     cantidad?: number,
-    salto?: number
+    salto?: number,
+    estado?: number
   ): Promise<CotizacionVentaDTO[]> => {
     const params: Record<string, string | number> = {};
     if (desde) params.desde = desde;
     if (hasta) params.hasta = hasta;
     if (cantidad) params.cantidad = cantidad;
     if (salto) params.salto = salto;
+    if (estado !== undefined) params.estado = estado;
 
     const { data } = await apiClient.get<ApiResponse<CotizacionVentaDTO[]>>(`${BASE}/${sucursal}`, { params });
     return data.data;
@@ -39,40 +41,39 @@ export const cotizacionVentaApi = {
     return data.data;
   },
 
-  obtenerPorId: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.get<ApiResponse<any>>(`${BASE}/${sucursal}/${id}`);
+  obtenerPorId: async (sucursal: number, id: number): Promise<CotizacionVentaDTO> => {
+    const { data } = await apiClient.get<ApiResponse<CotizacionVentaDTO>>(`${BASE}/${sucursal}/${id}`);
     return data.data;
   },
 
-  aplicar: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/aplicar/${id}`);
+  aplicar: async (sucursal: number, id: number): Promise<CotizacionVentaDTO> => {
+    const { data } = await apiClient.put<ApiResponse<CotizacionVentaDTO>>(`${BASE}/${sucursal}/aplicar/${id}`);
     return data.data;
   },
 
-  desaplicar: async (sucursal: number, documento: string): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/desaplicar?sucursal=${sucursal}&documento=${documento}`);
-    return data.data;
+  desaplicar: async (sucursal: number, documento: string): Promise<void> => {
+    await apiClient.put(`${BASE}/desaplicar?sucursal=${sucursal}&documento=${documento}`);
   },
 
-  postear: async (sucursal: number, cotizacion: any, destino?: number): Promise<any> => {
+  postear: async (sucursal: number, cotizacion: CotizacionVentaDTO, destino?: number): Promise<CotizacionVentaDTO> => {
     const params: Record<string, string | number> = {};
     if (destino) params.destino = destino;
-    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postear`, cotizacion, { params });
+    const { data } = await apiClient.post<ApiResponse<CotizacionVentaDTO>>(`${BASE}/${sucursal}/postear`, cotizacion, { params });
     return data.data;
   },
 
-  crear: async (sucursal: number, cotizacion: any): Promise<any> => {
-    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}`, cotizacion);
+  crear: async (sucursal: number, cotizacion: CotizacionVentaDTO): Promise<CotizacionVentaDTO> => {
+    const { data } = await apiClient.post<ApiResponse<CotizacionVentaDTO>>(`${BASE}/${sucursal}`, cotizacion);
     return data.data;
   },
 
-  actualizar: async (sucursal: number, id: number, cotizacion: any): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/${id}`, cotizacion);
+  actualizar: async (sucursal: number, id: number, cotizacion: CotizacionVentaDTO): Promise<CotizacionVentaDTO> => {
+    const { data } = await apiClient.put<ApiResponse<CotizacionVentaDTO>>(`${BASE}/${sucursal}/${id}`, cotizacion);
     return data.data;
   },
 
-  anular: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/anular/${id}`);
+  anular: async (sucursal: number, id: number): Promise<CotizacionVentaDTO> => {
+    const { data } = await apiClient.put<ApiResponse<CotizacionVentaDTO>>(`${BASE}/${sucursal}/anular/${id}`);
     return data.data;
   },
 };

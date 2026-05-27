@@ -9,6 +9,7 @@ import {
   Tag,
   message,
   Typography,
+  Alert,
 } from 'antd';
 import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -34,13 +35,12 @@ const Clientes: React.FC = () => {
 
   const pantallaActual = usuario?.pantallas.find((p: any) => p.codigo === 'MCliente');
   const puedeEditar = pantallaActual?.acciones.includes('EDITAR') ?? false;
-  const puedeCrear = pantallaActual?.acciones.includes('CREAR') ?? false;
 
   const [data, setData] = useState<ClienteDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [filtroActivo, setFiltroActivo] = useState<string>('todos');
-
+  const [loadingError, setLoadingError] = useState(false);
   const cargarDatos = useCallback(async () => {
     if (sucursalActiva === undefined) return;
     setLoading(true);
@@ -49,6 +49,7 @@ const Clientes: React.FC = () => {
       setData(resultados || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar clientes');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -88,6 +89,7 @@ const Clientes: React.FC = () => {
   };
 
   const handleReload = () => {
+    setLoadingError(false);
     cargarDatos();
   };
 
@@ -152,6 +154,19 @@ const Clientes: React.FC = () => {
 
   return (
     <>
+      {loadingError && (
+        <Alert
+          title="Error al cargar clientes"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleReload}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '16px 24px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>

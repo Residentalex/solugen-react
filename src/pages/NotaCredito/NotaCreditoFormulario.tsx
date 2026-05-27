@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Modal,
+  message, Form, Input, InputNumber, Select, DatePicker, Modal, Alert,
   Switch,
 } from 'antd';
 import {
@@ -129,6 +129,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<any>(null);
   const [tiposCache, setTiposCache] = useState<TipoNCSelectDTO[]>([]);
@@ -276,6 +277,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
+        setLoadingError(true);
         navigate(`/${codigoPantalla}`);
       })
       .finally(() => setLoading(false));
@@ -555,7 +557,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     if (!id) return;
     setSaving(true);
     try {
-      const result = await notaCreditoApi.recalcularPagos(sucursalActiva, parseInt(id));
+      const result = await notaCreditoApi.recalcularPagos(sucursalActiva, parseInt(id)) as any;
       if (result?.asientos) {
         setAsientos(result.asientos);
       }
@@ -1281,10 +1283,63 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     </Modal>
   );
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    notaCreditoApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res: any) => {
+        setData(res);
+        setTransaccionesAsociadas(res.transaccionesAsociadas || []);
+        setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);
+        setDevoluciones(res.devoluciones || []);
+        setImpuestosFactura(res.impuestosFactura || []);
+        setAsientos(res.asientos || []);
+        setLogs(res.logs || []);
+        setSelectedConcepto(res.concepto || null);
+        setSelectedEntidad(res.entidad || null);
+        if (res.tipo) setSelectedTipo(res.tipo);
+        else if (res.codigoTipo) {
+          const encontrado = tiposCache.find(t => t.codigo === res.codigoTipo);
+          if (encontrado) setSelectedTipo(encontrado);
+        }
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          tipo: res.tipo?.codigo || res.codigoTipo || '',
+          concepto: res.concepto?.codigo || '',
+          entidad: res.entidad?.codigo || res.codigoEntidad || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          ncf: res.ncf || '', referencia: res.referencia || '',
+          tasa: res.tasa || 1, nota: res.nota || '', total: res.total || 0,
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg); setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   // ===== Render principal =====
   return (
     <div>
       {renderToolbar()}
+
+      {loadingError && (
+        <Alert
+          message="Error al cargar formulario de nota de crédito"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
       {modalConcepto}
 
       {isLarge ? (

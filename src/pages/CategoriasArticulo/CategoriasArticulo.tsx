@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Table, Card, Input, Button, message, Typography, Tooltip } from 'antd';
+import { Alert, Table, Card, Input, Button, message, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -23,6 +23,7 @@ const CategoriasArticulo: React.FC = () => {
   const [data, setData] = useState<CategoriaArticuloDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [loadingError, setLoadingError] = useState(false);
 
   const cargarDatos = useCallback(async () => {
     if (sucursalActiva === undefined) return;
@@ -32,6 +33,7 @@ const CategoriasArticulo: React.FC = () => {
       setData(result || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar categorías');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -47,6 +49,11 @@ const CategoriasArticulo: React.FC = () => {
   const handleSearch = (value: string) => {
     setSearchText(value);
   };
+
+  const handleRefresh = useCallback(() => {
+    setLoadingError(false);
+    cargarDatos();
+  }, [cargarDatos]);
 
   const filteredData = useMemo(() => {
     if (!searchText) return data;
@@ -99,7 +106,20 @@ const CategoriasArticulo: React.FC = () => {
     },
   ];
 
-  return (
+  return (<>
+    {loadingError && (
+      <Alert
+        message="Error al cargar categorías de artículo"
+        type="error"
+        showIcon
+        style={{ marginBottom: 16 }}
+        action={
+          <Button size="small" onClick={handleRefresh}>
+            Reintentar
+          </Button>
+        }
+      />
+    )}
     <Card
       className="paces-card-erp"
       style={{ borderRadius: 8 }}
@@ -115,7 +135,7 @@ const CategoriasArticulo: React.FC = () => {
             prefix={<SearchOutlined className="paces-text-icon" />}
           />
           <div style={{ flex: 1 }} />
-          <Button icon={<ReloadOutlined />} onClick={() => cargarDatos()} />
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>
       <Table<CategoriaArticuloDTO>
@@ -133,6 +153,7 @@ const CategoriasArticulo: React.FC = () => {
         }}
       />
     </Card>
+    </>
   );
 };
 

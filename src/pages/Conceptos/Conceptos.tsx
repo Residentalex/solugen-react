@@ -8,14 +8,14 @@ import {
   Typography,
   message,
   Space,
-  Tooltip,
   Modal,
   Descriptions,
   Empty,
   Tabs,
+  Alert,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { conceptosApi } from '../../api/conceptosApi';
@@ -44,9 +44,9 @@ const Conceptos: React.FC = () => {
 
   const [data, setData] = useState<ConceptoDTO[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchText, setSearchText] = useState('');
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [detalleItem, setDetalleItem] = useState<ConceptoDTO | null>(null);
+  const [loadingError, setLoadingError] = useState(false);
 
   const cargarDatos = useCallback(async (filtro?: string) => {
     if (sucursalActiva === undefined) return;
@@ -56,6 +56,7 @@ const Conceptos: React.FC = () => {
       setData(result || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar conceptos');
+      setLoadingError(true);
     } finally {
       setLoading(false);
     }
@@ -69,12 +70,11 @@ const Conceptos: React.FC = () => {
   }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
 
   const handleSearch = (value: string) => {
-    setSearchText(value);
     cargarDatos(value || undefined);
   };
 
   const handleRecargar = () => {
-    setSearchText('');
+    setLoadingError(false);
     cargarDatos();
   };
 
@@ -126,6 +126,19 @@ const Conceptos: React.FC = () => {
 
   return (
     <>
+      {loadingError && (
+        <Alert
+          title="Error al cargar conceptos"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={() => { setLoadingError(false); cargarDatos(); }}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <div
         style={{
           display: 'flex',
