@@ -55,7 +55,7 @@ const ProductoDetalle: React.FC = () => {
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
 
   const [data, setData] = useState<ProductoDTO | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
 
   useEffect(() => {
@@ -83,6 +83,27 @@ const ProductoDetalle: React.FC = () => {
       });
     return () => abortController.abort();
   }, [codigo, sucursalActiva, setPageTitleOverride]);
+
+  const handleRefresh = () => {
+    if (!codigo) return;
+    setLoadingError(false);
+    setLoading(true);
+    const abortController = new AbortController();
+    productoApi.obtenerDetalle(sucursalActiva, codigo, abortController.signal)
+      .then((res) => {
+        if (abortController.signal.aborted) return;
+        setData(res);
+        setPageTitleOverride(res.nombre || codigo);
+      })
+      .catch((err: any) => {
+        if (err?.name === 'CanceledError' || abortController.signal.aborted) return;
+        message.error(err?.response?.data?.errorMessage || 'Error al recargar');
+        setLoadingError(true);
+      })
+      .finally(() => {
+        if (!abortController.signal.aborted) setLoading(false);
+      });
+  };
 
   if (!data) {
     return (
@@ -177,27 +198,6 @@ const ProductoDetalle: React.FC = () => {
       ),
     },
   ];
-
-  const handleRefresh = () => {
-    if (!codigo) return;
-    setLoadingError(false);
-    setLoading(true);
-    const abortController = new AbortController();
-    productoApi.obtenerDetalle(sucursalActiva, codigo, abortController.signal)
-      .then((res) => {
-        if (abortController.signal.aborted) return;
-        setData(res);
-        setPageTitleOverride(res.nombre || codigo);
-      })
-      .catch((err: any) => {
-        if (err?.name === 'CanceledError' || abortController.signal.aborted) return;
-        message.error(err?.response?.data?.errorMessage || 'Error al recargar');
-        setLoadingError(true);
-      })
-      .finally(() => {
-        if (!abortController.signal.aborted) setLoading(false);
-      });
-  };
 
   return (
     <div>

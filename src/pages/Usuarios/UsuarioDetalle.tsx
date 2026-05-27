@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Spin, Button, Space, Row, Col, message, Modal, Alert, Form, Input, Switch, InputNumber, Tabs, Select, Typography, Collapse, Table } from 'antd';
+import { Card, Descriptions, Tag, Spin, Button, Space, Row, Col, message, Modal, Alert, Form, Input, Switch, InputNumber, Tabs, Select, Typography, Table } from 'antd';
 import { ArrowLeftOutlined, KeyOutlined, StopOutlined, CheckCircleOutlined, EditOutlined, SaveOutlined, CloseOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
