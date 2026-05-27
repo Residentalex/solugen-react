@@ -464,7 +464,6 @@ const SalidaAlmacenFormulario: React.FC = () => {
   const [form] = Form.useForm();
 
   // ===== Watchers reactivos =====
-  const ncfValue = Form.useWatch('ncf', form) || '';
   const refValue = Form.useWatch('referencia', form) || '';
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
@@ -1437,38 +1436,10 @@ const SalidaAlmacenFormulario: React.FC = () => {
             </Form.Item>
           </Col>
 
-          {/* Fila 5: Campos rápidos (NCF, Referencia, Tasa, Moneda) */}
+          {/* Fila 5: Campos rápidos (Referencia, Tasa, Moneda) */}
           <Col xs={24}>
             <div style={{ marginBottom: 16 }}>
               <Space size={[8, 8]} wrap>
-                {/* NCF */}
-                <div>
-                  {editingField === 'ncf' ? (
-                    <Input
-                      size="small"
-                      style={{ width: 200 }}
-                      placeholder="NCF"
-                      maxLength={19}
-                      autoFocus
-                      defaultValue={editingValueRef.current as string}
-                      onChange={(e) => { editingValueRef.current = e.target.value; }}
-                      onPressEnter={() => commitFieldEditor()}
-                      onBlur={() => commitFieldEditor()}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                      }}
-                    />
-                  ) : ncfValue ? (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                      NCF: {ncfValue} <EditOutlined />
-                    </Tag>
-                  ) : (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                      <PlusOutlined /> NCF
-                    </Tag>
-                  )}
-                </div>
-
                 {/* Referencia */}
                 {editingField === 'referencia' ? (
                   <Input
@@ -1523,7 +1494,6 @@ const SalidaAlmacenFormulario: React.FC = () => {
               </Space>
             </div>
             {/* Hidden form items para campos rápidos */}
-            <Form.Item name="ncf" hidden><Input /></Form.Item>
             <Form.Item name="referencia" hidden><Input /></Form.Item>
             <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
             <Form.Item name="moneda" hidden><Input /></Form.Item>
