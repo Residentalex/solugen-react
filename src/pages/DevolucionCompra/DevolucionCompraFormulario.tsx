@@ -1565,74 +1565,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       width: 40,
       render: () => <DragHandle />,
     },
-    {
-      title: 'Código',
-      key: 'codigoInput',
-      width: 100,
-      render: (_: any, _record: DetalleDevolucionCompraDTO, idx: number) => (
-        <Input
-          size="small"
-          style={{ width: '100%' }}
-          placeholder="Código"
-          value={detalles[idx]?.codigo || ''}
-          onChange={(e) => handleDetalleUpdateValue(detalles[idx].id, 'codigo', e.target.value)}
-          onBlur={() => {
-            const codigo = detalles[idx]?.codigo;
-            if (codigo && codigo.length >= 2) {
-              productoApi.obtenerDetalle(sucursalActiva, codigo)
-                .then((prod) => {
-                  if (prod) {
-                    handleDetalleUpdateValue(detalles[idx].id, 'articulo', prod.nombre || '');
-                    handleDetalleUpdateValue(detalles[idx].id, 'referencia', prod.referenciaInterna || '');
-                    handleDetalleUpdateValue(detalles[idx].id, 'costo', prod.ultimoCosto || 0);
-                    handleDetalleUpdateValue(detalles[idx].id, 'familia', prod.familia);
-                    if (prod.unidadMedida) {
-                      handleDetalleUpdateValue(detalles[idx].id, 'medida', {
-                        nombre: prod.unidadMedida.nombre || '',
-                        codigo: '',
-                        factor: 1,
-                        idExterno: prod.unidadMedida.idExterno || 0,
-                      });
-                    }
-                    if (prod.impuestos && prod.impuestos.length > 0) {
-                      const imp = prod.impuestos[0].impuesto;
-                      if (imp) {
-                        handleDetalleUpdateValue(detalles[idx].id, 'impuesto', imp);
-                      }
-                    }
-                    handleDetalleUpdateValue(detalles[idx].id, 'tieneVencimiento', prod.pesado || false);
-                    handleDetalleCalculate(detalles[idx].id, 'costo', prod.ultimoCosto || 0);
-                  }
-                })
-                .catch(() => {
-                  productoApi.obtenerListado(sucursalActiva, { codigo })
-                    .then((prods) => {
-                      if (prods && prods.length > 0) {
-                        const p = prods[0];
-                        handleDetalleUpdateValue(detalles[idx].id, 'articulo', p.nombre || '');
-                        handleDetalleUpdateValue(detalles[idx].id, 'referencia', p.referencia || '');
-                        handleDetalleUpdateValue(detalles[idx].id, 'costo', p.ultimoCosto || 0);
-                        if (p.familia) {
-                          handleDetalleUpdateValue(detalles[idx].id, 'familia', p.familia);
-                        }
-                        if (p.unidadMedida) {
-                          handleDetalleUpdateValue(detalles[idx].id, 'medida', {
-                            nombre: p.unidadMedida.nombre || '',
-                            codigo: '',
-                            factor: 1,
-                            idExterno: p.unidadMedida.idExterno || 0,
-                          });
-                        }
-                        handleDetalleCalculate(detalles[idx].id, 'costo', p.ultimoCosto || 0);
-                      }
-                    })
-                    .catch(() => {});
-                });
-            }
-          }}
-        />
-      ),
-    },
+    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
     {
       title: 'Artículo',
       key: 'articulo',
