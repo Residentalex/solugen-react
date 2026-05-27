@@ -1344,8 +1344,15 @@ const SalidaAlmacenFormulario: React.FC = () => {
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
       <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
-          {/* Fila 1: Concepto */}
+          {/* Fila 1: Fecha Documento + Concepto */}
           <Col xs={24} sm={12} lg={9}>
+            <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
+              <FloatingField label="Fecha Documento" required>
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+              </FloatingField>
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} lg={15}>
             <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
               <div style={{ flex: 1 }}>
                 <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
@@ -1368,37 +1375,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
             </Col>
           )}
 
-          {/* Fila 2: FechaDocumento + Suplidor */}
-          <Col xs={24} sm={12} lg={9}>
-            <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Fecha Documento" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-              </FloatingField>
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} lg={15}>
-            <Form.Item name="suplidor" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Suplidor / Entidad" required ref={suplidorRef}>
-                <Select
-                  allowClear
-                  showSearch
-                  optionFilterProp="children"
-                  onChange={(val) => {
-                    const ent = suplidoresCache.find((e) => e.codigo === val);
-                    setSelectedEntidad(ent || null);
-                  }}
-                >
-                  {suplidoresCache.map((ent) => (
-                    <Select.Option key={ent.codigo} value={ent.codigo}>
-                      {toTitleCase(ent.nombre)}{ent.identificacion ? ` (${ent.identificacion})` : ''}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </FloatingField>
-            </Form.Item>
-          </Col>
-
-          {/* Fila 3: FechaRecibo + Almacén */}
+          {/* Fila 2: Fecha Recibo + Almacén */}
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaRecibo" style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Recibo">
@@ -1428,7 +1405,39 @@ const SalidaAlmacenFormulario: React.FC = () => {
             </Form.Item>
           </Col>
 
-          {/* Fila 4: Botones rápidos para campos opcionales */}
+          {/* Fila 3: Suplidor */}
+          <Col xs={24}>
+            <Form.Item name="suplidor" required style={{ marginBottom: 0 }}>
+              <FloatingField label="Suplidor / Entidad" required ref={suplidorRef}>
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="children"
+                  onChange={(val) => {
+                    const ent = suplidoresCache.find((e) => e.codigo === val);
+                    setSelectedEntidad(ent || null);
+                  }}
+                >
+                  {suplidoresCache.map((ent) => (
+                    <Select.Option key={ent.codigo} value={ent.codigo}>
+                      {toTitleCase(ent.nombre)}{ent.identificacion ? ` (${ent.identificacion})` : ''}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </FloatingField>
+            </Form.Item>
+          </Col>
+
+          {/* Fila 4: Nota */}
+          <Col xs={24}>
+            <Form.Item name="nota" style={{ marginBottom: 0 }}>
+              <FloatingField label="Nota">
+                <TextArea rows={3} />
+              </FloatingField>
+            </Form.Item>
+          </Col>
+
+          {/* Fila 5: Campos rápidos (NCF, Referencia, Tasa, Moneda) */}
           <Col xs={24}>
             <div style={{ marginBottom: 16 }}>
               <Space size={[8, 8]} wrap>
@@ -1518,15 +1527,6 @@ const SalidaAlmacenFormulario: React.FC = () => {
             <Form.Item name="referencia" hidden><Input /></Form.Item>
             <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
             <Form.Item name="moneda" hidden><Input /></Form.Item>
-          </Col>
-
-          {/* Fila 5: Nota */}
-          <Col xs={24}>
-            <Form.Item name="nota" style={{ marginBottom: 0 }}>
-              <FloatingField label="Nota">
-                <TextArea rows={3} />
-              </FloatingField>
-            </Form.Item>
           </Col>
         </Row>
       </Form>

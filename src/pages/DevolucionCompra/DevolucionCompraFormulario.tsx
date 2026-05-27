@@ -1353,7 +1353,7 @@ const DevolucionCompraFormulario: React.FC = () => {
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
       <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
-          {/* Fila 1: Tipo + Concepto */}
+          {/* Fila 1: Tipo de Documento + Suplidor */}
           <Col xs={24} sm={12} lg={9}>
             <div ref={tipoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
               <div style={{ flex: 1 }}>
@@ -1377,38 +1377,6 @@ const DevolucionCompraFormulario: React.FC = () => {
                 </Form.Item>
               </div>
             </div>
-          </Col>
-
-          <Col xs={24} sm={12} lg={15}>
-            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
-                  <Input
-                    placeholder=" "
-                    value={conceptoSearchText}
-                    readOnly
-                    onClick={handleConceptoSearchClick}
-                  />
-                </FloatingField>
-              </div>
-              <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
-            </div>
-            <Form.Item name="concepto" hidden><Input /></Form.Item>
-          </Col>
-
-          {conceptoInfo && (
-            <Col xs={24}>
-              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-            </Col>
-          )}
-
-          {/* Fila 2: FechaDocumento + Suplidor */}
-          <Col xs={24} sm={12} lg={9}>
-            <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Fecha Documento" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-              </FloatingField>
-            </Form.Item>
           </Col>
           <Col xs={24} sm={12} lg={15}>
             <div ref={suplidorRef}>
@@ -1436,7 +1404,7 @@ const DevolucionCompraFormulario: React.FC = () => {
             </div>
           </Col>
 
-          {/* Fila 3: EntradaReferencia + Almacén */}
+          {/* Fila 2: Entrada de Referencia + Concepto */}
           <Col xs={24} sm={12} lg={9}>
             <FloatingField label="Entrada de Referencia">
               <Space.Compact style={{ width: '100%' }}>
@@ -1452,6 +1420,37 @@ const DevolucionCompraFormulario: React.FC = () => {
               </Space.Compact>
             </FloatingField>
             <Form.Item name="referencia" hidden><Input /></Form.Item>
+          </Col>
+          <Col xs={24} sm={12} lg={15}>
+            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+              <div style={{ flex: 1 }}>
+                <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
+                  <Input
+                    placeholder=" "
+                    value={conceptoSearchText}
+                    readOnly
+                    onClick={handleConceptoSearchClick}
+                  />
+                </FloatingField>
+              </div>
+              <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
+            </div>
+            <Form.Item name="concepto" hidden><Input /></Form.Item>
+          </Col>
+
+          {conceptoInfo && (
+            <Col xs={24}>
+              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
+            </Col>
+          )}
+
+          {/* Fila 3: Fecha Documento + Almacén */}
+          <Col xs={24} sm={12} lg={9}>
+            <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
+              <FloatingField label="Fecha Documento" required>
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+              </FloatingField>
+            </Form.Item>
           </Col>
           <Col xs={24} sm={12} lg={15}>
             <div ref={almacenRef}>
@@ -1479,7 +1478,16 @@ const DevolucionCompraFormulario: React.FC = () => {
             </div>
           </Col>
 
-          {/* Fila 4: Campos rápidos (NCF, Tasa) */}
+          {/* Fila 4: Nota */}
+          <Col xs={24}>
+            <Form.Item name="nota" style={{ marginBottom: 0 }}>
+              <FloatingField label="Nota">
+                <TextArea rows={3} />
+              </FloatingField>
+            </Form.Item>
+          </Col>
+
+          {/* Fila 5: Campos rápidos (NCF, Tasa) */}
           <Col xs={24}>
             <div style={{ marginBottom: 16 }}>
               <Space size={[8, 8]} wrap>
@@ -1543,15 +1551,6 @@ const DevolucionCompraFormulario: React.FC = () => {
             <Form.Item name="ncf" hidden><Input /></Form.Item>
             <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
             <Form.Item name="moneda" hidden><Input /></Form.Item>
-          </Col>
-
-          {/* Fila 5: Nota */}
-          <Col xs={24}>
-            <Form.Item name="nota" style={{ marginBottom: 0 }}>
-              <FloatingField label="Nota">
-                <TextArea rows={3} />
-              </FloatingField>
-            </Form.Item>
           </Col>
         </Row>
       </Form>
