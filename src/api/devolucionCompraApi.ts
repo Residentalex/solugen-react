@@ -89,6 +89,18 @@ export const devolucionCompraApi = {
     await apiClient.delete(`${BASE}/${sucursal}/eliminar/${id}`);
   },
 
+  verificarScan: async (sucursal: number, id: number): Promise<{ existe: boolean }> => {
+    const { data } = await apiClient.get<ApiResponse<{ existe: boolean }>>(`${BASE}/${sucursal}/${id}/scanner/verificar`);
+    return data.data;
+  },
+
+  descargarScan: async (sucursal: number, id: number): Promise<Blob> => {
+    const { data } = await apiClient.get<Blob>(`${BASE}/${sucursal}/${id}/scanner/descargar`, {
+      responseType: 'blob',
+    });
+    return data;
+  },
+
   // ===== Catálogos para formulario =====
 
   obtenerTipos: async (sucursal: number): Promise<TipoDTO[]> => {

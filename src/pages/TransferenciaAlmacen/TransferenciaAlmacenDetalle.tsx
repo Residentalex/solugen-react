@@ -10,6 +10,8 @@ import {
   EditOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  FileTextOutlined,
+  FileSearchOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -133,6 +135,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
+  const [tieneScan, setTieneScan] = useState<boolean | null>(null);
   const screens = Grid.useBreakpoint();
 
   useEffect(() => {
@@ -148,6 +151,10 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       .then((res) => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        // Verificar si tiene documento escaneado
+        transferenciaAlmacenApi.verificarScan(sucursalActiva, parseInt(id))
+          .then((scanRes) => setTieneScan(scanRes.existe))
+          .catch(() => setTieneScan(false));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al cargar el documento';
@@ -332,6 +339,13 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   // ===== Handlers de acciones de estado =====
   const handleAplicar = async () => {
     if (!id) return;
+
+    // Verificación temprana del scanner
+    if (tieneScan === false) {
+      message.warning('Debe escanear el documento antes de aplicar.');
+      return;
+    }
+
     setSaving(true);
     try {
       await transferenciaAlmacenApi.aplicar(sucursalActiva, parseInt(id));
@@ -470,6 +484,16 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   </Tooltip>
 )}
                     <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
+                    {tieneScan === true && (
+                      <Tooltip title="Documento escaneado">
+                        <Tag icon={<FileTextOutlined />} color="success" />
+                      </Tooltip>
+                    )}
+                    {tieneScan === false && (
+                      <Tooltip title="Documento no escaneado">
+                        <Tag icon={<FileSearchOutlined />} color="warning" />
+                      </Tooltip>
+                    )}
                   </Space>
                 </div>
               }
@@ -537,6 +561,16 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   </Tooltip>
 )}
                     <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
+                    {tieneScan === true && (
+                      <Tooltip title="Documento escaneado">
+                        <Tag icon={<FileTextOutlined />} color="success" />
+                      </Tooltip>
+                    )}
+                    {tieneScan === false && (
+                      <Tooltip title="Documento no escaneado">
+                        <Tag icon={<FileSearchOutlined />} color="warning" />
+                      </Tooltip>
+                    )}
                   </Space>
                 </div>
               }
