@@ -87,9 +87,9 @@ export const facturaSuplidorApi = {
   },
 
   obtenerConceptos: async (sucursal: number, tipoId?: number): Promise<ConceptoDTO[]> => {
-    const params: Record<string, any> = { documento: 'RDE' };
+    const params: Record<string, any> = {};
     if (tipoId) params.tipoId = tipoId;
-    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}`, { params });
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}/documento/RDE`, { params });
     return data.data;
   },
 
@@ -112,6 +112,11 @@ export const facturaSuplidorApi = {
     const { data } = await apiClient.get<ApiResponse<boolean>>(
       `${BASE}/${sucursal}/ncf-verificar?ncf=${encodeURIComponent(ncf)}&suplidor=${encodeURIComponent(suplidorCodigo)}`
     );
+    return data.data;
+  },
+
+  obtenerPorDocumento: async (sucursal: number, noDocumento: string): Promise<any> => {
+    const { data } = await apiClient.get<ApiResponse<any>>(`/RDE/${sucursal}/documento/${noDocumento}`);
     return data.data;
   },
 };

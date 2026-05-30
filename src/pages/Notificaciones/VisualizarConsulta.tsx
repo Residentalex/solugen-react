@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Table, Card, Button, Alert, Typography, message, Tag } from 'antd';
+import { Table, Card, Button, Alert, Typography, message, Tag, Select } from 'antd';
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { notificacionesApi } from '../../api/notificacionesApi';
@@ -12,6 +12,7 @@ const VisualizarConsulta: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [pageSize, setPageSize] = useState(25);
 
   const cargarDatos = async () => {
     if (!configID) return;
@@ -52,6 +53,16 @@ const VisualizarConsulta: React.FC = () => {
           Resultado de consulta SQL
         </Typography.Title>
         <Tag>{total} filas</Tag>
+        <Select
+          style={{ width: 65 }}
+          value={pageSize}
+          onChange={(v) => setPageSize(v)}
+          options={[
+            { value: 25, label: '25' },
+            { value: 50, label: '50' },
+            { value: 100, label: '100' },
+          ]}
+        />
         <Button icon={<ReloadOutlined />} onClick={cargarDatos} loading={loading}>Recargar</Button>
       </div>
 
@@ -69,10 +80,9 @@ const VisualizarConsulta: React.FC = () => {
           size="middle"
           locale={{ emptyText: 'No hay datos' }}
           pagination={{
-            showSizeChanger: true,
+            pageSize,
+            showSizeChanger: false,
             showTotal: (t, range) => `${range[0]}-${range[1]} de ${t}`,
-            pageSizeOptions: ['10', '20', '50', '100'],
-            defaultPageSize: 20,
           }}
         />
       </Card>

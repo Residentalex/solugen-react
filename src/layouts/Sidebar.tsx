@@ -6,30 +6,33 @@ import { useUIStore } from '../stores/uiStore';
 import type { MenuProps } from 'antd';
 import type { PantallaDTO, ModuloDTO } from '../types/auth';
 import {
-  BankOutlined,
-  ShoppingOutlined,
-  ShoppingCartOutlined,
-  TeamOutlined,
-  SettingOutlined,
-  DollarOutlined,
-  CreditCardOutlined,
-  BuildOutlined,
-  DashboardOutlined,
-  AppstoreOutlined,
-} from '@ant-design/icons';
+   BankOutlined,
+   ShoppingCartOutlined,
+   DashboardOutlined,
+   AppstoreOutlined,
+   ControlOutlined,
+   AuditOutlined,
+   ShopOutlined,
+   FileTextOutlined,
+   ExperimentOutlined,
+   InboxOutlined,
+   TeamOutlined,
+   WalletOutlined,
+   DollarOutlined,
+ } from '@ant-design/icons';
 
 const ICONOS_MODULOS: Record<string, React.ReactNode> = {
-  Administracion: <SettingOutlined />,
-  Contabilidad: <BankOutlined />,
-  Inventario: <ShoppingCartOutlined />,
-  Ventas: <ShoppingOutlined />,
-  Facturacion: <ShoppingOutlined />,
-  Compras: <ShoppingCartOutlined />,
-  'Recursos humanos': <TeamOutlined />,
-  'Cuentas por pagar': <DollarOutlined />,
-  'Cuentas por cobrar': <CreditCardOutlined />,
-  Bancos: <BankOutlined />,
-  Produccion: <BuildOutlined />,
+   Administracion: <ControlOutlined />,
+   Contabilidad: <AuditOutlined />,
+   Inventario: <InboxOutlined />,
+   Ventas: <ShopOutlined />,
+   Facturacion: <FileTextOutlined />,
+   Compras: <ShoppingCartOutlined />,
+   'Recursos Humanos': <TeamOutlined />,
+   'Cuentas por Pagar': <WalletOutlined />,
+   'Cuentas por Cobrar': <DollarOutlined />,
+   Bancos: <BankOutlined />,
+   Produccion: <ExperimentOutlined />,
 };
 
 const ICONO_DEFAULT = <AppstoreOutlined />;

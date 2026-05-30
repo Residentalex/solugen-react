@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Input, Tag, Button, message, Card, Typography, Modal, Descriptions, Alert } from 'antd';
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { Table, Input, Select, Tag, Button, message, Card, Typography, Modal, Descriptions, Alert } from 'antd';
+import { ReloadOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import PermissionGate from '../../components/PermissionGate';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { servicioApi } from '../../api/servicioApi';
@@ -33,8 +34,9 @@ const Servicios: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [_searchText, setSearchText] = useState('');
+  const [filtroActivo, setFiltroActivo] = useState<string>('todos');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(25);
   const [total, setTotal] = useState(0);
   const [detalleItem, setDetalleItem] = useState<ServicioDTO | null>(null);
   const [detalleOpen, setDetalleOpen] = useState(false);
@@ -45,8 +47,6 @@ const Servicios: React.FC = () => {
     try {
       const resultados = await servicioApi.obtenerListado(sucursalActiva);
       setData(resultados || []);
-      setFilteredData(resultados || []);
-      setTotal(resultados?.length || 0);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar servicios');
       setLoadingError(true);
@@ -63,23 +63,41 @@ const Servicios: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setActiveModule, updateToolbar, resetToolbar, sucursalActiva]);
 
+  // Filtrar datos por búsqueda y estado activo/inactivo
+  const aplicarFiltros = useCallback((busqueda: string, activo: string, source: ServicioDTO[]) => {
+    let result = source;
+    // Filtro por activo/inactivo
+    if (activo === 'activos') result = result.filter((i) => i.activo);
+    else if (activo === 'inactivos') result = result.filter((i) => !i.activo);
+    // Filtro por búsqueda de texto
+    if (busqueda.trim()) {
+      const q = busqueda.toLowerCase();
+      result = result.filter(
+        (item) =>
+          item.codigo.toLowerCase().includes(q) ||
+          item.nombre.toLowerCase().includes(q) ||
+          (item.referenciaInterna || '').toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, []);
+
+  // Re-aplicar filtros cuando cambia data, searchText o filtroActivo
+  useEffect(() => {
+    const result = aplicarFiltros(_searchText, filtroActivo, data);
+    setFilteredData(result);
+    setTotal(result.length);
+    setPage(1);
+  }, [data, _searchText, filtroActivo, aplicarFiltros]);
+
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
-    if (!value.trim()) {
-      setFilteredData(data);
-      setTotal(data.length);
-      return;
-    }
-    const q = value.toLowerCase();
-    const filtrados = data.filter(
-      (item) =>
-        item.codigo.toLowerCase().includes(q) ||
-        item.nombre.toLowerCase().includes(q) ||
-        item.referenciaInterna.toLowerCase().includes(q)
-    );
-    setFilteredData(filtrados);
-    setTotal(filtrados.length);
+  };
+
+  const handleFiltroActivoChange = (val: string) => {
+    setFiltroActivo(val);
+    setPage(1);
   };
 
   const handleRefresh = () => {
@@ -187,23 +205,41 @@ const Servicios: React.FC = () => {
           }
         />
       )}
-      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+      <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '16px 24px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
             <Input.Search
               placeholder="Buscar por código, nombre o referencia..."
               allowClear
               onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-              style={{ width: 400 }}
+            style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
+            <Select
+              value={filtroActivo}
+              onChange={handleFiltroActivoChange}
+              style={{ width: 130 }}
+              size="middle"
+              options={[
+                { value: 'todos', label: 'Todos' },
+                { value: 'activos', label: 'Solo activos' },
+                { value: 'inactivos', label: 'Solo inactivos' },
+              ]}
+            />
+            <Select
+              style={{ width: 65 }}
+              value={pageSize}
+              onChange={(v) => { setPageSize(v); setPage(1); }}
+              options={[
+                { value: 25, label: '25' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
+              ]}
+            />
             <div style={{ flex: 1 }} />
+            <PermissionGate accion="CREAR">
+              <Button type="primary" icon={<PlusOutlined />}>Nuevo</Button>
+            </PermissionGate>
             <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>
         </div>
@@ -214,6 +250,8 @@ const Servicios: React.FC = () => {
           loading={loading}
           scroll={{ x: 1200 }}
           size="middle"
+          rowClassName="paces-row-hover"
+          className="paces-border-top paces-list-table"
           locale={{
             emptyText: loading ? ' ' : 'No se encontraron servicios',
           }}
@@ -232,9 +270,8 @@ const Servicios: React.FC = () => {
                 setPage(newPage);
               }
             },
-            showSizeChanger: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} servicios`,
-            pageSizeOptions: ['10', '20', '50', '100'],
+            showSizeChanger: false,
+            showTotal: (t) => `${t} registros`,
           }}
         />
       </Card>

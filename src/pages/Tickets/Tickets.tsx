@@ -43,6 +43,8 @@ const Tickets: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [ticketModalID, setTicketModalID] = useState<number | null>(null);
   const [searchText, setSearchText] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('');
+  const [pageSize, setPageSize] = useState(25);
   const [crearModal, setCrearModal] = useState(false);
   const [creando, setCreando] = useState(false);
   const [form] = Form.useForm();
@@ -96,12 +98,13 @@ const Tickets: React.FC = () => {
     }
   }, [sucursal, usuarioID, form, cargarTickets]);
 
-  const filtered = searchText
-    ? tickets.filter((t) =>
-        t.titulo.toLowerCase().includes(searchText.toLowerCase()) ||
-        t.mensaje?.toLowerCase().includes(searchText.toLowerCase())
-      )
-    : tickets;
+  const filtered = tickets.filter((t) => {
+    const matchTexto = !searchText || 
+      t.titulo.toLowerCase().includes(searchText.toLowerCase()) ||
+      t.mensaje?.toLowerCase().includes(searchText.toLowerCase());
+    const matchEstado = !filtroEstado || t.estado === filtroEstado;
+    return matchTexto && matchEstado;
+  });
 
   const columns: ColumnsType<TicketDTO> = [
     {
@@ -169,6 +172,30 @@ const Tickets: React.FC = () => {
               style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
+            <Select
+              placeholder="Estado"
+              style={{ width: 140 }}
+              allowClear
+              value={filtroEstado || undefined}
+              onChange={(val) => setFiltroEstado(val || '')}
+              onClear={() => setFiltroEstado('')}
+              options={[
+                { value: 'Abierto', label: 'Abierto' },
+                { value: 'EnProceso', label: 'En Proceso' },
+                { value: 'Resuelto', label: 'Resuelto' },
+                { value: 'Cerrado', label: 'Cerrado' },
+              ]}
+            />
+            <Select
+              style={{ width: 65 }}
+              value={pageSize}
+              onChange={(v) => { setPageSize(v); }}
+              options={[
+                { value: 25, label: '25' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
+              ]}
+            />
             <div style={{ flex: 1 }} />
             <PermissionGate accion="CREAR">
               <Button type="primary" icon={<PlusOutlined />} onClick={() => setCrearModal(true)}>
@@ -189,10 +216,9 @@ const Tickets: React.FC = () => {
             emptyText: <Empty description="No hay tickets" />,
           }}
           pagination={{
-            showSizeChanger: true,
+            showSizeChanger: false,
+            pageSize,
             showTotal: (total, range) => `${range[0]}-${range[1]} de ${total}`,
-            pageSizeOptions: ['10', '20', '50'],
-            defaultPageSize: 10,
           }}
         />
       </Card>

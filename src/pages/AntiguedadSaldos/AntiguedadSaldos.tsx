@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  Card, Table, Input, Button, Typography, message, Spin, DatePicker, Checkbox,
+  Card, Table, Input, Select, Button, Typography, message, Spin, DatePicker, Checkbox,
   Modal, Space, Row, Col,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -90,6 +90,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
   // Búsqueda y paginación
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
 
   // Modal de búsqueda de entidad
   const [modalEntidadAbierto, setModalEntidadAbierto] = useState(false);
@@ -643,9 +644,8 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
 
   const paginationProps = {
     current: page,
-    pageSize: FILAS_POR_PAGINA,
-    showSizeChanger: true,
-    pageSizeOptions: ['25', '50', '100'],
+    pageSize,
+    showSizeChanger: false,
     showTotal: (t: number) => `${t} registros`,
     onChange: (p: number) => setPage(p),
   };
@@ -770,6 +770,16 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                 onSearch={handleSearch}
                 style={{ width: 400 }}
                 prefix={<SearchOutlined className="paces-text-icon" />}
+              />
+              <Select
+                style={{ width: 65 }}
+                value={pageSize}
+                onChange={(v) => { setPageSize(v); setPage(1); }}
+                options={[
+                  { value: 25, label: '25' },
+                  { value: 50, label: '50' },
+                  { value: 100, label: '100' },
+                ]}
               />
               <div style={{ flex: 1 }} />
               <Button icon={<PrinterOutlined />} onClick={handlePrint} loading={imprimiendo}>

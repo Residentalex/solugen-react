@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Input, Tag, Button, Modal, Form, Input as AntInput, Switch, message, Space, Row, Col, Card, Typography, Alert } from 'antd';
+import { Table, Input, Select, Tag, Button, Modal, Form, Input as AntInput, Switch, message, Space, Row, Col, Card, Typography, Alert } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons';
+import PermissionGate from '../../components/PermissionGate';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { Sucursal } from '../../types/auth';
@@ -38,6 +39,8 @@ const Usuarios: React.FC = () => {
   const [data, setData] = useState<UsuarioDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [_searchText, setSearchText] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [loadingError, setLoadingError] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<UsuarioDTO | null>(null);
@@ -188,28 +191,41 @@ const Usuarios: React.FC = () => {
           }
         />
       )}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        marginBottom: 16,
-        flexWrap: 'wrap',
-      }}>
-        <Input.Search
-          placeholder="Buscar por usuario o nombre..."
-          allowClear
-          onSearch={handleSearch}
-          style={{ width: 400 }}
-          prefix={<SearchOutlined className="paces-text-icon" />}
-        />
-        <div style={{ flex: 1 }} />
-        <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-          Nuevo Usuario
-        </Button>
-        <Button icon={<ReloadOutlined />} onClick={() => { setLoadingError(false); setSearchText(''); cargarDatos(); }} />
-      </div>
-
-      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+      <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
+        <div style={{ padding: '16px 24px 0' }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: 16,
+            flexWrap: 'wrap',
+          }}>
+            <Input.Search
+              placeholder="Buscar por usuario o nombre..."
+              allowClear
+              onSearch={handleSearch}
+              style={{ width: 400 }}
+              prefix={<SearchOutlined className="paces-text-icon" />}
+            />
+            <Select
+              style={{ width: 65 }}
+              value={pageSize}
+              onChange={(v) => { setPageSize(v); setPage(1); }}
+              options={[
+                { value: 25, label: '25' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
+              ]}
+            />
+            <div style={{ flex: 1 }} />
+            <PermissionGate accion="CREAR">
+              <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
+                Nuevo Usuario
+              </Button>
+            </PermissionGate>
+            <Button icon={<ReloadOutlined />} onClick={() => { setLoadingError(false); setSearchText(''); cargarDatos(); }} />
+          </div>
+        </div>
         <Table<UsuarioDTO>
           columns={columns}
           dataSource={data}
@@ -217,11 +233,14 @@ const Usuarios: React.FC = () => {
           loading={loading}
           scroll={{ x: 920 }}
           size="middle"
+          rowClassName="paces-row-hover"
+          className="paces-border-top paces-list-table"
           pagination={{
-            showSizeChanger: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} usuarios`,
-            pageSizeOptions: ['10', '20', '50'],
-            defaultPageSize: 10,
+            current: page,
+            pageSize,
+            onChange: (p) => setPage(p),
+            showSizeChanger: false,
+            showTotal: (t) => `${t} registros`,
           }}
         />
       </Card>

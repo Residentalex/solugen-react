@@ -31,6 +31,7 @@ import type {
   ConceptoDTO, AlmacenDTO, ClienteDTO, TipoDTO,
   AsientoContableDTO,
 } from '../../types/facturaCliente';
+import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import type { DetalleFacturaClienteDTO, FacturaClienteFullDTO } from '../../types/facturaCliente';
 
 const { Text } = Typography;
@@ -157,117 +158,6 @@ function filaVacia(): DetalleFacturaClienteDTO {
   };
 }
 
-// ===== Componente BuscarProductoModal =====
-interface BuscarProductoModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (producto: {
-    codigo: string;
-    articulo: string;
-    referencia: string;
-    precio: number;
-    familia?: { nombre: string; idExterno: string };
-    medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
-    impuesto?: { nombre: string; porcentaje: number; codigo: string; idExterno: string };
-    tieneVencimiento?: boolean;
-  }) => void;
-}
-
-const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose, onSelect }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const [productos, setProductos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
-
-  const cargar = useCallback(async (filtro?: string) => {
-    setLoading(true);
-    try {
-      const res = await productoApi.obtenerListado(sucursalActiva, filtro ? { codigo: filtro } : undefined);
-      setProductos(res || []);
-    } catch {
-      message.error('Error al cargar productos');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (open) cargar();
-  }, [open, cargar]);
-
-  const columnas = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-    { title: 'Artículo', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-      render: (v: string) => toTitleCase(v) },
-    { title: 'Referencia', dataIndex: 'referencia', key: 'referencia', width: 120,
-      render: (v: string) => v || '-' },
-  ];
-
-  return (
-    <Modal
-      title="Buscar Producto"
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={700}
-      destroyOnHidden
-    >
-      <Input.Search
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        onSearch={(val) => cargar(val)}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={productos}
-        columns={columnas}
-        rowKey="codigo"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: async () => {
-            try {
-              const detalle = await productoApi.obtenerDetalle(sucursalActiva, record.codigo);
-              onSelect({
-                codigo: record.codigo,
-                articulo: detalle.nombre || record.nombre,
-                referencia: detalle.referenciaInterna || record.referencia || '',
-                precio: detalle.precio || detalle.ultimoCosto || record.precio || 0,
-                familia: detalle.familia || record.familia,
-                medida: detalle.unidadMedida
-                  ? { nombre: detalle.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: detalle.unidadMedida.idExterno || 0 }
-                  : record.unidadMedida
-                    ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: record.unidadMedida.idExterno || 0 }
-                    : undefined,
-                impuesto: (detalle.impuestos?.[0]?.impuesto as any) || undefined,
-                tieneVencimiento: detalle.pesado || false,
-              });
-            } catch {
-              onSelect({
-                codigo: record.codigo,
-                articulo: record.nombre,
-                referencia: record.referencia || '',
-                precio: record.precio || record.ultimoCosto || 0,
-                familia: record.familia,
-                medida: record.unidadMedida
-                  ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: record.unidadMedida.idExterno || 0 }
-                  : undefined,
-                impuesto: undefined,
-                tieneVencimiento: false,
-              });
-            }
-            onClose();
-          },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
-};
-
 // ===== Componente ClienteCard (readonly en right column) =====
 interface ClienteCardProps {
   cliente: ClienteDTO | null;
@@ -320,7 +210,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
       {monedaSimbolo && tasa !== undefined && (
         <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
           {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{monedaNombre || 'Peso Dominicano'} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
+          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
@@ -341,7 +231,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
 
     <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
       {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
+      <span style={{ color: 'var(--paces-primary)' }}>{monedaSimbolo || 'RD$'} {formatNumber(total)}</span>
     </div>
   </Card>
 );
@@ -794,54 +684,6 @@ const FacturaClienteFormulario: React.FC = () => {
     }
   };
 
-  const handleAplicar = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      const result = await facturaClienteApi.aplicar(sucursalActiva, parseInt(id));
-      setData(result);
-      message.success('Documento aplicado exitosamente');
-      navigate(`/FFAC/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAnular = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await facturaClienteApi.anular(sucursalActiva, dto);
-      message.success('Documento anulado exitosamente');
-      navigate(`/FFAC/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al anular');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePostear = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await facturaClienteApi.postear(sucursalActiva, dto);
-      message.success('Documento posteado exitosamente');
-      navigate(`/FFAC/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al postear');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // ===== Handlers de concepto =====
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
@@ -868,11 +710,16 @@ const FacturaClienteFormulario: React.FC = () => {
       );
     }
 
-    // Configurar moneda según el concepto
-    const monedaNombre = concepto.moneda?.nombre || 'Peso Dominicano';
+    // === ConfigurarMoneda ===
+    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
     form.setFieldsValue({
-      moneda: monedaNombre,
-      tasa: 1,
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+    });
+    // Actualizar data local para que la UI lo refleje
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, moneda: monedaObj };
     });
   };
 
@@ -1100,34 +947,6 @@ const FacturaClienteFormulario: React.FC = () => {
                 Cancelar
               </Button>
             )}
-            {esBorrador && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handleAplicar}
-              >
-                Aplicar
-              </Button>
-            )}
-            {esAplicado && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handlePostear}
-              >
-                Postear
-              </Button>
-            )}
-            {!esAnulado && (
-              <Button
-                danger
-                icon={<DeleteOutlined />}
-                loading={saving}
-                onClick={handleAnular}
-              >
-                Anular
-              </Button>
-            )}
           </>
         )}
       </Space>
@@ -1184,6 +1003,7 @@ const FacturaClienteFormulario: React.FC = () => {
       title: 'Código',
       key: 'codigoInput',
       width: 100,
+      onCell: () => ({ style: { paddingLeft: 8 } }),
       render: (_: any, _record: DetalleFacturaClienteDTO, idx: number) => (
         <Input
           size="small"
@@ -1280,9 +1100,11 @@ const FacturaClienteFormulario: React.FC = () => {
           <InputNumber
             size="small"
             style={{ width: '100%' }}
+            styles={{ input: { textAlign: 'right' } }}
             min={0.01}
             step={0.01}
             precision={2}
+            controls={false}
             value={detalles[idx]?.cantidad}
             onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'cantidad', val || 0)}
             onBlur={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
@@ -1300,25 +1122,37 @@ const FacturaClienteFormulario: React.FC = () => {
       title: 'Precio',
       dataIndex: 'precio',
       key: 'precio',
-      width: 110,
+      width: 130,
       align: 'right' as const,
       responsive: ['sm' as const, 'md' as const, 'lg' as const],
-      shouldCellUpdate: (record: DetalleFacturaClienteDTO, prevRecord: DetalleFacturaClienteDTO) => record.precio !== prevRecord.precio,
-      render: (_: any, _record: DetalleFacturaClienteDTO, idx: number) => (
-        <div>
-          <InputNumber
-            size="small"
-            style={{ width: '100%' }}
-            min={0}
-            step={0.01}
-            precision={2}
-            value={detalles[idx]?.precio}
-            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'precio', val || 0)}
-            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
-            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
-          />
-        </div>
-      ),
+      shouldCellUpdate: (record: DetalleFacturaClienteDTO, prevRecord: DetalleFacturaClienteDTO) => record.precio !== prevRecord.precio || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
+      render: (_: any, record: DetalleFacturaClienteDTO, idx: number) => {
+        const precioBase = Number(detalles[idx]?.precio) || 0;
+        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
+        const factor = Number(detalles[idx]?.medida?.factor) || 1;
+        const precioConDescuento = precioBase - ((precioBase * pctDesc) / 100);
+        const precioUnitario = precioConDescuento / factor;
+        return (
+          <div>
+            <InputNumber
+              size="small"
+              style={{ width: '100%' }}
+              styles={{ input: { textAlign: 'right' } }}
+              min={0}
+              step={0.01}
+              precision={2}
+              controls={false}
+              value={detalles[idx]?.precio}
+              onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'precio', val || 0)}
+              onBlur={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
+              onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
+            />
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+              {formatNumber(precioUnitario)} × {factor}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: '% Desc',
@@ -1392,6 +1226,7 @@ const FacturaClienteFormulario: React.FC = () => {
       title: '',
       key: 'acciones',
       width: 50,
+      onCell: () => ({ style: { paddingRight: 8 } }),
       render: (_: any, _record: DetalleFacturaClienteDTO, idx: number) => {
         const items: any[] = [
           {
@@ -1733,9 +1568,10 @@ const FacturaClienteFormulario: React.FC = () => {
         open={productoModalOpen}
         onClose={() => setProductoModalOpen(false)}
         onSelect={handleProductoSelect}
+        mode="venta"
       />
 
-      {isLarge ? (
+      {isLarge && (
         /* === DESKTOP LAYOUT (>= lg) === */
         <Row gutter={16}>
           <Col lg={18}>
@@ -1856,136 +1692,12 @@ const FacturaClienteFormulario: React.FC = () => {
               impuestos={totales.impuestos}
               total={totales.total}
               alignRight={false}
-              monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
-              monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
               tasa={tasaValue ?? data?.tasa ?? 1}
-            />
-          </Col>
+          />
+        </Col>
         </Row>
-      ) : (
-        /* === MOBILE LAYOUT (< lg) === */
-        <div>
-          {renderEncabezado()}
-
-          <Tabs
-            defaultActiveKey="detalles"
-            type="card"
-            style={{ borderRadius: 8, padding: '0 16px' }}
-            items={[
-              {
-                key: 'detalles',
-                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
-                children: (
-                  <>
-                    <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
-                      <Space>
-                        <Button
-                          type="dashed"
-                          icon={<PlusOutlined />}
-                          onClick={handleAgregarFila}
-                        >
-                          Agregar fila
-                        </Button>
-                        <Button
-                          icon={<SearchOutlined />}
-                          onClick={() => setProductoModalOpen(true)}
-                        >
-                          Buscar Prod.
-                        </Button>
-                      </Space>
-                      <Input.Search
-                        placeholder="Buscar detalle..."
-                        allowClear
-                        style={{ maxWidth: 250 }}
-                        onSearch={(value) => setDetalleSearch(value)}
-                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                      />
-                    </div>
-                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(event.active.id as number); }} onDragEnd={handleDragEnd}>
-                      <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
-                    <Table
-                      dataSource={detallesFiltrados}
-                      columns={detalleColumns}
-                      rowKey="id"
-                      size="small"
-                      pagination={false}
-                      scroll={{ x: 1300 }}
-                      components={{ body: { row: SortableRow } }}
-                    />
-                    </SortableContext>
-                    <DragOverlay>
-                      {activeId ? (
-                        <div style={{ padding: '8px 16px', background: '#fff', border: '2px solid #556ee6', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8, width: 300 }}>
-                          <HolderOutlined style={{ color: '#556ee6' }} />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {detalles.find((d) => d.id === activeId)?.articulo || 'Arrastrando...'}
-                          </span>
-                        </div>
-                      ) : null}
-                    </DragOverlay>
-                    </DndContext>
-                  </>
-                ),
-              },
-              ...(data?.asientos && data.asientos.length > 0
-                ? [{
-                    key: 'asientos',
-                    label: `Asientos (${data?.asientos?.length || 0})`,
-                    children: (
-                      <Table
-                        dataSource={data?.asientos || []}
-                        columns={asientoColumns}
-                        rowKey="id"
-                        size="small"
-                        pagination={false}
-                        scroll={{ x: 900 }}
-                        summary={() => (
-                          <Table.Summary fixed>
-                            <Table.Summary.Row>
-                              <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                              <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                              <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                            </Table.Summary.Row>
-                          </Table.Summary>
-                        )}
-                      />
-                    ),
-                  }]
-                : []),
-              ...(data?.logs && data.logs.length > 0
-                ? [{
-                    key: 'historial',
-                    label: `Historial (${data?.logs?.length || 0})`,
-                    children: (
-                      <Table
-                        dataSource={data?.logs || []}
-                        columns={logColumns}
-                        rowKey="id"
-                        size="small"
-                        pagination={false}
-                        scroll={{ x: 900 }}
-                      />
-                    ),
-                  }]
-                : []),
-            ]}
-          />
-
-          <ClienteCard
-            cliente={selectedCliente ?? data?.cliente ?? null}
-          />
-
-          <TotalesCard
-            subTotal={totales.subTotal}
-            descuento={totales.descuento}
-            impuestos={totales.impuestos}
-            total={totales.total}
-            alignRight={true}
-            monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
-            monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
-            tasa={tasaValue ?? data?.tasa ?? 1}
-          />
-        </div>
       )}
 
       {/* Modal de Fecha de Vencimiento */}

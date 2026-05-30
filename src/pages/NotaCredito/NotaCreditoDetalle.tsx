@@ -14,8 +14,6 @@ import { apiClient } from '../../api/client';
 import { notaCreditoApi } from '../../api/notaCreditoApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 
-const { TabPane } = Tabs;
-
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
   1: { label: 'Aplicado', color: 'success' },
@@ -412,36 +410,54 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
               </Descriptions>
             </Card>
 
-            <Tabs defaultActiveKey="documentos" type="card">
-              <TabPane tab={`Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`} key="documentos">
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                  <Input.Search
-                    placeholder="Buscar documento..."
-                    allowClear
-                    style={{ maxWidth: 250 }}
-                    onSearch={(value) => setDetalleSearch(value)}
-                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                  />
-                </div>
-                <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
-              </TabPane>
-              <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-                <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
-                  summary={() => (
-                    <Table.Summary fixed>
-                      <Table.Summary.Row>
-                        <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                      </Table.Summary.Row>
-                    </Table.Summary>
-                  )}
-                />
-              </TabPane>
-              <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
-                <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-              </TabPane>
-            </Tabs>
+            <Tabs
+              defaultActiveKey="documentos"
+              type="card"
+              items={[
+                {
+                  key: 'documentos',
+                  label: `Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`,
+                  children: (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                        <Input.Search
+                          placeholder="Buscar documento..."
+                          allowClear
+                          style={{ maxWidth: 250 }}
+                          onSearch={(value) => setDetalleSearch(value)}
+                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                        />
+                      </div>
+                      <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
+                    </>
+                  ),
+                },
+                {
+                  key: 'asientos',
+                  label: `Asientos (${data.asientos?.length || 0})`,
+                  children: (
+                    <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
+                      summary={() => (
+                        <Table.Summary fixed>
+                          <Table.Summary.Row>
+                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                            <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      )}
+                    />
+                  ),
+                },
+                {
+                  key: 'historial',
+                  label: `Historial (${data.logs?.length || 0})`,
+                  children: (
+                    <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                  ),
+                },
+              ]}
+            />
           </Col>
 
           <Col lg={6}>
@@ -483,36 +499,54 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
 
           <EntidadCard entidad={data.entidad} tipoEntidad={tipoEntidad} />
 
-          <Tabs defaultActiveKey="documentos" type="card">
-            <TabPane tab={`Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`} key="documentos">
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                <Input.Search
-                  placeholder="Buscar documento..."
-                  allowClear
-                  style={{ maxWidth: 250 }}
-                  onSearch={(value) => setDetalleSearch(value)}
-                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                />
-              </div>
-              <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
-            </TabPane>
-            <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-              <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
-                summary={() => (
-                  <Table.Summary fixed>
-                    <Table.Summary.Row>
-                      <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                      <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                      <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                    </Table.Summary.Row>
-                  </Table.Summary>
-                )}
-              />
-            </TabPane>
-            <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
-              <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-            </TabPane>
-          </Tabs>
+          <Tabs
+            defaultActiveKey="documentos"
+            type="card"
+            items={[
+              {
+                key: 'documentos',
+                label: `Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`,
+                children: (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                      <Input.Search
+                        placeholder="Buscar documento..."
+                        allowClear
+                        style={{ maxWidth: 250 }}
+                        onSearch={(value) => setDetalleSearch(value)}
+                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                      />
+                    </div>
+                    <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
+                  </>
+                ),
+              },
+              {
+                key: 'asientos',
+                label: `Asientos (${data.asientos?.length || 0})`,
+                children: (
+                  <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
+                    summary={() => (
+                      <Table.Summary fixed>
+                        <Table.Summary.Row>
+                          <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                          <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                          <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                        </Table.Summary.Row>
+                      </Table.Summary>
+                    )}
+                  />
+                ),
+              },
+              {
+                key: 'historial',
+                label: `Historial (${data.logs?.length || 0})`,
+                children: (
+                  <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                ),
+              },
+            ]}
+          />
 
           <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true}
             monedaSimbolo={data.moneda?.simbolo || 'RD$'}

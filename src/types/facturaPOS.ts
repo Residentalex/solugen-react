@@ -38,6 +38,7 @@ export interface UnidadMedidaDTO {
   id: number;
   codigo: string;
   nombre: string;
+  factor?: number;
 }
 
 export interface NotaSeguimientoDTO {

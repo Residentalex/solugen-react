@@ -7,6 +7,7 @@ import {
   Modal,
   Form,
   Input,
+  Select,
   Switch,
   Tag,
   message,
@@ -16,7 +17,8 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import PermissionGate from '../../components/PermissionGate';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { accionApi } from '../../api/accionApi';
@@ -36,6 +38,7 @@ const Acciones: React.FC = () => {
   const [editando, setEditando] = useState<AccionDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [pageSize, setPageSize] = useState(25);
   const [loadingError, setLoadingError] = useState(false);
   const [form] = Form.useForm();
 
@@ -202,12 +205,7 @@ const Acciones: React.FC = () => {
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Acciones</h4>
-        <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-          Nueva Acción
-        </Button>
-      </div>
+      <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600, marginBottom: 16 }}>Acciones</h4>
 
       {loadingError && (
         <Alert
@@ -222,9 +220,10 @@ const Acciones: React.FC = () => {
           }
         />
       )}
-      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
-        <div style={{ padding: '16px 16px 0 16px' }}>
-          <Input.Search
+      <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
+        <div style={{ padding: '16px 24px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
+            <Input.Search
             placeholder="Buscar por código o nombre..."
             allowClear
             onSearch={handleSearch}
@@ -234,8 +233,25 @@ const Acciones: React.FC = () => {
                 handleSearch('');
               }
             }}
-            style={{ maxWidth: 360 }}
+            style={{ width: 400 }}
+            prefix={<SearchOutlined className="paces-text-icon" />}
           />
+          <Select
+            style={{ width: 65 }}
+            value={pageSize}
+            onChange={(v) => { setPageSize(v); }}
+            options={[
+              { value: 25, label: '25' },
+              { value: 50, label: '50' },
+              { value: 100, label: '100' },
+            ]}
+          />
+            <div style={{ flex: 1 }} />
+            <PermissionGate accion="CREAR">
+              <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>Nuevo</Button>
+            </PermissionGate>
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+          </div>
         </div>
         <Table<AccionDTO>
           columns={columns}
@@ -245,10 +261,9 @@ const Acciones: React.FC = () => {
           scroll={{ x: 700 }}
           size="middle"
           pagination={{
-            showSizeChanger: true,
+            showSizeChanger: false,
+            pageSize,
             showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} acciones`,
-            pageSizeOptions: ['10', '20', '50'],
-            defaultPageSize: 10,
           }}
           locale={{ emptyText: <Empty description="No hay acciones registradas" /> }}
         />

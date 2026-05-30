@@ -79,6 +79,7 @@ interface DetalleOrcEditable {
   total: number;
   cantidadBonificable: number;
   tipoArticulo: string;
+  medida?: { id: number; nombre: string; factor: number };
 }
 
 function filaVacia(): DetalleOrcEditable {
@@ -97,6 +98,7 @@ function filaVacia(): DetalleOrcEditable {
     total: 0,
     cantidadBonificable: 0,
     tipoArticulo: 'Producto',
+    medida: undefined,
   };
 }
 
@@ -121,7 +123,7 @@ const BuscarConceptoModal: React.FC<{
   const cargar = useCallback(async (filtro?: string) => {
     setLoading(true);
     try {
-      const res = await conceptosApi.obtenerConceptos(sucursalActiva, filtro);
+      const res = await conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'ORC', filtro);
       setConceptos(res || []);
     } catch { message.error('Error al cargar conceptos'); }
     finally { setLoading(false); }
@@ -196,6 +198,7 @@ const OrdenCompraFormulario: React.FC = () => {
           total: d.total || 0,
           cantidadBonificable: d.cantidadBonificable || 0,
           tipoArticulo: d.tipoArticulo || 'Producto',
+          medida: d.medida || undefined,
         }));
         setDetalles(detallesMap);
         setSelectedConcepto(res.concepto || null);
@@ -349,6 +352,18 @@ const OrdenCompraFormulario: React.FC = () => {
     setSelectedConcepto(concepto);
     setConceptoSearchText(toTitleCase(concepto.nombre));
     form.setFieldsValue({ conceptoNombre: concepto.nombre });
+
+    // === ConfigurarMoneda ===
+    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    form.setFieldsValue({
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+    });
+    // Actualizar data local para que la UI lo refleje
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, moneda: monedaObj };
+    });
   };
 
   if (loading) {
@@ -366,6 +381,7 @@ const OrdenCompraFormulario: React.FC = () => {
       dataIndex: 'articulo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { paddingLeft: 8 } }),
       render: (_: any, __: any, idx: number) => (
         <div style={{ fontSize: 13 }}>
           <Input size="small" placeholder="Artículo" value={detalles[idx]?.articulo || ''}
@@ -383,7 +399,7 @@ const OrdenCompraFormulario: React.FC = () => {
       width: 100,
       align: 'right' as const,
       render: (_: any, __: any, idx: number) => (
-        <InputNumber size="small" style={{ width: '100%' }} min={0} step={0.01} precision={2}
+        <InputNumber size="small" style={{ width: '100%' }} styles={{ input: { textAlign: 'right' } }} min={0} step={0.01} precision={2} controls={false}
           value={detalles[idx]?.cantidad}
           onChange={(val) => handleDetalleChange(detalles[idx].id, 'cantidad', val || 0)} />
       ),
@@ -391,14 +407,26 @@ const OrdenCompraFormulario: React.FC = () => {
     {
       title: 'Costo',
       key: 'costo',
-      width: 110,
+      width: 130,
       align: 'right' as const,
       responsive: ['sm' as const, 'md' as const, 'lg' as const],
-      render: (_: any, __: any, idx: number) => (
-        <InputNumber size="small" style={{ width: '100%' }} min={0} step={0.01} precision={2}
-          value={detalles[idx]?.costo}
-          onChange={(val) => handleDetalleChange(detalles[idx].id, 'costo', val || 0)} />
-      ),
+      render: (_: any, __: any, idx: number) => {
+        const costoBase = Number(detalles[idx]?.costo) || 0;
+        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
+        const factor = Number(detalles[idx]?.medida?.factor) || 1;
+        const costoConDescuento = costoBase - ((costoBase * pctDesc) / 100);
+        const costoUnitario = costoConDescuento / factor;
+        return (
+          <div>
+            <InputNumber size="small" style={{ width: '100%' }} styles={{ input: { textAlign: 'right' } }} min={0} step={0.01} precision={2} controls={false}
+              value={detalles[idx]?.costo}
+              onChange={(val) => handleDetalleChange(detalles[idx].id, 'costo', val || 0)} />
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+              {formatNumber(costoUnitario)} × {factor}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: 'Descuento %',
@@ -431,6 +459,7 @@ const OrdenCompraFormulario: React.FC = () => {
       title: '',
       key: 'acciones',
       width: 50,
+      onCell: () => ({ style: { paddingRight: 8 } }),
       render: (_: any, __: any, idx: number) => (
         <Button type="text" size="small" danger icon={<DeleteOutlined />}
           onClick={() => handleEliminarFila(detalles[idx].id)} />
@@ -475,6 +504,7 @@ const OrdenCompraFormulario: React.FC = () => {
           total: d.total || 0,
           cantidadBonificable: d.cantidadBonificable || 0,
           tipoArticulo: d.tipoArticulo || 'Producto',
+          medida: d.medida || undefined,
         }));
         setDetalles(detallesMap);
         setSelectedConcepto(res.concepto || null);

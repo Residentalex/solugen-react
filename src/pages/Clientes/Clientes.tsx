@@ -39,6 +39,8 @@ const Clientes: React.FC = () => {
   const [data, setData] = useState<ClienteDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [filtroActivo, setFiltroActivo] = useState<string>('todos');
   const [loadingError, setLoadingError] = useState(false);
   const cargarDatos = useCallback(async () => {
@@ -167,19 +169,13 @@ const Clientes: React.FC = () => {
           }
         />
       )}
-      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+      <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '16px 24px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
             <Input.Search
               placeholder="Buscar por código o nombre..."
               allowClear
               onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
               style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
@@ -192,6 +188,16 @@ const Clientes: React.FC = () => {
                 { value: 'todos', label: 'Todos' },
                 { value: 'activos', label: 'Solo activos' },
                 { value: 'inactivos', label: 'Solo inactivos' },
+              ]}
+            />
+            <Select
+              style={{ width: 65 }}
+              value={pageSize}
+              onChange={(v) => { setPageSize(v); }}
+              options={[
+                { value: 25, label: '25' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
               ]}
             />
             <div style={{ flex: 1 }} />
@@ -210,10 +216,14 @@ const Clientes: React.FC = () => {
           loading={loading}
           scroll={{ x: 1000 }}
           size="middle"
+          rowClassName="paces-row-hover"
+          className="paces-border-top paces-list-table"
           pagination={{
-            showSizeChanger: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} clientes`,
-            pageSizeOptions: ['10', '20', '50', '100'],
+            current: page,
+            pageSize,
+            onChange: (p) => setPage(p),
+            showSizeChanger: false,
+            showTotal: (t) => `${t} registros`,
           }}
         />
       </Card>

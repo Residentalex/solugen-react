@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Alert, Table, Card, Input, Button, message, Typography } from 'antd';
+import { Alert, Table, Card, Input, Select, Button, message, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
+import PermissionGate from '../../components/PermissionGate';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { categoriaArticuloApi } from '../../api/categoriaArticuloApi';
@@ -23,6 +24,7 @@ const CategoriasArticulo: React.FC = () => {
   const [data, setData] = useState<CategoriaArticuloDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [pageSize, setPageSize] = useState(25);
   const [loadingError, setLoadingError] = useState(false);
 
   const cargarDatos = useCallback(async () => {
@@ -122,7 +124,7 @@ const CategoriasArticulo: React.FC = () => {
     )}
     <Card
       className="paces-card-erp"
-      style={{ borderRadius: 8 }}
+      style={{ borderRadius: 8, overflow: 'hidden' }}
       styles={{ body: { padding: 0 } }}
     >
       <div style={{ padding: '16px 24px 0' }}>
@@ -134,7 +136,20 @@ const CategoriasArticulo: React.FC = () => {
             style={{ width: 400 }}
             prefix={<SearchOutlined className="paces-text-icon" />}
           />
+          <Select
+            style={{ width: 65 }}
+            value={pageSize}
+            onChange={(v) => { setPageSize(v); }}
+            options={[
+              { value: 25, label: '25' },
+              { value: 50, label: '50' },
+              { value: 100, label: '100' },
+            ]}
+          />
           <div style={{ flex: 1 }} />
+          <PermissionGate accion="CREAR">
+            <Button type="primary" icon={<PlusOutlined />}>Nuevo</Button>
+          </PermissionGate>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>
@@ -145,11 +160,12 @@ const CategoriasArticulo: React.FC = () => {
         loading={loading}
         scroll={{ x: 900 }}
         size="middle"
+        rowClassName="paces-row-hover"
+        className="paces-border-top paces-list-table"
         pagination={{
-          showSizeChanger: true,
-          showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} categorías`,
-          pageSizeOptions: ['10', '20', '50', '100'],
-          defaultPageSize: 10,
+          showSizeChanger: false,
+          pageSize,
+          showTotal: (t) => `${t} registros`,
         }}
       />
     </Card>

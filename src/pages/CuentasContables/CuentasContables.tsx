@@ -1,12 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Table, Input, Tag, Button, message, Card, Modal, Descriptions, Form, Switch, Typography, Select, Alert } from 'antd';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Table, Input, Tag, Button, message, Card, Modal, Form, Switch, Typography, Select, Alert, Row, Col } from 'antd';
 import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
-import type { CuentaContableDTO } from '../../types/contabilidad';
+import { monedaApi } from '../../api/monedaApi';
+import PermissionGate from '../../components/PermissionGate';
+import type { CuentaContableDTO, TipoCuentaDTO, GrupoCuentaContableDTO, MonedaDTO } from '../../types/contabilidad';
 import { OrigenCuenta } from '../../types/contabilidad';
 
 const ORIGEN_LABEL: Record<number, string> = {
@@ -14,6 +16,12 @@ const ORIGEN_LABEL: Record<number, string> = {
   [OrigenCuenta.Credito]: 'Crédito',
   [OrigenCuenta.Desconocido]: 'Desconocido',
 }
+
+const ORIGEN_OPTIONS = [
+  { label: 'Débito', value: OrigenCuenta.Debito },
+  { label: 'Crédito', value: OrigenCuenta.Credito },
+  { label: 'Desconocido', value: OrigenCuenta.Desconocido },
+];
 
 const { Text } = Typography;
 
@@ -23,6 +31,7 @@ function toTitleCase(str: string): string {
 
 const CuentasContables: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
@@ -35,8 +44,7 @@ const CuentasContables: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [loadingError, setLoadingError] = useState(false);
-  const [detalleVisible, setDetalleVisible] = useState(false);
-  const [detalleItem] = useState<CuentaContableDTO | null>(null);
+  const [selectedRow, setSelectedRow] = useState<CuentaContableDTO | null>(null);
 
   // Estados para crear/editar
   const [modalVisible, setModalVisible] = useState(false);
@@ -44,9 +52,32 @@ const CuentasContables: React.FC = () => {
   const [guardando, setGuardando] = useState(false);
   const [form] = Form.useForm();
 
+  // Opciones para selects del modal
+  const [tipos, setTipos] = useState<TipoCuentaDTO[]>([]);
+  const [grupos, setGrupos] = useState<GrupoCuentaContableDTO[]>([]);
+  const [monedas, setMonedas] = useState<MonedaDTO[]>([]);
+
   const abrirNuevo = () => {
     setEditando(null);
     form.resetFields();
+    setModalVisible(true);
+  };
+
+  const abrirEdicion = (cuenta: CuentaContableDTO) => {
+    setEditando(cuenta);
+    form.setFieldsValue({
+      noCuenta: cuenta.noCuenta,
+      nombre: cuenta.nombre,
+      nota: cuenta.nota || '',
+      activo: cuenta.activo,
+      origen: cuenta.origen,
+      utilizaCentroCosto: cuenta.utilizaCentroCosto,
+      tipoCuentaCodigo: cuenta.tipoCuenta?.idExterno || undefined,
+      grupoCodigo: cuenta.grupo?.codigo || undefined,
+      monedaCodigo: cuenta.moneda?.codigo || undefined,
+      cuentaControlNo: cuenta.cuentaControl?.noCuenta || undefined,
+      cuentaPrimaNo: cuenta.cuentaPrima?.noCuenta || undefined,
+    });
     setModalVisible(true);
   };
 
@@ -80,6 +111,9 @@ const CuentasContables: React.FC = () => {
       const result = await cuentaContableApi.obtenerListadoPaginado(sucursalActiva, skip, size, texto);
       setData(result.data);
       setTotal(result.total);
+      setSelectedRow((actual) =>
+        actual ? result.data.find((item) => item.noCuenta === actual.noCuenta) ?? null : null
+      );
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar cuentas contables');
       setLoadingError(true);
@@ -94,6 +128,37 @@ const CuentasContables: React.FC = () => {
     cargarDatos(page, pageSize, filtro);
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos, page, pageSize, filtro]);
+
+  // Cargar opciones de catálogo cuando se abre el modal
+  useEffect(() => {
+    if (!modalVisible || sucursalActiva === undefined) return;
+    cuentaContableApi.obtenerTipos(sucursalActiva)
+      .then(setTipos)
+      .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar tipos de cuenta'));
+    cuentaContableApi.obtenerGrupos(sucursalActiva)
+      .then(setGrupos)
+      .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar grupos'));
+    monedaApi.obtenerListado(sucursalActiva)
+      .then(setMonedas)
+      .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar monedas'));
+  }, [modalVisible, sucursalActiva]);
+
+  // Manejar navegación desde detalle (Editar)
+  useEffect(() => {
+    const noCuentaEditar = (location.state as any)?.editarNoCuenta;
+    if (noCuentaEditar && sucursalActiva !== undefined) {
+      const encontrada = data.find(c => c.noCuenta === noCuentaEditar);
+      if (encontrada) {
+        abrirEdicion(encontrada);
+      } else {
+        cuentaContableApi.obtenerPorId(sucursalActiva, noCuentaEditar)
+          .then(cta => abrirEdicion(cta))
+          .catch(() => message.error('Error al cargar cuenta para editar'));
+      }
+      window.history.replaceState({}, document.title);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   const handleSearch = (value: string) => {
     setFiltro(value);
@@ -129,8 +194,11 @@ const CuentasContables: React.FC = () => {
       dataIndex: 'grupo',
       key: 'grupo',
       width: 160,
+      ellipsis: true,
       render: (grupo: { nombre: string }) =>
-        grupo?.nombre ? <Tag color="geekblue" style={{ fontSize: 11 }}>{grupo.nombre}</Tag> : '-',
+        grupo?.nombre
+          ? <Tag color="geekblue" style={{ fontSize: 11, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{grupo.nombre}</Tag>
+          : '-',
     },
     {
       title: 'Moneda',
@@ -191,13 +259,7 @@ const CuentasContables: React.FC = () => {
             placeholder="Buscar por número o nombre..."
             allowClear
             onSearch={handleSearch}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                (e.target as HTMLInputElement).blur();
-                handleSearch('');
-              }
-            }}
-            style={{ width: 320 }}
+            style={{ width: 400 }}
             prefix={<SearchOutlined className="paces-text-icon" />}
           />
           <Select
@@ -211,9 +273,11 @@ const CuentasContables: React.FC = () => {
             ]}
           />
           <div style={{ flex: 1 }} />
-          <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-            Nueva
-          </Button>
+          <PermissionGate accion="CREAR">
+            <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
+              Nuevo
+            </Button>
+          </PermissionGate>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>
@@ -225,6 +289,9 @@ const CuentasContables: React.FC = () => {
         loading={loading}
         scroll={{ x: 1100 }}
         size="middle"
+        rowClassName={(record) =>
+          selectedRow?.noCuenta === record.noCuenta ? 'paces-row-selected' : 'paces-row-hover'
+        }
         className="paces-border-top paces-list-table"
         pagination={{
           current: page,
@@ -233,35 +300,15 @@ const CuentasContables: React.FC = () => {
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}
+        onRow={(record) => ({
+          onClick: () => setSelectedRow(record),
+          style: { cursor: 'pointer' },
+        })}
         onChange={(pagination) => {
           setPage(pagination.current || 1);
         }}
       />
     </Card>
-
-      <Modal
-        title={`Detalle de Cuenta: ${detalleItem?.noCuenta || ''}`}
-        open={detalleVisible}
-        onCancel={() => setDetalleVisible(false)}
-        footer={null}
-        width={640}
-      >
-        {detalleItem && (
-          <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
-            <Descriptions.Item label="No. Cuenta">{detalleItem.noCuenta}</Descriptions.Item>
-            <Descriptions.Item label="Nombre">{detalleItem.nombre}</Descriptions.Item>
-            <Descriptions.Item label="Tipo Cuenta">{detalleItem.tipoCuenta?.nombre || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Grupo">{detalleItem.grupo?.nombre || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Moneda">{detalleItem.moneda?.codigo || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Origen">{ORIGEN_LABEL[detalleItem.origen] || 'Desconocido'}</Descriptions.Item>
-            <Descriptions.Item label="Cuenta Control">{detalleItem.cuentaControl?.noCuenta ? `${detalleItem.cuentaControl.noCuenta} - ${detalleItem.cuentaControl.nombre}` : '-'}</Descriptions.Item>
-            <Descriptions.Item label="Cuenta Prima">{detalleItem.cuentaPrima?.noCuenta ? `${detalleItem.cuentaPrima.noCuenta} - ${detalleItem.cuentaPrima.nombre}` : '-'}</Descriptions.Item>
-            <Descriptions.Item label="Centro Costo">{detalleItem.utilizaCentroCosto ? 'Sí' : 'No'}</Descriptions.Item>
-            <Descriptions.Item label="Estado">{detalleItem.activo ? 'Activo' : 'Inactivo'}</Descriptions.Item>
-            <Descriptions.Item label="Nota">{detalleItem.nota || '-'}</Descriptions.Item>
-          </Descriptions>
-        )}
-      </Modal>
 
       {/* Modal de crear/editar */}
       <Modal
@@ -270,33 +317,126 @@ const CuentasContables: React.FC = () => {
         onCancel={() => setModalVisible(false)}
         onOk={guardar}
         confirmLoading={guardando}
-        width={560}
+        width={640}
         okText="Guardar"
         cancelText="Cancelar"
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item
-            name="noCuenta"
-            label="No. Cuenta"
-            rules={[{ required: true, message: 'El número de cuenta es obligatorio' }]}
-          >
-            <Input placeholder="Ej. 1.01.01" maxLength={20} disabled={!!editando} />
-          </Form.Item>
-          <Form.Item
-            name="nombre"
-            label="Nombre"
-            rules={[{ required: true, message: 'El nombre es obligatorio' }]}
-          >
-            <Input placeholder="Ej. Caja General" maxLength={150} />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="noCuenta"
+                label="No. Cuenta"
+                rules={[{ required: true, message: 'El número de cuenta es obligatorio' }]}
+              >
+                <Input placeholder="Ej. 1.01.01" maxLength={20} disabled={!!editando} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="nombre"
+                label="Nombre"
+                rules={[{ required: true, message: 'El nombre es obligatorio' }]}
+              >
+                <Input placeholder="Ej. Caja General" maxLength={150} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="tipoCuentaCodigo"
+                label="Tipo Cuenta"
+                rules={[{ required: true, message: 'Seleccione un tipo de cuenta' }]}
+              >
+                <Select
+                  placeholder="Seleccionar tipo"
+                  showSearch
+                  optionFilterProp="label"
+                  options={tipos.map(t => ({ label: t.nombre, value: t.idExterno }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="grupoCodigo"
+                label="Grupo"
+                rules={[{ required: true, message: 'Seleccione un grupo' }]}
+              >
+                <Select
+                  placeholder="Seleccionar grupo"
+                  showSearch
+                  optionFilterProp="label"
+                  options={grupos.map(g => ({ label: g.nombre, value: g.codigo }))}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="monedaCodigo"
+                label="Moneda"
+                rules={[{ required: true, message: 'Seleccione una moneda' }]}
+              >
+                <Select
+                  placeholder="Seleccionar moneda"
+                  showSearch
+                  optionFilterProp="label"
+                  options={monedas.map(m => ({ label: `${m.nombre} (${m.codigo})`, value: m.codigo }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="origen"
+                label="Origen"
+                rules={[{ required: true, message: 'Seleccione el origen' }]}
+              >
+                <Select placeholder="Seleccionar origen" options={ORIGEN_OPTIONS} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="cuentaControlNo"
+                label="Cuenta Control"
+              >
+                <Input placeholder="No. cuenta control" maxLength={20} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="cuentaPrimaNo"
+                label="Cuenta Prima"
+              >
+                <Input placeholder="No. cuenta prima" maxLength={20} />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="utilizaCentroCosto" label="Centro Costo" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="activo" label="Activo" valuePropName="checked">
+                <Switch />
+              </Form.Item>
+            </Col>
+          </Row>
+
           <Form.Item
             name="nota"
             label="Nota"
           >
             <Input.TextArea rows={3} placeholder="Nota opcional" maxLength={500} />
-          </Form.Item>
-          <Form.Item name="activo" label="Activo" valuePropName="checked">
-            <Switch />
           </Form.Item>
         </Form>
       </Modal>

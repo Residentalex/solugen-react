@@ -6,6 +6,7 @@ import {
   Modal,
   Form,
   Input,
+  Select,
   message,
   Empty,
   Typography,
@@ -33,6 +34,7 @@ const TiposCuenta: React.FC = () => {
   const [data, setData] = useState<TipoCuentaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [pageSize, setPageSize] = useState(25);
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<TipoCuentaDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -150,21 +152,25 @@ const TiposCuenta: React.FC = () => {
 
   return (
     <>
-      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+      <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '16px 24px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
             <Input.Search
               placeholder="Buscar por código o nombre..."
               allowClear
               onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-              style={{ width: 400 }}
+            style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
+            />
+            <Select
+              style={{ width: 65 }}
+              value={pageSize}
+              onChange={(v) => { setPageSize(v); }}
+              options={[
+                { value: 25, label: '25' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
+              ]}
             />
             <div style={{ flex: 1 }} />
             <PermissionGate accion="CREAR">
@@ -182,11 +188,12 @@ const TiposCuenta: React.FC = () => {
           loading={loading}
           scroll={{ x: 500 }}
           size="middle"
+          rowClassName="paces-row-hover"
+          className="paces-border-top paces-list-table"
           pagination={{
-            showSizeChanger: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} tipos de cuenta`,
-            pageSizeOptions: ['10', '20', '50'],
-            defaultPageSize: 10,
+            showSizeChanger: false,
+            pageSize,
+            showTotal: (t) => `${t} registros`,
           }}
           locale={{ emptyText: <Empty description="No hay tipos de cuenta registrados" /> }}
         />

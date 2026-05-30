@@ -1,10 +1,12 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Alert, Card, Table, Input, Select, Button, Modal, Descriptions, message, Typography, Empty } from 'antd';
-import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { almacenApi } from '../../api/almacenApi';
+import PermissionGate from '../../components/PermissionGate';
 import type { AlmacenDTO } from '../../types/entradaAlmacen';
 
 function toTitleCase(str: string): string {
@@ -14,6 +16,7 @@ function toTitleCase(str: string): string {
 const { Text } = Typography;
 
 const Almacenes: React.FC = () => {
+  const navigate = useNavigate();
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
@@ -129,13 +132,7 @@ const Almacenes: React.FC = () => {
               placeholder="Buscar por código o nombre..."
               allowClear
               onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-              style={{ width: 400 }}
+            style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
             <Select
@@ -149,6 +146,11 @@ const Almacenes: React.FC = () => {
               ]}
             />
             <div style={{ flex: 1 }} />
+            <PermissionGate accion="CREAR">
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MAlmacen/nuevo')}>
+                Nuevo
+              </Button>
+            </PermissionGate>
             <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>
         </div>
@@ -160,6 +162,7 @@ const Almacenes: React.FC = () => {
           loading={loading}
           scroll={{ x: 500 }}
           size="middle"
+          rowClassName="paces-row-hover"
           className="paces-border-top paces-list-table"
           pagination={{
             current: page,

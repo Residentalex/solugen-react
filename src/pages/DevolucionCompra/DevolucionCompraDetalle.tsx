@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Typography, Tooltip, Alert
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Typography, Tooltip, Alert, Modal,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -16,6 +16,7 @@ import {
   EnvironmentOutlined,
   FileTextOutlined,
   FileSearchOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -24,8 +25,6 @@ import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 import PermissionGate from '../../components/PermissionGate';
 
 const { Text } = Typography;
-const { TabPane } = Tabs;
-
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
   1: { label: 'Aplicado', color: 'success' },
@@ -180,6 +179,9 @@ const DevolucionCompraDetalle: React.FC = () => {
   const [imprimiendo, setImprimiendo] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [tieneScan, setTieneScan] = useState<boolean | null>(null);
+  const [scannerModalOpen, setScannerModalOpen] = useState(false);
+  const [scannerUrl, setScannerUrl] = useState<string | null>(null);
+  const [scannerLoading, setScannerLoading] = useState(false);
   const screens = Grid.useBreakpoint();
 
   useEffect(() => {
@@ -240,6 +242,21 @@ const DevolucionCompraDetalle: React.FC = () => {
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
+  const handleVerScanner = async () => {
+    if (!id) return;
+    setScannerLoading(true);
+    try {
+      const blob = await devolucionCompraApi.descargarScan(sucursalActiva, parseInt(id));
+      const url = URL.createObjectURL(blob);
+      setScannerUrl(url);
+      setScannerModalOpen(true);
+    } catch {
+      message.error('Error al cargar el archivo escaneado');
+    } finally {
+      setScannerLoading(false);
+    }
+  };
+
   if (loading || !data) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
@@ -270,6 +287,8 @@ const DevolucionCompraDetalle: React.FC = () => {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { paddingLeft: 16 } }),
+      onHeaderCell: () => ({ style: { paddingLeft: 16 } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -304,14 +323,23 @@ const DevolucionCompraDetalle: React.FC = () => {
       title: 'Costo',
       dataIndex: 'costo',
       key: 'costo',
-      width: 120,
+      width: 130,
       align: 'right' as const,
-      render: (_: any, record: any) => (
-        <div>
-          <div>{formatNumber(record.costo || 0)}</div>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
-        </div>
-      ),
+      render: (_: any, record: any) => {
+        const costoBase = Number(record.costo) || 0;
+        const pctDesc = Number(record.porcentajeDescuento) || 0;
+        const factor = Number(record.medida?.factor) || 1;
+        const costoConDescuento = costoBase - ((costoBase * pctDesc) / 100);
+        const costoUnitario = costoConDescuento / factor;
+        return (
+          <div>
+            <div>{formatNumber(costoBase)}</div>
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+              {formatNumber(costoUnitario)} × {factor}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: 'Descuento',
@@ -324,6 +352,20 @@ const DevolucionCompraDetalle: React.FC = () => {
           <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
             {formatNumber(record.descuento || 0)}
           </div>
+        </div>
+      ),
+    },
+    {
+      title: 'SubTotal',
+      dataIndex: 'subTotal',
+      key: 'subTotal',
+      width: 120,
+      align: 'right' as const,
+      responsive: ['md' as const, 'lg' as const],
+      render: (_: any, record: any) => (
+        <div>
+          <div>{formatNumber(record.subTotal || 0)}</div>
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
         </div>
       ),
     },
@@ -345,24 +387,13 @@ const DevolucionCompraDetalle: React.FC = () => {
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
-      width: 130,
+      width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { paddingRight: 16 } }),
+      onHeaderCell: () => ({ style: { paddingRight: 16 } }),
       render: (_: any, record: any) => (
         <div>
           <Text strong>{formatNumber(record.total || 0)}</Text>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
-        </div>
-      ),
-    },
-    {
-      title: 'Subtotal',
-      dataIndex: 'subTotal',
-      key: 'subTotal',
-      width: 130,
-      align: 'right' as const,
-      render: (_: any, record: any) => (
-        <div>
-          <Text strong>{formatNumber(record.subTotal || 0)}</Text>
           <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
         </div>
       ),
@@ -414,6 +445,23 @@ const DevolucionCompraDetalle: React.FC = () => {
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al aplicar');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDesaplicar = async () => {
+    if (!id || !data) return;
+    setSaving(true);
+    try {
+      const documento = `${data.documento.codigo}-${data.noDocumento}`;
+      await devolucionCompraApi.desaplicar(sucursalActiva, documento);
+      message.success('Documento desaplicado exitosamente');
+      const res = await devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al desaplicar');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -547,14 +595,32 @@ const DevolucionCompraDetalle: React.FC = () => {
           </PermissionGate>
           {data.estado === 0 && data.periodo !== 6 && (
             <PermissionGate accion="APLICAR">
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleAplicar}>
+              <Button style={{ background: '#389e0d', borderColor: '#389e0d', color: '#fff' }} icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
+                Modal.confirm({
+                  title: 'Aplicar documento',
+                  icon: <ExclamationCircleOutlined />,
+                  content: '¿Está seguro que desea aplicar este documento?',
+                  okText: 'Sí',
+                  cancelText: 'No',
+                  onOk: handleAplicar,
+                });
+              }}>
                 Aplicar
               </Button>
             </PermissionGate>
           )}
           {data.estado !== 3 && (
             <PermissionGate accion="ANULAR">
-              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
+              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={() => {
+                Modal.confirm({
+                  title: 'Anular documento',
+                  icon: <ExclamationCircleOutlined />,
+                  content: '¿Está seguro que desea anular este documento?',
+                  okText: 'Sí',
+                  cancelText: 'No',
+                  onOk: handleAnular,
+                });
+              }}>
                 Anular
               </Button>
             </PermissionGate>
@@ -562,18 +628,59 @@ const DevolucionCompraDetalle: React.FC = () => {
           {data.estado === 1 && (
             <>
               <PermissionGate accion="REVISAR">
-                <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleRevisar}>
+                <Button icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
+                  Modal.confirm({
+                    title: 'Marcar como revisado',
+                    icon: <ExclamationCircleOutlined />,
+                    content: '¿Está seguro que desea marcar este documento como revisado?',
+                    okText: 'Sí',
+                    cancelText: 'No',
+                    onOk: handleRevisar,
+                  });
+                }}>
                   Revisado
                 </Button>
               </PermissionGate>
+              <PermissionGate accion="DESAPLICAR">
+                <Button icon={<RedoOutlined />} loading={saving} onClick={() => {
+                  Modal.confirm({
+                    title: 'Desaplicar documento',
+                    icon: <ExclamationCircleOutlined />,
+                    content: '¿Está seguro que desea desaplicar este documento?',
+                    okText: 'Sí',
+                    cancelText: 'No',
+                    onOk: handleDesaplicar,
+                  });
+                }}>
+                  Desaplicar
+                </Button>
+              </PermissionGate>
               <PermissionGate accion="POSTEAR">
-                <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handlePostear}>Postear</Button>
+                <Button icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
+                  Modal.confirm({
+                    title: 'Postear documento',
+                    icon: <ExclamationCircleOutlined />,
+                    content: '¿Está seguro que desea postear este documento?',
+                    okText: 'Sí',
+                    cancelText: 'No',
+                    onOk: handlePostear,
+                  });
+                }}>Postear</Button>
               </PermissionGate>
             </>
           )}
           {data.estado === 1 && data.revisado === true && (
             <PermissionGate accion="REVERSAR">
-              <Button danger icon={<RedoOutlined />} loading={saving} onClick={handleReversar}>
+              <Button danger icon={<RedoOutlined />} loading={saving} onClick={() => {
+                Modal.confirm({
+                  title: 'Reversar documento',
+                  icon: <ExclamationCircleOutlined />,
+                  content: '¿Está seguro que desea reversar este documento?',
+                  okText: 'Sí',
+                  cancelText: 'No',
+                  onOk: handleReversar,
+                });
+              }}>
                 Reversar
               </Button>
             </PermissionGate>
@@ -597,8 +704,13 @@ const DevolucionCompraDetalle: React.FC = () => {
 )}
                     <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
                     {tieneScan === true && (
-                      <Tooltip title="Documento escaneado">
-                        <Tag icon={<FileTextOutlined />} color="success" />
+                      <Tooltip title="Ver documento escaneado">
+                        <Tag
+                          icon={<FileTextOutlined />}
+                          color="success"
+                          style={{ cursor: 'pointer' }}
+                          onClick={handleVerScanner}
+                        />
                       </Tooltip>
                     )}
                     {tieneScan === false && (
@@ -620,36 +732,54 @@ const DevolucionCompraDetalle: React.FC = () => {
               </Descriptions>
             </Card>
 
-            <Tabs defaultActiveKey="detalles" type="card">
-              <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                  <Input.Search
-                    placeholder="Buscar detalle..."
-                    allowClear
-                    style={{ maxWidth: 250 }}
-                    onSearch={(value) => setDetalleSearch(value)}
-                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                  />
-                </div>
-                <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-              </TabPane>
-              <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-                <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
-                  summary={() => (
-                    <Table.Summary fixed>
-                      <Table.Summary.Row>
-                        <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                      </Table.Summary.Row>
-                    </Table.Summary>
-                  )}
-                />
-              </TabPane>
-              <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
-                <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-              </TabPane>
-            </Tabs>
+            <Tabs
+              defaultActiveKey="detalles"
+              type="card"
+              items={[
+                {
+                  key: 'detalles',
+                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                  children: (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                        <Input.Search
+                          placeholder="Buscar detalle..."
+                          allowClear
+                          style={{ maxWidth: 250 }}
+                          onSearch={(value) => setDetalleSearch(value)}
+                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                        />
+                      </div>
+                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                    </>
+                  ),
+                },
+                {
+                  key: 'asientos',
+                  label: `Asientos (${data.asientos?.length || 0})`,
+                  children: (
+                    <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
+                      summary={() => (
+                        <Table.Summary fixed>
+                          <Table.Summary.Row>
+                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                            <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      )}
+                    />
+                  ),
+                },
+                {
+                  key: 'historial',
+                  label: `Historial (${data.logs?.length || 0})`,
+                  children: (
+                    <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                  ),
+                },
+              ]}
+            />
           </Col>
 
           <Col lg={6}>
@@ -676,8 +806,13 @@ const DevolucionCompraDetalle: React.FC = () => {
 )}
                     <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
                     {tieneScan === true && (
-                      <Tooltip title="Documento escaneado">
-                        <Tag icon={<FileTextOutlined />} color="success" />
+                      <Tooltip title="Ver documento escaneado">
+                        <Tag
+                          icon={<FileTextOutlined />}
+                          color="success"
+                          style={{ cursor: 'pointer' }}
+                          onClick={handleVerScanner}
+                        />
                       </Tooltip>
                     )}
                     {tieneScan === false && (
@@ -701,36 +836,54 @@ const DevolucionCompraDetalle: React.FC = () => {
 
             <SuplidorCard entidad={data.entidad} suplidor={data.suplidor} />
 
-            <Tabs defaultActiveKey="detalles" type="card">
-              <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                  <Input.Search
-                    placeholder="Buscar detalle..."
-                    allowClear
-                    style={{ maxWidth: 250 }}
-                    onSearch={(value) => setDetalleSearch(value)}
-                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                  />
-                </div>
-                <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-              </TabPane>
-              <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-                <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
-                  summary={() => (
-                    <Table.Summary fixed>
-                      <Table.Summary.Row>
-                        <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                      </Table.Summary.Row>
-                    </Table.Summary>
-                  )}
-                />
-              </TabPane>
-              <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
-                <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-              </TabPane>
-            </Tabs>
+            <Tabs
+              defaultActiveKey="detalles"
+              type="card"
+              items={[
+                {
+                  key: 'detalles',
+                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                  children: (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                        <Input.Search
+                          placeholder="Buscar detalle..."
+                          allowClear
+                          style={{ maxWidth: 250 }}
+                          onSearch={(value) => setDetalleSearch(value)}
+                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                        />
+                      </div>
+                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                    </>
+                  ),
+                },
+                {
+                  key: 'asientos',
+                  label: `Asientos (${data.asientos?.length || 0})`,
+                  children: (
+                    <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
+                      summary={() => (
+                        <Table.Summary fixed>
+                          <Table.Summary.Row>
+                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                            <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      )}
+                    />
+                  ),
+                },
+                {
+                  key: 'historial',
+                  label: `Historial (${data.logs?.length || 0})`,
+                  children: (
+                    <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                  ),
+                },
+              ]}
+            />
 
           <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true}
             monedaSimbolo={data.moneda?.simbolo || 'RD$'}
@@ -739,6 +892,29 @@ const DevolucionCompraDetalle: React.FC = () => {
           />
         </div>
       )}
+
+      {/* Modal de Visor de Scanner */}
+      <Modal
+        title="Documento Escaneado"
+        open={scannerModalOpen}
+        onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
+        width="80%"
+        style={{ top: 20 }}
+        footer={null}
+        destroyOnHidden
+      >
+        {scannerLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin />
+          </div>
+        ) : scannerUrl ? (
+          <iframe src={scannerUrl} style={{ width: '100%', height: '70vh', border: 'none' }} title="Scanner" />
+        ) : (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin />
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

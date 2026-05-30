@@ -281,7 +281,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   // ===== Cargar conceptos =====
   const cargarConceptos = useCallback(async () => {
     try {
-      const res = await conceptosApi.obtenerConceptos(sucursalActiva, 'DBA');
+      const res = await conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'DBA');
       setConceptosCache(res || []);
       return res || [];
     } catch {
@@ -446,69 +446,6 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     }
   };
 
-  const handleAplicar = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      const result = await distribucionBalanceApi.aplicar(sucursalActiva, parseInt(id));
-      setData(result);
-      message.success('Documento aplicado exitosamente');
-      navigate(`/${codigoPantalla}/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDesaplicar = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      await distribucionBalanceApi.desaplicar(sucursalActiva, data.noDocumento || '');
-      message.success('Documento desaplicado exitosamente');
-      navigate(`/${codigoPantalla}/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al desaplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAnular = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await distribucionBalanceApi.anular(sucursalActiva, dto);
-      message.success('Documento anulado exitosamente');
-      navigate(`/${codigoPantalla}/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al anular');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePostear = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await distribucionBalanceApi.postear(sucursalActiva, dto);
-      message.success('Documento posteado exitosamente');
-      navigate(`/${codigoPantalla}/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al postear');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleGenerarAsientos = async () => {
     if (!id) return;
     setSaving(true);
@@ -536,11 +473,16 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     // Cargar entidades según concepto
     cargarEntidades(concepto.codigo);
 
-    // Configurar moneda según el concepto
-    const monedaNombre = concepto.moneda?.nombre || 'Peso Dominicano';
+    // === ConfigurarMoneda ===
+    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
     form.setFieldsValue({
-      moneda: monedaNombre,
-      tasa: 1,
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+    });
+    // Actualizar data local para que la UI lo refleje
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, moneda: monedaObj };
     });
   };
 
@@ -680,26 +622,6 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
             {esBorrador && (
               <Button icon={<CloseOutlined />} onClick={handleCancelar}>
                 Cancelar
-              </Button>
-            )}
-            {esBorrador && (
-              <Button icon={<ExclamationCircleOutlined />} loading={saving} onClick={handleAplicar}>
-                Aplicar
-              </Button>
-            )}
-            {esAplicado && (
-              <Button icon={<ExclamationCircleOutlined />} loading={saving} onClick={handleDesaplicar}>
-                Desaplicar
-              </Button>
-            )}
-            {esAplicado && (
-              <Button icon={<ExclamationCircleOutlined />} loading={saving} onClick={handlePostear}>
-                Postear
-              </Button>
-            )}
-            {!esAnulado && (
-              <Button danger icon={<DeleteOutlined />} loading={saving} onClick={handleAnular}>
-                Anular
               </Button>
             )}
             {id && (

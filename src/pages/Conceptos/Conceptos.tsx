@@ -3,6 +3,7 @@ import {
   Table,
   Card,
   Input,
+  Select,
   Tag,
   Button,
   Typography,
@@ -15,7 +16,8 @@ import {
   Alert,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
+import PermissionGate from '../../components/PermissionGate';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { conceptosApi } from '../../api/conceptosApi';
@@ -46,6 +48,7 @@ const Conceptos: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [detalleItem, setDetalleItem] = useState<ConceptoDTO | null>(null);
+  const [pageSize, setPageSize] = useState(25);
   const [loadingError, setLoadingError] = useState(false);
 
   const cargarDatos = useCallback(async (filtro?: string) => {
@@ -170,7 +173,20 @@ const Conceptos: React.FC = () => {
               style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
+            <Select
+              style={{ width: 65 }}
+              value={pageSize}
+              onChange={(v) => { setPageSize(v); }}
+              options={[
+                { value: 25, label: '25' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
+              ]}
+            />
             <div style={{ flex: 1 }} />
+            <PermissionGate accion="CREAR">
+              <Button type="primary" icon={<PlusOutlined />}>Nuevo</Button>
+            </PermissionGate>
             <Button icon={<ReloadOutlined />} onClick={handleRecargar} />
           </div>
         </div>
@@ -183,11 +199,10 @@ const Conceptos: React.FC = () => {
           scroll={{ x: 700 }}
           size="middle"
           pagination={{
-            showSizeChanger: true,
+            showSizeChanger: false,
+            pageSize,
             showTotal: (total, range) =>
               `${range[0]}-${range[1]} de ${total} conceptos`,
-            pageSizeOptions: ['10', '20', '50'],
-            defaultPageSize: 10,
           }}
           locale={{
             emptyText: <Empty description="No hay conceptos registrados" />,

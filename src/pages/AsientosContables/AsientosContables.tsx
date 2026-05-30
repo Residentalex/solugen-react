@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Alert, Table, Select, Tag, message, Card, Button, Typography } from 'antd';
+import { Alert, Table, Select, Tag, message, Card, Button, Typography, Input } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -7,7 +7,7 @@ import { asientoContableApi } from '../../api/asientoContableApi';
 import FiltrosDocumento from '../../components/FiltrosDocumento/FiltrosDocumento';
 import type { TransaccionVistaDTO } from '../../types/transaccion';
 import type { ColumnsType } from 'antd/es/table';
-import { ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
@@ -62,6 +62,7 @@ const AsientosContables: React.FC = () => {
   const [selectedRow, setSelectedRow] = useState<TransaccionVistaDTO | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [loadingError, setLoadingError] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
 
   const rangoDefault = useMemo(() => ({
@@ -94,17 +95,40 @@ const AsientosContables: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva, filtros.desde, filtros.hasta, filtros.estado]);
+  }, [sucursalActiva, rangoDefault, filtros]);
+
+  // ===== Filtrado client-side por búsqueda de texto =====
+  const filteredData = useMemo(() => {
+    if (!searchText || searchText.length < 2) return data;
+    const q = searchText.toLowerCase();
+    return data.filter((item) => {
+      const doc = item.documento || '';
+      const entidad = item.entidad || '';
+      const concepto = item.concepto || '';
+      const ncf = item.ncf || '';
+      return (
+        doc.toLowerCase().includes(q) ||
+        entidad.toLowerCase().includes(q) ||
+        concepto.toLowerCase().includes(q) ||
+        ncf.toLowerCase().includes(q)
+      );
+    });
+  }, [data, searchText]);
 
   useEffect(() => {
     cargarDatos(page, pageSize);
-  }, [page, pageSize, refreshTrigger, filtros, cargarDatos]);
+  }, [page, pageSize, refreshTrigger, cargarDatos]);
 
   useEffect(() => {
     setActiveModule('FAsientoContable');
     updateToolbar({});
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
+
+  const handleSearch = (value: string) => {
+    setSearchText(value);
+    setPage(1);
+  };
 
   const handleRefresh = () => {
     setLoadingError(false);
@@ -120,7 +144,7 @@ const AsientosContables: React.FC = () => {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 160,
+      width: 200,
       fixed: 'left',
       render: (doc: any, record: TransaccionVistaDTO) => (
         <Text strong className="paces-doc-link" onClick={() => navigate(`/FAsientoContable/${record.id}`)}>
@@ -146,7 +170,7 @@ const AsientosContables: React.FC = () => {
       title: 'Concepto',
       dataIndex: 'concepto',
       key: 'concepto',
-      width: 220,
+      width: 320,
       ellipsis: true,
       render: (v: string) => <Text>{titlecase(v || '')}</Text>,
     },
@@ -207,6 +231,13 @@ const AsientosContables: React.FC = () => {
             ]}
             rangoDefault={rangoDefault}
           />
+          <Input.Search
+            placeholder="Buscar documento, entidad, concepto..."
+            allowClear
+            onSearch={handleSearch}
+            style={{ width: 400 }}
+            prefix={<SearchOutlined className="paces-text-icon" />}
+          />
           <Select
             style={{ width: 65 }}
             value={pageSize}
@@ -217,23 +248,25 @@ const AsientosContables: React.FC = () => {
               { value: 100, label: '100' },
             ]}
           />
-          <Button type="primary" icon={<ReloadOutlined />} onClick={handleRefresh} style={{ marginLeft: 'auto' }} />
+          <div style={{ flex: 1 }} />
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>
 
       <Table<TransaccionVistaDTO>
         columns={columns}
-        dataSource={data}
+        dataSource={filteredData}
         rowKey="id"
         loading={loading}
         size="middle"
-        scroll={{ x: 900 }}
+        scroll={{ x: 1100 }}
+        className="paces-border-top paces-list-table"
         pagination={{
           current: page,
           pageSize,
-          total: total,
+          total: searchText.length >= 2 ? filteredData.length : total,
           showSizeChanger: false,
-          showTotal: (t) => `Aprox. ${t} registros`,
+          showTotal: (t) => `${t} registros`,
         }}
         onChange={(pagination) => {
           if (pagination.current) setPage(pagination.current);

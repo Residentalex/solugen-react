@@ -33,7 +33,6 @@ import type {
 
 const { Text } = Typography;
 const { TextArea } = Input;
-const { TabPane } = Tabs;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
@@ -155,9 +154,7 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({ open, onClose
   const cargar = useCallback(async (filtro?: string) => {
     setLoading(true);
     try {
-      const params: Record<string, any> = { documento: 'ND' };
-      if (filtro) params.filtro = filtro;
-      const res = await conceptosApi.obtenerConceptos(sucursalActiva, filtro);
+      const res = await conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'NDB', filtro);
       setConceptos(res || []);
     } catch {
       message.error('Error al cargar conceptos');
@@ -464,7 +461,7 @@ const TotalesCard: React.FC<{
       {monedaSimbolo && (
         <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
           {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{monedaNombre || 'Peso Dominicano'} ({monedaSimbolo} {formatNumber(tasa ?? 1)})</span>
+          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo} {formatNumber(tasa ?? 1)})</span>
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
@@ -483,7 +480,7 @@ const TotalesCard: React.FC<{
     <Divider style={{ margin: '12px 0' }} />
     <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
       {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
+      <span style={{ color: 'var(--paces-primary)' }}>{monedaSimbolo || 'RD$'} {formatNumber(total)}</span>
     </div>
   </Card>
 );
@@ -547,9 +544,6 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
   // ===== Determinar acciones según estado =====
   const puedeGuardar = mode === 'crear' || esBorrador;
-  const puedeAplicar = mode === 'editar' && esBorrador && !esCerrado;
-  const puedePostear = mode === 'editar' && esAplicado && !esCerrado;
-  const puedeAnular = mode === 'editar' && !esAnulado && !esCerrado;
 
   // ===== Cargar datos de apoyo al montar =====
   useEffect(() => {
@@ -674,10 +668,22 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     setSelectedConcepto(concepto);
     form.setFieldsValue({ concepto: concepto.codigo });
 
-    // Cargar entidades según el concepto
+    // Cargar entidades segÃºn el concepto
     conceptosApi.obtenerEntidades(sucursalActiva, concepto.codigo)
       .then((ents) => setEntidadesCache(ents))
       .catch(() => {});
+
+    // === ConfigurarMoneda ===
+    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    form.setFieldsValue({
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+    });
+    // Actualizar data local para que la UI lo refleje
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, moneda: monedaObj };
+    });
   };
 
   const handleConceptoClear = () => {
@@ -900,63 +906,6 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     }
   };
 
-  const handleAplicar = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      await notaDebitoApi.aplicar(sucursalActiva, parseInt(id));
-      message.success('Documento aplicado exitosamente');
-      navigate(`/${codigoPantalla}/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAnular = async () => {
-    if (!data) return;
-    Modal.confirm({
-      title: 'Anular Nota de Débito',
-      icon: <ExclamationCircleOutlined />,
-      content: '¿Está seguro de anular este documento? Esta acción no se puede deshacer.',
-      okText: 'Sí, anular',
-      cancelText: 'No',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        setSaving(true);
-        try {
-          const dto = construirDTO();
-          await notaDebitoApi.anular(sucursalActiva, dto);
-          message.success('Documento anulado exitosamente');
-          navigate(`/${codigoPantalla}/${id}`);
-        } catch (err: any) {
-          const msg = extraerMensajeError(err, 'Error al anular');
-          message.error(msg);
-        } finally {
-          setSaving(false);
-        }
-      },
-    });
-  };
-
-  const handlePostear = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await notaDebitoApi.postear(sucursalActiva, dto);
-      message.success('Documento posteado exitosamente');
-      navigate(`/${codigoPantalla}/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al postear');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleGenerarAsientos = async () => {
     if (!id) {
       message.warning('Debe guardar el documento antes de generar asientos');
@@ -1145,21 +1094,6 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         <Button icon={<CloseOutlined />} onClick={handleCancelar}>
           Cancelar
         </Button>
-        {puedeAplicar && (
-          <Button icon={<ExclamationCircleOutlined />} loading={saving} onClick={handleAplicar}>
-            Aplicar
-          </Button>
-        )}
-        {puedePostear && (
-          <Button icon={<ExclamationCircleOutlined />} loading={saving} onClick={handlePostear}>
-            Postear
-          </Button>
-        )}
-        {puedeAnular && (
-          <Button danger icon={<DeleteOutlined />} loading={saving} onClick={handleAnular}>
-            Anular
-          </Button>
-        )}
       </Space>
     </div>
   );
@@ -1298,26 +1232,33 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   );
 
   // ===== Layout principal =====
-  const contenidoPestanas = (
-    <Tabs defaultActiveKey="documentos" type="card">
-      <TabPane tab={`Documentos (${documentosRelacionados.length})`} key="documentos">
-        <div style={{ marginBottom: 8 }}>
-          <Button type="dashed" icon={<PlusOutlined />} onClick={() => setBuscarDocModalOpen(true)}>
-            Agregar Documento
-          </Button>
-        </div>
-        <Table
-          dataSource={documentosRelacionados}
-          columns={docRelColumns}
-          rowKey={(r) => r.transaccionAsociadaID || r.id || 0}
-          size="small"
-          pagination={false}
-          scroll={{ x: 800 }}
-        />
-      </TabPane>
-
-      {tipoEntidad === 'SUP' && (
-        <TabPane tab={`Devoluciones (${devoluciones.length})`} key="devoluciones">
+  const tabItems = [
+    {
+      key: 'documentos',
+      label: `Documentos (${documentosRelacionados.length})`,
+      children: (
+        <>
+          <div style={{ marginBottom: 8 }}>
+            <Button type="dashed" icon={<PlusOutlined />} onClick={() => setBuscarDocModalOpen(true)}>
+              Agregar Documento
+            </Button>
+          </div>
+          <Table
+            dataSource={documentosRelacionados}
+            columns={docRelColumns}
+            rowKey={(r) => r.transaccionAsociadaID || r.id || 0}
+            size="small"
+            pagination={false}
+            scroll={{ x: 800 }}
+          />
+        </>
+      ),
+    },
+    ...(tipoEntidad === 'SUP' ? [{
+      key: 'devoluciones',
+      label: `Devoluciones (${devoluciones.length})`,
+      children: (
+        <>
           <div style={{ marginBottom: 8 }}>
             <Button type="dashed" icon={<PlusOutlined />} onClick={() => setBuscarDevModalOpen(true)}>
               Agregar Devolución
@@ -1331,68 +1272,87 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
             pagination={false}
             scroll={{ x: 600 }}
           />
-        </TabPane>
-      )}
-
-      <TabPane tab={`Impuestos y Retenciones (${impuestosRetenciones.length})`} key="impuestos">
-        <div style={{ marginBottom: 8 }}>
-          <Button type="dashed" icon={<PlusOutlined />} onClick={handleImpuestoAdd}>
-            Agregar
-          </Button>
-        </div>
-        <Table
-          dataSource={impuestosRetenciones}
-          columns={impuestoColumns}
-          rowKey={(r) => r.id || 0}
-          size="small"
-          pagination={false}
-          scroll={{ x: 600 }}
-        />
-        <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end', gap: 16 }}>
-          <Text className="paces-text-secondary">SubTotal: <strong>{formatNumber(totales.subTotal)}</strong></Text>
-          <Text className="paces-text-secondary">Impuestos: <strong>{formatNumber(totales.impuestos)}</strong></Text>
-          <Text className="paces-text-secondary">Retenciones: <strong>{formatNumber(totales.retenciones)}</strong></Text>
-        </div>
-      </TabPane>
-
-      <TabPane tab={`Asientos (${data?.asientos?.length || 0})`} key="asientos">
-        {mode === 'editar' && (
-          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button icon={<ExclamationCircleOutlined />} loading={saving} onClick={handleGenerarAsientos}>
-              GENERAR
+        </>
+      ),
+    }] : []),
+    {
+      key: 'impuestos',
+      label: `Impuestos y Retenciones (${impuestosRetenciones.length})`,
+      children: (
+        <>
+          <div style={{ marginBottom: 8 }}>
+            <Button type="dashed" icon={<PlusOutlined />} onClick={handleImpuestoAdd}>
+              Agregar
             </Button>
           </div>
-        )}
-        <Table
-          dataSource={data?.asientos || []}
-          columns={asientoColumns}
-          rowKey={(r) => r.id || 0}
-          size="small"
-          pagination={false}
-          scroll={{ x: 600 }}
-          summary={() => (
-            <Table.Summary fixed>
-              <Table.Summary.Row>
-                <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-              </Table.Summary.Row>
-            </Table.Summary>
+          <Table
+            dataSource={impuestosRetenciones}
+            columns={impuestoColumns}
+            rowKey={(r) => r.id || 0}
+            size="small"
+            pagination={false}
+            scroll={{ x: 600 }}
+          />
+          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end', gap: 16 }}>
+            <Text className="paces-text-secondary">SubTotal: <strong>{formatNumber(totales.subTotal)}</strong></Text>
+            <Text className="paces-text-secondary">Impuestos: <strong>{formatNumber(totales.impuestos)}</strong></Text>
+            <Text className="paces-text-secondary">Retenciones: <strong>{formatNumber(totales.retenciones)}</strong></Text>
+          </div>
+        </>
+      ),
+    },
+    {
+      key: 'asientos',
+      label: `Asientos (${data?.asientos?.length || 0})`,
+      children: (
+        <>
+          {mode === 'editar' && (
+            <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button icon={<ExclamationCircleOutlined />} loading={saving} onClick={handleGenerarAsientos}>
+                GENERAR
+              </Button>
+            </div>
           )}
-        />
-      </TabPane>
+          <Table
+            dataSource={data?.asientos || []}
+            columns={asientoColumns}
+            rowKey={(r) => r.id || 0}
+            size="small"
+            pagination={false}
+            scroll={{ x: 600 }}
+            summary={() => (
+              <Table.Summary fixed>
+                <Table.Summary.Row>
+                  <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                  <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                  <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                </Table.Summary.Row>
+              </Table.Summary>
+            )}
+          />
+        </>
+      ),
+    },
+    {
+      key: 'historial',
+      label: `Historial (${data?.logs?.length || 0})`,
+      children: (
+        <>
+          <Table
+            dataSource={data?.logs || []}
+            columns={logColumns}
+            rowKey={(r) => r.id || 0}
+            size="small"
+            pagination={false}
+            scroll={{ x: 900 }}
+          />
+        </>
+      ),
+    },
+  ];
 
-      <TabPane tab={`Historial (${data?.logs?.length || 0})`} key="historial">
-        <Table
-          dataSource={data?.logs || []}
-          columns={logColumns}
-          rowKey={(r) => r.id || 0}
-          size="small"
-          pagination={false}
-          scroll={{ x: 900 }}
-        />
-      </TabPane>
-    </Tabs>
+  const contenidoPestanas = (
+    <Tabs defaultActiveKey="documentos" type="card" items={tabItems} />
   );
 
   const handleRefresh = useCallback(() => {
@@ -1472,8 +1432,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
               total={Number(montoTotalWatch) || 0}
               tasa={Form.useWatch('tasa', form) || 1}
               alignRight={false}
-              monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
-              monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
             />
           </Col>
         </Row>
@@ -1489,8 +1449,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
             total={Number(montoTotalWatch) || 0}
             tasa={Form.useWatch('tasa', form) || 1}
             alignRight={true}
-            monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
-            monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
+            monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+            monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
           />
           {contenidoPestanas}
         </div>

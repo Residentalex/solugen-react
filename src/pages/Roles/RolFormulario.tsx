@@ -304,10 +304,10 @@ const RolFormulario: React.FC = () => {
                                 padding: '6px 8px',
                                 borderRadius: 6,
                                 marginBottom: 4,
-                                background: algunaSeleccionada ? '#f0f5ff' : '#fafafa',
+                                background: algunaSeleccionada ? 'var(--paces-selected-bg)' : 'var(--paces-topbar-search-bg)',
                                 border: algunaSeleccionada
-                                  ? '1px solid #d6e4ff'
-                                  : '1px solid #f0f0f0',
+                                  ? '1px solid var(--paces-primary)'
+                                  : '1px solid transparent',
                                 flexWrap: 'wrap',
                                 gap: 4,
                               }}
@@ -344,11 +344,11 @@ const RolFormulario: React.FC = () => {
                                       padding: '1px 2px',
                                       borderRadius: 4,
                                       background: selected.includes(acc)
-                                        ? '#e6f7ff'
-                                        : '#fff',
+                                        ? 'var(--paces-hover-bg)'
+                                        : 'transparent',
                                       border: selected.includes(acc)
-                                        ? '1px solid #91d5ff'
-                                        : '1px solid #d9d9d9',
+                                        ? '1px solid var(--paces-primary)'
+                                        : '1px solid var(--paces-border)',
                                     }}
                                   >
                                     <Checkbox

@@ -8,6 +8,7 @@ import {
   PlusOutlined, SearchOutlined, ReloadOutlined,
   WarningFilled, WarningOutlined, ClockCircleOutlined, CheckCircleOutlined,
 } from '@ant-design/icons';
+import PermissionGate from '../../components/PermissionGate';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { ncfApi } from '../../api/ncfApi';
@@ -56,6 +57,7 @@ const SecuenciasNCF: React.FC = () => {
   const [filtroEstado, setFiltroEstado] = useState('todas');
   const [filtroVencimiento, setFiltroVencimiento] = useState('todas');
   const [pagina, setPagina] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [modalProntoVisible, setModalProntoVisible] = useState(false);
 
   const screens = Grid.useBreakpoint();
@@ -327,16 +329,18 @@ const SecuenciasNCF: React.FC = () => {
             {totalActivas} activas · {enAlerta} próx. a agotarse · {vencidas} vencidas
           </Text>
         </div>
-        <Button
-          type="default"
-          icon={<PlusOutlined />}
-          onClick={() => setModalProntoVisible(true)}
-        >
-          Nueva Secuencia{' '}
-          <Tag color="orange" style={{ marginLeft: 4, fontSize: 10 }}>
-            Pronto
-          </Tag>
-        </Button>
+        <PermissionGate accion="CREAR">
+          <Button
+            type="default"
+            icon={<PlusOutlined />}
+            onClick={() => setModalProntoVisible(true)}
+          >
+            Nueva Secuencia{' '}
+            <Tag color="orange" style={{ marginLeft: 4, fontSize: 10 }}>
+              Pronto
+            </Tag>
+          </Button>
+        </PermissionGate>
       </div>
 
       <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
@@ -387,6 +391,16 @@ const SecuenciasNCF: React.FC = () => {
                 { value: 'vencida', label: 'Vencida' },
               ]}
             />
+            <Select
+              style={{ width: 65 }}
+              value={pageSize}
+              onChange={(v) => { setPageSize(v); setPagina(1); }}
+              options={[
+                { value: 25, label: '25' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
+              ]}
+            />
             <div style={{ flex: 1 }} />
             <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>
@@ -415,11 +429,10 @@ const SecuenciasNCF: React.FC = () => {
           })}
           pagination={{
             current: pagina,
+            pageSize,
             onChange: (p) => setPagina(p),
-            showSizeChanger: true,
+            showSizeChanger: false,
             showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} secuencias`,
-            pageSizeOptions: ['10', '20', '50', '100'],
-            defaultPageSize: 10,
           }}
           locale={{
             emptyText:

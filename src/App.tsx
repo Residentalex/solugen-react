@@ -105,6 +105,10 @@ import GeneradorORC from './pages/GeneradorORC/GeneradorORC';
 import GeneradorORCDetalle from './pages/GeneradorORC/GeneradorORCDetalle';
 import Tickets from './pages/Tickets/Tickets';
 import VisualizarConsulta from './pages/Notificaciones/VisualizarConsulta';
+import PlantillaSuplidor from './pages/PlantillaSuplidor/PlantillaSuplidor';
+import PlantillaSuplidorDetalle from './pages/PlantillaSuplidor/PlantillaSuplidorDetalle';
+import PlantillaSuplidorFormulario from './pages/PlantillaSuplidor/PlantillaSuplidorFormulario';
+import MovimientoPorPlantilla from './pages/MovimientoPorPlantilla/MovimientoPorPlantilla';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -301,7 +305,12 @@ const App: React.FC = () => {
           <Route path="visualizar-consulta/:configID" element={<VisualizarConsulta />} />
           <Route path="MTicket" element={<Tickets />} />
           <Route path="MSucursal" element={<Proximamente modulo="Sucursales" codigo="MSucursal" />} />
-          <Route path="MServidor" element={<Proximamente modulo="Servidores" codigo="MServidor" />} />
+            <Route path="mplantillasup" element={<PlantillaSuplidor />} />
+            <Route path="mplantillasup/nuevo" element={<PlantillaSuplidorFormulario />} />
+            <Route path="mplantillasup/:id/editar" element={<PlantillaSuplidorFormulario />} />
+            <Route path="mplantillasup/:id" element={<PlantillaSuplidorDetalle />} />
+            <Route path="RMOVPLAN" element={<MovimientoPorPlantilla />} />
+            <Route path="MServidor" element={<Proximamente modulo="Servidores" codigo="MServidor" />} />
           <Route path="MPermiso" element={<Proximamente modulo="Permisos" codigo="MPermiso" />} />
           <Route path="MAuditoria" element={<Proximamente modulo="Historial y Auditoría" codigo="MAuditoria" />} />
           <Route path="MEmpresa" element={<Proximamente modulo="Configuración de la Empresa" codigo="MEmpresa" />} />

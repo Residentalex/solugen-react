@@ -15,8 +15,6 @@ import { cotizacionVentaApi } from '../../api/cotizacionVentaApi';
 import PermissionGate from '../../components/PermissionGate';
 import type { CotizacionVentaDetalleDTO } from '../../types/cotizacionVenta';
 
-const { TabPane } = Tabs;
-
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
   1: { label: 'Aplicado', color: 'success' },
@@ -216,8 +214,9 @@ const CotizacionVentaDetalle: React.FC = () => {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
+      onHeaderCell: () => ({ style: { paddingLeft: 8 } }),
       render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
+        <div style={{ fontSize: 13, paddingLeft: 8 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
           <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
             <span>
@@ -248,16 +247,24 @@ const CotizacionVentaDetalle: React.FC = () => {
     },
     {
       title: 'Precio',
-      dataIndex: 'precio',
       key: 'precio',
-      width: 120,
+      width: 130,
       align: 'right' as const,
-      render: (_: any, record: any) => (
-        <div>
-          <div>{formatNumber(record.precio || 0)}</div>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
-        </div>
-      ),
+      render: (_: any, record: any) => {
+        const precioBase = Number(record.precio) || 0;
+        const pctDesc = Number(record.porcentajeDescuento) || 0;
+        const factor = Number(record.medida?.factor) || 1;
+        const precioConDescuento = precioBase - ((precioBase * pctDesc) / 100);
+        const precioUnitario = precioConDescuento / factor;
+        return (
+          <div>
+            <div>{formatNumber(precioBase)}</div>
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+              {formatNumber(precioUnitario)} × {factor}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: 'Descuento',
@@ -302,12 +309,12 @@ const CotizacionVentaDetalle: React.FC = () => {
     },
     {
       title: 'Total',
-      dataIndex: 'total',
       key: 'total',
       width: 130,
       align: 'right' as const,
+      onHeaderCell: () => ({ style: { paddingRight: 8 } }),
       render: (_: any, record: any) => (
-        <div>
+        <div style={{ paddingRight: 8 }}>
           <strong>{formatNumber(record.total || 0)}</strong>
           <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
         </div>
@@ -490,31 +497,47 @@ const CotizacionVentaDetalle: React.FC = () => {
               </Descriptions>
             </Card>
 
-            <Tabs defaultActiveKey="detalles" type="card">
-              <TabPane tab={`Detalles (${data.detalles?.length || 0})`} key="detalles">
-                <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-              </TabPane>
-              <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-                {data.asientos && data.asientos.length > 0 ? (
-                  <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
-                    summary={() => (
-                      <Table.Summary fixed>
-                        <Table.Summary.Row>
-                          <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                          <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                          <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                        </Table.Summary.Row>
-                      </Table.Summary>
-                    )}
-                  />
-                ) : (
-                  <div style={{ textAlign: 'center', padding: 24 }} className="paces-text-secondary">Sin asientos contables</div>
-                )}
-              </TabPane>
-              <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
-                <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-              </TabPane>
-            </Tabs>
+            <Tabs
+              defaultActiveKey="detalles"
+              type="card"
+              items={[
+                {
+                  key: 'detalles',
+                  label: `Detalles (${data.detalles?.length || 0})`,
+                  children: (
+                    <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                  ),
+                },
+                {
+                  key: 'asientos',
+                  label: `Asientos (${data.asientos?.length || 0})`,
+                  children: (
+                    data.asientos && data.asientos.length > 0 ? (
+                      <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
+                        summary={() => (
+                          <Table.Summary fixed>
+                            <Table.Summary.Row>
+                              <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                              <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                              <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                            </Table.Summary.Row>
+                          </Table.Summary>
+                        )}
+                      />
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: 24 }} className="paces-text-secondary">Sin asientos contables</div>
+                    )
+                  ),
+                },
+                {
+                  key: 'historial',
+                  label: `Historial (${data.logs?.length || 0})`,
+                  children: (
+                    <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                  ),
+                },
+              ]}
+            />
           </Col>
 
           <Col lg={6}>
@@ -564,31 +587,47 @@ const CotizacionVentaDetalle: React.FC = () => {
 
           <ClienteCard entidad={data.entidad} />
 
-          <Tabs defaultActiveKey="detalles" type="card">
-            <TabPane tab={`Detalles (${data.detalles?.length || 0})`} key="detalles">
-              <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-            </TabPane>
-            <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-              {data.asientos && data.asientos.length > 0 ? (
-                <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
-                  summary={() => (
-                    <Table.Summary fixed>
-                      <Table.Summary.Row>
-                        <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                      </Table.Summary.Row>
-                    </Table.Summary>
-                  )}
-                />
-              ) : (
-                <div style={{ textAlign: 'center', padding: 24 }} className="paces-text-secondary">Sin asientos contables</div>
-              )}
-            </TabPane>
-            <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
-              <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-            </TabPane>
-          </Tabs>
+          <Tabs
+            defaultActiveKey="detalles"
+            type="card"
+            items={[
+              {
+                key: 'detalles',
+                label: `Detalles (${data.detalles?.length || 0})`,
+                children: (
+                  <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                ),
+              },
+              {
+                key: 'asientos',
+                label: `Asientos (${data.asientos?.length || 0})`,
+                children: (
+                  data.asientos && data.asientos.length > 0 ? (
+                    <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
+                      summary={() => (
+                        <Table.Summary fixed>
+                          <Table.Summary.Row>
+                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                            <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      )}
+                    />
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: 24 }} className="paces-text-secondary">Sin asientos contables</div>
+                  )
+                ),
+              },
+              {
+                key: 'historial',
+                label: `Historial (${data.logs?.length || 0})`,
+                children: (
+                  <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                ),
+              },
+            ]}
+          />
 
           <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
             monedaSimbolo={data.moneda?.simbolo || 'RD$'}

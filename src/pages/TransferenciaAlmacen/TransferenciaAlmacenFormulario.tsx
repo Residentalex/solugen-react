@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Popover, Alert,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Popover, Alert, Dropdown,
 } from 'antd';
 import {
   SaveOutlined,
@@ -14,12 +14,22 @@ import {
   ClearOutlined,
   ExclamationCircleOutlined,
   EditOutlined,
+  BarcodeOutlined,
+  MoreOutlined,
+  HolderOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons';
+import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
 import { productoApi } from '../../api/productoApi';
+import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
+import ScannerModal from '../../components/ScannerModal/ScannerModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type {
@@ -141,111 +151,6 @@ function filaVacia(): DetalleTRPInterno {
   };
 }
 
-// ===== Componente BuscarProductoModal (simplificado: sin impuesto, sin vencimiento) =====
-interface BuscarProductoModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (producto: {
-    codigo: string;
-    articulo: string;
-    referencia: string;
-    costo: number;
-    familia?: { nombre: string; idExterno: string };
-    medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
-  }) => void;
-}
-
-const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose, onSelect }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const [productos, setProductos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
-
-  const cargar = useCallback(async (filtro?: string) => {
-    setLoading(true);
-    try {
-      const res = await productoApi.obtenerListado(sucursalActiva, filtro ? { codigo: filtro } : undefined);
-      setProductos(res || []);
-    } catch {
-      message.error('Error al cargar productos');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (open) cargar();
-  }, [open, cargar]);
-
-  const columnas = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-    { title: 'Artículo', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-      render: (v: string) => toTitleCase(v) },
-    { title: 'Referencia', dataIndex: 'referencia', key: 'referencia', width: 120,
-      render: (v: string) => v || '-' },
-  ];
-
-  return (
-    <Modal
-      title="Buscar Producto"
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={700}
-      destroyOnHidden
-    >
-      <Input.Search
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        onSearch={(val) => cargar(val)}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={productos}
-        columns={columnas}
-        rowKey="codigo"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: async () => {
-            try {
-              const detalle = await productoApi.obtenerDetalle(sucursalActiva, record.codigo);
-              onSelect({
-                codigo: record.codigo,
-                articulo: detalle.nombre || record.nombre,
-                referencia: detalle.referenciaInterna || record.referencia || '',
-                costo: detalle.ultimoCosto || record.ultimoCosto || 0,
-                familia: detalle.familia || record.familia,
-                medida: detalle.unidadMedida
-                  ? { nombre: detalle.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: detalle.unidadMedida.idExterno || 0 }
-                  : record.unidadMedida
-                    ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: record.unidadMedida.idExterno || 0 }
-                    : undefined,
-              });
-            } catch {
-              onSelect({
-                codigo: record.codigo,
-                articulo: record.nombre,
-                referencia: record.referencia || '',
-                costo: record.ultimoCosto || 0,
-                familia: record.familia,
-                medida: record.unidadMedida
-                  ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: record.unidadMedida.idExterno || 0 }
-                  : undefined,
-              });
-            }
-            onClose();
-          },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
-};
-
 // ===== Componente TotalesCard (sin descuento ni impuestos) =====
 interface TotalesCardProps {
   subTotal: number;
@@ -265,7 +170,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, total, alignRight, 
       {monedaSimbolo && tasa !== undefined && (
         <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
           {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{monedaNombre || 'Peso Dominicano'} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
+          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
@@ -278,10 +183,46 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, total, alignRight, 
 
     <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
       {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
+      <span style={{ color: 'var(--paces-primary)' }}>{monedaSimbolo || 'RD$'} {formatNumber(total)}</span>
     </div>
   </Card>
 );
+
+// ===== Contexto para pasar listeners de drag al handle =====
+const DragListenersContext = React.createContext<any>(null);
+
+// ===== Componente SortableRow para drag-and-drop =====
+const SortableRow: React.FC<any> = ({ children, ...rest }) => {
+  const recordId = rest['data-row-key'];
+  if (!recordId) {
+    return <tr {...rest}>{children}</tr>;
+  }
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: recordId });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  return (
+    <DragListenersContext.Provider value={listeners}>
+      <tr ref={setNodeRef} style={style} {...attributes} {...rest}>
+        {children}
+      </tr>
+    </DragListenersContext.Provider>
+  );
+};
+
+// ===== Componente DragHandle que inicia el arrastre solo desde el icono =====
+const DragHandle: React.FC = () => {
+  const listeners = React.useContext(DragListenersContext);
+  return (
+    <div
+      {...(listeners ?? {})}
+      style={{ cursor: 'grab', touchAction: 'none', userSelect: 'none', display: 'inline-flex' }}
+    >
+      <HolderOutlined style={{ color: '#999' }} />
+    </div>
+  );
+};
 
 // ===== Componente principal =====
 const TransferenciaAlmacenFormulario: React.FC = () => {
@@ -307,7 +248,17 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
   const [selectedAlmacenDestino, setSelectedAlmacenDestino] = useState<AlmacenDTO | null>(null);
   const [conceptoInfo, setConceptoInfo] = useState<string>('');
   const [productoModalOpen, setProductoModalOpen] = useState(false);
+  const [scannerModalOpen, setScannerModalOpen] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
+  const [activeId, setActiveId] = useState<number | null>(null);
+
+  const editValuesRef = useRef<Record<string, any>>({});
+  const navigationConfirmedRef = useRef(false);
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
+  );
 
   // Refs para la guía
   const conceptoRef = useRef<HTMLDivElement>(null);
@@ -432,10 +383,51 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
         setLoadingError(true);
+        navigationConfirmedRef.current = true;
         navigate('/FTRP');
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
+
+  // ===== Bloquear salida si hay cambios =====
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  // Bloquear botón atrás/adelante del navegador
+  useEffect(() => {
+    const handlePopState = () => {
+      const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
+      if (!leave) {
+        window.history.pushState(null, '', window.location.pathname);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Bloquear navegación por sidebar (interceptar history.pushState)
+  useEffect(() => {
+    const originalPushState = window.history.pushState.bind(window.history);
+    window.history.pushState = function(data: any, unused: string, url?: string | URL | null) {
+      const currentPath = window.location.pathname;
+      const newPath = typeof url === 'string' ? url.split('?')[0] : (url instanceof URL ? url.pathname : null);
+      if (newPath && currentPath !== newPath && !navigationConfirmedRef.current) {
+        const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
+        if (!leave) return;
+        navigationConfirmedRef.current = true;
+      }
+      return originalPushState(data, unused, url);
+    };
+    return () => {
+      window.history.pushState = originalPushState;
+    };
+  }, []);
 
   // ===== Handlers =====
   const handleCancelar = () => {
@@ -449,6 +441,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       onOk: () => {
         setEditingField(null);
         if (mode === 'crear') {
+          navigationConfirmedRef.current = true;
           navigate('/FTRP');
         } else {
           if (id) {
@@ -481,6 +474,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
               })
               .finally(() => setLoading(false));
           }
+          navigationConfirmedRef.current = true;
           navigate(`/FTRP/${id}`);
         }
       },
@@ -557,62 +551,16 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       if (mode === 'crear') {
         const result = await transferenciaAlmacenApi.crear(sucursalActiva, dto);
         message.success('Transferencia de almacén creada exitosamente');
+        navigationConfirmedRef.current = true;
         navigate(`/FTRP/${result.id}`);
       } else {
         await transferenciaAlmacenApi.actualizar(sucursalActiva, dto);
         message.success('Transferencia de almacén actualizada exitosamente');
+        navigationConfirmedRef.current = true;
         navigate(`/FTRP/${id}`);
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAplicar = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      const result = await transferenciaAlmacenApi.aplicar(sucursalActiva, parseInt(id));
-      setData(result);
-      message.success('Documento aplicado exitosamente');
-      navigate(`/FTRP/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAnular = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await transferenciaAlmacenApi.anular(sucursalActiva, dto);
-      message.success('Documento anulado exitosamente');
-      navigate(`/FTRP/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al anular');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePostear = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await transferenciaAlmacenApi.postear(sucursalActiva, dto);
-      message.success('Documento posteado exitosamente');
-      navigate(`/FTRP/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al postear');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -639,11 +587,16 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
     if (concepto.noActualizaCostos) infoParts.push(' * No Actualiza Costos * ');
     setConceptoInfo(infoParts.join(''));
 
-    // Configurar moneda según el concepto
-    const monedaNombre = concepto.moneda?.nombre || 'Peso Dominicano';
+    // === ConfigurarMoneda ===
+    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
     form.setFieldsValue({
-      moneda: monedaNombre,
-      tasa: 1,
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+    });
+    // Actualizar data local para que la UI lo refleje
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, moneda: monedaObj };
     });
   };
 
@@ -750,6 +703,24 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
     }
   };
 
+  const handleScannerProducto = (producto: any) => {
+    const nuevoId = -(detalles.length + 1);
+    setDetalles((prev) => {
+      const filled: DetalleTRPInterno = {
+        ...filaVacia(),
+        id: nuevoId,
+        codigo: producto.codigo,
+        articulo: producto.articulo,
+        referencia: producto.referencia || '',
+        _costo: producto.costo || 0,
+        cantidad: producto.cantidad || 1,
+        familia: producto.familia,
+        medida: producto.medida,
+      };
+      return [calcularFila(filled), ...prev];
+    });
+  };
+
   // ===== Handlers de almacenes =====
   const handleAlmacenChange = (codigo: string) => {
     const alm = almacenesCache.find((a) => a.codigo === codigo);
@@ -848,34 +819,6 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                 Cancelar
               </Button>
             )}
-            {esBorrador && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handleAplicar}
-              >
-                Aplicar
-              </Button>
-            )}
-            {esAplicado && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handlePostear}
-              >
-                Postear
-              </Button>
-            )}
-            {!esAnulado && (
-              <Button
-                danger
-                icon={<DeleteOutlined />}
-                loading={saving}
-                onClick={handleAnular}
-              >
-                Anular
-              </Button>
-            )}
           </>
         )}
       </Space>
@@ -923,9 +866,16 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
   // ===== Grid de detalles editable (sin costo, sin descuento, sin impuesto) =====
   const detalleColumns = [
     {
+      title: '',
+      key: 'sort',
+      width: 40,
+      render: () => <DragHandle />,
+    },
+    {
       title: 'Código',
       key: 'codigoInput',
       width: 100,
+      onCell: () => ({ style: { paddingLeft: 8 } }),
       render: (_: any, _record: DetalleTransferenciaAlmacenDTO, idx: number) => (
         <Input
           size="small"
@@ -936,7 +886,6 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
           onBlur={() => {
             const codigo = detalles[idx]?.codigo;
             if (codigo && codigo.length >= 2) {
-              // Buscar producto por código usando obtenerDetalle
               productoApi.obtenerDetalle(sucursalActiva, codigo)
                 .then((prod) => {
                   if (prod) {
@@ -956,7 +905,6 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                   }
                 })
                 .catch(() => {
-                  // Si falla la búsqueda por código exacto, intentar con listado filtrado
                   productoApi.obtenerListado(sucursalActiva, { codigo })
                     .then((prods) => {
                       if (prods && prods.length > 0) {
@@ -1034,13 +982,21 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
           <InputNumber
             size="small"
             style={{ width: '100%' }}
+            styles={{ input: { textAlign: 'right' } }}
             min={0.01}
             step={0.01}
             precision={2}
-            value={detalles[idx]?.cantidad}
-            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'cantidad', val || 0)}
-            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
-            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
+            controls={false}
+            defaultValue={detalles[idx]?.cantidad}
+            onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_cantidad`] = val || 0; }}
+            onBlur={() => {
+              const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? detalles[idx]?.cantidad;
+              handleDetalleCalculate(detalles[idx].id, 'cantidad', val || 0);
+            }}
+            onPressEnter={() => {
+              const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? detalles[idx]?.cantidad;
+              handleDetalleCalculate(detalles[idx].id, 'cantidad', val || 0);
+            }}
           />
           {(detalles[idx] as any)?.medida?.nombre && (
             <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
@@ -1056,6 +1012,8 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       key: 'total',
       width: 100,
       align: 'right' as const,
+      shouldCellUpdate: (record: DetalleTransferenciaAlmacenDTO, prevRecord: DetalleTransferenciaAlmacenDTO) =>
+        record.total !== prevRecord.total,
       render: (_: any, record: DetalleTransferenciaAlmacenDTO) => (
         <Text strong>{formatNumber(record.total || 0)}</Text>
       ),
@@ -1064,22 +1022,30 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       title: '',
       key: 'acciones',
       width: 50,
-      render: (_: any, _record: DetalleTransferenciaAlmacenDTO, idx: number) => (
-        <Button
-          type="text"
-          size="small"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => handleEliminarFila(detalles[idx].id)}
-        />
-      ),
+      onCell: () => ({ style: { paddingRight: 8 } }),
+      render: (_: any, _record: DetalleTransferenciaAlmacenDTO, idx: number) => {
+        const items = [
+          {
+            key: 'eliminar',
+            label: 'Eliminar',
+            icon: <DeleteOutlined />,
+            danger: true,
+            onClick: () => handleEliminarFila(detalles[idx].id),
+          },
+        ];
+        return (
+          <Dropdown menu={{ items }} trigger={['click']}>
+            <Button type="text" size="small" icon={<MoreOutlined />} />
+          </Dropdown>
+        );
+      },
     },
   ];
 
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-      <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
+      <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           {/* Fila 1: Concepto */}
           <Col xs={24} sm={12} lg={9}>
@@ -1179,11 +1145,11 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                       }}
                     />
                   ) : ncfValue ? (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
+                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
                       NCF: {ncfValue} <EditOutlined />
                     </Tag>
                   ) : (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
+                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
                       <PlusOutlined /> NCF
                     </Tag>
                   )}
@@ -1205,11 +1171,11 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                     }}
                   />
                 ) : refValue ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
                     Ref: {refValue} <EditOutlined />
                   </Tag>
                 ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
                     <PlusOutlined /> Referencia
                   </Tag>
                 )}
@@ -1232,11 +1198,11 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                     }}
                   />
                 ) : tasaValue !== 1 ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
                     Tasa: {tasaValue} <EditOutlined />
                   </Tag>
                 ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
                     <PlusOutlined /> Tasa
                   </Tag>
                 )}
@@ -1295,6 +1261,22 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, form, mode]);
 
+  // ===== Drag-and-drop handler =====
+  const handleDragEnd = (event: any) => {
+    setActiveId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setDetalles((prev) => {
+      const oldIndex = prev.findIndex((d) => d.id === active.id);
+      const newIndex = prev.findIndex((d) => d.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      const updated = [...prev];
+      const [moved] = updated.splice(oldIndex, 1);
+      updated.splice(newIndex, 0, moved);
+      return updated;
+    });
+  };
+
   return (
     <div>
       {renderToolbar()}
@@ -1318,6 +1300,12 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
         open={productoModalOpen}
         onClose={() => setProductoModalOpen(false)}
         onSelect={handleProductoSelect}
+        mode="inventario"
+      />
+      <ScannerModal
+        open={scannerModalOpen}
+        onClose={() => setScannerModalOpen(false)}
+        onSelect={handleScannerProducto}
       />
 
       {isLarge ? (
@@ -1338,19 +1326,10 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
                         <Space>
-                          <Button
-                            type="dashed"
-                            icon={<PlusOutlined />}
-                            onClick={handleAgregarFila}
-                          >
-                            Agregar fila
+                          <Button type="primary" icon={<PlusOutlined />} onClick={() => setProductoModalOpen(true)}>
+                            Agregar producto
                           </Button>
-                          <Button
-                            icon={<SearchOutlined />}
-                            onClick={() => setProductoModalOpen(true)}
-                          >
-                            Buscar Producto
-                          </Button>
+                          <Button icon={<BarcodeOutlined />} onClick={() => setScannerModalOpen(true)} />
                         </Space>
                         <Input.Search
                           placeholder="Buscar detalle..."
@@ -1360,14 +1339,26 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
-                      <Table
-                        dataSource={detallesFiltrados}
-                        columns={detalleColumns}
-                        rowKey="id"
-                        size="small"
-                        pagination={false}
-                        scroll={{ x: 800 }}
-                      />
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={({ active }) => setActiveId(active.id as number)} onDragEnd={handleDragEnd}>
+                        <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
+                          <Table
+                            dataSource={detallesFiltrados}
+                            columns={detalleColumns}
+                            rowKey="id"
+                            size="small"
+                            pagination={false}
+                            scroll={{ x: 900 }}
+                            components={{ body: { row: SortableRow } }}
+                          />
+                        </SortableContext>
+                        <DragOverlay>
+                          {activeId ? (
+                            <div style={{ padding: '8px 12px', background: '#fafafa', border: '1px solid #d9d9d9', borderRadius: 4, opacity: 0.8 }}>
+                              Arrastrando...
+                            </div>
+                          ) : null}
+                        </DragOverlay>
+                      </DndContext>
                     </>
                   ),
                 },
@@ -1417,8 +1408,8 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
               subTotal={totales.subTotal}
               total={totales.total}
               alignRight={false}
-              monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
-              monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
               tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </Col>
@@ -1440,19 +1431,10 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                   <>
                     <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
                       <Space>
-                        <Button
-                          type="dashed"
-                          icon={<PlusOutlined />}
-                          onClick={handleAgregarFila}
-                        >
-                          Agregar fila
+                        <Button type="primary" icon={<PlusOutlined />} onClick={() => setProductoModalOpen(true)}>
+                          Agregar producto
                         </Button>
-                        <Button
-                          icon={<SearchOutlined />}
-                          onClick={() => setProductoModalOpen(true)}
-                        >
-                          Buscar Prod.
-                        </Button>
+                        <Button icon={<BarcodeOutlined />} onClick={() => setScannerModalOpen(true)} />
                       </Space>
                       <Input.Search
                         placeholder="Buscar detalle..."
@@ -1461,15 +1443,27 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                         onSearch={(value) => setDetalleSearch(value)}
                         onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                       />
-                    </div>
-                    <Table
-                      dataSource={detallesFiltrados}
-                      columns={detalleColumns}
-                      rowKey="id"
-                      size="small"
-                      pagination={false}
-                      scroll={{ x: 800 }}
-                    />
+                     </div>
+                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={({ active }) => setActiveId(active.id as number)} onDragEnd={handleDragEnd}>
+                       <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
+                         <Table
+                           dataSource={detallesFiltrados}
+                           columns={detalleColumns}
+                           rowKey="id"
+                           size="small"
+                           pagination={false}
+                           scroll={{ x: 900 }}
+                           components={{ body: { row: SortableRow } }}
+                         />
+                       </SortableContext>
+                       <DragOverlay>
+                         {activeId ? (
+                           <div style={{ padding: '8px 12px', background: '#fafafa', border: '1px solid #d9d9d9', borderRadius: 4, opacity: 0.8 }}>
+                             Arrastrando...
+                           </div>
+                         ) : null}
+                       </DragOverlay>
+                     </DndContext>
                   </>
                 ),
               },
@@ -1517,8 +1511,8 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
             subTotal={totales.subTotal}
             total={totales.total}
             alignRight={true}
-            monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
-            monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
+            monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+            monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
             tasa={tasaValue ?? data?.tasa ?? 1}
           />
         </div>

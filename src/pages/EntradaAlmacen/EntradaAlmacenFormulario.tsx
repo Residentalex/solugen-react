@@ -17,6 +17,8 @@ import {
   CalendarOutlined,
   HolderOutlined,
   CheckCircleOutlined,
+  CloseCircleOutlined,
+  BarcodeOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -32,6 +34,8 @@ import { ordenCompraApi } from '../../api/ordenCompraApi';
 import { productoApi } from '../../api/productoApi';
 import BuscarOrdenCompraModal from './BuscarOrdenCompraModal';
 import EntradaAlmacenGuide from './EntradaAlmacenGuide';
+import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
+import ScannerModal from '../../components/ScannerModal/ScannerModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type {
@@ -207,9 +211,10 @@ interface BuscarConceptoModalProps {
   open: boolean;
   onClose: () => void;
   onSelect: (concepto: ConceptoDTO) => void;
+  documento: string;
 }
 
-const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({ open, onClose, onSelect }) => {
+const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({ open, onClose, onSelect, documento }) => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const [conceptos, setConceptos] = useState<ConceptoDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -217,14 +222,14 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({ open, onClose
   const cargar = useCallback(async (filtro?: string) => {
     setLoading(true);
     try {
-      const res = await conceptosApi.obtenerConceptos(sucursalActiva, filtro);
+      const res = await conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, documento, filtro);
       setConceptos(res || []);
     } catch {
       message.error('Error al cargar conceptos');
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva]);
+  }, [sucursalActiva, documento]);
 
   useEffect(() => {
     if (open) cargar();
@@ -319,7 +324,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
       {monedaSimbolo && tasa !== undefined && (
         <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
           {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{monedaNombre || 'Peso Dominicano'} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
+          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
@@ -340,7 +345,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
 
     <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
       {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
+      <span style={{ color: 'var(--paces-primary)' }}>{monedaSimbolo || 'RD$'} {formatNumber(total)}</span>
     </div>
   </Card>
 );
@@ -386,6 +391,8 @@ const DragHandle: React.FC = () => {
   );
 };
 
+
+
 // ===== Componente principal =====
 const EntradaAlmacenFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -420,6 +427,13 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
   const [detalleSearch, setDetalleSearch] = useState('');
   const [activeId, setActiveId] = useState<number | null>(null);
+  const [productoModalOpen, setProductoModalOpen] = useState(false);
+  const [scannerModalOpen, setScannerModalOpen] = useState(false);
+  const [ocProductosModalOpen, setOcProductosModalOpen] = useState(false);
+  const [ocProductoSearch, setOcProductoSearch] = useState('');
+  const [comodines, setComodines] = useState<any[]>([]);
+
+  const editValuesRef = useRef<Record<string, any>>({});
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -527,6 +541,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
+        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento} - Editar`);
         setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
         setSelectedConcepto(res.concepto || null);
         setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
@@ -572,10 +587,67 @@ const EntradaAlmacenFormulario: React.FC = () => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
         setLoadingError(true);
+        navigationConfirmedRef.current = true;
         navigate('/FENP');
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
+
+  // ===== Cargar detalles de OC vinculada y comodines =====
+  useEffect(() => {
+    if (!data?.ordenCompra?.id) return;
+    if (ocDetallesData.length > 0) return;
+    ordenCompraApi.obtenerPorId(Sucursal.Compra, data.ordenCompra.id)
+      .then((oc: any) => {
+        if (oc.detalles?.length) setOcDetallesData(oc.detalles);
+      })
+      .catch(() => message.warning('No se pudieron cargar los detalles de la OC'));
+    // Cargar comodines
+    productoApi.obtenerComodines(Sucursal.Compra)
+      .then(setComodines)
+      .catch(() => {});
+  }, [data?.ordenCompra?.id, ocDetallesData.length]);
+
+  // ===== Bloquear salida si hay cambios =====
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  // Bloquear botón atrás/adelante del navegador
+  useEffect(() => {
+    const handlePopState = () => {
+      const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
+      if (!leave) {
+        window.history.pushState(null, '', window.location.pathname);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Bloquear navegación por sidebar (interceptar history.pushState)
+  const navigationConfirmedRef = useRef(false);
+  useEffect(() => {
+    const originalPushState = window.history.pushState.bind(window.history);
+    window.history.pushState = function(data: any, unused: string, url?: string | URL | null) {
+      const currentPath = window.location.pathname;
+      const newPath = typeof url === 'string' ? url.split('?')[0] : (url instanceof URL ? url.pathname : null);
+      if (newPath && currentPath !== newPath && !navigationConfirmedRef.current) {
+        const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
+        if (!leave) return;
+        navigationConfirmedRef.current = true;
+      }
+      return originalPushState(data, unused, url);
+    };
+    return () => {
+      window.history.pushState = originalPushState;
+    };
+  }, []);
 
   // ===== Handlers =====
   const handleCancelar = () => {
@@ -590,14 +662,16 @@ const EntradaAlmacenFormulario: React.FC = () => {
         setEditingField(null);
         setAgregarFilaBloqueado(false);
         if (mode === 'crear') {
+          navigationConfirmedRef.current = true;
           navigate('/FENP');
         } else {
           if (id) {
             setLoading(true);
             entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
               .then((res) => {
-                setData(res);
-                setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
+        setData(res);
+        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento} - Editar`);
+        setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
                 setSelectedConcepto(res.concepto || null);
                 setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
                 // === DEFENSIVE: asegurar RNC desde entidad si suplidor no lo tiene ===
@@ -642,6 +716,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
               })
               .finally(() => setLoading(false));
           }
+          navigationConfirmedRef.current = true;
           navigate(`/FENP/${id}`);
         }
       },
@@ -731,10 +806,12 @@ const EntradaAlmacenFormulario: React.FC = () => {
       if (mode === 'crear') {
         const result = await entradaAlmacenApi.crear(sucursalActiva, dto);
         message.success('Entrada de almacén creada exitosamente');
+        navigationConfirmedRef.current = true;
         navigate(`/FENP/${result.id}`);
       } else {
         await entradaAlmacenApi.actualizar(sucursalActiva, dto);
         message.success('Entrada de almacén actualizada exitosamente');
+        navigationConfirmedRef.current = true;
         navigate(`/FENP/${id}`);
       }
     } catch (err: any) {
@@ -926,6 +1003,72 @@ const EntradaAlmacenFormulario: React.FC = () => {
     setDetalles((prev) => [{ ...filaVacia(), id: -(prev.length + 1) }, ...prev]);
   };
 
+    const handleSeleccionarProducto = (producto: any) => {
+      // Si hay OC vinculada, validar que el producto pertenezca a la OC o sea comodín
+      if (ocDetallesData.length > 0) {
+        const existeEnOC = ocDetallesData.some((d: any) => d.codigo === producto.codigo);
+        const esComodin = comodines.some((d: any) => (d.codigo || d.idExterno) === producto.codigo);
+        if (!existeEnOC && !esComodin) {
+          message.warning(`El producto ${producto.codigo} no pertenece a la orden de compra ni es un producto comodín`);
+          return;
+        }
+        const yaAgregado = detalles.some((d) => d.codigo === producto.codigo);
+        if (yaAgregado) {
+          message.warning(`El producto ${producto.codigo} ya está agregado al detalle`);
+          return;
+        }
+      }
+      setDetalles((prev) => [
+        {
+          ...filaVacia(),
+          id: -(prev.length + 1),
+          codigo: producto.codigo,
+          articulo: producto.articulo,
+          referencia: producto.referencia || '',
+          costo: producto.costo || 0,
+          cantidad: 1,
+          familia: producto.familia,
+          medida: producto.medida || { nombre: '', codigo: '', factor: 1, idExterno: 0 },
+          impuesto: producto.impuesto,
+          porcentajeImpuesto: producto.impuesto?.porcentaje ?? 0,
+        },
+        ...prev,
+      ]);
+    };
+
+    const handleScannerProducto = (producto: any) => {
+      // Si hay OC vinculada, validar que el producto pertenezca a la OC o sea comodín
+      if (ocDetallesData.length > 0) {
+        const existeEnOC = ocDetallesData.some((d: any) => d.codigo === producto.codigo);
+        const esComodin = comodines.some((d: any) => (d.codigo || d.idExterno) === producto.codigo);
+        if (!existeEnOC && !esComodin) {
+          message.warning(`El código ${producto.codigo} no pertenece a la orden de compra ni es un producto comodín`);
+          return;
+        }
+        const yaAgregado = detalles.some((d) => d.codigo === producto.codigo);
+        if (yaAgregado) {
+          message.warning(`El producto ${producto.codigo} ya está agregado al detalle`);
+          return;
+        }
+      }
+      setDetalles((prev) => [
+        {
+          ...filaVacia(),
+          id: -(prev.length + 1),
+          codigo: producto.codigo,
+          articulo: producto.articulo,
+          referencia: producto.referencia || '',
+          costo: producto.costo || 0,
+          cantidad: producto.cantidad || 1,
+          familia: producto.familia,
+          medida: producto.medida || { nombre: '', codigo: '', factor: 1, idExterno: 0 },
+          impuesto: producto.impuesto,
+          porcentajeImpuesto: producto.impuesto?.porcentaje ?? 0,
+        },
+        ...prev,
+      ]);
+    };
+
   const handleEliminarFila = (id: number) => {
     setDetalles((prev) => prev.filter((d) => d.id !== id));
   };
@@ -943,9 +1086,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
       if (detalle) {
         const ocDetalle = ocDetallesData.find((d: DetalleOrdenCompraVistaDTO) => d.codigo === detalle.codigo);
         if (ocDetalle) {
-          const factor = ocDetalle.medida?.factor || 1;
           const disponible = ((ocDetalle.cantidad + (ocDetalle.cantidadBonificable || 0)) - (ocDetalle.cantidadRecibida || 0));
-          if ((Number(value) * factor) > (disponible * factor) && !ocDetalle.pesado) {
+          if ((Number(value)) > (disponible) && !ocDetalle.pesado) {
             message.warning(`La cantidad disponible en la OC es ${disponible}. Se ajustará automáticamente.`);
             value = disponible;
           }
@@ -1119,15 +1261,47 @@ const EntradaAlmacenFormulario: React.FC = () => {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
-      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) =>
-        record.articulo !== prevRecord.articulo || record.codigo !== prevRecord.codigo || record.referencia !== prevRecord.referencia || record.medida?.nombre !== prevRecord.medida?.nombre || record.fechaVencimiento !== prevRecord.fechaVencimiento,
       render: (_: any, record: DetalleEntradaAlmacenDTO) => {
-        const ocMatch = ocDetallesData.length > 0 && ocDetallesData.some((d: DetalleOrdenCompraVistaDTO) => d.codigo === record.codigo && d.cantidad === record.cantidad && d.costo === record.costo);
+        const fechaVencida = record.fechaVencimiento ? new Date(record.fechaVencimiento) < new Date() : false;
+        const tieneCoincidencia = ocDetallesData.some((d: DetalleOrdenCompraVistaDTO) =>
+          d.codigo === record.codigo
+          && (Math.abs(Number(d.costo) - Number(record.costo)) <= 1 || Number(record.cantidadBonificable) !== 0)
+          && Number(d.medida?.factor || 1) === Number(record.medida?.factor || 1)
+          && !d.nota?.trim()
+        );
+        const ocMatch = ocDetallesData.length > 0
+          && (tieneCoincidencia || Number(record.cantidadBonificable) > 0)
+          && (!record.tieneVencimiento || record.fechaVencimiento)
+          && !fechaVencida;
         return (
           <div style={{ fontSize: 13 }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <span style={{ flex: 1 }}>{toTitleCase(record.articulo || '')}</span>
-              {ocMatch && <Tooltip title="Coincide con OC"><CheckCircleOutlined style={{ color: '#34c38f', fontSize: 12 }} /></Tooltip>}
+              {ocDetallesData.length > 0 && (() => {
+                if (ocMatch) {
+                  return <Tooltip title="Coincide con OC"><CheckCircleOutlined style={{ color: '#34c38f', fontSize: 12 }} /></Tooltip>;
+                }
+                let motivo = 'No coincide con la OC';
+                const detalleOC = ocDetallesData.find((d: DetalleOrdenCompraVistaDTO) => d.codigo === record.codigo);
+                if (!detalleOC) {
+                  motivo = 'Código no encontrado en la OC';
+                } else if (record.tieneVencimiento && !record.fechaVencimiento) {
+                  motivo = 'Requiere fecha de vencimiento';
+                } else if (record.fechaVencimiento && new Date(record.fechaVencimiento) < new Date()) {
+                  motivo = 'Fecha de vencimiento vencida';
+                } else if (detalleOC.nota?.trim()) {
+                  motivo = `OC tiene nota: ${detalleOC.nota}`;
+                } else if (Number(detalleOC.medida?.factor || 1) !== Number(record.medida?.factor || 1)) {
+                  motivo = `Factor OC: ${detalleOC.medida?.factor || 1} | ENP: ${record.medida?.factor || 1}`;
+                } else if (Number(record.cantidadBonificable) === 0 && Math.abs(Number(detalleOC.costo) - Number(record.costo)) > 1) {
+                  motivo = `Costo OC: ${formatNumber(detalleOC.costo)} | ENP: ${formatNumber(record.costo)}`;
+                }
+                return (
+                  <Tooltip title={motivo}>
+                    <CloseCircleOutlined style={{ color: '#d9d9d9', fontSize: 12 }} />
+                  </Tooltip>
+                );
+              })()}
             </div>
             <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
               <span>
@@ -1154,13 +1328,23 @@ const EntradaAlmacenFormulario: React.FC = () => {
           <InputNumber
             size="small"
             style={{ width: '100%' }}
+            styles={{ input: { textAlign: 'right' } }}
             min={0}
             step={0.01}
             precision={2}
-            value={detalles[idx]?.cantidad}
-            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'cantidad', val || 0)}
-            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
-            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
+            controls={false}
+            defaultValue={detalles[idx]?.cantidad}
+            onChange={(val) => {
+              editValuesRef.current[`${detalles[idx].id}_cantidad`] = val || 0;
+            }}
+            onBlur={() => {
+              const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? detalles[idx]?.cantidad;
+              handleDetalleCalculate(detalles[idx].id, 'cantidad', val);
+            }}
+            onPressEnter={() => {
+              const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? detalles[idx]?.cantidad;
+              handleDetalleCalculate(detalles[idx].id, 'cantidad', val);
+            }}
           />
           {detalles[idx]?.medida?.nombre && (
             <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
@@ -1174,26 +1358,45 @@ const EntradaAlmacenFormulario: React.FC = () => {
       title: 'Costo',
       dataIndex: 'costo',
       key: 'costo',
-      width: 110,
+      width: 130,
       align: 'right' as const,
       responsive: ['sm' as const, 'md' as const, 'lg' as const],
-      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) => record.costo !== prevRecord.costo,
-      render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
-        <div>
-          <InputNumber
-            size="small"
-            style={{ width: '100%' }}
-            min={0}
-            step={0.01}
-            precision={2}
-            value={detalles[idx]?.costo}
-            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'costo', val || 0)}
-            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'costo', detalles[idx]?.costo || 0)}
-            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'costo', detalles[idx]?.costo || 0)}
-          />
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
-        </div>
-      ),
+      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
+      render: (_: any, record: DetalleEntradaAlmacenDTO, idx: number) => {
+        const costoBase = Number(detalles[idx]?.costo) || 0;
+        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
+        const factor = Number(detalles[idx]?.medida?.factor) || 1;
+        const costoConDescuento = costoBase - ((costoBase * pctDesc) / 100);
+        const costoUnitario = costoConDescuento / factor;
+        return (
+          <div>
+            <InputNumber
+              size="small"
+              style={{ width: '100%' }}
+              styles={{ input: { textAlign: 'right' } }}
+              min={0}
+              step={0.01}
+              precision={2}
+              controls={false}
+              defaultValue={detalles[idx]?.costo}
+              onChange={(val) => {
+                editValuesRef.current[`${detalles[idx].id}_costo`] = val || 0;
+              }}
+              onBlur={() => {
+                const val = editValuesRef.current[`${detalles[idx].id}_costo`] ?? detalles[idx]?.costo;
+                handleDetalleCalculate(detalles[idx].id, 'costo', val);
+              }}
+              onPressEnter={() => {
+                const val = editValuesRef.current[`${detalles[idx].id}_costo`] ?? detalles[idx]?.costo;
+                handleDetalleCalculate(detalles[idx].id, 'costo', val);
+              }}
+            />
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+              {formatNumber(costoUnitario)} × {factor}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: 'Descuento',
@@ -1208,16 +1411,26 @@ const EntradaAlmacenFormulario: React.FC = () => {
             <InputNumber
               size="small"
               style={{ width: '100%' }}
+              styles={{ input: { textAlign: 'right' } }}
               min={0}
               max={100}
               step={0.01}
               precision={2}
-              value={detalles[idx]?.porcentajeDescuento}
-              onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'porcentajeDescuento', val || 0)}
-              onBlur={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
-              onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
-            />
-            <div style={{ padding: '0 8px', display: 'flex', alignItems: 'center', background: '#f5f5f5', border: '1px solid #d9d9d9', borderLeft: 'none', borderRadius: '0 6px 6px 0', fontSize: 12 }}>%</div>
+              controls={false}
+              defaultValue={detalles[idx]?.porcentajeDescuento}
+              onChange={(val) => {
+                editValuesRef.current[`${detalles[idx].id}_descuento`] = val || 0;
+              }}
+              onBlur={() => {
+                const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
+              handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
+            }}
+            onPressEnter={() => {
+              const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
+              handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
+            }}
+          />
+            <Input placeholder="%" disabled style={{ width: 50, textAlign: 'center', borderLeft: 'none' }} />
           </Space.Compact>
           <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
             {formatNumber(detalles[idx]?.descuento || 0)}
@@ -1277,19 +1490,17 @@ const EntradaAlmacenFormulario: React.FC = () => {
             label: 'Eliminar',
             icon: <DeleteOutlined />,
             danger: true,
-            onClick: () => handleEliminarFila(detalles[idx].id),
+            onClick: () => handleEliminarFila(record.id),
           },
         ];
 
-        if (record.tieneVencimiento) {
-          items.unshift({
-            key: 'vencimiento',
-            label: record.fechaVencimiento ? `Venc: ${formatDate(record.fechaVencimiento)}` : 'Fecha Vencimiento',
-            icon: <CalendarOutlined />,
-            danger: false,
-            onClick: () => setFechaVencimientoModal({ open: true, detalleId: detalles[idx].id }),
-          });
-        }
+        items.unshift({
+          key: 'vencimiento',
+          label: record.fechaVencimiento ? `Venc: ${formatDate(record.fechaVencimiento)}` : 'Fecha Vencimiento',
+          icon: <CalendarOutlined />,
+          danger: false,
+          onClick: () => setFechaVencimientoModal({ open: true, detalleId: record.id }),
+        });
 
         return (
           <Dropdown menu={{ items }} trigger={['click']}>
@@ -1305,7 +1516,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     // ncfValue, refValue y tasaValue vienen del watcher reactivo (component-level Form.useWatch)
     return (
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-      <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
+      <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           {/* Fila 1: OrdenCompra + Concepto */}
           <Col xs={24} sm={12} lg={9}>
@@ -1456,11 +1667,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
                       }}
                     />
                   ) : ncfValue ? (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
+                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
                       NCF: {ncfValue} <EditOutlined />
                     </Tag>
                   ) : (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
+                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
                       <PlusOutlined /> NCF
                     </Tag>
                   )}
@@ -1487,11 +1698,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
                     }}
                   />
                 ) : refValue ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
                     Ref: {refValue} <EditOutlined />
                   </Tag>
                 ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
                     <PlusOutlined /> Referencia
                   </Tag>
                 )}
@@ -1519,11 +1730,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
                     }}
                   />
                 ) : tasaValue !== 1 ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
                     Tasa: {tasaValue} <EditOutlined />
                   </Tag>
                 ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
                     <PlusOutlined /> Tasa
                   </Tag>
                 )}
@@ -1572,6 +1783,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
+        documento="ENP"
       />
 
       <BuscarOrdenCompraModal
@@ -1580,6 +1792,138 @@ const EntradaAlmacenFormulario: React.FC = () => {
         onSelect={handleOCSelect}
         suplidorCodigo={selectedEntidad?.codigo}
       />
+      <BuscarProductoModal
+        open={productoModalOpen}
+        onClose={() => setProductoModalOpen(false)}
+        onSelect={handleSeleccionarProducto}
+        mode="inventario"
+      />
+      <ScannerModal
+        open={scannerModalOpen}
+        onClose={() => setScannerModalOpen(false)}
+        onSelect={handleScannerProducto}
+      />
+
+      <Modal
+        title="Agregar producto"
+        open={ocProductosModalOpen}
+        onCancel={() => { setOcProductoSearch(''); setOcProductosModalOpen(false); }}
+        footer={null}
+        width={700}
+        destroyOnHidden
+      >
+        <Tabs
+          type="card"
+          items={[
+            {
+              key: 'oc',
+              label: `OC (${ocDetallesData.filter((d: any) => !detalles.some((det: any) => det.codigo === d.codigo)).length})`,
+              children: (
+                <>
+                  <Input.Search
+                    placeholder="Buscar producto..."
+                    allowClear
+                    style={{ marginBottom: 16 }}
+                    onSearch={(value) => setOcProductoSearch(value)}
+                    onChange={(e) => { if (!e.target.value) setOcProductoSearch(''); }}
+                  />
+                  <Table
+                    dataSource={ocDetallesData.filter((d: any) => !detalles.some((det: any) => det.codigo === d.codigo)).filter((d: any) => {
+                      if (!ocProductoSearch) return true;
+                      const q = ocProductoSearch.toLowerCase();
+                      return (d.codigo || '').toLowerCase().includes(q) || (d.articulo || '').toLowerCase().includes(q);
+                    })}
+                    columns={[
+                      { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
+                      { title: 'Artículo', dataIndex: 'articulo', key: 'articulo', ellipsis: true },
+                      { title: 'Cant. OC', dataIndex: 'cantidad', key: 'cantidad', width: 90, align: 'right' as const },
+                      { title: 'Costo', dataIndex: 'costo', key: 'costo', width: 100, align: 'right' as const,
+                        render: (v: number) => formatNumber(v) },
+                    ]}
+                    rowKey="id"
+                    size="small"
+                    pagination={{ pageSize: 10, showSizeChanger: false, showTotal: (t: number) => `${t} productos` }}
+                    onRow={(record: any) => ({
+                      onClick: () => {
+                        setDetalles((prev) => [
+                          calcularFila({
+                            ...filaVacia(),
+                            id: -(prev.length + 1),
+                            codigo: record.codigo,
+                            articulo: record.articulo,
+                            referencia: record.referencia || '',
+                            costo: record.costo || 0,
+                            cantidad: record.cantidad || 0,
+                            porcentajeDescuento: record.porcentajeDescuento || 0,
+                            familia: record.familia,
+                            medida: record.medida || { nombre: '', codigo: '', factor: 1, idExterno: 0 },
+                            impuesto: record.impuesto,
+                            porcentajeImpuesto: record.impuesto?.porcentaje ?? 0,
+                            cantidadBonificable: record.cantidadBonificable || 0,
+                          }),
+                          ...prev,
+                        ]);
+                        setOcProductoSearch('');
+                        setOcProductosModalOpen(false);
+                      },
+                      style: { cursor: 'pointer' },
+                    })}
+                    locale={{ emptyText: 'Todos los productos de la OC ya fueron agregados' }}
+                  />
+                </>
+              ),
+            },
+            {
+              key: 'comodines',
+              label: `Comodines (${comodines.filter((d: any) => !detalles.some((det: any) => det.codigo === d.codigo)).length})`,
+              children: (
+                <>
+                  <Input.Search
+                    placeholder="Buscar comodín..."
+                    allowClear
+                    style={{ marginBottom: 16 }}
+                  />
+                  <Table
+                    dataSource={comodines.filter((d: any) => !detalles.some((det: any) => det.codigo === d.codigo))}
+                    columns={[
+                      { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
+                      { title: 'Artículo', dataIndex: 'nombre', key: 'nombre', ellipsis: true },
+                      { title: 'Costo', dataIndex: 'ultimoCosto', key: 'ultimoCosto', width: 100, align: 'right' as const,
+                        render: (v: number) => formatNumber(v || 0) },
+                    ]}
+                    rowKey="codigo"
+                    size="small"
+                    pagination={{ pageSize: 10, showSizeChanger: false, showTotal: (t: number) => `${t} productos` }}
+                    onRow={(record: any) => ({
+                      onClick: () => {
+                        setDetalles((prev) => [
+                          calcularFila({
+                            ...filaVacia(),
+                            id: -(prev.length + 1),
+                            codigo: record.codigo || record.idExterno,
+                            articulo: record.nombre,
+                            referencia: record.referencia || record.upc || '',
+                            costo: record.ultimoCosto || 0,
+                            cantidad: 1,
+                            familia: record.familia ? { nombre: record.familia.nombre, idExterno: record.familia.idExterno } : undefined,
+                            medida: record.unidadMedida || { nombre: '', codigo: '', factor: 1, idExterno: 0 },
+                            impuesto: record.impuestos?.[0]?.impuesto,
+                            porcentajeImpuesto: record.impuestos?.[0]?.impuesto?.porcentaje ?? 0,
+                          }),
+                          ...prev,
+                        ]);
+                        setOcProductosModalOpen(false);
+                      },
+                      style: { cursor: 'pointer' },
+                    })}
+                    locale={{ emptyText: 'No hay comodines disponibles' }}
+                  />
+                </>
+              ),
+            },
+          ]}
+        />
+      </Modal>
 
       {isLarge ? (
         /* === DESKTOP LAYOUT (>= lg) === */
@@ -1598,14 +1942,18 @@ const EntradaAlmacenFormulario: React.FC = () => {
                   children: (
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
-                        <Button
-                          type="dashed"
-                          icon={<PlusOutlined />}
-                          onClick={handleAgregarFila}
-                          disabled={agregarFilaBloqueado}
-                        >
-                          Agregar fila
-                        </Button>
+                        <Space>
+                          <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+                            if (ocDetallesData.length > 0) {
+                              setOcProductosModalOpen(true);
+                            } else {
+                              setProductoModalOpen(true);
+                            }
+                          }}>
+                            Agregar producto
+                          </Button>
+                          <Button icon={<BarcodeOutlined />} onClick={() => setScannerModalOpen(true)} />
+                        </Space>
                         <Input.Search
                           placeholder="Buscar detalle..."
                           allowClear
@@ -1713,14 +2061,18 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 children: (
                   <>
                     <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
-                      <Button
-                        type="dashed"
-                        icon={<PlusOutlined />}
-                        onClick={handleAgregarFila}
-                        disabled={agregarFilaBloqueado}
-                      >
-                        Agregar fila
-                      </Button>
+                      <Space>
+                        <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+                          if (ocDetallesData.length > 0) {
+                            setOcProductosModalOpen(true);
+                          } else {
+                            setProductoModalOpen(true);
+                          }
+                        }}>
+                          Agregar producto
+                        </Button>
+                        <Button icon={<BarcodeOutlined />} onClick={() => setScannerModalOpen(true)} />
+                      </Space>
                       <Input.Search
                         placeholder="Buscar detalle..."
                         allowClear

@@ -2,10 +2,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Table, Card, Input, Button, message, Typography, Space, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { proveedorApi } from '../../api/proveedorApi';
+import PermissionGate from '../../components/PermissionGate';
 import type { SuplidorDTO } from '../../types/entradaAlmacen';
 
 const { Text } = Typography;
@@ -154,7 +155,7 @@ const Proveedores: React.FC = () => {
       )}
       <Card
         className="paces-card-erp"
-        style={{ borderRadius: 8 }}
+        style={{ borderRadius: 8, overflow: 'hidden' }}
         styles={{ body: { padding: 0 } }}
       >
       <div style={{ padding: '16px 24px 0' }}>
@@ -167,6 +168,11 @@ const Proveedores: React.FC = () => {
             prefix={<SearchOutlined className="paces-text-icon" />}
           />
           <div style={{ flex: 1 }} />
+          <PermissionGate accion="CREAR">
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MProveedor/nuevo')}>
+              Nuevo
+            </Button>
+          </PermissionGate>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>

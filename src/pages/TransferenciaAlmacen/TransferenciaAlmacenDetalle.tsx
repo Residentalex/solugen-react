@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Typography, Tooltip
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Typography, Tooltip, Modal, Alert
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -12,16 +12,17 @@ import {
   CloseCircleOutlined,
   FileTextOutlined,
   FileSearchOutlined,
+  ExclamationCircleOutlined,
+  RedoOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
+import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import PermissionGate from '../../components/PermissionGate';
 
 const { Text } = Typography;
-const { TabPane } = Tabs;
-
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   0: { label: 'Borrador', color: 'default' },
   1: { label: 'Aplicado', color: 'success' },
@@ -31,18 +32,6 @@ const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   5: { label: 'Abierto', color: 'warning' },
   6: { label: 'Cerrado', color: 'default' },
 };
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function toTitleCase(str: string): string {
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 const ACCION_MAP: Record<number, string> = {
   0: 'Crear',
@@ -57,6 +46,18 @@ const ACCION_MAP: Record<number, string> = {
   9: 'Escanear',
 };
 
+function formatCurrency(n: number): string {
+  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
+}
+
+function formatNumber(n: number): string {
+  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+
+function toTitleCase(str: string): string {
+  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function formatDate(val: string): string {
   if (!val) return '-';
   const d = new Date(val);
@@ -64,10 +65,25 @@ function formatDate(val: string): string {
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+function extraerMensajeError(err: any, fallback: string): string {
+  const data = err?.response?.data;
+  if (!data) return fallback;
+  if (data.errorMessage) return data.errorMessage;
+  if (data.errors && typeof data.errors === 'object') {
+    const mensajes: string[] = [];
+    for (const key of Object.keys(data.errors)) {
+      const val = data.errors[key];
+      if (Array.isArray(val)) mensajes.push(...val);
+      else if (typeof val === 'string') mensajes.push(val);
+    }
+    if (mensajes.length > 0) return mensajes.join('; ');
+  }
+  return fallback;
+}
+
+// ===== Componente TotalesCard (sin descuento ni impuestos - TRP no los usa) =====
 interface TotalesCardProps {
   subTotal: number;
-  descuento: number;
-  impuestos: number;
   total: number;
   nota: string;
   alignRight: boolean;
@@ -76,7 +92,7 @@ interface TotalesCardProps {
   tasa?: number;
 }
 
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
+const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, total, nota, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
     className="paces-card"
@@ -91,14 +107,6 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
         {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
         <span>{formatNumber(subTotal)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Descuento</span>}
-        <span>{formatNumber(descuento)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
-        <span>{formatNumber(impuestos)}</span>
       </div>
     </div>
 
@@ -131,11 +139,14 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [tieneScan, setTieneScan] = useState<boolean | null>(null);
+  const [scannerModalOpen, setScannerModalOpen] = useState(false);
+  const [scannerUrl, setScannerUrl] = useState<string | null>(null);
+  const [scannerLoading, setScannerLoading] = useState(false);
   const screens = Grid.useBreakpoint();
 
   useEffect(() => {
@@ -146,7 +157,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    setError(null);
+    setLoadingError(false);
     transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
@@ -157,36 +168,52 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
           .catch(() => setTieneScan(false));
       })
       .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al cargar el documento';
-        setError(msg);
+        const msg = extraerMensajeError(err, 'Error al cargar el documento');
         message.error(msg);
+        setLoadingError(true);
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
-  if (loading) {
+  const handleRefresh = useCallback(() => {
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setData(res);
+        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+      })
+      .catch((err: any) => {
+        const msg = extraerMensajeError(err, 'Error al recargar');
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, setPageTitleOverride]);
+
+  const handleVerScanner = async () => {
+    if (!id) return;
+    setScannerLoading(true);
+    try {
+      const blob = await transferenciaAlmacenApi.descargarScan(sucursalActiva, parseInt(id));
+      const url = URL.createObjectURL(blob);
+      setScannerUrl(url);
+      setScannerModalOpen(true);
+    } catch {
+      message.error('Error al cargar el archivo escaneado');
+    } finally {
+      setScannerLoading(false);
+    }
+  };
+
+  if (loading || !data) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
         <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
       </div>
     );
-  }
-
-  if (error) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <div style={{ fontSize: 18, color: '#ff4d4f', marginBottom: 16 }}>Error</div>
-        <div style={{ marginBottom: 24 }} className="paces-text-secondary">{error}</div>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
-          Volver
-        </Button>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return null;
   }
 
   const isLarge = screens.lg ?? true;
@@ -210,6 +237,8 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { paddingLeft: 16 } }),
+      onHeaderCell: () => ({ style: { paddingLeft: 16 } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -241,65 +270,13 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       ),
     },
     {
-      title: 'Costo',
-      dataIndex: 'costo',
-      key: 'costo',
-      width: 120,
-      align: 'right' as const,
-      render: (_: any, record: any) => (
-        <div>
-          <div>{formatNumber(record.costo || 0)}</div>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
-        </div>
-      ),
-    },
-    {
-      title: 'Descuento',
-      key: 'descuento',
-      width: 120,
-      align: 'right' as const,
-      render: (_: any, record: any) => (
-        <div>
-          <div>{formatNumber(record.porcentajeDescuento || 0)}%</div>
-          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
-            {formatNumber(record.descuento || 0)}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: 'SubTotal',
-      dataIndex: 'subTotal',
-      key: 'subTotal',
-      width: 120,
-      align: 'right' as const,
-      render: (_: any, record: any) => (
-        <div>
-          <div>{formatNumber(record.subTotal || 0)}</div>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
-        </div>
-      ),
-    },
-    {
-      title: 'Impuestos',
-      key: 'impuestos',
-      width: 140,
-      align: 'right' as const,
-      render: (_: any, record: any) => (
-        <div>
-          <div>{formatNumber(record.impuestos || 0)}</div>
-          {record.impuesto?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
-          )}
-        </div>
-      ),
-    },
-    {
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
-      width: 130,
+      width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { paddingRight: 16 } }),
+      onHeaderCell: () => ({ style: { paddingRight: 16 } }),
       render: (_: any, record: any) => (
         <div>
           <Text strong>{formatNumber(record.total || 0)}</Text>
@@ -339,13 +316,6 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   // ===== Handlers de acciones de estado =====
   const handleAplicar = async () => {
     if (!id) return;
-
-    // Verificación temprana del scanner
-    if (tieneScan === false) {
-      message.warning('Debe escanear el documento antes de aplicar.');
-      return;
-    }
-
     setSaving(true);
     try {
       await transferenciaAlmacenApi.aplicar(sucursalActiva, parseInt(id));
@@ -354,6 +324,24 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al aplicar');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDesaplicar = async () => {
+    if (!id || !data) return;
+    setSaving(true);
+    try {
+      const origen = data.codigoSucursal || String(sucursalActiva);
+      const documento = `${data.documento.codigo}-${data.noDocumento}`;
+      await transferenciaAlmacenApi.desaplicar(sucursalActiva, documento);
+      message.success('Documento desaplicado exitosamente');
+      const res = await transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al desaplicar');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -392,200 +380,69 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
     }
   };
 
-  function extraerMensajeError(err: any, fallback: string): string {
-    const data = err?.response?.data;
-    if (!data) return fallback;
-    if (data.errorMessage) return data.errorMessage;
-    if (data.errors && typeof data.errors === 'object') {
-      const mensajes: string[] = [];
-      for (const key of Object.keys(data.errors)) {
-        const val = data.errors[key];
-        if (Array.isArray(val)) mensajes.push(...val);
-        else if (typeof val === 'string') mensajes.push(val);
-      }
-      if (mensajes.length > 0) return mensajes.join('; ');
-    }
-    return fallback;
-  }
-
-  return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FTRP')}>
-          Volver
-        </Button>
-        <div style={{ flex: 1 }} />
+  // ===== Datos Generales card (compartido desktop/mobile) =====
+  const renderDatosGenerales = (columnCount: number) => (
+    <Card className="paces-card" size="small" title={
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 16, fontWeight: 600 }}>Datos Generales</span>
         <Space>
-          {data.estado === 0 && data.periodo !== 6 && (
-            <PermissionGate accion="EDITAR">
-              <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FTRP/${id}/editar`)}>Editar</Button>
-            </PermissionGate>
+          {esCerrado && (
+            <Tooltip title="Período contable cerrado">
+              <LockFilled style={{ fontSize: 14, color: '#595959' }} />
+            </Tooltip>
           )}
-          <PermissionGate accion="IMPRIMIR">
-            <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
-            setImprimiendo(true);
-            try {
-              const res = await apiClient.post('/reportes/inventario/transferencia', data, {
-                responseType: 'blob',
-              });
-              const blobUrl = URL.createObjectURL(res.data);
-              const iframe = document.createElement('iframe');
-              iframe.style.display = 'none';
-              iframe.src = blobUrl;
-              document.body.appendChild(iframe);
-              setTimeout(() => {
-                iframe.contentWindow?.print();
-                setTimeout(() => {
-                  document.body.removeChild(iframe);
-                  URL.revokeObjectURL(blobUrl);
-                }, 30000);
-              }, 2000);
-            } catch {
-              message.error('Error al generar el PDF');
-            } finally {
-              setImprimiendo(false);
-            }
-          }} />
-          </PermissionGate>
-          {data.estado === 0 && data.periodo !== 6 && (
-            <PermissionGate accion="APLICAR">
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleAplicar}>
-                Aplicar
-              </Button>
-            </PermissionGate>
+          <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
+          {tieneScan === true && (
+            <Tooltip title="Ver documento escaneado">
+              <Tag
+                icon={<FileTextOutlined />}
+                color="success"
+                style={{ cursor: 'pointer' }}
+                onClick={handleVerScanner}
+              />
+            </Tooltip>
           )}
-          {data.estado !== 3 && (
-            <PermissionGate accion="ANULAR">
-              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
-                Anular
-              </Button>
-            </PermissionGate>
-          )}
-          {data.estado === 1 && (
-            <PermissionGate accion="POSTEAR">
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handlePostear}>Postear</Button>
-            </PermissionGate>
-          )}
+          {tieneScan === false && <Tag icon={<FileSearchOutlined />} color="warning" />}
         </Space>
       </div>
+    } style={{ marginBottom: 16 }}>
+      <Descriptions bordered size="small" column={columnCount} styles={{ content: { background: 'transparent' } }}>
+        <Descriptions.Item label="Concepto:">
+          {data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}
+        </Descriptions.Item>
+        <Descriptions.Item label="NCF:">
+          {data.ncf || '-'}
+        </Descriptions.Item>
+        <Descriptions.Item label="Fecha Doc.:">
+          {formatDate(data.fechaDocumento)}
+        </Descriptions.Item>
+        <Descriptions.Item label="Almacén Origen:">
+          {data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}
+        </Descriptions.Item>
+        <Descriptions.Item label="Almacén Destino:" span={columnCount === 3 ? 2 : 1}>
+          {data.almacenDestino?.nombre ? toTitleCase(data.almacenDestino.nombre) : '-'}
+        </Descriptions.Item>
+        <Descriptions.Item label="Referencia:">
+          {data.referencia || '-'}
+        </Descriptions.Item>
+        <Descriptions.Item label="Nota:" span={columnCount === 3 ? 3 : 1}>
+          <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+        </Descriptions.Item>
+      </Descriptions>
+    </Card>
+  );
 
-      {isLarge ? (
-        <Row gutter={16}>
-          <Col lg={18}>
-            <Card className="paces-card" size="small" title={
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 16, fontWeight: 600 }}>
-                    Datos Generales
-                  </span>
-                  <Space>
-                    {esCerrado && (
-  <Tooltip title="Período contable cerrado">
-    <LockFilled style={{ marginLeft: 4, fontSize: 14, color: '#595959' }} />
-  </Tooltip>
-)}
-                    <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-                    {tieneScan === true && (
-                      <Tooltip title="Documento escaneado">
-                        <Tag icon={<FileTextOutlined />} color="success" />
-                      </Tooltip>
-                    )}
-                    {tieneScan === false && (
-                      <Tooltip title="Documento no escaneado">
-                        <Tag icon={<FileSearchOutlined />} color="warning" />
-                      </Tooltip>
-                    )}
-                  </Space>
-                </div>
-              }
-              style={{ marginBottom: 16 }}
-            >
-              <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Almacen Origen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Almacen Destino">{data.almacenDestino?.nombre ? toTitleCase(data.almacenDestino.nombre) : '-'}</Descriptions.Item>
-              </Descriptions>
-            </Card>
-
-            <Tabs defaultActiveKey="detalles" type="card">
-              <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                  <Input.Search
-                    placeholder="Buscar detalle..."
-                    allowClear
-                    style={{ maxWidth: 250 }}
-                    onSearch={(value) => setDetalleSearch(value)}
-                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                  />
-                </div>
-                <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-              </TabPane>
-              <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-                <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
-                  summary={() => (
-                    <Table.Summary fixed>
-                      <Table.Summary.Row>
-                        <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                      </Table.Summary.Row>
-                    </Table.Summary>
-                  )}
-                />
-              </TabPane>
-              <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
-                <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-              </TabPane>
-            </Tabs>
-          </Col>
-
-          <Col lg={6}>
-            <TotalesCard subTotal={data.subTotal || 0} descuento={data.descuento || 0} impuestos={data.impuestos || 0} total={data.total} nota={data.nota} alignRight={false}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
-              tasa={data.tasa ?? 1}
-            />
-          </Col>
-        </Row>
-      ) : (
-        <div>
-          <Card className="paces-card" size="small" title={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 16, fontWeight: 600 }}>
-                    Datos Generales
-                  </span>
-                  <Space>
-                    {esCerrado && (
-  <Tooltip title="Período contable cerrado">
-    <LockFilled style={{ marginLeft: 4, fontSize: 14, color: '#595959' }} />
-  </Tooltip>
-)}
-                    <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-                    {tieneScan === true && (
-                      <Tooltip title="Documento escaneado">
-                        <Tag icon={<FileTextOutlined />} color="success" />
-                      </Tooltip>
-                    )}
-                    {tieneScan === false && (
-                      <Tooltip title="Documento no escaneado">
-                        <Tag icon={<FileSearchOutlined />} color="warning" />
-                      </Tooltip>
-                    )}
-                  </Space>
-                </div>
-              }
-              style={{ marginBottom: 16 }}
-            >
-              <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Almacen Origen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Almacen Destino">{data.almacenDestino?.nombre ? toTitleCase(data.almacenDestino.nombre) : '-'}</Descriptions.Item>
-              </Descriptions>
-          </Card>
-
-          <Tabs defaultActiveKey="detalles" type="card">
-            <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
+  // ===== Tabs (compartido desktop/mobile) =====
+  const renderTabs = () => (
+    <Tabs
+      defaultActiveKey="detalles"
+      type="card"
+      items={[
+        {
+          key: 'detalles',
+          label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+          children: (
+            <>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
                 <Input.Search
                   placeholder="Buscar detalle..."
@@ -595,33 +452,208 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
                   onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                 />
               </div>
-              <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-            </TabPane>
-            <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-              <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
-                summary={() => (
-                  <Table.Summary fixed>
-                    <Table.Summary.Row>
-                      <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                      <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                      <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                    </Table.Summary.Row>
-                  </Table.Summary>
-                )}
-              />
-            </TabPane>
-            <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
-              <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-            </TabPane>
-          </Tabs>
+              <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 600 }} />
+            </>
+          ),
+        },
+        {
+          key: 'asientos',
+          label: `Asientos (${data.asientos?.length || 0})`,
+          children: (
+            <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
+              summary={() => (
+                <Table.Summary fixed>
+                  <Table.Summary.Row>
+                    <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                    <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                    <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                  </Table.Summary.Row>
+                </Table.Summary>
+              )}
+            />
+          ),
+        },
+        {
+          key: 'historial',
+          label: `Historial (${data.logs?.length || 0})`,
+          children: (
+            <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+          ),
+        },
+      ]}
+    />
+  );
 
-          <TotalesCard subTotal={data.subTotal || 0} descuento={data.descuento || 0} impuestos={data.impuestos || 0} total={data.total} nota={data.nota} alignRight={true}
+  return (
+    <div>
+      {loadingError && (
+        <Alert
+          message="Error al cargar detalle de transferencia de almacén"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
+      {/* Toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FTRP')}>
+          Volver
+        </Button>
+        <div style={{ flex: 1 }} />
+        <Space>
+          <PermissionGate accion="IMPRIMIR">
+            <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
+              setImprimiendo(true);
+              try {
+                const sucursalParam = data.codigoSucursal
+                  ? obtenerNombreEnumSucursal(data.codigoSucursal)
+                  : sucursalActiva;
+                const res = await apiClient.post('/reportes/inventario/transferencia', data, {
+                  responseType: 'blob',
+                });
+                const blobUrl = URL.createObjectURL(res.data);
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = blobUrl;
+                document.body.appendChild(iframe);
+                setTimeout(() => {
+                  iframe.contentWindow?.print();
+                  setTimeout(() => {
+                    document.body.removeChild(iframe);
+                    URL.revokeObjectURL(blobUrl);
+                  }, 30000);
+                }, 2000);
+              } catch {
+                message.error('Error al generar el PDF');
+              } finally {
+                setImprimiendo(false);
+              }
+            }} />
+          </PermissionGate>
+
+          {data.estado === 0 && data.periodo !== 6 && data.revisado !== true && (
+            <PermissionGate accion="EDITAR">
+              <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FTRP/${id}/editar`)}>Editar</Button>
+            </PermissionGate>
+          )}
+          {data.estado === 0 && data.periodo !== 6 && (
+            <PermissionGate accion="APLICAR">
+              <Button style={{ background: '#389e0d', borderColor: '#389e0d', color: '#fff' }} icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
+                Modal.confirm({
+                  title: 'Aplicar documento',
+                  icon: <ExclamationCircleOutlined />,
+                  content: '¿Está seguro que desea aplicar este documento?',
+                  okText: 'Sí',
+                  cancelText: 'No',
+                  onOk: handleAplicar,
+                });
+              }}>
+                Aplicar
+              </Button>
+            </PermissionGate>
+          )}
+          {data.revisado !== true && data.estado !== 3 && (
+            <PermissionGate accion="ANULAR">
+              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={() => {
+                Modal.confirm({
+                  title: 'Anular documento',
+                  icon: <ExclamationCircleOutlined />,
+                  content: '¿Está seguro que desea anular este documento?',
+                  okText: 'Sí',
+                  cancelText: 'No',
+                  onOk: handleAnular,
+                });
+              }}>
+                Anular
+              </Button>
+            </PermissionGate>
+          )}
+          {data.estado === 1 && data.revisado !== true && (
+            <PermissionGate accion="POSTEAR">
+              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
+                Modal.confirm({
+                  title: 'Postear documento',
+                  icon: <ExclamationCircleOutlined />,
+                  content: '¿Está seguro que desea postear este documento?',
+                  okText: 'Sí',
+                  cancelText: 'No',
+                  onOk: handlePostear,
+                });
+              }}>Postear</Button>
+            </PermissionGate>
+          )}
+          {data.estado === 1 && data.revisado !== true && (
+            <PermissionGate accion="DESAPLICAR">
+              <Button icon={<RedoOutlined />} loading={saving} onClick={() => {
+                Modal.confirm({
+                  title: 'Desaplicar documento',
+                  icon: <ExclamationCircleOutlined />,
+                  content: '¿Está seguro que desea desaplicar este documento?',
+                  okText: 'Sí',
+                  cancelText: 'No',
+                  onOk: handleDesaplicar,
+                });
+              }}>
+                Desaplicar
+              </Button>
+            </PermissionGate>
+          )}
+        </Space>
+      </div>
+
+      {isLarge ? (
+        /* === DESKTOP LAYOUT (≥ lg) === */
+        <Row gutter={16}>
+          <Col lg={18}>
+            {renderDatosGenerales(3)}
+            {renderTabs()}
+          </Col>
+
+          <Col lg={6}>
+            <TotalesCard subTotal={data.subTotal || 0} total={data.total} nota={data.nota} alignRight={false}
+              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              tasa={data.tasa ?? 1}
+            />
+          </Col>
+        </Row>
+      ) : (
+        /* === MOBILE LAYOUT (< lg) === */
+        <div>
+          {renderDatosGenerales(1)}
+          {renderTabs()}
+          <TotalesCard subTotal={data.subTotal || 0} total={data.total} nota={data.nota} alignRight={true}
             monedaSimbolo={data.moneda?.simbolo || 'RD$'}
             monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
             tasa={data.tasa ?? 1}
           />
         </div>
       )}
+
+      {/* Modal de Visor de Scanner */}
+      <Modal
+        title="Documento Escaneado"
+        open={scannerModalOpen}
+        onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
+        width="80%"
+        style={{ top: 20 }}
+        footer={null}
+        destroyOnHidden
+      >
+        {scannerLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
+        ) : scannerUrl ? (
+          <iframe src={scannerUrl} style={{ width: '100%', height: '70vh', border: 'none' }} title="Scanner" />
+        ) : (
+          <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
+        )}
+      </Modal>
     </div>
   );
 };

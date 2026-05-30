@@ -722,7 +722,7 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
 
 /* ===== Content Area ===== */
 .paces-content {
-  padding: 4px 20px 20px;
+  padding: 16px 20px 20px;
   min-height: calc(100vh - 56px);
 }
 
@@ -1092,7 +1092,7 @@ body.theme-liga .paces-login-bg {
 
 /* ===== Toolbar ===== */
 .paces-toolbar {
-  padding: 4px 20px;
+  padding: 8px 20px;
   background: transparent;
   border-bottom: none;
   display: flex;
@@ -1208,7 +1208,7 @@ body.theme-liga .paces-login-bg {
   height: 24px;
   border-radius: 50%;
   background: var(--paces-hover-bg);
-  color: var(--paces-primary);
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;

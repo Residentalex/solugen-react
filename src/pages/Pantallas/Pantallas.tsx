@@ -22,6 +22,7 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons';
+import PermissionGate from '../../components/PermissionGate';
 
 const FILAS_POR_PAGINA = 25;
 import { useUIStore } from '../../stores/uiStore';
@@ -52,6 +53,7 @@ const Pantallas: React.FC = () => {
   const [data, setData] = useState<PantallaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
   const [filtroModulo, setFiltroModulo] = useState<number | undefined>();
   const [filtroGrupo, setFiltroGrupo] = useState<string | undefined>();
   const [modalVisible, setModalVisible] = useState(false);
@@ -315,9 +317,11 @@ const Pantallas: React.FC = () => {
         <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
           Pantallas del Sistema
         </h4>
-        <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-          Nueva Pantalla
-        </Button>
+        <PermissionGate accion="CREAR">
+          <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
+            Nueva Pantalla
+          </Button>
+        </PermissionGate>
       </div>
 
       {/* Filtros */}
@@ -366,6 +370,18 @@ const Pantallas: React.FC = () => {
             ))}
           </Select>
         </Col>
+        <Col xs={12} sm={6} md={3}>
+          <Select
+            style={{ width: '100%' }}
+            value={pageSize}
+            onChange={(v) => { setPageSize(v); }}
+            options={[
+              { value: 25, label: '25' },
+              { value: 50, label: '50' },
+              { value: 100, label: '100' },
+            ]}
+          />
+        </Col>
       </Row>
 
       <div className="paces-border-top">
@@ -378,11 +394,10 @@ const Pantallas: React.FC = () => {
           scroll={{ x: 900 }}
           size="middle"
           pagination={{
-            showSizeChanger: true,
+            pageSize,
+            showSizeChanger: false,
             showTotal: (total, range) =>
               `${range[0]}-${range[1]} de ${total} pantallas`,
-            pageSizeOptions: ['10', '20', '50'],
-            defaultPageSize: FILAS_POR_PAGINA,
           }}
           locale={{
             emptyText: <Empty description="No hay pantallas registradas" />,

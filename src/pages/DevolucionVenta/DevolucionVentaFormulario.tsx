@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Dropdown,
 } from 'antd';
 import {
   SaveOutlined,
@@ -12,6 +12,10 @@ import {
   SearchOutlined,
   ClearOutlined,
   ExclamationCircleOutlined,
+  MoreOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  RedoOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -19,6 +23,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { devolucionVentaApi } from '../../api/devolucionVentaApi';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
 import { productoApi } from '../../api/productoApi';
+import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type {
@@ -157,120 +162,6 @@ function filaVacia(): DetalleDevolucionVentaDTO {
   };
 }
 
-// ===== Componente BuscarProductoModal =====
-interface BuscarProductoModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (producto: {
-    codigo: string;
-    articulo: string;
-    referencia: string;
-    costo: number;
-    precio: number;
-    familia?: { nombre: string; idExterno: string };
-    medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
-    impuesto?: { nombre: string; porcentaje: number; codigo: string; idExterno: string };
-    tieneVencimiento?: boolean;
-  }) => void;
-}
-
-const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose, onSelect }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const [productos, setProductos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
-
-  const cargar = useCallback(async (filtro?: string) => {
-    setLoading(true);
-    try {
-      const res = await productoApi.obtenerListado(sucursalActiva, filtro ? { codigo: filtro } : undefined);
-      setProductos(res || []);
-    } catch {
-      message.error('Error al cargar productos');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (open) cargar();
-  }, [open, cargar]);
-
-  const columnas = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-    { title: 'Artículo', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-      render: (v: string) => toTitleCase(v) },
-    { title: 'Referencia', dataIndex: 'referencia', key: 'referencia', width: 120,
-      render: (v: string) => v || '-' },
-  ];
-
-  return (
-    <Modal
-      title="Buscar Producto"
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={700}
-      destroyOnHidden
-    >
-      <Input.Search
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        onSearch={(val) => cargar(val)}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={productos}
-        columns={columnas}
-        rowKey="codigo"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: async () => {
-            try {
-              const detalle = await productoApi.obtenerDetalle(sucursalActiva, record.codigo);
-              onSelect({
-                codigo: record.codigo,
-                articulo: detalle.nombre || record.nombre,
-                referencia: detalle.referenciaInterna || record.referencia || '',
-                costo: detalle.ultimoCosto || record.ultimoCosto || 0,
-                precio: detalle.precio || record.precio || 0,
-                familia: detalle.familia || record.familia,
-                medida: detalle.unidadMedida
-                  ? { nombre: detalle.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: detalle.unidadMedida.idExterno || 0 }
-                  : record.unidadMedida
-                    ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: record.unidadMedida.idExterno || 0 }
-                    : undefined,
-                impuesto: (detalle.impuestos?.[0]?.impuesto as any) || undefined,
-                tieneVencimiento: detalle.pesado || false,
-              });
-            } catch {
-              onSelect({
-                codigo: record.codigo,
-                articulo: record.nombre,
-                referencia: record.referencia || '',
-                costo: record.ultimoCosto || 0,
-                precio: record.precio || 0,
-                familia: record.familia,
-                medida: record.unidadMedida
-                  ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: record.unidadMedida.idExterno || 0 }
-                  : undefined,
-                impuesto: undefined,
-                tieneVencimiento: false,
-              });
-            }
-            onClose();
-          },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
-};
-
 // ===== Componente BuscarFacturaModal =====
 interface BuscarFacturaModalProps {
   open: boolean;
@@ -371,14 +262,22 @@ interface TotalesCardProps {
   impuestos: number;
   total: number;
   alignRight: boolean;
+  monedaSimbolo?: string;
+  monedaNombre?: string;
 }
 
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, alignRight }) => (
+const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, alignRight, monedaSimbolo, monedaNombre }) => (
   <Card
     title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
     className="paces-card"
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
+      {monedaSimbolo && (
+        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
+          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
+          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'})</span>
+        </div>
+      )}
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
         {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
         <span>{formatNumber(subTotal)}</span>
@@ -397,7 +296,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
 
     <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
       {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
+      <span style={{ color: 'var(--paces-primary)' }}>{monedaSimbolo || 'RD$'} {formatNumber(total)}</span>
     </div>
   </Card>
 );
@@ -432,6 +331,9 @@ const DevolucionVentaFormulario: React.FC = () => {
   const [detalleSearch, setDetalleSearch] = useState('');
 
   const [form] = Form.useForm();
+
+  const editValuesRef = useRef<Record<string, any>>({});
+  const navigationConfirmedRef = useRef(false);
 
   const isLarge = screens.lg ?? true;
 
@@ -536,6 +438,44 @@ const DevolucionVentaFormulario: React.FC = () => {
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
 
+  // ===== Bloquear salida si hay cambios =====
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
+      if (!leave) {
+        window.history.pushState(null, '', window.location.pathname);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    const originalPushState = window.history.pushState.bind(window.history);
+    window.history.pushState = function(data: any, unused: string, url?: string | URL | null) {
+      const currentPath = window.location.pathname;
+      const newPath = typeof url === 'string' ? url.split('?')[0] : (url instanceof URL ? url.pathname : null);
+      if (newPath && currentPath !== newPath && !navigationConfirmedRef.current) {
+        const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
+        if (!leave) return;
+        navigationConfirmedRef.current = true;
+      }
+      return originalPushState(data, unused, url);
+    };
+    return () => {
+      window.history.pushState = originalPushState;
+    };
+  }, []);
+
   // ===== Handlers =====
   const handleCancelar = () => {
     Modal.confirm({
@@ -547,6 +487,7 @@ const DevolucionVentaFormulario: React.FC = () => {
       okButtonProps: { danger: true },
       onOk: () => {
         if (mode === 'crear') {
+          navigationConfirmedRef.current = true;
           navigate('/FDEV');
         } else if (id) {
           setLoading(true);
@@ -602,8 +543,9 @@ const DevolucionVentaFormulario: React.FC = () => {
               const msg = err?.response?.data?.errorMessage || 'Error al recargar el documento';
               message.error(msg);
             })
-            .finally(() => setLoading(false));
-          navigate(`/FDEV/${id}`);
+.finally(() => setLoading(false));
+           navigationConfirmedRef.current = true;
+           navigate(`/FDEV/${id}`);
         }
       },
     });
@@ -689,62 +631,16 @@ const DevolucionVentaFormulario: React.FC = () => {
       if (mode === 'crear') {
         const result = await devolucionVentaApi.crear(sucursalActiva, dto);
         message.success('Devolución de venta creada exitosamente');
+        navigationConfirmedRef.current = true;
         navigate(`/FDEV/${result.id}`);
       } else {
         await devolucionVentaApi.actualizar(sucursalActiva, dto);
         message.success('Devolución de venta actualizada exitosamente');
+        navigationConfirmedRef.current = true;
         navigate(`/FDEV/${id}`);
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAplicar = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      const result = await devolucionVentaApi.aplicar(sucursalActiva, parseInt(id));
-      setData(result);
-      message.success('Documento aplicado exitosamente');
-      navigate(`/FDEV/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAnular = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await devolucionVentaApi.anular(sucursalActiva, dto);
-      message.success('Documento anulado exitosamente');
-      navigate(`/FDEV/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al anular');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePostear = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await devolucionVentaApi.postear(sucursalActiva, dto);
-      message.success('Documento posteado exitosamente');
-      navigate(`/FDEV/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al postear');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -776,11 +672,16 @@ const DevolucionVentaFormulario: React.FC = () => {
       );
     }
 
-    // Configurar moneda según el concepto
-    const monedaNombre = concepto.moneda?.nombre || 'Peso Dominicano';
+    // === ConfigurarMoneda ===
+    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
     form.setFieldsValue({
-      moneda: monedaNombre,
-      tasa: 1,
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+    });
+    // Actualizar data local para que la UI lo refleje
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, moneda: monedaObj };
     });
 
     // Si el concepto tiene almacén por defecto
@@ -1041,7 +942,6 @@ const DevolucionVentaFormulario: React.FC = () => {
           <>
             {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
             <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-            {data.ncf && <Tag color="purple">NCF: {data.ncf}</Tag>}
           </>
         )}
 
@@ -1068,34 +968,6 @@ const DevolucionVentaFormulario: React.FC = () => {
             {esBorrador && (
               <Button icon={<CloseOutlined />} onClick={handleCancelar}>
                 Cancelar
-              </Button>
-            )}
-            {esBorrador && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handleAplicar}
-              >
-                Aplicar
-              </Button>
-            )}
-            {esAplicado && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handlePostear}
-              >
-                Postear
-              </Button>
-            )}
-            {!esAnulado && (
-              <Button
-                danger
-                icon={<DeleteOutlined />}
-                loading={saving}
-                onClick={handleAnular}
-              >
-                Anular
               </Button>
             )}
           </>
@@ -1148,6 +1020,7 @@ const DevolucionVentaFormulario: React.FC = () => {
       title: 'Código',
       key: 'codigoInput',
       width: 100,
+      onCell: () => ({ style: { paddingLeft: 8 } }),
       render: (_: any, _record: DetalleDevolucionVentaDTO, idx: number) => (
         <Input
           size="small"
@@ -1243,13 +1116,15 @@ const DevolucionVentaFormulario: React.FC = () => {
           <InputNumber
             size="small"
             style={{ width: '100%' }}
+            styles={{ input: { textAlign: 'right' } }}
             min={0.01}
             step={0.01}
             precision={2}
-            value={detalles[idx]?.cantidad}
-            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'cantidad', val || 0)}
-            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
-            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
+            controls={false}
+            defaultValue={detalles[idx]?.cantidad}
+            onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_cantidad`] = val || 0; }}
+            onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? detalles[idx]?.cantidad; handleDetalleCalculate(detalles[idx].id, 'cantidad', val); }}
+            onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? detalles[idx]?.cantidad; handleDetalleCalculate(detalles[idx].id, 'cantidad', val); }}
           />
           {detalles[idx]?.medida?.nombre && (
             <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
@@ -1263,23 +1138,37 @@ const DevolucionVentaFormulario: React.FC = () => {
       title: 'Precio',
       dataIndex: 'precio',
       key: 'precio',
-      width: 110,
+      width: 130,
       align: 'right' as const,
-      render: (_: any, _record: DetalleDevolucionVentaDTO, idx: number) => (
-        <div>
-          <InputNumber
-            size="small"
-            style={{ width: '100%' }}
-            min={0}
-            step={0.01}
-            precision={2}
-            value={detalles[idx]?.precio}
-            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'precio', val || 0)}
-            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
-            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
-          />
-        </div>
-      ),
+      responsive: ['sm' as const, 'md' as const, 'lg' as const],
+      shouldCellUpdate: (record: DetalleDevolucionVentaDTO, prevRecord: DetalleDevolucionVentaDTO) => record.precio !== prevRecord.precio || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
+      render: (_: any, record: DetalleDevolucionVentaDTO, idx: number) => {
+        const precioBase = Number(detalles[idx]?.precio) || 0;
+        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
+        const factor = Number(detalles[idx]?.medida?.factor) || 1;
+        const precioConDescuento = precioBase - ((precioBase * pctDesc) / 100);
+        const precioUnitario = precioConDescuento / factor;
+        return (
+          <div>
+            <InputNumber
+              size="small"
+              style={{ width: '100%' }}
+              styles={{ input: { textAlign: 'right' } }}
+              min={0}
+              step={0.01}
+              precision={2}
+              controls={false}
+              defaultValue={detalles[idx]?.precio}
+              onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_precio`] = val || 0; }}
+              onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_precio`] ?? detalles[idx]?.precio; handleDetalleCalculate(detalles[idx].id, 'precio', val); }}
+              onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_precio`] ?? detalles[idx]?.precio; handleDetalleCalculate(detalles[idx].id, 'precio', val); }}
+            />
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+              {formatNumber(precioUnitario)} × {factor}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: 'SubTotal',
@@ -1288,6 +1177,8 @@ const DevolucionVentaFormulario: React.FC = () => {
       width: 100,
       align: 'right' as const,
       responsive: ['md' as const, 'lg' as const],
+      shouldCellUpdate: (record: DetalleDevolucionVentaDTO, prevRecord: DetalleDevolucionVentaDTO) =>
+        record.subTotal !== prevRecord.subTotal,
       render: (_: any, record: DetalleDevolucionVentaDTO) => (
         <Text>{formatNumber(record.subTotal || 0)}</Text>
       ),
@@ -1305,10 +1196,10 @@ const DevolucionVentaFormulario: React.FC = () => {
           max={100}
           step={0.01}
           precision={2}
-          value={detalles[idx]?.porcentajeDescuento}
-          onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'porcentajeDescuento', val || 0)}
-          onBlur={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
-          onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
+          defaultValue={detalles[idx]?.porcentajeDescuento}
+          onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] = val || 0; }}
+          onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] ?? detalles[idx]?.porcentajeDescuento; handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val); }}
+          onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] ?? detalles[idx]?.porcentajeDescuento; handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val); }}
           addonAfter="%"
         />
       ),
@@ -1319,6 +1210,8 @@ const DevolucionVentaFormulario: React.FC = () => {
       width: 100,
       align: 'right' as const,
       responsive: ['md' as const, 'lg' as const],
+      shouldCellUpdate: (record: DetalleDevolucionVentaDTO, prevRecord: DetalleDevolucionVentaDTO) =>
+        record.descuento !== prevRecord.descuento,
       render: (_: any, record: DetalleDevolucionVentaDTO) => (
         <Text>{formatNumber(record.descuento || 0)}</Text>
       ),
@@ -1328,6 +1221,8 @@ const DevolucionVentaFormulario: React.FC = () => {
       key: 'impuestos',
       width: 100,
       align: 'right' as const,
+      shouldCellUpdate: (record: DetalleDevolucionVentaDTO, prevRecord: DetalleDevolucionVentaDTO) =>
+        record.impuestos !== prevRecord.impuestos || record.impuesto?.nombre !== prevRecord.impuesto?.nombre,
       render: (_: any, record: DetalleDevolucionVentaDTO) => (
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
@@ -1343,6 +1238,8 @@ const DevolucionVentaFormulario: React.FC = () => {
       key: 'total',
       width: 100,
       align: 'right' as const,
+      shouldCellUpdate: (record: DetalleDevolucionVentaDTO, prevRecord: DetalleDevolucionVentaDTO) =>
+        record.total !== prevRecord.total,
       render: (_: any, record: DetalleDevolucionVentaDTO) => (
         <Text strong>{formatNumber(record.total || 0)}</Text>
       ),
@@ -1351,22 +1248,30 @@ const DevolucionVentaFormulario: React.FC = () => {
       title: '',
       key: 'acciones',
       width: 50,
-      render: (_: any, _record: DetalleDevolucionVentaDTO, idx: number) => (
-        <Button
-          type="text"
-          danger
-          size="small"
-          icon={<DeleteOutlined />}
-          onClick={() => handleEliminarFila(detalles[idx].id)}
-        />
-      ),
+      onCell: () => ({ style: { paddingRight: 8 } }),
+      render: (_: any, _record: DetalleDevolucionVentaDTO, idx: number) => {
+        const items = [
+          {
+            key: 'eliminar',
+            label: 'Eliminar',
+            icon: <DeleteOutlined />,
+            danger: true,
+            onClick: () => handleEliminarFila(detalles[idx].id),
+          },
+        ];
+        return (
+          <Dropdown menu={{ items }} trigger={['click']}>
+            <Button type="text" size="small" icon={<MoreOutlined />} />
+          </Dropdown>
+        );
+      },
     },
   ];
 
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-      <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
+      <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           {/* Fila 1: Concepto */}
           <Col xs={24} sm={12} lg={8}>
@@ -1569,6 +1474,7 @@ const DevolucionVentaFormulario: React.FC = () => {
         open={productoModalOpen}
         onClose={() => setProductoModalOpen(false)}
         onSelect={handleProductoSelect}
+        mode="venta"
       />
 
       <BuscarFacturaModal
@@ -1695,6 +1601,8 @@ const DevolucionVentaFormulario: React.FC = () => {
               impuestos={totales.impuestos}
               total={totales.total}
               alignRight={false}
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
             />
           </Col>
         </Row>
@@ -1814,6 +1722,8 @@ const DevolucionVentaFormulario: React.FC = () => {
             impuestos={totales.impuestos}
             total={totales.total}
             alignRight={true}
+            monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+            monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
           />
         </div>
       )}

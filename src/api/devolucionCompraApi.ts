@@ -65,6 +65,11 @@ export const devolucionCompraApi = {
     return data.data;
   },
 
+  desaplicar: async (sucursal: number, documento: string): Promise<any> => {
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/desaplicar?sucursal=${sucursal}&documento=${documento}`);
+    return data.data;
+  },
+
   postear: async (sucursal: number, devolucion: any): Promise<any> => {
     const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postear`, devolucion);
     return data.data;
@@ -109,9 +114,9 @@ export const devolucionCompraApi = {
   },
 
   obtenerConceptos: async (sucursal: number, tipoId?: number): Promise<ConceptoDTO[]> => {
-    const params: Record<string, any> = { documento: 'DVC' };
+    const params: Record<string, any> = {};
     if (tipoId) params.tipoId = tipoId;
-    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}`, { params });
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}/documento/DVC`, { params });
     return data.data;
   },
 
@@ -132,6 +137,11 @@ export const devolucionCompraApi = {
 
   obtenerDetalleEntrada: async (sucursal: number, id: number): Promise<any> => {
     const { data } = await apiClient.get<ApiResponse<any>>(`/ENP/${sucursal}/${id}`);
+    return data.data;
+  },
+
+  obtenerPorIdEntrada: async (sucursal: number, idEntrada: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/idEntrada/${idEntrada}`);
     return data.data;
   },
 };

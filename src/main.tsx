@@ -86,6 +86,11 @@ function getThemeConfig(themeName: ThemeName) {
       headerBg: t.bgContainer,
       contentBg: t.bgContainer,
     },
+    Checkbox: {
+      colorBgContainer: isDark ? t.bgElevated : '#ffffff',
+      colorBorder: isDark ? t.border : '#d9d9d9',
+      colorPrimary: t.primaryColor,
+    },
   };
 
   return {

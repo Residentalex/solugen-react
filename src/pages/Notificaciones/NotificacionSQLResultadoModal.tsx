@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Modal, Table, Tag, message, Spin, Empty, Typography } from 'antd';
+import { Modal, Table, Tag, Select, message, Spin, Empty, Typography } from 'antd';
 import { notificacionesApi } from '../../api/notificacionesApi';
 
 const { Text } = Typography;
@@ -17,6 +17,7 @@ const NotificacionSQLResultadoModal: React.FC<NotificacionSQLResultadoModalProps
   const [filas, setFilas] = useState<Record<string, any>[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pageSize, setPageSize] = useState(25);
 
   const cargarResultado = useCallback(async () => {
     if (!visible || !configId) return;
@@ -82,9 +83,20 @@ const NotificacionSQLResultadoModal: React.FC<NotificacionSQLResultadoModalProps
 
       {!loading && !error && filas.length > 0 && (
         <>
-          <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Text strong>{filas.length}</Text>
             <Text type="secondary"> fila(s) obtenida(s)</Text>
+            <div style={{ flex: 1 }} />
+            <Select
+              style={{ width: 65 }}
+              value={pageSize}
+              onChange={(v) => setPageSize(v)}
+              options={[
+                { value: 25, label: '25' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
+              ]}
+            />
           </div>
           <Table
             columns={columns}
@@ -93,10 +105,9 @@ const NotificacionSQLResultadoModal: React.FC<NotificacionSQLResultadoModalProps
             size="small"
             scroll={{ x: columns.length * 160 }}
             pagination={{
-              showSizeChanger: true,
+              pageSize,
+              showSizeChanger: false,
               showTotal: (t, range) => `${range[0]}-${range[1]} de ${t}`,
-              pageSizeOptions: ['10', '20', '50'],
-              defaultPageSize: 10,
             }}
           />
         </>

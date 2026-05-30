@@ -18,6 +18,7 @@ import {
   IdcardOutlined,
   PhoneOutlined,
   EnvironmentOutlined,
+  ExclamationCircleOutlined,
   RollbackOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -27,6 +28,8 @@ import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
+import { devolucionCompraApi } from '../../api/devolucionCompraApi';
+import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import PermissionGate from '../../components/PermissionGate';
 import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
@@ -174,6 +177,71 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
   </Card>
 );
 
+interface DocumentosRelacionadosCardProps {
+  devoluciones: any[];
+  factura: any;
+  tienePermisoFDVC: boolean;
+  tienePermisoFRDE: boolean;
+  navigate: (path: string) => void;
+}
+
+const DocumentosRelacionadosCard: React.FC<DocumentosRelacionadosCardProps> = ({
+  devoluciones, factura, tienePermisoFDVC, tienePermisoFRDE, navigate
+}) => {
+  const tieneAlgunDocumento = (devoluciones?.length > 0) || !!factura;
+  if (!tieneAlgunDocumento) return null;
+
+  return (
+    <Card
+      title={<span style={{ fontSize: 16, fontWeight: 600 }}>Documentos Relacionados</span>}
+      className="paces-card"
+      style={{ marginTop: 16 }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Factura RDE */}
+        {factura && (
+          <div key="factura" style={{ fontSize: 13 }}>
+            {tienePermisoFRDE ? (
+              <a
+                style={{ cursor: 'pointer' }}
+                onClick={() => navigate(`/FRDE/${factura.id}`)}
+              >
+                <FileTextOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+                {factura.documento.codigo}-{factura.noDocumento}
+              </a>
+            ) : (
+              <span className="paces-text-secondary">
+                <FileTextOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+                {factura.documento.codigo}-{factura.noDocumento}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Devoluciones DVC */}
+        {(devoluciones || []).map((dvc: any) => (
+          <div key={dvc.id} style={{ fontSize: 13 }}>
+            {tienePermisoFDVC ? (
+              <a
+                style={{ cursor: 'pointer' }}
+                onClick={() => navigate(`/FDVC/${dvc.id}`)}
+              >
+                <FileTextOutlined style={{ color: '#ff4d4f', marginRight: 8 }} />
+                {dvc.documento.codigo}-{dvc.noDocumento}
+              </a>
+            ) : (
+              <span className="paces-text-secondary">
+                <FileTextOutlined style={{ color: '#ff4d4f', marginRight: 8 }} />
+                {dvc.documento.codigo}-{dvc.noDocumento}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+};
+
 const EntradaAlmacenDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -194,9 +262,26 @@ const EntradaAlmacenDetalle: React.FC = () => {
   const [scannerUrl, setScannerUrl] = useState<string | null>(null);
   const [scannerLoading, setScannerLoading] = useState(false);
   const [ocDetallesData, setOcDetallesData] = useState<any[]>([]);
+  const [ocLoading, setOcLoading] = useState(false);
+  const [devolucionesData, setDevolucionesData] = useState<any[]>([]);
+const [facturaData, setFacturaData] = useState<any>(null);
+
+  // Cargar detalles de la OC por separado cuando se tenga el id
+  useEffect(() => {
+    if (!data?.ordenCompra?.id) return;
+    if (ocDetallesData.length > 0) return;
+    setOcLoading(true);
+    ordenCompraApi.obtenerPorId(Sucursal.Compra, data.ordenCompra.id)
+      .then((oc: any) => {
+        if (oc.detalles?.length) setOcDetallesData(oc.detalles);
+      })
+      .catch(() => message.warning('No se pudieron cargar los detalles de la OC'))
+      .finally(() => setOcLoading(false));
+  }, [data?.ordenCompra?.id]);
 
   const handleRefresh = useCallback(() => {
     if (!id) return;
+    setFacturaData(null);
     setLoadingError(false);
     setLoading(true);
     entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
@@ -207,6 +292,17 @@ const EntradaAlmacenDetalle: React.FC = () => {
           ordenCompraApi.obtenerPorId(Sucursal.Compra, res.ordenCompra.id)
             .then((oc: any) => setOcDetallesData(oc.detalles || []))
             .catch(() => {});
+        }
+        devolucionCompraApi.obtenerPorIdEntrada(sucursalActiva, parseInt(id))
+          .then((dvcs) => setDevolucionesData(dvcs))
+          .catch(() => {});
+        // Cargar factura RDE si el concepto genera una
+        if (res.concepto?.docAGenerar === 'RDE') {
+          facturaSuplidorApi.obtenerPorDocumento(Sucursal.Consolidado, res.noDocumento)
+            .then((factura) => setFacturaData(factura))
+            .catch(() => {});
+        } else {
+          setFacturaData(null);
         }
       })
       .catch((err: any) => {
@@ -268,6 +364,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
 
   useEffect(() => {
     if (!id) return;
+    setFacturaData(null);
     setLoading(true);
     entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
@@ -277,6 +374,23 @@ const EntradaAlmacenDetalle: React.FC = () => {
           ordenCompraApi.obtenerPorId(Sucursal.Compra, res.ordenCompra.id)
             .then((oc: any) => setOcDetallesData(oc.detalles || []))
             .catch(() => {});
+        }
+        // Cargar devoluciones asociadas
+        devolucionCompraApi.obtenerPorIdEntrada(sucursalActiva, parseInt(id))
+          .then((dvcs) => setDevolucionesData(dvcs))
+          .catch((err) => {
+            const msg = err?.response?.data?.errorMessage || 'Error al cargar devoluciones';
+            message.warning(msg);
+          });
+        // Cargar factura RDE si el concepto genera una
+        if (res.concepto?.docAGenerar === 'RDE') {
+          facturaSuplidorApi.obtenerPorDocumento(Sucursal.Consolidado, res.noDocumento)
+            .then((factura) => setFacturaData(factura))
+            .catch(() => {
+              // Silencioso - puede no existir si la ENP no se ha posteado
+            });
+        } else {
+          setFacturaData(null);
         }
         // Verificar si tiene factura escaneada
         entradaAlmacenApi.verificarScan(sucursalActiva, parseInt(id))
@@ -290,6 +404,56 @@ const EntradaAlmacenDetalle: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  // Función lookup: para cada detalle de entrada, obtiene el total devuelto
+  // Primero por idExterno (id del detalle de entrada), luego por codigo+costo
+  const obtenerDevueltoPorDetalle = React.useMemo(() => {
+    const porIdExterno: Record<number, number> = {};
+    const porCodigoCosto: Record<string, number> = {};
+
+    for (const dvc of devolucionesData) {
+      if (!dvc.detalles) continue;
+      for (const det of dvc.detalles) {
+        const factor = Number(det.medida?.factor) || 1;
+        const devuelto = Number(det.devuelto || 0) * factor;
+
+        if (det.idExterno) {
+          porIdExterno[det.idExterno] = (porIdExterno[det.idExterno] || 0) + devuelto;
+        } else {
+          const key = `${det.codigo || ''}`;
+          porCodigoCosto[key] = (porCodigoCosto[key] || 0) + devuelto;
+        }
+      }
+    }
+
+    return (entradaDetalle: any): number => {
+      // 1. Intentar por idExterno
+      if (porIdExterno[entradaDetalle.id]) {
+        return porIdExterno[entradaDetalle.id];
+      }
+      // 2. Fallback por codigo + costo
+      const key = `${entradaDetalle.codigo || ''}`;
+      return porCodigoCosto[key] || 0;
+    };
+  }, [devolucionesData]);
+
+  const tienePermisoFDVC = React.useMemo(() => {
+    const usuario = useAuthStore.getState().usuario;
+    if (!usuario) return false;
+    const pantalla = usuario.pantallas.find(
+      (p) => p.codigo?.toUpperCase() === 'FDVC'
+    );
+    return pantalla?.acciones.includes('VISUALIZAR') ?? false;
+  }, []);
+
+  const tienePermisoFRDE = React.useMemo(() => {
+    const usuario = useAuthStore.getState().usuario;
+    if (!usuario) return false;
+    const pantalla = usuario.pantallas.find(
+      (p) => p.codigo?.toUpperCase() === 'FRDE'
+    );
+    return pantalla?.acciones.includes('VISUALIZAR') ?? false;
+  }, []);
 
   if (loading || !data) {
     return (
@@ -310,15 +474,57 @@ const EntradaAlmacenDetalle: React.FC = () => {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { paddingLeft: 16 } }),
+      onHeaderCell: () => ({ style: { paddingLeft: 16 } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
 <div style={{ display: 'flex', alignItems: 'center' }}>
                   <span style={{ flex: 1 }}>{toTitleCase(record.articulo || '')}</span>
-                  {ocDetallesData.some((d: any) => d.codigo === record.codigo && d.cantidad === record.cantidad && d.costo === record.costo) && (
-                    <Tooltip title="Coincide con OC">
-                      <CheckCircleOutlined style={{ color: '#34c38f', fontSize: 12 }} />
-                    </Tooltip>
-                  )}
+                  {(() => {
+                    const fechaVencida = record.fechaVencimiento ? new Date(record.fechaVencimiento) < new Date() : false;
+                    const tieneCoincidencia = ocDetallesData.some((d: any) =>
+                      d.codigo === record.codigo
+                      && (Math.abs(Number(d.costo) - Number(record.costo)) <= 1 || Number(record.cantidadBonificable) !== 0)
+                      && Number(d.medida?.factor || 1) === Number(record.medida?.factor || 1)
+                      && !d.nota?.trim()
+                    );
+                    const ocMatch = ocDetallesData.length > 0
+                      && (tieneCoincidencia || Number(record.cantidadBonificable) > 0)
+                      && (!record.tieneVencimiento || record.fechaVencimiento)
+                      && !fechaVencida;
+
+                    if (ocDetallesData.length === 0) return null;
+
+                    if (ocMatch) {
+                      return (
+                        <Tooltip title="Coincide con OC">
+                          <CheckCircleOutlined style={{ color: '#34c38f', fontSize: 12 }} />
+                        </Tooltip>
+                      );
+                    }
+
+                    let motivo = 'No coincide con la OC';
+                    const detalleOC = ocDetallesData.find((d: any) => d.codigo === record.codigo);
+                    if (!detalleOC) {
+                      motivo = 'Código no encontrado en la OC';
+                    } else if (record.tieneVencimiento && !record.fechaVencimiento) {
+                      motivo = 'Requiere fecha de vencimiento';
+                    } else if (record.fechaVencimiento && new Date(record.fechaVencimiento) < new Date()) {
+                      motivo = 'Fecha de vencimiento vencida';
+                    } else if (detalleOC.nota?.trim()) {
+                      motivo = `OC tiene nota: ${detalleOC.nota}`;
+                    } else if (Number(detalleOC.medida?.factor || 1) !== Number(record.medida?.factor || 1)) {
+                      motivo = `Factor OC: ${detalleOC.medida?.factor || 1} | ENP: ${record.medida?.factor || 1}`;
+                    } else if (Number(record.cantidadBonificable) === 0 && Math.abs(Number(detalleOC.costo) - Number(record.costo)) > 1) {
+                      motivo = `Costo OC: ${formatNumber(detalleOC.costo)} | ENP: ${formatNumber(record.costo)}`;
+                    }
+
+                    return (
+                      <Tooltip title={motivo}>
+                        <CloseCircleOutlined style={{ color: '#d9d9d9', fontSize: 12 }} />
+                      </Tooltip>
+                    );
+                  })()}
                 </div>
           <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
             <span>
@@ -335,31 +541,59 @@ const EntradaAlmacenDetalle: React.FC = () => {
       title: 'Cantidad',
       dataIndex: 'cantidad',
       key: 'cantidad',
-      width: 100,
+      width: 130,
       align: 'right' as const,
-      render: (_: any, record: any) => (
-        <div>
-          <div>{formatNumber(record.cantidad || 0)}</div>
-          {record.medida?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
-              {record.medida.nombre}
-            </div>
-          )}
-        </div>
-      ),
+      render: (_: any, record: any) => {
+        const enpFactor = Number(record.medida?.factor) || 1;
+        const totalEnBase = (record.cantidad || 0) * enpFactor;
+        const totalDevuelto = obtenerDevueltoPorDetalle(record);
+        const saldo = totalEnBase - totalDevuelto;
+        const tieneDevolucion = totalDevuelto > 0;
+
+        return (
+          <div>
+            {tieneDevolucion ? (
+              <div>
+                <span style={{ textDecoration: 'line-through', color: '#ff4d4f', marginRight: 8 }}>
+                  {formatNumber(record.cantidad || 0)}
+                </span>
+                <span style={{ color: '#34c38f', fontWeight: 600, fontSize: 13 }}>
+                  {formatNumber(saldo / enpFactor)}
+                </span>
+              </div>
+            ) : (
+              <div>{formatNumber(record.cantidad || 0)}</div>
+            )}
+            {record.medida?.nombre && (
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
+                {record.medida.nombre}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: 'Costo',
       dataIndex: 'costo',
       key: 'costo',
-      width: 110,
+      width: 130,
       align: 'right' as const,
-      render: (_: any, record: any) => (
-        <div>
-          <div>{formatNumber(record.costo || 0)}</div>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
-        </div>
-      ),
+      render: (_: any, record: any) => {
+        const costoBase = Number(record.costo) || 0;
+        const pctDesc = Number(record.porcentajeDescuento) || 0;
+        const factor = Number(record.medida?.factor) || 1;
+        const costoConDescuento = costoBase - ((costoBase * pctDesc) / 100);
+        const costoUnitario = costoConDescuento / factor;
+        return (
+          <div>
+            <div>{formatNumber(costoBase)}</div>
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+              {formatNumber(costoUnitario)} × {factor}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: 'Descuento',
@@ -408,34 +642,14 @@ const EntradaAlmacenDetalle: React.FC = () => {
       key: 'total',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { paddingRight: 16 } }),
+      onHeaderCell: () => ({ style: { paddingRight: 16 } }),
       render: (_: any, record: any) => (
         <div>
           <Text strong>{formatNumber(record.total || 0)}</Text>
           <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
         </div>
       ),
-    },
-    {
-      title: '',
-      key: 'acciones',
-      width: 50,
-      render: (_: any, record: any) => {
-        const items: any[] = [];
-        if (record.tieneVencimiento) {
-          items.push({
-            key: 'vencimiento',
-            label: record.fechaVencimiento ? `Venc: ${formatDate(record.fechaVencimiento)}` : 'Fecha Vencimiento',
-            icon: <CalendarOutlined />,
-            onClick: () => setFechaVencimientoModal({ open: true, detalleId: record.id }),
-          });
-        }
-        if (items.length === 0) return null;
-        return (
-          <Dropdown menu={{ items }} trigger={['click']}>
-            <Button type="text" size="small" icon={<MoreOutlined />} />
-          </Dropdown>
-        );
-      },
     },
   ];
 
@@ -643,15 +857,17 @@ const EntradaAlmacenDetalle: React.FC = () => {
               }} />
           </PermissionGate>
 
-          <PermissionGate codigoPantalla="FDVC" accion="CREAR">
-            <Button icon={<RollbackOutlined />} onClick={() =>
-              navigate('/FDVC/nuevo', { state: { entradaId: data?.id } })
-            }>
-              Devolver
-            </Button>
-          </PermissionGate>
+          {data.estado === 1 && (
+            <PermissionGate codigoPantalla="FDVC" accion="CREAR">
+              <Button icon={<RollbackOutlined />} onClick={() =>
+                navigate('/FDVC/nuevo', { state: { entradaId: data?.id } })
+              }>
+                Devolver
+              </Button>
+            </PermissionGate>
+          )}
 
-          {data.estado === 0 && data.periodo !== 6 && data.revisado === false && (
+          {data.estado === 0 && data.periodo !== 6 && data.revisado !== true && (
             <PermissionGate accion="EDITAR">
               <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FENP/${id}/editar`)}>Editar</Button>
             </PermissionGate>
@@ -659,41 +875,99 @@ const EntradaAlmacenDetalle: React.FC = () => {
           {/* Acciones de estado - solo en consulta */}
           {data.estado === 0 && data.periodo !== 6 && (
             <PermissionGate accion="APLICAR">
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleAplicar}>
+              <Button style={{ background: '#389e0d', borderColor: '#389e0d', color: '#fff' }} icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
+                Modal.confirm({
+                  title: 'Aplicar documento',
+                  icon: <ExclamationCircleOutlined />,
+                  content: '¿Está seguro que desea aplicar este documento?',
+                  okText: 'Sí',
+                  cancelText: 'No',
+                  onOk: handleAplicar,
+                });
+              }}>
                 Aplicar
               </Button>
             </PermissionGate>
           )}
-          {data.revisado === false && data.estado !== 3 && (
+          {data.revisado !== true && data.estado !== 3 && (
             <PermissionGate accion="ANULAR">
-              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
+              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={() => {
+                Modal.confirm({
+                  title: 'Anular documento',
+                  icon: <ExclamationCircleOutlined />,
+                  content: '¿Está seguro que desea anular este documento?',
+                  okText: 'Sí',
+                  cancelText: 'No',
+                  onOk: handleAnular,
+                });
+              }}>
                 Anular
               </Button>
             </PermissionGate>
           )}
-          {data.revisado === false && (
+          {data.estado === 1 && data.revisado !== true && (
             <PermissionGate accion="POSTEAR">
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handlePostear}>Postear</Button>
+              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
+                Modal.confirm({
+                  title: 'Postear documento',
+                  icon: <ExclamationCircleOutlined />,
+                  content: '¿Está seguro que desea postear este documento?',
+                  okText: 'Sí',
+                  cancelText: 'No',
+                  onOk: handlePostear,
+                });
+              }}>Postear</Button>
             </PermissionGate>
           )}
           {data.estado === 1 && (
             <>
-              {data.revisado === false && (
-                <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleRevisado}>
-                  Revisado
-                </Button>
+              {data.revisado !== true && (
+                <PermissionGate accion="AUTORIZAR">
+                  <Button icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
+                    Modal.confirm({
+                      title: 'Marcar como revisado',
+                      icon: <ExclamationCircleOutlined />,
+                      content: '¿Está seguro que desea marcar este documento como revisado?',
+                      okText: 'Sí',
+                      cancelText: 'No',
+                      onOk: handleRevisado,
+                    });
+                  }}>
+                    Revisado
+                  </Button>
+                </PermissionGate>
               )}
-              {data.revisado === false && (
+              {data.revisado !== true && (
                 <PermissionGate accion="DESAPLICAR">
-                  <Button icon={<RedoOutlined />} loading={saving} onClick={handleDesaplicar}>
+                  <Button icon={<RedoOutlined />} loading={saving} onClick={() => {
+                    Modal.confirm({
+                      title: 'Desaplicar documento',
+                      icon: <ExclamationCircleOutlined />,
+                      content: '¿Está seguro que desea desaplicar este documento?',
+                      okText: 'Sí',
+                      cancelText: 'No',
+                      onOk: handleDesaplicar,
+                    });
+                  }}>
                     Desaplicar
                   </Button>
                 </PermissionGate>
               )}
               {data.revisado === true && (
-                <Button danger icon={<RedoOutlined />} loading={saving} onClick={handleReversar}>
+                <PermissionGate accion="REVERSAR">
+                  <Button danger icon={<RedoOutlined />} loading={saving} onClick={() => {
+                    Modal.confirm({
+                      title: 'Reversar documento',
+                      icon: <ExclamationCircleOutlined />,
+                      content: '¿Está seguro que desea reversar este documento?',
+                      okText: 'Sí',
+                      cancelText: 'No',
+                      onOk: handleReversar,
+                    });
+                  }}>
                   Reversar
                 </Button>
+              </PermissionGate>
               )}
             </>
           )}
@@ -820,6 +1094,13 @@ const EntradaAlmacenDetalle: React.FC = () => {
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
             />
+            <DocumentosRelacionadosCard
+              devoluciones={devolucionesData}
+              factura={facturaData}
+              tienePermisoFDVC={tienePermisoFDVC}
+              tienePermisoFRDE={tienePermisoFRDE}
+              navigate={navigate}
+            />
           </Col>
         </Row>
       ) : (
@@ -940,6 +1221,13 @@ const EntradaAlmacenDetalle: React.FC = () => {
             monedaSimbolo={data.moneda?.simbolo || 'RD$'}
             monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
             tasa={data.tasa ?? 1}
+          />
+          <DocumentosRelacionadosCard
+            devoluciones={devolucionesData}
+            factura={facturaData}
+            tienePermisoFDVC={tienePermisoFDVC}
+            tienePermisoFRDE={tienePermisoFRDE}
+            navigate={navigate}
           />
         </div>
       )}

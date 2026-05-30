@@ -21,6 +21,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
 import { productoApi } from '../../api/productoApi';
+import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type {
@@ -169,117 +170,6 @@ function cobrosVacios(): CobroDTO {
   };
 }
 
-// ===== Componente BuscarProductoModal =====
-interface BuscarProductoModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (producto: {
-    codigo: string;
-    articulo: string;
-    referencia: string;
-    precio: number;
-    familia?: { nombre: string; idExterno: string };
-    medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
-    impuesto?: { nombre: string; porcentaje: number; codigo: string; idExterno: string };
-    tieneVencimiento?: boolean;
-  }) => void;
-}
-
-const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose, onSelect }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const [productos, setProductos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
-
-  const cargar = useCallback(async (filtro?: string) => {
-    setLoading(true);
-    try {
-      const res = await productoApi.obtenerListado(sucursalActiva, filtro ? { codigo: filtro } : undefined);
-      setProductos(res || []);
-    } catch {
-      message.error('Error al cargar productos');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (open) cargar();
-  }, [open, cargar]);
-
-  const columnas = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-    { title: 'Artículo', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-      render: (v: string) => toTitleCase(v) },
-    { title: 'Referencia', dataIndex: 'referencia', key: 'referencia', width: 120,
-      render: (v: string) => v || '-' },
-  ];
-
-  return (
-    <Modal
-      title="Buscar Producto"
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={700}
-      destroyOnHidden
-    >
-      <Input.Search
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        onSearch={(val) => cargar(val)}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={productos}
-        columns={columnas}
-        rowKey="codigo"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: async () => {
-            try {
-              const detalle = await productoApi.obtenerDetalle(sucursalActiva, record.codigo);
-              onSelect({
-                codigo: record.codigo,
-                articulo: detalle.nombre || record.nombre,
-                referencia: detalle.referenciaInterna || record.referencia || '',
-                precio: detalle.precio || detalle.ultimoCosto || record.precio || 0,
-                familia: detalle.familia || record.familia,
-                medida: detalle.unidadMedida
-                  ? { nombre: detalle.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: detalle.unidadMedida.idExterno || 0 }
-                  : record.unidadMedida
-                    ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: record.unidadMedida.idExterno || 0 }
-                    : undefined,
-                impuesto: (detalle.impuestos?.[0]?.impuesto as any) || undefined,
-                tieneVencimiento: detalle.pesado || false,
-              });
-            } catch {
-              onSelect({
-                codigo: record.codigo,
-                articulo: record.nombre,
-                referencia: record.referencia || '',
-                precio: record.precio || record.ultimoCosto || 0,
-                familia: record.familia,
-                medida: record.unidadMedida
-                  ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: record.unidadMedida.idExterno || 0 }
-                  : undefined,
-                impuesto: undefined,
-                tieneVencimiento: false,
-              });
-            }
-            onClose();
-          },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
-};
-
 // ===== Componente ClienteCard =====
 interface ClienteCardProps {
   cliente: ClienteDTO | null;
@@ -354,7 +244,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
 
     <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
       {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
+      <span style={{ color: 'var(--paces-primary)' }}>{monedaSimbolo || 'RD$'} {formatNumber(total)}</span>
     </div>
 
     <Divider style={{ margin: '12px 0' }} />
@@ -672,54 +562,6 @@ const FacturaPOSFormulario: React.FC = () => {
     }
   };
 
-  const handleAplicar = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      const result = await facturaPOSApi.aplicar(sucursalActiva, parseInt(id));
-      setData(result as any);
-      message.success('Documento aplicado exitosamente');
-      navigate(`/FPV/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAnular = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await facturaPOSApi.anular(sucursalActiva, dto as any);
-      message.success('Documento anulado exitosamente');
-      navigate(`/FPV/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al anular');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePostear = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await facturaPOSApi.postear(sucursalActiva, dto as any);
-      message.success('Documento posteado exitosamente');
-      navigate(`/FPV/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al postear');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   // ===== Handlers de concepto =====
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
@@ -746,11 +588,16 @@ const FacturaPOSFormulario: React.FC = () => {
       );
     }
 
-    // Configurar moneda según el concepto
-    const monedaNombre = (concepto as any).moneda?.nombre || 'Peso Dominicano';
+    // === ConfigurarMoneda ===
+    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
     form.setFieldsValue({
-      moneda: monedaNombre,
-      tasa: 1,
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+    });
+    // Actualizar data local para que la UI lo refleje
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, moneda: monedaObj };
     });
 
     // Auto-asignar almacén del concepto si tiene
@@ -974,34 +821,6 @@ const FacturaPOSFormulario: React.FC = () => {
                 Cancelar
               </Button>
             )}
-            {esBorrador && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handleAplicar}
-              >
-                Aplicar
-              </Button>
-            )}
-            {esAplicado && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handlePostear}
-              >
-                Postear
-              </Button>
-            )}
-            {!esAnulado && (
-              <Button
-                danger
-                icon={<DeleteOutlined />}
-                loading={saving}
-                onClick={handleAnular}
-              >
-                Anular
-              </Button>
-            )}
           </>
         )}
       </Space>
@@ -1052,6 +871,7 @@ const FacturaPOSFormulario: React.FC = () => {
       title: 'Código',
       key: 'codigoInput',
       width: 100,
+      onCell: () => ({ style: { paddingLeft: 8 } }),
       render: (_: any, _record: DetalleFacturaPOSDTO, idx: number) => (
         <Input
           size="small"
@@ -1145,9 +965,11 @@ const FacturaPOSFormulario: React.FC = () => {
           <InputNumber
             size="small"
             style={{ width: '100%' }}
+            styles={{ input: { textAlign: 'right' } }}
             min={0.01}
             step={0.01}
             precision={2}
+            controls={false}
             value={detalles[idx]?.cantidad}
             onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'cantidad', val || 0)}
             onBlur={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
@@ -1165,24 +987,37 @@ const FacturaPOSFormulario: React.FC = () => {
       title: 'Precio',
       dataIndex: 'precio',
       key: 'precio',
-      width: 110,
+      width: 130,
       align: 'right' as const,
       responsive: ['sm' as const, 'md' as const, 'lg' as const],
-      render: (_: any, _record: DetalleFacturaPOSDTO, idx: number) => (
-        <div>
-          <InputNumber
-            size="small"
-            style={{ width: '100%' }}
-            min={0}
-            step={0.01}
-            precision={2}
-            value={detalles[idx]?.precio}
-            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'precio', val || 0)}
-            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
-            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
-          />
-        </div>
-      ),
+      shouldCellUpdate: (record: DetalleFacturaPOSDTO, prevRecord: DetalleFacturaPOSDTO) => record.precio !== prevRecord.precio || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
+      render: (_: any, record: DetalleFacturaPOSDTO, idx: number) => {
+        const precioBase = Number(detalles[idx]?.precio) || 0;
+        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
+        const factor = Number(detalles[idx]?.medida?.factor) || 1;
+        const precioConDescuento = precioBase - ((precioBase * pctDesc) / 100);
+        const precioUnitario = precioConDescuento / factor;
+        return (
+          <div>
+            <InputNumber
+              size="small"
+              style={{ width: '100%' }}
+              styles={{ input: { textAlign: 'right' } }}
+              min={0}
+              step={0.01}
+              precision={2}
+              controls={false}
+              value={detalles[idx]?.precio}
+              onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'precio', val || 0)}
+              onBlur={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
+              onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
+            />
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+              {formatNumber(precioUnitario)} × {factor}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: '% Desc',
@@ -1256,6 +1091,7 @@ const FacturaPOSFormulario: React.FC = () => {
       title: '',
       key: 'acciones',
       width: 50,
+      onCell: () => ({ style: { paddingRight: 8 } }),
       render: (_: any, _record: DetalleFacturaPOSDTO, idx: number) => {
         const items: any[] = [
           {
@@ -1606,6 +1442,7 @@ const FacturaPOSFormulario: React.FC = () => {
         open={productoModalOpen}
         onClose={() => setProductoModalOpen(false)}
         onSelect={handleProductoSelect}
+        mode="venta"
       />
 
       {isLarge ? (
@@ -1727,7 +1564,7 @@ const FacturaPOSFormulario: React.FC = () => {
               cobrado={cobradoTotal}
               diferencia={diferencia}
               alignRight={false}
-              monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
               tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </Col>
@@ -1843,7 +1680,7 @@ const FacturaPOSFormulario: React.FC = () => {
             cobrado={cobradoTotal}
             diferencia={diferencia}
             alignRight={true}
-            monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
+            monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
             tasa={tasaValue ?? data?.tasa ?? 1}
           />
         </div>

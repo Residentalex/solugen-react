@@ -313,7 +313,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   // ===== Cargar conceptos =====
   const cargarConceptos = useCallback(async (_searchText?: string) => {
     try {
-      const res = await conceptosApi.obtenerConceptos(sucursalActiva, 'RI');
+      const res = await conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'RI');
       setConceptosCache(res || []);
       return res || [];
     } catch {
@@ -485,69 +485,6 @@ const ReciboIngresoFormulario: React.FC = () => {
     }
   };
 
-  const handleAplicar = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      const result = await reciboIngresoApi.aplicar(sucursalActiva, parseInt(id));
-      setData(result as any);
-      message.success('Documento aplicado exitosamente');
-      navigate(`/FRI/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDesaplicar = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      await reciboIngresoApi.desaplicar(sucursalActiva, data.noDocumento || '');
-      message.success('Documento desaplicado exitosamente');
-      navigate(`/FRI/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al desaplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAnular = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await reciboIngresoApi.anular(sucursalActiva, dto);
-      message.success('Documento anulado exitosamente');
-      navigate(`/FRI/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al anular');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePostear = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await reciboIngresoApi.postear(sucursalActiva, dto);
-      message.success('Documento posteado exitosamente');
-      navigate(`/FRI/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al postear');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleGenerarAsientos = async () => {
     if (!id) return;
     setSaving(true);
@@ -595,10 +532,16 @@ const ReciboIngresoFormulario: React.FC = () => {
     if (concepto.activo === false) infoParts.push(' * Concepto Inactivo * ');
     setConceptoInfo(infoParts.join(''));
 
-    // Configurar moneda según el concepto
-    const monedaNombre = concepto.moneda?.nombre || 'Peso Dominicano';
+    // === ConfigurarMoneda ===
+    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
     form.setFieldsValue({
-      moneda: monedaNombre,
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+    });
+    // Actualizar data local para que la UI lo refleje
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, moneda: monedaObj };
     });
   };
 
@@ -781,43 +724,6 @@ const ReciboIngresoFormulario: React.FC = () => {
             {esBorrador && (
               <Button icon={<CloseOutlined />} onClick={handleCancelar}>
                 Cancelar
-              </Button>
-            )}
-            {esBorrador && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handleAplicar}
-              >
-                Aplicar
-              </Button>
-            )}
-            {esAplicado && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handleDesaplicar}
-              >
-                Desaplicar
-              </Button>
-            )}
-            {esAplicado && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handlePostear}
-              >
-                Postear
-              </Button>
-            )}
-            {!esAnulado && (
-              <Button
-                danger
-                icon={<CloseOutlined />}
-                loading={saving}
-                onClick={handleAnular}
-              >
-                Anular
               </Button>
             )}
           </>
@@ -1061,8 +967,10 @@ const ReciboIngresoFormulario: React.FC = () => {
     </Card>
   );
 
-  const renderTotalesCard = () => {
+  const renderTotalesCard = (opts?: { monedaSimbolo?: string; monedaNombre?: string }) => {
     const cobrado = cobros.reduce((s, c) => s + (c.monto || 0), 0);
+    const monSim = opts?.monedaSimbolo || data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$';
+    const monNom = opts?.monedaNombre || data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano';
     return (
       <Card
         title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
@@ -1070,8 +978,12 @@ const ReciboIngresoFormulario: React.FC = () => {
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+            <span className="paces-text-secondary">Moneda</span>
+            <span>{toTitleCase(monNom)} ({monSim})</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
             <span className="paces-text-secondary">Total</span>
-            <span style={{ fontWeight: 700 }}>{formatCurrency(totalValue || 0)}</span>
+            <span style={{ fontWeight: 700 }}>{monSim} {formatNumber(totalValue || 0)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
             <span className="paces-text-secondary">Retenciones</span>
@@ -1079,16 +991,16 @@ const ReciboIngresoFormulario: React.FC = () => {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
             <span className="paces-text-secondary">Total a Pagar</span>
-            <span>{formatCurrency(totalPagar)}</span>
+            <span>{monSim} {formatNumber(totalPagar)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
             <span className="paces-text-secondary">Distribuido</span>
-            <span>{formatCurrency(totalDistribuido)}</span>
+            <span>{monSim} {formatNumber(totalDistribuido)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
             <span className="paces-text-secondary">Por Distribuir</span>
             <span style={{ color: porDistribuir > 0 ? '#faad14' : '#52c41a', fontWeight: 600 }}>
-              {formatCurrency(porDistribuir)}
+              {monSim} {formatNumber(porDistribuir)}
             </span>
           </div>
         </div>
@@ -1099,18 +1011,18 @@ const ReciboIngresoFormulario: React.FC = () => {
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Cobros</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
             <span className="paces-text-secondary">Cobrado</span>
-            <span>{formatCurrency(cobrado)}</span>
+            <span>{monSim} {formatNumber(cobrado)}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
             <span className="paces-text-secondary">Cuentas por Cobrar</span>
             <span style={{ color: cuentasPorCobrar > 0 ? '#ff4d4f' : '#52c41a', fontWeight: 600 }}>
-              {formatCurrency(cuentasPorCobrar)}
+              {monSim} {formatNumber(cuentasPorCobrar)}
             </span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
             <span className="paces-text-secondary">Diferencia</span>
             <span style={{ color: Math.abs(diferencia) > 0.01 ? '#ff4d4f' : '#52c41a', fontWeight: 600 }}>
-              {formatCurrency(diferencia)}
+              {monSim} {formatNumber(diferencia)}
             </span>
           </div>
         </div>

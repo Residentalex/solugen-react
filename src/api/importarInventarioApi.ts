@@ -8,9 +8,9 @@ export const importarInventarioApi = {
     sucursal: number,
     tipoDocumento?: string
   ): Promise<ConceptoDTO[]> => {
+    const url = tipoDocumento ? `/Concepto/${sucursal}/documento/${tipoDocumento}` : `/Concepto/${sucursal}`;
     const params: Record<string, string> = {};
-    if (tipoDocumento) params.documento = tipoDocumento;
-    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}`, { params });
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(url, { params });
     return data.data;
   },
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Table, Input, Button, Typography, message, Tag, Alert } from 'antd';
+import { Card, Table, Input, Select, Button, Typography, message, Tag, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -32,6 +32,7 @@ const Recetas: React.FC = () => {
   const [loadingLista, setLoadingLista] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [pageSize, setPageSize] = useState(25);
 
   const [productoSeleccionado, setProductoSeleccionado] = useState<string | null>(null);
   const [productoNombre, setProductoNombre] = useState('');
@@ -193,13 +194,25 @@ const Recetas: React.FC = () => {
               </Text>
             </>
           ) : (
-            <Input.Search
-              placeholder="Buscar producto..."
-              allowClear
-              onSearch={(val) => setSearchText(val)}
-              style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
+            <>
+              <Input.Search
+                placeholder="Buscar producto..."
+                allowClear
+                onSearch={(val) => setSearchText(val)}
+                style={{ width: 400 }}
+                prefix={<SearchOutlined className="paces-text-icon" />}
+              />
+              <Select
+                style={{ width: 65 }}
+                value={pageSize}
+                onChange={(v) => { setPageSize(v); }}
+                options={[
+                  { value: 25, label: '25' },
+                  { value: 50, label: '50' },
+                  { value: 100, label: '100' },
+                ]}
+              />
+            </>
           )}
           <div style={{ flex: 1 }} />
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
@@ -215,10 +228,9 @@ const Recetas: React.FC = () => {
             scroll={{ x: 600 }}
             size="middle"
             pagination={{
-              showSizeChanger: true,
+              pageSize,
+              showSizeChanger: false,
               showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} productos`,
-              pageSizeOptions: ['10', '20', '50', '100'],
-              defaultPageSize: 20,
             }}
             onRow={(record) => ({
               onClick: () => handleSeleccionar(record.codigo, record.nombre),

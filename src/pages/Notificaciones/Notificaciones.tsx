@@ -48,6 +48,7 @@ const Notificaciones: React.FC = () => {
   const [historial, setHistorial] = useState<NotificacionVista[]>([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [pageSize, setPageSize] = useState(25);
   const [modalVisible, setModalVisible] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -412,6 +413,16 @@ const Notificaciones: React.FC = () => {
               onChange={setFiltroModulo}
               options={modulosDisponibles.map((m) => ({ label: m, value: m }))}
             />
+            <Select
+              style={{ width: 65 }}
+              value={pageSize}
+              onChange={(v) => { setPageSize(v); }}
+              options={[
+                { value: 25, label: '25' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
+              ]}
+            />
             <div style={{ flex: 1 }} />
             <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>
@@ -471,10 +482,9 @@ const Notificaciones: React.FC = () => {
                     ),
                   }}
                   pagination={{
-                    showSizeChanger: true,
+                    pageSize,
+                    showSizeChanger: false,
                     showTotal: (total, range) => `${range[0]}-${range[1]} de ${total}`,
-                    pageSizeOptions: ['10', '20', '50'],
-                    defaultPageSize: 10,
                   }}
                 />
               ),
@@ -503,10 +513,9 @@ const Notificaciones: React.FC = () => {
                     ),
                   }}
                   pagination={{
-                    showSizeChanger: true,
+                    pageSize,
+                    showSizeChanger: false,
                     showTotal: (total, range) => `${range[0]}-${range[1]} de ${total}`,
-                    pageSizeOptions: ['10', '20', '50'],
-                    defaultPageSize: 10,
                   }}
                 />
               ),
@@ -529,10 +538,9 @@ const Notificaciones: React.FC = () => {
                     emptyText: <Empty description="No hay notificaciones en el historial" />,
                   }}
                   pagination={{
-                    showSizeChanger: true,
+                    pageSize,
+                    showSizeChanger: false,
                     showTotal: (total, range) => `${range[0]}-${range[1]} de ${total}`,
-                    pageSizeOptions: ['10', '20', '50'],
-                    defaultPageSize: 10,
                   }}
                 />
               ),

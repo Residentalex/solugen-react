@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Tooltip, Typography
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Tooltip, Typography, Modal, Alert
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -10,9 +10,11 @@ import {
   LockFilled,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  RedoOutlined,
   IdcardOutlined,
   PhoneOutlined,
   EnvironmentOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -21,7 +23,6 @@ import { devolucionVentaApi } from '../../api/devolucionVentaApi';
 import type { DevolucionVentaDTO, AsientoContableDTO } from '../../types/devolucionVenta';
 import PermissionGate from '../../components/PermissionGate';
 
-const { TabPane } = Tabs;
 const { Text } = Typography;
 
 const ESTADO_MAP: Record<number, { label: string; color: string }> = {
@@ -64,6 +65,22 @@ function formatDate(val: string): string {
   const d = new Date(val);
   if (isNaN(d.getTime())) return val;
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function extraerMensajeError(err: any, fallback: string): string {
+  const data = err?.response?.data;
+  if (!data) return fallback;
+  if (data.errorMessage) return data.errorMessage;
+  if (data.errors && typeof data.errors === 'object') {
+    const mensajes: string[] = [];
+    for (const key of Object.keys(data.errors)) {
+      const val = data.errors[key];
+      if (Array.isArray(val)) mensajes.push(...val);
+      else if (typeof val === 'string') mensajes.push(val);
+    }
+    if (mensajes.length > 0) return mensajes.join('; ');
+  }
+  return fallback;
 }
 
 interface ClienteCardProps {
@@ -175,11 +192,28 @@ const DevolucionVentaDetalle: React.FC = () => {
 
   const [data, setData] = useState<DevolucionVentaDTO | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const screens = Grid.useBreakpoint();
+
+  const handleRefresh = useCallback(() => {
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    devolucionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setData(res);
+        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+      })
+      .catch((err: any) => {
+        const msg = extraerMensajeError(err, 'Error al recargar');
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, setPageTitleOverride]);
 
   useEffect(() => {
     setActiveModule('FDEV');
@@ -189,43 +223,27 @@ const DevolucionVentaDetalle: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    setError(null);
+    setLoadingError(false);
     devolucionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
       })
       .catch((err: any) => {
-        const msg = err?.response?.data?.ErrorMessage || 'Error al cargar el documento';
-        setError(msg);
+        const msg = extraerMensajeError(err, 'Error al cargar el documento');
         message.error(msg);
+        setLoadingError(true);
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
-  if (loading) {
+  if (loading || !data) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
         <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
       </div>
     );
-  }
-
-  if (error) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <div style={{ fontSize: 18, color: '#ff4d4f', marginBottom: 16 }}>Error</div>
-        <div style={{ marginBottom: 24 }} className="paces-text-secondary">{error}</div>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FDEV')}>
-          Volver
-        </Button>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return null;
   }
 
   const isLarge = screens.lg ?? true;
@@ -250,8 +268,9 @@ const DevolucionVentaDetalle: React.FC = () => {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
+      onHeaderCell: () => ({ style: { paddingLeft: 8 } }),
       render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
+        <div style={{ fontSize: 13, paddingLeft: 8 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
           <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
             <span>
@@ -292,14 +311,23 @@ const DevolucionVentaDetalle: React.FC = () => {
       title: 'Precio',
       dataIndex: 'precio',
       key: 'precio',
-      width: 120,
+      width: 130,
       align: 'right' as const,
-      render: (_: any, record: any) => (
-        <div>
-          <div>{formatNumber(record.precio || 0)}</div>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
-        </div>
-      ),
+      render: (_: any, record: any) => {
+        const pctDesc = Number(record.porcentajeDescuento) || 0;
+        const factor = Number(record.medida?.factor) || 1;
+        const precioBase = Number(record.precio) || 0;
+        const precioConDescuento = precioBase - ((precioBase * pctDesc) / 100);
+        const precioUnitario = precioConDescuento / factor;
+        return (
+          <div>
+            <div>{formatNumber(precioBase)}</div>
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+              {formatNumber(precioUnitario)} × {factor}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: 'Descuento',
@@ -348,8 +376,9 @@ const DevolucionVentaDetalle: React.FC = () => {
       key: 'total',
       width: 130,
       align: 'right' as const,
+      onHeaderCell: () => ({ style: { paddingRight: 8 } }),
       render: (_: any, record: any) => (
-        <div>
+        <div style={{ paddingRight: 8 }}>
           <Text strong>{formatNumber(record.total || 0)}</Text>
           <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
         </div>
@@ -435,24 +464,21 @@ const DevolucionVentaDetalle: React.FC = () => {
     }
   };
 
-  function extraerMensajeError(err: any, fallback: string): string {
-    const data = err?.response?.data;
-    if (!data) return fallback;
-    if (data.errorMessage) return data.errorMessage;
-    if (data.errors && typeof data.errors === 'object') {
-      const mensajes: string[] = [];
-      for (const key of Object.keys(data.errors)) {
-        const val = data.errors[key];
-        if (Array.isArray(val)) mensajes.push(...val);
-        else if (typeof val === 'string') mensajes.push(val);
-      }
-      if (mensajes.length > 0) return mensajes.join('; ');
-    }
-    return fallback;
-  }
-
   return (
     <div>
+      {loadingError && (
+        <Alert
+          message="Error al cargar detalle de devolución de venta"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FDEV')}>
@@ -464,7 +490,7 @@ const DevolucionVentaDetalle: React.FC = () => {
             <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
             setImprimiendo(true);
             try {
-              const res = await apiClient.post('/reportes/facturacion/devolucion', data, {
+              const res = await apiClient.get('/reportes/facturacion/devolucion', {
                 responseType: 'blob',
               });
 
@@ -480,9 +506,8 @@ const DevolucionVentaDetalle: React.FC = () => {
                   URL.revokeObjectURL(blobUrl);
                 }, 30000);
               }, 2000);
-            } catch (err: any) {
-              const msg = err?.response?.data?.ErrorMessage || 'Error al generar el PDF';
-              message.error(msg);
+            } catch {
+              message.error('Error al generar el PDF');
             } finally {
               setImprimiendo(false);
             }
@@ -495,21 +520,65 @@ const DevolucionVentaDetalle: React.FC = () => {
           )}
           {data.estado === 0 && data.periodo !== 6 && (
             <PermissionGate accion="APLICAR">
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleAplicar}>
+              <Button
+                style={{ background: '#389e0d', borderColor: '#389e0d', color: '#fff' }}
+                icon={<CheckCircleOutlined />}
+                loading={saving}
+                onClick={() => {
+                  Modal.confirm({
+                    title: 'Aplicar documento',
+                    icon: <ExclamationCircleOutlined />,
+                    content: '¿Está seguro que desea aplicar este documento?',
+                    okText: 'Sí',
+                    cancelText: 'No',
+                    onOk: handleAplicar,
+                  });
+                }}
+              >
                 Aplicar
               </Button>
             </PermissionGate>
           )}
           {data.estado !== 3 && (
             <PermissionGate accion="ANULAR">
-              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
+              <Button
+                danger
+                icon={<CloseCircleOutlined />}
+                loading={saving}
+                onClick={() => {
+                  Modal.confirm({
+                    title: 'Anular documento',
+                    icon: <ExclamationCircleOutlined />,
+                    content: '¿Está seguro que desea anular este documento?',
+                    okText: 'Sí',
+                    cancelText: 'No',
+                    okButtonProps: { danger: true },
+                    onOk: handleAnular,
+                  });
+                }}
+              >
                 Anular
               </Button>
             </PermissionGate>
           )}
           {data.estado === 1 && (
             <PermissionGate accion="POSTEAR">
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handlePostear}>Postear</Button>
+              <Button
+                icon={<CheckCircleOutlined />}
+                loading={saving}
+                onClick={() => {
+                  Modal.confirm({
+                    title: 'Postear documento',
+                    icon: <ExclamationCircleOutlined />,
+                    content: '¿Está seguro que desea postear este documento?',
+                    okText: 'Sí',
+                    cancelText: 'No',
+                    onOk: handlePostear,
+                  });
+                }}
+              >
+                Postear
+              </Button>
             </PermissionGate>
           )}
         </Space>
@@ -546,36 +615,54 @@ const DevolucionVentaDetalle: React.FC = () => {
               </Descriptions>
             </Card>
 
-            <Tabs defaultActiveKey="detalles" type="card">
-              <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                  <Input.Search
-                    placeholder="Buscar detalle..."
-                    allowClear
-                    style={{ maxWidth: 250 }}
-                    onSearch={(value) => setDetalleSearch(value)}
-                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                  />
-                </div>
-                <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-              </TabPane>
-              <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-                <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
-                  summary={() => (
-                    <Table.Summary fixed>
-                      <Table.Summary.Row>
-                        <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                        <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                      </Table.Summary.Row>
-                    </Table.Summary>
-                  )}
-                />
-              </TabPane>
-              <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
-                <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-              </TabPane>
-            </Tabs>
+            <Tabs
+              defaultActiveKey="detalles"
+              type="card"
+              items={[
+                {
+                  key: 'detalles',
+                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                  children: (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                        <Input.Search
+                          placeholder="Buscar detalle..."
+                          allowClear
+                          style={{ maxWidth: 250 }}
+                          onSearch={(value) => setDetalleSearch(value)}
+                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                        />
+                      </div>
+                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                    </>
+                  ),
+                },
+                {
+                  key: 'asientos',
+                  label: `Asientos (${data.asientos?.length || 0})`,
+                  children: (
+                    <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
+                      summary={() => (
+                        <Table.Summary fixed>
+                          <Table.Summary.Row>
+                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                            <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                            <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      )}
+                    />
+                  ),
+                },
+                {
+                  key: 'historial',
+                  label: `Historial (${data.logs?.length || 0})`,
+                  children: (
+                    <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                  ),
+                },
+              ]}
+            />
           </Col>
 
           <Col lg={6}>
@@ -619,36 +706,54 @@ const DevolucionVentaDetalle: React.FC = () => {
 
           <ClienteCard entidad={data.entidad} cliente={data.cliente} />
 
-          <Tabs defaultActiveKey="detalles" type="card">
-            <TabPane tab={`Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`} key="detalles">
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                <Input.Search
-                  placeholder="Buscar detalle..."
-                  allowClear
-                  style={{ maxWidth: 250 }}
-                  onSearch={(value) => setDetalleSearch(value)}
-                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                />
-              </div>
-              <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-            </TabPane>
-            <TabPane tab={`Asientos (${data.asientos?.length || 0})`} key="asientos">
-              <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
-                summary={() => (
-                  <Table.Summary fixed>
-                    <Table.Summary.Row>
-                      <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                      <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                      <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                    </Table.Summary.Row>
-                  </Table.Summary>
-                )}
-              />
-            </TabPane>
-            <TabPane tab={`Historial (${data.logs?.length || 0})`} key="historial">
-              <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
-            </TabPane>
-          </Tabs>
+          <Tabs
+            defaultActiveKey="detalles"
+            type="card"
+            items={[
+              {
+                key: 'detalles',
+                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                children: (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                      <Input.Search
+                        placeholder="Buscar detalle..."
+                        allowClear
+                        style={{ maxWidth: 250 }}
+                        onSearch={(value) => setDetalleSearch(value)}
+                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                      />
+                    </div>
+                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                  </>
+                ),
+              },
+              {
+                key: 'asientos',
+                label: `Asientos (${data.asientos?.length || 0})`,
+                children: (
+                  <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
+                    summary={() => (
+                      <Table.Summary fixed>
+                        <Table.Summary.Row>
+                          <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                          <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                          <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                        </Table.Summary.Row>
+                      </Table.Summary>
+                    )}
+                  />
+                ),
+              },
+              {
+                key: 'historial',
+                label: `Historial (${data.logs?.length || 0})`,
+                children: (
+                  <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                ),
+              },
+            ]}
+          />
 
           <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true}
             monedaSimbolo={data.moneda?.simbolo || 'RD$'}

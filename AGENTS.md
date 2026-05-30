@@ -28,6 +28,9 @@ npx tsc --noEmit
 ## Referencia bajo demanda
 
 - Cargar `docs-ai/frontend.md` solo si el cambio requiere detalles de estructura, UI o API.
+- Al crear o ajustar una vista de listado, cargar y seguir `docs-ai/frontend-patron-listado.md` como referencia obligatoria antes de escribir código.
+- Al crear o ajustar una vista de detalle, cargar y seguir `docs-ai/frontend-patron-detalle.md` como referencia obligatoria antes de escribir código.
+- Al crear o ajustar un formulario, cargar y seguir `docs-ai/frontend-patron-formulario.md` como referencia obligatoria antes de escribir código.
 
 ## Listados sin columna Acciones redundante
 
@@ -62,3 +65,92 @@ npx tsc --noEmit
 - Un early return con `if (condicion) return <Componente />` hace que los hooks declarados DESPUES de esa linea no se ejecuten en ese render, rompiendo las Reglas de los Hooks.
 - Esto aplica especialmente a hooks como `useCallback` y `useMemo` que suelen definirse tarde en el componente.
 - Patron correcto: hooks al inicio, early return despues, handlers y JSX al final.
+
+## Reglas visuales consolidadas del sistema
+
+### Canon visual
+
+Tres pantallas definen el canon visual del sistema. Cualquier pantalla nueva debe alinearse a estos patrones:
+
+- **Listado/visualización**: `src/pages/EntradaAlmacen/EntradaAlmacen.tsx`
+- **Detalle/consulta**: `src/pages/EntradaAlmacen/EntradaAlmacenDetalle.tsx`
+- **Crear/editar**: `src/pages/EntradaAlmacen/EntradaAlmacenFormulario.tsx`
+
+### Patrón de listado (aplica a todas las listas)
+
+Estructura obligatoria:
+
+```tsx
+<>
+  {loadingError && <Alert ... />}
+  <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }}
+    styles={{ body: { padding: 0 } }}>
+    <div style={{ padding: '16px 24px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
+        <Input.Search placeholder="Buscar..." allowClear onSearch={handleSearch}
+          style={{ width: 400 }} prefix={<SearchOutlined className="paces-text-icon" />} />
+        <div style={{ flex: 1 }} />
+        <PermissionGate accion="CREAR">
+          <Button type="primary" icon={<PlusOutlined />}>Nuevo</Button>
+        </PermissionGate>
+        <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+      </div>
+    </div>
+    <Table className="paces-border-top paces-list-table"
+      rowClassName={(record) => selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'}
+      pagination={{ showTotal: (t) => `${t} registros` }} />
+  </Card>
+</>
+```
+
+Reglas:
+- Card siempre con `className="paces-card-erp"`, `borderRadius: 8`, `overflow: 'hidden'`, `styles={{ body: { padding: 0 } }}`
+- Toolbar con flex, gap 8px, flexWrap wrap
+- Search sin `value` controlado, solo `onSearch`, con `allowClear`
+- `<div style={{ flex: 1 }} />` como spacer entre filtros y acciones
+- Botón Nuevo envuelto en `PermissionGate accion="CREAR"` con `type="primary"` e `icon={<PlusOutlined />}`
+- Botón Reload solo icono, sin texto
+- Table con `className="paces-border-top paces-list-table"`, `rowClassName` con patrón hover/selected
+- Pagination con `showTotal: (t) => \`${t} registros\``
+- No usar columna "Acciones" separada si la columna primaria ya es clickeable
+
+### Patrón de detalle (aplica a todas las consultas)
+
+- Toolbar inline con Volver, spacer, acciones contextuales
+- Layout responsive: `Row gutter={16}` con `Col lg={18}` (contenido) + `Col lg={6}` (sidebar)
+- Datos generales en Card con `Descriptions bordered size="small"`
+- Tabs con `type="card"` usando `items={[]}` API (NO TabPane deprecated)
+- Sidebar con cards de entidad y totales
+- Versión mobile (< lg): layout vertical sin sidebar, TotalesCard con alignRight
+
+### Patrón de formulario (aplica a todos los crear/editar)
+
+- Toolbar inline con Guardar (primary) + Cancelar, alineados a la derecha
+- Encabezado en Card con Form layout vertical, size small
+- Grilla responsive con Row gutter={16}
+- Tabla de detalles editable con drag-and-drop
+- Sidebar con SuplidorCard + TotalesCard (solo en desktop)
+- Tabs de info secundaria (asientos, historial) con `items={[]}` API
+
+### Clases CSS del sistema
+
+- `paces-card-erp`: Card base para todas las pantallas
+- `paces-card`: Card para contenedores secundarios
+- `paces-list-table`: Table en vistas de listado (padding estandarizado en celdas)
+- `paces-border-top`: Borde superior en tablas listado
+- `paces-row-hover`: Hover en filas de tabla
+- `paces-row-selected`: Fila seleccionada
+- `paces-doc-link`: Enlace de documento (color primario)
+- `paces-avatar-initials`: Avatar circular con inicial
+- `paces-text-total`: Texto de total (negrita, color heading)
+- `paces-text-secondary`: Texto secundario
+- `paces-text-dark`: Texto oscuro
+- `paces-text-icon`: Icono en toolbar
+
+### Prohibiciones visuales
+- No usar TabPane (deprecated en Ant Design v5) - usar `items={[]}` API
+- No usar `value` controlado en Input.Search de listados
+- No usar `onChange` en Search de listados para búsqueda en tiempo real (usar debounce >= 300ms si es necesario)
+- No crear columna "Acciones" redundante si la columna primaria es clickeable
+- No duplicar SuplidorCard/TotalesCard - extraer a componentes compartidos si se necesitan en múltiples pantallas
+- No usar estilos inline repetidos que puedan reemplazarse con clases CSS existentes

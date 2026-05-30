@@ -1,12 +1,14 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Table, Card, Input, Select, Tag, Space, Button, Typography, message, Drawer, Tooltip, Alert } from 'antd';
+import { Table, Card, Input, Select, Tag, Space, Button, Typography, message, Drawer, Tooltip, Alert, Modal } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined,
   ReloadOutlined,
   PlusOutlined,
   PrinterOutlined,
+  EditOutlined,
+  StopOutlined,
   LockFilled,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -66,6 +68,13 @@ function getInitials(name: string): string {
   return name.charAt(0).toUpperCase();
 }
 
+function getColorMonograma(diasCredito: number | undefined): string {
+  if (diasCredito === undefined || diasCredito === null) return '#8C8C8C';
+  if (diasCredito < 15) return '#E05252';
+  if (diasCredito < 30) return '#4A8FD4';
+  return '#2BA88C';
+}
+
 function formatDateParam(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -84,10 +93,9 @@ function toTitleCase(str: string): string {
 const EntradaAlmacen: React.FC = () => {
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
-  const setEditarCallback = useUIStore((s) => s.setEditarCallback);
+  const setNuevoCallback = useUIStore((s) => s.setNuevoCallback);
 
   const [data, setData] = useState<MovimientoVistaDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -150,17 +158,12 @@ const EntradaAlmacen: React.FC = () => {
 
   useEffect(() => {
     setActiveModule('FENP');
-    updateToolbar({ editar: false, anular: false });
+    setNuevoCallback(() => navigate('/FENP/nuevo'));
     return () => {
       resetToolbar();
+      setNuevoCallback(undefined);
     };
-  }, [setActiveModule, updateToolbar, resetToolbar]);
-
-  useEffect(() => {
-    return () => {
-      setEditarCallback(undefined);
-    };
-  }, [setEditarCallback]);
+  }, [setActiveModule, resetToolbar, setNuevoCallback]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -188,19 +191,34 @@ const EntradaAlmacen: React.FC = () => {
     }
   }, [selectedRow, sucursalActiva]);
 
+  const handleAnular = useCallback(() => {
+    if (!selectedRow) return;
+    Modal.confirm({
+      title: 'Anular entrada',
+      content: `¿Está seguro de que desea anular la entrada ${selectedRow.documento}?`,
+      okText: 'Sí, anular',
+      okType: 'danger',
+      cancelText: 'Cancelar',
+      onOk: async () => {
+        try {
+          const data = await entradaAlmacenApi.obtenerPorId(sucursalActiva, selectedRow.id);
+          await entradaAlmacenApi.anular(sucursalActiva, data as any);
+          message.success('Entrada anulada correctamente');
+          setLoadingError(false);
+          setRefreshTrigger(n => n + 1);
+        } catch (err: any) {
+          message.error(err?.response?.data?.errorMessage || 'Error al anular la entrada');
+        }
+      },
+    });
+  }, [selectedRow, sucursalActiva]);
+
   const handleTableChange = (pagination: any) => {
     setPage(pagination.current);
   };
 
   const handleRowClick = (record: MovimientoVistaDTO) => {
     setSelectedRow(record);
-    const editable = record.periodo !== 6 && record.estado === 0;
-    updateToolbar({ editar: editable, anular: editable });
-    if (editable) {
-      setEditarCallback(() => navigate(`/FENP/${record.id}/editar`));
-    } else {
-      setEditarCallback(undefined);
-    }
   };
 
   const columns: ColumnsType<MovimientoVistaDTO> = [
@@ -225,9 +243,12 @@ const EntradaAlmacen: React.FC = () => {
   title: 'Entidad',
   dataIndex: 'entidad',
   key: 'entidad',
-  render: (name: string) => (
+  render: (name: string, record: MovimientoVistaDTO) => (
     <Space>
-      <div className="paces-avatar-initials">
+      <div
+        className="paces-avatar-initials"
+        style={{ backgroundColor: getColorMonograma(record.diasCredito) }}
+      >
         {getInitials(name)}
       </div>
       <Text>{toTitleCase(name) || ''}</Text>
@@ -352,6 +373,7 @@ const EntradaAlmacen: React.FC = () => {
             ]}
           />
           <div style={{ flex: 1 }} />
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           <PermissionGate accion="CREAR">
             <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FENP/nuevo')}>
               Nuevo
@@ -360,7 +382,16 @@ const EntradaAlmacen: React.FC = () => {
           <PermissionGate accion="IMPRIMIR">
             <Button icon={<PrinterOutlined />} onClick={handleImprimir} disabled={!selectedRow} />
           </PermissionGate>
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+          <PermissionGate accion="EDITAR">
+            <Button icon={<EditOutlined />} disabled={!selectedRow || !(selectedRow.periodo !== 6 && selectedRow.estado === 0)} onClick={() => navigate(`/FENP/${selectedRow!.id}/editar`)}>
+              Editar
+            </Button>
+          </PermissionGate>
+          <PermissionGate accion="ANULAR">
+            <Button danger icon={<StopOutlined />} disabled={!selectedRow || !(selectedRow.periodo !== 6 && selectedRow.estado === 0)} onClick={handleAnular}>
+              Anular
+            </Button>
+          </PermissionGate>
         </div>
       </div>
 
@@ -390,6 +421,21 @@ const EntradaAlmacen: React.FC = () => {
         }}
         className="paces-border-top paces-list-table"
       />
+
+      <div style={{ display: 'flex', gap: 16, padding: '8px 24px 12px', flexWrap: 'wrap' }}>
+        <Space size={4}>
+          <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#E05252' }} />
+          <Text type="secondary" style={{ fontSize: 12 }}>0-14 días</Text>
+        </Space>
+        <Space size={4}>
+          <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#4A8FD4' }} />
+          <Text type="secondary" style={{ fontSize: 12 }}>15-29 días</Text>
+        </Space>
+        <Space size={4}>
+          <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#2BA88C' }} />
+          <Text type="secondary" style={{ fontSize: 12 }}>30+ días</Text>
+        </Space>
+      </div>
 
       <Drawer
         title={pdfPreview?.title}

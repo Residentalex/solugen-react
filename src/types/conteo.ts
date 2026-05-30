@@ -52,4 +52,5 @@ export interface FamiliaArticuloDTO {
 export interface UnidadMedidaDTO {
   codigo: string;
   nombre: string;
+  factor?: number;
 }

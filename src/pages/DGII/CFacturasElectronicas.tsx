@@ -7,6 +7,7 @@ import {
   Radio,
   Table,
   Button,
+  Select,
   message,
   Modal,
   Spin,
@@ -490,6 +491,18 @@ const CFacturasElectronicas: React.FC = () => {
             format="DD/MM/YYYY"
           />
         </Col>
+        <Col xs={12} md={4} lg={3}>
+          <Select
+            style={{ width: '100%' }}
+            value={tamanoPagina}
+            onChange={(v) => { setTamanoPagina(v); setPagina(1); }}
+            options={[
+              { value: 25, label: '25' },
+              { value: 50, label: '50' },
+              { value: 100, label: '100' },
+            ]}
+          />
+        </Col>
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
@@ -651,8 +664,7 @@ const CFacturasElectronicas: React.FC = () => {
             current: pagina,
             pageSize: tamanoPagina,
             total: dataTabla.length === tamanoPagina ? pagina * tamanoPagina + 1 : (pagina - 1) * tamanoPagina + dataTabla.length,
-            showSizeChanger: true,
-            pageSizeOptions: ['10', '25', '50'],
+            showSizeChanger: false,
             showTotal: (total, range) => `${range[0]}-${range[1]} de ${total}+ registros`,
           }}
           onChange={(pagination) => {

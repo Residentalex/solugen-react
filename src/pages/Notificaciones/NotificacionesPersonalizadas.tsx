@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Table, Card, Button, Tag, Tooltip, message, Input, Alert, Space, Popconfirm,
+  Table, Card, Button, Tag, Tooltip, message, Input, Select, Alert, Space, Popconfirm,
 } from 'antd';
 import {
   SearchOutlined, ReloadOutlined, PlusOutlined, EditOutlined,
@@ -51,6 +51,7 @@ const NotificacionesPersonalizadas: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [pagina, setPagina] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [loadingError, setLoadingError] = useState(false);
   const [formularioVisible, setFormularioVisible] = useState(false);
   const [editando, setEditando] = useState<NotificacionSQLConfig | null>(null);
@@ -270,6 +271,16 @@ const NotificacionesPersonalizadas: React.FC = () => {
               style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
+            <Select
+              style={{ width: 65 }}
+              value={pageSize}
+              onChange={(v) => { setPageSize(v); setPagina(1); }}
+              options={[
+                { value: 25, label: '25' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
+              ]}
+            />
             <div style={{ flex: 1 }} />
             <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>
@@ -284,11 +295,10 @@ const NotificacionesPersonalizadas: React.FC = () => {
           size="middle"
           pagination={{
             current: pagina,
-            onChange: setPagina,
-            showSizeChanger: true,
+            pageSize,
+            onChange: (p) => setPagina(p),
+            showSizeChanger: false,
             showTotal: (total, range) => `${range[0]}-${range[1]} de ${total}`,
-            pageSizeOptions: ['10', '20', '50'],
-            defaultPageSize: 10,
           }}
         />
       </Card>

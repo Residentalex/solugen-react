@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Row, Col, Tag, Button, Spin, message, Empty, Grid, Tooltip, Avatar, Alert, Modal, Descriptions, Typography } from 'antd';
 import { PlusOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import PermissionGate from '../../components/PermissionGate';
 import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
 import { rolApi } from '../../api/rolApi';
@@ -84,9 +85,11 @@ const Roles: React.FC = () => {
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Administrar Roles</h4>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MROL/nuevo')}>
-          Nuevo Rol
-        </Button>
+        <PermissionGate accion="CREAR">
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MROL/nuevo')}>
+            Nuevo Rol
+          </Button>
+        </PermissionGate>
       </div>
 
       <Spin spinning={loading}>

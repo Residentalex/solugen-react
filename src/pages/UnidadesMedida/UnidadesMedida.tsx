@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Table, Card, Input, Button, Modal, Form, InputNumber, message, Typography, Alert } from 'antd';
+import { Table, Card, Input, Select, Button, Modal, Form, InputNumber, message, Typography, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -27,6 +27,7 @@ const UnidadesMedida: React.FC = () => {
   const [data, setData] = useState<UnidadMedidaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [pageSize, setPageSize] = useState(25);
   const [loadingError, setLoadingError] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -147,7 +148,7 @@ const UnidadesMedida: React.FC = () => {
       )}
       <Card
         className="paces-card-erp"
-        style={{ borderRadius: 8 }}
+        style={{ borderRadius: 8, overflow: 'hidden' }}
         styles={{ body: { padding: 0 } }}
       >
         <div style={{ padding: '16px 24px 0' }}>
@@ -158,6 +159,16 @@ const UnidadesMedida: React.FC = () => {
               onSearch={handleSearch}
               style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
+            />
+            <Select
+              style={{ width: 65 }}
+              value={pageSize}
+              onChange={(v) => { setPageSize(v); }}
+              options={[
+                { value: 25, label: '25' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
+              ]}
             />
             <div style={{ flex: 1 }} />
             <PermissionGate accion="CREAR">
@@ -175,11 +186,12 @@ const UnidadesMedida: React.FC = () => {
           loading={loading}
           scroll={{ x: 700 }}
           size="middle"
+          rowClassName="paces-row-hover"
+          className="paces-border-top paces-list-table"
           pagination={{
-            showSizeChanger: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} unidades de medida`,
-            pageSizeOptions: ['10', '20', '50', '100'],
-            defaultPageSize: 10,
+            showSizeChanger: false,
+            pageSize,
+            showTotal: (t) => `${t} registros`,
           }}
         />
       </Card>

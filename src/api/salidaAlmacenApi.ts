@@ -63,6 +63,11 @@ export const salidaAlmacenApi = {
     return data.data;
   },
 
+  desaplicar: async (sucursal: number, documento: string): Promise<any> => {
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/desaplicar?sucursal=${sucursal}&documento=${documento}`);
+    return data.data;
+  },
+
   postear: async (sucursal: number, salida: SalidaAlmacenFullDTO): Promise<any> => {
     const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postear`, salida);
     return data.data;
@@ -75,6 +80,16 @@ export const salidaAlmacenApi = {
 
   eliminar: async (sucursal: number, id: number): Promise<void> => {
     await apiClient.delete(`${BASE}/${sucursal}/eliminar/${id}`);
+  },
+
+  revisado: async (sucursal: number, id: number): Promise<any> => {
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/revisado/${id}`);
+    return data.data;
+  },
+
+  reversar: async (sucursal: number, id: number): Promise<any> => {
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/reversar/${id}`);
+    return data.data;
   },
 
   verificarScan: async (sucursal: number, id: number): Promise<{ existe: boolean }> => {
@@ -91,9 +106,9 @@ export const salidaAlmacenApi = {
 
   // Catálogos para selects
   obtenerConceptos: async (sucursal: number, tipoDocumento?: string): Promise<ConceptoDTO[]> => {
+    const url = tipoDocumento ? `/Concepto/${sucursal}/documento/${tipoDocumento}` : `/Concepto/${sucursal}`;
     const params: Record<string, string> = {};
-    if (tipoDocumento) params.documento = tipoDocumento;
-    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}`, { params });
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(url, { params });
     return data.data;
   },
 

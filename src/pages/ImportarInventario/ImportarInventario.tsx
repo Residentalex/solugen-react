@@ -353,6 +353,13 @@ const ImportarInventario: React.FC = () => {
     setSelectedConcepto(concepto);
     setConceptoSearchText(toTitleCase(concepto.nombre));
     form.setFieldsValue({ conceptoNombre: concepto.nombre });
+
+    // === ConfigurarMoneda ===
+    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    form.setFieldsValue({
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+    });
   };
 
   const handleConceptoSearchClick = () => {
@@ -956,13 +963,20 @@ const ImportarInventario: React.FC = () => {
     </Card>
   );
 
-  // ===== Card de totales (sin moneda/tasa para simplificar) =====
-  const renderTotalesCard = (alignRight: boolean) => (
+  // ===== Card de totales =====
+  const renderTotalesCard = (alignRight: boolean) => {
+    const monSim = selectedConcepto?.moneda?.simbolo || 'RD$';
+    const monNom = selectedConcepto?.moneda?.nombre || 'Peso Dominicano';
+    return (
     <Card
       title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
       className="paces-card"
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
+        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
+          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
+          <span>{toTitleCase(monNom)} ({monSim})</span>
+        </div>
         <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
           {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
           <span>{formatNumber(totales.subTotal)}</span>
@@ -979,10 +993,11 @@ const ImportarInventario: React.FC = () => {
       <Divider style={{ margin: '12px 0' }} />
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
         {!alignRight && <span>Total</span>}
-        <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(totales.total)}</span>
+        <span style={{ color: 'var(--paces-primary)' }}>{monSim} {formatNumber(totales.total)}</span>
       </div>
     </Card>
   );
+  };
 
   return (
     <div>

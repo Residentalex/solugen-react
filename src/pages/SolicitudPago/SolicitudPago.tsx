@@ -6,8 +6,10 @@ import {
   SearchOutlined,
   ReloadOutlined,
   LockFilled,
+  PlusOutlined,
 } from '@ant-design/icons';
 import FiltrosDocumento from '../../components/FiltrosDocumento/FiltrosDocumento';
+import PermissionGate from '../../components/PermissionGate';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
@@ -267,6 +269,11 @@ const SolicitudPago: React.FC = () => {
             prefix={<SearchOutlined className="paces-text-icon" />}
           />
           <div style={{ flex: 1 }} />
+          <PermissionGate accion="CREAR">
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FSPA/nuevo')}>
+              Nuevo
+            </Button>
+          </PermissionGate>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
       </div>

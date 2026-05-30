@@ -115,10 +115,21 @@ const OrdenCompraDetalle: React.FC = () => {
     { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
     {
       title: 'Artículo',
-      dataIndex: 'articulo',
       key: 'articulo',
       ellipsis: true,
-      render: (v: string) => toTitleCase(v || ''),
+      onHeaderCell: () => ({ style: { paddingLeft: 8 } }),
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13, paddingLeft: 8 }}>
+          <div>{toTitleCase(record.articulo || '')}</div>
+          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+            <span>
+              {record.codigo && <span>{record.codigo}</span>}
+              {record.codigo && record.referencia && <span>{' | '}</span>}
+              {record.referencia && <span>{record.referencia}</span>}
+            </span>
+          </div>
+        </div>
+      ),
     },
     {
       title: 'Cantidad',
@@ -126,15 +137,37 @@ const OrdenCompraDetalle: React.FC = () => {
       key: 'cantidad',
       width: 100,
       align: 'right' as const,
-      render: (v: number) => formatNumber(v || 0),
+      render: (_: any, record: any) => (
+        <div>
+          <div>{formatNumber(record.cantidad || 0)}</div>
+          {record.medida?.nombre && (
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
+              {record.medida.nombre}
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Costo',
-      dataIndex: 'costo',
       key: 'costo',
-      width: 110,
+      width: 130,
       align: 'right' as const,
-      render: (v: number) => formatNumber(v || 0),
+      render: (_: any, record: any) => {
+        const costoBase = Number(record.costo) || 0;
+        const pctDesc = Number(record.porcentajeDescuento) || 0;
+        const factor = Number(record.medida?.factor) || 1;
+        const costoConDescuento = costoBase - ((costoBase * pctDesc) / 100);
+        const costoUnitario = costoConDescuento / factor;
+        return (
+          <div>
+            <div>{formatNumber(costoBase)}</div>
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+              {formatNumber(costoUnitario)} × {factor}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: 'SubTotal',
@@ -142,7 +175,12 @@ const OrdenCompraDetalle: React.FC = () => {
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
-      render: (v: number) => formatNumber(v || 0),
+      render: (_: any, record: any) => (
+        <div>
+          <div>{formatNumber(record.subTotal || 0)}</div>
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+        </div>
+      ),
     },
     {
       title: 'Descuento',
@@ -158,11 +196,16 @@ const OrdenCompraDetalle: React.FC = () => {
     },
     {
       title: 'Total',
-      dataIndex: 'total',
       key: 'total',
-      width: 120,
+      width: 130,
       align: 'right' as const,
-      render: (v: number) => <Text strong>{formatNumber(v || 0)}</Text>,
+      onHeaderCell: () => ({ style: { paddingRight: 8 } }),
+      render: (_: any, record: any) => (
+        <div style={{ paddingRight: 8 }}>
+          <Text strong>{formatNumber(record.total || 0)}</Text>
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+        </div>
+      ),
     },
   ];
 

@@ -138,7 +138,7 @@ const CuentaContableDetalle: React.FC = () => {
           Volver
         </Button>
         <div style={{ flex: 1 }} />
-        <Button type="primary" icon={<EditOutlined />} onClick={() => navigate('/MCuentaContable')}>
+        <Button type="primary" icon={<EditOutlined />} onClick={() => navigate('/MCuentaContable', { state: { editarNoCuenta: noCuenta } })}>
           Editar
         </Button>
       </div>

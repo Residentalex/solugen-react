@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Table, Card, Input, Button, message, Tag, Modal, Descriptions, Typography } from 'antd';
+import { Table, Card, Input, Select, Button, message, Tag, Modal, Descriptions, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
+import PermissionGate from '../../components/PermissionGate';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { cuentaBancariaApi } from '../../api/cuentaBancariaApi';
@@ -23,6 +24,7 @@ const CuentasBancarias: React.FC = () => {
   const [data, setData] = useState<CuentaBancariaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [pageSize, setPageSize] = useState(25);
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [detalleItem, setDetalleItem] = useState<CuentaBancariaDTO | null>(null);
 
@@ -130,7 +132,7 @@ const CuentasBancarias: React.FC = () => {
   return (
     <><Card
       className="paces-card-erp"
-      style={{ borderRadius: 8 }}
+      style={{ borderRadius: 8, overflow: 'hidden' }}
       styles={{ body: { padding: 0 } }}
     >
       <div style={{ padding: '16px 24px 0' }}>
@@ -142,7 +144,20 @@ const CuentasBancarias: React.FC = () => {
             style={{ width: 400 }}
             prefix={<SearchOutlined className="paces-text-icon" />}
           />
+          <Select
+            style={{ width: 65 }}
+            value={pageSize}
+            onChange={(v) => { setPageSize(v); }}
+            options={[
+              { value: 25, label: '25' },
+              { value: 50, label: '50' },
+              { value: 100, label: '100' },
+            ]}
+          />
           <div style={{ flex: 1 }} />
+          <PermissionGate accion="CREAR">
+            <Button type="primary" icon={<PlusOutlined />}>Nuevo</Button>
+          </PermissionGate>
           <Button icon={<ReloadOutlined />} onClick={() => cargarDatos()} />
         </div>
       </div>
@@ -153,11 +168,12 @@ const CuentasBancarias: React.FC = () => {
         loading={loading}
         scroll={{ x: 1200 }}
         size="middle"
+        rowClassName="paces-row-hover"
+        className="paces-border-top paces-list-table"
         pagination={{
-          showSizeChanger: true,
-          showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} cuentas bancarias`,
-          pageSizeOptions: ['10', '20', '50', '100'],
-          defaultPageSize: 10,
+          showSizeChanger: false,
+          pageSize,
+          showTotal: (t) => `${t} registros`,
         }}
       />
       </Card>

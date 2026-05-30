@@ -17,6 +17,10 @@ import {
   MoreOutlined,
   CalendarOutlined,
   HolderOutlined,
+  BarcodeOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  RedoOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -26,7 +30,10 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 import { productoApi } from '../../api/productoApi';
+import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
+import ScannerModal from '../../components/ScannerModal/ScannerModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
+import PermissionGate from '../../components/PermissionGate';
 import '../../components/FloatingLabel/FloatingField.css';
 import type {
   ConceptoDTO, AlmacenDTO, SuplidorDTO,
@@ -157,117 +164,6 @@ function filaVacia(): DetalleDevolucionCompraDTO {
     nota: '',
   };
 }
-
-// ===== Componente BuscarProductoModal (reutiliza patrón SAP) =====
-interface BuscarProductoModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (producto: {
-    codigo: string;
-    articulo: string;
-    referencia: string;
-    costo: number;
-    familia?: { nombre: string; idExterno: string };
-    medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
-    impuesto?: { nombre: string; porcentaje: number; codigo: string; idExterno: string };
-    tieneVencimiento?: boolean;
-  }) => void;
-}
-
-const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose, onSelect }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const [productos, setProductos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
-
-  const cargar = useCallback(async (filtro?: string) => {
-    setLoading(true);
-    try {
-      const res = await productoApi.obtenerListado(sucursalActiva, filtro ? { codigo: filtro } : undefined);
-      setProductos(res || []);
-    } catch {
-      message.error('Error al cargar productos');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (open) cargar();
-  }, [open, cargar]);
-
-  const columnas = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-    { title: 'Artículo', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-      render: (v: string) => toTitleCase(v) },
-    { title: 'Referencia', dataIndex: 'referencia', key: 'referencia', width: 120,
-      render: (v: string) => v || '-' },
-  ];
-
-  return (
-    <Modal
-      title="Buscar Producto"
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={700}
-      destroyOnHidden
-    >
-      <Input.Search
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        onSearch={(val) => cargar(val)}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={productos}
-        columns={columnas}
-        rowKey="codigo"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: async () => {
-            try {
-              const detalle = await productoApi.obtenerDetalle(sucursalActiva, record.codigo);
-              onSelect({
-                codigo: record.codigo,
-                articulo: detalle.nombre || record.nombre,
-                referencia: detalle.referenciaInterna || record.referencia || '',
-                costo: detalle.ultimoCosto || record.ultimoCosto || 0,
-                familia: detalle.familia || record.familia,
-                medida: detalle.unidadMedida
-                  ? { nombre: detalle.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: detalle.unidadMedida.idExterno || 0 }
-                  : record.unidadMedida
-                    ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: record.unidadMedida.idExterno || 0 }
-                    : undefined,
-                impuesto: (detalle.impuestos?.[0]?.impuesto as any) || undefined,
-                tieneVencimiento: detalle.pesado || false,
-              });
-            } catch {
-              onSelect({
-                codigo: record.codigo,
-                articulo: record.nombre,
-                referencia: record.referencia || '',
-                costo: record.ultimoCosto || 0,
-                familia: record.familia,
-                medida: record.unidadMedida
-                  ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: record.unidadMedida.idExterno || 0 }
-                  : undefined,
-                impuesto: undefined,
-                tieneVencimiento: false,
-              });
-            }
-            onClose();
-          },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
-};
 
 // ===== Componente BuscarEntradaModal (para seleccionar ENP referencia) =====
 interface BuscarEntradaModalProps {
@@ -415,7 +311,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
       {monedaSimbolo && tasa !== undefined && (
         <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
           {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{monedaNombre || 'Peso Dominicano'} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
+          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
@@ -436,7 +332,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuesto
 
     <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
       {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
+      <span style={{ color: 'var(--paces-primary)' }}>{monedaSimbolo || 'RD$'} {formatNumber(total)}</span>
     </div>
   </Card>
 );
@@ -512,10 +408,14 @@ const DevolucionCompraFormulario: React.FC = () => {
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
   const [conceptoSearchText, setConceptoSearchText] = useState('');
   const [productoModalOpen, setProductoModalOpen] = useState(false);
+  const [scannerModalOpen, setScannerModalOpen] = useState(false);
   const [entradaModalOpen, setEntradaModalOpen] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [activeId, setActiveId] = useState<number | null>(null);
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
+
+  const editValuesRef = useRef<Record<string, any>>({});
+  const navigationConfirmedRef = useRef(false);
 
   // Refs para la guía
   const tipoRef = useRef<HTMLDivElement>(null);
@@ -626,6 +526,7 @@ const DevolucionCompraFormulario: React.FC = () => {
         setDetalles(res.detalles || []);
         setSelectedTipo(res.tipo || null);
         setSelectedConcepto(res.concepto || null);
+        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
         setSelectedEntidad(res.suplidor || res.entidad || null);
         setSelectedAlmacen(res.almacen || null);
         setSelectedEntrada(res.entrada || null);
@@ -658,9 +559,10 @@ const DevolucionCompraFormulario: React.FC = () => {
           .catch(() => {});
       })
       .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
+        const msg = extraerMensajeError(err, 'Error al cargar el documento');
         message.error(msg);
         setLoadingError(true);
+        navigationConfirmedRef.current = true;
         navigate('/FDVC');
       })
       .finally(() => setLoading(false));
@@ -690,6 +592,7 @@ const DevolucionCompraFormulario: React.FC = () => {
         const nuevosDetalles = (detalleEntrada.detalles || []).map((d: any, idx: number) => ({
           ...filaVacia(),
           id: -(idx + 1),
+          idExterno: d.idExterno || d.id,
           codigo: d.codigo || '',
           articulo: d.articulo || '',
           referencia: d.referencia || '',
@@ -711,6 +614,46 @@ const DevolucionCompraFormulario: React.FC = () => {
     loadFromEntrada();
   }, [mode, entradaId, sucursalActiva, form]);
 
+  // ===== Bloquear salida si hay cambios =====
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  // Bloquear botón atrás/adelante del navegador
+  useEffect(() => {
+    const handlePopState = () => {
+      const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
+      if (!leave) {
+        window.history.pushState(null, '', window.location.pathname);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Bloquear navegación por sidebar (interceptar history.pushState)
+  useEffect(() => {
+    const originalPushState = window.history.pushState.bind(window.history);
+    window.history.pushState = function(data: any, unused: string, url?: string | URL | null) {
+      const currentPath = window.location.pathname;
+      const newPath = typeof url === 'string' ? url.split('?')[0] : (url instanceof URL ? url.pathname : null);
+      if (newPath && currentPath !== newPath && !navigationConfirmedRef.current) {
+        const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
+        if (!leave) return;
+        navigationConfirmedRef.current = true;
+      }
+      return originalPushState(data, unused, url);
+    };
+    return () => {
+      window.history.pushState = originalPushState;
+    };
+  }, []);
+
   // ===== Handlers =====
   const handleCancelar = () => {
     Modal.confirm({
@@ -723,6 +666,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       onOk: () => {
         setEditingField(null);
         if (mode === 'crear') {
+          navigationConfirmedRef.current = true;
           navigate('/FDVC');
         } else {
           if (id) {
@@ -733,6 +677,7 @@ const DevolucionCompraFormulario: React.FC = () => {
                 setDetalles(res.detalles || []);
                 setSelectedTipo(res.tipo || null);
                 setSelectedConcepto(res.concepto || null);
+                setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
                 setSelectedEntidad(res.suplidor || res.entidad || null);
                 setSelectedAlmacen(res.almacen || null);
                 setSelectedEntrada(res.entrada || null);
@@ -762,11 +707,12 @@ const DevolucionCompraFormulario: React.FC = () => {
                   .catch(() => {});
               })
               .catch((err: any) => {
-                const msg = err?.response?.data?.errorMessage || 'Error al recargar el documento';
+                const msg = extraerMensajeError(err, 'Error al recargar el documento');
                 message.error(msg);
               })
               .finally(() => setLoading(false));
           }
+          navigationConfirmedRef.current = true;
           navigate(`/FDVC/${id}`);
         }
       },
@@ -848,93 +794,16 @@ const DevolucionCompraFormulario: React.FC = () => {
       if (mode === 'crear') {
         const result = await devolucionCompraApi.crear(sucursalActiva, dto);
         message.success('Devolución de compra creada exitosamente');
+        navigationConfirmedRef.current = true;
         navigate(`/FDVC/${result.id}`);
       } else {
         await devolucionCompraApi.actualizar(sucursalActiva, dto);
         message.success('Devolución de compra actualizada exitosamente');
+        navigationConfirmedRef.current = true;
         navigate(`/FDVC/${id}`);
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAplicar = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      const result = await devolucionCompraApi.aplicar(sucursalActiva, parseInt(id));
-      setData(result);
-      message.success('Documento aplicado exitosamente');
-      navigate(`/FDVC/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAnular = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await devolucionCompraApi.anular(sucursalActiva, dto);
-      message.success('Documento anulado exitosamente');
-      navigate(`/FDVC/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al anular');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePostear = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await devolucionCompraApi.postear(sucursalActiva, dto);
-      message.success('Documento posteado exitosamente');
-      navigate(`/FDVC/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al postear');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRevisar = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      await devolucionCompraApi.revisar(sucursalActiva, parseInt(id));
-      message.success('Documento revisado exitosamente');
-      navigate(`/FDVC/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al revisar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleReversar = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await devolucionCompraApi.reversar(sucursalActiva, dto);
-      message.success('Documento reversado exitosamente');
-      navigate(`/FDVC/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al reversar');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -994,11 +863,16 @@ const DevolucionCompraFormulario: React.FC = () => {
       );
     }
 
-    // Configurar moneda según el concepto
-    const monedaNombre = concepto.moneda?.nombre || 'Peso Dominicano';
+    // === ConfigurarMoneda ===
+    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
     form.setFieldsValue({
-      moneda: monedaNombre,
-      tasa: 1,
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+    });
+    // Actualizar data local para que la UI lo refleje
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, moneda: monedaObj };
     });
 
     // Auto-asignar almacén si el concepto trae uno
@@ -1182,6 +1056,25 @@ const DevolucionCompraFormulario: React.FC = () => {
     }
   };
 
+  const handleScannerProducto = (producto: any) => {
+    const nuevaFila = filaVacia();
+    const nuevoId = -(detalles.length + 1);
+    setDetalles((prev) => {
+      const filled: DetalleDevolucionCompraDTO = {
+        ...nuevaFila,
+        id: nuevoId,
+        codigo: producto.codigo,
+        articulo: producto.articulo,
+        referencia: producto.referencia || '',
+        costo: producto.costo || 0,
+        cantidad: producto.cantidad || 1,
+        familia: producto.familia,
+        medida: producto.medida,
+      };
+      return [calcularFila(filled), ...prev];
+    });
+  };
+
   const handleFechaVencimiento = (date: dayjs.Dayjs | null) => {
     if (fechaVencimientoModal.detalleId) {
       setDetalles((prev) =>
@@ -1287,59 +1180,15 @@ const DevolucionCompraFormulario: React.FC = () => {
         {mode === 'editar' && (
           <>
             {esBorrador && (
-              <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-                Guardar
-              </Button>
+              <PermissionGate accion="EDITAR">
+                <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
+                  Guardar
+                </Button>
+              </PermissionGate>
             )}
             {esBorrador && (
               <Button icon={<CloseOutlined />} onClick={handleCancelar}>
                 Cancelar
-              </Button>
-            )}
-            {esBorrador && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handleAplicar}
-              >
-                Aplicar
-              </Button>
-            )}
-            {esAplicado && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handlePostear}
-              >
-                Postear
-              </Button>
-            )}
-            {esAplicado && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handleRevisar}
-              >
-                Revisar
-              </Button>
-            )}
-            {esAplicado && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handleReversar}
-              >
-                Reversar
-              </Button>
-            )}
-            {!esAnulado && (
-              <Button
-                danger
-                icon={<DeleteOutlined />}
-                loading={saving}
-                onClick={handleAnular}
-              >
-                Anular
               </Button>
             )}
           </>
@@ -1351,7 +1200,7 @@ const DevolucionCompraFormulario: React.FC = () => {
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-      <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
+      <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           {/* Fila 1: Tipo de Documento + Suplidor */}
           <Col xs={24} sm={12} lg={9}>
@@ -1509,11 +1358,11 @@ const DevolucionCompraFormulario: React.FC = () => {
                       }}
                     />
                   ) : ncfValue ? (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
+                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
                       NCF: {ncfValue} <EditOutlined />
                     </Tag>
                   ) : (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
+                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
                       <PlusOutlined /> NCF
                     </Tag>
                   )}
@@ -1537,11 +1386,11 @@ const DevolucionCompraFormulario: React.FC = () => {
                     }}
                   />
                 ) : tasaValue !== 1 ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
                     Tasa: {tasaValue} <EditOutlined />
                   </Tag>
                 ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
                     <PlusOutlined /> Tasa
                   </Tag>
                 )}
@@ -1565,7 +1414,6 @@ const DevolucionCompraFormulario: React.FC = () => {
       width: 40,
       render: () => <DragHandle />,
     },
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
     {
       title: 'Artículo',
       key: 'articulo',
@@ -1577,6 +1425,8 @@ const DevolucionCompraFormulario: React.FC = () => {
           <div>{toTitleCase(record.articulo || '')}</div>
           <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
             <span>
+              {record.codigo && <span>{record.codigo}</span>}
+              {record.codigo && record.referencia && <span>{' | '}</span>}
               {record.referencia && <span>{record.referencia}</span>}
             </span>
             {record.fechaVencimiento && <span className="paces-text-secondary">V: {formatDate(record.fechaVencimiento)}</span>}
@@ -1597,13 +1447,15 @@ const DevolucionCompraFormulario: React.FC = () => {
           <InputNumber
             size="small"
             style={{ width: '100%' }}
+            styles={{ input: { textAlign: 'right' } }}
             min={0.01}
             step={0.01}
             precision={2}
-            value={detalles[idx]?.cantidad}
-            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'cantidad', val || 0)}
-            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
-            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
+            controls={false}
+            defaultValue={detalles[idx]?.cantidad}
+            onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_cantidad`] = val ?? 0; }}
+            onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? (detalles[idx]?.cantidad || 0); handleDetalleCalculate(detalles[idx].id, 'cantidad', val); }}
+            onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? (detalles[idx]?.cantidad || 0); handleDetalleCalculate(detalles[idx].id, 'cantidad', val); }}
           />
           {detalles[idx]?.medida?.nombre && (
             <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
@@ -1617,25 +1469,37 @@ const DevolucionCompraFormulario: React.FC = () => {
       title: 'Costo',
       dataIndex: 'costo',
       key: 'costo',
-      width: 110,
+      width: 130,
       align: 'right' as const,
       responsive: ['sm' as const, 'md' as const, 'lg' as const],
-      shouldCellUpdate: (record: DetalleDevolucionCompraDTO, prevRecord: DetalleDevolucionCompraDTO) => record.costo !== prevRecord.costo,
-      render: (_: any, _record: DetalleDevolucionCompraDTO, idx: number) => (
-        <div>
-          <InputNumber
-            size="small"
-            style={{ width: '100%' }}
-            min={0}
-            step={0.01}
-            precision={2}
-            value={detalles[idx]?.costo}
-            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'costo', val || 0)}
-            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'costo', detalles[idx]?.costo || 0)}
-            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'costo', detalles[idx]?.costo || 0)}
-          />
-        </div>
-      ),
+      shouldCellUpdate: (record: DetalleDevolucionCompraDTO, prevRecord: DetalleDevolucionCompraDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
+      render: (_: any, record: DetalleDevolucionCompraDTO, idx: number) => {
+        const costoBase = Number(detalles[idx]?.costo) || 0;
+        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
+        const factor = Number(detalles[idx]?.medida?.factor) || 1;
+        const costoConDescuento = costoBase - ((costoBase * pctDesc) / 100);
+        const costoUnitario = costoConDescuento / factor;
+        return (
+          <div>
+            <InputNumber
+              size="small"
+              style={{ width: '100%' }}
+              styles={{ input: { textAlign: 'right' } }}
+              min={0}
+              step={0.01}
+              precision={2}
+              controls={false}
+              defaultValue={detalles[idx]?.costo}
+              onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_costo`] = val ?? 0; }}
+              onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_costo`] ?? (detalles[idx]?.costo || 0); handleDetalleCalculate(detalles[idx].id, 'costo', val); }}
+              onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_costo`] ?? (detalles[idx]?.costo || 0); handleDetalleCalculate(detalles[idx].id, 'costo', val); }}
+            />
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+              {formatNumber(costoUnitario)} × {factor}
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: '% Desc',
@@ -1643,17 +1507,18 @@ const DevolucionCompraFormulario: React.FC = () => {
       width: 90,
       align: 'right' as const,
       render: (_: any, _record: DetalleDevolucionCompraDTO, idx: number) => (
-        <InputNumber
+<InputNumber
           size="small"
           style={{ width: '100%' }}
           min={0}
           max={100}
           step={0.01}
           precision={2}
-          value={detalles[idx]?.porcentajeDescuento}
-          onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'porcentajeDescuento', val || 0)}
-          onBlur={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
-          onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
+          controls={false}
+          defaultValue={detalles[idx]?.porcentajeDescuento}
+          onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] = val ?? 0; }}
+          onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] ?? (detalles[idx]?.porcentajeDescuento || 0); handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val); }}
+          onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] ?? (detalles[idx]?.porcentajeDescuento || 0); handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val); }}
           addonAfter="%"
         />
       ),
@@ -1709,6 +1574,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       title: '',
       key: 'acciones',
       width: 50,
+      onCell: () => ({ style: { paddingRight: 8 } }),
       render: (_: any, _record: DetalleDevolucionCompraDTO, idx: number) => {
         const items = [
           {
@@ -1750,6 +1616,7 @@ const DevolucionCompraFormulario: React.FC = () => {
         setDetalles(res.detalles || []);
         setSelectedTipo(res.tipo || null);
         setSelectedConcepto(res.concepto || null);
+        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
         setSelectedEntidad(res.suplidor || res.entidad || null);
         setSelectedAlmacen(res.almacen || null);
         setSelectedEntrada(res.entrada || null);
@@ -1768,7 +1635,7 @@ const DevolucionCompraFormulario: React.FC = () => {
         });
       })
       .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        const msg = extraerMensajeError(err, 'Error al recargar');
         message.error(msg);
         setLoadingError(true);
       })
@@ -1805,7 +1672,7 @@ const DevolucionCompraFormulario: React.FC = () => {
         <Table
           dataSource={conceptosCache}
           columns={[
-            { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
+    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120, onCell: () => ({ style: { paddingLeft: 8 } }) },
             { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
               render: (v: string) => toTitleCase(v) },
           ]}
@@ -1827,11 +1694,17 @@ const DevolucionCompraFormulario: React.FC = () => {
         open={productoModalOpen}
         onClose={() => setProductoModalOpen(false)}
         onSelect={handleProductoSelect}
+        mode="compra"
       />
       <BuscarEntradaModal
         open={entradaModalOpen}
         onClose={() => setEntradaModalOpen(false)}
         onSelect={handleEntradaSelect}
+      />
+      <ScannerModal
+        open={scannerModalOpen}
+        onClose={() => setScannerModalOpen(false)}
+        onSelect={handleScannerProducto}
       />
 
       {isLarge ? (
@@ -1852,19 +1725,10 @@ const DevolucionCompraFormulario: React.FC = () => {
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
                         <Space>
-                          <Button
-                            type="dashed"
-                            icon={<PlusOutlined />}
-                            onClick={handleAgregarFila}
-                          >
-                            Agregar fila
+                          <Button type="primary" icon={<PlusOutlined />} onClick={() => setProductoModalOpen(true)}>
+                            Agregar producto
                           </Button>
-                          <Button
-                            icon={<SearchOutlined />}
-                            onClick={() => setProductoModalOpen(true)}
-                          >
-                            Buscar Producto
-                          </Button>
+                          <Button icon={<BarcodeOutlined />} onClick={() => setScannerModalOpen(true)} />
                         </Space>
                         <Input.Search
                           placeholder="Buscar detalle..."
@@ -1951,8 +1815,8 @@ const DevolucionCompraFormulario: React.FC = () => {
               impuestos={totales.impuestos}
               total={totales.total}
               alignRight={false}
-              monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
-              monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
               tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </Col>
@@ -1974,19 +1838,10 @@ const DevolucionCompraFormulario: React.FC = () => {
                   <>
                     <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
                       <Space>
-                        <Button
-                          type="dashed"
-                          icon={<PlusOutlined />}
-                          onClick={handleAgregarFila}
-                        >
-                          Agregar fila
+                        <Button type="primary" icon={<PlusOutlined />} onClick={() => setProductoModalOpen(true)}>
+                          Agregar producto
                         </Button>
-                        <Button
-                          icon={<SearchOutlined />}
-                          onClick={() => setProductoModalOpen(true)}
-                        >
-                          Buscar Prod.
-                        </Button>
+                        <Button icon={<BarcodeOutlined />} onClick={() => setScannerModalOpen(true)} />
                       </Space>
                       <Input.Search
                         placeholder="Buscar detalle..."

@@ -2,6 +2,13 @@ import { apiClient } from './client';
 import type { ConteoFisicoDTO } from '../types/conteo';
 import type { ApiResponse } from '../types/auth';
 
+export interface PlantillaConteoFisicoDTO {
+  id: string;
+  codigo: string;
+  suplidorID: string;
+  suplidor: string;
+}
+
 const BASE = '/IF';
 
 export const conteoApi = {
@@ -20,6 +27,19 @@ export const conteoApi = {
       { params: queryParams }
     );
     return data.data;
+  },
+
+  obtenerPlantillas: async (sucursal: number, codsup?: string): Promise<PlantillaConteoFisicoDTO[]> => {
+    const { data } = await apiClient.get<PlantillaConteoFisicoDTO[]>(
+      `${BASE}/plantilla/${sucursal}`,
+      { params: codsup ? { codsup } : {} }
+    );
+    return data;
+  },
+
+  obtenerPlantilla: async (sucursal: number, id: string): Promise<any> => {
+    const { data } = await apiClient.get(`${BASE}/plantilla/${sucursal}/${id}`);
+    return data;
   },
 
   obtenerUltimos: async (

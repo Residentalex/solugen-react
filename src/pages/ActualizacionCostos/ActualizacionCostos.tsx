@@ -73,6 +73,7 @@ const ActualizacionCostos: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [fechaCierre, setFechaCierre] = useState<dayjs.Dayjs | null>(null);
+  const [pageSize, setPageSize] = useState(50);
 
   const dateParamsRef = useRef({
     desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
@@ -152,9 +153,11 @@ const ActualizacionCostos: React.FC = () => {
     setSaving(true);
     try {
       const { desde, hasta } = dateParamsRef.current;
+      const toISO = (s: string) =>
+        `${s.substring(0,4)}-${s.substring(4,6)}-${s.substring(6,8)}T${s.substring(8,10)}:${s.substring(10,12)}:${s.substring(12,14)}`;
       await actualizacionCostoApi.aplicar(sucursalActiva, {
-        fechaDesde: desde,
-        fechaHasta: hasta,
+        fechaDesde: toISO(desde),
+        fechaHasta: toISO(hasta),
         nota: '',
         usuario: { id: usuario?.id },
         detalles: data,
@@ -292,6 +295,17 @@ const ActualizacionCostos: React.FC = () => {
               Actualizar
             </Button>
           )}
+          <div style={{ flex: 1 }} />
+          <Select
+            style={{ width: 65 }}
+            value={pageSize}
+            onChange={(v) => setPageSize(v)}
+            options={[
+              { value: 25, label: '25' },
+              { value: 50, label: '50' },
+              { value: 100, label: '100' },
+            ]}
+          />
         </div>
       </Card>
 
@@ -308,10 +322,9 @@ const ActualizacionCostos: React.FC = () => {
             emptyText: <Empty description={emptyDescription} />,
           }}
           pagination={{
-            pageSize: 50,
-            showSizeChanger: true,
+            pageSize,
+            showSizeChanger: false,
             showTotal: (t) => `${t} registros`,
-            pageSizeOptions: ['25', '50', '100'],
           }}
         />
       </Card>

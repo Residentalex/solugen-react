@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
-import type { CuentaContableDTO, MovimientoCuentaDTO, BalanceCuentaDTO } from '../types/contabilidad';
+import type { CuentaContableDTO, MovimientoCuentaDTO, BalanceCuentaDTO, TipoCuentaDTO, GrupoCuentaContableDTO } from '../types/contabilidad';
 
 const BASE = '/CuentaContable';
 
@@ -66,5 +66,17 @@ export const cuentaContableApi = {
 
   eliminar: async (sucursal: number, noCuenta: string): Promise<void> => {
     await apiClient.delete(`${BASE}/${sucursal}/${noCuenta}`);
+  },
+
+  // ===== Catálogos para formulario =====
+
+  obtenerTipos: async (sucursal: number): Promise<TipoCuentaDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<TipoCuentaDTO[]>>(`/TipoCuenta/${sucursal}`);
+    return data.data;
+  },
+
+  obtenerGrupos: async (sucursal: number): Promise<GrupoCuentaContableDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<GrupoCuentaContableDTO[]>>(`/GrupoCuentaContable/${sucursal}`);
+    return data.data;
   },
 };

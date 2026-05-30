@@ -143,12 +143,6 @@ const MetodosPago: React.FC = () => {
             placeholder="Buscar por nombre o código..."
             allowClear
             onSearch={handleSearch}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                (e.target as HTMLInputElement).blur();
-                handleSearch('');
-              }
-            }}
             style={{ width: 400 }}
             prefix={<SearchOutlined className="paces-text-icon" />}
           />
@@ -174,6 +168,7 @@ const MetodosPago: React.FC = () => {
         loading={loading}
         scroll={{ x: 600 }}
         size="middle"
+        rowClassName="paces-row-hover"
         className="paces-border-top paces-list-table"
         pagination={{
           current: page,

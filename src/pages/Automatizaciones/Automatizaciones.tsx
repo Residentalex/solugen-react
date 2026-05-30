@@ -153,6 +153,8 @@ const Automatizaciones: React.FC = () => {
   const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
 
   // ── Jobs state ──
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [jobs, setJobs] = useState<JobHangfire[]>([]);
   const [resumen, setResumen] = useState<{ total: number; fallidos: number; exitosos: number }>({
     total: 0,
@@ -909,6 +911,16 @@ const Automatizaciones: React.FC = () => {
           onChange={(val) => setFiltroModulo(val)}
           options={modulosDisponibles.map((m) => ({ value: m, label: m }))}
         />
+        <Select
+          style={{ width: 65 }}
+          value={pageSize}
+          onChange={(v) => { setPageSize(v); setPage(1); }}
+          options={[
+            { value: 25, label: '25' },
+            { value: 50, label: '50' },
+            { value: 100, label: '100' },
+          ]}
+        />
         <div style={{ flex: 1 }} />
         <Space size={8}>
           <Text className="paces-text-secondary" style={{ fontSize: 13 }}>
@@ -986,10 +998,11 @@ const Automatizaciones: React.FC = () => {
             },
           })}
           pagination={{
-            showSizeChanger: true,
+            current: page,
+            pageSize,
+            onChange: (p) => setPage(p),
+            showSizeChanger: false,
             showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} jobs`,
-            pageSizeOptions: ['15', '30', '50'],
-            defaultPageSize: 15,
           }}
           className="paces-border-top paces-list-table"
         />

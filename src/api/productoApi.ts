@@ -71,4 +71,10 @@ export const productoApi = {
     );
     return data.data;
   },
+
+  obtenerComodines: async (sucursal: number): Promise<any[]> => {
+    const { data } = await apiClient.get(`/Producto/comodines/${sucursal}`);
+    if (Array.isArray(data)) return data;
+    return data.data || [];
+  },
 };

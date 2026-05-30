@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Table, Input, Tag, Button, message, Card, Typography, Modal, Descriptions, DatePicker, Alert } from 'antd';
+import { Table, Input, Select, Tag, Button, message, Card, Typography, Modal, Descriptions, DatePicker, Alert } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -253,6 +253,16 @@ const ActualizacionPrecio: React.FC = () => {
               style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
+            <Select
+              style={{ width: 65 }}
+              value={pageSize}
+              onChange={(v) => { setPageSize(v); setPage(1); }}
+              options={[
+                { value: 25, label: '25' },
+                { value: 50, label: '50' },
+                { value: 100, label: '100' },
+              ]}
+            />
             <div style={{ flex: 1 }} />
             <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>
@@ -282,9 +292,8 @@ const ActualizacionPrecio: React.FC = () => {
                 setPage(newPage);
               }
             },
-            showSizeChanger: true,
+            showSizeChanger: false,
             showTotal: (t) => `${t} registros`,
-            pageSizeOptions: ['10', '25', '50', '100'],
           }}
         />
       </Card>

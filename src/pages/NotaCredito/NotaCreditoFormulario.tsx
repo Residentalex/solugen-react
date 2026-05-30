@@ -286,7 +286,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   // ===== Cargar conceptos =====
   const cargarConceptos = useCallback(async () => {
     try {
-      const res = await conceptosApi.obtenerConceptos(sucursalActiva, 'NC');
+      const res = await conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'NC');
       setConceptosCache(res || []);
       return res || [];
     } catch {
@@ -490,69 +490,6 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     }
   };
 
-  const handleAplicar = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      const result = await notaCreditoApi.aplicar(sucursalActiva, parseInt(id));
-      setData(result);
-      message.success('Documento aplicado exitosamente');
-      navigate(`/${codigoPantalla}/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDesaplicar = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      await notaCreditoApi.desaplicar(sucursalActiva, data.noDocumento || '');
-      message.success('Documento desaplicado exitosamente');
-      navigate(`/${codigoPantalla}/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al desaplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAnular = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await notaCreditoApi.anular(sucursalActiva, dto);
-      message.success('Documento anulado exitosamente');
-      navigate(`/${codigoPantalla}/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al anular');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handlePostear = async () => {
-    if (!data) return;
-    setSaving(true);
-    try {
-      const dto = construirDTO();
-      await notaCreditoApi.postear(sucursalActiva, dto);
-      message.success('Documento posteado exitosamente');
-      navigate(`/${codigoPantalla}/${id}`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al postear');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleGenerarAsientos = async () => {
     if (!id) return;
     setSaving(true);
@@ -577,8 +514,20 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     setConceptoSearchText('');
     form.setFieldsValue({ concepto: concepto.codigo });
 
-    // Cargar entidades según concepto
+    // Cargar entidades segÃºn concepto
     cargarEntidades(concepto.codigo);
+
+    // === ConfigurarMoneda ===
+    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    form.setFieldsValue({
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+    });
+    // Actualizar data local para que la UI lo refleje
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, moneda: monedaObj };
+    });
   };
 
   const handleConceptoClear = () => {
@@ -779,43 +728,6 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
             {esBorrador && (
               <Button icon={<CloseOutlined />} onClick={handleCancelar}>
                 Cancelar
-              </Button>
-            )}
-            {esBorrador && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handleAplicar}
-              >
-                Aplicar
-              </Button>
-            )}
-            {esAplicado && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handleDesaplicar}
-              >
-                Desaplicar
-              </Button>
-            )}
-            {esAplicado && (
-              <Button
-                icon={<ExclamationCircleOutlined />}
-                loading={saving}
-                onClick={handlePostear}
-              >
-                Postear
-              </Button>
-            )}
-            {!esAnulado && (
-              <Button
-                danger
-                icon={<DeleteOutlined />}
-                loading={saving}
-                onClick={handleAnular}
-              >
-                Anular
               </Button>
             )}
           </>
@@ -1054,12 +966,19 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   );
 
   // ===== Totales Card =====
-  const TotalesCard = () => (
+  const TotalesCard = () => {
+    const monSim = data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$';
+    const monNom = data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano';
+    return (
     <Card
       title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
       className="paces-card"
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+          <span className="paces-text-secondary">Moneda</span>
+          <span>{toTitleCase(monNom)} ({monSim})</span>
+        </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
           <span className="paces-text-secondary">Subtotal</span>
           <span>{formatNumber(totales.subTotal)}</span>
@@ -1076,7 +995,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       <Divider style={{ margin: '12px 0' }} />
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
         <span>Total</span>
-        <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(totales.total)}</span>
+        <span style={{ color: 'var(--paces-primary)' }}>{monSim} {formatNumber(totales.total)}</span>
       </div>
       {data?.nota && (
         <>
@@ -1091,6 +1010,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       )}
     </Card>
   );
+  };
 
   // ===== Tabs =====
   const tabItems: any[] = [];

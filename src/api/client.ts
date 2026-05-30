@@ -22,6 +22,9 @@ apiClient.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  // Identificar origen web para el historial
+  config.headers['X-Client-Machine'] = window.location.hostname;
+  config.headers['X-Client-App'] = 'WEB';
   return config;
 });
 
