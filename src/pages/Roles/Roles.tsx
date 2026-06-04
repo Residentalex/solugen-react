@@ -31,8 +31,7 @@ const Roles: React.FC = () => {
     try {
       const data = await rolApi.obtenerListado(SUCURSAL_SEGURIDAD);
       setRoles(data || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar roles');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);
@@ -147,8 +146,8 @@ const Roles: React.FC = () => {
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                       {(rol.pantallas || []).slice(0, 5).map((pp) => (
-                        <Tag key={pp.pantalla.id} color="blue" style={{ fontSize: 11 }}>
-                          {pp.pantalla.nombre}
+                        <Tag key={pp.id} color="blue" style={{ fontSize: 11 }}>
+                          {pp.nombre}
                         </Tag>
                       ))}
                       {(rol.pantallas || []).length > 5 && (
@@ -201,12 +200,12 @@ const Roles: React.FC = () => {
                 <h5 style={{ marginBottom: 12, fontWeight: 600 }}>Pantallas y Permisos ({detalleItem.pantallas?.length || 0})</h5>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {(detalleItem.pantallas || []).map((pp) => (
-                    <Card key={pp.pantalla.id} size="small" className="paces-card" style={{ borderRadius: 6 }}>
+                    <Card key={pp.id} size="small" className="paces-card" style={{ borderRadius: 6 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text strong>{pp.pantalla.nombre}</Text>
+                        <Text strong>{pp.nombre}</Text>
                         <div style={{ display: 'flex', gap: 4 }}>
                           {pp.acciones.map((acc) => (
-                            <Tag key={acc.codigo} color="blue" style={{ fontSize: 11 }}>{acc.nombre}</Tag>
+                            <Tag key={acc} color="blue" style={{ fontSize: 11 }}>{acc}</Tag>
                           ))}
                         </div>
                       </div>

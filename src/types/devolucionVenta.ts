@@ -67,6 +67,7 @@ export interface DevolucionVentaDTO {
   noDocumento: string;
   estado: number;
   periodo: number;
+  revisado?: boolean;
   ncf: string;
   ncfModificado: string;
   referencia: string;

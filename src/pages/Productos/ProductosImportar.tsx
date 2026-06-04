@@ -34,6 +34,19 @@ const ProductosImportar: React.FC = () => {
     setActiveModule('MProducto');
   }, [setActiveModule]);
 
+  const handleDescargarResultado = async () => {
+    if (!resultado?.productos?.length) return;
+    try {
+      const blob = await productoApi.descargarResultado(sucursalActiva, resultado.productos);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Productos_Creados.xlsx';
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (e) { message.error('Error al descargar resultado'); }
+  };
+
   const handleDescargarPlantilla = async () => {
     try {
       const blob = await productoApi.descargarPlantilla(sucursalActiva);
@@ -240,15 +253,14 @@ const ProductosImportar: React.FC = () => {
                       )}
                     </Space>
                   }
-                  extra={[
-                    <Button key="new" type="primary" onClick={resetear}>Importar otro archivo</Button>,
-                    <Button key="back" onClick={() => navigate('/MProducto')}>Volver a Productos</Button>,
-                  ]}
+                  extra={[]}
                 />
-
                 {resultado.productos && resultado.productos.length > 0 && (
                   <Card
                     title="Productos importados"
+                    extra={
+                      <Button type="text" icon={<DownloadOutlined />} onClick={handleDescargarResultado} />
+                    }
                     size="small"
                     style={{ marginTop: 16 }}
                     className="paces-card"

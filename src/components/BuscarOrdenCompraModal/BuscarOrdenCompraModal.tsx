@@ -1,8 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { Modal, Table, Input, message } from 'antd';
-import { useAuthStore } from '../../stores/authStore';
-import { Sucursal } from '../../types/auth';
-import { ordenCompraApi } from '../../api/ordenCompraApi';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Modal, Input, Table, message } from 'antd';
 import type { OrdenCompraVistaDTO } from '../../types/entradaAlmacen';
 
 function toTitleCase(str: string): string {
@@ -25,53 +22,46 @@ interface BuscarOrdenCompraModalProps {
   open: boolean;
   onClose: () => void;
   onSelect: (orden: OrdenCompraVistaDTO) => void;
-  suplidorCodigo?: string;
+  fetchOrdenes: () => Promise<OrdenCompraVistaDTO[]>;
+  title?: string;
 }
 
-const BuscarOrdenCompraModal: React.FC<BuscarOrdenCompraModalProps> = ({ open, onClose, onSelect, suplidorCodigo }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-
-  const [resultados, setResultados] = useState<OrdenCompraVistaDTO[]>([]);
+const BuscarOrdenCompraModal: React.FC<BuscarOrdenCompraModalProps> = ({
+  open,
+  onClose,
+  onSelect,
+  fetchOrdenes,
+  title = 'Buscar Orden de Compra',
+}) => {
+  const [ordenes, setOrdenes] = useState<OrdenCompraVistaDTO[]>([]);
+  const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const formatDateParam = (d: Date): string => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = String(d.getMinutes()).padStart(2, '0');
-    const ss = String(d.getSeconds()).padStart(2, '0');
-    return `${y}${m}${dd}${hh}${mm}${ss}`;
-  };
-
-  const buscar = useCallback(async () => {
-    setLoading(true);
-    try {
-      const hoy = new Date();
-      const hace60 = new Date();
-      hace60.setDate(hace60.getDate() - 60);
-
-      const params: { suplidor?: string; cantidad?: number; desde?: string; hasta?: string } = {
-        cantidad: 50,
-        desde: formatDateParam(hace60),
-        hasta: formatDateParam(hoy),
-      };
-      if (suplidorCodigo?.trim()) params.suplidor = suplidorCodigo.trim();
-
-      const res = await ordenCompraApi.obtenerResumido(Sucursal.Compra, sucursalActiva, params);
-      setResultados(res || []);
-    } catch (err: any) {
-      const msg = err?.response?.data?.errorMessage || 'Error al buscar órdenes de compra';
-      message.error(msg);
-      setResultados([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva, suplidorCodigo]);
-
   useEffect(() => {
-    if (open) buscar();
-  }, [open, buscar]);
+    if (open) {
+      setSearchText('');
+      setLoading(true);
+      fetchOrdenes()
+        .then((res) => setOrdenes(res || []))
+        .catch((err: any) => {
+          const msg = err?.response?.data?.errorMessage || 'Error al buscar órdenes de compra';
+          message.error(msg);
+          setOrdenes([]);
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [open, fetchOrdenes]);
+
+  const ordenesFiltradas = useMemo(() => {
+    if (!searchText) return ordenes;
+    const q = searchText.toLowerCase();
+    return ordenes.filter(
+      (o) =>
+        (o.noDocumento || '').toLowerCase().includes(q) ||
+        (o.suplidor?.nombre || '').toLowerCase().includes(q) ||
+        String(o.total || '').includes(q)
+    );
+  }, [ordenes, searchText]);
 
   const columnas = [
     {
@@ -106,21 +96,22 @@ const BuscarOrdenCompraModal: React.FC<BuscarOrdenCompraModalProps> = ({ open, o
 
   return (
     <Modal
-      title="Buscar Orden de Compra"
+      title={title}
       open={open}
       onCancel={onClose}
       footer={null}
       width={800}
-      destroyOnHidden
+      destroyOnClose
     >
       <Input.Search
-        placeholder="Buscar..."
+        placeholder="Buscar por documento, suplidor o total..."
         allowClear
-        onSearch={() => buscar()}
+        onSearch={(val) => setSearchText(val || '')}
+        onChange={(e) => setSearchText(e.target.value)}
         style={{ marginBottom: 16 }}
       />
       <Table
-        dataSource={resultados}
+        dataSource={ordenesFiltradas}
         columns={columnas}
         rowKey="id"
         loading={loading}

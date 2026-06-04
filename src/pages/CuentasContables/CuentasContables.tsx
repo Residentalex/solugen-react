@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Table, Input, Tag, Button, message, Card, Modal, Form, Switch, Typography, Select, Alert, Row, Col } from 'antd';
 import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -114,8 +114,7 @@ const CuentasContables: React.FC = () => {
       setSelectedRow((actual) =>
         actual ? result.data.find((item) => item.noCuenta === actual.noCuenta) ?? null : null
       );
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar cuentas contables');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);
@@ -172,7 +171,7 @@ const CuentasContables: React.FC = () => {
       key: 'noCuenta',
       width: 140,
       fixed: 'left',
-      render: (val: string) => <Text strong className="paces-doc-link" style={{ fontFamily: 'monospace' }} onClick={() => navigate('/MCuentaContable/' + val)}>{val}</Text>,
+      render: (val: string) => <Link to={'/MCuentaContable/' + val} className="paces-doc-link" style={{ fontFamily: 'monospace' }}><Text strong>{val}</Text></Link>,
     },
     {
       title: 'Nombre',

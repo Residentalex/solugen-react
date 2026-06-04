@@ -7,17 +7,12 @@ export interface AccionDTO {
   activo: boolean;
 }
 
-export interface PantallaFullDTO {
-  pantalla: PantallaDTO;
-  acciones: AccionDTO[];
-}
-
 export interface RolFullDTO {
   id: number;
   nombre: string;
   descripcion: string;
   activo: boolean;
-  pantallas: PantallaFullDTO[];
+  pantallas: PantallaDTO[];
   cantidadUsuarios?: number;
   nombresUsuarios?: string[];
 }
@@ -43,6 +38,7 @@ export interface CrearUsuarioRequest {
   nombreUsuario: string;
   contrasena?: string;
   activo: boolean;
+  debeCambiarClave?: boolean;
   diasVigencia: number;
   empleadoID?: string;
   roles: { sucursal: number; rolID: number }[];

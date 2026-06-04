@@ -48,8 +48,7 @@ const Acciones: React.FC = () => {
     try {
       const result = await accionApi.obtenerListado(sucursalActiva);
       setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar acciones');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);

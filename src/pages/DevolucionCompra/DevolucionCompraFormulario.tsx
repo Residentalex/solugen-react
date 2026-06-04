@@ -23,14 +23,14 @@ import {
   RedoOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 import { productoApi } from '../../api/productoApi';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
+import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import ScannerModal from '../../components/ScannerModal/ScannerModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import PermissionGate from '../../components/PermissionGate';
@@ -42,85 +42,19 @@ import type {
 import type {
   DetalleDevolucionCompraDTO, DevolucionCompraFullDTO, TipoDTO,
 } from '../../types/devolucionCompra';
+import LogTable from '../../components/LogTable';
+
+import EntidadCard from '../../components/EntidadCard';
+import TotalesCard from '../../components/TotalesCard';
+import FormularioToolbar from '../../components/FormularioToolbar';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
+import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { Text } = Typography;
 const { TextArea } = Input;
-
-const ESTADO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
-
-const ACCION_MAP: Record<number, string> = {
-  0: 'Crear', 1: 'Modificar', 2: 'Eliminar', 3: 'Aplicar',
-  4: 'Desaplicar', 5: 'Postear', 6: 'Anular', 7: 'Revisar',
-  8: 'Reversar', 9: 'Escanear',
-};
-
-// ===== Helpers de formato =====
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function toTitleCase(str: string): string {
-  if (!str) return str;
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatDate(val: string): string {
-  if (!val) return '-';
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
-  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function parseDateRaw(val: string): Date | null {
-  if (!val) return null;
-  const num = val.replace(/\D/g, '');
-  if (num.length >= 14) {
-    const y = parseInt(num.slice(0, 4), 10);
-    const m = parseInt(num.slice(4, 6), 10) - 1;
-    const d = parseInt(num.slice(6, 8), 10);
-    return new Date(y, m, d);
-  }
-  const dt = new Date(val);
-  return isNaN(dt.getTime()) ? null : dt;
-}
-
-function toISOFormat(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${y}-${m}-${day}T${hh}:${mm}:${ss}`;
-}
-
-function extraerMensajeError(err: any, fallback: string): string {
-  const data = err?.response?.data;
-  if (!data) return fallback;
-  if (data.errorMessage) return data.errorMessage;
-  if (data.errors && typeof data.errors === 'object') {
-    const mensajes: string[] = [];
-    for (const key of Object.keys(data.errors)) {
-      const val = data.errors[key];
-      if (Array.isArray(val)) mensajes.push(...val);
-      else if (typeof val === 'string') mensajes.push(val);
-    }
-    if (mensajes.length > 0) return mensajes.join('; ');
-  }
-  return fallback;
-}
 
 // ===== Cálculo de fila SAP (misma fórmula) =====
 function calcularFila(fila: DetalleDevolucionCompraDTO): DetalleDevolucionCompraDTO {
@@ -259,121 +193,7 @@ const BuscarEntradaModal: React.FC<BuscarEntradaModalProps> = ({ open, onClose, 
   );
 };
 
-// ===== Componente SuplidorCard (readonly en right column) =====
-interface SuplidorCardProps {
-  suplidor: SuplidorDTO | null;
-}
 
-const SuplidorCard: React.FC<SuplidorCardProps> = ({ suplidor }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Suplidor</span>}
-    className="paces-card"
-    style={{ marginBottom: 16 }}
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ fontWeight: 600 }}>
-        {suplidor?.nombre ? toTitleCase(suplidor.nombre) : '-'}
-      </div>
-      <div>
-        <span className="paces-text-secondary">RNC: </span>
-        <span>{suplidor?.identificacion || '-'}</span>
-      </div>
-      <div>
-        <span className="paces-text-secondary">Teléfono: </span>
-        <span>{suplidor?.telefono || '-'}</span>
-      </div>
-      <div>
-        <span className="paces-text-secondary">Dirección: </span>
-        <span>{suplidor?.direccion ? toTitleCase(suplidor.direccion) : '-'}</span>
-      </div>
-    </div>
-  </Card>
-);
-
-// ===== Componente TotalesCard =====
-interface TotalesCardProps {
-  subTotal: number;
-  descuento: number;
-  impuestos: number;
-  total: number;
-  alignRight: boolean;
-  monedaSimbolo?: string;
-  monedaNombre?: string;
-  tasa?: number;
-}
-
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    className="paces-card"
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
-      {monedaSimbolo && tasa !== undefined && (
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
-        </div>
-      )}
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
-        <span>{formatNumber(subTotal)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Descuento</span>}
-        <span>{formatNumber(descuento)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
-        <span>{formatNumber(impuestos)}</span>
-      </div>
-    </div>
-
-    <Divider style={{ margin: '12px 0' }} />
-
-    <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
-      {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{monedaSimbolo || 'RD$'} {formatNumber(total)}</span>
-    </div>
-  </Card>
-);
-
-// ===== Contexto para pasar listeners de drag al handle =====
-const DragListenersContext = React.createContext<any>(null);
-
-// ===== Componente SortableRow para drag-and-drop =====
-const SortableRow: React.FC<any> = ({ children, ...rest }) => {
-  const recordId = rest['data-row-key'];
-
-  if (!recordId) {
-    return <tr {...rest}>{children}</tr>;
-  }
-
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: recordId });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-  return (
-    <DragListenersContext.Provider value={listeners}>
-      <tr ref={setNodeRef} style={style} {...attributes} {...rest}>
-        {children}
-      </tr>
-    </DragListenersContext.Provider>
-  );
-};
-
-// ===== Componente DragHandle que inicia el arrastre solo desde el icono =====
-const DragHandle: React.FC = () => {
-  const listeners = React.useContext(DragListenersContext);
-  return (
-    <div
-      {...(listeners ?? {})}
-      style={{ cursor: 'grab', touchAction: 'none', userSelect: 'none', display: 'inline-flex' }}
-    >
-      <HolderOutlined style={{ color: '#999' }} />
-    </div>
-  );
-};
 
 // ===== Componente principal =====
 const DevolucionCompraFormulario: React.FC = () => {
@@ -398,7 +218,6 @@ const DevolucionCompraFormulario: React.FC = () => {
   const [suplidoresCache, setSuplidoresCache] = useState<SuplidorDTO[]>([]);
   const [almacenesCache, setAlmacenesCache] = useState<AlmacenDTO[]>([]);
   const [tiposCache, setTiposCache] = useState<TipoDTO[]>([]);
-  const [conceptosCache, setConceptosCache] = useState<ConceptoDTO[]>([]);
   const [selectedTipo, setSelectedTipo] = useState<TipoDTO | null>(null);
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
   const [selectedEntidad, setSelectedEntidad] = useState<SuplidorDTO | null>(null);
@@ -415,7 +234,7 @@ const DevolucionCompraFormulario: React.FC = () => {
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
 
   const editValuesRef = useRef<Record<string, any>>({});
-  const navigationConfirmedRef = useRef(false);
+  const navigationConfirmedRef = useFormularioNavigation();
 
   // Refs para la guía
   const tipoRef = useRef<HTMLDivElement>(null);
@@ -546,13 +365,6 @@ const DevolucionCompraFormulario: React.FC = () => {
           nota: res.nota || '',
         });
 
-        // Cargar conceptos filtrados por tipo si existe
-        if (res.tipo?.idExterno) {
-          devolucionCompraApi.obtenerConceptos(sucursalActiva, res.tipo.idExterno)
-            .then(r => setConceptosCache(r || []))
-            .catch(() => {});
-        }
-
         // Cargar suplidores
         devolucionCompraApi.obtenerSuplidores(sucursalActiva)
           .then(r => setSuplidoresCache(r || []))
@@ -589,6 +401,26 @@ const DevolucionCompraFormulario: React.FC = () => {
           });
         }
 
+        // Precargar almacén desde la ENP
+        if (detalleEntrada.almacen?.codigo) {
+          setSelectedAlmacen(detalleEntrada.almacen);
+          form.setFieldsValue({ almacen: detalleEntrada.almacen.codigo });
+        }
+
+        // Precargar tipo por defecto desde configuración de empresa
+        try {
+          const tipoDefecto = await devolucionCompraApi.obtenerTipoDVCDefecto(sucursalActiva);
+          if (tipoDefecto?.codigo) {
+            setSelectedTipo(tipoDefecto);
+            form.setFieldsValue({ tipo: tipoDefecto.codigo });
+
+            // Los conceptos se cargarán al abrir el modal de concepto
+          }
+        } catch (err: any) {
+          // Silencioso - si falla, el usuario puede seleccionar manualmente
+          console.warn('No se pudo cargar el tipo por defecto:', err);
+        }
+
         const nuevosDetalles = (detalleEntrada.detalles || []).map((d: any, idx: number) => ({
           ...filaVacia(),
           id: -(idx + 1),
@@ -613,46 +445,6 @@ const DevolucionCompraFormulario: React.FC = () => {
 
     loadFromEntrada();
   }, [mode, entradaId, sucursalActiva, form]);
-
-  // ===== Bloquear salida si hay cambios =====
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, []);
-
-  // Bloquear botón atrás/adelante del navegador
-  useEffect(() => {
-    const handlePopState = () => {
-      const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
-      if (!leave) {
-        window.history.pushState(null, '', window.location.pathname);
-      }
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  // Bloquear navegación por sidebar (interceptar history.pushState)
-  useEffect(() => {
-    const originalPushState = window.history.pushState.bind(window.history);
-    window.history.pushState = function(data: any, unused: string, url?: string | URL | null) {
-      const currentPath = window.location.pathname;
-      const newPath = typeof url === 'string' ? url.split('?')[0] : (url instanceof URL ? url.pathname : null);
-      if (newPath && currentPath !== newPath && !navigationConfirmedRef.current) {
-        const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
-        if (!leave) return;
-        navigationConfirmedRef.current = true;
-      }
-      return originalPushState(data, unused, url);
-    };
-    return () => {
-      window.history.pushState = originalPushState;
-    };
-  }, []);
 
   // ===== Handlers =====
   const handleCancelar = () => {
@@ -697,11 +489,6 @@ const DevolucionCompraFormulario: React.FC = () => {
                   nota: res.nota || '',
                 });
 
-                if (res.tipo?.idExterno) {
-                  devolucionCompraApi.obtenerConceptos(sucursalActiva, res.tipo.idExterno)
-                    .then(r => setConceptosCache(r || []))
-                    .catch(() => {});
-                }
                 devolucionCompraApi.obtenerSuplidores(sucursalActiva)
                   .then(r => setSuplidoresCache(r || []))
                   .catch(() => {});
@@ -815,22 +602,13 @@ const DevolucionCompraFormulario: React.FC = () => {
     const tipo = tiposCache.find((t) => t.codigo === tipoCodigo) || null;
     setSelectedTipo(tipo);
     setSelectedConcepto(null);
-    setConceptosCache([]);
     setConceptoInfo('');
     form.setFieldsValue({ concepto: '' });
-
-    if (tipo) {
-      // Cargar conceptos filtrados por tipo
-      devolucionCompraApi.obtenerConceptos(sucursalActiva, tipo.idExterno)
-        .then((conceptos) => setConceptosCache(conceptos))
-        .catch(() => {});
-    }
   };
 
   const handleTipoClear = () => {
     setSelectedTipo(null);
     setSelectedConcepto(null);
-    setConceptosCache([]);
     setConceptoInfo('');
     form.setFieldsValue({ tipo: '', concepto: '' });
   };
@@ -1129,73 +907,13 @@ const DevolucionCompraFormulario: React.FC = () => {
       render: (_: any, r: AsientoContableDTO) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
   ];
 
-  const logColumns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
-    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200,
-      render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-') },
-    { title: 'Estacion', dataIndex: 'estacion', key: 'estacion', width: 200 },
-    { title: 'Accion', dataIndex: 'accion', key: 'accion', width: 120,
-      render: (v: number) => ACCION_MAP[v] || `Accion ${v}` },
-    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
-  ];
-
   // ===== Loading state =====
   if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
-      </div>
-    );
+    return <LoadingSpinner mensaje="Cargando documento..." />;
   }
 
   // ===== Estado info =====
-  const estadoInfo = ESTADO_MAP[estado] || { label: 'Borrador', color: 'default' };
-
-  // ===== Toolbar manual (inline) =====
-  const renderToolbar = () => (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-      <div style={{ flex: 1 }} />
-      <Space wrap>
-        {mode === 'editar' && data && (
-          <>
-            {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-            <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-          </>
-        )}
-
-        {/* Botones según estado - Creación */}
-        {mode === 'crear' && (
-          <>
-            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-              Guardar
-            </Button>
-            <Button icon={<CloseOutlined />} onClick={handleCancelar}>
-              Cancelar
-            </Button>
-          </>
-        )}
-
-        {/* Botones según estado - Edición */}
-        {mode === 'editar' && (
-          <>
-            {esBorrador && (
-              <PermissionGate accion="EDITAR">
-                <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-                  Guardar
-                </Button>
-              </PermissionGate>
-            )}
-            {esBorrador && (
-              <Button icon={<CloseOutlined />} onClick={handleCancelar}>
-                Cancelar
-              </Button>
-            )}
-          </>
-        )}
-      </Space>
-    </div>
-  );
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Borrador', color: 'default' };
 
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
@@ -1644,7 +1362,7 @@ const DevolucionCompraFormulario: React.FC = () => {
 
   return (
     <div>
-      {renderToolbar()}
+      <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
 
       {loadingError && (
         <Alert
@@ -1660,36 +1378,18 @@ const DevolucionCompraFormulario: React.FC = () => {
         />
       )}
 
-      {/* Modal de búsqueda de concepto */}
-      <Modal
-        title="Buscar Concepto"
+      <BuscarConceptoModal
         open={conceptoModalOpen}
-        onCancel={() => setConceptoModalOpen(false)}
-        footer={null}
-        width={600}
-        destroyOnHidden
-      >
-        <Table
-          dataSource={conceptosCache}
-          columns={[
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120, onCell: () => ({ style: { paddingLeft: 8 } }) },
-            { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-              render: (v: string) => toTitleCase(v) },
-          ]}
-          rowKey="codigo"
-          loading={false}
-          size="small"
-          pagination={{ pageSize: 10, showSizeChanger: false }}
-          onRow={(record) => ({
-            onClick: () => {
-              handleConceptoSelect(record);
-              setConceptoModalOpen(false);
-            },
-            style: { cursor: 'pointer' },
-          })}
-        />
-      </Modal>
-
+        onClose={() => setConceptoModalOpen(false)}
+        onSelect={(concepto) => {
+          handleConceptoSelect(concepto);
+          setConceptoModalOpen(false);
+        }}
+        fetchConceptos={async () => {
+          if (!selectedTipo) return [];
+          return await devolucionCompraApi.obtenerConceptos(sucursalActiva, selectedTipo.idExterno);
+        }}
+      />
       <BuscarProductoModal
         open={productoModalOpen}
         onClose={() => setProductoModalOpen(false)}
@@ -1791,14 +1491,7 @@ const DevolucionCompraFormulario: React.FC = () => {
                   key: 'historial',
                   label: `Historial (${data?.logs?.length || 0})`,
                   children: (
-                    <Table
-                      dataSource={data?.logs || []}
-                      columns={logColumns}
-                      rowKey="id"
-                      size="small"
-                      pagination={false}
-                      scroll={{ x: 900 }}
-                    />
+                    <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
@@ -1806,9 +1499,7 @@ const DevolucionCompraFormulario: React.FC = () => {
           </Col>
 
           <Col lg={6}>
-            <SuplidorCard
-              suplidor={selectedEntidad ?? data?.suplidor ?? null}
-            />
+            <EntidadCard entidad={selectedEntidad ?? data?.suplidor ?? null} fallbackTitulo="Suplidor" />
             <TotalesCard
               subTotal={totales.subTotal}
               descuento={totales.descuento}
@@ -1904,22 +1595,13 @@ const DevolucionCompraFormulario: React.FC = () => {
                 key: 'historial',
                 label: `Historial (${data?.logs?.length || 0})`,
                 children: (
-                  <Table
-                    dataSource={data?.logs || []}
-                    columns={logColumns}
-                    rowKey="id"
-                    size="small"
-                    pagination={false}
-                    scroll={{ x: 900 }}
-                  />
+                  <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
                 ),
               },
             ]}
           />
 
-          <SuplidorCard
-            suplidor={selectedEntidad ?? data?.suplidor ?? null}
-          />
+          <EntidadCard entidad={selectedEntidad ?? data?.suplidor ?? null} fallbackTitulo="Suplidor" />
 
           <TotalesCard
             subTotal={totales.subTotal}

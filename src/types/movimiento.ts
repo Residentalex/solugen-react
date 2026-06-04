@@ -2,7 +2,7 @@ export interface MovimientoDTO {
   id?: number;
   fecha: string;
   documento: string;
-  codigoArticulo: string;
+  codigo: string;
   articulo: string;
   cantidad: number;
   costo: number;

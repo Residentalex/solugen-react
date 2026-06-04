@@ -1,0 +1,87 @@
+src/pages/AsientosContables/AsientosContables.tsx(105,89): error TS2339: Property 'codigo' does not exist on type 'never'.
+src/pages/CotizacionVenta/CotizacionVentaFormulario.tsx(305,9): error TS6133: 'esAnulado' is declared but its value is never read.
+src/pages/CotizacionVenta/CotizacionVentaFormulario.tsx(929,255): error TS2339: Property 'factor' does not exist on type 'UnidadMedidaDTO'.
+src/pages/CotizacionVenta/CotizacionVentaFormulario.tsx(929,285): error TS2339: Property 'factor' does not exist on type 'UnidadMedidaDTO'.
+src/pages/CotizacionVenta/CotizacionVentaFormulario.tsx(930,24): error TS6133: 'record' is declared but its value is never read.
+src/pages/CotizacionVenta/CotizacionVentaFormulario.tsx(933,54): error TS2339: Property 'factor' does not exist on type 'UnidadMedidaDTO'.
+src/pages/DevolucionCompra/DevolucionCompraFormulario.tsx(21,3): error TS6133: 'CheckCircleOutlined' is declared but its value is never read.
+src/pages/DevolucionCompra/DevolucionCompraFormulario.tsx(22,3): error TS6133: 'CloseCircleOutlined' is declared but its value is never read.
+src/pages/DevolucionCompra/DevolucionCompraFormulario.tsx(23,3): error TS6133: 'RedoOutlined' is declared but its value is never read.
+src/pages/DevolucionCompra/DevolucionCompraFormulario.tsx(32,1): error TS6133: 'productoApi' is declared but its value is never read.
+src/pages/DevolucionCompra/DevolucionCompraFormulario.tsx(491,9): error TS6133: 'esAplicado' is declared but its value is never read.
+src/pages/DevolucionCompra/DevolucionCompraFormulario.tsx(492,9): error TS6133: 'esAnulado' is declared but its value is never read.
+src/pages/DevolucionCompra/DevolucionCompraFormulario.tsx(880,9): error TS6133: 'handleConceptoClear' is declared but its value is never read.
+src/pages/DevolucionCompra/DevolucionCompraFormulario.tsx(979,9): error TS6133: 'handleAgregarFila' is declared but its value is never read.
+src/pages/DevolucionCompra/DevolucionCompraFormulario.tsx(997,9): error TS6133: 'handleDetalleUpdateValue' is declared but its value is never read.
+src/pages/DevolucionCompra/DevolucionCompraFormulario.tsx(1471,24): error TS6133: 'record' is declared but its value is never read.
+src/pages/DevolucionVenta/DevolucionVentaDetalle.tsx(13,3): error TS6133: 'RedoOutlined' is declared but its value is never read.
+src/pages/DevolucionVenta/DevolucionVentaFormulario.tsx(16,3): error TS6133: 'CheckCircleOutlined' is declared but its value is never read.
+src/pages/DevolucionVenta/DevolucionVentaFormulario.tsx(17,3): error TS6133: 'CloseCircleOutlined' is declared but its value is never read.
+src/pages/DevolucionVenta/DevolucionVentaFormulario.tsx(18,3): error TS6133: 'RedoOutlined' is declared but its value is never read.
+src/pages/DevolucionVenta/DevolucionVentaFormulario.tsx(336,9): error TS6133: 'esAplicado' is declared but its value is never read.
+src/pages/DevolucionVenta/DevolucionVentaFormulario.tsx(337,9): error TS6133: 'esAnulado' is declared but its value is never read.
+src/pages/DevolucionVenta/DevolucionVentaFormulario.tsx(1131,265): error TS2339: Property 'factor' does not exist on type 'UnidadMedidaDTO'.
+src/pages/DevolucionVenta/DevolucionVentaFormulario.tsx(1131,295): error TS2339: Property 'factor' does not exist on type 'UnidadMedidaDTO'.
+src/pages/DevolucionVenta/DevolucionVentaFormulario.tsx(1132,24): error TS6133: 'record' is declared but its value is never read.
+src/pages/DevolucionVenta/DevolucionVentaFormulario.tsx(1135,54): error TS2339: Property 'factor' does not exist on type 'UnidadMedidaDTO'.
+src/pages/DistribucionBalance/DistribucionBalanceFormulario.tsx(10,3): error TS6133: 'DeleteOutlined' is declared but its value is never read.
+src/pages/DistribucionBalance/DistribucionBalanceFormulario.tsx(162,9): error TS6133: 'esAplicado' is declared but its value is never read.
+src/pages/DistribucionBalance/DistribucionBalanceFormulario.tsx(163,9): error TS6133: 'esAnulado' is declared but its value is never read.
+src/pages/EntradaAlmacen/EntradaAlmacenDetalle.tsx(4,89): error TS6133: 'Dropdown' is declared but its value is never read.
+src/pages/EntradaAlmacen/EntradaAlmacenDetalle.tsx(10,3): error TS6133: 'MoreOutlined' is declared but its value is never read.
+src/pages/EntradaAlmacen/EntradaAlmacenDetalle.tsx(11,3): error TS6133: 'CalendarOutlined' is declared but its value is never read.
+src/pages/EntradaAlmacen/EntradaAlmacenDetalle.tsx(265,10): error TS6133: 'ocLoading' is declared but its value is never read.
+src/pages/EntradaAlmacen/EntradaAlmacenFormulario.tsx(425,10): error TS6133: 'agregarFilaBloqueado' is declared but its value is never read.
+src/pages/EntradaAlmacen/EntradaAlmacenFormulario.tsx(1001,9): error TS6133: 'handleAgregarFila' is declared but its value is never read.
+src/pages/EntradaAlmacen/EntradaAlmacenFormulario.tsx(1075,9): error TS6133: 'handleDetalleUpdateValue' is declared but its value is never read.
+src/pages/EntradaAlmacen/EntradaAlmacenFormulario.tsx(1364,24): error TS6133: 'record' is declared but its value is never read.
+src/pages/EntradaAlmacen/EntradaAlmacenFormulario.tsx(1485,58): error TS6133: 'idx' is declared but its value is never read.
+src/pages/FacturaCliente/FacturaClienteFormulario.tsx(379,9): error TS6133: 'esAplicado' is declared but its value is never read.
+src/pages/FacturaCliente/FacturaClienteFormulario.tsx(380,9): error TS6133: 'esAnulado' is declared but its value is never read.
+src/pages/FacturaCliente/FacturaClienteFormulario.tsx(1123,263): error TS2339: Property 'factor' does not exist on type 'UnidadMedidaDTO'.
+src/pages/FacturaCliente/FacturaClienteFormulario.tsx(1123,293): error TS2339: Property 'factor' does not exist on type 'UnidadMedidaDTO'.
+src/pages/FacturaCliente/FacturaClienteFormulario.tsx(1124,24): error TS6133: 'record' is declared but its value is never read.
+src/pages/FacturaCliente/FacturaClienteFormulario.tsx(1127,54): error TS2339: Property 'factor' does not exist on type 'UnidadMedidaDTO'.
+src/pages/FacturaPOS/FacturaPOSFormulario.tsx(344,9): error TS6133: 'esAplicado' is declared but its value is never read.
+src/pages/FacturaPOS/FacturaPOSFormulario.tsx(345,9): error TS6133: 'esAnulado' is declared but its value is never read.
+src/pages/FacturaPOS/FacturaPOSFormulario.tsx(988,255): error TS2339: Property 'factor' does not exist on type 'UnidadMedidaDTO'.
+src/pages/FacturaPOS/FacturaPOSFormulario.tsx(988,285): error TS2339: Property 'factor' does not exist on type 'UnidadMedidaDTO'.
+src/pages/FacturaPOS/FacturaPOSFormulario.tsx(989,24): error TS6133: 'record' is declared but its value is never read.
+src/pages/FacturaPOS/FacturaPOSFormulario.tsx(992,54): error TS2339: Property 'factor' does not exist on type 'UnidadMedidaDTO'.
+src/pages/FacturaSuplidor/FacturaSuplidorFormulario.tsx(473,9): error TS6133: 'esAplicado' is declared but its value is never read.
+src/pages/FacturaSuplidor/FacturaSuplidorFormulario.tsx(474,9): error TS6133: 'esAnulado' is declared but its value is never read.
+src/pages/FacturaSuplidor/FacturaSuplidorFormulario.tsx(1493,24): error TS6133: 'record' is declared but its value is never read.
+src/pages/MovimientoPorPlantilla/MovimientoPorPlantilla.tsx(264,9): error TS6133: 'displayData' is declared but its value is never read.
+src/pages/NotaCredito/NotaCreditoFormulario.tsx(11,3): error TS6133: 'DeleteOutlined' is declared but its value is never read.
+src/pages/NotaCredito/NotaCreditoFormulario.tsx(171,9): error TS6133: 'esAplicado' is declared but its value is never read.
+src/pages/NotaCredito/NotaCreditoFormulario.tsx(172,9): error TS6133: 'esAnulado' is declared but its value is never read.
+src/pages/NotaDebito/NotaDebitoFormulario.tsx(544,9): error TS6133: 'esAplicado' is declared but its value is never read.
+src/pages/NotaDebito/NotaDebitoFormulario.tsx(545,9): error TS6133: 'esAnulado' is declared but its value is never read.
+src/pages/PlantillaSuplidor/PlantillaSuplidor.tsx(3,66): error TS6133: 'Space' is declared but its value is never read.
+src/pages/PlantillaSuplidor/PlantillaSuplidorDetalle.tsx(4,22): error TS6133: 'Tag' is declared but its value is never read.
+src/pages/PlantillaSuplidor/PlantillaSuplidorDetalle.tsx(17,7): error TS6133: 'Text' is declared but its value is never read.
+src/pages/PlantillaSuplidor/PlantillaSuplidorFormulario.tsx(1,38): error TS6133: 'useCallback' is declared but its value is never read.
+src/pages/PlantillaSuplidor/PlantillaSuplidorFormulario.tsx(18,7): error TS6133: 'Text' is declared but its value is never read.
+src/pages/PlantillaSuplidor/PlantillaSuplidorFormulario.tsx(21,10): error TS6133: 'toTitleCase' is declared but its value is never read.
+src/pages/PlantillaSuplidor/PlantillaSuplidorFormulario.tsx(424,36): error TS6133: 'value' is declared but its value is never read.
+src/pages/PlantillaSuplidor/PlantillaSuplidorFormulario.tsx(524,34): error TS6133: 'value' is declared but its value is never read.
+src/pages/ReciboIngreso/ReciboIngresoFormulario.tsx(193,9): error TS6133: 'esAplicado' is declared but its value is never read.
+src/pages/ReciboIngreso/ReciboIngresoFormulario.tsx(194,9): error TS6133: 'esAnulado' is declared but its value is never read.
+src/pages/SalidaAlmacen/SalidaAlmacenDetalle.tsx(129,65): error TS2339: Property 'identificacion' does not exist on type '{ nombre: string; telefono?: string | undefined; direccion?: string | undefined; }'.
+src/pages/SalidaAlmacen/SalidaAlmacenDetalle.tsx(494,30): error TS2339: Property 'revisado' does not exist on type '{ obtenerVista: (sucursal: number, desde?: string | undefined, hasta?: string | undefined, cantidad?: number | undefined, salto?: number | undefined, estado?: number | undefined) => Promise<...>; ... 13 more ...; obtenerSuplidores: (sucursal: number) => Promise<...>; }'.
+src/pages/SalidaAlmacen/SalidaAlmacenDetalle.tsx(510,30): error TS2339: Property 'reversar' does not exist on type '{ obtenerVista: (sucursal: number, desde?: string | undefined, hasta?: string | undefined, cantidad?: number | undefined, salto?: number | undefined, estado?: number | undefined) => Promise<...>; ... 13 more ...; obtenerSuplidores: (sucursal: number) => Promise<...>; }'.
+src/pages/SalidaAlmacen/SalidaAlmacenFormulario.tsx(28,1): error TS6133: 'productoApi' is declared but its value is never read.
+src/pages/SalidaAlmacen/SalidaAlmacenFormulario.tsx(380,9): error TS6133: 'esAplicado' is declared but its value is never read.
+src/pages/SalidaAlmacen/SalidaAlmacenFormulario.tsx(381,9): error TS6133: 'esAnulado' is declared but its value is never read.
+src/pages/SalidaAlmacen/SalidaAlmacenFormulario.tsx(699,9): error TS6133: 'handleConceptoClear' is declared but its value is never read.
+src/pages/SalidaAlmacen/SalidaAlmacenFormulario.tsx(769,9): error TS6133: 'handleAgregarFila' is declared but its value is never read.
+src/pages/SalidaAlmacen/SalidaAlmacenFormulario.tsx(787,9): error TS6133: 'handleDetalleUpdateValue' is declared but its value is never read.
+src/pages/SalidaAlmacen/SalidaAlmacenFormulario.tsx(1094,24): error TS6133: 'record' is declared but its value is never read.
+src/pages/TransferenciaAlmacen/TransferenciaAlmacenDetalle.tsx(338,13): error TS6133: 'destino' is declared but its value is never read.
+src/pages/TransferenciaAlmacen/TransferenciaAlmacenDetalle.tsx(340,48): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+src/pages/TransferenciaAlmacen/TransferenciaAlmacenDetalle.tsx(515,23): error TS6133: 'sucursalParam' is declared but its value is never read.
+src/pages/TransferenciaAlmacen/TransferenciaAlmacenFormulario.tsx(20,3): error TS6133: 'CheckCircleOutlined' is declared but its value is never read.
+src/pages/TransferenciaAlmacen/TransferenciaAlmacenFormulario.tsx(21,3): error TS6133: 'CloseCircleOutlined' is declared but its value is never read.
+src/pages/TransferenciaAlmacen/TransferenciaAlmacenFormulario.tsx(329,9): error TS6133: 'esAplicado' is declared but its value is never read.
+src/pages/TransferenciaAlmacen/TransferenciaAlmacenFormulario.tsx(330,9): error TS6133: 'esAnulado' is declared but its value is never read.
+src/pages/TransferenciaAlmacen/TransferenciaAlmacenFormulario.tsx(630,9): error TS6133: 'handleAgregarFila' is declared but its value is never read.

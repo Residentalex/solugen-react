@@ -1,13 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
+  Card, Table, Tabs, Tag, Button, Space, Row, Col, Grid,
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Tooltip,
 } from 'antd';
 import {
-  SaveOutlined,
-  CloseOutlined,
-
   DeleteOutlined,
   PlusOutlined,
   SearchOutlined,
@@ -21,8 +18,7 @@ import {
   BarcodeOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -32,117 +28,34 @@ import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
 import { productoApi } from '../../api/productoApi';
-import BuscarOrdenCompraModal from './BuscarOrdenCompraModal';
+import { parametrosApi } from '../../api/parametrosApi';
+import BuscarOrdenCompraModal from '../../components/BuscarOrdenCompraModal/BuscarOrdenCompraModal';
+import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import EntradaAlmacenGuide from './EntradaAlmacenGuide';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import ScannerModal from '../../components/ScannerModal/ScannerModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
+import EntidadCard from '../../components/EntidadCard';
+import TotalesCard from '../../components/TotalesCard';
+import FormularioToolbar from '../../components/FormularioToolbar';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
+import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import type {
-  EntradaAlmacenDTO, DetalleEntradaAlmacenDTO, AsientoContableDTO,
+  EntradaAlmacenDTO, DetalleEntradaAlmacenDTO,
   ConceptoDTO, AlmacenDTO, SuplidorDTO,
   OrdenCompraVistaDTO, DetalleOrdenCompraVistaDTO,
 } from '../../types/entradaAlmacen';
+import LogTable from '../../components/LogTable';
+import AsientosContableTable from '../../components/AsientosContableTable';
 
 const { Text } = Typography;
 const { TextArea } = Input;
 
-const ESTADO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
-
-const ACCION_MAP: Record<number, string> = {
-  0: 'Crear', 1: 'Modificar', 2: 'Eliminar', 3: 'Aplicar',
-  4: 'Desaplicar', 5: 'Postear', 6: 'Anular', 7: 'Revisar',
-  8: 'Reversar', 9: 'Escanear',
-};
-
-// ===== Helpers de formato =====
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function toTitleCase(str: string): string {
-  if (!str) return str;
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatDate(val: string): string {
-  if (!val) return '-';
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
-  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function parseDateRaw(val: string): Date | null {
-  if (!val) return null;
-  const num = val.replace(/\D/g, '');
-  if (num.length >= 14) {
-    const y = parseInt(num.slice(0, 4), 10);
-    const m = parseInt(num.slice(4, 6), 10) - 1;
-    const d = parseInt(num.slice(6, 8), 10);
-    return new Date(y, m, d);
-  }
-  const d = new Date(val);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-/* unused
-function formatDateParam(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${y}${m}${day}${hh}${mm}${ss}`;
-}*/
-
-/** Formato ISO 8601 para JSON body (System.Text.Json en ASP.NET Core). */
-function toISOFormat(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${y}-${m}-${day}T${hh}:${mm}:${ss}`;
-}
-
-// ===== Helper para extraer mensaje de error de la respuesta del backend =====
-function extraerMensajeError(err: any, fallback: string): string {
-  const data = err?.response?.data;
-  if (!data) return fallback;
-
-  // Formato ApiResponse<T> (el estandar)
-  if (data.errorMessage) return data.errorMessage;
-
-  // Formato ValidationProblemDetails de ASP.NET Core
-  if (data.errors && typeof data.errors === 'object') {
-    const mensajes: string[] = [];
-    for (const key of Object.keys(data.errors)) {
-      const val = data.errors[key];
-      if (Array.isArray(val)) {
-        mensajes.push(...val);
-      } else if (typeof val === 'string') {
-        mensajes.push(val);
-      }
-    }
-    if (mensajes.length > 0) return mensajes.join('; ');
-  }
-
-  return fallback;
-}
+// ===== Cálculo de fila =====
 
 // ===== Cálculo de fila =====
 function calcularFila(fila: DetalleEntradaAlmacenDTO): DetalleEntradaAlmacenDTO {
@@ -206,190 +119,10 @@ function filaVacia(): DetalleEntradaAlmacenDTO {
   };
 }
 
-// ===== Componente BuscarConceptoModal =====
-interface BuscarConceptoModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (concepto: ConceptoDTO) => void;
-  documento: string;
-}
 
-const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({ open, onClose, onSelect, documento }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const [conceptos, setConceptos] = useState<ConceptoDTO[]>([]);
-  const [loading, setLoading] = useState(false);
 
-  const cargar = useCallback(async (filtro?: string) => {
-    setLoading(true);
-    try {
-      const res = await conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, documento, filtro);
-      setConceptos(res || []);
-    } catch {
-      message.error('Error al cargar conceptos');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva, documento]);
 
-  useEffect(() => {
-    if (open) cargar();
-  }, [open, cargar]);
 
-  const columnas = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-    { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-      render: (v: string) => toTitleCase(v) },
-  ];
-
-  return (
-    <Modal
-      title="Buscar Concepto"
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={600}
-      destroyOnHidden
-    >
-      <Input.Search
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        onSearch={(val) => cargar(val)}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={conceptos}
-        columns={columnas}
-        rowKey="codigo"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: () => { onSelect(record); onClose(); },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
-};
-
-// ===== Componente SuplidorCard (readonly en right column) =====
-interface SuplidorCardProps {
-  suplidor: SuplidorDTO | null;
-}
-
-const SuplidorCard: React.FC<SuplidorCardProps> = ({ suplidor }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Suplidor</span>}
-    className="paces-card"
-    style={{ marginBottom: 16 }}
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ fontWeight: 600 }}>
-        {suplidor?.nombre ? toTitleCase(suplidor.nombre) : '-'}
-      </div>
-      <div>
-        <span className="paces-text-secondary">RNC: </span>
-        <span>{suplidor?.identificacion || '-'}</span>
-      </div>
-      <div>
-        <span className="paces-text-secondary">Teléfono: </span>
-        <span>{suplidor?.telefono || '-'}</span>
-      </div>
-      <div>
-        <span className="paces-text-secondary">Dirección: </span>
-        <span>{suplidor?.direccion ? toTitleCase(suplidor.direccion) : '-'}</span>
-      </div>
-    </div>
-  </Card>
-);
-
-// ===== Componente TotalesCard =====
-interface TotalesCardProps {
-  subTotal: number;
-  descuento: number;
-  impuestos: number;
-  total: number;
-  alignRight: boolean;
-  monedaSimbolo?: string;
-  monedaNombre?: string;
-  tasa?: number;
-}
-
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    className="paces-card"
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
-      {monedaSimbolo && tasa !== undefined && (
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
-        </div>
-      )}
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
-        <span>{formatNumber(subTotal)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Descuento</span>}
-        <span>{formatNumber(descuento)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
-        <span>{formatNumber(impuestos)}</span>
-      </div>
-    </div>
-
-    <Divider style={{ margin: '12px 0' }} />
-
-    <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
-      {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{monedaSimbolo || 'RD$'} {formatNumber(total)}</span>
-    </div>
-  </Card>
-);
-
-// ===== Contexto para pasar listeners de drag al handle =====
-const DragListenersContext = React.createContext<any>(null);
-
-// ===== Componente SortableRow para drag-and-drop =====
-const SortableRow: React.FC<any> = ({ children, ...rest }) => {
-  // Ant Design Table NO pasa record como prop en esta versión.
-  // En su lugar, data-row-key se asigna automáticamente al <tr> vía rowKey="id".
-  const recordId = rest['data-row-key'];
-
-  // Si no hay data-row-key (expanded row, empty row, etc.), renderizar <tr> normal sin drag
-  if (!recordId) {
-    return <tr {...rest}>{children}</tr>;
-  }
-
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: recordId });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-  return (
-    <DragListenersContext.Provider value={listeners}>
-      <tr ref={setNodeRef} style={style} {...attributes} {...rest}>
-        {children}
-      </tr>
-    </DragListenersContext.Provider>
-  );
-};
-
-// ===== Componente DragHandle que inicia el arrastre solo desde el icono =====
-const DragHandle: React.FC = () => {
-  const listeners = React.useContext(DragListenersContext);
-  return (
-    <div
-      {...(listeners ?? {})}
-      style={{ cursor: 'grab', touchAction: 'none', userSelect: 'none', display: 'inline-flex' }}
-    >
-      <HolderOutlined style={{ color: '#999' }} />
-    </div>
-  );
-};
 
 
 
@@ -432,6 +165,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const [ocProductosModalOpen, setOcProductosModalOpen] = useState(false);
   const [ocProductoSearch, setOcProductoSearch] = useState('');
   const [comodines, setComodines] = useState<any[]>([]);
+  const [fechaCierreInventario, setFechaCierreInventario] = useState<string | null>(null);
+  const [modoDescuento, setModoDescuento] = useState<'porcentaje' | 'pesos'>('porcentaje');
 
   const editValuesRef = useRef<Record<string, any>>({});
 
@@ -502,7 +237,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const agregarFilaRef = useRef<HTMLDivElement>(null);
   const ncfRef = useRef<HTMLDivElement>(null);
 
-  const isLarge = screens.lg ?? true;
+  const isLarge = screens.xl ?? true;
 
   // ===== Determinar qué acciones mostrar según estado =====
   const estado = data?.estado ?? 0;
@@ -517,6 +252,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
     // Cargar catálogos
     conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
+    // Obtener fecha de cierre de inventario
+    parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch(() => {});
 
     // Inicializar fechas en modo crear
     if (mode === 'crear') {
@@ -608,46 +345,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       .catch(() => {});
   }, [data?.ordenCompra?.id, ocDetallesData.length]);
 
-  // ===== Bloquear salida si hay cambios =====
-  useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, []);
-
-  // Bloquear botón atrás/adelante del navegador
-  useEffect(() => {
-    const handlePopState = () => {
-      const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
-      if (!leave) {
-        window.history.pushState(null, '', window.location.pathname);
-      }
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-
-  // Bloquear navegación por sidebar (interceptar history.pushState)
-  const navigationConfirmedRef = useRef(false);
-  useEffect(() => {
-    const originalPushState = window.history.pushState.bind(window.history);
-    window.history.pushState = function(data: any, unused: string, url?: string | URL | null) {
-      const currentPath = window.location.pathname;
-      const newPath = typeof url === 'string' ? url.split('?')[0] : (url instanceof URL ? url.pathname : null);
-      if (newPath && currentPath !== newPath && !navigationConfirmedRef.current) {
-        const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
-        if (!leave) return;
-        navigationConfirmedRef.current = true;
-      }
-      return originalPushState(data, unused, url);
-    };
-    return () => {
-      window.history.pushState = originalPushState;
-    };
-  }, []);
+  const navigationConfirmedRef = useFormularioNavigation();
 
   // ===== Handlers =====
   const handleCancelar = () => {
@@ -731,6 +429,25 @@ const EntradaAlmacenFormulario: React.FC = () => {
     if (!values.almacen && !selectedAlmacen) return 'El almacén es requerido';
     if (detalles.length === 0) return 'Debe agregar al menos un detalle';
     if (!detalles.some((d) => (d.cantidad || 0) > 0)) return 'Debe tener al menos un detalle con cantidad > 0';
+
+    // Validar fecha contra cierre de inventario
+    if (fechaCierreInventario) {
+      const cierreDate = parseDateRaw(fechaCierreInventario);
+      if (cierreDate) {
+        const cierreTs = dayjs(cierreDate).startOf('day').valueOf();
+
+        const fechaDoc = values.fechaDocumento;
+        if (fechaDoc && dayjs(fechaDoc).startOf('day').valueOf() <= cierreTs) {
+          return 'La fecha del documento no puede ser menor o igual a la fecha de cierre de inventario';
+        }
+
+        const fechaRec = values.fechaRecibo;
+        if (fechaRec && dayjs(fechaRec).startOf('day').valueOf() <= cierreTs) {
+          return 'La fecha de recibo no puede ser menor o igual a la fecha de cierre de inventario';
+        }
+      }
+    }
+
     return null;
   };
 
@@ -1098,6 +815,13 @@ const EntradaAlmacenFormulario: React.FC = () => {
     setDetalles((prev) =>
       prev.map((d) => {
         if (d.id !== id) return d;
+        if (field === 'descuento') {
+          // Modo pesos: calcular porcentaje desde el valor en pesos
+          const subTotal = (d.cantidad || 0) * (d.costo || 0);
+          const pctCalculado = subTotal > 0 ? Math.round((Number(value) / subTotal) * 100 * 100) / 100 : 0;
+          const updated = { ...d, descuento: Number(value), porcentajeDescuento: pctCalculado };
+          return calcularFila(updated);
+        }
         const updated = { ...d, [field]: value };
         return calcularFila(updated);
       })
@@ -1139,34 +863,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     total: detalles.reduce((s, d) => s + (d.total || 0), 0),
   };
 
-  // ===== Columnas de la tabla de asientos =====
-  function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
-  function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
-  const totalDebitos = (data?.asientos || []).reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
-  const totalCreditos = (data?.asientos || []).reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
-
-  const asientoColumns = [
-    { title: 'Cuenta', key: 'cuenta', width: 120,
-      render: (_: any, r: AsientoContableDTO) => r.cuentaContable?.noCuenta || '-' },
-    { title: 'Nombre', key: 'nombre', ellipsis: true,
-      render: (_: any, r: AsientoContableDTO) => r.cuentaContable?.nombre ? toTitleCase(r.cuentaContable.nombre) : '-' },
-    { title: 'Descripcion', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
-      render: (v: string) => v ? toTitleCase(v) : '-' },
-    { title: 'Debito', key: 'debito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => esDebito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-    { title: 'Credito', key: 'credito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-  ];
-
-  const logColumns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
-    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200,
-      render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-') },
-    { title: 'Estacion', dataIndex: 'estacion', key: 'estacion', width: 200 },
-    { title: 'Accion', dataIndex: 'accion', key: 'accion', width: 120,
-      render: (v: number) => ACCION_MAP[v] || `Accion ${v}` },
-    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
-  ];
+  // asientoColumns reemplazado por AsientosContableTable compartido
 
   const handleRefresh = useCallback(() => {
     if (mode === 'crear') return;
@@ -1215,39 +912,13 @@ const EntradaAlmacenFormulario: React.FC = () => {
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, form, mode]);
 
-  // ===== Loading state =====
-  if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
-      </div>
-    );
-  }
+  if (loading) return <LoadingSpinner mensaje="Cargando documento..." />;
 
   // ===== Estado y titulo =====
-  const estadoInfo = ESTADO_MAP[estado] || { label: 'Borrador', color: 'default' };
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Borrador', color: 'default' };
 
-  // ===== Toolbar manual (inline) =====
-  const renderToolbar = () => (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-      <div style={{ flex: 1 }} />
-      <Space wrap>
-        {mode === 'editar' && data && (
-          <>
-            {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-            <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-          </>
-        )}
-        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-          Guardar
-        </Button>
-        <Button icon={<CloseOutlined />} onClick={handleCancelar}>
-          Cancelar
-        </Button>
-      </Space>
-    </div>
-  );
+
+
 
   // ===== Grid de detalles editable (responsive) =====
   const detalleColumns = [
@@ -1260,6 +931,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     {
       title: 'Artículo',
       key: 'articulo',
+      fixed: 'left' as const,
       ellipsis: true,
       render: (_: any, record: DetalleEntradaAlmacenDTO) => {
         const fechaVencida = record.fechaVencimiento ? new Date(record.fechaVencimiento) < new Date() : false;
@@ -1319,7 +991,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       title: 'Cantidad',
       dataIndex: 'cantidad',
       key: 'cantidad',
-      width: 100,
+      width: 130,
       align: 'right' as const,
       shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) =>
         record.cantidad !== prevRecord.cantidad || record.medida?.nombre !== prevRecord.medida?.nombre,
@@ -1360,7 +1032,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       key: 'costo',
       width: 130,
       align: 'right' as const,
-      responsive: ['sm' as const, 'md' as const, 'lg' as const],
+      responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
       render: (_: any, record: DetalleEntradaAlmacenDTO, idx: number) => {
         const costoBase = Number(detalles[idx]?.costo) || 0;
@@ -1403,40 +1075,76 @@ const EntradaAlmacenFormulario: React.FC = () => {
       key: 'descuento',
       width: 120,
       align: 'right' as const,
-      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) =>
-        record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.descuento !== prevRecord.descuento,
-      render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
-        <div>
-          <Space.Compact style={{ width: '100%' }}>
-            <InputNumber
-              size="small"
-              style={{ width: '100%' }}
-              styles={{ input: { textAlign: 'right' } }}
-              min={0}
-              max={100}
-              step={0.01}
-              precision={2}
-              controls={false}
-              defaultValue={detalles[idx]?.porcentajeDescuento}
-              onChange={(val) => {
-                editValuesRef.current[`${detalles[idx].id}_descuento`] = val || 0;
-              }}
-              onBlur={() => {
-                const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
-              handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
-            }}
-            onPressEnter={() => {
-              const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
-              handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
-            }}
-          />
-            <Input placeholder="%" disabled style={{ width: 50, textAlign: 'center', borderLeft: 'none' }} />
-          </Space.Compact>
-          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
-            {formatNumber(detalles[idx]?.descuento || 0)}
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
+      render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) =>
+        modoDescuento === 'porcentaje' ? (
+          <div>
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber
+                key={`pct_${detalles[idx].id}_${modoDescuento}`}
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                max={100}
+                step={0.01}
+                precision={2}
+                controls={false}
+                defaultValue={detalles[idx]?.porcentajeDescuento}
+                onChange={(val) => {
+                  editValuesRef.current[`${detalles[idx].id}_descuento`] = val || 0;
+                }}
+                onBlur={() => {
+                  const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
+                  handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
+                }}
+                onPressEnter={() => {
+                  const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
+                  handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
+                }}
+              />
+              <span onClick={() => setModoDescuento('pesos')} style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                <Input placeholder="%" disabled style={{ width: 36, textAlign: 'center', borderLeft: 'none', pointerEvents: 'none' }} />
+              </span>
+            </Space.Compact>
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
+              {formatNumber(detalles[idx]?.descuento || 0)}
+            </div>
           </div>
-        </div>
-      ),
+        ) : (
+          <div>
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber
+                key={`pesos_${detalles[idx].id}_${modoDescuento}`}
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                step={0.01}
+                precision={2}
+                controls={false}
+                defaultValue={detalles[idx]?.descuento}
+                onChange={(val) => {
+                  editValuesRef.current[`${detalles[idx].id}_descuento_pesos`] = val || 0;
+                }}
+                onBlur={() => {
+                  const val = editValuesRef.current[`${detalles[idx].id}_descuento_pesos`] ?? detalles[idx]?.descuento;
+                  handleDetalleCalculate(detalles[idx].id, 'descuento', val);
+                }}
+                onPressEnter={() => {
+                  const val = editValuesRef.current[`${detalles[idx].id}_descuento_pesos`] ?? detalles[idx]?.descuento;
+                  handleDetalleCalculate(detalles[idx].id, 'descuento', val);
+                }}
+              />
+              <span onClick={() => setModoDescuento('porcentaje')} style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                <Input placeholder="$" disabled style={{ width: 36, textAlign: 'center', borderLeft: 'none', pointerEvents: 'none' }} />
+              </span>
+            </Space.Compact>
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
+              {formatNumber(detalles[idx]?.porcentajeDescuento || 0)}%
+            </div>
+          </div>
+        ),
     },
     {
       title: 'SubTotal',
@@ -1444,7 +1152,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
-      responsive: ['md' as const, 'lg' as const],
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleEntradaAlmacenDTO) => (
         <div>
           <Text>{formatNumber(record.subTotal || 0)}</Text>
@@ -1457,6 +1165,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleEntradaAlmacenDTO) => (
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
@@ -1640,120 +1349,135 @@ const EntradaAlmacenFormulario: React.FC = () => {
             </Form.Item>
           </Col>
 
-          {/* Fila 4: Botones rápidos para campos opcionales */}
+          {/* Fila 4: Botones rápidos para campos opcionales + TotalesCard */}
           <Col xs={24}>
-            <div style={{ marginBottom: 16 }}>
-              <Space size={[8, 8]} wrap>
-                {/* NCF */}
-                <div ref={ncfRef}>
-                  {editingField === 'ncf' ? (
-                    <Input
-                      size="small"
-                      style={{ width: 200 }}
-                      placeholder="NCF"
-                      maxLength={19}
-                      autoFocus
-                      defaultValue={editingValueRef.current as string}
-                      onChange={(e) => {
-                        editingValueRef.current = e.target.value;
-                      }}
-                      onPressEnter={() => commitFieldEditor()}
-                      onBlur={() => commitFieldEditor()}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') {
-                          e.stopPropagation();
-                          cancelFieldEditor();
-                        }
-                      }}
-                    />
-                  ) : ncfValue ? (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
-                      NCF: {ncfValue} <EditOutlined />
-                    </Tag>
-                  ) : (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
-                      <PlusOutlined /> NCF
-                    </Tag>
-                  )}
+            <Row gutter={16}>
+              <Col xs={24} xl={18}>
+                <div style={{ marginBottom: 16 }}>
+                  <Space size={[8, 8]} wrap>
+                    {/* NCF */}
+                    <div ref={ncfRef}>
+                      {editingField === 'ncf' ? (
+                        <Input
+                          size="small"
+                          style={{ width: 200 }}
+                          placeholder="NCF"
+                          maxLength={19}
+                          autoFocus
+                          defaultValue={editingValueRef.current as string}
+                          onChange={(e) => {
+                            editingValueRef.current = e.target.value;
+                          }}
+                          onPressEnter={() => commitFieldEditor()}
+                          onBlur={() => commitFieldEditor()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                              e.stopPropagation();
+                              cancelFieldEditor();
+                            }
+                          }}
+                        />
+                      ) : ncfValue ? (
+                        <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
+                          NCF: {ncfValue} <EditOutlined />
+                        </Tag>
+                      ) : (
+                        <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
+                          <PlusOutlined /> NCF
+                        </Tag>
+                      )}
+                    </div>
+
+                    {/* Referencia */}
+                    {editingField === 'referencia' ? (
+                      <Input
+                        size="small"
+                        style={{ width: 200 }}
+                        placeholder="Referencia"
+                        autoFocus
+                        defaultValue={editingValueRef.current as string}
+                        onChange={(e) => {
+                          editingValueRef.current = e.target.value;
+                        }}
+                        onPressEnter={() => commitFieldEditor()}
+                        onBlur={() => commitFieldEditor()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') {
+                            e.stopPropagation();
+                            cancelFieldEditor();
+                          }
+                        }}
+                      />
+                    ) : refValue ? (
+                      <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
+                        Ref: {refValue} <EditOutlined />
+                      </Tag>
+                    ) : (
+                      <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
+                        <PlusOutlined /> Referencia
+                      </Tag>
+                    )}
+
+                    {/* Tasa */}
+                    {editingField === 'tasa' ? (
+                      <InputNumber
+                        size="small"
+                        style={{ width: 120 }}
+                        min={0}
+                        step={0.01}
+                        placeholder="Tasa"
+                        autoFocus
+                        defaultValue={editingValueRef.current as number}
+                        onChange={(val) => {
+                          editingValueRef.current = val ?? 1;
+                        }}
+                        onPressEnter={() => commitFieldEditor()}
+                        onBlur={() => commitFieldEditor()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') {
+                            e.stopPropagation();
+                            cancelFieldEditor();
+                          }
+                        }}
+                      />
+                    ) : tasaValue !== 1 ? (
+                      <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
+                        Tasa: {tasaValue} <EditOutlined />
+                      </Tag>
+                    ) : (
+                      <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
+                        <PlusOutlined /> Tasa
+                      </Tag>
+                    )}
+                  </Space>
                 </div>
-
-                {/* Referencia */}
-                {editingField === 'referencia' ? (
-                  <Input
-                    size="small"
-                    style={{ width: 200 }}
-                    placeholder="Referencia"
-                    autoFocus
-                    defaultValue={editingValueRef.current as string}
-                    onChange={(e) => {
-                      editingValueRef.current = e.target.value;
-                    }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') {
-                        e.stopPropagation();
-                        cancelFieldEditor();
-                      }
-                    }}
+                {/* Hidden form items para campos rápidos */}
+                <Form.Item name="ncf" hidden><Input /></Form.Item>
+                <Form.Item name="referencia" hidden><Input /></Form.Item>
+                <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
+                <Form.Item name="moneda" hidden><Input /></Form.Item>
+                {/* Nota */}
+                <Form.Item name="nota" style={{ marginBottom: 0 }}>
+                  <FloatingField label="Nota">
+                    <TextArea rows={3} />
+                  </FloatingField>
+                </Form.Item>
+              </Col>
+              <Col xs={24} xl={6}>
+                <div style={{ marginTop: 16, marginBottom: 16 }}>
+                  <TotalesCard
+                    subTotal={totales.subTotal}
+                    descuento={totales.descuento}
+                    impuestos={totales.impuestos}
+                    total={totales.total}
+                    hideTitle
+                    monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+                    monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+                    tasa={tasaValue ?? data?.tasa ?? 1}
                   />
-                ) : refValue ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
-                    Ref: {refValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
-                    <PlusOutlined /> Referencia
-                  </Tag>
-                )}
-
-                {/* Tasa */}
-                {editingField === 'tasa' ? (
-                  <InputNumber
-                    size="small"
-                    style={{ width: 120 }}
-                    min={0}
-                    step={0.01}
-                    placeholder="Tasa"
-                    autoFocus
-                    defaultValue={editingValueRef.current as number}
-                    onChange={(val) => {
-                      editingValueRef.current = val ?? 1;
-                    }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') {
-                        e.stopPropagation();
-                        cancelFieldEditor();
-                      }
-                    }}
-                  />
-                ) : tasaValue !== 1 ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
-                    Tasa: {tasaValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
-                    <PlusOutlined /> Tasa
-                  </Tag>
-                )}
-              </Space>
-            </div>
-            {/* Hidden form items para campos rápidos */}
-            <Form.Item name="ncf" hidden><Input /></Form.Item>
-            <Form.Item name="referencia" hidden><Input /></Form.Item>
-            <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
-            <Form.Item name="moneda" hidden><Input /></Form.Item>
-          </Col>
-
-          {/* Fila 5: Nota */}
-          <Col xs={24}>
-            <Form.Item name="nota" style={{ marginBottom: 0 }}>
-              <FloatingField label="Nota">
-                <TextArea rows={3} />
-              </FloatingField>
-            </Form.Item>
+                </div>
+              </Col>
+            </Row>
           </Col>
         </Row>
       </Form>
@@ -1763,7 +1487,13 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
   return (
     <div>
-      {renderToolbar()}
+      <FormularioToolbar
+        saving={saving}
+        estado={mode === 'editar' ? estado : undefined}
+        periodo={data?.periodo}
+        onGuardar={handleGuardar}
+        onCancelar={handleCancelar}
+      />
 
       {loadingError && (
         <Alert
@@ -1783,14 +1513,36 @@ const EntradaAlmacenFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        documento="ENP"
+        fetchConceptos={() => conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'ENP')}
       />
 
       <BuscarOrdenCompraModal
         open={ordenCompraModalOpen}
         onClose={() => setOrdenCompraModalOpen(false)}
         onSelect={handleOCSelect}
-        suplidorCodigo={selectedEntidad?.codigo}
+        fetchOrdenes={async () => {
+          const hoy = new Date();
+          const hace60 = new Date();
+          hace60.setDate(hace60.getDate() - 60);
+          const formatDateParam = (d: Date): string => {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mm = String(d.getMinutes()).padStart(2, '0');
+            const ss = String(d.getSeconds()).padStart(2, '0');
+            return `${y}${m}${dd}${hh}${mm}${ss}`;
+          };
+          const params: any = {
+            cantidad: 50,
+            desde: formatDateParam(hace60),
+            hasta: formatDateParam(hoy),
+          };
+          if (selectedEntidad?.codigo?.trim()) {
+            params.suplidor = selectedEntidad.codigo.trim();
+          }
+          return await ordenCompraApi.obtenerResumido(Sucursal.Compra, sucursalActiva, params);
+        }}
       />
       <BuscarProductoModal
         open={productoModalOpen}
@@ -1928,7 +1680,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       {isLarge ? (
         /* === DESKTOP LAYOUT (>= lg) === */
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xl={24}>
             {renderEncabezado()}
 
             <Tabs
@@ -1992,56 +1744,17 @@ const EntradaAlmacenFormulario: React.FC = () => {
                   key: 'asientos',
                   label: `Asientos (${data?.asientos?.length || 0})`,
                   children: (
-                    <Table
-                      dataSource={data?.asientos || []}
-                      columns={asientoColumns}
-                      rowKey="id"
-                      size="small"
-                      pagination={false}
-                      scroll={{ x: 900 }}
-                      summary={() => (
-                        <Table.Summary fixed>
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        </Table.Summary>
-                      )}
-                    />
+                    <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 800 }} />
                   ),
                 },
                 {
                   key: 'historial',
                   label: `Historial (${data?.logs?.length || 0})`,
                   children: (
-                    <Table
-                      dataSource={data?.logs || []}
-                      columns={logColumns}
-                      rowKey="id"
-                      size="small"
-                      pagination={false}
-                      scroll={{ x: 900 }}
-                    />
+                    <LogTable dataSource={data?.logs || []} scroll={{ x: 800 }} />
                   ),
                 },
               ]}
-            />
-          </Col>
-
-          <Col lg={6}>
-            <SuplidorCard
-              suplidor={selectedEntidad ?? data?.suplidor ?? null}
-            />
-            <TotalesCard
-              subTotal={totales.subTotal}
-              descuento={totales.descuento}
-              impuestos={totales.impuestos}
-              total={totales.total}
-              alignRight={false}
-              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
-              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
-               tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </Col>
         </Row>
@@ -2111,56 +1824,19 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 key: 'asientos',
                 label: `Asientos (${data?.asientos?.length || 0})`,
                 children: (
-                  <Table
-                    dataSource={data?.asientos || []}
-                    columns={asientoColumns}
-                    rowKey="id"
-                    size="small"
-                    pagination={false}
-                    scroll={{ x: 900 }}
-                    summary={() => (
-                      <Table.Summary fixed>
-                        <Table.Summary.Row>
-                          <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                          <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                          <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                        </Table.Summary.Row>
-                      </Table.Summary>
-                    )}
-                  />
+                  <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 800 }} />
                 ),
               },
               {
                 key: 'historial',
                 label: `Historial (${data?.logs?.length || 0})`,
                 children: (
-                  <Table
-                    dataSource={data?.logs || []}
-                    columns={logColumns}
-                    rowKey="id"
-                    size="small"
-                    pagination={false}
-                    scroll={{ x: 900 }}
-                  />
+                  <LogTable dataSource={data?.logs || []} scroll={{ x: 800 }} />
                 ),
               },
             ]}
           />
 
-          <SuplidorCard
-            suplidor={selectedEntidad ?? data?.suplidor ?? null}
-          />
-
-          <TotalesCard
-            subTotal={totales.subTotal}
-            descuento={totales.descuento}
-            impuestos={totales.impuestos}
-            total={totales.total}
-            alignRight={true}
-            monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
-            monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
-             tasa={tasaValue ?? data?.tasa ?? 1}
-          />
         </div>
       )}
 

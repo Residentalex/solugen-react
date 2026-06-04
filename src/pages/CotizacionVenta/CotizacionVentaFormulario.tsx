@@ -22,89 +22,23 @@ import { cotizacionVentaApi } from '../../api/cotizacionVentaApi';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
 import { productoApi } from '../../api/productoApi';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
+import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type { ConceptoDTO, ClienteDTO, DetalleFacturaPOSDTO } from '../../types/facturaPOS';
 import type { CotizacionVentaDetalleDTO } from '../../types/cotizacionVenta';
+import LogTable from '../../components/LogTable';
+
+import EntidadCard from '../../components/EntidadCard';
+import TotalesCard from '../../components/TotalesCard';
+import FormularioToolbar from '../../components/FormularioToolbar';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { Text } = Typography;
 const { TextArea } = Input;
-
-const ESTADO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
-
-const ACCION_MAP: Record<number, string> = {
-  0: 'Crear', 1: 'Modificar', 2: 'Eliminar', 3: 'Aplicar',
-  4: 'Desaplicar', 5: 'Postear', 6: 'Anular', 7: 'Revisar',
-  8: 'Reversar', 9: 'Escanear',
-};
-
-// ===== Helpers de formato =====
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function toTitleCase(str: string): string {
-  if (!str) return str;
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatDate(val: string): string {
-  if (!val) return '-';
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
-  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function parseDateRaw(val: string): Date | null {
-  if (!val) return null;
-  const num = val.replace(/\D/g, '');
-  if (num.length >= 14) {
-    const y = parseInt(num.slice(0, 4), 10);
-    const m = parseInt(num.slice(4, 6), 10) - 1;
-    const d = parseInt(num.slice(6, 8), 10);
-    return new Date(y, m, d);
-  }
-  const dt = new Date(val);
-  return isNaN(dt.getTime()) ? null : dt;
-}
-
-function toISOFormat(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${y}-${m}-${day}T${hh}:${mm}:${ss}`;
-}
-
-function extraerMensajeError(err: any, fallback: string): string {
-  const data = err?.response?.data;
-  if (!data) return fallback;
-  if (data.errorMessage) return data.errorMessage;
-  if (data.errors && typeof data.errors === 'object') {
-    const mensajes: string[] = [];
-    for (const key of Object.keys(data.errors)) {
-      const val = data.errors[key];
-      if (Array.isArray(val)) mensajes.push(...val);
-      else if (typeof val === 'string') mensajes.push(val);
-    }
-    if (mensajes.length > 0) return mensajes.join('; ');
-  }
-  return fallback;
-}
 
 // ===== Cálculo de fila estándar (sin IVBIS incluido en precio) =====
 function calcularFila(fila: DetalleFacturaPOSDTO): DetalleFacturaPOSDTO {
@@ -150,82 +84,7 @@ function filaVacia(): DetalleFacturaPOSDTO {
   };
 }
 
-// ===== Componente ClienteCard =====
-interface ClienteCardProps {
-  cliente: ClienteDTO | null;
-}
 
-const ClienteCard: React.FC<ClienteCardProps> = ({ cliente }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Cliente</span>}
-    className="paces-card"
-    style={{ marginBottom: 16 }}
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ fontWeight: 600 }}>
-        {cliente?.nombre ? toTitleCase(cliente.nombre) : '-'}
-      </div>
-      <div>
-        <span className="paces-text-secondary">RNC: </span>
-        <span>{cliente?.identificacion || '-'}</span>
-      </div>
-      <div>
-        <span className="paces-text-secondary">Teléfono: </span>
-        <span>{cliente?.telefono || '-'}</span>
-      </div>
-      <div>
-        <span className="paces-text-secondary">Dirección: </span>
-        <span>{cliente?.direccion ? toTitleCase(cliente.direccion) : '-'}</span>
-      </div>
-    </div>
-  </Card>
-);
-
-// ===== Componente TotalesCard (simplificado, sin cobros) =====
-interface TotalesCardProps {
-  subTotal: number;
-  descuento: number;
-  impuestos: number;
-  total: number;
-  alignRight: boolean;
-  monedaSimbolo?: string;
-  tasa?: number;
-}
-
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, alignRight, monedaSimbolo, tasa }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    className="paces-card"
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
-      {monedaSimbolo && tasa !== undefined && (
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>RD$ ({formatNumber(tasa ?? 1)})</span>
-        </div>
-      )}
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
-        <span>{formatNumber(subTotal)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Descuento</span>}
-        <span>{formatNumber(descuento)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
-        <span>{formatNumber(impuestos)}</span>
-      </div>
-    </div>
-
-    <Divider style={{ margin: '12px 0' }} />
-
-    <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
-      {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{monedaSimbolo || 'RD$'} {formatNumber(total)}</span>
-    </div>
-  </Card>
-);
 
 // ===== Componente principal =====
 const CotizacionVentaFormulario: React.FC = () => {
@@ -567,35 +426,16 @@ const CotizacionVentaFormulario: React.FC = () => {
   };
 
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
-  const [conceptosCache, setConceptosCache] = useState<ConceptoDTO[]>([]);
-  const [conceptoSearchText, setConceptoSearchText] = useState('');
 
   const handleConceptoClear = () => {
     setSelectedConcepto(null);
-    setConceptoSearchText('');
     setClientesCache([]);
-    setConceptosCache([]);
     form.setFieldsValue({ concepto: '', cliente: undefined });
   };
 
   const handleConceptoSearchClick = () => {
     setConceptoModalOpen(true);
   };
-
-  const cargarConceptos = useCallback(async () => {
-    try {
-      const res = await facturaPOSApi.obtenerConceptos(sucursalActiva, 'COT');
-      setConceptosCache(res || []);
-    } catch {
-      message.error('Error al cargar conceptos');
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (conceptoModalOpen) {
-      cargarConceptos();
-    }
-  }, [conceptoModalOpen, cargarConceptos]);
 
   // ===== Handlers de detalles =====
   const handleAgregarFila = () => {
@@ -702,109 +542,13 @@ const CotizacionVentaFormulario: React.FC = () => {
       render: (_: any, r: any) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
   ];
 
-  const logColumns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
-    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200,
-      render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-') },
-    { title: 'Estacion', dataIndex: 'estacion', key: 'estacion', width: 200 },
-    { title: 'Accion', dataIndex: 'accion', key: 'accion', width: 120,
-      render: (v: number) => ACCION_MAP[v] || `Accion ${v}` },
-    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
-  ];
-
   // ===== Loading state =====
   if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando cotización...</div>
-      </div>
-    );
+    return <LoadingSpinner mensaje="Cargando cotización..." />;
   }
 
   // ===== Estado info =====
-  const estadoInfo = ESTADO_MAP[estado] || { label: 'Borrador', color: 'default' };
-
-  // ===== Toolbar manual (inline) =====
-  const renderToolbar = () => (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-      <div style={{ flex: 1 }} />
-      <Space wrap>
-        {mode === 'editar' && data && (
-          <>
-            {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-            <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-          </>
-        )}
-
-        {/* Botones según estado - Creación */}
-        {mode === 'crear' && (
-          <>
-            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-              Guardar
-            </Button>
-            <Button icon={<CloseOutlined />} onClick={handleCancelar}>
-              Cancelar
-            </Button>
-          </>
-        )}
-
-        {/* Botones según estado - Edición */}
-        {mode === 'editar' && (
-          <>
-            {esBorrador && (
-              <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-                Guardar
-              </Button>
-            )}
-            {esBorrador && (
-              <Button icon={<CloseOutlined />} onClick={handleCancelar}>
-                Cancelar
-              </Button>
-            )}
-          </>
-        )}
-      </Space>
-    </div>
-  );
-
-  // ===== Modal de búsqueda de concepto =====
-  const modalConcepto = (
-    <Modal
-      title="Buscar Concepto"
-      open={conceptoModalOpen}
-      onCancel={() => setConceptoModalOpen(false)}
-      footer={null}
-      width={600}
-      destroyOnHidden
-    >
-      <Input.Search
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        onSearch={() => cargarConceptos()}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={conceptosCache}
-        columns={[
-          { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-          { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-            render: (v: string) => toTitleCase(v) },
-        ]}
-        rowKey="codigo"
-        loading={false}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: () => {
-            handleConceptoSelect(record);
-            setConceptoModalOpen(false);
-          },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Borrador', color: 'default' };
 
   // ===== Grid de detalles editable =====
   const detalleColumns = [
@@ -1077,7 +821,7 @@ const CotizacionVentaFormulario: React.FC = () => {
                 <FloatingField label="Concepto" required>
                   <Input
                     placeholder=" "
-                    value={selectedConcepto ? toTitleCase(selectedConcepto.nombre) : conceptoSearchText}
+                    value={selectedConcepto ? toTitleCase(selectedConcepto.nombre) : ''}
                     readOnly
                     onClick={handleConceptoSearchClick}
                   />
@@ -1275,7 +1019,7 @@ const CotizacionVentaFormulario: React.FC = () => {
 
   return (
     <div>
-      {renderToolbar()}
+      <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
 
       {loadingError && (
         <Alert
@@ -1291,7 +1035,12 @@ const CotizacionVentaFormulario: React.FC = () => {
         />
       )}
 
-      {modalConcepto}
+      <BuscarConceptoModal
+        open={conceptoModalOpen}
+        onClose={() => setConceptoModalOpen(false)}
+        onSelect={handleConceptoSelect}
+        fetchConceptos={() => facturaPOSApi.obtenerConceptos(sucursalActiva, 'COT')}
+      />
       <BuscarProductoModal
         open={productoModalOpen}
         onClose={() => setProductoModalOpen(false)}
@@ -1381,14 +1130,7 @@ const CotizacionVentaFormulario: React.FC = () => {
                   key: 'historial',
                   label: `Historial (${data.logs.length})`,
                   children: (
-                    <Table
-                      dataSource={data.logs}
-                      columns={logColumns}
-                      rowKey="id"
-                      size="small"
-                      pagination={false}
-                      scroll={{ x: 900 }}
-                    />
+                    <LogTable dataSource={data.logs} scroll={{ x: 900 }} />
                   ),
                 });
               }
@@ -1409,9 +1151,7 @@ const CotizacionVentaFormulario: React.FC = () => {
           </Col>
 
           <Col lg={6}>
-            <ClienteCard
-              cliente={selectedCliente ?? null}
-            />
+            <EntidadCard entidad={selectedCliente ?? null} fallbackTitulo="Cliente" />
             <TotalesCard
               subTotal={totales.subTotal}
               descuento={totales.descuento}
@@ -1462,9 +1202,7 @@ const CotizacionVentaFormulario: React.FC = () => {
             scroll={{ x: 1300 }}
           />
 
-          <ClienteCard
-            cliente={selectedCliente ?? null}
-          />
+          <EntidadCard entidad={selectedCliente ?? null} fallbackTitulo="Cliente" />
 
           <TotalesCard
             subTotal={totales.subTotal}

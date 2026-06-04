@@ -120,4 +120,19 @@ export interface ProductoImportadoDTO {
   fila: number;
   nombre: string;
   codigoGenerado: string;
+  referencia?: string;
+  upc?: string;
+  precio?: number;
+  ultimoCosto?: number;
+  familia?: string;
+  categoria?: string;
+  impuesto?: string;
+  impuestoVenta?: string;
+  unidadMedida?: string;
+  paraVender?: string;
+  paraComprar?: string;
+  requiereFechaVenc?: string;
+  diasVencimiento?: number;
+  pesado?: string;
+  suplidor?: string;
 }

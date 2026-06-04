@@ -12,6 +12,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { productoApi } from '../../api/productoApi';
 import type { ProductoDTO, ImpuestoProductoDTO } from '../../types/productos';
 import ErrorBoundary from '../../components/ErrorBoundary';
+import { ErrorDetalle } from '../../components';
 
 const { Text } = Typography;
 
@@ -55,7 +56,7 @@ const ProductoDetalle: React.FC = () => {
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
 
   const [data, setData] = useState<ProductoDTO | null>(null);
-  const [, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
 
   useEffect(() => {
@@ -70,6 +71,11 @@ const ProductoDetalle: React.FC = () => {
     productoApi.obtenerDetalle(sucursalActiva, codigo, abortController.signal)
       .then((res) => {
         if (abortController.signal.aborted) return;
+        if (!res) {
+          message.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setData(res);
         setPageTitleOverride(res.nombre || codigo);
       })
@@ -92,6 +98,11 @@ const ProductoDetalle: React.FC = () => {
     productoApi.obtenerDetalle(sucursalActiva, codigo, abortController.signal)
       .then((res) => {
         if (abortController.signal.aborted) return;
+        if (!res) {
+          message.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setData(res);
         setPageTitleOverride(res.nombre || codigo);
       })
@@ -105,21 +116,18 @@ const ProductoDetalle: React.FC = () => {
       });
   };
 
-  if (!data) {
+  if (loading || (!data && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">
-          {loadingError ? 'Error al cargar producto' : 'Cargando producto...'}
-        </div>
-        {loadingError && (
-          <Button size="small" onClick={handleRefresh} style={{ marginTop: 16 }}>
-            Reintentar
-          </Button>
-        )}
+        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando producto...</div>
       </div>
     );
   }
+  if (loadingError && !data) {
+    return <ErrorDetalle mensaje="Error al cargar el producto" rutaVolver="/MProducto" />;
+  }
+  if (!data) return null;
 
   const impuestoColumns = [
     { title: 'Nombre', key: 'nombre', render: (_: any, r: ImpuestoProductoDTO) => r.impuesto?.nombre ? toTitleCase(r.impuesto.nombre) : '-' },

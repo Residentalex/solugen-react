@@ -45,8 +45,7 @@ const Recetas: React.FC = () => {
     try {
       const result = await recetaApi.obtenerProductosConReceta(sucursalActiva);
       setProductos(result);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar productos con receta');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoadingLista(false);

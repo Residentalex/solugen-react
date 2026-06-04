@@ -86,4 +86,24 @@ export const reciboIngresoApi = {
     const { data } = await apiClient.put<ApiResponse<TransaccionVistaDTO>>(`${BASE}/${sucursal}/recalcularPagos/${id}`);
     return data.data;
   },
+
+  revisado: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.post(`${BASE}/${sucursal}/${id}/Revisado`);
+  },
+
+  reversar: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.post(`${BASE}/${sucursal}/${id}/Reversar`);
+  },
+
+  verificarScan: async (sucursal: number, id: number): Promise<{ existe: boolean }> => {
+    const { data } = await apiClient.get<ApiResponse<{ existe: boolean }>>(`${BASE}/${sucursal}/${id}/scanner/verificar`);
+    return data.data;
+  },
+
+  descargarScan: async (sucursal: number, id: number): Promise<Blob> => {
+    const { data } = await apiClient.get<Blob>(`${BASE}/${sucursal}/${id}/scanner/descargar`, {
+      responseType: 'blob',
+    });
+    return data;
+  },
 };

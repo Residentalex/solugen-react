@@ -119,4 +119,31 @@ export const facturaSuplidorApi = {
     const { data } = await apiClient.get<ApiResponse<any>>(`/RDE/${sucursal}/documento/${noDocumento}`);
     return data.data;
   },
+
+  // ===== Scanner =====
+  verificarScan: async (sucursal: number, id: number): Promise<{ existe: boolean }> => {
+    const { data } = await apiClient.get<ApiResponse<{ existe: boolean }>>(`/RDE/${sucursal}/${id}/scanner/verificar`);
+    return data.data;
+  },
+
+  descargarScan: async (sucursal: number, id: number): Promise<Blob> => {
+    const { data } = await apiClient.get<Blob>(`/RDE/${sucursal}/${id}/scanner/descargar`, {
+      responseType: 'blob',
+    });
+    return data;
+  },
+
+  // ===== Acciones de estado =====
+  desaplicar: async (origen: string, documento: string): Promise<void> => {
+    const params = { origen, documento };
+    await apiClient.put(`/RDE/desaplicar`, null, { params });
+  },
+
+  revisado: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.post(`/RDE/${sucursal}/${id}/Revisado`);
+  },
+
+  reversar: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.post(`/RDE/${sucursal}/${id}/Reversar`);
+  },
 };

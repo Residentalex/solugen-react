@@ -113,8 +113,7 @@ const Configuracion: React.FC = () => {
     try {
       const data = await notificacionesApi.obtenerConfig(sucursal);
       setConfigs(data || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar configuración');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);

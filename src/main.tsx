@@ -1,6 +1,6 @@
 import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ConfigProvider, theme } from 'antd'
+import { ConfigProvider, theme, App as AntApp } from 'antd'
 import './index.css'
 import App from './App'
 import { useUIStore } from './stores/uiStore'
@@ -124,7 +124,9 @@ function AppWrapper() {
 
   return (
     <ConfigProvider theme={getThemeConfig(themeName)}>
-      <App />
+      <AntApp>
+        <App />
+      </AntApp>
     </ConfigProvider>
   );
 }

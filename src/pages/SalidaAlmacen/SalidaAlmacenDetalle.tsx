@@ -1,171 +1,37 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Typography, Tooltip, Modal, Alert
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Typography, Tooltip, Modal, Alert, App
 } from 'antd';
 
 import {
   ArrowLeftOutlined,
-  PrinterOutlined,
   LockFilled,
-  EditOutlined,
-  CheckCircleOutlined,
   CloseCircleOutlined,
-  RedoOutlined,
   IdcardOutlined,
   PhoneOutlined,
   EnvironmentOutlined,
   FileTextOutlined,
   FileSearchOutlined,
-  ExclamationCircleOutlined,
 } from '@ant-design/icons';
+import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { salidaAlmacenApi } from '../../api/salidaAlmacenApi';
-import PermissionGate from '../../components/PermissionGate';
+import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
+import LogTable from '../../components/LogTable';
+import AsientosContableTable from '../../components/AsientosContableTable';
+import { useAplicar } from '../../hooks/useAplicar';
+import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
+import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
+import EntidadCard from '../../components/EntidadCard';
+import TotalesCard from '../../components/TotalesCard';
+import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
+import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { Text } = Typography;
-const ESTADO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
-
-const ACCION_MAP: Record<number, string> = {
-  0: 'Crear',
-  1: 'Modificar',
-  2: 'Eliminar',
-  3: 'Aplicar',
-  4: 'Desaplicar',
-  5: 'Postear',
-  6: 'Anular',
-  7: 'Revisar',
-  8: 'Reversar',
-  9: 'Escanear',
-};
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function toTitleCase(str: string): string {
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-interface TotalesCardProps {
-  subTotal: number;
-  descuento: number;
-  impuestos: number;
-  total: number;
-  nota: string;
-  alignRight: boolean;
-  monedaSimbolo?: string;
-  monedaNombre?: string;
-  tasa?: number;
-}
-
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    className="paces-card"
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
-      {monedaSimbolo && tasa !== undefined && (
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
-        </div>
-      )}
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
-        <span>{formatNumber(subTotal)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Descuento</span>}
-        <span>{formatNumber(descuento)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
-        <span>{formatNumber(impuestos)}</span>
-      </div>
-    </div>
-
-    <Divider style={{ margin: '12px 0' }} />
-
-    <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
-      {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
-    </div>
-
-    {nota && (
-      <>
-        <Divider style={{ margin: '12px 0' }} />
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, textAlign: alignRight ? 'right' : undefined }} className="paces-text-secondary">Notas</div>
-          <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.5, textAlign: alignRight ? 'right' : undefined }} className="paces-text-dark">
-            {nota}
-          </div>
-        </div>
-      </>
-    )}
-  </Card>
-);
-
-interface SuplidorCardProps {
-  entidad: { nombre: string; identificacion: string; telefono?: string; direccion?: string } | undefined;
-  suplidor: { nombre: string; identificacion?: string; telefono?: string; direccion?: string } | undefined;
-}
-
-const SuplidorCard: React.FC<SuplidorCardProps> = ({ entidad, suplidor }) => {
-    const identificacion = entidad?.identificacion ?? suplidor?.identificacion ?? '';
-  const telefono = entidad?.telefono || suplidor?.telefono || '';
-  const direccion = entidad?.direccion ? toTitleCase(entidad.direccion) : suplidor?.direccion ? toTitleCase(suplidor.direccion) : '-';
-
-  return (
-    <Card
-      title={<span style={{ fontSize: 16, fontWeight: 600 }}>{toTitleCase(suplidor?.nombre || entidad?.nombre || 'Suplidor')}</span>}
-      className="paces-card"
-      style={{ marginBottom: 16 }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {identificacion && identificacion !== '-' && (
-          <div style={{ fontSize: 13 }}>
-            <IdcardOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {identificacion}
-          </div>
-        )}
-        {telefono && telefono !== '-' && (
-          <div style={{ fontSize: 13 }}>
-            <PhoneOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {telefono}
-          </div>
-        )}
-        {direccion && direccion !== '-' && (
-          <div style={{ fontSize: 13, color: '#595959' }}>
-            <EnvironmentOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {direccion}
-          </div>
-        )}
-      </div>
-    </Card>
-  );
-};
-
-function formatDate(val: string): string {
-  if (!val) return '-';
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
-  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
 
 function extraerMensajeError(err: any, fallback: string): string {
   const data = err?.response?.data;
@@ -196,12 +62,19 @@ const SalidaAlmacenDetalle: React.FC = () => {
   const [imprimiendo, setImprimiendo] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [tieneScan, setTieneScan] = useState<boolean | null>(null);
+  const [operacionTitulo, setOperacionTitulo] = useState('');
+  const [scannerModalOpen, setScannerModalOpen] = useState(false);
+  const [scannerUrl, setScannerUrl] = useState<string | null>(null);
+  const [scannerLoading, setScannerLoading] = useState(false);
+  const [documentosRelacionados, setDocumentosRelacionados] = React.useState<DocumentoRelacionDTO[]>([]);
+
+  const { message: messageApi } = App.useApp();
+  const operacion = useAplicar();
   const screens = Grid.useBreakpoint();
 
   const handleRefresh = useCallback(() => {
     if (!id) return;
     setLoadingError(false);
-    setLoading(true);
     salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
@@ -212,10 +85,9 @@ const SalidaAlmacenDetalle: React.FC = () => {
       })
       .catch((err: any) => {
         const msg = extraerMensajeError(err, 'Error al cargar el documento');
-        message.error(msg);
+        messageApi.error(msg);
         setLoadingError(true);
       })
-      .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
   useEffect(() => {
@@ -229,6 +101,11 @@ const SalidaAlmacenDetalle: React.FC = () => {
     setLoadingError(false);
     salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
+        if (!res) {
+          messageApi.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Verificar si tiene documento escaneado
@@ -238,13 +115,39 @@ const SalidaAlmacenDetalle: React.FC = () => {
       })
       .catch((err: any) => {
         const msg = extraerMensajeError(err, 'Error al cargar el documento');
-        message.error(msg);
+        messageApi.error(msg);
         setLoadingError(true);
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
-  if (loading || !data) {
+  // Cargar documentos relacionados desde DOCUMENTOS_RELACION
+  React.useEffect(() => {
+    if (!data?.id) return;
+    documentoRelacionApi.obtenerPorTransaccion(data.id)
+      .then(rel => setDocumentosRelacionados(rel || []))
+      .catch(() => {
+        setDocumentosRelacionados([]);
+        messageApi.warning('No se pudieron cargar los documentos relacionados');
+      });
+  }, [data?.id]);
+
+  const handleVerScanner = async () => {
+    if (!id) return;
+    setScannerLoading(true);
+    try {
+      const blob = await salidaAlmacenApi.descargarScan(sucursalActiva, parseInt(id));
+      const url = URL.createObjectURL(blob);
+      setScannerUrl(url);
+      setScannerModalOpen(true);
+    } catch {
+      messageApi.error('Error al cargar el archivo escaneado');
+    } finally {
+      setScannerLoading(false);
+    }
+  };
+
+  if (loading || (!data && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
@@ -252,9 +155,30 @@ const SalidaAlmacenDetalle: React.FC = () => {
       </div>
     );
   }
+  if (loadingError && !data) {
+    return (
+      <div style={{ textAlign: 'center', padding: 80 }}>
+        <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
+        <div style={{ marginTop: 16, fontSize: 16, color: '#ff4d4f' }}>
+          Error al cargar el documento
+        </div>
+        <div style={{ marginTop: 8 }} className="paces-text-secondary">
+          Verifique que el documento exista en la sucursal seleccionada.
+        </div>
+        <Button
+          type="primary"
+          icon={<ArrowLeftOutlined />}
+          style={{ marginTop: 24 }}
+          onClick={() => navigate('/FSAP')}
+        >
+          Volver al listado
+        </Button>
+      </div>
+    );
+  }
 
   const isLarge = screens.lg ?? true;
-  const estadoInfo = ESTADO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
   // ===== Detalles filtrados por búsqueda =====
@@ -385,71 +309,33 @@ const SalidaAlmacenDetalle: React.FC = () => {
   ];
 
   // ===== Asientos e Historial =====
-  function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
-  function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
-
-  const totalDebitos = (data.asientos || []).reduce((s: number, r: any) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
-  const totalCreditos = (data.asientos || []).reduce((s: number, r: any) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
-
-  const asientoColumns = [
-    { title: 'Cuenta', key: 'cuenta', width: 120,
-      render: (_: any, r: any) => r.cuentaContable?.noCuenta || '-' },
-    { title: 'Nombre', key: 'nombre', ellipsis: true,
-      render: (_: any, r: any) => r.cuentaContable?.nombre ? toTitleCase(r.cuentaContable.nombre) : '-' },
-    { title: 'Descripcion', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
-      render: (v: string) => v ? toTitleCase(v) : '-' },
-    { title: 'Debito', key: 'debito', width: 130, align: 'right' as const,
-      render: (_: any, r: any) => esDebito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-    { title: 'Credito', key: 'credito', width: 130, align: 'right' as const,
-      render: (_: any, r: any) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-  ];
-
-  const logColumns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
-    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200,
-      render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-') },
-    { title: 'Estacion', dataIndex: 'estacion', key: 'estacion', width: 200 },
-    { title: 'Accion', dataIndex: 'accion', key: 'accion', width: 120,
-      render: (v: number) => ACCION_MAP[v] || `Accion ${v}` },
-    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
-  ];
+  // asientoColumns reemplazado por AsientosContableTable compartido
 
   // ===== Handlers de acciones de estado =====
-  const handleAplicar = async () => {
+  const handleAplicar = () => {
     if (!id) return;
 
     // Verificación temprana del scanner
     if (tieneScan === false) {
-      message.warning('Debe escanear el documento antes de aplicar.');
+      messageApi.warning('Debe escanear el documento antes de aplicar.');
       return;
     }
 
-    setSaving(true);
-    try {
-      await salidaAlmacenApi.aplicar(sucursalActiva, parseInt(id));
-      message.success('Documento aplicado exitosamente');
-      const res = await salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id));
-      setData(res);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
+    setOperacionTitulo(`Aplicando SAP-${data?.noDocumento || id}`);
+    operacion.ejecutar(`/SAP/${sucursalActiva}/aplicar/${id}`, handleRefresh);
   };
 
   const handleDesaplicar = async () => {
     if (!id || !data) return;
     setSaving(true);
     try {
-      const documento = `${data.documento.codigo}-${data.noDocumento}`;
+      const documento = `${(data as any).documento.codigo || ''}-${(data as any).noDocumento || ''}`;
       await salidaAlmacenApi.desaplicar(sucursalActiva, documento);
-      message.success('Documento desaplicado exitosamente');
-      const res = await salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id));
-      setData(res);
+      messageApi.success('Documento desaplicado exitosamente');
+      handleRefresh();
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al desaplicar');
-      message.error(msg);
+      messageApi.error(msg);
     } finally {
       setSaving(false);
     }
@@ -460,31 +346,25 @@ const SalidaAlmacenDetalle: React.FC = () => {
     setSaving(true);
     try {
       await salidaAlmacenApi.anular(sucursalActiva, data as any);
-      message.success('Documento anulado exitosamente');
+      messageApi.success('Documento anulado exitosamente');
       const res = await salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
-      message.error(msg);
+      messageApi.error(msg);
     } finally {
       setSaving(false);
     }
   };
 
-  const handlePostear = async () => {
+  const handlePostear = () => {
     if (!data) return;
-    setSaving(true);
-    try {
-      await salidaAlmacenApi.postear(sucursalActiva, data as any);
-      message.success('Documento posteado exitosamente');
-      const res = await salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
-      setData(res);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al postear');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
+    setOperacionTitulo(`Posteando SAP-${data?.noDocumento || id}`);
+    operacion.ejecutar(
+      `/SAP/${sucursalActiva}/postear`,
+      handleRefresh,
+      data
+    );
   };
 
   const handleRevisado = async () => {
@@ -492,12 +372,12 @@ const SalidaAlmacenDetalle: React.FC = () => {
     setSaving(true);
     try {
       await salidaAlmacenApi.revisado(sucursalActiva, parseInt(id));
-      message.success('Documento marcado como revisado');
+      messageApi.success('Documento marcado como revisado');
       const res = await salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al marcar revisado');
-      message.error(msg);
+      messageApi.error(msg);
     } finally {
       setSaving(false);
     }
@@ -508,12 +388,12 @@ const SalidaAlmacenDetalle: React.FC = () => {
     setSaving(true);
     try {
       await salidaAlmacenApi.reversar(sucursalActiva, parseInt(id));
-      message.success('Documento reversado exitosamente');
+      messageApi.success('Documento reversado exitosamente');
       const res = await salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al reversar');
-      message.error(msg);
+      messageApi.error(msg);
     } finally {
       setSaving(false);
     }
@@ -534,155 +414,50 @@ const SalidaAlmacenDetalle: React.FC = () => {
           }
         />
       )}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FSAP')}>
-          Volver
-        </Button>
-        <div style={{ flex: 1 }} />
-        <Space>
-          <PermissionGate accion="IMPRIMIR">
-            <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
-            setImprimiendo(true);
-            try {
-              const res = await apiClient.post('/reportes/inventario/salida', data, {
-                responseType: 'blob',
-              });
-              const blobUrl = URL.createObjectURL(res.data);
-              const iframe = document.createElement('iframe');
-              iframe.style.display = 'none';
-              iframe.src = blobUrl;
-              document.body.appendChild(iframe);
+      <DetalleToolbar
+        modulo="FSAP"
+        estado={data.estado}
+        periodo={data.periodo}
+        revisado={data.revisado}
+        saving={saving}
+        imprimiendo={imprimiendo}
+        operacionLoading={operacion?.loading}
+        onVolver={() => navigate('/FSAP')}
+        onImprimir={async () => {
+          setImprimiendo(true);
+          try {
+            const sucursalParam = data.codigoSucursal
+              ? obtenerNombreEnumSucursal(data.codigoSucursal)
+              : sucursalActiva;
+            const res = await apiClient.get(`/reportes/inventario/salida/${sucursalParam}/${id}`, {
+              responseType: 'blob',
+            });
+            const blobUrl = URL.createObjectURL(res.data);
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = blobUrl;
+            document.body.appendChild(iframe);
+            setTimeout(() => {
+              iframe.contentWindow?.print();
               setTimeout(() => {
-                iframe.contentWindow?.print();
-                setTimeout(() => {
-                  document.body.removeChild(iframe);
-                  URL.revokeObjectURL(blobUrl);
-                }, 30000);
-              }, 2000);
-            } catch (e) {
-              const ex = e as any;
-              try {
-                const blob = ex?.response?.data;
-                const text = blob instanceof Blob ? await blob.text() : '';
-                const json = JSON.parse(text);
-                message.error(json.errorMessage || 'Error al generar el PDF');
-              } catch {
-                message.error(ex?.message || 'Error al generar el PDF');
-              }
-            } finally {
-              setImprimiendo(false);
-            }
-          }} />
-          </PermissionGate>
-
-          {data.estado === 0 && data.periodo !== 6 && data.revisado !== true && (
-            <PermissionGate accion="EDITAR">
-              <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FSAP/${id}/editar`)}>
-                Editar
-              </Button>
-            </PermissionGate>
-          )}
-          {/* Acciones de estado */}
-          {data.estado === 0 && data.periodo !== 6 && (
-            <PermissionGate accion="APLICAR">
-              <Button style={{ background: '#389e0d', borderColor: '#389e0d', color: '#fff' }} icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
-                Modal.confirm({
-                  title: 'Aplicar documento',
-                  icon: <ExclamationCircleOutlined />,
-                  content: '¿Está seguro que desea aplicar este documento?',
-                  okText: 'Sí',
-                  cancelText: 'No',
-                  onOk: handleAplicar,
-                });
-              }}>
-                Aplicar
-              </Button>
-            </PermissionGate>
-          )}
-          {data.revisado !== true && data.estado !== 3 && (
-            <PermissionGate accion="ANULAR">
-              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={() => {
-                Modal.confirm({
-                  title: 'Anular documento',
-                  icon: <ExclamationCircleOutlined />,
-                  content: '¿Está seguro que desea anular este documento?',
-                  okText: 'Sí',
-                  cancelText: 'No',
-                  onOk: handleAnular,
-                });
-              }}>
-                Anular
-              </Button>
-            </PermissionGate>
-          )}
-          {data.estado === 1 && data.revisado !== true && (
-            <PermissionGate accion="POSTEAR">
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
-                Modal.confirm({
-                  title: 'Postear documento',
-                  icon: <ExclamationCircleOutlined />,
-                  content: '¿Está seguro que desea postear este documento?',
-                  okText: 'Sí',
-                  cancelText: 'No',
-                  onOk: handlePostear,
-                });
-              }}>Postear</Button>
-            </PermissionGate>
-          )}
-          {data.estado === 1 && (
-            <>
-              {data.revisado !== true && (
-                <PermissionGate accion="AUTORIZAR">
-                  <Button icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
-                    Modal.confirm({
-                      title: 'Marcar como revisado',
-                      icon: <ExclamationCircleOutlined />,
-                      content: '¿Está seguro que desea marcar este documento como revisado?',
-                      okText: 'Sí',
-                      cancelText: 'No',
-                      onOk: handleRevisado,
-                    });
-                  }}>
-                    Revisado
-                  </Button>
-                </PermissionGate>
-              )}
-              {data.revisado !== true && (
-                <PermissionGate accion="DESAPLICAR">
-                  <Button icon={<RedoOutlined />} loading={saving} onClick={() => {
-                    Modal.confirm({
-                      title: 'Desaplicar documento',
-                      icon: <ExclamationCircleOutlined />,
-                      content: '¿Está seguro que desea desaplicar este documento?',
-                      okText: 'Sí',
-                      cancelText: 'No',
-                      onOk: handleDesaplicar,
-                    });
-                  }}>
-                    Desaplicar
-                  </Button>
-                </PermissionGate>
-              )}
-              {data.revisado === true && (
-                <PermissionGate accion="REVERSAR">
-                  <Button danger icon={<RedoOutlined />} loading={saving} onClick={() => {
-                    Modal.confirm({
-                      title: 'Reversar documento',
-                      icon: <ExclamationCircleOutlined />,
-                      content: '¿Está seguro que desea reversar este documento?',
-                      okText: 'Sí',
-                      cancelText: 'No',
-                      onOk: handleReversar,
-                    });
-                  }}>
-                  Reversar
-                </Button>
-              </PermissionGate>
-              )}
-            </>
-          )}
-        </Space>
-      </div>
+                document.body.removeChild(iframe);
+                URL.revokeObjectURL(blobUrl);
+              }, 30000);
+            }, 2000);
+          } catch {
+            messageApi.error('Error al generar el PDF');
+          } finally {
+            setImprimiendo(false);
+          }
+        }}
+        onEditar={() => navigate(`/FSAP/${id}/editar`)}
+        onAplicar={handleAplicar}
+        onAnular={handleAnular}
+        onPostear={handlePostear}
+        onRevisado={handleRevisado}
+        onDesaplicar={handleDesaplicar}
+        onReversar={handleReversar}
+      />
 
       {isLarge ? (
         <Row gutter={16}>
@@ -700,8 +475,13 @@ const SalidaAlmacenDetalle: React.FC = () => {
 )}
                     <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
                     {tieneScan === true && (
-                      <Tooltip title="Documento escaneado">
-                        <Tag icon={<FileTextOutlined />} color="success" />
+                      <Tooltip title="Ver documento escaneado">
+                        <Tag
+                          icon={<FileTextOutlined />}
+                          color="success"
+                          style={{ cursor: 'pointer' }}
+                          onClick={handleVerScanner}
+                        />
                       </Tooltip>
                     )}
                     {tieneScan === false && (
@@ -750,24 +530,14 @@ const SalidaAlmacenDetalle: React.FC = () => {
                   key: 'asientos',
                   label: `Asientos (${data.asientos?.length || 0})`,
                   children: (
-                    <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
-                      summary={() => (
-                        <Table.Summary fixed>
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        </Table.Summary>
-                      )}
-                    />
+                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 900 }} />
                   ),
                 },
                 {
                   key: 'historial',
                   label: `Historial (${data.logs?.length || 0})`,
                   children: (
-                    <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
@@ -775,11 +545,15 @@ const SalidaAlmacenDetalle: React.FC = () => {
           </Col>
 
           <Col lg={6}>
-            <SuplidorCard entidad={data.entidad} suplidor={data.suplidor} />
+            <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
+            />
+            <DocumentosRelacionadosCard
+              documentos={documentosRelacionados}
+              currentId={data?.id}
             />
           </Col>
         </Row>
@@ -798,8 +572,13 @@ const SalidaAlmacenDetalle: React.FC = () => {
 )}
                     <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
                     {tieneScan === true && (
-                      <Tooltip title="Documento escaneado">
-                        <Tag icon={<FileTextOutlined />} color="success" />
+                      <Tooltip title="Ver documento escaneado">
+                        <Tag
+                          icon={<FileTextOutlined />}
+                          color="success"
+                          style={{ cursor: 'pointer' }}
+                          onClick={handleVerScanner}
+                        />
                       </Tooltip>
                     )}
                     {tieneScan === false && (
@@ -822,7 +601,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
               </Descriptions>
             </Card>
 
-            <SuplidorCard entidad={data.entidad} suplidor={data.suplidor} />
+            <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
 
             <Tabs
               defaultActiveKey="detalles"
@@ -850,24 +629,14 @@ const SalidaAlmacenDetalle: React.FC = () => {
                   key: 'asientos',
                   label: `Asientos (${data.asientos?.length || 0})`,
                   children: (
-                    <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
-                      summary={() => (
-                        <Table.Summary fixed>
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        </Table.Summary>
-                      )}
-                    />
+                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 900 }} />
                   ),
                 },
                 {
                   key: 'historial',
                   label: `Historial (${data.logs?.length || 0})`,
                   children: (
-                    <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
@@ -878,8 +647,45 @@ const SalidaAlmacenDetalle: React.FC = () => {
             monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
             tasa={data.tasa ?? 1}
           />
+
+          <DocumentosRelacionadosCard
+            documentos={documentosRelacionados}
+            currentId={data?.id}
+          />
         </div>
       )}
+
+      {/* Modal de Visor de Scanner */}
+      <Modal
+        title="Documento Escaneado"
+        open={scannerModalOpen}
+        onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
+        width="80%"
+        style={{ top: 20 }}
+        footer={null}
+        destroyOnHidden
+      >
+        {scannerLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin />
+          </div>
+        ) : scannerUrl ? (
+          <iframe src={scannerUrl} style={{ width: '100%', height: '70vh', border: 'none' }} title="Scanner" />
+        ) : (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin />
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal de Progreso para Aplicar/Postear */}
+      <ModalProgreso
+        open={operacion.loading || !!operacion.completado}
+        titulo={operacionTitulo}
+        eventos={operacion.eventos}
+        completado={operacion.completado}
+        onClose={() => operacion.reset()}
+      />
     </div>
   );
 };

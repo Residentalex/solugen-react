@@ -10,7 +10,6 @@ import {
   Modal,
   Descriptions,
   Divider,
-  message,
   Alert,
   Empty,
 } from 'antd';
@@ -117,8 +116,7 @@ const Conteos: React.FC = () => {
           ? (page - 1) * pageSize + resultados.length
           : page * pageSize + 1
       );
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar conteos');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);

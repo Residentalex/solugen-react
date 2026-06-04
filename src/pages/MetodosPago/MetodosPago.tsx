@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Card, Table, Input, Select, Button, Tag, message, Typography, Empty, Modal, Descriptions, Alert } from 'antd';
+import { Card, Table, Input, Select, Button, Tag, Typography, Empty, Modal, Descriptions, Alert } from 'antd';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -34,8 +34,7 @@ const MetodosPago: React.FC = () => {
     try {
       const result = await puntoVentaApi.obtenerMetodosPago(sucursalActiva);
       setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar métodos de pago');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);

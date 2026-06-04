@@ -130,6 +130,11 @@ export const devolucionCompraApi = {
     return data.data;
   },
 
+  obtenerTipoDVCDefecto: async (sucursal: number): Promise<TipoDTO> => {
+    const { data } = await apiClient.get<ApiResponse<TipoDTO>>(`/Tipo/${sucursal}/DVCDefecto`);
+    return data.data;
+  },
+
   buscarEntradas: async (sucursal: number, params?: any): Promise<any[]> => {
     const { data } = await apiClient.get<ApiResponse<any[]>>(`/ENP/${sucursal}/vista`, { params });
     return data.data;

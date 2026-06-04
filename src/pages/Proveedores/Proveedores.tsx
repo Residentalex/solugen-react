@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Table, Card, Input, Button, message, Typography, Space, Alert } from 'antd';
+import { useNavigate, Link } from 'react-router-dom';
+import { Table, Card, Input, Button, Typography, Space, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -49,8 +49,7 @@ const Proveedores: React.FC = () => {
       }
       setData(resultados);
       setTotal(resultados.length < filas ? (pagina - 1) * filas + resultados.length : pagina * filas + 1);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar proveedores');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);
@@ -89,9 +88,9 @@ const Proveedores: React.FC = () => {
       width: 120,
       fixed: 'left',
       render: (val: string, record: SuplidorDTO) => (
-        <Text strong className="paces-doc-link" onClick={() => navigate(`/MProveedor/${record.codigo}`)}>
-          {val}
-        </Text>
+        <Link to={`/MProveedor/${record.codigo}`} className="paces-doc-link">
+          <Text strong>{val}</Text>
+        </Link>
       ),
     },
     {

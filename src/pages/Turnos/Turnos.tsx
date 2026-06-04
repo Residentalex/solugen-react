@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Alert, Table, DatePicker, Tag, message, Card, Button, Typography,
+  Alert, Table, DatePicker, Tag, Card, Button, Typography,
   Modal, Descriptions, Divider, Input, Empty,
 } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
@@ -92,8 +92,7 @@ const Turnos: React.FC = () => {
           : (pagina - 1) * filas + result.length + filas
       );
       setLoadingError(false);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar turnos');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);

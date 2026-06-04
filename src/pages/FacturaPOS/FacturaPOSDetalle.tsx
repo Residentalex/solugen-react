@@ -20,6 +20,7 @@ import { apiClient } from '../../api/client';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
 import type { FacturaPOSDTO } from '../../types/facturaPOS';
 import PermissionGate from '../../components/PermissionGate';
+import LogTable from '../../components/LogTable';
 
 const { Text } = Typography;
 
@@ -31,19 +32,6 @@ const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   4: { label: 'Pagado', color: 'cyan' },
   5: { label: 'Abierto', color: 'warning' },
   6: { label: 'Cerrado', color: 'default' },
-};
-
-const ACCION_MAP: Record<number, string> = {
-  0: 'Crear',
-  1: 'Modificar',
-  2: 'Eliminar',
-  3: 'Aplicar',
-  4: 'Desaplicar',
-  5: 'Postear',
-  6: 'Anular',
-  7: 'Revisar',
-  8: 'Reversar',
-  9: 'Escanear',
 };
 
 function formatCurrency(n: number): string {
@@ -190,6 +178,12 @@ const FacturaPOSDetalle: React.FC = () => {
     setError(null);
     facturaPOSApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
+        if (!res) {
+          const msg = 'Documento no encontrado en la sucursal seleccionada.';
+          setError(msg);
+          message.error(msg);
+          return;
+        }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
       })
@@ -345,16 +339,6 @@ const FacturaPOSDetalle: React.FC = () => {
     },
   ];
 
-
-  const logColumns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
-    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200,
-      render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-') },
-    { title: 'Estacion', dataIndex: 'estacion', key: 'estacion', width: 200 },
-    { title: 'Accion', dataIndex: 'accion', key: 'accion', width: 120,
-      render: (v: number) => ACCION_MAP[v] || `Accion ${v}` },
-    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
-  ];
 
   // ===== Handlers de acciones de estado =====
   const handleAplicar = async () => {
@@ -566,7 +550,7 @@ const FacturaPOSDetalle: React.FC = () => {
                   key: 'historial',
                   label: `Historial (${data.logs?.length || 0})`,
                   children: (
-                    <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
@@ -652,7 +636,7 @@ const FacturaPOSDetalle: React.FC = () => {
                 key: 'historial',
                 label: `Historial (${data.logs?.length || 0})`,
                 children: (
-                  <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                  <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                 ),
               },
             ]}

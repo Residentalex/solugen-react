@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Descriptions, Tag, Spin, Button, Space, Row, Col, message, Modal, Alert, Form, Input, Switch, InputNumber, Tabs, Select, Typography, Table } from 'antd';
 import { ArrowLeftOutlined, KeyOutlined, StopOutlined, CheckCircleOutlined, EditOutlined, SaveOutlined, CloseOutlined } from '@ant-design/icons';
@@ -6,8 +6,10 @@ import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
 import { usuarioApi } from '../../api/usuarioApi';
 import { rolApi } from '../../api/rolApi';
+import { empleadoApi, type EmpleadoDTO } from '../../api/empleadoApi';
 import type { UsuarioDTO } from '../../types/administracion';
 import type { RolDTO, PantallaDTO, UsuarioSucursalRolDTO } from '../../types/auth';
+import { ErrorDetalle } from '../../components';
 
 /* ───────── helpers ───────── */
 function formatFecha(iso?: string): string {
@@ -39,8 +41,13 @@ const CambiarClaveTag: React.FC<{ debe: boolean }> = ({ debe }) => (
 /* ───────── constantes sucursales ───────── */
 const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
 
+/* ───────── tipo extendido para pantallas con roles de acceso ───────── */
+interface PantallaConRoles extends PantallaDTO {
+  rolesAcceso: string[];
+}
+
 /* ───────── renderizado de pantallas como tabla ───────── */
-function renderPantallasGrouped(pantallas: PantallaDTO[]): React.ReactNode {
+function renderPantallasGrouped(pantallas: PantallaConRoles[]): React.ReactNode {
   const data = [...pantallas].sort((a, b) => {
     const modA = a.modulos?.[0]?.orden ?? 999;
     const modB = b.modulos?.[0]?.orden ?? 999;
@@ -73,10 +80,21 @@ function renderPantallasGrouped(pantallas: PantallaDTO[]): React.ReactNode {
         {
           title: 'Módulo',
           width: 150,
-          render: (_: any, record: PantallaDTO) => (
+          render: (_: any, record: PantallaConRoles) => (
             <Tag color="geekblue" style={{ fontSize: 11 }}>
               {record.modulos?.[0]?.nombre || 'Sin módulo'}
             </Tag>
+          ),
+        },
+        {
+          title: 'Acceso vía Rol',
+          width: 200,
+          render: (_: any, record: PantallaConRoles) => (
+            <Space wrap size={2}>
+              {(record.rolesAcceso || []).map((rol) => (
+                <Tag key={rol} color="blue" style={{ fontSize: 11 }}>{rol}</Tag>
+              ))}
+            </Space>
           ),
         },
       ]}
@@ -120,10 +138,11 @@ const UsuarioDetalle: React.FC = () => {
   const [form] = Form.useForm();
   const [sucursalesRolesEdit, setSucursalesRolesEdit] = useState<UsuarioSucursalRolDTO[]>([]);
   const [rolesDisponibles, setRolesDisponibles] = useState<Record<number, RolDTO[]>>({});
-  const [pantallasPorSucursal, setPantallasPorSucursal] = useState<Record<number, PantallaDTO[]>>({});
+  const [pantallasPorSucursal, setPantallasPorSucursal] = useState<Record<number, PantallaConRoles[]>>({});
   const [sucursalActivaTab, setSucursalActivaTab] = useState<Sucursal>(SUCURSALES[0]);
   const [cargandoPantallas, setCargandoPantallas] = useState(false);
   const [cargandoRoles, setCargandoRoles] = useState(false);
+  const [empleados, setEmpleados] = useState<EmpleadoDTO[]>([]);
 
   /* ─── efectos de montaje ─── */
   useEffect(() => {
@@ -138,6 +157,11 @@ const UsuarioDetalle: React.FC = () => {
     setLoadingError(false);
     try {
       const res = await usuarioApi.obtenerPorId(SUCURSAL_SEGURIDAD, parseInt(id));
+      if (!res) {
+        message.error('Usuario no encontrado en la sucursal seleccionada.');
+        setLoadingError(true);
+        return;
+      }
       setData(res);
       setPageTitleOverride(res.nombreUsuario);
     } catch (err: any) {
@@ -168,12 +192,42 @@ const UsuarioDetalle: React.FC = () => {
     }
   }, []);
 
-  /* ─── carga de pantallas para la sucursal activa ─── */
-  const cargarPantallas = useCallback(async (sucursal: Sucursal) => {
+  /* ─── carga de pantallas filtradas por los roles del usuario en la sucursal ─── */
+  const cargarPantallas = useCallback(async (sucursal: Sucursal, rolesUsuario: RolDTO[]) => {
     setCargandoPantallas(true);
     try {
-      const pantallas = await rolApi.obtenerPantallasDisponibles(SUCURSAL_SEGURIDAD);
-      setPantallasPorSucursal((prev) => ({ ...prev, [sucursal]: pantallas }));
+      if (rolesUsuario.length === 0) {
+        setPantallasPorSucursal((prev) => ({ ...prev, [sucursal]: [] }));
+        return;
+      }
+
+      // Obtener detalles completos de cada rol (incluye sus pantallas)
+      const promesas = rolesUsuario.map((r) => rolApi.obtenerPorId(SUCURSAL_SEGURIDAD, r.id));
+      const rolesCompletos = await Promise.all(promesas);
+
+      // Unir pantallas de todos los roles y registrar qué rol da acceso
+      const pantallasMap = new Map<number, PantallaConRoles>();
+
+      rolesCompletos.forEach((rolCompleto) => {
+        (rolCompleto.pantallas || []).forEach((pantalla) => {
+          const existente = pantallasMap.get(pantalla.id);
+          if (existente) {
+            if (!existente.rolesAcceso.includes(rolCompleto.nombre)) {
+              existente.rolesAcceso.push(rolCompleto.nombre);
+            }
+          } else {
+            pantallasMap.set(pantalla.id, {
+              ...pantalla,
+              rolesAcceso: [rolCompleto.nombre],
+            });
+          }
+        });
+      });
+
+      setPantallasPorSucursal((prev) => ({
+        ...prev,
+        [sucursal]: Array.from(pantallasMap.values()),
+      }));
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar pantallas');
       setPantallasPorSucursal((prev) => ({ ...prev, [sucursal]: [] }));
@@ -182,11 +236,16 @@ const UsuarioDetalle: React.FC = () => {
     }
   }, []);
 
-  /* cuando cambia la sucursal activa (en modo edicion), recargar pantallas */
+  /* cuando cambia la sucursal activa o los roles, recargar pantallas filtradas */
+  const rolesSucursalActiva = useMemo(
+    () => data?.sucursalesRoles?.find((x) => x.sucursal === sucursalActivaTab)?.roles || [],
+    [data, sucursalActivaTab]
+  );
+
   useEffect(() => {
     if (!data) return;
-    cargarPantallas(sucursalActivaTab);
-  }, [sucursalActivaTab, data, cargarPantallas]);
+    cargarPantallas(sucursalActivaTab, rolesSucursalActiva);
+  }, [sucursalActivaTab, data, cargarPantallas, rolesSucursalActiva]);
 
   /* ─── handlers de modo ─── */
   const entrarEdicion = useCallback(async () => {
@@ -196,10 +255,12 @@ const UsuarioDetalle: React.FC = () => {
       nombreUsuario: data.nombreUsuario,
       activo: data.activo,
       diasVigencia: data.diasVigencia,
+      empleadoID: data.empleadoID,
     });
     setSucursalesRolesEdit(JSON.parse(JSON.stringify(data.sucursalesRoles || [])));
     setModoEdicion(true);
     await cargarRolesDisponibles();
+    empleadoApi.obtenerTodos(SUCURSAL_SEGURIDAD).then(setEmpleados).catch(() => {});
   }, [data, form, cargarRolesDisponibles]);
 
   const cancelarEdicion = useCallback(() => {
@@ -246,6 +307,7 @@ const UsuarioDetalle: React.FC = () => {
         nombreUsuario: values.nombreUsuario,
         activo: values.activo,
         diasVigencia: values.diasVigencia,
+        empleadoID: values.empleadoID || data.empleadoID,
         sucursalesRoles: sucursalesRolesEdit,
       };
       await usuarioApi.actualizar(SUCURSAL_SEGURIDAD, payload);
@@ -342,6 +404,29 @@ const UsuarioDetalle: React.FC = () => {
                   <Input placeholder="Nombre y apellidos" />
                 </Form.Item>
               </Col>
+              <Col xs={24} sm={12} lg={6}>
+                <Form.Item name="empleadoID" label="Empleado">
+                  <Select
+                    showSearch
+                    placeholder="Buscar empleado..."
+                    allowClear
+                    filterOption={(input, option) =>
+                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                    }
+                    options={empleados.map(e => ({ label: `${e.codigo} - ${e.nombre}`, value: e.codigo }))}
+                    onChange={(codigo) => {
+                      if (!codigo) return;
+                      const emp = empleados.find(e => e.codigo === codigo);
+                      if (!emp) return;
+                      form.setFieldValue('nombre', emp.nombre);
+                    const partes = emp.nombre.trim().split(/\s+/);
+                    const apellido = partes[0] || '';
+                    const nombre = partes[partes.length - 1] || '';
+                    form.setFieldValue('nombreUsuario', (nombre.charAt(0) + apellido).toUpperCase());
+                    }}
+                  />
+                </Form.Item>
+              </Col>
               <Col xs={12} sm={8} lg={4}>
                 <Form.Item name="diasVigencia" label="Vigencia (días)" rules={[{ required: true, message: 'Obligatorio' }]}>
                   <InputNumber min={1} max={365} style={{ width: '100%' }} />
@@ -360,7 +445,7 @@ const UsuarioDetalle: React.FC = () => {
 
     return (
       <Card title="Información General" style={{ borderRadius: 8, marginBottom: 16 }}>
-        <Descriptions column={{ xs: 1, sm: 2 }} size="small" labelStyle={{ fontWeight: 500 }}>
+        <Descriptions column={{ xs: 1, sm: 2 }} size="small" styles={{ label: { fontWeight: 500 } }}>
           <Descriptions.Item label="ID">{data!.id}</Descriptions.Item>
           <Descriptions.Item label="Nombre">{data!.nombre}</Descriptions.Item>
           <Descriptions.Item label="Usuario">
@@ -470,8 +555,11 @@ const UsuarioDetalle: React.FC = () => {
   };
 
   /* ─── render: loading ─── */
-  if (loading) {
+  if (loading || (!data && !loadingError)) {
     return <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>;
+  }
+  if (loadingError && !data) {
+    return <ErrorDetalle mensaje="Error al cargar el usuario" rutaVolver="/MUsuario" />;
   }
   if (!data) return null;
 

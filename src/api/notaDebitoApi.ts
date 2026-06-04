@@ -74,9 +74,9 @@ export const notaDebitoApi = {
     return data.data;
   },
 
-  desaplicar: async (sucursal: number, documento: string): Promise<TransaccionVistaDTO> => {
-    const { data } = await apiClient.put<ApiResponse<TransaccionVistaDTO>>(`${BASE}/desaplicar?sucursal=${sucursal}&documento=${documento}`);
-    return data.data;
+  desaplicar: async (origen: string, documento: string): Promise<void> => {
+    const params = { origen, documento };
+    await apiClient.put(`${BASE}/desaplicar`, null, { params });
   },
 
   postear: async <T>(sucursal: number, transaccion: T): Promise<T> => {
@@ -87,5 +87,25 @@ export const notaDebitoApi = {
   recalcularPagos: async (sucursal: number, id: number): Promise<TransaccionVistaDTO> => {
     const { data } = await apiClient.put<ApiResponse<TransaccionVistaDTO>>(`${BASE}/${sucursal}/recalcularPagos/${id}`);
     return data.data;
+  },
+
+  verificarScan: async (sucursal: number, id: number): Promise<{ existe: boolean }> => {
+    const { data } = await apiClient.get<ApiResponse<{ existe: boolean }>>(`${BASE}/${sucursal}/${id}/scanner/verificar`);
+    return data.data;
+  },
+
+  descargarScan: async (sucursal: number, id: number): Promise<Blob> => {
+    const { data } = await apiClient.get<Blob>(`${BASE}/${sucursal}/${id}/scanner/descargar`, {
+      responseType: 'blob',
+    });
+    return data;
+  },
+
+  revisado: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.post(`${BASE}/${sucursal}/${id}/Revisado`);
+  },
+
+  reversar: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.post(`${BASE}/${sucursal}/${id}/Reversar`);
   },
 };

@@ -103,12 +103,15 @@ import CierreInventario from './pages/CierreInventario/CierreInventario';
 import CierreDetalle from './pages/CierreInventario/CierreDetalle';
 import GeneradorORC from './pages/GeneradorORC/GeneradorORC';
 import GeneradorORCDetalle from './pages/GeneradorORC/GeneradorORCDetalle';
+import GeneradorORCFormulario from './pages/GeneradorORC/GeneradorORCFormulario';
 import Tickets from './pages/Tickets/Tickets';
 import VisualizarConsulta from './pages/Notificaciones/VisualizarConsulta';
 import PlantillaSuplidor from './pages/PlantillaSuplidor/PlantillaSuplidor';
 import PlantillaSuplidorDetalle from './pages/PlantillaSuplidor/PlantillaSuplidorDetalle';
 import PlantillaSuplidorFormulario from './pages/PlantillaSuplidor/PlantillaSuplidorFormulario';
 import MovimientoPorPlantilla from './pages/MovimientoPorPlantilla/MovimientoPorPlantilla';
+import DocumentacionPage from './pages/Documentacion/DocumentacionPage';
+import ApiTokens from './pages/ApiTokens/ApiTokens';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -128,7 +131,7 @@ const PantallaGuard: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   // Extraer el código de la pantalla desde el primer segmento de la ruta
   const segmentos = location.pathname.split('/').filter(Boolean);
   const codigoRuta = segmentos[0] || '';
-  if (codigoRuta && !['dashboard', 'cambiar-clave', 'MPERFIL', 'MPerfil', 'notificaciones', 'MTicket', 'visualizar-consulta'].includes(codigoRuta)) {
+  if (codigoRuta && !['dashboard', 'cambiar-clave', 'MPERFIL', 'MPerfil', 'notificaciones', 'MTicket', 'visualizar-consulta', 'MApiToken'].includes(codigoRuta)) {
     const tieneAcceso = pantallas.some((p) => p.codigo.toLowerCase() === codigoRuta.toLowerCase());
     if (!tieneAcceso) {
       return <Navigate to="/" replace />;
@@ -293,7 +296,9 @@ const App: React.FC = () => {
           <Route path="OImportarINV" element={<ImportarInventario />} />
           <Route path="OCierreINV" element={<CierreInventario />} />
           <Route path="OCierreINV/detalle/:cierreId" element={<CierreDetalle />} />
-          <Route path="FGORC" element={<GeneradorORC />} />
+            <Route path="FGORC" element={<GeneradorORC />} />
+            <Route path="FGORC/nuevo" element={<GeneradorORCFormulario />} />
+            <Route path="FGORC/:id/editar" element={<GeneradorORCFormulario />} />
           <Route path="FGORC/:id" element={<GeneradorORCDetalle />} />
           <Route path="OActualizacionCostos" element={<ActualizacionCostos />} />
           <Route path="RAntiguedaCXC" element={<AntiguedadSaldos tipoEntidad="CLI" />} />
@@ -316,7 +321,13 @@ const App: React.FC = () => {
           <Route path="MEmpresa" element={<Proximamente modulo="Configuración de la Empresa" codigo="MEmpresa" />} />
           <Route path="MTerminal" element={<Proximamente modulo="Terminales" codigo="MTerminal" />} />
           <Route path="MSincronizacion" element={<Proximamente modulo="Sincronización" codigo="MSincronizacion" />} />
+          <Route path="MApiToken" element={<ApiTokens />} />
           </Route>
+
+        {/* Rutas de documentación (sin autenticación, fuera de MainLayout) */}
+        <Route path="/documentacion" element={<DocumentacionPage />} />
+        <Route path="/documentacion/:modulo/:doc" element={<DocumentacionPage />} />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

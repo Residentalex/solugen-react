@@ -77,8 +77,7 @@ const Pantallas: React.FC = () => {
     try {
       const result = await pantallaApi.obtenerListado(sucursalActiva);
       setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar pantallas');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);
@@ -95,8 +94,7 @@ const Pantallas: React.FC = () => {
       ]);
       setModulosCatalogo(modulos || []);
       setAccionesCatalogo(acciones || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar catálogos');
+    } catch {
       setLoadingError(true);
     } finally {
       setCatalogosLoading(false);

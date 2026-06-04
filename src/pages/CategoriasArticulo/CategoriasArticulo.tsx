@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Alert, Table, Card, Input, Select, Button, message, Typography } from 'antd';
+import { Alert, Table, Card, Input, Select, Button, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
@@ -33,8 +33,7 @@ const CategoriasArticulo: React.FC = () => {
     try {
       const result = await categoriaArticuloApi.obtenerListado(sucursalActiva);
       setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar categorías');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);

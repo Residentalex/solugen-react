@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { useAuthStore } from '../../stores/authStore';
 import { Sucursal } from '../../types/auth';
 import { Form, Input, Button, Alert } from 'antd';
@@ -20,7 +21,9 @@ const Login: React.FC = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/', { replace: true });
+      const returnUrl = sessionStorage.getItem('returnUrl');
+      sessionStorage.removeItem('returnUrl');
+      navigate(returnUrl || '/', { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
@@ -55,11 +58,24 @@ const Login: React.FC = () => {
         sucursal: SUCURSAL_SEGURIDAD,
       });
 
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4003/api';
+      try {
+        const resp = await axios.get(`${apiUrl}/app/version/SoluGen`);
+        const version = resp.data?.data;
+        if (version) {
+          useAuthStore.getState().setAppVersion(version);
+        }
+      } catch {
+        // No bloquear el login si falla obtener la versión
+      }
+
       const usuario = useAuthStore.getState().usuario;
       if (usuario?.debeCambiarClave) {
         navigate('/cambiar-clave', { replace: true });
       } else {
-        navigate('/', { replace: true });
+        const returnUrl = sessionStorage.getItem('returnUrl');
+        sessionStorage.removeItem('returnUrl');
+        navigate(returnUrl || '/', { replace: true });
       }
     } catch (err: any) {
       const apiMsg = err.response?.data?.errorMessage || err.response?.data?.ErrorMessage;

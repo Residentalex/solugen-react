@@ -10,6 +10,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { clienteApi } from '../../api/clienteApi';
 import type { ClienteDTO } from '../../types/facturacion';
 import ErrorBoundary from '../../components/ErrorBoundary';
+import { ErrorDetalle } from '../../components';
 
 const { Text } = Typography;
 
@@ -59,10 +60,16 @@ const ClienteDetalle: React.FC = () => {
 
     const abortController = new AbortController();
     setLoading(true);
+    setLoadingError(false);
 
     clienteApi.obtenerPorCodigo(sucursalActiva, codigo, abortController.signal)
       .then((res) => {
         if (abortController.signal.aborted) return;
+        if (!res) {
+          message.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setData(res);
         setPageTitleOverride(res.nombre || codigo);
         form.setFieldsValue({
@@ -146,13 +153,16 @@ const ClienteDetalle: React.FC = () => {
     }
   };
 
-  if (!esNuevo && loading) {
+  if (!esNuevo && (loading || (!data && !loadingError))) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
         <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando cliente...</div>
       </div>
     );
+  }
+  if (!esNuevo && loadingError && !data) {
+    return <ErrorDetalle mensaje="Error al cargar el documento" rutaVolver="/MCliente" />;
   }
 
   const esSoloLectura = !esNuevo && !editando;
@@ -204,6 +214,11 @@ const ClienteDetalle: React.FC = () => {
     clienteApi.obtenerPorCodigo(sucursalActiva, codigo, abortController.signal)
       .then((res) => {
         if (abortController.signal.aborted) return;
+        if (!res) {
+          message.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setData(res);
         setPageTitleOverride(res.nombre || codigo);
         form.setFieldsValue({

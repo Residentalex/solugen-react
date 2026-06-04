@@ -131,6 +131,23 @@ export const transaccionApi = {
     );
     return data.data || [];
   },
+
+  /** Buscar transacciones por campo específico (documento, ncf, doc_ref) */
+  buscarPorCampo: async (
+    sucursal: number,
+    campo: 'documento' | 'ncf' | 'doc_ref',
+    valor: string,
+    cantidad: number = 10,
+    tipoDoc?: string
+  ): Promise<TransaccionVistaDTO[]> => {
+    const params: Record<string, string | number> = { campo, valor, cantidad };
+    if (tipoDoc) params.tipoDoc = tipoDoc;
+    const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO[]>>(
+      `${BASE}/${sucursal}/buscar`,
+      { params }
+    );
+    return data.data;
+  },
 };
 
 export { formatDateParam };

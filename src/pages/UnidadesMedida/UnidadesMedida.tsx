@@ -39,8 +39,7 @@ const UnidadesMedida: React.FC = () => {
     try {
       const result = await unidadMedidaApi.obtenerListado(sucursalActiva);
       setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar unidades de medida');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);

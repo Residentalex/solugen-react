@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Tag, Button, Card, Input, message, Empty, Modal, Select, Form, Alert } from 'antd';
+import { Table, Tag, Button, Card, Input, message, Empty, Modal, Select, Form, Alert, Typography } from 'antd';
 import { ReloadOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
@@ -60,8 +60,7 @@ const Tickets: React.FC = () => {
     try {
       const data = await ticketApi.obtenerPendientes(sucursal, usuarioID);
       setTickets(data);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar tickets');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);
@@ -107,6 +106,16 @@ const Tickets: React.FC = () => {
   });
 
   const columns: ColumnsType<TicketDTO> = [
+    {
+      title: 'N° Ticket',
+      dataIndex: 'numero',
+      key: 'numero',
+      width: 120,
+      fixed: 'left',
+      render: (numero: string) => (
+        <Typography.Text strong style={{ fontFamily: 'monospace' }}>{numero || '-'}</Typography.Text>
+      ),
+    },
     {
       title: 'Título',
       dataIndex: 'titulo',
@@ -210,7 +219,7 @@ const Tickets: React.FC = () => {
           dataSource={filtered}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 600 }}
+          scroll={{ x: 750 }}
           size="middle"
           locale={{
             emptyText: <Empty description="No hay tickets" />,

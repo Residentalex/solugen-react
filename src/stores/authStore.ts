@@ -51,6 +51,7 @@ interface AuthState {
   compania: Sucursal;
   equipo: string;
   ip: string;
+  appVersion: string;
   isAuthenticated: boolean;
 
   login: (request: {
@@ -71,6 +72,7 @@ interface AuthState {
   }) => void;
   marcarClaveCambiada: () => void;
   setSucursalActiva: (sucursal: Sucursal) => void;
+  setAppVersion: (version: string) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -82,6 +84,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   compania: SUCURSAL_CONSOLIDADO,
   equipo: localStorage.getItem('equipo') || '',
   ip: localStorage.getItem('ip') || '',
+  appVersion: localStorage.getItem('appVersion') || '',
   isAuthenticated: !!localStorage.getItem('accessToken'),
 
   login: async (request) => {
@@ -115,6 +118,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('equipo');
     localStorage.removeItem('ip');
     localStorage.removeItem('sucursalActiva');
+    localStorage.removeItem('appVersion');
     set({
       accessToken: '',
       refreshToken: '',
@@ -124,6 +128,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       compania: SUCURSAL_CONSOLIDADO,
       equipo: '',
       ip: '',
+      appVersion: '',
       isAuthenticated: false,
     });
   },
@@ -157,5 +162,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   setSucursalActiva: (sucursal) => {
     localStorage.setItem('sucursalActiva', sucursal.toString());
     set({ sucursalActiva: sucursal });
+  },
+
+  setAppVersion: (version) => {
+    localStorage.setItem('appVersion', version);
+    set({ appVersion: version });
   },
 }));

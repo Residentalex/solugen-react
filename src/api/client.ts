@@ -19,12 +19,33 @@ if (useMocks) {
 
 apiClient.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
+
   if (token) {
+    // Verificar si el token ya expiró ANTES de enviar el request
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.exp * 1000 < Date.now()) {
+        // Token expirado → no tiene sentido intentar el request
+        useAuthStore.getState().logout();
+        sessionStorage.setItem('returnUrl', window.location.pathname + window.location.search);
+        window.location.href = '/login';
+        return Promise.reject(new Error('Sesión expirada'));
+      }
+    } catch {
+      // Si falla decodificar el token, continuar normalmente
+    }
+
     config.headers.Authorization = `Bearer ${token}`;
   }
+
   // Identificar origen web para el historial
-  config.headers['X-Client-Machine'] = window.location.hostname;
   config.headers['X-Client-App'] = 'WEB';
+
+  const appVersion = useAuthStore.getState().appVersion;
+  if (appVersion) {
+    config.headers['X-Client-Version'] = appVersion;
+  }
+
   return config;
 });
 
@@ -35,7 +56,15 @@ apiClient.interceptors.response.use(
 
     const isLoginRequest = originalRequest.url?.includes('/auth/login');
 
-    if (error.response?.status === 401 && !originalRequest._retry && !isLoginRequest) {
+    if (error.response?.status === 401 && !isLoginRequest) {
+      // Ya se intentó refrescar y sigue dando 401 → forzar redirect
+      if (originalRequest._retry) {
+        useAuthStore.getState().logout();
+        sessionStorage.setItem('returnUrl', window.location.pathname + window.location.search);
+        window.location.href = '/login';
+        return Promise.reject(new Error('Sesión expirada'));
+      }
+
       originalRequest._retry = true;
 
       try {
@@ -68,6 +97,7 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch {
         useAuthStore.getState().logout();
+        sessionStorage.setItem('returnUrl', window.location.pathname + window.location.search);
         window.location.href = '/login';
         return Promise.reject(new Error('Sesión expirada'));
       }

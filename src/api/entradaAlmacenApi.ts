@@ -64,8 +64,8 @@ export const entradaAlmacenApi = {
     return data.data;
   },
 
-  desaplicar: async (origen: string, destino: string, documento: string): Promise<void> => {
-    const params = { origen, destino, documento };
+  desaplicar: async (origen: string, documento: string): Promise<void> => {
+    const params = { origen, documento };
     await apiClient.put(`${BASE}/desaplicar`, null, { params });
   },
 

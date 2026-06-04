@@ -1,146 +1,31 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Tooltip
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Modal, Tooltip, Alert, App
 } from 'antd';
 import {
-  ArrowLeftOutlined, PrinterOutlined, EditOutlined, LockFilled,
-  CheckCircleOutlined, CloseCircleOutlined,
+  ArrowLeftOutlined, LockFilled,
+  CloseCircleOutlined,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
+  FileTextOutlined, FileSearchOutlined,
 } from '@ant-design/icons';
+import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { cotizacionVentaApi } from '../../api/cotizacionVentaApi';
-import PermissionGate from '../../components/PermissionGate';
+import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
+import LogTable from '../../components/LogTable';
+import AsientosContableTable from '../../components/AsientosContableTable';
+import { useAplicar } from '../../hooks/useAplicar';
+import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
+import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import type { CotizacionVentaDetalleDTO } from '../../types/cotizacionVenta';
-
-const ESTADO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
-
-const ACCION_MAP: Record<number, string> = {
-  0: 'Crear',
-  1: 'Modificar',
-  2: 'Eliminar',
-  3: 'Aplicar',
-  4: 'Desaplicar',
-  5: 'Postear',
-  6: 'Anular',
-  7: 'Revisar',
-  8: 'Reversar',
-  9: 'Escanear',
-};
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function toTitleCase(str: string): string {
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatDate(val: string): string {
-  if (!val) return '-';
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
-  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-interface ClienteCardProps {
-  entidad: { nombre: string; identificacion: string; telefono?: string; direccion?: string } | undefined;
-}
-
-const ClienteCard: React.FC<ClienteCardProps> = ({ entidad }) => {
-  const identificacion = entidad?.identificacion || '';
-  const telefono = entidad?.telefono || '';
-  const direccion = entidad?.direccion ? toTitleCase(entidad.direccion) : '-';
-
-  return (
-    <Card
-      title={<span style={{ fontSize: 16, fontWeight: 600 }}>{toTitleCase(entidad?.nombre || 'Cliente')}</span>}
-      className="paces-card"
-      style={{ marginBottom: 16 }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {identificacion && identificacion !== '-' && (
-          <div style={{ fontSize: 13 }}>
-            <IdcardOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {identificacion}
-          </div>
-        )}
-        {telefono && telefono !== '-' && (
-          <div style={{ fontSize: 13 }}>
-            <PhoneOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {telefono}
-          </div>
-        )}
-        {direccion && direccion !== '-' && (
-          <div style={{ fontSize: 13, color: '#595959' }}>
-            <EnvironmentOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {direccion}
-          </div>
-        )}
-      </div>
-    </Card>
-  );
-};
-
-interface TotalesCardProps {
-  subTotal: number;
-  descuento: number;
-  impuestos: number;
-  total: number;
-  alignRight: boolean;
-  monedaSimbolo?: string;
-  monedaNombre?: string;
-  tasa?: number;
-}
-
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    className="paces-card"
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
-      {monedaSimbolo && tasa !== undefined && (
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
-        </div>
-      )}
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
-        <span>{formatNumber(subTotal)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Descuento</span>}
-        <span>{formatNumber(descuento)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
-        <span>{formatNumber(impuestos)}</span>
-      </div>
-    </div>
-
-    <Divider style={{ margin: '12px 0' }} />
-
-    <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
-      {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
-    </div>
-  </Card>
-);
+import EntidadCard from '../../components/EntidadCard';
+import TotalesCard from '../../components/TotalesCard';
+import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
+import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const CotizacionVentaDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -152,9 +37,20 @@ const CotizacionVentaDetalle: React.FC = () => {
 
   const [data, setData] = useState<CotizacionVentaDetalleDTO | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [detalleSearch, setDetalleSearch] = useState('');
+  const [tieneScan, setTieneScan] = useState<boolean | null>(null);
+  const [scannerModalOpen, setScannerModalOpen] = useState(false);
+  const [scannerUrl, setScannerUrl] = useState<string | null>(null);
+  const [scannerLoading, setScannerLoading] = useState(false);
+  const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionDTO[]>([]);
+
+  const operacion = useAplicar();
+  const [operacionTitulo, setOperacionTitulo] = useState('');
+
+  const { message } = App.useApp();
   const screens = Grid.useBreakpoint();
 
   useEffect(() => {
@@ -162,24 +58,83 @@ const CotizacionVentaDetalle: React.FC = () => {
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
+  // Cargar documentos relacionados desde DOCUMENTOS_RELACION
+  useEffect(() => {
+    if (!data?.id) return;
+    documentoRelacionApi.obtenerPorTransaccion(data.id)
+      .then(rel => setDocumentosRelacionados(rel || []))
+      .catch(() => {
+        setDocumentosRelacionados([]);
+        message.warning('No se pudieron cargar los documentos relacionados');
+      });
+  }, [data?.id]);
+
+  const handleRefresh = useCallback(() => {
+    if (!id) return;
+    setLoadingError(false);
+    cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res: any) => {
+        if (!res) {
+          message.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
+        setData(res);
+        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        cotizacionVentaApi.verificarScan(sucursalActiva, parseInt(id))
+          .then((scanRes) => setTieneScan(scanRes.existe))
+          .catch(() => setTieneScan(false));
+        // Cargar documentos relacionados desde DOCUMENTOS_RELACION
+        documentoRelacionApi.obtenerPorTransaccion(parseInt(id))
+          .then(rel => setDocumentosRelacionados(rel || []))
+          .catch(() => setDocumentosRelacionados([]));
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
+      })
+  }, [id, sucursalActiva, setPageTitleOverride]);
+
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    setError(null);
+    setLoadingError(false);
     cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res: any) => {
+        if (!res) {
+          message.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        // Verificar scanner
+        cotizacionVentaApi.verificarScan(sucursalActiva, parseInt(id))
+          .then((scanRes) => setTieneScan(scanRes.existe))
+          .catch(() => setTieneScan(false));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al cargar el documento';
-        setError(msg);
         message.error(msg);
+        setLoadingError(true);
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
-  if (loading) {
+  // ===== Detalles filtrados por búsqueda =====
+  const detallesFiltrados = detalleSearch
+    ? (data?.detalles || []).filter((d: any) => {
+        const q = detalleSearch.toLowerCase();
+        return (
+          (d.codigo || '').toLowerCase().includes(q) ||
+          (d.articulo || '').toLowerCase().includes(q) ||
+          (d.referencia || '').toLowerCase().includes(q)
+        );
+      })
+    : (data?.detalles || []);
+
+  if (loading || (!data && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
@@ -188,13 +143,23 @@ const CotizacionVentaDetalle: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (loadingError && !data) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
-        <div style={{ fontSize: 18, color: '#ff4d4f', marginBottom: 16 }}>Error</div>
-        <div style={{ marginBottom: 24 }} className="paces-text-secondary">{error}</div>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FCotizacion')}>
-          Volver
+        <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
+        <div style={{ marginTop: 16, fontSize: 16, color: '#ff4d4f' }}>
+          Error al cargar el documento
+        </div>
+        <div style={{ marginTop: 8 }} className="paces-text-secondary">
+          Verifique que el documento exista en la sucursal seleccionada.
+        </div>
+        <Button
+          type="primary"
+          icon={<ArrowLeftOutlined />}
+          style={{ marginTop: 24 }}
+          onClick={() => navigate('/FCotizacion')}
+        >
+          Volver al listado
         </Button>
       </div>
     );
@@ -206,7 +171,7 @@ const CotizacionVentaDetalle: React.FC = () => {
 
   const isLarge = screens.lg ?? true;
 
-  const estadoInfo = ESTADO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
   const detalleColumns = [
@@ -322,50 +287,48 @@ const CotizacionVentaDetalle: React.FC = () => {
     },
   ];
 
-  const asientoColumns = [
-    { title: 'Cuenta', key: 'cuenta', width: 120,
-      render: (_: any, r: any) => r.cuentaContable?.noCuenta || '-' },
-    { title: 'Nombre', key: 'nombre', ellipsis: true,
-      render: (_: any, r: any) => r.cuentaContable?.nombre ? toTitleCase(r.cuentaContable.nombre) : '-' },
-    { title: 'Descripcion', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
-      render: (v: string) => v ? toTitleCase(v) : '-' },
-    { title: 'Debito', key: 'debito', width: 130, align: 'right' as const,
-      render: (_: any, r: any) => esDebito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-    { title: 'Credito', key: 'credito', width: 130, align: 'right' as const,
-      render: (_: any, r: any) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-  ];
-
-  const logColumns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
-    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200,
-      render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-') },
-    { title: 'Estacion', dataIndex: 'estacion', key: 'estacion', width: 200 },
-    { title: 'Accion', dataIndex: 'accion', key: 'accion', width: 120,
-      render: (v: number) => ACCION_MAP[v] || `Accion ${v}` },
-    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
-  ];
-
-  function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
-  function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
-
-  const totalDebitos = (data.asientos || []).reduce((s: number, r: any) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
-  const totalCreditos = (data.asientos || []).reduce((s: number, r: any) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
+  // asientoColumns reemplazado por AsientosContableTable compartido
 
   // ===== Handlers de acciones de estado =====
-  const handleAplicar = async () => {
+  const handleVerScanner = async () => {
     if (!id) return;
+    setScannerLoading(true);
+    try {
+      const blob = await cotizacionVentaApi.descargarScan(sucursalActiva, parseInt(id));
+      const url = URL.createObjectURL(blob);
+      setScannerUrl(url);
+      setScannerModalOpen(true);
+    } catch (err: any) {
+      message.error('Error al cargar el archivo escaneado');
+    } finally {
+      setScannerLoading(false);
+    }
+  };
+
+  const handleDesaplicar = async () => {
+    if (!id || !data) return;
     setSaving(true);
     try {
-      await cotizacionVentaApi.aplicar(sucursalActiva, parseInt(id));
-      message.success('Documento aplicado exitosamente');
-      const res: any = await cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id));
-      setData(res);
+      const origen = obtenerNombreEnumSucursal(String(sucursalActiva));
+      const documento = `${data.documento.codigo}-${data.noDocumento}`;
+      await cotizacionVentaApi.desaplicar(origen, documento);
+      message.success('Documento desaplicado exitosamente');
+      handleRefresh();
     } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
+      const msg = extraerMensajeError(err, 'Error al desaplicar');
       message.error(msg);
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleAplicar = () => {
+    if (!id) return;
+    setOperacionTitulo(`Aplicando COT-${data?.noDocumento || id}`);
+    operacion.ejecutar(
+      `/COTV/${sucursalActiva}/aplicar/${id}`,
+      handleRefresh
+    );
   };
 
   const handleAnular = async () => {
@@ -378,6 +341,48 @@ const CotizacionVentaDetalle: React.FC = () => {
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePostear = () => {
+    if (!data) return;
+    setOperacionTitulo(`Posteando COT-${data?.noDocumento || id}`);
+    operacion.ejecutar(
+      `/COTV/${sucursalActiva}/postear`,
+      handleRefresh,
+      data
+    );
+  };
+
+  const handleRevisado = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await cotizacionVentaApi.revisado(sucursalActiva, parseInt(id));
+      message.success('Documento marcado como revisado');
+      const res: any = await cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al marcar revisado');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReversar = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await cotizacionVentaApi.reversar(sucursalActiva, parseInt(id));
+      message.success('Documento reversado exitosamente');
+      const res: any = await cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al reversar');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -402,61 +407,64 @@ const CotizacionVentaDetalle: React.FC = () => {
 
   return (
     <div>
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FCotizacion')}>
-          Volver
-        </Button>
-        <div style={{ flex: 1 }} />
-        <Space>
-          <PermissionGate accion="IMPRIMIR">
-            <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
-              setImprimiendo(true);
-              try {
-                const res = await apiClient.get(`/reportes/facturacion/cotizacionVenta/${sucursalActiva}/${id}`, {
-                  responseType: 'blob',
-                });
-                const blobUrl = URL.createObjectURL(res.data);
-                const iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = blobUrl;
-                document.body.appendChild(iframe);
-                setTimeout(() => {
-                  iframe.contentWindow?.print();
-                  setTimeout(() => {
-                    document.body.removeChild(iframe);
-                    URL.revokeObjectURL(blobUrl);
-                  }, 30000);
-                }, 2000);
-              } catch (err: any) {
-                const msg = err?.response?.data?.ErrorMessage || 'Error al generar el PDF';
-                message.error(msg);
-              } finally {
-                setImprimiendo(false);
-              }
-            }} />
-          </PermissionGate>
-          {data.estado === 0 && data.periodo !== 6 && (
-            <PermissionGate accion="EDITAR">
-              <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FCotizacion/${id}/editar`)}>Editar</Button>
-            </PermissionGate>
-          )}
-          {data.estado === 0 && data.periodo !== 6 && (
-            <PermissionGate accion="APLICAR">
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleAplicar}>
-                Aplicar
-              </Button>
-            </PermissionGate>
-          )}
-          {data.estado !== 3 && (
-            <PermissionGate accion="ANULAR">
-              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
-                Anular
-              </Button>
-            </PermissionGate>
-          )}
-        </Space>
-      </div>
+      {loadingError && (
+        <Alert
+          message="Error al cargar detalle de cotización de venta"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={handleRefresh}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+      <DetalleToolbar
+        modulo="FCotizacion"
+        estado={data.estado}
+        periodo={data.periodo}
+        revisado={(data as any).revisado}
+        saving={saving}
+        imprimiendo={imprimiendo}
+        operacionLoading={operacion?.loading}
+        onVolver={() => navigate('/FCotizacion')}
+        onImprimir={async () => {
+          setImprimiendo(true);
+          try {
+            const codigoSucursalVal = (data as any).codigoSucursal;
+            const sucursalParam = codigoSucursalVal
+              ? obtenerNombreEnumSucursal(codigoSucursalVal)
+              : sucursalActiva;
+            const res = await apiClient.get(`/reportes/facturacion/cotizacionVenta/${sucursalParam}/${id}`, {
+              responseType: 'blob',
+            });
+            const blobUrl = URL.createObjectURL(res.data);
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = blobUrl;
+            document.body.appendChild(iframe);
+            setTimeout(() => {
+              iframe.contentWindow?.print();
+              setTimeout(() => {
+                document.body.removeChild(iframe);
+                URL.revokeObjectURL(blobUrl);
+              }, 30000);
+            }, 2000);
+          } catch {
+            message.error('Error al generar el PDF');
+          } finally {
+            setImprimiendo(false);
+          }
+        }}
+        onEditar={() => navigate(`/FCotizacion/${id}/editar`)}
+        onAplicar={handleAplicar}
+        onAnular={handleAnular}
+        onPostear={handlePostear}
+        onRevisado={handleRevisado}
+        onDesaplicar={handleDesaplicar}
+        onReversar={handleReversar}
+      />
 
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */
@@ -470,10 +478,21 @@ const CotizacionVentaDetalle: React.FC = () => {
                   <Space>
                     {esCerrado && (
                       <Tooltip title="Período contable cerrado">
-                        <LockFilled style={{ marginLeft: 4, fontSize: 14, color: '#595959' }} />
+                        <LockFilled style={{ fontSize: 14, color: '#595959' }} />
                       </Tooltip>
                     )}
                     <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
+                    {tieneScan === true && (
+                      <Tooltip title="Ver cotización escaneada">
+                        <Tag
+                          icon={<FileTextOutlined />}
+                          color="success"
+                          style={{ cursor: 'pointer' }}
+                          onClick={handleVerScanner}
+                        />
+                      </Tooltip>
+                    )}
+                    {tieneScan === false && <Tag icon={<FileSearchOutlined />} color="warning" />}
                   </Space>
                 </div>
               }
@@ -503,9 +522,20 @@ const CotizacionVentaDetalle: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${data.detalles?.length || 0})`,
+                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                   children: (
-                    <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                        <Input.Search
+                          placeholder="Buscar detalle..."
+                          allowClear
+                          style={{ maxWidth: 250 }}
+                          onSearch={(value) => setDetalleSearch(value)}
+                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                        />
+                      </div>
+                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                    </>
                   ),
                 },
                 {
@@ -513,17 +543,7 @@ const CotizacionVentaDetalle: React.FC = () => {
                   label: `Asientos (${data.asientos?.length || 0})`,
                   children: (
                     data.asientos && data.asientos.length > 0 ? (
-                      <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
-                        summary={() => (
-                          <Table.Summary fixed>
-                            <Table.Summary.Row>
-                              <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                              <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                              <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                            </Table.Summary.Row>
-                          </Table.Summary>
-                        )}
-                      />
+                      <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
                     ) : (
                       <div style={{ textAlign: 'center', padding: 24 }} className="paces-text-secondary">Sin asientos contables</div>
                     )
@@ -533,7 +553,7 @@ const CotizacionVentaDetalle: React.FC = () => {
                   key: 'historial',
                   label: `Historial (${data.logs?.length || 0})`,
                   children: (
-                    <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
@@ -541,11 +561,16 @@ const CotizacionVentaDetalle: React.FC = () => {
           </Col>
 
           <Col lg={6}>
-            <ClienteCard entidad={data.entidad} />
+            <EntidadCard entidad={data.entidad} fallbackTitulo="Cliente" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
+            />
+            <DocumentosRelacionadosCard
+              documentos={documentosRelacionados}
+              currentId={data?.id}
+              rutaMap={{ COT: 'FCotizacion' }}
             />
           </Col>
         </Row>
@@ -560,10 +585,21 @@ const CotizacionVentaDetalle: React.FC = () => {
                   <Space>
                     {esCerrado && (
                       <Tooltip title="Período contable cerrado">
-                        <LockFilled style={{ marginLeft: 4, fontSize: 14, color: '#595959' }} />
+                        <LockFilled style={{ fontSize: 14, color: '#595959' }} />
                       </Tooltip>
                     )}
                     <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
+                    {tieneScan === true && (
+                      <Tooltip title="Ver cotización escaneada">
+                        <Tag
+                          icon={<FileTextOutlined />}
+                          color="success"
+                          style={{ cursor: 'pointer' }}
+                          onClick={handleVerScanner}
+                        />
+                      </Tooltip>
+                    )}
+                    {tieneScan === false && <Tag icon={<FileSearchOutlined />} color="warning" />}
                   </Space>
                 </div>
               }
@@ -585,7 +621,7 @@ const CotizacionVentaDetalle: React.FC = () => {
               </Descriptions>
           </Card>
 
-          <ClienteCard entidad={data.entidad} />
+          <EntidadCard entidad={data.entidad} fallbackTitulo="Cliente" />
 
           <Tabs
             defaultActiveKey="detalles"
@@ -593,9 +629,20 @@ const CotizacionVentaDetalle: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${data.detalles?.length || 0})`,
+                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                 children: (
-                  <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                      <Input.Search
+                        placeholder="Buscar detalle..."
+                        allowClear
+                        style={{ maxWidth: 250 }}
+                        onSearch={(value) => setDetalleSearch(value)}
+                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                      />
+                    </div>
+                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                  </>
                 ),
               },
               {
@@ -603,17 +650,7 @@ const CotizacionVentaDetalle: React.FC = () => {
                 label: `Asientos (${data.asientos?.length || 0})`,
                 children: (
                   data.asientos && data.asientos.length > 0 ? (
-                    <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
-                      summary={() => (
-                        <Table.Summary fixed>
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        </Table.Summary>
-                      )}
-                    />
+                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
                   ) : (
                     <div style={{ textAlign: 'center', padding: 24 }} className="paces-text-secondary">Sin asientos contables</div>
                   )
@@ -623,7 +660,7 @@ const CotizacionVentaDetalle: React.FC = () => {
                 key: 'historial',
                 label: `Historial (${data.logs?.length || 0})`,
                 children: (
-                  <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                  <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                 ),
               },
             ]}
@@ -634,8 +671,46 @@ const CotizacionVentaDetalle: React.FC = () => {
             monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
             tasa={data.tasa ?? 1}
           />
+
+          <DocumentosRelacionadosCard
+            documentos={documentosRelacionados}
+            currentId={data?.id}
+            rutaMap={{ COT: 'FCotizacion' }}
+          />
         </div>
       )}
+
+      {/* Modal de Visor de Scanner */}
+      <Modal
+        title="Cotización Escaneada"
+        open={scannerModalOpen}
+        onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
+        width="80%"
+        style={{ top: 20 }}
+        footer={null}
+        destroyOnHidden
+      >
+        {scannerLoading ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin />
+          </div>
+        ) : scannerUrl ? (
+          <iframe src={scannerUrl} style={{ width: '100%', height: '70vh', border: 'none' }} title="Scanner" />
+        ) : (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin />
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal de Progreso para Aplicar/Postear */}
+      <ModalProgreso
+        open={operacion.loading || !!operacion.completado}
+        titulo={operacionTitulo}
+        eventos={operacion.eventos}
+        completado={operacion.completado}
+        onClose={() => operacion.reset()}
+      />
     </div>
   );
 };

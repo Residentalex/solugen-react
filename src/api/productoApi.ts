@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { ProductoListaDTO, ProductoDTO, FiltroProducto, ResultadoImportacionDTO } from '../types/productos';
+import type { ProductoListaDTO, ProductoDTO, FiltroProducto, ResultadoImportacionDTO, ProductoImportadoDTO } from '../types/productos';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/Producto';
@@ -61,6 +61,11 @@ export const productoApi = {
     return data;
   },
 
+  descargarResultado: async (sucursal: number, productos: ProductoImportadoDTO[]): Promise<Blob> => {
+    const { data } = await apiClient.post(`${BASE}/${sucursal}/descargarResultado`, productos, { responseType: 'blob' });
+    return data;
+  },
+
   importarExcel: async (sucursal: number, file: File): Promise<ResultadoImportacionDTO> => {
     const formData = new FormData();
     formData.append('archivo', file);
@@ -76,5 +81,33 @@ export const productoApi = {
     const { data } = await apiClient.get(`/Producto/comodines/${sucursal}`);
     if (Array.isArray(data)) return data;
     return data.data || [];
+  },
+
+  /** Obtener productos por código de suplidor */
+  obtenerProductosPorSuplidor: async (
+    sucursal: number,
+    codigoSuplidor: string,
+    signal?: AbortSignal
+  ): Promise<ProductoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<ProductoDTO[]>>(
+      `${BASE}/${sucursal}/suplidor/${codigoSuplidor}`,
+      { signal }
+    );
+    return data.data;
+  },
+
+  /** Buscar productos por campo específico (codigo, referencia, equival) */
+  buscarPorCampo: async (
+    sucursal: number,
+    campo: 'codigo' | 'referencia' | 'equival',
+    valor: string,
+    cantidad: number = 10
+  ): Promise<ProductoListaDTO[]> => {
+    const params = { campo, valor, cantidad };
+    const { data } = await apiClient.get<ApiResponse<ProductoListaDTO[]>>(
+      `${BASE}/${sucursal}/buscar`,
+      { params }
+    );
+    return data.data;
   },
 };

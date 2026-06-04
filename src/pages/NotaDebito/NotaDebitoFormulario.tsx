@@ -30,85 +30,19 @@ import type {
   ImpuestoRetencionDTO,
   AsientoDTO,
 } from '../../types/notaDebito';
+import LogTable from '../../components/LogTable';
+import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+
+import EntidadCard from '../../components/EntidadCard';
+import TotalesCard from '../../components/TotalesCard';
+import FormularioToolbar from '../../components/FormularioToolbar';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { Text } = Typography;
 const { TextArea } = Input;
-
-const ESTADO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
-
-const ACCION_MAP: Record<number, string> = {
-  0: 'Crear', 1: 'Modificar', 2: 'Eliminar', 3: 'Aplicar',
-  4: 'Desaplicar', 5: 'Postear', 6: 'Anular', 7: 'Revisar',
-  8: 'Reversar', 9: 'Escanear',
-};
-
-// ===== Helpers de formato =====
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function toTitleCase(str: string): string {
-  if (!str) return str;
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatDate(val: string): string {
-  if (!val) return '-';
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
-  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function parseDateRaw(val: string): Date | null {
-  if (!val) return null;
-  const num = val.replace(/\D/g, '');
-  if (num.length >= 14) {
-    const y = parseInt(num.slice(0, 4), 10);
-    const m = parseInt(num.slice(4, 6), 10) - 1;
-    const d = parseInt(num.slice(6, 8), 10);
-    return new Date(y, m, d);
-  }
-  const dt = new Date(val);
-  return isNaN(dt.getTime()) ? null : dt;
-}
-
-function toISOFormat(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${y}-${m}-${day}T${hh}:${mm}:${ss}`;
-}
-
-function extraerMensajeError(err: any, fallback: string): string {
-  const data = err?.response?.data;
-  if (!data) return fallback;
-  if (data.errorMessage) return data.errorMessage;
-  if (data.errors && typeof data.errors === 'object') {
-    const mensajes: string[] = [];
-    for (const key of Object.keys(data.errors)) {
-      const val = data.errors[key];
-      if (Array.isArray(val)) mensajes.push(...val);
-      else if (typeof val === 'string') mensajes.push(val);
-    }
-    if (mensajes.length > 0) return mensajes.join('; ');
-  }
-  return fallback;
-}
 
 // ===== Calcular totales desde impuestos =====
 function calcularTotales(impuestos: ImpuestoRetencionDTO[], total: number) {
@@ -138,64 +72,6 @@ function validarNcfModificado(val: string): boolean {
   const e3Pattern = /^E3\d{10}$/;
   return b0Pattern.test(val) || e3Pattern.test(val);
 }
-
-// ===== Modal de búsqueda de Concepto =====
-interface BuscarConceptoModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (concepto: ConceptoDTO) => void;
-}
-
-const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({ open, onClose, onSelect }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const [conceptos, setConceptos] = useState<ConceptoDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const cargar = useCallback(async (filtro?: string) => {
-    setLoading(true);
-    try {
-      const res = await conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'NDB', filtro);
-      setConceptos(res || []);
-    } catch {
-      message.error('Error al cargar conceptos');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (open) cargar();
-  }, [open, cargar]);
-
-  const columnas = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-    { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-      render: (v: string) => toTitleCase(v) },
-  ];
-
-  return (
-    <Modal title="Buscar Concepto" open={open} onCancel={onClose} footer={null} width={600} destroyOnHidden>
-      <Input.Search
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        onSearch={(val) => cargar(val)}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={conceptos}
-        columns={columnas}
-        rowKey="codigo"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: () => { onSelect(record); onClose(); },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
-};
 
 // ===== Modal de búsqueda de Tipo =====
 interface BuscarTipoModalProps {
@@ -436,54 +312,7 @@ const BuscarDevolucionModal: React.FC<BuscarDevolucionModalProps> = ({ open, onC
   );
 };
 
-// ===== Componente EntidadCard =====
-const EntidadCard: React.FC<{ entidad: EntidadDTO | null; tipoEntidad: 'SUP' | 'CLI' }> = ({ entidad, tipoEntidad }) => (
-  <Card title={<span style={{ fontSize: 16, fontWeight: 600 }}>{tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente'}</span>}
-    className="paces-card" style={{ marginBottom: 16 }}>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ fontWeight: 600 }}>{entidad?.nombre ? toTitleCase(entidad.nombre) : '-'}</div>
-      <div><span className="paces-text-secondary">RNC: </span><span>{entidad?.identificacion || '-'}</span></div>
-      <div><span className="paces-text-secondary">Teléfono: </span><span>{entidad?.telefono || '-'}</span></div>
-      <div><span className="paces-text-secondary">Dirección: </span><span>{entidad?.direccion ? toTitleCase(entidad.direccion) : '-'}</span></div>
-    </div>
-  </Card>
-);
 
-// ===== Componente TotalesCard =====
-const TotalesCard: React.FC<{
-  subTotal: number; impuestos: number; retenciones: number; total: number;
-  tasa: number; alignRight: boolean;
-  monedaNombre?: string; monedaSimbolo?: string;
-}> = ({ subTotal, impuestos, retenciones, total, tasa, alignRight, monedaNombre, monedaSimbolo }) => (
-  <Card title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    className="paces-card" style={{ marginBottom: 16 }}>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
-      {monedaSimbolo && (
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo} {formatNumber(tasa ?? 1)})</span>
-        </div>
-      )}
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
-        <span>{formatNumber(subTotal)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
-        <span>{formatNumber(impuestos)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Retenciones</span>}
-        <span>{formatNumber(retenciones)}</span>
-      </div>
-    </div>
-    <Divider style={{ margin: '12px 0' }} />
-    <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
-      {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{monedaSimbolo || 'RD$'} {formatNumber(total)}</span>
-    </div>
-  </Card>
-);
 
 // ===== Componente principal =====
 interface NotaDebitoFormularioProps {
@@ -675,6 +504,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
     // === ConfigurarMoneda ===
     const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || 'RD$', codigo: monedaObj.codigo };
     form.setFieldsValue({
       moneda: monedaObj.nombre,
       tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
@@ -682,7 +512,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     // Actualizar data local para que la UI lo refleje
     setData((prev) => {
       if (!prev) return prev;
-      return { ...prev, moneda: monedaObj };
+      return { ...prev, moneda: monedaFull };
     });
   };
 
@@ -928,15 +758,10 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
   // ===== Loader =====
   if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
-      </div>
-    );
+    return <LoadingSpinner mensaje="Cargando documento..." />;
   }
 
-  const estadoInfo = ESTADO_MAP[estado] || { label: 'Borrador', color: 'default' };
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Borrador', color: 'default' };
 
   // ===== Columnas de pestañas =====
   const docRelColumns = [
@@ -1064,39 +889,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const totalDebitos = (data?.asientos || []).reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
   const totalCreditos = (data?.asientos || []).reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
 
-  const logColumns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
-    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200,
-      render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-') },
-    { title: 'Estación', dataIndex: 'estacion', key: 'estacion', width: 200 },
-    { title: 'Acción', dataIndex: 'accion', key: 'accion', width: 120,
-      render: (v: number) => ACCION_MAP[v] || `Acción ${v}` },
-    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
-  ];
-
   // ===== Toolbar =====
-  const renderToolbar = () => (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-      <div style={{ flex: 1 }} />
-      <Space wrap>
-        {mode === 'editar' && data && (
-          <>
-            {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-            <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-          </>
-        )}
-
-        {puedeGuardar && (
-          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-            Guardar
-          </Button>
-        )}
-        <Button icon={<CloseOutlined />} onClick={handleCancelar}>
-          Cancelar
-        </Button>
-      </Space>
-    </div>
-  );
 
   // ===== Encabezado =====
   const renderEncabezado = () => (
@@ -1337,16 +1130,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       key: 'historial',
       label: `Historial (${data?.logs?.length || 0})`,
       children: (
-        <>
-          <Table
-            dataSource={data?.logs || []}
-            columns={logColumns}
-            rowKey={(r) => r.id || 0}
-            size="small"
-            pagination={false}
-            scroll={{ x: 900 }}
-          />
-        </>
+        <LogTable dataSource={(data?.logs || []) as any} scroll={{ x: 900 }} />
       ),
     },
   ];
@@ -1400,7 +1184,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
   return (
     <div>
-      {renderToolbar()}
+      <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
 
       {loadingError && (
         <Alert
@@ -1424,16 +1208,16 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
             {contenidoPestanas}
           </Col>
           <Col lg={6}>
-            <EntidadCard entidad={selectedEntidad} tipoEntidad={tipoEntidad} />
+            <EntidadCard entidad={selectedEntidad} fallbackTitulo={entidadLabel} />
             <TotalesCard
               subTotal={totales.subTotal}
+              descuento={0}
               impuestos={totales.impuestos}
-              retenciones={totales.retenciones}
               total={Number(montoTotalWatch) || 0}
-              tasa={Form.useWatch('tasa', form) || 1}
               alignRight={false}
-              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
-              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+              monedaNombre={data?.moneda?.nombre || (selectedConcepto?.moneda as any)?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data?.moneda?.simbolo || (selectedConcepto?.moneda as any)?.simbolo || 'RD$'}
+              tasa={Form.useWatch('tasa', form) || 1}
             />
           </Col>
         </Row>
@@ -1441,16 +1225,16 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         /* === MOBILE LAYOUT (< lg) === */
         <div>
           {renderEncabezado()}
-          <EntidadCard entidad={selectedEntidad} tipoEntidad={tipoEntidad} />
+          <EntidadCard entidad={selectedEntidad} fallbackTitulo={entidadLabel} />
           <TotalesCard
             subTotal={totales.subTotal}
+            descuento={0}
             impuestos={totales.impuestos}
-            retenciones={totales.retenciones}
             total={Number(montoTotalWatch) || 0}
-            tasa={Form.useWatch('tasa', form) || 1}
             alignRight={true}
-            monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
-            monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+            monedaNombre={data?.moneda?.nombre || (selectedConcepto?.moneda as any)?.nombre || 'Peso Dominicano'}
+            monedaSimbolo={data?.moneda?.simbolo || (selectedConcepto?.moneda as any)?.simbolo || 'RD$'}
+            tasa={Form.useWatch('tasa', form) || 1}
           />
           {contenidoPestanas}
         </div>
@@ -1461,6 +1245,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
+        fetchConceptos={() => conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'NDB')}
       />
       <BuscarTipoModal
         open={tipoModalOpen}

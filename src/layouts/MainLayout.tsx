@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Layout, Spin, message, Dropdown, Select, Input } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Layout, Spin, message, Dropdown, Select, Input, Tag, Grid } from 'antd';
 import type { MenuProps } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
@@ -9,9 +9,11 @@ import { useUIStore } from '../stores/uiStore';
 import { useNotificacionesStore } from '../stores/notificacionesStore';
 import GenesisLogo from '../components/GenesisLogo';
 import Sidebar from './Sidebar';
+import SidebarDocBtn from '../components/SidebarDocBtn';
 import Toolbar from './Toolbar';
 import ThemeSwitcher from '../components/ThemeSwitcher';
 import NotificacionDropdown from '../components/NotificacionDropdown';
+import BuscadorGlobalModal from '../components/BuscadorGlobal/BuscadorGlobalModal';
 import { Outlet } from 'react-router-dom';
 import {
   MenuFoldOutlined,
@@ -31,6 +33,7 @@ function toTitleCase(str?: string | null): string {
 }
 
 const { Sider } = Layout;
+const { useBreakpoint } = Grid;
 
 const pageTitles: Record<string, string> = {
   Dashboard: 'Dashboard',
@@ -117,6 +120,7 @@ const pageTitles: Record<string, string> = {
   FGORC: 'Generador ORC',
   notificaciones: 'Notificaciones',
   MTicket: 'Tickets',
+  MApiToken: 'API Tokens',
 };
 
 const MainLayout: React.FC = () => {
@@ -135,6 +139,16 @@ const MainLayout: React.FC = () => {
   const activeModule = useUIStore((s: any) => s.activeModule);
   const pageTitleOverride = useUIStore((s: any) => s.pageTitleOverride);
   const themeName = useUIStore((s: any) => s.themeName);
+  const screens = useBreakpoint();
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const activeBreakpoint = (Object.entries(screens).find(([, v]) => v)?.[0] || 'xs') as string;
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -189,6 +203,19 @@ const MainLayout: React.FC = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [sidebarCollapsed, setSidebarCollapsed]);
+
+  const [searchOpen, setSearchOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   if (!isAuthenticated) return null;
 
@@ -255,13 +282,17 @@ const MainLayout: React.FC = () => {
           top: 0,
           bottom: 0,
           zIndex: 200,
-          overflow: 'auto',
         }}
       >
         <div className={`sidebar-logo ${sidebarCollapsed ? 'collapsed' : ''}`}>
           <GenesisLogo size={28} dark={themeName.startsWith('dark-')} showText={!sidebarCollapsed} />
         </div>
-        <Sidebar />
+        <div className="sidebar-menu-wrapper">
+          <Sidebar />
+        </div>
+        <div className="sidebar-footer">
+          <SidebarDocBtn collapsed={sidebarCollapsed} />
+        </div>
       </Sider>
 
       <Layout style={{ marginLeft: siderWidth, transition: 'margin-left 0.2s' }}>
@@ -270,14 +301,19 @@ const MainLayout: React.FC = () => {
             <button className="paces-hamburger" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
               {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             </button>
-            <Input.Search
-              placeholder="Buscar..."
-              size="middle"
-              className="paces-topbar-search"
-            />
+            <div style={{ cursor: 'pointer', position: 'relative', width: '100%' }} onClick={() => setSearchOpen(true)}>
+              <Input.Search
+                placeholder="Buscar...  (Ctrl+K)"
+                size="middle"
+                className="paces-topbar-search"
+                onFocus={(e) => { e.target.blur(); setSearchOpen(true); }}
+                onSearch={() => setSearchOpen(true)}
+              />
+            </div>
           </div>
 
           <div className="paces-topbar-right">
+            <Tag style={{ marginRight: 8, fontSize: 11, lineHeight: '20px', height: 24 }}>{windowWidth}px · {activeBreakpoint}</Tag>
             <ThemeSwitcher />
             <NotificacionDropdown />
             {sucursalesFiltradas.length > 1 && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && activeModule !== 'MTicket' && activeModule !== 'notificaciones' && (
@@ -336,6 +372,8 @@ const MainLayout: React.FC = () => {
           )}
           {!loading && <Outlet />}
         </div>
+
+        <BuscadorGlobalModal open={searchOpen} onClose={() => setSearchOpen(false)} />
       </Layout>
     </Layout>
   );

@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
-import type { ConceptoDTO, EntidadDTO, AlmacenDTO, SuplidorDTO } from '../types/entradaAlmacen';
+import type { ConceptoDTO, EntidadDTO, AlmacenDTO, SuplidorDTO, CompaniaDTO } from '../types/entradaAlmacen';
 
 const CONCEPTOS_BASE = '/Concepto';
 const ENTIDADES_BASE = '/Entidad';
@@ -30,10 +30,10 @@ export const conceptosApi = {
   },
 
   obtenerConcepto: async (sucursal: number, codigo: string): Promise<ConceptoDTO> => {
-    const { data } = await apiClient.get<ConceptoDTO>(
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO>>(
       `${CONCEPTOS_BASE}/${sucursal}/${codigo}`
     );
-    return data;
+    return data.data;
   },
 
   obtenerEntidades: async (
@@ -61,6 +61,23 @@ export const conceptosApi = {
     const { data } = await apiClient.get<ApiResponse<AlmacenDTO[]>>(
       `${ALMACENES_BASE}/${sucursal}`
     );
+    return data.data;
+  },
+
+  obtenerSucursales: async (sucursal: number): Promise<CompaniaDTO[]> => {
+    const { data } = await apiClient.get<CompaniaDTO[]>(`/Compania/todas/${sucursal}`);
+    return data;
+  },
+
+  obtenerConceptosPorSucursalDestino: async (sucursal: number, codSucDest: string): Promise<ConceptoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(
+      `${CONCEPTOS_BASE}/${sucursal}/porSucursalDestino/${codSucDest}`
+    );
+    return data.data;
+  },
+
+  actualizarConcepto: async (sucursal: number, codigo: string, dto: ConceptoDTO): Promise<ConceptoDTO> => {
+    const { data } = await apiClient.put<ApiResponse<ConceptoDTO>>(`${CONCEPTOS_BASE}/${sucursal}/${codigo}`, dto);
     return data.data;
   },
 };

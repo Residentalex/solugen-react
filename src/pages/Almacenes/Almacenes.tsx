@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Card, Table, Input, Select, Button, Modal, Descriptions, message, Typography, Empty } from 'antd';
+import { Alert, Card, Table, Input, Select, Button, Modal, Descriptions, Typography, Empty } from 'antd';
 import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -37,8 +37,7 @@ const Almacenes: React.FC = () => {
     try {
       const result = await almacenApi.obtenerListado(sucursalActiva);
       setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar almacenes');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);

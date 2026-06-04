@@ -26,6 +26,7 @@ import type {
   TipoDocInventario,
   DetalleImportarDTO,
 } from '../../types/importarInventario';
+import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import { TIPO_DOC_LABELS, TIPO_DOC_ROUTES } from '../../types/importarInventario';
 import type { ConceptoDTO, AlmacenDTO, SuplidorDTO, EntradaAlmacenDTO, DetalleEntradaAlmacenDTO } from '../../types/entradaAlmacen';
 import type { SalidaAlmacenFullDTO, DetalleSalidaAlmacenDTO } from '../../types/salidaAlmacen';
@@ -178,80 +179,6 @@ function parseCSV(text: string): DetalleImportarDTO[] {
 
   return resultados;
 }
-
-// ===== Componente BuscarConceptoModal =====
-interface BuscarConceptoModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (concepto: ConceptoDTO) => void;
-  tipoDocumento: TipoDocInventario;
-}
-
-const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({ open, onClose, onSelect, tipoDocumento }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const [conceptos, setConceptos] = useState<ConceptoDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const cargar = useCallback(async (filtro?: string) => {
-    setLoading(true);
-    try {
-      const res = await importarInventarioApi.obtenerConceptos(sucursalActiva, tipoDocumento);
-      const filtrados = filtro
-        ? res.filter((c) =>
-            c.nombre.toLowerCase().includes(filtro.toLowerCase()) ||
-            c.codigo.toLowerCase().includes(filtro.toLowerCase())
-          )
-        : res;
-      setConceptos(filtrados || []);
-    } catch {
-      message.error('Error al cargar conceptos');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva, tipoDocumento]);
-
-  useEffect(() => {
-    if (open) cargar();
-  }, [open, cargar]);
-
-  const columnas = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-    {
-      title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-      render: (v: string) => toTitleCase(v),
-    },
-  ];
-
-  return (
-    <Modal
-      title="Buscar Concepto"
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={600}
-      destroyOnClose
-    >
-      <Input.Search
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        onSearch={(val) => cargar(val)}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={conceptos}
-        columns={columnas}
-        rowKey="codigo"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: () => { onSelect(record); onClose(); },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
-};
 
 // ===== Componente principal =====
 const ImportarInventario: React.FC = () => {
@@ -1007,7 +934,7 @@ const ImportarInventario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        tipoDocumento={tipoDocumento}
+        fetchConceptos={() => importarInventarioApi.obtenerConceptos(sucursalActiva, tipoDocumento)}
       />
 
       {isLarge ? (

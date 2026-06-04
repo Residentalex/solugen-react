@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Table, Card, Input, Select, Button, message, Typography, Alert } from 'antd';
+import { Table, Card, Input, Select, Button, Typography, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
@@ -33,8 +33,7 @@ const FamiliasArticulo: React.FC = () => {
     try {
       const result = await familiaArticuloApi.obtenerTodo(sucursalActiva);
       setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar familias de artículos');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);

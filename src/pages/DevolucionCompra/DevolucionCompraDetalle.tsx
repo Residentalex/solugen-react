@@ -1,170 +1,36 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Typography, Tooltip, Alert, Modal,
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Typography, Tooltip, Alert, Modal, App,
 } from 'antd';
 import {
   ArrowLeftOutlined,
-  PrinterOutlined,
   LockFilled,
-  EditOutlined,
-  CheckCircleOutlined,
   CloseCircleOutlined,
-  RedoOutlined,
   IdcardOutlined,
   PhoneOutlined,
   EnvironmentOutlined,
   FileTextOutlined,
   FileSearchOutlined,
-  ExclamationCircleOutlined,
 } from '@ant-design/icons';
+import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
-import PermissionGate from '../../components/PermissionGate';
+import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
+import LogTable from '../../components/LogTable';
+import AsientosContableTable from '../../components/AsientosContableTable';
+
+import { useAplicar } from '../../hooks/useAplicar';
+import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
+import EntidadCard from '../../components/EntidadCard';
+import TotalesCard from '../../components/TotalesCard';
+import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
+import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { Text } = Typography;
-const ESTADO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function toTitleCase(str: string): string {
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-const ACCION_MAP: Record<number, string> = {
-  0: 'Crear',
-  1: 'Modificar',
-  2: 'Eliminar',
-  3: 'Aplicar',
-  4: 'Desaplicar',
-  5: 'Postear',
-  6: 'Anular',
-  7: 'Revisar',
-  8: 'Reversar',
-  9: 'Escanear',
-};
-
-interface SuplidorCardProps {
-  entidad: { nombre: string; identificacion: string; telefono?: string; direccion?: string } | undefined;
-  suplidor: { nombre: string; telefono?: string; direccion?: string } | undefined;
-}
-
-const SuplidorCard: React.FC<SuplidorCardProps> = ({ entidad, suplidor }) => {
-  const identificacion = entidad?.identificacion || '';
-  const telefono = entidad?.telefono || suplidor?.telefono || '';
-  const direccion = entidad?.direccion ? toTitleCase(entidad.direccion) : suplidor?.direccion ? toTitleCase(suplidor.direccion) : '-';
-
-  return (
-    <Card
-      title={<span style={{ fontSize: 16, fontWeight: 600 }}>{toTitleCase(suplidor?.nombre || entidad?.nombre || 'Suplidor')}</span>}
-      className="paces-card"
-      style={{ marginBottom: 16 }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {identificacion && identificacion !== '-' && (
-          <div style={{ fontSize: 13 }}>
-            <IdcardOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {identificacion}
-          </div>
-        )}
-        {telefono && telefono !== '-' && (
-          <div style={{ fontSize: 13 }}>
-            <PhoneOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {telefono}
-          </div>
-        )}
-        {direccion && direccion !== '-' && (
-          <div style={{ fontSize: 13, color: '#595959' }}>
-            <EnvironmentOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {direccion}
-          </div>
-        )}
-      </div>
-    </Card>
-  );
-};
-
-function formatDate(val: string): string {
-  if (!val) return '-';
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
-  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-interface TotalesCardProps {
-  subTotal: number;
-  descuento: number;
-  impuestos: number;
-  total: number;
-  nota: string;
-  alignRight: boolean;
-  monedaSimbolo?: string;
-  monedaNombre?: string;
-  tasa?: number;
-}
-
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    className="paces-card"
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
-      {monedaSimbolo && tasa !== undefined && (
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
-        </div>
-      )}
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
-        <span>{formatNumber(subTotal)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Descuento</span>}
-        <span>{formatNumber(descuento)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
-        <span>{formatNumber(impuestos)}</span>
-      </div>
-    </div>
-
-    <Divider style={{ margin: '12px 0' }} />
-
-    <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
-      {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
-    </div>
-
-    {nota && (
-      <>
-        <Divider style={{ margin: '12px 0' }} />
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, textAlign: alignRight ? 'right' : undefined }} className="paces-text-secondary">Notas</div>
-          <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.5, textAlign: alignRight ? 'right' : undefined }} className="paces-text-dark">
-            {nota}
-          </div>
-        </div>
-      </>
-    )}
-  </Card>
-);
 
 const DevolucionCompraDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -182,7 +48,12 @@ const DevolucionCompraDetalle: React.FC = () => {
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
   const [scannerUrl, setScannerUrl] = useState<string | null>(null);
   const [scannerLoading, setScannerLoading] = useState(false);
+  const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionDTO[]>([]);
   const screens = Grid.useBreakpoint();
+
+  const { message: messageApi } = App.useApp();
+  const operacion = useAplicar();
+  const [operacionTitulo, setOperacionTitulo] = useState('');
 
   useEffect(() => {
     setActiveModule('FDVC');
@@ -192,8 +63,14 @@ const DevolucionCompraDetalle: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
+    setLoadingError(false);
     devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
+        if (!res) {
+          messageApi.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Verificar si tiene documento escaneado
@@ -203,11 +80,22 @@ const DevolucionCompraDetalle: React.FC = () => {
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
-        message.error(msg);
+        messageApi.error(msg);
         setLoadingError(true);
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  // Cargar documentos relacionados desde DOCUMENTOS_RELACION
+  useEffect(() => {
+    if (!data?.id) return;
+    documentoRelacionApi.obtenerPorTransaccion(data.id)
+      .then(rel => setDocumentosRelacionados(rel || []))
+      .catch(() => {
+        setDocumentosRelacionados([]);
+        messageApi.warning('No se pudieron cargar los documentos relacionados');
+      });
+  }, [data?.id]);
 
   function extraerMensajeError(err: any, fallback: string): string {
     const data = err?.response?.data;
@@ -228,18 +116,25 @@ const DevolucionCompraDetalle: React.FC = () => {
   const handleRefresh = useCallback(() => {
     if (!id) return;
     setLoadingError(false);
-    setLoading(true);
     devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
+        if (!res) {
+          messageApi.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        // Cargar documentos relacionados desde DOCUMENTOS_RELACION
+        documentoRelacionApi.obtenerPorTransaccion(parseInt(id))
+          .then(rel => setDocumentosRelacionados(rel || []))
+          .catch(() => setDocumentosRelacionados([]));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg);
+        messageApi.error(msg);
         setLoadingError(true);
       })
-      .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
   const handleVerScanner = async () => {
@@ -251,13 +146,13 @@ const DevolucionCompraDetalle: React.FC = () => {
       setScannerUrl(url);
       setScannerModalOpen(true);
     } catch {
-      message.error('Error al cargar el archivo escaneado');
+      messageApi.error('Error al cargar el archivo escaneado');
     } finally {
       setScannerLoading(false);
     }
   };
 
-  if (loading || !data) {
+  if (loading || (!data && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
@@ -265,9 +160,25 @@ const DevolucionCompraDetalle: React.FC = () => {
       </div>
     );
   }
+  if (loadingError && !data) {
+    return (
+      <div style={{ textAlign: 'center', padding: 80 }}>
+        <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
+        <div style={{ marginTop: 16, fontSize: 16, color: '#ff4d4f' }}>
+          Error al cargar el documento
+        </div>
+        <div style={{ marginTop: 8 }} className="paces-text-secondary">
+          Verifique que el documento exista en la sucursal seleccionada.
+        </div>
+        <Button type="primary" icon={<ArrowLeftOutlined />} style={{ marginTop: 24 }} onClick={() => navigate('/FDVC')}>
+          Volver al listado
+        </Button>
+      </div>
+    );
+  }
 
   const isLarge = screens.lg ?? true;
-  const estadoInfo = ESTADO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
   // ===== Detalles filtrados por búsqueda =====
@@ -400,55 +311,20 @@ const DevolucionCompraDetalle: React.FC = () => {
     },
   ];
 
-  function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
-  function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
-
-  const totalDebitos = (data.asientos || []).reduce((s: number, r: any) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
-  const totalCreditos = (data.asientos || []).reduce((s: number, r: any) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
-
-  const asientoColumns = [
-    { title: 'Cuenta', key: 'cuenta', width: 120,
-      render: (_: any, r: any) => r.cuentaContable?.noCuenta || '-' },
-    { title: 'Nombre', key: 'nombre', ellipsis: true,
-      render: (_: any, r: any) => r.cuentaContable?.nombre ? toTitleCase(r.cuentaContable.nombre) : '-' },
-    { title: 'Descripcion', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
-      render: (v: string) => v ? toTitleCase(v) : '-' },
-    { title: 'Debito', key: 'debito', width: 130, align: 'right' as const,
-      render: (_: any, r: any) => esDebito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-    { title: 'Credito', key: 'credito', width: 130, align: 'right' as const,
-      render: (_: any, r: any) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-  ];
-
-  const logColumns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
-    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200, render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-') },
-    { title: 'Estacion', dataIndex: 'estacion', key: 'estacion', width: 200 },
-    { title: 'Accion', dataIndex: 'accion', key: 'accion', width: 120, render: (v: number) => ACCION_MAP[v] || `Accion ${v}` },
-    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
-  ];
+  // asientoColumns reemplazado por AsientosContableTable compartido
 
   // ===== Handlers de acciones de estado =====
-  const handleAplicar = async () => {
+  const handleAplicar = () => {
     if (!id) return;
 
     // Verificación temprana del scanner
     if (tieneScan === false) {
-      message.warning('Debe escanear el documento antes de aplicar.');
+      messageApi.warning('Debe escanear el documento antes de aplicar.');
       return;
     }
 
-    setSaving(true);
-    try {
-      await devolucionCompraApi.aplicar(sucursalActiva, parseInt(id));
-      message.success('Documento aplicado exitosamente');
-      const res = await devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id));
-      setData(res);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
+    setOperacionTitulo(`Aplicando DVC-${data?.noDocumento || id}`);
+    operacion.ejecutar(`/DVC/${sucursalActiva}/aplicar/${id}`, handleRefresh);
   };
 
   const handleDesaplicar = async () => {
@@ -457,12 +333,12 @@ const DevolucionCompraDetalle: React.FC = () => {
     try {
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
       await devolucionCompraApi.desaplicar(sucursalActiva, documento);
-      message.success('Documento desaplicado exitosamente');
+      messageApi.success('Documento desaplicado exitosamente');
       const res = await devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al desaplicar');
-      message.error(msg);
+      messageApi.error(msg);
     } finally {
       setSaving(false);
     }
@@ -473,31 +349,25 @@ const DevolucionCompraDetalle: React.FC = () => {
     setSaving(true);
     try {
       await devolucionCompraApi.anular(sucursalActiva, data as any);
-      message.success('Documento anulado exitosamente');
+      messageApi.success('Documento anulado exitosamente');
       const res = await devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
-      message.error(msg);
+      messageApi.error(msg);
     } finally {
       setSaving(false);
     }
   };
 
-  const handlePostear = async () => {
+  const handlePostear = () => {
     if (!data) return;
-    setSaving(true);
-    try {
-      await devolucionCompraApi.postear(sucursalActiva, data as any);
-      message.success('Documento posteado exitosamente');
-      const res = await devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id!));
-      setData(res);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al postear');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
+    setOperacionTitulo(`Posteando DVC-${data?.noDocumento || id}`);
+    operacion.ejecutar(
+      `/DVC/${sucursalActiva}/postear`,
+      handleRefresh,
+      data
+    );
   };
 
   const handleRevisar = async () => {
@@ -505,12 +375,12 @@ const DevolucionCompraDetalle: React.FC = () => {
     setSaving(true);
     try {
       await devolucionCompraApi.revisar(sucursalActiva, parseInt(id));
-      message.success('Documento marcado como revisado');
+      messageApi.success('Documento marcado como revisado');
       const res = await devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al marcar revisado');
-      message.error(msg);
+      messageApi.error(msg);
     } finally {
       setSaving(false);
     }
@@ -521,12 +391,12 @@ const DevolucionCompraDetalle: React.FC = () => {
     setSaving(true);
     try {
       await devolucionCompraApi.reversar(sucursalActiva, data as any);
-      message.success('Documento reversado exitosamente');
+      messageApi.success('Documento reversado exitosamente');
       const res = await devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al reversar');
-      message.error(msg);
+      messageApi.error(msg);
     } finally {
       setSaving(false);
     }
@@ -547,146 +417,54 @@ const DevolucionCompraDetalle: React.FC = () => {
           }
         />
       )}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FDVC')}>
-          Volver
-        </Button>
-        <div style={{ flex: 1 }} />
-        <Space>
-          {data.estado === 0 && data.periodo !== 6 && (
-            <PermissionGate accion="EDITAR">
-              <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FDVC/${id}/editar`)}>
-                Editar
-              </Button>
-            </PermissionGate>
-          )}
-          <PermissionGate accion="IMPRIMIR">
-            <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
-            setImprimiendo(true);
-            try {
-              const res = await apiClient.post('/reportes/inventario/devolucion-compra', data, {
-                responseType: 'blob',
-              });
-              const blobUrl = URL.createObjectURL(res.data);
-              const iframe = document.createElement('iframe');
-              iframe.style.display = 'none';
-              iframe.src = blobUrl;
-              document.body.appendChild(iframe);
+      <DetalleToolbar
+        modulo="FDVC"
+        estado={data.estado}
+        periodo={data.periodo}
+        revisado={data.revisado}
+        saving={saving}
+        imprimiendo={imprimiendo}
+        operacionLoading={operacion?.loading}
+        onVolver={() => navigate('/FDVC')}
+        onImprimir={async () => {
+          setImprimiendo(true);
+          try {
+            const res = await apiClient.post('/reportes/inventario/devolucion-compra', data, {
+              responseType: 'blob',
+            });
+            const blobUrl = URL.createObjectURL(res.data);
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = blobUrl;
+            document.body.appendChild(iframe);
+            setTimeout(() => {
+              iframe.contentWindow?.print();
               setTimeout(() => {
-                iframe.contentWindow?.print();
-                setTimeout(() => {
-                  document.body.removeChild(iframe);
-                  URL.revokeObjectURL(blobUrl);
-                }, 30000);
-              }, 2000);
-            } catch (err: any) {
-              try {
-                const blob = err?.response?.data;
-                const text = blob instanceof Blob ? await blob.text() : '';
-                const json = JSON.parse(text);
-                message.error(json.errorMessage || 'Error al generar el PDF');
-              } catch {
-              message.error(err?.message || 'Error al generar el PDF');
+                document.body.removeChild(iframe);
+                URL.revokeObjectURL(blobUrl);
+              }, 30000);
+            }, 2000);
+          } catch (err: any) {
+            try {
+              const blob = err?.response?.data;
+              const text = blob instanceof Blob ? await blob.text() : '';
+              const json = JSON.parse(text);
+              messageApi.error(json.errorMessage || 'Error al generar el PDF');
+            } catch {
+              messageApi.error(err?.message || 'Error al generar el PDF');
             }
-            } finally {
-              setImprimiendo(false);
-            }
-          }} />
-          </PermissionGate>
-          {data.estado === 0 && data.periodo !== 6 && (
-            <PermissionGate accion="APLICAR">
-              <Button style={{ background: '#389e0d', borderColor: '#389e0d', color: '#fff' }} icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
-                Modal.confirm({
-                  title: 'Aplicar documento',
-                  icon: <ExclamationCircleOutlined />,
-                  content: '¿Está seguro que desea aplicar este documento?',
-                  okText: 'Sí',
-                  cancelText: 'No',
-                  onOk: handleAplicar,
-                });
-              }}>
-                Aplicar
-              </Button>
-            </PermissionGate>
-          )}
-          {data.estado !== 3 && (
-            <PermissionGate accion="ANULAR">
-              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={() => {
-                Modal.confirm({
-                  title: 'Anular documento',
-                  icon: <ExclamationCircleOutlined />,
-                  content: '¿Está seguro que desea anular este documento?',
-                  okText: 'Sí',
-                  cancelText: 'No',
-                  onOk: handleAnular,
-                });
-              }}>
-                Anular
-              </Button>
-            </PermissionGate>
-          )}
-          {data.estado === 1 && (
-            <>
-              <PermissionGate accion="REVISAR">
-                <Button icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
-                  Modal.confirm({
-                    title: 'Marcar como revisado',
-                    icon: <ExclamationCircleOutlined />,
-                    content: '¿Está seguro que desea marcar este documento como revisado?',
-                    okText: 'Sí',
-                    cancelText: 'No',
-                    onOk: handleRevisar,
-                  });
-                }}>
-                  Revisado
-                </Button>
-              </PermissionGate>
-              <PermissionGate accion="DESAPLICAR">
-                <Button icon={<RedoOutlined />} loading={saving} onClick={() => {
-                  Modal.confirm({
-                    title: 'Desaplicar documento',
-                    icon: <ExclamationCircleOutlined />,
-                    content: '¿Está seguro que desea desaplicar este documento?',
-                    okText: 'Sí',
-                    cancelText: 'No',
-                    onOk: handleDesaplicar,
-                  });
-                }}>
-                  Desaplicar
-                </Button>
-              </PermissionGate>
-              <PermissionGate accion="POSTEAR">
-                <Button icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
-                  Modal.confirm({
-                    title: 'Postear documento',
-                    icon: <ExclamationCircleOutlined />,
-                    content: '¿Está seguro que desea postear este documento?',
-                    okText: 'Sí',
-                    cancelText: 'No',
-                    onOk: handlePostear,
-                  });
-                }}>Postear</Button>
-              </PermissionGate>
-            </>
-          )}
-          {data.estado === 1 && data.revisado === true && (
-            <PermissionGate accion="REVERSAR">
-              <Button danger icon={<RedoOutlined />} loading={saving} onClick={() => {
-                Modal.confirm({
-                  title: 'Reversar documento',
-                  icon: <ExclamationCircleOutlined />,
-                  content: '¿Está seguro que desea reversar este documento?',
-                  okText: 'Sí',
-                  cancelText: 'No',
-                  onOk: handleReversar,
-                });
-              }}>
-                Reversar
-              </Button>
-            </PermissionGate>
-          )}
-        </Space>
-      </div>
+          } finally {
+            setImprimiendo(false);
+          }
+        }}
+        onEditar={() => navigate(`/FDVC/${id}/editar`)}
+        onAplicar={handleAplicar}
+        onAnular={handleAnular}
+        onPostear={handlePostear}
+        onRevisado={handleRevisar}
+        onDesaplicar={handleDesaplicar}
+        onReversar={handleReversar}
+      />
 
       {isLarge ? (
         <Row gutter={16}>
@@ -758,24 +536,14 @@ const DevolucionCompraDetalle: React.FC = () => {
                   key: 'asientos',
                   label: `Asientos (${data.asientos?.length || 0})`,
                   children: (
-                    <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
-                      summary={() => (
-                        <Table.Summary fixed>
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        </Table.Summary>
-                      )}
-                    />
+                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
                   ),
                 },
                 {
                   key: 'historial',
                   label: `Historial (${data.logs?.length || 0})`,
                   children: (
-                    <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
@@ -783,11 +551,15 @@ const DevolucionCompraDetalle: React.FC = () => {
           </Col>
 
           <Col lg={6}>
-            <SuplidorCard entidad={data.entidad} suplidor={data.suplidor} />
+            <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
+            />
+            <DocumentosRelacionadosCard
+              documentos={documentosRelacionados}
+              currentId={data?.id}
             />
           </Col>
         </Row>
@@ -834,7 +606,12 @@ const DevolucionCompraDetalle: React.FC = () => {
               </Descriptions>
             </Card>
 
-            <SuplidorCard entidad={data.entidad} suplidor={data.suplidor} />
+            <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
+
+            <DocumentosRelacionadosCard
+              documentos={documentosRelacionados}
+              currentId={data?.id}
+            />
 
             <Tabs
               defaultActiveKey="detalles"
@@ -862,24 +639,14 @@ const DevolucionCompraDetalle: React.FC = () => {
                   key: 'asientos',
                   label: `Asientos (${data.asientos?.length || 0})`,
                   children: (
-                    <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey={(r: any) => r.id || r.asientoID} size="small" pagination={false} scroll={{ x: 600 }}
-                      summary={() => (
-                        <Table.Summary fixed>
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        </Table.Summary>
-                      )}
-                    />
+                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
                   ),
                 },
                 {
                   key: 'historial',
                   label: `Historial (${data.logs?.length || 0})`,
                   children: (
-                    <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
@@ -892,6 +659,15 @@ const DevolucionCompraDetalle: React.FC = () => {
           />
         </div>
       )}
+
+      {/* Modal de Progreso para Aplicar/Postear */}
+      <ModalProgreso
+        open={operacion.loading || !!operacion.completado}
+        titulo={operacionTitulo}
+        eventos={operacion.eventos}
+        completado={operacion.completado}
+        onClose={() => operacion.reset()}
+      />
 
       {/* Modal de Visor de Scanner */}
       <Modal

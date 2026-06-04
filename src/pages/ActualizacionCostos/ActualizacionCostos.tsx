@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Table, Select, Button, message, Card, Typography, DatePicker, InputNumber, Empty } from 'antd';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { Table, Select, Button, message, Card, Typography, DatePicker, InputNumber, Empty, Input } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SaveOutlined } from '@ant-design/icons';
+import { SaveOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -74,6 +74,7 @@ const ActualizacionCostos: React.FC = () => {
   const [hasGenerated, setHasGenerated] = useState(false);
   const [fechaCierre, setFechaCierre] = useState<dayjs.Dayjs | null>(null);
   const [pageSize, setPageSize] = useState(50);
+  const [searchText, setSearchText] = useState('');
 
   const dateParamsRef = useRef({
     desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
@@ -114,6 +115,19 @@ const ActualizacionCostos: React.FC = () => {
     }
   };
 
+  const datosFiltrados = useMemo(() => {
+    if (!searchText) return data;
+    const f = searchText.toLowerCase();
+    return data.filter(
+      (d) =>
+        d.documento?.toLowerCase().includes(f) ||
+        d.documentoReferencia?.toLowerCase().includes(f) ||
+        d.codigo?.toLowerCase().includes(f) ||
+        d.producto?.toLowerCase().includes(f)
+    );
+  }, [data, searchText]);
+  const handleSearch = (value: string) => setSearchText(value);
+
   const handleGenerar = useCallback(async () => {
     if (tiposDocumento.length === 0) {
       message.warning('Selecciona al menos un tipo de documento');
@@ -132,7 +146,7 @@ const ActualizacionCostos: React.FC = () => {
         hasta,
         docs
       );
-      setData(resultados);
+      setData([...resultados].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '')));
       if (resultados.length === 0) {
         message.info('Todos los costos están actualizados');
       }
@@ -186,21 +200,21 @@ const ActualizacionCostos: React.FC = () => {
       title: 'Fecha',
       dataIndex: 'fecha',
       key: 'fecha',
-      width: 110,
+      width: 85,
       render: (val: string) => <Text>{formatDate(val)}</Text>,
     },
     {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 140,
+      width: 95,
       render: (val: string) => <Text strong>{val}</Text>,
     },
     {
       title: 'Código',
       dataIndex: 'codigo',
       key: 'codigo',
-      width: 100,
+      width: 75,
       render: (val: string) => <Text>{val}</Text>,
     },
     {
@@ -222,6 +236,19 @@ const ActualizacionCostos: React.FC = () => {
           {formatCurrency(val)}
         </Text>
       ),
+    },
+    {
+      title: '% Dif.',
+      key: 'diferencia',
+      width: 80,
+      align: 'right',
+      render: (_: any, record: DetalleActualizacionCostoDTO) => {
+        const pct = record.costoAntiguo
+          ? ((record.costoNuevo - record.costoAntiguo) / record.costoAntiguo) * 100
+          : 0;
+        const color = pct > 0 ? '#34c38f' : pct < 0 ? '#f46a6a' : undefined;
+        return <Text style={{ color, fontFamily: 'monospace' }}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</Text>;
+      },
     },
     {
       title: 'Costo Nuevo',
@@ -249,6 +276,13 @@ const ActualizacionCostos: React.FC = () => {
       key: 'documentoReferencia',
       width: 140,
       render: (val: string) => <Text strong>{val || '-'}</Text>,
+    },
+    {
+      title: 'Fec. Origen',
+      dataIndex: 'fechaDocumento',
+      key: 'fechaDocumento',
+      width: 85,
+      render: (val: string) => <Text>{val ? formatDate(val) : '-'}</Text>,
     },
   ];
 
@@ -309,14 +343,28 @@ const ActualizacionCostos: React.FC = () => {
         </div>
       </Card>
 
+      {/* Barra de búsqueda */}
+      {hasGenerated && (
+        <div style={{ marginBottom: 12 }}>
+          <Input.Search
+            placeholder="Buscar por doc. origen, código, documento o producto..."
+            allowClear
+            onSearch={handleSearch}
+            onChange={(e) => { if (!e.target.value) setSearchText(''); }}
+            style={{ width: 450 }}
+            prefix={<SearchOutlined className="paces-text-icon" />}
+          />
+        </div>
+      )}
+
       {/* Tabla de resultados */}
       <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
         <Table<DetalleActualizacionCostoDTO>
           columns={columns}
-          dataSource={data}
+          dataSource={datosFiltrados}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 1100 }}
+          scroll={{ x: 1050 }}
           size="middle"
           locale={{
             emptyText: <Empty description={emptyDescription} />,

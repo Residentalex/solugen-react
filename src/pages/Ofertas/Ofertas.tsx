@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Alert, Table, Card, Input, Select, Button, message, Modal, Descriptions, Typography, Tag, Divider } from 'antd';
+import { Alert, Table, Card, Input, Select, Button, Modal, Descriptions, Typography, Tag, Divider } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -69,8 +69,7 @@ const Ofertas: React.FC = () => {
     try {
       const result = await ofertaApi.obtenerListado(sucursalActiva);
       setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar ofertas');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);

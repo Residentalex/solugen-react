@@ -77,6 +77,16 @@ export const transferenciaAlmacenApi = {
     return data.data;
   },
 
+  revisado: async (sucursal: number, id: number): Promise<any> => {
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/revisado/${id}`);
+    return data.data;
+  },
+
+  reversar: async (sucursal: number, id: number): Promise<any> => {
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/reversar/${id}`);
+    return data.data;
+  },
+
   verificarScan: async (sucursal: number, id: number): Promise<{ existe: boolean }> => {
     const { data } = await apiClient.get<ApiResponse<{ existe: boolean }>>(`${BASE}/${sucursal}/${id}/scanner/verificar`);
     return data.data;

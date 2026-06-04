@@ -154,3 +154,5 @@ Reglas:
 - No crear columna "Acciones" redundante si la columna primaria es clickeable
 - No duplicar SuplidorCard/TotalesCard - extraer a componentes compartidos si se necesitan en múltiples pantallas
 - No usar estilos inline repetidos que puedan reemplazarse con clases CSS existentes
+- Todo modal de busqueda o seleccion (BuscarConcepto, BuscarDocumento, BuscarEntidad, etc.) debe ser un componente compartido en `src/components/`, no definido dentro de la misma pagina donde se usa.
+- La unica excepcion son modales especificos de una sola pantalla que no se reutilizan en ningun otro modulo.

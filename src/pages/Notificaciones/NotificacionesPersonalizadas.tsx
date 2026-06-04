@@ -65,8 +65,7 @@ const NotificacionesPersonalizadas: React.FC = () => {
       const data = await notificacionesApi.obtenerSQLConfigs();
       setConfigs(data || []);
       setLoadingError(false);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar configuraciones SQL');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);
@@ -290,6 +289,9 @@ const NotificacionesPersonalizadas: React.FC = () => {
           columns={columns}
           dataSource={dataSource}
           rowKey="id"
+          className="paces-border-top paces-list-table"
+          rowClassName="paces-row-hover"
+          onRow={() => ({ style: { cursor: 'pointer' } })}
           loading={loading}
           scroll={{ x: 950 }}
           size="middle"
@@ -298,7 +300,7 @@ const NotificacionesPersonalizadas: React.FC = () => {
             pageSize,
             onChange: (p) => setPagina(p),
             showSizeChanger: false,
-            showTotal: (total, range) => `${range[0]}-${range[1]} de ${total}`,
+            showTotal: (total) => `${total} registros`,
           }}
         />
       </Card>

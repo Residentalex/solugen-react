@@ -21,6 +21,7 @@ import { conceptosApi } from '../../api/conceptosApi';
 import { proveedorApi } from '../../api/proveedorApi';
 import { apiClient } from '../../api/client';
 import type { SuplidorDTO, ConceptoDTO } from '../../types/entradaAlmacen';
+import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -111,36 +112,6 @@ function calcularFila(fila: DetalleOrcEditable): DetalleOrcEditable {
   const total = Math.round((subTotal - descuento) * 100) / 100;
   return { ...fila, subTotal, descuento, total };
 }
-
-const BuscarConceptoModal: React.FC<{
-  open: boolean;
-  onClose: () => void;
-  onSelect: (concepto: ConceptoDTO) => void;
-}> = ({ open, onClose, onSelect }) => {
-  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
-  const [conceptos, setConceptos] = useState<ConceptoDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const cargar = useCallback(async (filtro?: string) => {
-    setLoading(true);
-    try {
-      const res = await conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'ORC', filtro);
-      setConceptos(res || []);
-    } catch { message.error('Error al cargar conceptos'); }
-    finally { setLoading(false); }
-  }, [sucursalActiva]);
-  useEffect(() => { if (open) cargar(); }, [open, cargar]);
-  return (
-    <Modal title="Buscar Concepto" open={open} onCancel={onClose} footer={null} width={600} destroyOnHidden>
-      <Input.Search placeholder="Buscar por código o nombre..." allowClear onSearch={(val) => cargar(val)} style={{ marginBottom: 16 }} />
-      <Table dataSource={conceptos} columns={[
-        { title: 'Código', dataIndex: 'codigo', width: 120 },
-        { title: 'Nombre', dataIndex: 'nombre', ellipsis: true, render: (v: string) => toTitleCase(v) },
-      ]} rowKey="codigo" loading={loading} size="small" pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({ onClick: () => { onSelect(record); onClose(); }, style: { cursor: 'pointer' } })}
-      />
-    </Modal>
-  );
-};
 
 const OrdenCompraFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -360,9 +331,10 @@ const OrdenCompraFormulario: React.FC = () => {
       tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
     });
     // Actualizar data local para que la UI lo refleje
-    setData((prev) => {
+    const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || 'RD$', codigo: monedaObj.codigo };
+    setData((prev: any) => {
       if (!prev) return prev;
-      return { ...prev, moneda: monedaObj };
+      return { ...prev, moneda: monedaFull };
     });
   };
 
@@ -668,6 +640,7 @@ const OrdenCompraFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
+        fetchConceptos={() => conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'ORC')}
       />
     </div>
   );

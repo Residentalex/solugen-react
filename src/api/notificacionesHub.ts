@@ -21,18 +21,35 @@ class NotificacionesHubService {
       .withUrl(HUB_URL, {
         accessTokenFactory: () => token || '',
       })
+      .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
       .build();
 
     this.connection = connection;
+
+    connection.onreconnecting(() => {
+      console.warn('[SignalR Notificaciones] Reconectando...');
+    });
+
+    connection.onreconnected(async () => {
+      console.log('[SignalR Notificaciones] Reconectado');
+      try {
+        await connection.invoke('UnirseAlGrupo', usuarioID);
+      } catch {
+        console.warn('[SignalR Notificaciones] Error al re-unirse al grupo tras reconexión');
+      }
+    });
+
+    connection.onclose(async () => {
+      console.warn('[SignalR Notificaciones] Conexión cerrada, reintentando...');
+      this.connection = null;
+    });
 
     try {
       await connection.start();
       await connection.invoke('UnirseAlGrupo', usuarioID);
     } catch (err) {
-      if (this.connection === connection) {
-        this.connection = null;
-      }
-      throw err;
+      // No limpiamos this.connection para permitir reconexión automática
+      console.warn('[SignalR Notificaciones] Error inicial de conexión, se reintentará automáticamente:', err);
     }
   }
 

@@ -241,8 +241,7 @@ const Automatizaciones: React.FC = () => {
         fallidos: data.fallidos ?? 0,
         exitosos: data.exitosos ?? 0,
       });
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar automatizaciones');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);

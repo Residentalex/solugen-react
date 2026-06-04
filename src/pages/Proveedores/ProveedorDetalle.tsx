@@ -10,6 +10,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { proveedorApi } from '../../api/proveedorApi';
 import type { SuplidorDTO } from '../../types/entradaAlmacen';
+import { ErrorDetalle } from '../../components';
 
 function toTitleCase(str: string): string {
   if (!str) return str;
@@ -55,6 +56,11 @@ const ProveedorDetalle: React.FC = () => {
     setLoading(true);
     proveedorApi.obtenerPorCodigo(sucursalActiva, codigo)
       .then((res) => {
+        if (!res) {
+          message.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setData(res);
         setPageTitleOverride(toTitleCase(res.nombre || codigo));
       })
@@ -66,7 +72,7 @@ const ProveedorDetalle: React.FC = () => {
       .finally(() => setLoading(false));
   }, [codigo, sucursalActiva, setPageTitleOverride]);
 
-  if (loading || !data) {
+  if (loading || (!data && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
@@ -74,6 +80,10 @@ const ProveedorDetalle: React.FC = () => {
       </div>
     );
   }
+  if (loadingError && !data) {
+    return <ErrorDetalle mensaje="Error al cargar el documento" rutaVolver="/MProveedor" />;
+  }
+  if (!data) return null;
 
   const isLarge = screens.lg ?? true;
 

@@ -90,12 +90,12 @@ const TicketThreadModal: React.FC<Props> = ({ open, ticketID, onClose }) => {
 
   return (
     <Modal
-      title={ticket ? `Ticket: ${ticket.titulo}` : 'Cargando...'}
+      title={ticket ? `${ticket.numero || `#${ticket.id}`} - ${ticket.titulo}` : 'Cargando...'}
       open={open}
       onCancel={onClose}
       footer={null}
       width={640}
-      destroyOnClose
+      destroyOnHidden
     >
       {loading ? (
         <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
@@ -103,6 +103,7 @@ const TicketThreadModal: React.FC<Props> = ({ open, ticketID, onClose }) => {
         <>
           {/* Header info */}
           <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <Tag style={{ fontFamily: 'monospace', fontWeight: 600 }}>{ticket.numero || `#${ticket.id}`}</Tag>
             <Tag color={ESTADO_COLORS[ticket.estado] || 'default'}>{ticket.estado}</Tag>
             <Tag>{ticket.prioridad}</Tag>
             <span style={{ fontSize: 12, color: '#888' }}>{formatFecha(ticket.fechaCreacion)}</span>

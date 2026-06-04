@@ -14,6 +14,7 @@ export interface MovimientoVistaDTO {
   estado: number;
   periodo: number;
   codigoSucursal: string;
+  fechaEntrega?: string;
 }
 
 export interface FiltroENP {
@@ -58,6 +59,8 @@ export interface ConceptoDTO {
   almacen?: AlmacenDTO;
   cuentaContable?: CuentaContableDTO;
   tipoIngreso?: number;
+  sucursalDestino?: CompaniaDTO;
+  conceptoDestino?: string;
   entidades?: TipoEntidadDTO[];
   documentos?: DocumentoDTO[];
 }
@@ -75,6 +78,14 @@ export interface AlmacenDTO {
   fechaCierre?: string;
   idExterno?: string;
   cuentaContable?: string;
+}
+
+export interface CompaniaDTO extends EntidadDTO {
+  slogan?: string;
+  rnc?: string;
+  telefono?: string;
+  prefijo?: string;
+  sucursal?: number;
 }
 
 export interface SuplidorDTO {
@@ -118,6 +129,7 @@ export interface DetalleEntradaAlmacenDTO {
   idTransaccionExterna?: number;
   tieneVencimiento?: boolean;
   familia?: { nombre: string; idExterno: string };
+  categoria?: { nombre: string; codigo: string; idExterno: string };
   medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
   impuesto?: { nombre: string; porcentaje: number; codigo: string; idExterno: string };
 }

@@ -26,25 +26,19 @@ import type { ConceptoDTO, AsientoContableDTO, LogDTO } from '../../types/entrad
 import type {
   ReciboIngresoFullDTO, TransaccionAsociadaDTO, CobroDTO, TipoRISelectDTO,
 } from '../../types/reciboIngreso';
+import LogTable from '../../components/LogTable';
+import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+
+import EntidadCard from '../../components/EntidadCard';
+import TotalesCard from '../../components/TotalesCard';
+import FormularioToolbar from '../../components/FormularioToolbar';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { Text } = Typography;
 const { TextArea } = Input;
-
-const ESTADO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
-
-const ACCION_MAP: Record<number, string> = {
-  0: 'Crear', 1: 'Modificar', 2: 'Eliminar', 3: 'Aplicar',
-  4: 'Desaplicar', 5: 'Postear', 6: 'Anular', 7: 'Revisar',
-  8: 'Reversar', 9: 'Escanear',
-};
 
 const MEDIO_COBRO_LABELS: Record<string, string> = {
   Efectivo: 'Efectivo',
@@ -56,66 +50,6 @@ const MEDIO_COBRO_LABELS: Record<string, string> = {
   TarjetaRegalo: 'Tarjeta Regalo',
   NotaCredito: 'Nota Crédito',
 };
-
-// ===== Helpers =====
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function toTitleCase(str: string): string {
-  if (!str) return str;
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatDate(val: string): string {
-  if (!val) return '-';
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
-  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function parseDateRaw(val: string): Date | null {
-  if (!val) return null;
-  const num = val.replace(/\D/g, '');
-  if (num.length >= 14) {
-    const y = parseInt(num.slice(0, 4), 10);
-    const m = parseInt(num.slice(4, 6), 10) - 1;
-    const d = parseInt(num.slice(6, 8), 10);
-    return new Date(y, m, d);
-  }
-  const dt = new Date(val);
-  return isNaN(dt.getTime()) ? null : dt;
-}
-
-function toISOFormat(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${y}-${m}-${day}T${hh}:${mm}:${ss}`;
-}
-
-function extraerMensajeError(err: any, fallback: string): string {
-  const data = err?.response?.data;
-  if (!data) return fallback;
-  if (data.errorMessage) return data.errorMessage;
-  if (data.errors && typeof data.errors === 'object') {
-    const mensajes: string[] = [];
-    for (const key of Object.keys(data.errors)) {
-      const val = data.errors[key];
-      if (Array.isArray(val)) mensajes.push(...val);
-      else if (typeof val === 'string') mensajes.push(val);
-    }
-    if (mensajes.length > 0) return mensajes.join('; ');
-  }
-  return fallback;
-}
 
 // ===== Factory para Cobros =====
 function crearCobrosIniciales(): CobroDTO[] {
@@ -155,7 +89,6 @@ const ReciboIngresoFormulario: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<ReciboIngresoFullDTO | null>(null);
   const [tiposCache, setTiposCache] = useState<TipoRISelectDTO[]>([]);
-  const [conceptosCache, setConceptosCache] = useState<ConceptoDTO[]>([]);
   const [entidadesCache, setEntidadesCache] = useState<any[]>([]);
   const [selectedTipo, setSelectedTipo] = useState<TipoRISelectDTO | null>(null);
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
@@ -309,24 +242,6 @@ const ReciboIngresoFormulario: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
-
-  // ===== Cargar conceptos =====
-  const cargarConceptos = useCallback(async (_searchText?: string) => {
-    try {
-      const res = await conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'RI');
-      setConceptosCache(res || []);
-      return res || [];
-    } catch {
-      message.error('Error al cargar conceptos');
-      return [];
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (conceptoModalOpen) {
-      cargarConceptos();
-    }
-  }, [conceptoModalOpen, cargarConceptos]);
 
   // ===== Cargar entidades (clientes o suplidores) =====
   const cargarEntidades = async (conceptoCodigo?: string) => {
@@ -667,70 +582,13 @@ const ReciboIngresoFormulario: React.FC = () => {
     },
   ];
 
-  const logColumns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
-    {
-      title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200,
-      render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-'),
-    },
-    { title: 'Estación', dataIndex: 'estacion', key: 'estacion', width: 200 },
-    { title: 'Acción', dataIndex: 'accion', key: 'accion', width: 120, render: (v: number) => ACCION_MAP[v] || `Acción ${v}` },
-    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
-  ];
-
   // ===== Loading =====
   if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
-      </div>
-    );
+    return <LoadingSpinner mensaje="Cargando documento..." />;
   }
 
   // ===== Estado info =====
-  const estadoInfo = ESTADO_MAP[estado] || { label: 'Borrador', color: 'default' };
-
-  // ===== Toolbar =====
-  const renderToolbar = () => (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-      <div style={{ flex: 1 }} />
-      <Space wrap>
-        {mode === 'editar' && data && (
-          <>
-            {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-            <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-          </>
-        )}
-
-        {mode === 'crear' && (
-          <>
-            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-              Guardar
-            </Button>
-            <Button icon={<CloseOutlined />} onClick={handleCancelar}>
-              Cancelar
-            </Button>
-          </>
-        )}
-
-        {mode === 'editar' && (
-          <>
-            {esBorrador && (
-              <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-                Guardar
-              </Button>
-            )}
-            {esBorrador && (
-              <Button icon={<CloseOutlined />} onClick={handleCancelar}>
-                Cancelar
-              </Button>
-            )}
-          </>
-        )}
-      </Space>
-    </div>
-  );
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Borrador', color: 'default' };
 
   // ===== Encabezado =====
   const renderEncabezado = () => (
@@ -944,91 +802,7 @@ const ReciboIngresoFormulario: React.FC = () => {
     </Card>
   );
 
-  // ===== Totales Card (right column) =====
-  const renderEntidadCard = () => (
-    <Card
-      title={<span style={{ fontSize: 16, fontWeight: 600 }}>Entidad</span>}
-      className="paces-card"
-      style={{ marginBottom: 16 }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ fontWeight: 600 }}>
-          {selectedEntidad?.nombre ? toTitleCase(selectedEntidad.nombre) : '-'}
-        </div>
-        <div>
-          <span className="paces-text-secondary">RNC: </span>
-          <span>{selectedEntidad?.identificacion || '-'}</span>
-        </div>
-        <div>
-          <span className="paces-text-secondary">Teléfono: </span>
-          <span>{selectedEntidad?.telefono || '-'}</span>
-        </div>
-      </div>
-    </Card>
-  );
 
-  const renderTotalesCard = (opts?: { monedaSimbolo?: string; monedaNombre?: string }) => {
-    const cobrado = cobros.reduce((s, c) => s + (c.monto || 0), 0);
-    const monSim = opts?.monedaSimbolo || data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$';
-    const monNom = opts?.monedaNombre || data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano';
-    return (
-      <Card
-        title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-        className="paces-card"
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-            <span className="paces-text-secondary">Moneda</span>
-            <span>{toTitleCase(monNom)} ({monSim})</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-            <span className="paces-text-secondary">Total</span>
-            <span style={{ fontWeight: 700 }}>{monSim} {formatNumber(totalValue || 0)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-            <span className="paces-text-secondary">Retenciones</span>
-            <span>{formatNumber(totalRetenciones)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-            <span className="paces-text-secondary">Total a Pagar</span>
-            <span>{monSim} {formatNumber(totalPagar)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-            <span className="paces-text-secondary">Distribuido</span>
-            <span>{monSim} {formatNumber(totalDistribuido)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-            <span className="paces-text-secondary">Por Distribuir</span>
-            <span style={{ color: porDistribuir > 0 ? '#faad14' : '#52c41a', fontWeight: 600 }}>
-              {monSim} {formatNumber(porDistribuir)}
-            </span>
-          </div>
-        </div>
-
-        <Divider style={{ margin: '12px 0' }} />
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Cobros</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-            <span className="paces-text-secondary">Cobrado</span>
-            <span>{monSim} {formatNumber(cobrado)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-            <span className="paces-text-secondary">Cuentas por Cobrar</span>
-            <span style={{ color: cuentasPorCobrar > 0 ? '#ff4d4f' : '#52c41a', fontWeight: 600 }}>
-              {monSim} {formatNumber(cuentasPorCobrar)}
-            </span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-            <span className="paces-text-secondary">Diferencia</span>
-            <span style={{ color: Math.abs(diferencia) > 0.01 ? '#ff4d4f' : '#52c41a', fontWeight: 600 }}>
-              {monSim} {formatNumber(diferencia)}
-            </span>
-          </div>
-        </div>
-      </Card>
-    );
-  };
 
   // ===== Tabs =====
   const tabItems: any[] = [];
@@ -1151,53 +925,9 @@ const ReciboIngresoFormulario: React.FC = () => {
     key: 'historial',
     label: `Historial (${logs.length})`,
     children: (
-      <Table
-        dataSource={logs}
-        columns={logColumns}
-        rowKey={(r) => r as any}
-        size="small"
-        pagination={false}
-        scroll={{ x: 900 }}
-      />
+      <LogTable dataSource={logs} scroll={{ x: 900 }} />
     ),
   });
-
-  // ===== Modal Concepto =====
-  const modalConcepto = (
-    <Modal
-      title="Buscar Concepto"
-      open={conceptoModalOpen}
-      onCancel={() => setConceptoModalOpen(false)}
-      footer={null}
-      width={600}
-      destroyOnHidden
-    >
-      <Input.Search
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        onSearch={(val) => cargarConceptos(val)}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={conceptosCache}
-        columns={[
-          { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-          { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true, render: (v: string) => toTitleCase(v) },
-        ]}
-        rowKey="codigo"
-        loading={false}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: () => {
-            handleConceptoSelect(record);
-            setConceptoModalOpen(false);
-          },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
 
   const handleRefresh = useCallback(() => {
     if (mode === 'crear') return;
@@ -1239,7 +969,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   // ===== Render principal =====
   return (
     <div>
-      {renderToolbar()}
+      <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
 
       {loadingError && (
         <Alert
@@ -1255,7 +985,12 @@ const ReciboIngresoFormulario: React.FC = () => {
         />
       )}
 
-      {modalConcepto}
+      <BuscarConceptoModal
+        open={conceptoModalOpen}
+        onClose={() => setConceptoModalOpen(false)}
+        onSelect={handleConceptoSelect}
+        fetchConceptos={() => conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'RI')}
+      />
 
       {isLarge ? (
         /* === DESKTOP === */
@@ -1270,8 +1005,16 @@ const ReciboIngresoFormulario: React.FC = () => {
             />
           </Col>
           <Col lg={6}>
-            {renderEntidadCard()}
-            {renderTotalesCard()}
+            <EntidadCard entidad={selectedEntidad} fallbackTitulo="Entidad" />
+            <TotalesCard
+              subTotal={totalValue || 0}
+              descuento={0}
+              impuestos={0}
+              total={totalValue || 0}
+              alignRight={false}
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+            />
           </Col>
         </Row>
       ) : (
@@ -1284,8 +1027,16 @@ const ReciboIngresoFormulario: React.FC = () => {
             style={{ borderRadius: 8, padding: '0 16px' }}
             items={tabItems}
           />
-          {renderEntidadCard()}
-          {renderTotalesCard()}
+          <EntidadCard entidad={selectedEntidad} fallbackTitulo="Entidad" />
+          <TotalesCard
+            subTotal={totalValue || 0}
+            descuento={0}
+            impuestos={0}
+            total={totalValue || 0}
+            alignRight={true}
+            monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+            monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+          />
         </div>
       )}
     </div>

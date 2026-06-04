@@ -113,4 +113,26 @@ export const devolucionVentaApi = {
     const { data } = await apiClient.get<ApiResponse<any>>(`/FPV/${sucursal}/${id}`);
     return data.data;
   },
+
+  // ===== Acciones de estado =====
+  revisado: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.post(`${BASE}/${sucursal}/${id}/Revisado`);
+  },
+
+  reversar: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.post(`${BASE}/${sucursal}/${id}/Reversar`);
+  },
+
+  // ===== Scanner =====
+  verificarScan: async (sucursal: number, id: number): Promise<{ existe: boolean }> => {
+    const { data } = await apiClient.get<ApiResponse<{ existe: boolean }>>(`${BASE}/${sucursal}/${id}/scanner/verificar`);
+    return data.data;
+  },
+
+  descargarScan: async (sucursal: number, id: number): Promise<Blob> => {
+    const { data } = await apiClient.get<Blob>(`${BASE}/${sucursal}/${id}/scanner/descargar`, {
+      responseType: 'blob',
+    });
+    return data;
+  },
 };

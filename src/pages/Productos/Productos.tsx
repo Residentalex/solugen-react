@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Input, Tag, Button, message, Card, Select, Typography, Tooltip, Alert } from 'antd';
+import { Table, Input, Tag, Button, Card, Select, Typography, Tooltip, Alert } from 'antd';
 import { ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -77,8 +77,7 @@ const Productos: React.FC = () => {
 
       setData((resultados || []).sort((a, b) => b.codigo.localeCompare(a.codigo)));
       setTotal(totalCount ?? 0);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar productos');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);
@@ -134,14 +133,9 @@ const Productos: React.FC = () => {
       fixed: 'left',
       render: (val: string, record: ProductoListaDTO) =>
         puedeEditar ? (
-          <Button
-            type="link"
-            size="small"
-            style={{ padding: 0, fontWeight: 500 }}
-            onClick={() => navigate(`/MProducto/${record.codigo}`)}
-          >
+          <Link to={`/MProducto/${record.codigo}`} className="paces-doc-link" style={{ fontWeight: 500 }}>
             {val}
-          </Button>
+          </Link>
         ) : (
           <Text style={{ fontFamily: 'monospace' }}>{val}</Text>
         ),

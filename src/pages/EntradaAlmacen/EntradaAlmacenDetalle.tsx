@@ -1,24 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Dropdown, Modal, DatePicker, Typography, Tooltip, Descriptions, Alert
+  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Dropdown, Modal, DatePicker, Typography, Tooltip, Descriptions, Alert, App
 } from 'antd';
 import {
   ArrowLeftOutlined,
-  PrinterOutlined,
-  EditOutlined,
-  MoreOutlined,
-  CalendarOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  RedoOutlined,
   LockFilled,
   FileTextOutlined,
   FileSearchOutlined,
-  IdcardOutlined,
-  PhoneOutlined,
-  EnvironmentOutlined,
-  ExclamationCircleOutlined,
   RollbackOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -31,216 +22,21 @@ import { ordenCompraApi } from '../../api/ordenCompraApi';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
+import LogTable from '../../components/LogTable';
+import AsientosContableTable from '../../components/AsientosContableTable';
 import PermissionGate from '../../components/PermissionGate';
+import DetalleToolbar from '../../components/DetalleToolbar';
+import EntidadCard from '../../components/EntidadCard';
+import TotalesCard from '../../components/TotalesCard';
+import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
+import { useAplicar } from '../../hooks/useAplicar';
+import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
+import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
+import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 
 const { Text } = Typography;
-
-const ESTADO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
-
-const ACCION_MAP: Record<number, string> = {
-  0: 'Crear',
-  1: 'Modificar',
-  2: 'Eliminar',
-  3: 'Aplicar',
-  4: 'Desaplicar',
-  5: 'Postear',
-  6: 'Anular',
-  7: 'Revisar',
-  8: 'Reversar',
-  9: 'Escanear',
-};
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function toTitleCase(str: string): string {
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatDate(val: string): string {
-  if (!val) return '-';
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
-  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-interface SuplidorCardProps {
-  suplidor: SuplidorDTO | null;
-  entidad?: EntidadDTO | null;
-}
-
-const SuplidorCard: React.FC<SuplidorCardProps> = ({ suplidor, entidad }) => {
-  const identificacion = suplidor?.identificacion || entidad?.identificacion || '';
-  const telefono = suplidor?.telefono || entidad?.telefono || '';
-  const direccion = suplidor?.direccion ? toTitleCase(suplidor.direccion) : entidad?.direccion ? toTitleCase(entidad.direccion) : '-';
-
-  return (
-    <Card
-      title={<span style={{ fontSize: 16, fontWeight: 600 }}>{toTitleCase(suplidor?.nombre || entidad?.nombre || 'Suplidor')}</span>}
-      className="paces-card"
-      style={{ marginBottom: 16 }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {identificacion && identificacion !== '-' && (
-          <div style={{ fontSize: 13 }}>
-            <IdcardOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {identificacion}
-          </div>
-        )}
-        {telefono && telefono !== '-' && (
-          <div style={{ fontSize: 13 }}>
-            <PhoneOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {telefono}
-          </div>
-        )}
-        {direccion && direccion !== '-' && (
-          <div style={{ fontSize: 13, color: '#595959' }}>
-            <EnvironmentOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {direccion}
-          </div>
-        )}
-      </div>
-    </Card>
-  );
-};
-
-interface TotalesCardProps {
-  subTotal: number;
-  descuento: number;
-  impuestos: number;
-  total: number;
-  nota: string;
-  alignRight: boolean;
-  monedaSimbolo?: string;
-  monedaNombre?: string;
-  tasa?: number;
-}
-
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    className="paces-card"
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
-      {monedaSimbolo && tasa !== undefined && (
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
-        </div>
-      )}
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
-        <span>{formatNumber(subTotal)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Descuento</span>}
-        <span>{formatNumber(descuento)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
-        <span>{formatNumber(impuestos)}</span>
-      </div>
-    </div>
-
-    <Divider style={{ margin: '12px 0' }} />
-
-    <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
-      {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
-    </div>
-
-    {nota && (
-      <>
-        <Divider style={{ margin: '12px 0' }} />
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, textAlign: alignRight ? 'right' : undefined }} className="paces-text-secondary">Notas</div>
-          <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.5, textAlign: alignRight ? 'right' : undefined }} className="paces-text-dark">
-            {nota}
-          </div>
-        </div>
-      </>
-    )}
-  </Card>
-);
-
-interface DocumentosRelacionadosCardProps {
-  devoluciones: any[];
-  factura: any;
-  tienePermisoFDVC: boolean;
-  tienePermisoFRDE: boolean;
-  navigate: (path: string) => void;
-}
-
-const DocumentosRelacionadosCard: React.FC<DocumentosRelacionadosCardProps> = ({
-  devoluciones, factura, tienePermisoFDVC, tienePermisoFRDE, navigate
-}) => {
-  const tieneAlgunDocumento = (devoluciones?.length > 0) || !!factura;
-  if (!tieneAlgunDocumento) return null;
-
-  return (
-    <Card
-      title={<span style={{ fontSize: 16, fontWeight: 600 }}>Documentos Relacionados</span>}
-      className="paces-card"
-      style={{ marginTop: 16 }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {/* Factura RDE */}
-        {factura && (
-          <div key="factura" style={{ fontSize: 13 }}>
-            {tienePermisoFRDE ? (
-              <a
-                style={{ cursor: 'pointer' }}
-                onClick={() => navigate(`/FRDE/${factura.id}`)}
-              >
-                <FileTextOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-                {factura.documento.codigo}-{factura.noDocumento}
-              </a>
-            ) : (
-              <span className="paces-text-secondary">
-                <FileTextOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-                {factura.documento.codigo}-{factura.noDocumento}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Devoluciones DVC */}
-        {(devoluciones || []).map((dvc: any) => (
-          <div key={dvc.id} style={{ fontSize: 13 }}>
-            {tienePermisoFDVC ? (
-              <a
-                style={{ cursor: 'pointer' }}
-                onClick={() => navigate(`/FDVC/${dvc.id}`)}
-              >
-                <FileTextOutlined style={{ color: '#ff4d4f', marginRight: 8 }} />
-                {dvc.documento.codigo}-{dvc.noDocumento}
-              </a>
-            ) : (
-              <span className="paces-text-secondary">
-                <FileTextOutlined style={{ color: '#ff4d4f', marginRight: 8 }} />
-                {dvc.documento.codigo}-{dvc.noDocumento}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-};
 
 const EntradaAlmacenDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -265,6 +61,9 @@ const EntradaAlmacenDetalle: React.FC = () => {
   const [ocLoading, setOcLoading] = useState(false);
   const [devolucionesData, setDevolucionesData] = useState<any[]>([]);
 const [facturaData, setFacturaData] = useState<any>(null);
+const [documentosRelacionados, setDocumentosRelacionados] = React.useState<DocumentoRelacionDTO[]>([]);
+
+  const { message, modal } = App.useApp();
 
   // Cargar detalles de la OC por separado cuando se tenga el id
   useEffect(() => {
@@ -279,13 +78,29 @@ const [facturaData, setFacturaData] = useState<any>(null);
       .finally(() => setOcLoading(false));
   }, [data?.ordenCompra?.id]);
 
+  // Cargar documentos relacionados desde DOCUMENTOS_RELACION
+  React.useEffect(() => {
+    if (!data?.id) return;
+    documentoRelacionApi.obtenerPorTransaccion(data.id)
+      .then(rel => setDocumentosRelacionados(rel || []))
+      .catch(() => {
+        setDocumentosRelacionados([]);
+        message.warning('No se pudieron cargar los documentos relacionados');
+      });
+  }, [data?.id]);
+
   const handleRefresh = useCallback(() => {
     if (!id) return;
     setFacturaData(null);
     setLoadingError(false);
-    setLoading(true);
     entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
+        console.log('[DEBUG handleRefresh] logs recibidos:', res?.logs);
+        if (!res) {
+          message.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         if (res.ordenCompra?.id) {
@@ -296,6 +111,10 @@ const [facturaData, setFacturaData] = useState<any>(null);
         devolucionCompraApi.obtenerPorIdEntrada(sucursalActiva, parseInt(id))
           .then((dvcs) => setDevolucionesData(dvcs))
           .catch(() => {});
+        // Cargar documentos relacionados desde DOCUMENTOS_RELACION
+        documentoRelacionApi.obtenerPorTransaccion(parseInt(id))
+          .then(rel => setDocumentosRelacionados(rel || []))
+          .catch(() => message.warning('No se pudieron cargar los documentos relacionados'));
         // Cargar factura RDE si el concepto genera una
         if (res.concepto?.docAGenerar === 'RDE') {
           facturaSuplidorApi.obtenerPorDocumento(Sucursal.Consolidado, res.noDocumento)
@@ -310,7 +129,6 @@ const [facturaData, setFacturaData] = useState<any>(null);
         message.error(msg);
         setLoadingError(true);
       })
-      .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
   const handleVerScanner = async () => {
@@ -368,6 +186,11 @@ const [facturaData, setFacturaData] = useState<any>(null);
     setLoading(true);
     entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
+        if (!res) {
+          message.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         if (res.ordenCompra?.id) {
@@ -455,7 +278,10 @@ const [facturaData, setFacturaData] = useState<any>(null);
     return pantalla?.acciones.includes('VISUALIZAR') ?? false;
   }, []);
 
-  if (loading || !data) {
+  const operacion = useAplicar();
+  const [operacionTitulo, setOperacionTitulo] = useState('');
+
+  if (loading || (!data && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
@@ -464,15 +290,39 @@ const [facturaData, setFacturaData] = useState<any>(null);
     );
   }
 
-  const isLarge = screens.lg ?? true;
+  if (loadingError && !data) {
+    return (
+      <div style={{ textAlign: 'center', padding: 80 }}>
+        <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
+        <div style={{ marginTop: 16, fontSize: 16, color: '#ff4d4f' }}>
+          Error al cargar el documento
+        </div>
+        <div style={{ marginTop: 8 }} className="paces-text-secondary">
+          Verifique que el documento exista en la sucursal seleccionada.
+        </div>
+        <Button
+          type="primary"
+          icon={<ArrowLeftOutlined />}
+          style={{ marginTop: 24 }}
+          onClick={() => navigate('/FENP')}
+        >
+          Volver al listado
+        </Button>
+      </div>
+    );
+  }
+  if (!data) return null;
 
-  const estadoInfo = ESTADO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
+  const isLarge = screens.xxl === true;
+
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
   const detalleColumns = [
     {
       title: 'Artículo',
       key: 'articulo',
+      fixed: 'left' as const,
       ellipsis: true,
       onCell: () => ({ style: { paddingLeft: 16 } }),
       onHeaderCell: () => ({ style: { paddingLeft: 16 } }),
@@ -541,7 +391,7 @@ const [facturaData, setFacturaData] = useState<any>(null);
       title: 'Cantidad',
       dataIndex: 'cantidad',
       key: 'cantidad',
-      width: 130,
+      width: 150,
       align: 'right' as const,
       render: (_: any, record: any) => {
         const enpFactor = Number(record.medida?.factor) || 1;
@@ -579,6 +429,7 @@ const [facturaData, setFacturaData] = useState<any>(null);
       key: 'costo',
       width: 130,
       align: 'right' as const,
+      responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => {
         const costoBase = Number(record.costo) || 0;
         const pctDesc = Number(record.porcentajeDescuento) || 0;
@@ -600,6 +451,7 @@ const [facturaData, setFacturaData] = useState<any>(null);
       key: 'descuento',
       width: 120,
       align: 'right' as const,
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
           <div>{formatNumber(record.porcentajeDescuento || 0)}%</div>
@@ -615,6 +467,7 @@ const [facturaData, setFacturaData] = useState<any>(null);
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
           <div>{formatNumber(record.subTotal || 0)}</div>
@@ -627,6 +480,7 @@ const [facturaData, setFacturaData] = useState<any>(null);
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
@@ -653,34 +507,7 @@ const [facturaData, setFacturaData] = useState<any>(null);
     },
   ];
 
-  function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
-  function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
-
-  const totalDebitos = (data.asientos || []).reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
-  const totalCreditos = (data.asientos || []).reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
-
-  const asientoColumns = [
-    { title: 'Cuenta', key: 'cuenta', width: 120,
-      render: (_: any, r: AsientoContableDTO) => r.cuentaContable?.noCuenta || '-' },
-    { title: 'Nombre', key: 'nombre', ellipsis: true,
-      render: (_: any, r: AsientoContableDTO) => r.cuentaContable?.nombre ? toTitleCase(r.cuentaContable.nombre) : '-' },
-    { title: 'Descripcion', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
-      render: (v: string) => v ? toTitleCase(v) : '-' },
-    { title: 'Debito', key: 'debito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => esDebito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-    { title: 'Credito', key: 'credito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-  ];
-
-  const logColumns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
-    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200,
-      render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-') },
-    { title: 'Estacion', dataIndex: 'estacion', key: 'estacion', width: 200 },
-    { title: 'Accion', dataIndex: 'accion', key: 'accion', width: 120,
-      render: (v: number) => ACCION_MAP[v] || `Accion ${v}` },
-    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
-  ];
+  // asientoColumns reemplazado por AsientosContableTable compartido
 
   // ===== Handlers de acciones de estado =====
   const handleDesaplicar = async () => {
@@ -688,12 +515,10 @@ const [facturaData, setFacturaData] = useState<any>(null);
     setSaving(true);
     try {
       const origen = obtenerNombreEnumSucursal(data.codigoSucursal || String(sucursalActiva));
-      const destino = origen;
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
-      await entradaAlmacenApi.desaplicar(origen, destino, documento);
+      await entradaAlmacenApi.desaplicar(origen, documento);
       message.success('Documento desaplicado exitosamente');
-      const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id));
-      setData(res);
+      handleRefresh();
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al desaplicar');
       message.error(msg);
@@ -702,26 +527,20 @@ const [facturaData, setFacturaData] = useState<any>(null);
     }
   };
 
-  const handleAplicar = async () => {
+  const handleAplicar = () => {
     if (!id) return;
 
-    // Verificación temprana del scanner
-    if (tieneScan === false) {
+    // Verificación temprana del scanner (solo obligatorio si tiene Orden de Compra)
+    if (tieneScan === false && data?.ordenCompra?.noDocumento) {
       message.warning('Debe escanear la factura antes de aplicar.');
       return;
     }
 
-    setSaving(true);
-    try {
-      const result = await entradaAlmacenApi.aplicar(sucursalActiva, parseInt(id));
-      setData(result);
-      message.success('Documento aplicado exitosamente');
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al aplicar');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
+    setOperacionTitulo(`Aplicando ENP-${data?.noDocumento || id}`);
+    operacion.ejecutar(
+      `/ENP/${sucursalActiva}/aplicar/${id}`,
+      handleRefresh
+    );
   };
 
   const handleAnular = async () => {
@@ -740,20 +559,14 @@ const [facturaData, setFacturaData] = useState<any>(null);
     }
   };
 
-  const handlePostear = async () => {
+  const handlePostear = () => {
     if (!data) return;
-    setSaving(true);
-    try {
-      await entradaAlmacenApi.postear(sucursalActiva, data as any);
-      message.success('Documento posteado exitosamente');
-      const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
-      setData(res);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al postear');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
+    setOperacionTitulo(`Posteando ENP-${data?.noDocumento || id}`);
+    operacion.ejecutar(
+      `/ENP/${sucursalActiva}/postear`,
+      handleRefresh,
+      data
+    );
   };
 
   const handleRevisado = async () => {
@@ -819,164 +632,63 @@ const [facturaData, setFacturaData] = useState<any>(null);
           }
         />
       )}
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FENP')}>
-          Volver
-        </Button>
-        <div style={{ flex: 1 }} />
-        <Space>
-          <PermissionGate accion="IMPRIMIR">
-            <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
-              setImprimiendo(true);
-              try {
-                const sucursalParam = data.codigoSucursal
-                  ? obtenerNombreEnumSucursal(data.codigoSucursal)
-                  : sucursalActiva;
-                const res = await apiClient.get(`/reportes/inventario/entrada/${sucursalParam}/${id}`, {
-                  responseType: 'blob',
-                });
-
-                const blobUrl = URL.createObjectURL(res.data);
-                const iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = blobUrl;
-                document.body.appendChild(iframe);
-                setTimeout(() => {
-                  iframe.contentWindow?.print();
-                  setTimeout(() => {
-                    document.body.removeChild(iframe);
-                    URL.revokeObjectURL(blobUrl);
-                  }, 30000);
-                }, 2000);
-              } catch {
-                message.error('Error al generar el PDF');
-              } finally {
-                setImprimiendo(false);
-              }
-              }} />
-          </PermissionGate>
-
-          {data.estado === 1 && (
+      <DetalleToolbar
+        modulo="FENP"
+        estado={data.estado}
+        periodo={data.periodo}
+        revisado={data.revisado}
+        saving={saving}
+        imprimiendo={imprimiendo}
+        operacionLoading={operacion.loading}
+        onVolver={() => navigate('/FENP')}
+        onImprimir={async () => {
+          setImprimiendo(true);
+          try {
+            const sucursalParam = data.codigoSucursal
+              ? obtenerNombreEnumSucursal(data.codigoSucursal)
+              : sucursalActiva;
+            const res = await apiClient.get(`/reportes/inventario/entrada/${sucursalParam}/${id}`, {
+              responseType: 'blob',
+            });
+            const blobUrl = URL.createObjectURL(res.data);
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = blobUrl;
+            document.body.appendChild(iframe);
+            setTimeout(() => {
+              iframe.contentWindow?.print();
+              setTimeout(() => {
+                document.body.removeChild(iframe);
+                URL.revokeObjectURL(blobUrl);
+              }, 30000);
+            }, 2000);
+          } catch {
+            message.error('Error al generar el PDF');
+          } finally {
+            setImprimiendo(false);
+          }
+        }}
+        onEditar={() => navigate(`/FENP/${id}/editar`)}
+        onAplicar={handleAplicar}
+        onAnular={handleAnular}
+        onPostear={handlePostear}
+        onRevisado={handleRevisado}
+        onDesaplicar={handleDesaplicar}
+        onReversar={handleReversar}
+        extraButtons={
+          data.estado === 1 ? (
             <PermissionGate codigoPantalla="FDVC" accion="CREAR">
-              <Button icon={<RollbackOutlined />} onClick={() =>
-                navigate('/FDVC/nuevo', { state: { entradaId: data?.id } })
-              }>
+              <Button icon={<RollbackOutlined />} onClick={() => navigate('/FDVC/nuevo', { state: { entradaId: data?.id } })}>
                 Devolver
               </Button>
             </PermissionGate>
-          )}
-
-          {data.estado === 0 && data.periodo !== 6 && data.revisado !== true && (
-            <PermissionGate accion="EDITAR">
-              <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FENP/${id}/editar`)}>Editar</Button>
-            </PermissionGate>
-          )}
-          {/* Acciones de estado - solo en consulta */}
-          {data.estado === 0 && data.periodo !== 6 && (
-            <PermissionGate accion="APLICAR">
-              <Button style={{ background: '#389e0d', borderColor: '#389e0d', color: '#fff' }} icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
-                Modal.confirm({
-                  title: 'Aplicar documento',
-                  icon: <ExclamationCircleOutlined />,
-                  content: '¿Está seguro que desea aplicar este documento?',
-                  okText: 'Sí',
-                  cancelText: 'No',
-                  onOk: handleAplicar,
-                });
-              }}>
-                Aplicar
-              </Button>
-            </PermissionGate>
-          )}
-          {data.revisado !== true && data.estado !== 3 && (
-            <PermissionGate accion="ANULAR">
-              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={() => {
-                Modal.confirm({
-                  title: 'Anular documento',
-                  icon: <ExclamationCircleOutlined />,
-                  content: '¿Está seguro que desea anular este documento?',
-                  okText: 'Sí',
-                  cancelText: 'No',
-                  onOk: handleAnular,
-                });
-              }}>
-                Anular
-              </Button>
-            </PermissionGate>
-          )}
-          {data.estado === 1 && data.revisado !== true && (
-            <PermissionGate accion="POSTEAR">
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
-                Modal.confirm({
-                  title: 'Postear documento',
-                  icon: <ExclamationCircleOutlined />,
-                  content: '¿Está seguro que desea postear este documento?',
-                  okText: 'Sí',
-                  cancelText: 'No',
-                  onOk: handlePostear,
-                });
-              }}>Postear</Button>
-            </PermissionGate>
-          )}
-          {data.estado === 1 && (
-            <>
-              {data.revisado !== true && (
-                <PermissionGate accion="AUTORIZAR">
-                  <Button icon={<CheckCircleOutlined />} loading={saving} onClick={() => {
-                    Modal.confirm({
-                      title: 'Marcar como revisado',
-                      icon: <ExclamationCircleOutlined />,
-                      content: '¿Está seguro que desea marcar este documento como revisado?',
-                      okText: 'Sí',
-                      cancelText: 'No',
-                      onOk: handleRevisado,
-                    });
-                  }}>
-                    Revisado
-                  </Button>
-                </PermissionGate>
-              )}
-              {data.revisado !== true && (
-                <PermissionGate accion="DESAPLICAR">
-                  <Button icon={<RedoOutlined />} loading={saving} onClick={() => {
-                    Modal.confirm({
-                      title: 'Desaplicar documento',
-                      icon: <ExclamationCircleOutlined />,
-                      content: '¿Está seguro que desea desaplicar este documento?',
-                      okText: 'Sí',
-                      cancelText: 'No',
-                      onOk: handleDesaplicar,
-                    });
-                  }}>
-                    Desaplicar
-                  </Button>
-                </PermissionGate>
-              )}
-              {data.revisado === true && (
-                <PermissionGate accion="REVERSAR">
-                  <Button danger icon={<RedoOutlined />} loading={saving} onClick={() => {
-                    Modal.confirm({
-                      title: 'Reversar documento',
-                      icon: <ExclamationCircleOutlined />,
-                      content: '¿Está seguro que desea reversar este documento?',
-                      okText: 'Sí',
-                      cancelText: 'No',
-                      onOk: handleReversar,
-                    });
-                  }}>
-                  Reversar
-                </Button>
-              </PermissionGate>
-              )}
-            </>
-          )}
-        </Space>
-      </div>
+          ) : undefined
+        }
+      />
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={18}>
             <Card className="paces-card" size="small" title={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 16, fontWeight: 600 }}>Datos Generales</span>
@@ -1063,43 +775,30 @@ const [facturaData, setFacturaData] = useState<any>(null);
                   key: 'asientos',
                   label: `Asientos (${data.asientos?.length || 0})`,
                   children: (
-                    <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
-                      summary={() => (
-                        <Table.Summary fixed>
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        </Table.Summary>
-                      )}
-                    />
+                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 800 }} />
                   ),
                 },
                 {
                   key: 'historial',
                   label: `Historial (${data.logs?.length || 0})`,
                   children: (
-                    <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                    <LogTable dataSource={data.logs || []} scroll={{ x: 800 }} />
                   ),
                 },
               ]}
             />
           </Col>
 
-          <Col lg={6}>
-            <SuplidorCard suplidor={data.suplidor} entidad={data.entidad} />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false}
+          <Col xxl={6}>
+            <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
             />
             <DocumentosRelacionadosCard
-              devoluciones={devolucionesData}
-              factura={facturaData}
-              tienePermisoFDVC={tienePermisoFDVC}
-              tienePermisoFRDE={tienePermisoFRDE}
-              navigate={navigate}
+              documentos={documentosRelacionados}
+              currentId={data?.id}
             />
           </Col>
         </Row>
@@ -1166,8 +865,6 @@ const [facturaData, setFacturaData] = useState<any>(null);
               </Descriptions>
             </Card>
 
-          <SuplidorCard suplidor={data.suplidor} entidad={data.entidad} />
-
           <Tabs
             defaultActiveKey="detalles"
             type="card"
@@ -1194,41 +891,30 @@ const [facturaData, setFacturaData] = useState<any>(null);
                 key: 'asientos',
                 label: `Asientos (${data.asientos?.length || 0})`,
                 children: (
-                  <Table dataSource={data.asientos || []} columns={asientoColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
-                    summary={() => (
-                      <Table.Summary fixed>
-                        <Table.Summary.Row>
-                          <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                          <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                          <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                        </Table.Summary.Row>
-                      </Table.Summary>
-                    )}
-                  />
+                  <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 800 }} />
                 ),
               },
               {
                 key: 'historial',
                 label: `Historial (${data.logs?.length || 0})`,
                 children: (
-                  <Table dataSource={data.logs || []} columns={logColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
+                  <LogTable dataSource={data.logs || []} scroll={{ x: 800 }} />
                 ),
               },
             ]}
           />
 
-          <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true}
-            monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-            monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
-            tasa={data.tasa ?? 1}
-          />
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight
+              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              tasa={data.tasa ?? 1}
+            />
           <DocumentosRelacionadosCard
-            devoluciones={devolucionesData}
-            factura={facturaData}
-            tienePermisoFDVC={tienePermisoFDVC}
-            tienePermisoFRDE={tienePermisoFRDE}
-            navigate={navigate}
+            documentos={documentosRelacionados}
+            currentId={data?.id}
           />
+          </div>
         </div>
       )}
 
@@ -1270,6 +956,15 @@ const [facturaData, setFacturaData] = useState<any>(null);
           </div>
         )}
       </Modal>
+
+      {/* Modal de Progreso para Aplicar/Postear */}
+      <ModalProgreso
+        open={operacion.loading || !!operacion.completado}
+        titulo={operacionTitulo}
+        eventos={operacion.eventos}
+        completado={operacion.completado}
+        onClose={() => operacion.reset()}
+      />
     </div>
   );
 };

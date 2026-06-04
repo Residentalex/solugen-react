@@ -18,8 +18,7 @@ import {
   HolderOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -33,85 +32,19 @@ import type {
 } from '../../types/facturaCliente';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import type { DetalleFacturaClienteDTO, FacturaClienteFullDTO } from '../../types/facturaCliente';
+import LogTable from '../../components/LogTable';
+import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import EntidadCard from '../../components/EntidadCard';
+import TotalesCard from '../../components/TotalesCard';
+import FormularioToolbar from '../../components/FormularioToolbar';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
+import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { Text } = Typography;
 const { TextArea } = Input;
-
-const ESTADO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
-
-const ACCION_MAP: Record<number, string> = {
-  0: 'Crear', 1: 'Modificar', 2: 'Eliminar', 3: 'Aplicar',
-  4: 'Desaplicar', 5: 'Postear', 6: 'Anular', 7: 'Revisar',
-  8: 'Reversar', 9: 'Escanear',
-};
-
-// ===== Helpers de formato =====
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function toTitleCase(str: string): string {
-  if (!str) return str;
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatDate(val: string): string {
-  if (!val) return '-';
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
-  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function parseDateRaw(val: string): Date | null {
-  if (!val) return null;
-  const num = val.replace(/\D/g, '');
-  if (num.length >= 14) {
-    const y = parseInt(num.slice(0, 4), 10);
-    const m = parseInt(num.slice(4, 6), 10) - 1;
-    const d = parseInt(num.slice(6, 8), 10);
-    return new Date(y, m, d);
-  }
-  const dt = new Date(val);
-  return isNaN(dt.getTime()) ? null : dt;
-}
-
-function toISOFormat(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${y}-${m}-${day}T${hh}:${mm}:${ss}`;
-}
-
-function extraerMensajeError(err: any, fallback: string): string {
-  const data = err?.response?.data;
-  if (!data) return fallback;
-  if (data.errorMessage) return data.errorMessage;
-  if (data.errors && typeof data.errors === 'object') {
-    const mensajes: string[] = [];
-    for (const key of Object.keys(data.errors)) {
-      const val = data.errors[key];
-      if (Array.isArray(val)) mensajes.push(...val);
-      else if (typeof val === 'string') mensajes.push(val);
-    }
-    if (mensajes.length > 0) return mensajes.join('; ');
-  }
-  return fallback;
-}
 
 // ===== Cálculo de fila para FFAC (Precio × Cantidad) =====
 function calcularFila(fila: DetalleFacturaClienteDTO): DetalleFacturaClienteDTO {
@@ -158,121 +91,7 @@ function filaVacia(): DetalleFacturaClienteDTO {
   };
 }
 
-// ===== Componente ClienteCard (readonly en right column) =====
-interface ClienteCardProps {
-  cliente: ClienteDTO | null;
-}
 
-const ClienteCard: React.FC<ClienteCardProps> = ({ cliente }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Cliente</span>}
-    className="paces-card"
-    style={{ marginBottom: 16 }}
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ fontWeight: 600 }}>
-        {cliente?.nombre ? toTitleCase(cliente.nombre) : '-'}
-      </div>
-      <div>
-        <span className="paces-text-secondary">RNC: </span>
-        <span>{cliente?.identificacion || '-'}</span>
-      </div>
-      <div>
-        <span className="paces-text-secondary">Teléfono: </span>
-        <span>{cliente?.telefono || '-'}</span>
-      </div>
-      <div>
-        <span className="paces-text-secondary">Dirección: </span>
-        <span>{cliente?.direccion ? toTitleCase(cliente.direccion) : '-'}</span>
-      </div>
-    </div>
-  </Card>
-);
-
-// ===== Componente TotalesCard =====
-interface TotalesCardProps {
-  subTotal: number;
-  descuento: number;
-  impuestos: number;
-  total: number;
-  alignRight: boolean;
-  monedaSimbolo?: string;
-  monedaNombre?: string;
-  tasa?: number;
-}
-
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    className="paces-card"
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
-      {monedaSimbolo && tasa !== undefined && (
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
-        </div>
-      )}
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
-        <span>{formatNumber(subTotal)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Descuento</span>}
-        <span>{formatNumber(descuento)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
-        <span>{formatNumber(impuestos)}</span>
-      </div>
-    </div>
-
-    <Divider style={{ margin: '12px 0' }} />
-
-    <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
-      {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{monedaSimbolo || 'RD$'} {formatNumber(total)}</span>
-    </div>
-  </Card>
-);
-
-// ===== Contexto para pasar listeners de drag al handle =====
-const DragListenersContext = React.createContext<any>(null);
-
-// ===== Componente SortableRow para drag-and-drop =====
-const SortableRow: React.FC<any> = ({ children, ...rest }) => {
-  const recordId = rest['data-row-key'];
-
-  if (!recordId) {
-    return <tr {...rest}>{children}</tr>;
-  }
-
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: recordId });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-  return (
-    <DragListenersContext.Provider value={listeners}>
-      <tr ref={setNodeRef} style={style} {...attributes} {...rest}>
-        {children}
-      </tr>
-    </DragListenersContext.Provider>
-  );
-};
-
-// ===== Componente DragHandle que inicia el arrastre solo desde el icono =====
-const DragHandle: React.FC = () => {
-  const listeners = React.useContext(DragListenersContext);
-  return (
-    <div
-      {...(listeners ?? {})}
-      style={{ cursor: 'grab', touchAction: 'none', userSelect: 'none', display: 'inline-flex' }}
-    >
-      <HolderOutlined style={{ color: '#999' }} />
-    </div>
-  );
-};
 
 // ===== Componente principal =====
 const FacturaClienteFormulario: React.FC = () => {
@@ -724,36 +543,18 @@ const FacturaClienteFormulario: React.FC = () => {
   };
 
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
-  const [conceptosCache, setConceptosCache] = useState<ConceptoDTO[]>([]);
   const [conceptoSearchText, setConceptoSearchText] = useState('');
 
   const handleConceptoClear = () => {
     setSelectedConcepto(null);
     setConceptoSearchText('');
     setClientesCache([]);
-    setConceptosCache([]);
     form.setFieldsValue({ concepto: '', cliente: undefined });
   };
 
   const handleConceptoSearchClick = () => {
     setConceptoModalOpen(true);
   };
-
-  // Cargar conceptos cuando se abre el modal
-  const cargarConceptos = useCallback(async (_filtro?: string) => {
-    try {
-      const res = await facturaClienteApi.obtenerConceptos(sucursalActiva, 'FFAC');
-      setConceptosCache(res || []);
-    } catch {
-      message.error('Error al cargar conceptos');
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (conceptoModalOpen) {
-      cargarConceptos();
-    }
-  }, [conceptoModalOpen, cargarConceptos]);
 
   // ===== Handlers de detalles =====
   const handleAgregarFila = () => {
@@ -887,109 +688,13 @@ const FacturaClienteFormulario: React.FC = () => {
       render: (_: any, r: AsientoContableDTO) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
   ];
 
-  const logColumns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
-    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200,
-      render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-') },
-    { title: 'Estacion', dataIndex: 'estacion', key: 'estacion', width: 200 },
-    { title: 'Accion', dataIndex: 'accion', key: 'accion', width: 120,
-      render: (v: number) => ACCION_MAP[v] || `Accion ${v}` },
-    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
-  ];
-
   // ===== Loading state =====
   if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
-      </div>
-    );
+    return <LoadingSpinner mensaje="Cargando documento..." />;
   }
 
   // ===== Estado info =====
-  const estadoInfo = ESTADO_MAP[estado] || { label: 'Borrador', color: 'default' };
-
-  // ===== Toolbar manual (inline) =====
-  const renderToolbar = () => (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-      <div style={{ flex: 1 }} />
-      <Space wrap>
-        {mode === 'editar' && data && (
-          <>
-            {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-            <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-          </>
-        )}
-
-        {/* Botones según estado - Creación */}
-        {mode === 'crear' && (
-          <>
-            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-              Guardar
-            </Button>
-            <Button icon={<CloseOutlined />} onClick={handleCancelar}>
-              Cancelar
-            </Button>
-          </>
-        )}
-
-        {/* Botones según estado - Edición */}
-        {mode === 'editar' && (
-          <>
-            {esBorrador && (
-              <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-                Guardar
-              </Button>
-            )}
-            {esBorrador && (
-              <Button icon={<CloseOutlined />} onClick={handleCancelar}>
-                Cancelar
-              </Button>
-            )}
-          </>
-        )}
-      </Space>
-    </div>
-  );
-
-  // ===== Modal de búsqueda de concepto =====
-  const modalConcepto = (
-    <Modal
-      title="Buscar Concepto"
-      open={conceptoModalOpen}
-      onCancel={() => setConceptoModalOpen(false)}
-      footer={null}
-      width={600}
-      destroyOnHidden
-    >
-      <Input.Search
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        onSearch={(val) => cargarConceptos(val)}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={conceptosCache}
-        columns={[
-          { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-          { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-            render: (v: string) => toTitleCase(v) },
-        ]}
-        rowKey="codigo"
-        loading={false}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: () => {
-            handleConceptoSelect(record);
-            setConceptoModalOpen(false);
-          },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Borrador', color: 'default' };
 
   // ===== Grid de detalles editable =====
   const detalleColumns = [
@@ -1547,7 +1252,7 @@ const FacturaClienteFormulario: React.FC = () => {
 
   return (
     <div>
-      {renderToolbar()}
+      <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
 
       {loadingError && (
         <Alert
@@ -1563,7 +1268,12 @@ const FacturaClienteFormulario: React.FC = () => {
         />
       )}
 
-      {modalConcepto}
+      <BuscarConceptoModal
+        open={conceptoModalOpen}
+        onClose={() => setConceptoModalOpen(false)}
+        onSelect={handleConceptoSelect}
+        fetchConceptos={() => facturaClienteApi.obtenerConceptos(sucursalActiva, 'FFAC')}
+      />
       <BuscarProductoModal
         open={productoModalOpen}
         onClose={() => setProductoModalOpen(false)}
@@ -1667,14 +1377,7 @@ const FacturaClienteFormulario: React.FC = () => {
                       key: 'historial',
                       label: `Historial (${data?.logs?.length || 0})`,
                       children: (
-                        <Table
-                          dataSource={data?.logs || []}
-                          columns={logColumns}
-                          rowKey="id"
-                          size="small"
-                          pagination={false}
-                          scroll={{ x: 900 }}
-                        />
+                        <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
                       ),
                     }]
                   : []),
@@ -1683,9 +1386,7 @@ const FacturaClienteFormulario: React.FC = () => {
           </Col>
 
           <Col lg={6}>
-            <ClienteCard
-              cliente={selectedCliente ?? data?.cliente ?? null}
-            />
+            <EntidadCard entidad={selectedCliente ?? data?.cliente ?? null} fallbackTitulo="Cliente" />
             <TotalesCard
               subTotal={totales.subTotal}
               descuento={totales.descuento}

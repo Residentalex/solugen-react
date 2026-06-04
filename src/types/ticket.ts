@@ -1,5 +1,6 @@
 export interface TicketDTO {
   id: number;
+  numero?: string;
   titulo: string;
   mensaje: string;
   estado: string;         // 'Abierto' | 'EnProceso' | 'Resuelto' | 'Cerrado'

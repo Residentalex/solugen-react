@@ -8,6 +8,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
 import type { CuentaContableDTO, MovimientoCuentaDTO, BalanceCuentaDTO } from '../../types/contabilidad';
 import { OrigenCuenta } from '../../types/contabilidad';
+import { ErrorDetalle } from '../../components';
 
 const { Text } = Typography;
 
@@ -44,6 +45,11 @@ const CuentaContableDetalle: React.FC = () => {
       cuentaContableApi.obtenerBalance(sucursalActiva, noCuenta),
     ])
       .then(([cta, bal]) => {
+        if (!cta) {
+          message.error('Cuenta contable no encontrada en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setItem(cta);
         setPageTitleOverride(cta.noCuenta);
         setBalance(bal);
@@ -88,6 +94,11 @@ const CuentaContableDetalle: React.FC = () => {
       cuentaContableApi.obtenerBalance(sucursalActiva, noCuenta),
     ])
       .then(([cta, bal]) => {
+        if (!cta) {
+          message.error('Cuenta contable no encontrada en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setItem(cta);
         setPageTitleOverride(cta.noCuenta);
         setBalance(bal);
@@ -99,13 +110,17 @@ const CuentaContableDetalle: React.FC = () => {
       .finally(() => setLoading(false));
   }, [noCuenta, sucursalActiva]);
 
-  if (loading || !item) {
+  if (loading || (!item && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
       </div>
     );
   }
+  if (loadingError && !item) {
+    return <ErrorDetalle mensaje="Error al cargar el documento" rutaVolver="/MCuentaContable" />;
+  }
+  if (!item) return null;
 
   const columnsMovimientos: ColumnsType<MovimientoCuentaDTO> = [
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 90,

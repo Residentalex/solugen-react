@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Table, Input, Select, Tag, Button, message, Card, Typography, Modal, Descriptions, DatePicker, Alert } from 'antd';
+import { Table, Input, Select, Tag, Button, Card, Typography, Modal, Descriptions, DatePicker, Alert } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -97,8 +97,7 @@ const ActualizacionPrecio: React.FC = () => {
             ? (pagina - 1) * filas + resultados.length
             : pagina * filas + 1
         );
-      } catch (err: any) {
-        message.error(err?.response?.data?.errorMessage || 'Error al cargar actualizaciones de precio');
+      } catch {
         setLoadingError(true);
       } finally {
         setLoading(false);

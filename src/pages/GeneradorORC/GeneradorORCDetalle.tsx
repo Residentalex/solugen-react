@@ -1,15 +1,21 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tag, Spin, Button, Row, Col, Divider, Grid, message, Typography, Descriptions, Alert
+  Card, Table, Tag, Spin, Button, Row, Col, Divider, Grid, message, Typography, Descriptions, Alert, Input
 } from 'antd';
 import {
   ArrowLeftOutlined,
+  EditOutlined,
+  IdcardOutlined,
+  CalendarOutlined,
+  ShoppingCartOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { generadorOrcApi } from '../../api/generadorOrcApi';
 import type { GeneradorOrdenCompraDTO, DetalleGeneradorDTO } from '../../types/generadorOrc';
+import { ErrorDetalle } from '../../components';
 
 const { Text } = Typography;
 
@@ -28,11 +34,6 @@ function formatNumber(n: number): string {
   return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 }
 
-function sumCantidades(cantidades: Record<string, number> | null | undefined): number {
-  if (!cantidades) return 0;
-  return Object.values(cantidades).reduce((sum, v) => sum + (v || 0), 0);
-}
-
 function toTitleCase(str: string): string {
   if (!str) return str;
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -43,6 +44,19 @@ function formatDate(val: string): string {
   const d = new Date(val);
   if (isNaN(d.getTime())) return val;
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function calcularFilaGORC(fila: DetalleGeneradorDTO): DetalleGeneradorDTO {
+  const cantTotal = Object.values(fila.cantidades || {}).reduce((s, v) => s + (v || 0), 0);
+  const costo = fila.costo || 0;
+  const pctDesc = fila.porcentajeDescuento || 0;
+  const pctImp = fila.impuesto?.porcentaje ?? 0;
+  const subTotal = Math.round(cantTotal * costo * 100) / 100;
+  const descuento = Math.round(subTotal * (pctDesc / 100) * 100) / 100;
+  const base = subTotal - descuento;
+  const impuestos = Math.round(base * (pctImp / 100) * 100) / 100;
+  const total = Math.round((base + impuestos) * 100) / 100;
+  return { ...fila, subTotal, descuento, impuestos, total };
 }
 
 const GeneradorORCDetalle: React.FC = () => {
@@ -56,6 +70,18 @@ const GeneradorORCDetalle: React.FC = () => {
   const [data, setData] = useState<GeneradorOrdenCompraDTO | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
+  const [detalleSearch, setDetalleSearch] = useState('');
+
+  const detallesFiltrados = useMemo(() => {
+    const d = (data?.detalles || []).map((item) => calcularFilaGORC(item));
+    return detalleSearch
+      ? d.filter(item => {
+          const q = detalleSearch.toLowerCase();
+          return (item.codigo || '').toLowerCase().includes(q) ||
+                 (item.producto || '').toLowerCase().includes(q);
+        })
+      : d;
+  }, [data, detalleSearch]);
 
   const handleRefresh = useCallback(() => {
     if (!id) return;
@@ -86,6 +112,11 @@ const GeneradorORCDetalle: React.FC = () => {
     setLoading(true);
     generadorOrcApi.obtenerPorId(sucursalActiva, id)
       .then((res) => {
+        if (!res) {
+          message.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setData(res);
         setPageTitleOverride(`GORC-${res.numero}`);
       })
@@ -97,7 +128,7 @@ const GeneradorORCDetalle: React.FC = () => {
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
-  if (loading || !data) {
+  if (loading || (!data && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
@@ -105,105 +136,143 @@ const GeneradorORCDetalle: React.FC = () => {
       </div>
     );
   }
+  if (loadingError && !data) {
+    return <ErrorDetalle mensaje="Error al cargar el documento" rutaVolver="/FGORC" />;
+  }
+  if (!data) return null;
 
   const isLarge = screens.lg ?? true;
   const estadoInfo = ESTADO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
-  const detalles = data.detalles || [];
+  const detalles = detallesFiltrados;
 
   const sumSubTotal = detalles.reduce((s, d) => s + (d.subTotal || 0), 0);
   const sumDescuento = detalles.reduce((s, d) => s + (d.descuento || 0), 0);
   const sumImpuestos = detalles.reduce((s, d) => s + (d.impuestos || 0), 0);
   const sumTotal = detalles.reduce((s, d) => s + (d.total || 0), 0);
 
+  const SUC_BAND: Record<string, string> = {
+    OP: 'gorc-band-op',
+    HR: 'gorc-band-hr',
+    VH: 'gorc-band-vh',
+  };
+
+  const sucursalColumns = (suc: string) => ({
+    title: suc,
+    className: SUC_BAND[suc] || '',
+    children: [
+      {
+        title: 'Cant.', key: `${suc}_cant`, width: 80, align: 'right' as const,
+        onHeaderCell: () => ({ className: SUC_BAND[suc] || '' }),
+        onCell: () => ({ className: `gorc-cell-${suc.toLowerCase()}` }),
+        render: (_: any, record: DetalleGeneradorDTO) => (
+          <div>
+            <Text strong>{formatNumber(record.cantidades?.[suc] ?? 0)}</Text>
+            {record.medida?.nombre && (
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
+                {record.medida.nombre}
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        title: 'Bonif.', key: `${suc}_bonif`, width: 75, align: 'right' as const,
+        onHeaderCell: () => ({ className: SUC_BAND[suc] || '' }),
+        onCell: () => ({ className: `gorc-cell-${suc.toLowerCase()}` }),
+        render: (_: any, record: DetalleGeneradorDTO) => formatNumber(record.cantidadesBonificadas?.[suc] ?? 0),
+      },
+      {
+        title: 'Exist.\nConteo', key: `${suc}_existconteo`, width: 90, align: 'right' as const,
+        onHeaderCell: () => ({ className: SUC_BAND[suc] || '' }),
+        onCell: () => ({ className: `gorc-cell-${suc.toLowerCase()}` }),
+        render: (_: any, record: DetalleGeneradorDTO) => (
+          <div>
+            <div>{formatNumber(record.existencias?.[suc] ?? 0)}</div>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+              {formatNumber(record.existenciasFisicas?.[suc] ?? 0)}
+            </div>
+          </div>
+        ),
+      },
+    ],
+  });
+
   const detalleColumns = [
     {
-      title: 'Código',
-      dataIndex: 'codigo',
-      key: 'codigo',
-      width: 100,
+      title: 'Información',
+      className: 'gorc-band-info',
+      children: [
+        {
+          title: 'Artículo', key: 'producto',
+          onCell: () => ({ style: { paddingLeft: 16 } }),
+          onHeaderCell: () => ({ style: { paddingLeft: 16 } }),
+          render: (_: any, record: DetalleGeneradorDTO) => (
+            <div style={{ fontSize: 13 }}>
+              <div style={{ fontWeight: 500 }}>{toTitleCase(record.producto || '')}</div>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+                <span>{record.codigo}</span>
+                {record.codigo && record.referencia && <span>{' | '}</span>}
+                {record.referencia && <span>{record.referencia}</span>}
+              </div>
+            </div>
+          ),
+        },
+        {
+          title: 'Costo', dataIndex: 'costo', key: 'costo', width: 90, align: 'right' as const,
+          render: (costo: number) => formatNumber(costo || 0),
+        },
+        {
+          title: 'Margen %', dataIndex: 'margen', key: 'margen', width: 100, align: 'right' as const,
+          render: (margen: number) => `${(margen || 0).toFixed(2)}%`,
+        },
+        {
+          title: 'P. Sugerido', dataIndex: 'precioSugerido', key: 'precioSugerido', width: 100, align: 'right' as const,
+          render: (val: number) => formatNumber(val || 0),
+        },
+      ],
     },
+    // Columnas agrupadas por sucursal (OP, HR, VH)
+    sucursalColumns('OP'),
+    sucursalColumns('HR'),
+    sucursalColumns('VH'),
+    // Totales
     {
-      title: 'Producto',
-      key: 'producto',
-      width: 220,
-      render: (_: any, record: DetalleGeneradorDTO) => (
-        <div>
-          <div>{toTitleCase(record.producto || '')}</div>
-          {record.referencia && (
-            <div style={{ fontSize: 12, color: '#8c8c8c' }}>{record.referencia}</div>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: 'Medida',
-      dataIndex: 'medida',
-      key: 'medida',
-      width: 80,
-      render: (med: { id: number; nombre: string } | null) => med?.nombre || '-',
-    },
-    {
-      title: 'Cantidad',
-      key: 'cantidad',
-      width: 100,
-      align: 'right' as const,
-      render: (_: any, record: DetalleGeneradorDTO) => formatNumber(sumCantidades(record.cantidades)),
-    },
-    {
-      title: 'Costo',
-      dataIndex: 'costo',
-      key: 'costo',
-      width: 100,
-      align: 'right' as const,
-      render: (costo: number) => formatCurrency(costo || 0),
-    },
-    {
-      title: 'Margen',
-      dataIndex: 'margen',
-      key: 'margen',
-      width: 80,
-      align: 'right' as const,
-      render: (margen: number) => `${(margen || 0).toFixed(2)}%`,
-    },
-    {
-      title: 'Precio Sug.',
-      dataIndex: 'precioSugerido',
-      key: 'precioSugerido',
-      width: 110,
-      align: 'right' as const,
-      render: (val: number) => formatCurrency(val || 0),
-    },
-    {
-      title: 'SubTotal',
-      dataIndex: 'subTotal',
-      key: 'subTotal',
-      width: 110,
-      align: 'right' as const,
-      render: (val: number) => formatCurrency(val || 0),
-    },
-    {
-      title: 'Desc. %',
-      dataIndex: 'porcentajeDescuento',
-      key: 'porcentajeDescuento',
-      width: 80,
-      align: 'right' as const,
-      render: (val: number) => (val || 0).toFixed(2),
-    },
-    {
-      title: 'Impuesto',
-      dataIndex: 'impuestos',
-      key: 'impuestos',
-      width: 90,
-      align: 'right' as const,
-      render: (val: number) => formatCurrency(val || 0),
-    },
-    {
-      title: 'Total',
-      dataIndex: 'total',
-      key: 'total',
-      width: 110,
-      align: 'right' as const,
-      render: (val: number) => <Text strong>{formatCurrency(val || 0)}</Text>,
+      title: 'Totales',
+      className: 'gorc-band-totales',
+      children: [
+        {
+          title: 'SubTotal', dataIndex: 'subTotal', key: 'subTotal', width: 110, align: 'right' as const,
+          render: (val: number) => formatNumber(val || 0),
+        },
+        {
+          title: 'Descuento', key: 'descuento_comb', width: 100, align: 'right' as const,
+          render: (_: any, record: DetalleGeneradorDTO) => (
+            <div>
+              <div>{(record.porcentajeDescuento || 0).toFixed(2)}%</div>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+                {formatNumber(record.descuento || 0)}
+              </div>
+            </div>
+          ),
+        },
+        {
+          title: 'Impuesto', dataIndex: 'impuestos', key: 'impuestos', width: 140, align: 'right' as const,
+          render: (_: any, record: DetalleGeneradorDTO) => (
+            <div>
+              <div>{formatNumber(record.impuestos || 0)}</div>
+              {(record.impuesto as any)?.nombre && (
+                <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+                  {toTitleCase((record.impuesto as any).nombre)}
+                </div>
+              )}
+            </div>
+          ),
+        },
+        {
+          title: 'Total', dataIndex: 'total', key: 'total', width: 110, align: 'right' as const,
+          render: (val: number) => <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(val || 0)}</Text>,
+        },
+      ],
     },
   ];
 
@@ -233,9 +302,8 @@ const GeneradorORCDetalle: React.FC = () => {
 
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */
-        <Row gutter={16}>
-          <Col lg={18}>
-            <Card className="paces-card" size="small" title={
+        <div>
+          <Card className="paces-card" size="small" title={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 16, fontWeight: 600 }}>Datos del Generador</span>
                 <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
@@ -263,62 +331,56 @@ const GeneradorORCDetalle: React.FC = () => {
               </Descriptions>
             </Card>
 
-            <Card className="paces-card" size="small" title={`Productos (${detalles.length})`}>
+            <Card className="paces-card" size="small" title={`Productos (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`}>
               {detalles.length > 0 ? (
-                <Table<DetalleGeneradorDTO>
-                  dataSource={detalles}
-                  columns={detalleColumns}
-                  rowKey="codigo"
-                  size="small"
-                  pagination={false}
-                  scroll={{ x: 1200 }}
-                  summary={() => (
-                    <Table.Summary.Row>
-                      <Table.Summary.Cell index={0} colSpan={2}><Text strong>Totales</Text></Table.Summary.Cell>
-                      <Table.Summary.Cell index={1} />
-                      <Table.Summary.Cell index={2} />
-                      <Table.Summary.Cell index={3} />
-                      <Table.Summary.Cell index={4} />
-                      <Table.Summary.Cell index={5} />
-                      <Table.Summary.Cell index={6} align="right">{formatCurrency(sumSubTotal)}</Table.Summary.Cell>
-                      <Table.Summary.Cell index={7} align="right">{formatNumber(sumDescuento)}</Table.Summary.Cell>
-                      <Table.Summary.Cell index={8} align="right">{formatCurrency(sumImpuestos)}</Table.Summary.Cell>
-                      <Table.Summary.Cell index={9} align="right"><Text strong style={{ color: 'var(--paces-primary)' }}>{formatCurrency(sumTotal)}</Text></Table.Summary.Cell>
-                    </Table.Summary.Row>
-                  )}
-                />
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                    <Input.Search
+                      placeholder="Buscar producto..."
+                      allowClear
+                      style={{ maxWidth: 250 }}
+                      prefix={<SearchOutlined className="paces-text-icon" />}
+                      onSearch={(value) => setDetalleSearch(value)}
+                      onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                    />
+                  </div>
+                  <Table<DetalleGeneradorDTO>
+                    dataSource={detallesFiltrados}
+                    columns={detalleColumns}
+                    rowKey="codigo"
+                    size="small"
+                    pagination={false}
+                    scroll={{ x: 1600 }}
+                    summary={() => {
+                      const colsAntes = 13;
+                      return (
+                        <Table.Summary fixed="bottom">
+                          <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                            <Table.Summary.Cell index={0} colSpan={colsAntes}>
+                              <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={colsAntes} align="right">{formatCurrency(sumSubTotal)}</Table.Summary.Cell>
+                            <Table.Summary.Cell index={colsAntes + 1} align="right">{formatCurrency(sumDescuento)}</Table.Summary.Cell>
+                            <Table.Summary.Cell index={colsAntes + 2} align="right">{formatCurrency(sumImpuestos)}</Table.Summary.Cell>
+                            <Table.Summary.Cell index={colsAntes + 3} align="right">
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatCurrency(sumTotal)}</Text>
+                            </Table.Summary.Cell>
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      );
+                    }}
+                  />
+                </>
               ) : (
                 <div style={{ textAlign: 'center', padding: 40 }}>
                   <div className="paces-text-secondary">No hay productos en este generador</div>
                 </div>
               )}
             </Card>
-          </Col>
-
-          <Col lg={6}>
-            <Card className="paces-card" title={<span style={{ fontSize: 16, fontWeight: 600 }}>Resumen</span>}>
-              <Divider style={{ margin: '12px 0' }} />
-              <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'right' }}>
-                <div className="paces-text-secondary" style={{ fontSize: 13, fontWeight: 400, marginBottom: 4 }}>Total</div>
-                <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(data.total)}</span>
-              </div>
-              {data.notas && (
-                <>
-                  <Divider style={{ margin: '12px 0' }} />
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }} className="paces-text-secondary">Notas</div>
-                    <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.5 }} className="paces-text-dark">
-                      {data.notas}
-                    </div>
-                  </div>
-                </>
-              )}
-            </Card>
-          </Col>
-        </Row>
-      ) : (
-        /* === MOBILE LAYOUT (< lg) === */
-        <div>
+          </div>
+        ) : (
+          /* === MOBILE LAYOUT (< lg) === */
+          <div>
           <Card className="paces-card" size="small" title={
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 16, fontWeight: 600 }}>Datos del Generador</span>
@@ -347,53 +409,50 @@ const GeneradorORCDetalle: React.FC = () => {
             </Descriptions>
           </Card>
 
-          <Card className="paces-card" size="small" title={`Productos (${detalles.length})`} style={{ marginBottom: 16 }}>
+          <Card className="paces-card" size="small" title={`Productos (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`} style={{ marginBottom: 16 }}>
             {detalles.length > 0 ? (
-              <Table<DetalleGeneradorDTO>
-                dataSource={detalles}
-                columns={detalleColumns}
-                rowKey="codigo"
-                size="small"
-                pagination={false}
-                scroll={{ x: 1200 }}
-                summary={() => (
-                  <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={2}><Text strong>Totales</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell index={1} />
-                    <Table.Summary.Cell index={2} />
-                    <Table.Summary.Cell index={3} />
-                    <Table.Summary.Cell index={4} />
-                    <Table.Summary.Cell index={5} />
-                    <Table.Summary.Cell index={6} align="right">{formatCurrency(sumSubTotal)}</Table.Summary.Cell>
-                    <Table.Summary.Cell index={7} align="right">{formatNumber(sumDescuento)}</Table.Summary.Cell>
-                    <Table.Summary.Cell index={8} align="right">{formatCurrency(sumImpuestos)}</Table.Summary.Cell>
-                    <Table.Summary.Cell index={9} align="right"><Text strong style={{ color: 'var(--paces-primary)' }}>{formatCurrency(sumTotal)}</Text></Table.Summary.Cell>
-                  </Table.Summary.Row>
-                )}
-              />
+              <>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                  <Input.Search
+                    placeholder="Buscar producto..."
+                    allowClear
+                    style={{ maxWidth: 250 }}
+                    prefix={<SearchOutlined className="paces-text-icon" />}
+                    onSearch={(value) => setDetalleSearch(value)}
+                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                  />
+                </div>
+                <Table<DetalleGeneradorDTO>
+                  dataSource={detallesFiltrados}
+                  columns={detalleColumns}
+                  rowKey="codigo"
+                  size="small"
+                  pagination={false}
+                  scroll={{ x: 1600 }}
+                  summary={() => {
+                    const colsAntes = 13;
+                    return (
+                      <Table.Summary fixed="bottom">
+                        <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                          <Table.Summary.Cell index={0} colSpan={colsAntes}>
+                            <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
+                          </Table.Summary.Cell>
+                          <Table.Summary.Cell index={colsAntes} align="right">{formatCurrency(sumSubTotal)}</Table.Summary.Cell>
+                          <Table.Summary.Cell index={colsAntes + 1} align="right">{formatCurrency(sumDescuento)}</Table.Summary.Cell>
+                          <Table.Summary.Cell index={colsAntes + 2} align="right">{formatCurrency(sumImpuestos)}</Table.Summary.Cell>
+                          <Table.Summary.Cell index={colsAntes + 3} align="right">
+                            <Text strong style={{ color: 'var(--paces-primary)' }}>{formatCurrency(sumTotal)}</Text>
+                          </Table.Summary.Cell>
+                        </Table.Summary.Row>
+                      </Table.Summary>
+                    );
+                  }}
+                />
+              </>
             ) : (
               <div style={{ textAlign: 'center', padding: 40 }}>
                 <div className="paces-text-secondary">No hay productos en este generador</div>
               </div>
-            )}
-          </Card>
-
-          <Card className="paces-card" title={<span style={{ fontSize: 16, fontWeight: 600 }}>Resumen</span>}>
-            <Divider style={{ margin: '12px 0' }} />
-            <div style={{ fontSize: 16, fontWeight: 700, textAlign: 'right' }}>
-              <div className="paces-text-secondary" style={{ fontSize: 13, fontWeight: 400, marginBottom: 4 }}>Total</div>
-              <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(data.total)}</span>
-            </div>
-            {data.notas && (
-              <>
-                <Divider style={{ margin: '12px 0' }} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }} className="paces-text-secondary">Notas</div>
-                  <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.5 }} className="paces-text-dark">
-                    {data.notas}
-                  </div>
-                </div>
-              </>
             )}
           </Card>
         </div>

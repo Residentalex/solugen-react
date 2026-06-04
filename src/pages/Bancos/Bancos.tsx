@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Table, Card, Input, Select, Button, message, Modal, Descriptions, Typography } from 'antd';
+import { Alert, Table, Card, Input, Select, Button, Modal, Descriptions, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -37,8 +37,7 @@ const Bancos: React.FC = () => {
     try {
       const result = await bancoApi.obtenerListado(sucursalActiva);
       setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar bancos');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);

@@ -28,80 +28,18 @@ import type {
   TransaccionAsociadaDTO,
 } from '../../types/distribucionBalance';
 import type { TipoDocumentoDTO } from '../../types/transaccion';
+import LogTable from '../../components/LogTable';
+import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+
+import EntidadCard from '../../components/EntidadCard';
+import TotalesCard from '../../components/TotalesCard';
+import FormularioToolbar from '../../components/FormularioToolbar';
+import LoadingSpinner from '../../components/LoadingSpinner';
+import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { TextArea } = Input;
-
-const ESTADO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
-
-const ACCION_MAP: Record<number, string> = {
-  0: 'Crear', 1: 'Modificar', 2: 'Eliminar', 3: 'Aplicar',
-  4: 'Desaplicar', 5: 'Postear', 6: 'Anular', 7: 'Revisar',
-  8: 'Reversar', 9: 'Escanear',
-};
-
-// ===== Helpers =====
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function toTitleCase(str: string): string {
-  if (!str) return str;
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatDate(val: string): string {
-  if (!val) return '-';
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return val;
-  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function parseDateRaw(val: string): Date | null {
-  if (!val) return null;
-  const num = val.replace(/\D/g, '');
-  if (num.length >= 14) {
-    const y = parseInt(num.slice(0, 4), 10);
-    const m = parseInt(num.slice(4, 6), 10) - 1;
-    const d = parseInt(num.slice(6, 8), 10);
-    return new Date(y, m, d);
-  }
-  const dt = new Date(val);
-  return isNaN(dt.getTime()) ? null : dt;
-}
-
-function toISOFormat(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${y}-${m}-${day}T${hh}:${mm}:${ss}`;
-}
-
-function extraerMensajeError(err: any, fallback: string): string {
-  const data = err?.response?.data;
-  if (!data) return fallback;
-  if (data.errorMessage) return data.errorMessage;
-  if (data.errors && typeof data.errors === 'object') {
-    const mensajes: string[] = [];
-    for (const key of Object.keys(data.errors)) {
-      const val = data.errors[key];
-      if (Array.isArray(val)) mensajes.push(...val);
-      else if (typeof val === 'string') mensajes.push(val);
-    }
-    if (mensajes.length > 0) return mensajes.join('; ');
-  }
-  return fallback;
-}
 
 // ===== Componente principal =====
 interface DistribucionBalanceFormularioProps {
@@ -127,7 +65,6 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<any>(null);
   const [tiposCache, setTiposCache] = useState<TipoDocumentoDTO[]>([]);
-  const [conceptosCache, setConceptosCache] = useState<ConceptoDTO[]>([]);
   const [entidadesCache, setEntidadesCache] = useState<any[]>([]);
   const [selectedTipo, setSelectedTipo] = useState<TipoDocumentoDTO | null>(null);
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
@@ -277,24 +214,6 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate, codigoPantalla]);
-
-  // ===== Cargar conceptos =====
-  const cargarConceptos = useCallback(async () => {
-    try {
-      const res = await conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'DBA');
-      setConceptosCache(res || []);
-      return res || [];
-    } catch {
-      message.error('Error al cargar conceptos');
-      return [];
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (conceptoModalOpen) {
-      cargarConceptos();
-    }
-  }, [conceptoModalOpen, cargarConceptos]);
 
   // ===== Cargar entidades (clientes o suplidores) =====
   const cargarEntidades = async (conceptoCodigo?: string) => {
@@ -480,9 +399,10 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
     });
     // Actualizar data local para que la UI lo refleje
-    setData((prev) => {
+    const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || 'RD$', codigo: monedaObj.codigo };
+    setData((prev: any) => {
       if (!prev) return prev;
-      return { ...prev, moneda: monedaObj };
+      return { ...prev, moneda: monedaFull };
     });
   };
 
@@ -567,111 +487,12 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       render: (_: any, r: AsientoContableDTO) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
   ];
 
-  const logColumns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 160, render: (v: string) => formatDate(v) },
-    { title: 'Usuario', dataIndex: 'usuario', key: 'usuario', width: 200,
-      render: (v: any) => (v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-') },
-    { title: 'Estacion', dataIndex: 'estacion', key: 'estacion', width: 200 },
-    { title: 'Accion', dataIndex: 'accion', key: 'accion', width: 120,
-      render: (v: number) => ACCION_MAP[v] || `Accion ${v}` },
-    { title: 'Motivos', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
-  ];
-
   // ===== Loading state =====
   if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
-      </div>
-    );
+    return <LoadingSpinner mensaje="Cargando documento..." />;
   }
 
-  const estadoInfo = ESTADO_MAP[estado] || { label: 'Borrador', color: 'default' };
-
-  // ===== Toolbar inline =====
-  const renderToolbar = () => (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-      <div style={{ flex: 1 }} />
-      <Space wrap>
-        {mode === 'editar' && data && (
-          <>
-            {esCerrado && <Tag color="geekblue">Cerrado</Tag>}
-            <Tag color={estadoInfo.color}>{estadoInfo.label}</Tag>
-          </>
-        )}
-
-        {mode === 'crear' && (
-          <>
-            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-              Guardar
-            </Button>
-            <Button icon={<CloseOutlined />} onClick={handleCancelar}>
-              Cancelar
-            </Button>
-          </>
-        )}
-
-        {mode === 'editar' && (
-          <>
-            {esBorrador && (
-              <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-                Guardar
-              </Button>
-            )}
-            {esBorrador && (
-              <Button icon={<CloseOutlined />} onClick={handleCancelar}>
-                Cancelar
-              </Button>
-            )}
-            {id && (
-              <Button icon={<ExclamationCircleOutlined />} loading={saving} onClick={handleGenerarAsientos}>
-                ReCalcular
-              </Button>
-            )}
-          </>
-        )}
-      </Space>
-    </div>
-  );
-
-  // ===== Modal Concepto =====
-  const modalConcepto = (
-    <Modal
-      title="Buscar Concepto"
-      open={conceptoModalOpen}
-      onCancel={() => setConceptoModalOpen(false)}
-      footer={null}
-      width={600}
-      destroyOnHidden
-    >
-      <Input.Search
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        onSearch={() => cargarConceptos()}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={conceptosCache}
-        columns={[
-          { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-          { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-            render: (v: string) => toTitleCase(v) },
-        ]}
-        rowKey="codigo"
-        loading={false}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: () => {
-            handleConceptoSelect(record);
-            setConceptoModalOpen(false);
-          },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Borrador', color: 'default' };
 
   // ===== Encabezado =====
   const renderEncabezado = () => (
@@ -882,65 +703,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     </Card>
   );
 
-  // ===== Entidad Card =====
-  const EntidadCard = () => (
-    <Card
-      title={<span style={{ fontSize: 16, fontWeight: 600 }}>{entidadLabel}</span>}
-      className="paces-card"
-      style={{ marginBottom: 16 }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ fontWeight: 600 }}>
-          {selectedEntidad?.nombre ? toTitleCase(selectedEntidad.nombre) : '-'}
-        </div>
-        <div>
-          <span className="paces-text-secondary">RNC: </span>
-          <span>{selectedEntidad?.identificacion || '-'}</span>
-        </div>
-        <div>
-          <span className="paces-text-secondary">Teléfono: </span>
-          <span>{selectedEntidad?.telefono || '-'}</span>
-        </div>
-      </div>
-    </Card>
-  );
 
-  // ===== Totales Card (lateral) =====
-  const TotalesCard = () => (
-    <Card
-      title={<span style={{ fontSize: 16, fontWeight: 600 }}>Balance</span>}
-      className="paces-card"
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-          <span className="paces-text-secondary">Total Débitos</span>
-          <span style={{ fontWeight: 600 }}>{formatNumber(totalDebitosDBA)}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-          <span className="paces-text-secondary">Total Créditos</span>
-          <span style={{ fontWeight: 600 }}>{formatNumber(totalCreditosDBA)}</span>
-        </div>
-      </div>
-      <Divider style={{ margin: '12px 0' }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
-        <span>Pendiente</span>
-        <span style={{ color: Math.abs(pendienteDBA) > 0.01 ? '#ff4d4f' : 'var(--paces-primary)' }}>
-          {formatNumber(pendienteDBA)}
-        </span>
-      </div>
-      {data?.nota && (
-        <>
-          <Divider style={{ margin: '12px 0' }} />
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }} className="paces-text-secondary">Notas</div>
-            <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.5 }} className="paces-text-dark">
-              {data.nota}
-            </div>
-          </div>
-        </>
-      )}
-    </Card>
-  );
 
   // ===== Tabs =====
   const tabItems: any[] = [];
@@ -1047,14 +810,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     key: 'historial',
     label: `Historial (${logs.length})`,
     children: (
-      <Table
-        dataSource={logs}
-        columns={logColumns}
-        rowKey={(r) => r as any}
-        size="small"
-        pagination={false}
-        scroll={{ x: 900 }}
-      />
+      <LogTable dataSource={logs} scroll={{ x: 900 }} />
     ),
   });
 
@@ -1092,7 +848,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   // ===== Render principal =====
   return (
     <div>
-      {renderToolbar()}
+      <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
 
       {loadingError && (
         <Alert
@@ -1108,7 +864,12 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
         />
       )}
 
-      {modalConcepto}
+      <BuscarConceptoModal
+        open={conceptoModalOpen}
+        onClose={() => setConceptoModalOpen(false)}
+        onSelect={handleConceptoSelect}
+        fetchConceptos={() => conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'DBA')}
+      />
 
       {isLarge ? (
         /* === DESKTOP === */
@@ -1124,8 +885,14 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
             <BalanceFooter />
           </Col>
           <Col lg={6}>
-            <EntidadCard />
-            <TotalesCard />
+            <EntidadCard entidad={selectedEntidad} fallbackTitulo={entidadLabel} />
+            <TotalesCard
+              subTotal={totalDebitosDBA}
+              descuento={0}
+              impuestos={0}
+              total={totalDebitosDBA}
+              alignRight={false}
+            />
           </Col>
         </Row>
       ) : (
@@ -1139,8 +906,14 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
             items={tabItems}
           />
           <BalanceFooter />
-          <EntidadCard />
-          <TotalesCard />
+          <EntidadCard entidad={selectedEntidad} fallbackTitulo={entidadLabel} />
+          <TotalesCard
+            subTotal={totalDebitosDBA}
+            descuento={0}
+            impuestos={0}
+            total={totalDebitosDBA}
+            alignRight={true}
+          />
         </div>
       )}
     </div>

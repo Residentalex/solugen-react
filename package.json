@@ -1,7 +1,7 @@
 {
   "name": "solugen-react",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,7 +20,9 @@
     "axios": "^1.16.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.15.0",
+    "remark-gfm": "^4.0.1",
     "zustand": "^5.0.13"
   },
   "devDependencies": {

@@ -56,6 +56,7 @@ const Notificaciones: React.FC = () => {
   const [filtroTipo, setFiltroTipo] = useState<string[]>([]);
   const [filtroModulo, setFiltroModulo] = useState<string[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [selectedRow, setSelectedRow] = useState<NotificacionVista | null>(null);
   const [loadingError, setLoadingError] = useState(false);
   const [verNotificacion, setVerNotificacion] = useState<NotificacionVista | null>(null);
   const [ticketModalID, setTicketModalID] = useState<number | null>(null);
@@ -81,8 +82,7 @@ const Notificaciones: React.FC = () => {
       const data = await notificacionesApi.obtenerEnviadas(sucursal, usuarioID);
       setEnviadas(data || []);
       setLoadingError(false);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar notificaciones enviadas');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoadingEnviadas(false);
@@ -96,8 +96,7 @@ const Notificaciones: React.FC = () => {
       const data = await notificacionesApi.obtenerHistorial(sucursal, usuarioID);
       setHistorial(data || []);
       setLoadingError(false);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar historial');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoadingHistorial(false);
@@ -134,6 +133,7 @@ const Notificaciones: React.FC = () => {
   const handleTabChange = (key: string) => {
     setTabActiva(key);
     setSelectedRowKeys([]);
+    setSelectedRow(null);
   };
 
   const handleMarcarLeida = async (notificacionUsuarioID: number) => {
@@ -470,6 +470,12 @@ const Notificaciones: React.FC = () => {
                   columns={columns}
                   dataSource={getDataSource()}
                   rowKey="notificacionUsuarioID"
+                  className="paces-border-top paces-list-table"
+                  rowClassName={(record) => selectedRow?.notificacionUsuarioID === record.notificacionUsuarioID ? 'paces-row-selected' : 'paces-row-hover'}
+                  onRow={(record) => ({
+                    onClick: () => setSelectedRow(record),
+                    style: { cursor: 'pointer' },
+                  })}
                   scroll={{ x: 1100 }}
                   size="middle"
                   rowSelection={{
@@ -484,7 +490,7 @@ const Notificaciones: React.FC = () => {
                   pagination={{
                     pageSize,
                     showSizeChanger: false,
-                    showTotal: (total, range) => `${range[0]}-${range[1]} de ${total}`,
+                    showTotal: (total) => `${total} registros`,
                   }}
                 />
               ),
@@ -501,6 +507,12 @@ const Notificaciones: React.FC = () => {
                   columns={columns}
                   dataSource={getDataSource()}
                   rowKey="id"
+                  className="paces-border-top paces-list-table"
+                  rowClassName={(record) => selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'}
+                  onRow={(record) => ({
+                    onClick: () => setSelectedRow(record),
+                    style: { cursor: 'pointer' },
+                  })}
                   scroll={{ x: 1100 }}
                   size="middle"
                   locale={{
@@ -515,7 +527,7 @@ const Notificaciones: React.FC = () => {
                   pagination={{
                     pageSize,
                     showSizeChanger: false,
-                    showTotal: (total, range) => `${range[0]}-${range[1]} de ${total}`,
+                    showTotal: (total) => `${total} registros`,
                   }}
                 />
               ),
@@ -532,6 +544,12 @@ const Notificaciones: React.FC = () => {
                   columns={columns}
                   dataSource={getDataSource()}
                   rowKey="notificacionUsuarioID"
+                  className="paces-border-top paces-list-table"
+                  rowClassName={(record) => selectedRow?.notificacionUsuarioID === record.notificacionUsuarioID ? 'paces-row-selected' : 'paces-row-hover'}
+                  onRow={(record) => ({
+                    onClick: () => setSelectedRow(record),
+                    style: { cursor: 'pointer' },
+                  })}
                   scroll={{ x: 1100 }}
                   size="middle"
                   locale={{
@@ -540,7 +558,7 @@ const Notificaciones: React.FC = () => {
                   pagination={{
                     pageSize,
                     showSizeChanger: false,
-                    showTotal: (total, range) => `${range[0]}-${range[1]} de ${total}`,
+                    showTotal: (total) => `${total} registros`,
                   }}
                 />
               ),

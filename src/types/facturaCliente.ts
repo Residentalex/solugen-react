@@ -78,6 +78,7 @@ export interface FacturaClienteDTO {
   ncf: string;
   ncfModificado: string;
   referencia: string;
+  revisado?: boolean;
   nota: string;
   diasCredito: number;
   subTotal: number;

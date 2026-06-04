@@ -47,8 +47,7 @@ const Servicios: React.FC = () => {
     try {
       const resultados = await servicioApi.obtenerListado(sucursalActiva);
       setData(resultados || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar servicios');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);

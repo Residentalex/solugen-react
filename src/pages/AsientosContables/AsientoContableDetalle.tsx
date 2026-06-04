@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Typography, Tooltip, Descriptions, Alert
+  Card, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Typography, Tooltip, Descriptions, Alert
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -12,6 +12,8 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { transaccionApi } from '../../api/transaccionApi';
 import type { TransaccionDTO, TransaccionAsientoDTO } from '../../types/transaccion';
+import { ErrorDetalle } from '../../components';
+import AsientosContableTable from '../../components/AsientosContableTable';
 
 const { Text } = Typography;
 
@@ -74,6 +76,11 @@ const AsientoContableDetalle: React.FC = () => {
     }
     transaccionApi.obtenerPorId(sucursalActiva, idNum)
       .then((res) => {
+        if (!res) {
+          message.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
         setData(res);
         setPageTitleOverride(`${res.noDocumento || `Transacción #${res.id}`}`);
       })
@@ -85,7 +92,7 @@ const AsientoContableDetalle: React.FC = () => {
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
-  if (loading || !data) {
+  if (loading || (!data && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
@@ -93,26 +100,21 @@ const AsientoContableDetalle: React.FC = () => {
       </div>
     );
   }
+  if (loadingError && !data) {
+    return <ErrorDetalle mensaje="Error al cargar el documento" rutaVolver="/FAsientoContable" />;
+  }
+  if (!data) return null;
 
   const isLarge = screens.lg ?? true;
   const estadoInfo = ESTADO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
-  const totalDebitos = (data.asientos || []).reduce((s, r) => s + (r.tipoAsiento === 0 ? r.monto : 0), 0);
-  const totalCreditos = (data.asientos || []).reduce((s, r) => s + (r.tipoAsiento === 1 ? r.monto : 0), 0);
-
-  const asientoColumns = [
-    { title: 'No. Cuenta', dataIndex: 'noCuenta', key: 'noCuenta', width: 140,
-      render: (v: string) => <Text style={{ fontFamily: 'monospace' }}>{v || '-'}</Text> },
-    { title: 'Descripción', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
-      render: (v: string) => v ? toTitleCase(v) : '-' },
-    { title: 'Débito', key: 'debito', width: 140, align: 'right' as const,
-      render: (_: unknown, r: TransaccionAsientoDTO) =>
-        r.tipoAsiento === 0 ? formatNumber(r.monto) : '' },
-    { title: 'Crédito', key: 'credito', width: 140, align: 'right' as const,
-      render: (_: unknown, r: TransaccionAsientoDTO) =>
-        r.tipoAsiento === 1 ? formatNumber(r.monto) : '' },
-  ];
+  // Mapear TransaccionAsientoDTO al formato esperado por AsientosContableTable
+  const asientosMapeados = React.useMemo(() =>
+    (data.asientos || []).map(a => ({
+      ...a,
+      cuentaContable: { noCuenta: a.noCuenta || '', nombre: '' },
+    })), [data.asientos]);
 
   return (
     <div>
@@ -219,29 +221,7 @@ const AsientoContableDetalle: React.FC = () => {
                   key: 'asientos',
                   label: `Asientos (${data.asientos?.length || 0})`,
                   children: (
-                    <Table<TransaccionAsientoDTO>
-                      dataSource={data.asientos || []}
-                      columns={asientoColumns}
-                      rowKey={(r, i) => `${r.id || ''}-${i}`}
-                      size="small"
-                      pagination={false}
-                      scroll={{ x: 600 }}
-                      summary={() => (
-                        <Table.Summary fixed>
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0} colSpan={2}>
-                              <Text strong>Totales</Text>
-                            </Table.Summary.Cell>
-                            <Table.Summary.Cell index={1} align="right">
-                              <Text strong>{formatNumber(totalDebitos)}</Text>
-                            </Table.Summary.Cell>
-                            <Table.Summary.Cell index={2} align="right">
-                              <Text strong>{formatNumber(totalCreditos)}</Text>
-                            </Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        </Table.Summary>
-                      )}
-                    />
+<AsientosContableTable asientos={asientosMapeados} scroll={{ x: 600 }} rowKey={(r) => `${r.id || ''}`} />
                   ),
                 },
               ]}
@@ -330,29 +310,7 @@ const AsientoContableDetalle: React.FC = () => {
                 key: 'asientos',
                 label: `Asientos (${data.asientos?.length || 0})`,
                 children: (
-                  <Table<TransaccionAsientoDTO>
-                    dataSource={data.asientos || []}
-                    columns={asientoColumns}
-                    rowKey={(r, i) => `${r.id || ''}-${i}`}
-                    size="small"
-                    pagination={false}
-                    scroll={{ x: 600 }}
-                    summary={() => (
-                      <Table.Summary fixed>
-                        <Table.Summary.Row>
-                          <Table.Summary.Cell index={0} colSpan={2}>
-                            <Text strong>Totales</Text>
-                          </Table.Summary.Cell>
-                          <Table.Summary.Cell index={1} align="right">
-                            <Text strong>{formatNumber(totalDebitos)}</Text>
-                          </Table.Summary.Cell>
-                          <Table.Summary.Cell index={2} align="right">
-                            <Text strong>{formatNumber(totalCreditos)}</Text>
-                          </Table.Summary.Cell>
-                        </Table.Summary.Row>
-                      </Table.Summary>
-                    )}
-                  />
+                  <AsientosContableTable asientos={asientosMapeados} scroll={{ x: 600 }} rowKey={(r) => `${r.id || ''}`} />
                 ),
               },
             ]}

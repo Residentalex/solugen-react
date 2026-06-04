@@ -1,12 +1,38 @@
+export interface SuplidorGORC {
+  idExterno: string;
+  codigo: string;
+  nombre: string;
+  diasCredito: number;
+  rnc: string;
+  identificacion: string;
+  telefono: string;
+  direccion: string;
+}
+
+export interface LogGORC {
+  fecha: string;
+  usuario: string;
+  accion: number;
+  descripcion: string;
+}
+
 export interface GeneradorOrdenCompraDTO {
+  id?: number | string;
   idExterno: string;
   numero: string;
   fecha: string;
-  suplidor: { codigo: string; nombre: string } | null;
+  suplidor: SuplidorGORC | null;
   almacen: string;
   notas: string;
   estado: number;
   total: number;
+  subTotal: number;
+  descuento: number;
+  impuestos: number;
+  redondeo: number;
+  creadoPor: string;
+  validadoPor: string;
+  logs?: LogGORC[];
   detalles?: DetalleGeneradorDTO[];
 }
 

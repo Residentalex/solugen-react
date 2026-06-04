@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Card,
   Table,
@@ -7,7 +7,6 @@ import {
   Input,
   Select,
   Tag,
-  message,
   Typography,
   Alert,
 } from 'antd';
@@ -49,8 +48,7 @@ const Clientes: React.FC = () => {
     try {
       const resultados = await clienteApi.obtenerListado(sucursalActiva, {});
       setData(resultados || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar clientes');
+    } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);
@@ -106,9 +104,9 @@ const Clientes: React.FC = () => {
       fixed: 'left',
       render: (val: string, record: ClienteDTO) =>
         puedeEditar ? (
-          <Button type="link" size="small" style={{ padding: 0, fontWeight: 500 }} onClick={() => navigate(`/MCliente/${record.codigo}`)}>
+          <Link to={`/MCliente/${record.codigo}`} className="paces-doc-link" style={{ fontWeight: 500 }}>
             {val}
-          </Button>
+          </Link>
         ) : (
           <Text style={{ fontFamily: 'monospace' }}>{val}</Text>
         ),

@@ -63,6 +63,10 @@ const CierreDetalle: React.FC = () => {
         return;
       }
       const data = await cierreInventarioApi.obtenerDetalleCierre(sucursal, id);
+      if (!data) {
+        setError('Documento no encontrado en la sucursal seleccionada.');
+        return;
+      }
       setDetalle(data);
 
       // Intentar obtener info del cierre del primer elemento o de una llamada separada
