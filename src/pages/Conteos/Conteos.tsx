@@ -279,6 +279,11 @@ const Conteos: React.FC = () => {
               placeholder="Buscar..."
               allowClear
               onSearch={() => {}}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
               style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />

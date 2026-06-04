@@ -25,11 +25,13 @@ import { clienteApi } from '../../api/clienteApi';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type { ConceptoDTO, AsientoContableDTO, LogDTO } from '../../types/entradaAlmacen';
+import type { UnidadMedidaDTO } from '../../types/productos';
 import type {
   TransaccionAsociadaDTO,
   DetalleMovimientoDTO, DevolucionDTO, ImpuestoFacturaDTO,
   TipoNCSelectDTO,
 } from '../../types/notaCredito';
+import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 
@@ -75,6 +77,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   const [detallesMovimiento, setDetallesMovimiento] = useState<DetalleMovimientoDTO[]>([]);
   const [devoluciones, setDevoluciones] = useState<DevolucionDTO[]>([]);
   const [impuestosFactura, setImpuestosFactura] = useState<ImpuestoFacturaDTO[]>([]);
+  const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
   const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
   const [logs, setLogs] = useState<LogDTO[]>([]);
 
@@ -95,7 +98,8 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   const refValue = Form.useWatch('referencia', form) || '';
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
-  const isLarge = screens.lg ?? true;
+  const sinOC = true;
+  const isLarge = screens.xxl === true;
 
   // Estado
   const estado = data?.estado ?? 0;
@@ -146,6 +150,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     tipoApi.obtenerPorDocumento(sucursalActiva, 'NC')
       .then((tipos) => setTiposCache(tipos as any))
       .catch(() => {});
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
 
     if (mode === 'crear') {
       form.setFieldsValue({
@@ -509,17 +514,45 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   ];
 
   const detalleMovimientoColumns = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
-    { title: 'Artículo', dataIndex: 'articulo', key: 'articulo', ellipsis: true },
-    { title: 'Familia', dataIndex: 'familia', key: 'familia', width: 120 },
+    {
+      title: 'CÃ³digo',
+      key: 'codigo',
+      width: 120,
+      fixed: 'left' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13 }}>
+          <div>{record.codigo || '-'}</div>
+          {record.referencia && (
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+              {record.referencia}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: 'ArtÃ­culo',
+      key: 'articulo',
+      ellipsis: true,
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13 }}>
+          <div>{toTitleCase(record.articulo || '')}</div>
+          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
+            {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
+          </div>
+        </div>
+      ),
+    },
     { title: 'Tipo', dataIndex: 'tipo', key: 'tipo', width: 100 },
     { title: 'Cantidad', dataIndex: 'cantidad', key: 'cantidad', width: 100, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'UDM', dataIndex: 'udm', key: 'udm', width: 80, render: (v: string) => v || '-' },
-    { title: 'Precio', dataIndex: 'precio', key: 'precio', width: 110, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'SubTotal', dataIndex: 'subTotal', key: 'subTotal', width: 110, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Impuestos', dataIndex: 'impuestos', key: 'impuestos', width: 110, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Descuento', dataIndex: 'descuento', key: 'descuento', width: 110, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Total', dataIndex: 'total', key: 'total', width: 110, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
+    { title: 'Medida', dataIndex: 'udm', key: 'medida', width: 80, render: (v: string) => v || '-' },
+    { title: 'Precio', dataIndex: 'precio', key: 'precio', width: 110, align: 'right' as const, responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const], render: (v: number) => formatNumber(v) },
+    { title: 'SubTotal', dataIndex: 'subTotal', key: 'subTotal', width: 120, align: 'right' as const, responsive: ['lg' as const, 'xl' as const, 'xxl' as const], render: (v: number) => formatNumber(v) },
+    { title: 'Impuestos', dataIndex: 'impuestos', key: 'impuestos', width: 140, align: 'right' as const, responsive: ['lg' as const, 'xl' as const, 'xxl' as const], render: (v: number) => formatNumber(v) },
+    { title: 'Descuento', dataIndex: 'descuento', key: 'descuento', width: 120, align: 'right' as const, responsive: ['lg' as const, 'xl' as const, 'xxl' as const], render: (v: number) => formatNumber(v) },
+    { title: 'Total', dataIndex: 'total', key: 'total', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
   ];
 
   const devolucionesColumns = [
@@ -598,7 +631,9 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   // ===== Encabezado =====
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-      <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
+      <Row gutter={16}>
+        <Col xs={24} xxl={18}>
+          <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           {/* Fila 1: Tipo + Concepto */}
           <Col xs={24} sm={12} lg={9}>
@@ -798,6 +833,19 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
           </Col>
         </Row>
       </Form>
+        </Col>
+        <Col xs={24} xxl={6}>
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard
+              subTotal={totales.subTotal}
+              descuento={totales.descuento}
+              impuestos={totales.impuestos}
+              total={totales.total}
+              hideTitle
+            />
+          </div>
+        </Col>
+      </Row>
     </Card>
   );
 
@@ -1017,7 +1065,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       {isLarge ? (
         /* === DESKTOP === */
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={24}>
             {renderEncabezado()}
             <Tabs
               defaultActiveKey="documentos"
@@ -1026,19 +1074,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
               items={tabItems}
             />
           </Col>
-          <Col lg={6}>
-            <EntidadCard entidad={selectedEntidad} fallbackTitulo={entidadLabel} />
-            <TotalesCard
-              subTotal={totales.subTotal}
-              descuento={totales.descuento}
-              impuestos={totales.impuestos}
-              total={totales.total}
-              alignRight={false}
-              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
-              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
-            />
-          </Col>
-        </Row>
+          </Row>
       ) : (
         /* === MOBILE === */
         <div>
@@ -1049,17 +1085,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
             style={{ borderRadius: 8, padding: '0 16px' }}
             items={tabItems}
           />
-          <EntidadCard entidad={selectedEntidad} fallbackTitulo={entidadLabel} />
-          <TotalesCard
-            subTotal={totales.subTotal}
-            descuento={totales.descuento}
-            impuestos={totales.impuestos}
-            total={totales.total}
-            alignRight={true}
-            monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
-            monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
-          />
-        </div>
+          </div>
       )}
     </div>
   );

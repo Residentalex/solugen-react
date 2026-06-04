@@ -23,10 +23,12 @@ import { clienteApi } from '../../api/clienteApi';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type { ConceptoDTO, AsientoContableDTO, LogDTO } from '../../types/entradaAlmacen';
+import type { UnidadMedidaDTO } from '../../types/productos';
 import type {
   ReciboIngresoFullDTO, TransaccionAsociadaDTO, CobroDTO, TipoRISelectDTO,
 } from '../../types/reciboIngreso';
 import LogTable from '../../components/LogTable';
+import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 
 import EntidadCard from '../../components/EntidadCard';
@@ -98,6 +100,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
   const [logs, setLogs] = useState<LogDTO[]>([]);
   const [conceptoInfo, setConceptoInfo] = useState<string>('');
+  const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
 
   // Concepto modal
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
@@ -117,7 +120,8 @@ const ReciboIngresoFormulario: React.FC = () => {
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
   const totalValue = Form.useWatch('total', form) ?? 0;
 
-  const isLarge = screens.lg ?? true;
+  const sinOC = true;
+  const isLarge = screens.xxl === true;
 
   // Estado
   const estado = data?.estado ?? 0;
@@ -168,6 +172,7 @@ const ReciboIngresoFormulario: React.FC = () => {
     tipoApi.obtenerPorDocumento(sucursalActiva, 'RI')
       .then((tipos) => setTiposCache(tipos as any))
       .catch(() => {});
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
 
     if (mode === 'crear') {
       form.setFieldsValue({
@@ -593,7 +598,9 @@ const ReciboIngresoFormulario: React.FC = () => {
   // ===== Encabezado =====
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-      <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
+      <Row gutter={16}>
+        <Col xs={24} xxl={18}>
+          <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           {/* Fila 1: Tipo + Concepto */}
           <Col xs={24} sm={12} lg={9}>
@@ -799,6 +806,19 @@ const ReciboIngresoFormulario: React.FC = () => {
           </Col>
         </Row>
       </Form>
+        </Col>
+        <Col xs={24} xxl={6}>
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard
+              subTotal={totales.subTotal}
+              descuento={totales.descuento}
+              impuestos={totales.impuestos}
+              total={totales.total}
+              hideTitle
+            />
+          </div>
+        </Col>
+      </Row>
     </Card>
   );
 
@@ -995,7 +1015,7 @@ const ReciboIngresoFormulario: React.FC = () => {
       {isLarge ? (
         /* === DESKTOP === */
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={24}>
             {renderEncabezado()}
             <Tabs
               defaultActiveKey="documentos"
@@ -1004,19 +1024,7 @@ const ReciboIngresoFormulario: React.FC = () => {
               items={tabItems}
             />
           </Col>
-          <Col lg={6}>
-            <EntidadCard entidad={selectedEntidad} fallbackTitulo="Entidad" />
-            <TotalesCard
-              subTotal={totalValue || 0}
-              descuento={0}
-              impuestos={0}
-              total={totalValue || 0}
-              alignRight={false}
-              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
-              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
-            />
-          </Col>
-        </Row>
+          </Row>
       ) : (
         /* === MOBILE === */
         <div>
@@ -1027,17 +1035,7 @@ const ReciboIngresoFormulario: React.FC = () => {
             style={{ borderRadius: 8, padding: '0 16px' }}
             items={tabItems}
           />
-          <EntidadCard entidad={selectedEntidad} fallbackTitulo="Entidad" />
-          <TotalesCard
-            subTotal={totalValue || 0}
-            descuento={0}
-            impuestos={0}
-            total={totalValue || 0}
-            alignRight={true}
-            monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
-            monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
-          />
-        </div>
+          </div>
       )}
     </div>
   );

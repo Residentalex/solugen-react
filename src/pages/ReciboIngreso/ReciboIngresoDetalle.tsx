@@ -155,7 +155,7 @@ const ReciboIngresoDetalle: React.FC = () => {
     return null;
   }
 
-  const isLarge = screens.lg ?? true;
+  const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
@@ -365,7 +365,7 @@ const ReciboIngresoDetalle: React.FC = () => {
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={18}>
             <Card className="paces-card" size="small" title={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 16, fontWeight: 600 }}>Datos Generales</span>
@@ -440,7 +440,7 @@ const ReciboIngresoDetalle: React.FC = () => {
             />
           </Col>
 
-          <Col lg={6}>
+          <Col xxl={6}>
             <EntidadCard entidad={data.entidad} fallbackTitulo="Entidad" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
@@ -490,8 +490,6 @@ const ReciboIngresoDetalle: React.FC = () => {
             </Descriptions>
           </Card>
 
-          <EntidadCard entidad={data.entidad} fallbackTitulo="Entidad" />
-
           <Tabs
             defaultActiveKey="documentos"
             type="card"
@@ -531,16 +529,18 @@ const ReciboIngresoDetalle: React.FC = () => {
             ]}
           />
 
-          <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={true}
-            monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-            monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
-            tasa={data.tasa ?? 1}
-          />
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={true}
+              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              tasa={data.tasa ?? 1}
+            />
 
           <DocumentosRelacionadosCard
             documentos={documentosRelacionados}
             currentId={data?.id}
           />
+          </div>
         </div>
       )}
 

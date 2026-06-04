@@ -267,7 +267,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
     return null;
   }
 
-  const isLarge = screens.lg ?? true;
+  const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
@@ -352,7 +352,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
 
       {isLarge ? (
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={18}>
             <Card className="paces-card" size="small" title={
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 16, fontWeight: 600 }}>
@@ -434,7 +434,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
             />
           </Col>
 
-          <Col lg={6}>
+          <Col xxl={6}>
             <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
@@ -489,8 +489,6 @@ const FacturaSuplidorDetalle: React.FC = () => {
               </Descriptions>
           </Card>
 
-          <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
-
           <Tabs
             defaultActiveKey="documentos"
             type="card"
@@ -530,11 +528,13 @@ const FacturaSuplidorDetalle: React.FC = () => {
               ]}
           />
 
-          <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={true}
-            monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-            monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
-            tasa={data.tasa ?? 1}
-          />
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={true}
+              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              tasa={data.tasa ?? 1}
+            />
+          </div>
 
           <DocumentosRelacionadosCard
             documentos={documentosRelacionados}

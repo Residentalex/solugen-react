@@ -29,7 +29,8 @@ import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProd
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type { GeneradorOrdenCompraDTO, DetalleGeneradorDTO, SuplidorGORC } from '../../types/generadorOrc';
-import type { ProductoDTO } from '../../types/productos';
+import type { ProductoDTO, UnidadMedidaDTO } from '../../types/productos';
+import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -217,7 +218,7 @@ const GeneradorORCFormulario: React.FC = () => {
   const screens = Grid.useBreakpoint();
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
-  const isLarge = screens.lg ?? true;
+  const isLarge = screens.xxl === true;
 
   // ===== Estados =====
   const [loading, setLoading] = useState(false);
@@ -243,6 +244,7 @@ const GeneradorORCFormulario: React.FC = () => {
   const [detalleSearch, setDetalleSearch] = useState('');
   const [redondeoComercial, setRedondeoComercial] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
 
   // Análisis / monitor
   const [analisisOpen, setAnalisisOpen] = useState(false);
@@ -270,6 +272,8 @@ const GeneradorORCFormulario: React.FC = () => {
     setActiveModule('FGORC');
     const pageTitle = mode === 'crear' ? 'Nuevo Generador ORC' : 'Editar Generador ORC';
     setPageTitleOverride(pageTitle);
+
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
 
     if (mode === 'crear') {
       form.setFieldsValue({ fecha: dayjs() });
@@ -978,7 +982,7 @@ const GeneradorORCFormulario: React.FC = () => {
           <Skeleton.Button active style={{ width: 90 }} />
         </div>
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={24}>
             <Card className="paces-card" size="small" style={{ marginBottom: 16 }}>
               <Skeleton active paragraph={{ rows: 2 }} />
             </Card>
@@ -986,15 +990,7 @@ const GeneradorORCFormulario: React.FC = () => {
               <Skeleton active paragraph={{ rows: 6 }} />
             </Card>
           </Col>
-          <Col lg={6}>
-            <Card className="paces-card" style={{ marginBottom: 16 }}>
-              <Skeleton active paragraph={{ rows: 4 }} />
-            </Card>
-            <Card className="paces-card">
-              <Skeleton active paragraph={{ rows: 5 }} />
-            </Card>
-          </Col>
-        </Row>
+          </Row>
       </div>
     );
   }
@@ -1008,7 +1004,9 @@ const GeneradorORCFormulario: React.FC = () => {
   // ===== Encabezado =====
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-      <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
+      <Row gutter={16}>
+        <Col xs={24} xxl={18}>
+          <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           <Col xs={24} sm={12} lg={6}>
             <Form.Item name="fecha" label="Fecha" rules={[{ required: true, message: 'Campo requerido' }]}>
@@ -1058,6 +1056,19 @@ const GeneradorORCFormulario: React.FC = () => {
           </Col>
         </Row>
       </Form>
+        </Col>
+        <Col xs={24} xxl={6}>
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard
+              subTotal={totales.subTotal}
+              descuento={totales.descuento}
+              impuestos={totales.impuestos}
+              total={totales.total}
+              hideTitle
+            />
+          </div>
+        </Col>
+      </Row>
     </Card>
   );
 
@@ -1209,21 +1220,15 @@ const GeneradorORCFormulario: React.FC = () => {
       {isLarge ? (
         /* === DESKTOP ≥ lg === */
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={24}>
             {renderDetalles()}
           </Col>
-          <Col lg={6}>
-            <EntidadCard entidad={selectedSuplidor} fallbackTitulo="Suplidor" />
-            <TotalesCard {...totalesGenerales} alignRight={false} />
-          </Col>
-        </Row>
+          </Row>
       ) : (
         /* === MOBILE < lg === */
         <div>
           {renderDetalles()}
-          <EntidadCard entidad={selectedSuplidor} fallbackTitulo="Suplidor" />
-          <TotalesCard {...totalesGenerales} alignRight={true} />
-        </div>
+          </div>
       )}
 
       {/* ===== Modales ===== */}

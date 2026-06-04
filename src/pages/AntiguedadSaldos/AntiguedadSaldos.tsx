@@ -768,6 +768,12 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                 placeholder="Buscar por documento, entidad o NCF..."
                 allowClear
                 onSearch={handleSearch}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    (e.target as HTMLInputElement).blur();
+                    handleSearch('');
+                  }
+                }}
                 style={{ width: 400 }}
                 prefix={<SearchOutlined className="paces-text-icon" />}
               />

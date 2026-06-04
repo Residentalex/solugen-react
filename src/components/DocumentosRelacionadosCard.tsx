@@ -54,7 +54,7 @@ const DocumentosRelacionadosCard: React.FC<DocumentosRelacionadosCardProps> = ({
                 window.location.href = `/${map[doc.tipo] || doc.tipo}/${doc.id}`;
               }}
             >
-              {(tipoDoc === 'RDE' || tipoDoc === 'EDI') && <FileTextOutlined style={{ marginRight: 6, color: '#556ee6' }} />}
+              <FileTextOutlined style={{ marginRight: 6, color: '#556ee6' }} />
               {esOrigen ? '→' : '←'} {esOrigen
                 ? `${rel.destinoTipoDoc ?? '?'}-${rel.destinoNumDoc ?? '?'}`
                 : `${rel.origenTipoDoc ?? '?'}-${rel.origenNumDoc ?? '?'}`}

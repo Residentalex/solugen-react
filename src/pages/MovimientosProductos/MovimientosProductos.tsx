@@ -491,6 +491,12 @@ const MovimientosProductos: React.FC = () => {
               placeholder="Buscar en resultados..."
               allowClear
               onSearch={handleSearch}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  (e.target as HTMLInputElement).blur();
+                  handleSearch('');
+                }
+              }}
               style={{ width: 350 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />

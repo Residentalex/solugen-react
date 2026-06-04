@@ -124,6 +124,9 @@ const FacturaClienteFormulario: React.FC = () => {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
 
+  // Cache de medidas
+  const [medidasCache, setMedidasCache] = useState<any[]>([]);
+
   // Refs para la guía
   const conceptoRef = useRef<HTMLDivElement>(null);
   const clienteRef = useRef<HTMLDivElement>(null);
@@ -189,7 +192,9 @@ const FacturaClienteFormulario: React.FC = () => {
   const refValue = Form.useWatch('referencia', form) || '';
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
-  const isLarge = screens.lg ?? true;
+  const sinOC = true;
+
+  const isLarge = screens.xxl === true;
 
   // ===== Determinar estado =====
   const estado = data?.estado ?? 0;
@@ -210,6 +215,10 @@ const FacturaClienteFormulario: React.FC = () => {
     // Cargar almacenes y tipos
     facturaClienteApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
     facturaClienteApi.obtenerTipos(sucursalActiva).then(setTiposCache).catch(() => {});
+    // Cargar unidades de medida
+    import('../../api/unidadMedidaApi').then(({ unidadMedidaApi }) => {
+      unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => message.error('Error al cargar medidas'));
+    });
 
     // Inicializar fechas en modo crear
     if (mode === 'crear') {
@@ -706,88 +715,31 @@ const FacturaClienteFormulario: React.FC = () => {
     },
     {
       title: 'Código',
-      key: 'codigoInput',
-      width: 100,
-      onCell: () => ({ style: { paddingLeft: 8 } }),
-      render: (_: any, _record: DetalleFacturaClienteDTO, idx: number) => (
-        <Input
-          size="small"
-          style={{ width: '100%' }}
-          placeholder="Código"
-          value={detalles[idx]?.codigo || ''}
-          onChange={(e) => handleDetalleUpdateValue(detalles[idx].id, 'codigo', e.target.value)}
-          onBlur={() => {
-            const codigo = detalles[idx]?.codigo;
-            if (codigo && codigo.length >= 2) {
-              productoApi.obtenerDetalle(sucursalActiva, codigo)
-                .then((prod) => {
-                  if (prod) {
-                    handleDetalleUpdateValue(detalles[idx].id, 'articulo', prod.nombre || '');
-                    handleDetalleUpdateValue(detalles[idx].id, 'referencia', prod.referenciaInterna || '');
-                    handleDetalleUpdateValue(detalles[idx].id, 'precio', prod.precio || prod.ultimoCosto || 0);
-                    handleDetalleUpdateValue(detalles[idx].id, 'familia', prod.familia);
-                    if (prod.unidadMedida) {
-                      handleDetalleUpdateValue(detalles[idx].id, 'medida', {
-                        nombre: prod.unidadMedida.nombre || '',
-                        codigo: '',
-                        factor: 1,
-                        idExterno: prod.unidadMedida.idExterno || 0,
-                      });
-                    }
-                    if (prod.impuestos && prod.impuestos.length > 0) {
-                      const imp = prod.impuestos[0].impuesto;
-                      if (imp) {
-                        handleDetalleUpdateValue(detalles[idx].id, 'impuesto', imp);
-                        handleDetalleUpdateValue(detalles[idx].id, 'porcentajeImpuesto', imp.porcentaje || 0);
-                      }
-                    }
-                    handleDetalleUpdateValue(detalles[idx].id, 'tieneVencimiento', prod.pesado || false);
-                    handleDetalleCalculate(detalles[idx].id, 'precio', prod.precio || prod.ultimoCosto || 0);
-                  }
-                })
-                .catch(() => {
-                  productoApi.obtenerListado(sucursalActiva, { codigo })
-                    .then((prods) => {
-                      if (prods && prods.length > 0) {
-                        const p = prods[0];
-                        handleDetalleUpdateValue(detalles[idx].id, 'articulo', p.nombre || '');
-                        handleDetalleUpdateValue(detalles[idx].id, 'referencia', p.referencia || '');
-                        handleDetalleUpdateValue(detalles[idx].id, 'precio', p.precio || p.ultimoCosto || 0);
-                        if (p.familia) {
-                          handleDetalleUpdateValue(detalles[idx].id, 'familia', p.familia);
-                        }
-                        if (p.unidadMedida) {
-                          handleDetalleUpdateValue(detalles[idx].id, 'medida', {
-                            nombre: p.unidadMedida.nombre || '',
-                            codigo: '',
-                            factor: 1,
-                            idExterno: p.unidadMedida.idExterno || 0,
-                          });
-                        }
-                        handleDetalleCalculate(detalles[idx].id, 'precio', p.precio || p.ultimoCosto || 0);
-                      }
-                    })
-                    .catch(() => {});
-                });
-            }
-          }}
-        />
+      key: 'codigo',
+      width: 120,
+      fixed: 'left' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: DetalleFacturaClienteDTO) => (
+        <div style={{ fontSize: 13 }}>
+          <div>{record.codigo || '-'}</div>
+          {record.referencia && (
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+              {record.referencia}
+            </div>
+          )}
+        </div>
       ),
     },
     {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
-      shouldCellUpdate: (record: DetalleFacturaClienteDTO, prevRecord: DetalleFacturaClienteDTO) =>
-        record.articulo !== prevRecord.articulo || record.referencia !== prevRecord.referencia || record.medida?.nombre !== prevRecord.medida?.nombre || record.fechaVencimiento !== prevRecord.fechaVencimiento,
       render: (_: any, record: DetalleFacturaClienteDTO) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
           <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
-            <span>
-              {record.referencia && <span>{record.referencia}</span>}
-            </span>
-            {record.fechaVencimiento && <span className="paces-text-secondary">V: {formatDate(record.fechaVencimiento)}</span>}
+            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
+            {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
           </div>
         </div>
       ),
@@ -815,7 +767,7 @@ const FacturaClienteFormulario: React.FC = () => {
             onBlur={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
             onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
           />
-          {detalles[idx]?.medida?.nombre && (
+          {!sinOC && detalles[idx]?.medida?.nombre && (
             <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
               {toTitleCase(detalles[idx].medida!.nombre)}
             </div>
@@ -823,13 +775,48 @@ const FacturaClienteFormulario: React.FC = () => {
         </div>
       ),
     },
+    ...(sinOC ? [{
+      title: 'Medida',
+      key: 'medida',
+      width: 160,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: DetalleFacturaClienteDTO, _idx: number) => {
+        const curId = record.medida?.idExterno;
+        const hasMatch = medidasCache.some((m: any) => m.idExterno === curId);
+        return (
+          <Select
+            size="small"
+            style={{ width: '100%' }}
+            key={medidasCache.length}
+            value={hasMatch ? curId : undefined}
+            onChange={(idExterno) => {
+              const medida = medidasCache.find((m: any) => m.idExterno === idExterno);
+              if (medida) {
+                handleDetalleCalculate(record.id, 'medida', {
+                  nombre: medida.nombre,
+                  codigo: medida.codigo,
+                  factor: medida.factor,
+                  idExterno: medida.idExterno,
+                });
+              }
+            }}
+          >
+            {medidasCache.map((m: any) => (
+              <Select.Option key={m.idExterno} value={m.idExterno}>
+                {toTitleCase(m.nombre)}
+              </Select.Option>
+            ))}
+          </Select>
+        );
+      },
+    }] : []),
     {
       title: 'Precio',
       dataIndex: 'precio',
       key: 'precio',
       width: 130,
       align: 'right' as const,
-      responsive: ['sm' as const, 'md' as const, 'lg' as const],
+      responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       shouldCellUpdate: (record: DetalleFacturaClienteDTO, prevRecord: DetalleFacturaClienteDTO) => record.precio !== prevRecord.precio || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
       render: (_: any, record: DetalleFacturaClienteDTO, idx: number) => {
         const precioBase = Number(detalles[idx]?.precio) || 0;
@@ -883,9 +870,9 @@ const FacturaClienteFormulario: React.FC = () => {
     {
       title: 'Descuento',
       key: 'descuento',
-      width: 100,
+      width: 120,
       align: 'right' as const,
-      responsive: ['md' as const, 'lg' as const],
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaClienteDTO) => (
         <div>
           <Text>{formatNumber(record.descuento || 0)}</Text>
@@ -896,9 +883,9 @@ const FacturaClienteFormulario: React.FC = () => {
       title: 'SubTotal',
       dataIndex: 'subTotal',
       key: 'subTotal',
-      width: 100,
+      width: 120,
       align: 'right' as const,
-      responsive: ['md' as const, 'lg' as const],
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaClienteDTO) => (
         <Text>{formatNumber(record.subTotal || 0)}</Text>
       ),
@@ -906,8 +893,9 @@ const FacturaClienteFormulario: React.FC = () => {
     {
       title: 'Impuestos',
       key: 'impuestos',
-      width: 100,
+      width: 140,
       align: 'right' as const,
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaClienteDTO) => (
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
@@ -921,7 +909,7 @@ const FacturaClienteFormulario: React.FC = () => {
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
-      width: 100,
+      width: 120,
       align: 'right' as const,
       render: (_: any, record: DetalleFacturaClienteDTO) => (
         <Text strong>{formatNumber(record.total || 0)}</Text>
@@ -965,246 +953,264 @@ const FacturaClienteFormulario: React.FC = () => {
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-      <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
-        <Row gutter={[16, 24]}>
-          {/* Fila 1: Tipo + Concepto */}
-          <Col xs={24} sm={12} lg={9}>
-            <Form.Item name="tipo" style={{ marginBottom: 0 }}>
-              <FloatingField label="Tipo Documento">
-                <Select
-                  allowClear
-                  showSearch
-                  optionFilterProp="children"
-                  onChange={(val) => {
-                    const t = tiposCache.find((tc) => tc.codigo === val);
-                    setSelectedTipo(t || null);
-                  }}
-                >
-                  {tiposCache.map((tc) => (
-                    <Select.Option key={tc.codigo} value={tc.codigo}>
-                      {toTitleCase(tc.nombre)}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </FloatingField>
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} lg={15}>
-            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required>
-                  <Input
-                    placeholder=" "
-                    value={selectedConcepto ? toTitleCase(selectedConcepto.nombre) : conceptoSearchText}
-                    readOnly
-                    onClick={handleConceptoSearchClick}
-                  />
-                </FloatingField>
-              </div>
-              <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
-              {selectedConcepto && (
-                <Button icon={<ClearOutlined />} onClick={handleConceptoClear} />
-              )}
-            </div>
-            <Form.Item name="concepto" hidden><Input /></Form.Item>
-          </Col>
-
-          {conceptoInfo && (
-            <Col xs={24}>
-              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-            </Col>
-          )}
-
-          {/* Fila 2: FechaDocumento + Cliente */}
-          <Col xs={24} sm={12} lg={9}>
-            <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Fecha Documento" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-              </FloatingField>
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} lg={15}>
-            <Form.Item name="cliente" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Cliente" required ref={clienteRef}>
-                <Select
-                  allowClear
-                  showSearch
-                  optionFilterProp="children"
-                  onChange={(val) => {
-                    const cli = clientesCache.find((e) => e.codigo === val);
-                    setSelectedCliente(cli || null);
-                  }}
-                >
-                  {clientesCache.map((cli) => (
-                    <Select.Option key={cli.codigo} value={cli.codigo}>
-                      {toTitleCase(cli.nombre)}{cli.identificacion ? ` (${cli.identificacion})` : ''}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </FloatingField>
-            </Form.Item>
-          </Col>
-
-          {/* Fila 3: FechaVencimiento + Almacén */}
-          <Col xs={24} sm={12} lg={9}>
-            <Form.Item name="fechaVencimiento" style={{ marginBottom: 0 }}>
-              <FloatingField label="Fecha Vencimiento">
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-              </FloatingField>
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} lg={15}>
-            <Form.Item name="almacen" required={tieneProductos} style={{ marginBottom: 0 }}>
-              <FloatingField label="Almacén" required={tieneProductos} ref={almacenRef}>
-                <Select
-                  allowClear
-                  showSearch
-                  optionFilterProp="children"
-                  onChange={(val) => {
-                    const alm = almacenesCache.find((a) => a.codigo === val);
-                    setSelectedAlmacen(alm || null);
-                  }}
-                >
-                  {almacenesCache.map((alm) => (
-                    <Select.Option key={alm.codigo} value={alm.codigo}>
-                      {toTitleCase(alm.nombre)}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </FloatingField>
-            </Form.Item>
-          </Col>
-
-          {/* Fila 4: Campos rápidos (NCF, Referencia, Tasa, Días Crédito) */}
-          <Col xs={24}>
-            <div style={{ marginBottom: 16 }}>
-              <Space size={[8, 8]} wrap>
-                {/* NCF */}
-                <div>
-                  {editingField === 'ncf' ? (
-                    <Input
-                      size="small"
-                      style={{ width: 200 }}
-                      placeholder="NCF"
-                      maxLength={19}
-                      autoFocus
-                      defaultValue={editingValueRef.current as string}
-                      onChange={(e) => { editingValueRef.current = e.target.value; }}
-                      onPressEnter={() => commitFieldEditor()}
-                      onBlur={() => commitFieldEditor()}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+      <Row gutter={16}>
+        <Col xs={24} xxl={18}>
+          <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
+            <Row gutter={[16, 24]}>
+              {/* Fila 1: Tipo + Concepto */}
+              <Col xs={24} sm={12} lg={9}>
+                <Form.Item name="tipo" style={{ marginBottom: 0 }}>
+                  <FloatingField label="Tipo Documento">
+                    <Select
+                      allowClear
+                      showSearch
+                      optionFilterProp="children"
+                      onChange={(val) => {
+                        const t = tiposCache.find((tc) => tc.codigo === val);
+                        setSelectedTipo(t || null);
                       }}
-                    />
-                  ) : ncfValue ? (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                      NCF: {ncfValue} <EditOutlined />
-                    </Tag>
-                  ) : (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                      <PlusOutlined /> NCF
-                    </Tag>
+                    >
+                      {tiposCache.map((tc) => (
+                        <Select.Option key={tc.codigo} value={tc.codigo}>
+                          {toTitleCase(tc.nombre)}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </FloatingField>
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} lg={15}>
+                <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+                  <div style={{ flex: 1 }}>
+                    <FloatingField label="Concepto" required>
+                      <Input
+                        placeholder=" "
+                        value={selectedConcepto ? toTitleCase(selectedConcepto.nombre) : conceptoSearchText}
+                        readOnly
+                        onClick={handleConceptoSearchClick}
+                      />
+                    </FloatingField>
+                  </div>
+                  <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
+                  {selectedConcepto && (
+                    <Button icon={<ClearOutlined />} onClick={handleConceptoClear} />
                   )}
                 </div>
+                <Form.Item name="concepto" hidden><Input /></Form.Item>
+              </Col>
 
-                {/* Referencia */}
-                {editingField === 'referencia' ? (
-                  <Input
-                    size="small"
-                    style={{ width: 200 }}
-                    placeholder="Referencia"
-                    autoFocus
-                    defaultValue={editingValueRef.current as string}
-                    onChange={(e) => { editingValueRef.current = e.target.value; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : refValue ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
-                    Ref: {refValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
-                    <PlusOutlined /> Referencia
-                  </Tag>
-                )}
+              {conceptoInfo && (
+                <Col xs={24}>
+                  <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
+                </Col>
+              )}
 
-                {/* Tasa */}
-                {editingField === 'tasa' ? (
-                  <InputNumber
-                    size="small"
-                    style={{ width: 120 }}
-                    min={0}
-                    step={0.01}
-                    placeholder="Tasa"
-                    autoFocus
-                    defaultValue={editingValueRef.current as number}
-                    onChange={(val) => { editingValueRef.current = val ?? 1; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : tasaValue !== 1 ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
-                    Tasa: {tasaValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
-                    <PlusOutlined /> Tasa
-                  </Tag>
-                )}
+              {/* Fila 2: FechaDocumento + Cliente */}
+              <Col xs={24} sm={12} lg={9}>
+                <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
+                  <FloatingField label="Fecha Documento" required>
+                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                  </FloatingField>
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} lg={15}>
+                <Form.Item name="cliente" required style={{ marginBottom: 0 }}>
+                  <FloatingField label="Cliente" required ref={clienteRef}>
+                    <Select
+                      allowClear
+                      showSearch
+                      optionFilterProp="children"
+                      onChange={(val) => {
+                        const cli = clientesCache.find((e) => e.codigo === val);
+                        setSelectedCliente(cli || null);
+                      }}
+                    >
+                      {clientesCache.map((cli) => (
+                        <Select.Option key={cli.codigo} value={cli.codigo}>
+                          {toTitleCase(cli.nombre)}{cli.identificacion ? ` (${cli.identificacion})` : ''}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </FloatingField>
+                </Form.Item>
+              </Col>
 
-                {/* Días Crédito */}
-                {editingField === 'diasCredito' ? (
-                  <InputNumber
-                    size="small"
-                    style={{ width: 120 }}
-                    min={0}
-                    max={365}
-                    step={1}
-                    placeholder="Días Crédito"
-                    autoFocus
-                    defaultValue={editingValueRef.current as number}
-                    onChange={(val) => { editingValueRef.current = val ?? 0; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('diasCredito')}>
-                    {form.getFieldValue('diasCredito') !== undefined && form.getFieldValue('diasCredito') !== null
-                      ? `Crédito: ${form.getFieldValue('diasCredito')} días`
-                      : <><PlusOutlined /> Días Crédito</>}
-                    {form.getFieldValue('diasCredito') !== undefined && form.getFieldValue('diasCredito') !== null && form.getFieldValue('diasCredito') !== '' && <EditOutlined />}
-                  </Tag>
-                )}
-              </Space>
-            </div>
-            {/* Hidden form items para campos rápidos */}
-            <Form.Item name="ncf" hidden><Input /></Form.Item>
-            <Form.Item name="referencia" hidden><Input /></Form.Item>
-            <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
-            <Form.Item name="diasCredito" hidden><InputNumber /></Form.Item>
-            <Form.Item name="moneda" hidden><Input /></Form.Item>
-          </Col>
+              {/* Fila 3: FechaVencimiento + Almacén */}
+              <Col xs={24} sm={12} lg={9}>
+                <Form.Item name="fechaVencimiento" style={{ marginBottom: 0 }}>
+                  <FloatingField label="Fecha Vencimiento">
+                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                  </FloatingField>
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} lg={15}>
+                <Form.Item name="almacen" required={tieneProductos} style={{ marginBottom: 0 }}>
+                  <FloatingField label="Almacén" required={tieneProductos} ref={almacenRef}>
+                    <Select
+                      allowClear
+                      showSearch
+                      optionFilterProp="children"
+                      onChange={(val) => {
+                        const alm = almacenesCache.find((a) => a.codigo === val);
+                        setSelectedAlmacen(alm || null);
+                      }}
+                    >
+                      {almacenesCache.map((alm) => (
+                        <Select.Option key={alm.codigo} value={alm.codigo}>
+                          {toTitleCase(alm.nombre)}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </FloatingField>
+                </Form.Item>
+              </Col>
 
-          {/* Fila 5: Nota */}
-          <Col xs={24}>
-            <Form.Item name="nota" style={{ marginBottom: 0 }}>
-              <FloatingField label="Nota">
-                <TextArea rows={3} />
-              </FloatingField>
-            </Form.Item>
-          </Col>
-        </Row>
-      </Form>
+              {/* Fila 4: Campos rápidos (NCF, Referencia, Tasa, Días Crédito) */}
+              <Col xs={24}>
+                <div style={{ marginBottom: 16 }}>
+                  <Space size={[8, 8]} wrap>
+                    {/* NCF */}
+                    <div>
+                      {editingField === 'ncf' ? (
+                        <Input
+                          size="small"
+                          style={{ width: 200 }}
+                          placeholder="NCF"
+                          maxLength={19}
+                          autoFocus
+                          defaultValue={editingValueRef.current as string}
+                          onChange={(e) => { editingValueRef.current = e.target.value; }}
+                          onPressEnter={() => commitFieldEditor()}
+                          onBlur={() => commitFieldEditor()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                          }}
+                        />
+                      ) : ncfValue ? (
+                        <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
+                          NCF: {ncfValue} <EditOutlined />
+                        </Tag>
+                      ) : (
+                        <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
+                          <PlusOutlined /> NCF
+                        </Tag>
+                      )}
+                    </div>
+
+                    {/* Referencia */}
+                    {editingField === 'referencia' ? (
+                      <Input
+                        size="small"
+                        style={{ width: 200 }}
+                        placeholder="Referencia"
+                        autoFocus
+                        defaultValue={editingValueRef.current as string}
+                        onChange={(e) => { editingValueRef.current = e.target.value; }}
+                        onPressEnter={() => commitFieldEditor()}
+                        onBlur={() => commitFieldEditor()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                        }}
+                      />
+                    ) : refValue ? (
+                      <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
+                        Ref: {refValue} <EditOutlined />
+                      </Tag>
+                    ) : (
+                      <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
+                        <PlusOutlined /> Referencia
+                      </Tag>
+                    )}
+
+                    {/* Tasa */}
+                    {editingField === 'tasa' ? (
+                      <InputNumber
+                        size="small"
+                        style={{ width: 120 }}
+                        min={0}
+                        step={0.01}
+                        placeholder="Tasa"
+                        autoFocus
+                        defaultValue={editingValueRef.current as number}
+                        onChange={(val) => { editingValueRef.current = val ?? 1; }}
+                        onPressEnter={() => commitFieldEditor()}
+                        onBlur={() => commitFieldEditor()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                        }}
+                      />
+                    ) : tasaValue !== 1 ? (
+                      <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
+                        Tasa: {tasaValue} <EditOutlined />
+                      </Tag>
+                    ) : (
+                      <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
+                        <PlusOutlined /> Tasa
+                      </Tag>
+                    )}
+
+                    {/* Días Crédito */}
+                    {editingField === 'diasCredito' ? (
+                      <InputNumber
+                        size="small"
+                        style={{ width: 120 }}
+                        min={0}
+                        max={365}
+                        step={1}
+                        placeholder="Días Crédito"
+                        autoFocus
+                        defaultValue={editingValueRef.current as number}
+                        onChange={(val) => { editingValueRef.current = val ?? 0; }}
+                        onPressEnter={() => commitFieldEditor()}
+                        onBlur={() => commitFieldEditor()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                        }}
+                      />
+                    ) : (
+                      <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('diasCredito')}>
+                        {form.getFieldValue('diasCredito') !== undefined && form.getFieldValue('diasCredito') !== null
+                          ? `Crédito: ${form.getFieldValue('diasCredito')} días`
+                          : <><PlusOutlined /> Días Crédito</>}
+                        {form.getFieldValue('diasCredito') !== undefined && form.getFieldValue('diasCredito') !== null && form.getFieldValue('diasCredito') !== '' && <EditOutlined />}
+                      </Tag>
+                    )}
+                  </Space>
+                </div>
+                {/* Hidden form items para campos rápidos */}
+                <Form.Item name="ncf" hidden><Input /></Form.Item>
+                <Form.Item name="referencia" hidden><Input /></Form.Item>
+                <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
+                <Form.Item name="diasCredito" hidden><InputNumber /></Form.Item>
+                <Form.Item name="moneda" hidden><Input /></Form.Item>
+              </Col>
+
+              {/* Fila 5: Nota */}
+              <Col xs={24}>
+                <Form.Item name="nota" style={{ marginBottom: 0 }}>
+                  <FloatingField label="Nota">
+                    <TextArea rows={3} />
+                  </FloatingField>
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        </Col>
+        <Col xs={24} xxl={6}>
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard
+              subTotal={totales.subTotal}
+              descuento={totales.descuento}
+              impuestos={totales.impuestos}
+              total={totales.total}
+              hideTitle
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+              tasa={tasaValue ?? data?.tasa ?? 1}
+            />
+          </div>
+        </Col>
+      </Row>
     </Card>
   );
 
@@ -1281,10 +1287,10 @@ const FacturaClienteFormulario: React.FC = () => {
         mode="venta"
       />
 
-      {isLarge && (
-        /* === DESKTOP LAYOUT (>= lg) === */
+      {isLarge ? (
+        /* === DESKTOP LAYOUT (>= xxl) === */
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={24}>
             {renderEncabezado()}
 
             <Tabs
@@ -1384,21 +1390,109 @@ const FacturaClienteFormulario: React.FC = () => {
               ]}
             />
           </Col>
-
-          <Col lg={6}>
-            <EntidadCard entidad={selectedCliente ?? data?.cliente ?? null} fallbackTitulo="Cliente" />
-            <TotalesCard
-              subTotal={totales.subTotal}
-              descuento={totales.descuento}
-              impuestos={totales.impuestos}
-              total={totales.total}
-              alignRight={false}
-              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
-              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
-              tasa={tasaValue ?? data?.tasa ?? 1}
-          />
-        </Col>
         </Row>
+      ) : (
+        /* === MOBILE LAYOUT (< xxl) === */
+        <div>
+          {renderEncabezado()}
+
+          <Tabs
+            defaultActiveKey="detalles"
+            type="card"
+            style={{ borderRadius: 8, padding: '0 16px' }}
+            items={[
+              {
+                key: 'detalles',
+                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
+                children: (
+                  <>
+                    <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
+                      <Space>
+                        <Button
+                          type="dashed"
+                          icon={<PlusOutlined />}
+                          onClick={handleAgregarFila}
+                        >
+                          Agregar fila
+                        </Button>
+                        <Button
+                          icon={<SearchOutlined />}
+                          onClick={() => setProductoModalOpen(true)}
+                        >
+                          Buscar Producto
+                        </Button>
+                      </Space>
+                      <Input.Search
+                        placeholder="Buscar detalle..."
+                        allowClear
+                        style={{ maxWidth: 250 }}
+                        onSearch={(value) => setDetalleSearch(value)}
+                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                      />
+                    </div>
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(event.active.id as number); }} onDragEnd={handleDragEnd}>
+                      <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
+                      <Table
+                        dataSource={detallesFiltrados}
+                        columns={detalleColumns}
+                        rowKey="id"
+                        size="small"
+                        pagination={false}
+                        scroll={{ x: 1300 }}
+                        components={{ body: { row: SortableRow } }}
+                      />
+                      </SortableContext>
+                      <DragOverlay>
+                        {activeId ? (
+                          <div style={{ padding: '8px 16px', background: '#fff', border: '2px solid #556ee6', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8, width: 300 }}>
+                            <HolderOutlined style={{ color: '#556ee6' }} />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {detalles.find((d) => d.id === activeId)?.articulo || 'Arrastrando...'}
+                            </span>
+                          </div>
+                        ) : null}
+                      </DragOverlay>
+                    </DndContext>
+                  </>
+                ),
+              },
+              ...(data?.asientos && data.asientos.length > 0
+                ? [{
+                    key: 'asientos',
+                    label: `Asientos (${data?.asientos?.length || 0})`,
+                    children: (
+                      <Table
+                        dataSource={data?.asientos || []}
+                        columns={asientoColumns}
+                        rowKey="id"
+                        size="small"
+                        pagination={false}
+                        scroll={{ x: 900 }}
+                        summary={() => (
+                          <Table.Summary fixed>
+                            <Table.Summary.Row>
+                              <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+                              <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+                              <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+                            </Table.Summary.Row>
+                          </Table.Summary>
+                        )}
+                      />
+                    ),
+                  }]
+                : []),
+              ...(data?.logs && data.logs.length > 0
+                ? [{
+                    key: 'historial',
+                    label: `Historial (${data?.logs?.length || 0})`,
+                    children: (
+                      <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
+                    ),
+                  }]
+                : []),
+            ]}
+          />
+        </div>
       )}
 
       {/* Modal de Fecha de Vencimiento */}

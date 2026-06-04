@@ -198,6 +198,12 @@ const Recetas: React.FC = () => {
                 placeholder="Buscar producto..."
                 allowClear
                 onSearch={(val) => setSearchText(val)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    (e.target as HTMLInputElement).blur();
+                    setSearchText('');
+                  }
+                }}
                 style={{ width: 400 }}
                 prefix={<SearchOutlined className="paces-text-icon" />}
               />

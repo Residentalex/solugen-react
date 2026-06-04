@@ -80,6 +80,12 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
         placeholder={searchPlaceholder}
         allowClear
         onSearch={onSearch}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            (e.target as HTMLInputElement).blur();
+            onSearch('');
+          }
+        }}
         style={{ width: 400 }}
         prefix={<SearchOutlined className="paces-text-icon" />}
       />

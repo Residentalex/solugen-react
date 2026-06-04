@@ -117,19 +117,29 @@ Reglas:
 ### Patrón de detalle (aplica a todas las consultas)
 
 - Toolbar inline con Volver, spacer, acciones contextuales
-- Layout responsive: `Row gutter={16}` con `Col lg={18}` (contenido) + `Col lg={6}` (sidebar)
+- Layout responsive: `isLarge = screens.xxl === true` (NO `screens.lg ?? true`)
+- Desktop (≥xxl, ≥1600px): `Row gutter={16}` con `Col xxl={18}` (contenido) + `Col xxl={6}` (sidebar)
+- Compacto/mobile (<xxl): una columna sin sidebar, TotalesCard debajo de Tabs con `marginTop: 24`
+- En compacto NO mostrar EntidadCard ni DocumentosRelacionadosCard
 - Datos generales en Card con `Descriptions bordered size="small"`
 - Tabs con `type="card"` usando `items={[]}` API (NO TabPane deprecated)
-- Sidebar con cards de entidad y totales
-- Versión mobile (< lg): layout vertical sin sidebar, TotalesCard con alignRight
+- Columnas estándar: Código (sticky left, width 120) + Artículo (auto) + Cantidad (120) + Costo (130, responsive md+) + Descuento (120, responsive lg+) + SubTotal (120, responsive lg+) + Impuestos (140, responsive lg+) + Total (120)
+- `scroll.x`: `1100`
+- Primera columna (Código) con `verticalAlign: 'top'`
+- Línea secundaria de Artículo: familia como `<Tag>` a la izquierda, fecha vencimiento a la derecha
+- Línea secundaria de Código: referencia debajo en 11px
 
 ### Patrón de formulario (aplica a todos los crear/editar)
 
 - Toolbar inline con Guardar (primary) + Cancelar, alineados a la derecha
 - Encabezado en Card con Form layout vertical, size small
-- Grilla responsive con Row gutter={16}
+- Layout: Row con Col izquierda (formulario, xxl={18}) + Col derecha (TotalesCard con `hideTitle`, xxl={6})
+- En mobile (<xxl): TotalesCard apilado debajo del formulario
+- TotalesCard DENTRO del Card Datos Generales, no en sidebar externo
 - Tabla de detalles editable con drag-and-drop
-- Sidebar con SuplidorCard + TotalesCard (solo en desktop)
+- Columnas estándar: Drag(40) + Código(sticky 120) + Artículo(auto) + Cantidad(100) + Medida(160, condicional sinOC) + Costo(130, md+) + Descuento(120, lg+) + SubTotal(120, lg+) + Impuestos(140, lg+) + Total(120) + Acciones(50)
+- `scroll.x`: `1300`
+- Columna Medida: solo cuando no hay OC. Usar `...(sinOC ? [{...}] : [])`. Select con `idExterno` como value
 - Tabs de info secundaria (asientos, historial) con `items={[]}` API
 
 ### Clases CSS del sistema

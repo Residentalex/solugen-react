@@ -351,6 +351,12 @@ const ActualizacionCostos: React.FC = () => {
             allowClear
             onSearch={handleSearch}
             onChange={(e) => { if (!e.target.value) setSearchText(''); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                (e.target as HTMLInputElement).blur();
+                handleSearch('');
+              }
+            }}
             style={{ width: 450 }}
             prefix={<SearchOutlined className="paces-text-icon" />}
           />

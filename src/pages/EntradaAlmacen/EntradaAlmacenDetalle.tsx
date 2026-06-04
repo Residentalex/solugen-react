@@ -320,69 +320,81 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
 
   const detalleColumns = [
     {
-      title: 'Artículo',
-      key: 'articulo',
+      title: 'Código',
+      key: 'codigo',
+      width: 120,
       fixed: 'left' as const,
-      ellipsis: true,
-      onCell: () => ({ style: { paddingLeft: 16 } }),
-      onHeaderCell: () => ({ style: { paddingLeft: 16 } }),
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
-<div style={{ display: 'flex', alignItems: 'center' }}>
-                  <span style={{ flex: 1 }}>{toTitleCase(record.articulo || '')}</span>
-                  {(() => {
-                    const fechaVencida = record.fechaVencimiento ? new Date(record.fechaVencimiento) < new Date() : false;
-                    const tieneCoincidencia = ocDetallesData.some((d: any) =>
-                      d.codigo === record.codigo
-                      && (Math.abs(Number(d.costo) - Number(record.costo)) <= 1 || Number(record.cantidadBonificable) !== 0)
-                      && Number(d.medida?.factor || 1) === Number(record.medida?.factor || 1)
-                      && !d.nota?.trim()
-                    );
-                    const ocMatch = ocDetallesData.length > 0
-                      && (tieneCoincidencia || Number(record.cantidadBonificable) > 0)
-                      && (!record.tieneVencimiento || record.fechaVencimiento)
-                      && !fechaVencida;
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>{record.codigo || '-'}</span>
+            {(() => {
+              const fechaVencida = record.fechaVencimiento ? new Date(record.fechaVencimiento) < new Date() : false;
+              const tieneCoincidencia = ocDetallesData.some((d: any) =>
+                d.codigo === record.codigo
+                && (Math.abs(Number(d.costo) - Number(record.costo)) <= 1 || Number(record.cantidadBonificable) !== 0)
+                && Number(d.medida?.factor || 1) === Number(record.medida?.factor || 1)
+                && !d.nota?.trim()
+              );
+              const ocMatch = ocDetallesData.length > 0
+                && (tieneCoincidencia || Number(record.cantidadBonificable) > 0)
+                && (!record.tieneVencimiento || record.fechaVencimiento)
+                && !fechaVencida;
 
-                    if (ocDetallesData.length === 0) return null;
+              if (ocDetallesData.length === 0) return null;
 
-                    if (ocMatch) {
-                      return (
-                        <Tooltip title="Coincide con OC">
-                          <CheckCircleOutlined style={{ color: '#34c38f', fontSize: 12 }} />
-                        </Tooltip>
-                      );
-                    }
+              if (ocMatch) {
+                return (
+                  <Tooltip title="Coincide con OC">
+                    <CheckCircleOutlined style={{ color: '#34c38f', fontSize: 12 }} />
+                  </Tooltip>
+                );
+              }
 
-                    let motivo = 'No coincide con la OC';
-                    const detalleOC = ocDetallesData.find((d: any) => d.codigo === record.codigo);
-                    if (!detalleOC) {
-                      motivo = 'Código no encontrado en la OC';
-                    } else if (record.tieneVencimiento && !record.fechaVencimiento) {
-                      motivo = 'Requiere fecha de vencimiento';
-                    } else if (record.fechaVencimiento && new Date(record.fechaVencimiento) < new Date()) {
-                      motivo = 'Fecha de vencimiento vencida';
-                    } else if (detalleOC.nota?.trim()) {
-                      motivo = `OC tiene nota: ${detalleOC.nota}`;
-                    } else if (Number(detalleOC.medida?.factor || 1) !== Number(record.medida?.factor || 1)) {
-                      motivo = `Factor OC: ${detalleOC.medida?.factor || 1} | ENP: ${record.medida?.factor || 1}`;
-                    } else if (Number(record.cantidadBonificable) === 0 && Math.abs(Number(detalleOC.costo) - Number(record.costo)) > 1) {
-                      motivo = `Costo OC: ${formatNumber(detalleOC.costo)} | ENP: ${formatNumber(record.costo)}`;
-                    }
+              let motivo = 'No coincide con la OC';
+              const detalleOC = ocDetallesData.find((d: any) => d.codigo === record.codigo);
+              if (!detalleOC) {
+                motivo = 'Código no encontrado en la OC';
+              } else if (record.tieneVencimiento && !record.fechaVencimiento) {
+                motivo = 'Requiere fecha de vencimiento';
+              } else if (record.fechaVencimiento && new Date(record.fechaVencimiento) < new Date()) {
+                motivo = 'Fecha de vencimiento vencida';
+              } else if (detalleOC.nota?.trim()) {
+                motivo = `OC tiene nota: ${detalleOC.nota}`;
+              } else if (Number(detalleOC.medida?.factor || 1) !== Number(record.medida?.factor || 1)) {
+                motivo = `Factor OC: ${detalleOC.medida?.factor || 1} | ENP: ${record.medida?.factor || 1}`;
+              } else if (Number(record.cantidadBonificable) === 0 && Math.abs(Number(detalleOC.costo) - Number(record.costo)) > 1) {
+                motivo = `Costo OC: ${formatNumber(detalleOC.costo)} | ENP: ${formatNumber(record.costo)}`;
+              }
 
-                    return (
-                      <Tooltip title={motivo}>
-                        <CloseCircleOutlined style={{ color: '#d9d9d9', fontSize: 12 }} />
-                      </Tooltip>
-                    );
-                  })()}
-                </div>
+              return (
+                <Tooltip title={motivo}>
+                  <CloseCircleOutlined style={{ color: '#d9d9d9', fontSize: 12 }} />
+                </Tooltip>
+              );
+            })()}
+          </div>
+          {record.referencia && (
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+              {record.referencia}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: 'Artículo',
+      key: 'articulo',
+      ellipsis: true,
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span style={{ flex: 1 }}>{toTitleCase(record.articulo || '')}</span>
+          </div>
           <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
-            <span>
-              {record.codigo && <span>{record.codigo}</span>}
-              {record.codigo && record.referencia && <span>{' | '}</span>}
-              {record.referencia && <span>{record.referencia}</span>}
-            </span>
-            {record.fechaVencimiento && <span className="paces-text-secondary">V: {formatDate(record.fechaVencimiento)}</span>}
+            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
+            {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
           </div>
         </div>
       ),
@@ -391,7 +403,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
       title: 'Cantidad',
       dataIndex: 'cantidad',
       key: 'cantidad',
-      width: 150,
+      width: 120,
       align: 'right' as const,
       render: (_: any, record: any) => {
         const enpFactor = Number(record.medida?.factor) || 1;
@@ -644,10 +656,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
         onImprimir={async () => {
           setImprimiendo(true);
           try {
-            const sucursalParam = data.codigoSucursal
-              ? obtenerNombreEnumSucursal(data.codigoSucursal)
-              : sucursalActiva;
-            const res = await apiClient.get(`/reportes/inventario/entrada/${sucursalParam}/${id}`, {
+            const res = await apiClient.post('/reportes/inventario/entrada', { ...data, facturaAsociada: facturaData }, {
               responseType: 'blob',
             });
             const blobUrl = URL.createObjectURL(res.data);

@@ -453,6 +453,12 @@ const MovimientoPorPlantilla: React.FC = () => {
             placeholder="Buscar por código, artículo o sucursal..."
             allowClear
             onSearch={(value) => setSearchText(value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                (e.target as HTMLInputElement).blur();
+                setSearchText('');
+              }
+            }}
             style={{ width: 400 }}
           />
         </div>

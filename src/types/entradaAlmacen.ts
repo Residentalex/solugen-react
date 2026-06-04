@@ -196,6 +196,7 @@ export interface EntradaAlmacenDTO {
   codigoAlmacenDestino?: string;
   fechaEntrega?: string;
   recibidoPor?: string;
+  facturaAsociada?: Record<string, any>;
 }
 
 // ===== Tipos para Orden de Compra (ORC) =====

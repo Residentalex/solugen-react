@@ -211,6 +211,12 @@ const Servicios: React.FC = () => {
               placeholder="Buscar por código, nombre o referencia..."
               allowClear
               onSearch={handleSearch}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  (e.target as HTMLInputElement).blur();
+                  handleSearch('');
+                }
+              }}
             style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />

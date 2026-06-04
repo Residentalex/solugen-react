@@ -172,6 +172,12 @@ const ApiTokens: React.FC = () => {
               placeholder="Buscar por nombre..."
               allowClear
               onSearch={handleSearch}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  (e.target as HTMLInputElement).blur();
+                  handleSearch('');
+                }
+              }}
               style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />

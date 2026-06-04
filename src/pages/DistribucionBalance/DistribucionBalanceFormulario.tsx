@@ -24,10 +24,12 @@ import { clienteApi } from '../../api/clienteApi';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type { ConceptoDTO, AsientoContableDTO, LogDTO } from '../../types/entradaAlmacen';
+import type { UnidadMedidaDTO } from '../../types/productos';
 import type {
   TransaccionAsociadaDTO,
 } from '../../types/distribucionBalance';
 import type { TipoDocumentoDTO } from '../../types/transaccion';
+import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 
@@ -72,6 +74,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const [transaccionesAsociadas, setTransaccionesAsociadas] = useState<TransaccionAsociadaDTO[]>([]);
   const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
   const [logs, setLogs] = useState<LogDTO[]>([]);
+  const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
 
   // Concepto modal
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
@@ -90,7 +93,8 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const refValue = Form.useWatch('referencia', form) || '';
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
-  const isLarge = screens.lg ?? true;
+  const sinOC = true;
+  const isLarge = screens.xxl === true;
 
   // Estado
   const estado = data?.estado ?? 0;
@@ -154,6 +158,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     tipoApi.obtenerPorDocumento(sucursalActiva, 'DBA')
       .then((tipos) => setTiposCache(tipos as any))
       .catch(() => {});
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
 
     if (mode === 'crear') {
       form.setFieldsValue({
@@ -497,7 +502,9 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   // ===== Encabezado =====
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-      <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
+      <Row gutter={16}>
+        <Col xs={24} xxl={18}>
+          <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           {/* Fila 1: Tipo + Concepto */}
           <Col xs={24} sm={12} lg={9}>
@@ -674,6 +681,19 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
           </Col>
         </Row>
       </Form>
+        </Col>
+        <Col xs={24} xxl={6}>
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard
+              subTotal={totales.subTotal}
+              descuento={totales.descuento}
+              impuestos={totales.impuestos}
+              total={totales.total}
+              hideTitle
+            />
+          </div>
+        </Col>
+      </Row>
     </Card>
   );
 
@@ -874,7 +894,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       {isLarge ? (
         /* === DESKTOP === */
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={24}>
             {renderEncabezado()}
             <Tabs
               defaultActiveKey="debitos"
@@ -884,17 +904,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
             />
             <BalanceFooter />
           </Col>
-          <Col lg={6}>
-            <EntidadCard entidad={selectedEntidad} fallbackTitulo={entidadLabel} />
-            <TotalesCard
-              subTotal={totalDebitosDBA}
-              descuento={0}
-              impuestos={0}
-              total={totalDebitosDBA}
-              alignRight={false}
-            />
-          </Col>
-        </Row>
+          </Row>
       ) : (
         /* === MOBILE === */
         <div>
@@ -906,15 +916,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
             items={tabItems}
           />
           <BalanceFooter />
-          <EntidadCard entidad={selectedEntidad} fallbackTitulo={entidadLabel} />
-          <TotalesCard
-            subTotal={totalDebitosDBA}
-            descuento={0}
-            impuestos={0}
-            total={totalDebitosDBA}
-            alignRight={true}
-          />
-        </div>
+          </div>
       )}
     </div>
   );

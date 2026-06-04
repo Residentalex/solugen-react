@@ -39,9 +39,11 @@ import type {
   ConceptoDTO, AlmacenDTO, SuplidorDTO,
   AsientoContableDTO,
 } from '../../types/entradaAlmacen';
+import type { UnidadMedidaDTO } from '../../types/productos';
 import type {
   DetalleDevolucionCompraDTO, DevolucionCompraFullDTO, TipoDTO,
 } from '../../types/devolucionCompra';
+import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
 
 import EntidadCard from '../../components/EntidadCard';
@@ -232,6 +234,7 @@ const DevolucionCompraFormulario: React.FC = () => {
   const [detalleSearch, setDetalleSearch] = useState('');
   const [activeId, setActiveId] = useState<number | null>(null);
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
+  const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
 
   const editValuesRef = useRef<Record<string, any>>({});
   const navigationConfirmedRef = useFormularioNavigation();
@@ -301,7 +304,8 @@ const DevolucionCompraFormulario: React.FC = () => {
   const ncfValue = Form.useWatch('ncf', form) || '';
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
-  const isLarge = screens.lg ?? true;
+  const sinOC = true;
+  const isLarge = screens.xxl === true;
 
   // ===== Determinar estado =====
   const estado = data?.estado ?? 0;
@@ -319,6 +323,7 @@ const DevolucionCompraFormulario: React.FC = () => {
     // Cargar catálogos iniciales
     devolucionCompraApi.obtenerAlmacenes(sucursalActiva).then(r => setAlmacenesCache(r || [])).catch(() => {});
     devolucionCompraApi.obtenerTipos(sucursalActiva).then(r => setTiposCache(r || [])).catch(() => {});
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
 
     // Inicializar fecha en modo crear
     if (mode === 'crear') {
@@ -918,7 +923,9 @@ const DevolucionCompraFormulario: React.FC = () => {
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-      <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
+      <Row gutter={16}>
+        <Col xs={24} xxl={18}>
+          <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           {/* Fila 1: Tipo de Documento + Suplidor */}
           <Col xs={24} sm={12} lg={9}>
@@ -1121,6 +1128,19 @@ const DevolucionCompraFormulario: React.FC = () => {
           </Col>
         </Row>
       </Form>
+        </Col>
+        <Col xs={24} xxl={6}>
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard
+              subTotal={totales.subTotal}
+              descuento={totales.descuento}
+              impuestos={totales.impuestos}
+              total={totales.total}
+              hideTitle
+            />
+          </div>
+        </Col>
+      </Row>
     </Card>
   );
 
@@ -1133,21 +1153,32 @@ const DevolucionCompraFormulario: React.FC = () => {
       render: () => <DragHandle />,
     },
     {
-      title: 'Artículo',
+      title: 'CÃ³digo',
+      key: 'codigo',
+      width: 120,
+      fixed: 'left' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13 }}>
+          <div>{record.codigo || '-'}</div>
+          {record.referencia && (
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+              {record.referencia}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: 'ArtÃ­culo',
       key: 'articulo',
       ellipsis: true,
-      shouldCellUpdate: (record: DetalleDevolucionCompraDTO, prevRecord: DetalleDevolucionCompraDTO) =>
-        record.articulo !== prevRecord.articulo || record.referencia !== prevRecord.referencia || record.medida?.nombre !== prevRecord.medida?.nombre || record.fechaVencimiento !== prevRecord.fechaVencimiento,
-      render: (_: any, record: DetalleDevolucionCompraDTO) => (
+      render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
           <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
-            <span>
-              {record.codigo && <span>{record.codigo}</span>}
-              {record.codigo && record.referencia && <span>{' | '}</span>}
-              {record.referencia && <span>{record.referencia}</span>}
-            </span>
-            {record.fechaVencimiento && <span className="paces-text-secondary">V: {formatDate(record.fechaVencimiento)}</span>}
+            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
+            {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
           </div>
         </div>
       ),
@@ -1175,7 +1206,7 @@ const DevolucionCompraFormulario: React.FC = () => {
             onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? (detalles[idx]?.cantidad || 0); handleDetalleCalculate(detalles[idx].id, 'cantidad', val); }}
             onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? (detalles[idx]?.cantidad || 0); handleDetalleCalculate(detalles[idx].id, 'cantidad', val); }}
           />
-          {detalles[idx]?.medida?.nombre && (
+          {detalles[idx]?.medida?.nombre && !sinOC && (
             <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
               {toTitleCase(detalles[idx].medida!.nombre)}
             </div>
@@ -1183,13 +1214,48 @@ const DevolucionCompraFormulario: React.FC = () => {
         </div>
       ),
     },
+    ...(sinOC ? [{
+      title: 'Medida',
+      key: 'medida',
+      width: 160,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any, _idx: number) => {
+        const curId = record.medida?.idExterno;
+        const hasMatch = medidasCache.some((m) => m.idExterno === curId);
+        return (
+          <Select
+            size="small"
+            style={{ width: '100%' }}
+            key={medidasCache.length}
+            value={hasMatch ? curId : undefined}
+            onChange={(idExterno) => {
+              const medida = medidasCache.find((m) => m.idExterno === idExterno);
+              if (medida) {
+                handleDetalleCalculate(record.id, 'medida', {
+                  nombre: medida.nombre,
+                  codigo: medida.codigo,
+                  factor: medida.factor,
+                  idExterno: medida.idExterno,
+                });
+              }
+            }}
+          >
+            {medidasCache.map((m) => (
+              <Select.Option key={m.idExterno} value={m.idExterno}>
+                {toTitleCase(m.nombre)}
+              </Select.Option>
+            ))}
+          </Select>
+        );
+      },
+    }] : []),
     {
       title: 'Costo',
       dataIndex: 'costo',
       key: 'costo',
       width: 130,
       align: 'right' as const,
-      responsive: ['sm' as const, 'md' as const, 'lg' as const],
+      responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       shouldCellUpdate: (record: DetalleDevolucionCompraDTO, prevRecord: DetalleDevolucionCompraDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
       render: (_: any, record: DetalleDevolucionCompraDTO, idx: number) => {
         const costoBase = Number(detalles[idx]?.costo) || 0;
@@ -1244,9 +1310,9 @@ const DevolucionCompraFormulario: React.FC = () => {
     {
       title: 'Descuento',
       key: 'descuento',
-      width: 100,
+      width: 120,
       align: 'right' as const,
-      responsive: ['md' as const, 'lg' as const],
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleDevolucionCompraDTO) => (
         <div>
           <Text>{formatNumber(record.descuento || 0)}</Text>
@@ -1257,9 +1323,9 @@ const DevolucionCompraFormulario: React.FC = () => {
       title: 'SubTotal',
       dataIndex: 'subTotal',
       key: 'subTotal',
-      width: 100,
+      width: 120,
       align: 'right' as const,
-      responsive: ['md' as const, 'lg' as const],
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleDevolucionCompraDTO) => (
         <Text>{formatNumber(record.subTotal || 0)}</Text>
       ),
@@ -1267,8 +1333,9 @@ const DevolucionCompraFormulario: React.FC = () => {
     {
       title: 'Impuestos',
       key: 'impuestos',
-      width: 100,
+      width: 140,
       align: 'right' as const,
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleDevolucionCompraDTO) => (
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
@@ -1282,7 +1349,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
-      width: 100,
+      width: 120,
       align: 'right' as const,
       render: (_: any, record: DetalleDevolucionCompraDTO) => (
         <Text strong>{formatNumber(record.total || 0)}</Text>
@@ -1410,7 +1477,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       {isLarge ? (
         /* === DESKTOP LAYOUT (>= lg) === */
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={24}>
             {renderEncabezado()}
 
             <Tabs
@@ -1498,20 +1565,7 @@ const DevolucionCompraFormulario: React.FC = () => {
             />
           </Col>
 
-          <Col lg={6}>
-            <EntidadCard entidad={selectedEntidad ?? data?.suplidor ?? null} fallbackTitulo="Suplidor" />
-            <TotalesCard
-              subTotal={totales.subTotal}
-              descuento={totales.descuento}
-              impuestos={totales.impuestos}
-              total={totales.total}
-              alignRight={false}
-              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
-              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
-              tasa={tasaValue ?? data?.tasa ?? 1}
-            />
-          </Col>
-        </Row>
+          </Row>
       ) : (
         /* === MOBILE LAYOUT (< lg) === */
         <div>
@@ -1601,19 +1655,7 @@ const DevolucionCompraFormulario: React.FC = () => {
             ]}
           />
 
-          <EntidadCard entidad={selectedEntidad ?? data?.suplidor ?? null} fallbackTitulo="Suplidor" />
-
-          <TotalesCard
-            subTotal={totales.subTotal}
-            descuento={totales.descuento}
-            impuestos={totales.impuestos}
-            total={totales.total}
-            alignRight={true}
-            monedaSimbolo={data?.moneda?.simbolo || 'RD$'}
-            monedaNombre={data?.moneda?.nombre || 'Peso Dominicano'}
-            tasa={tasaValue ?? data?.tasa ?? 1}
-          />
-        </div>
+          </div>
       )}
 
       {/* Guía paso a paso (solo en modo crear o editar borrador) */}

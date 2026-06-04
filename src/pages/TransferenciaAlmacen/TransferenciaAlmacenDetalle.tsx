@@ -167,7 +167,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
     );
   }
 
-  const isLarge = screens.lg ?? true;
+  const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
@@ -185,20 +185,32 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
 
   const detalleColumns = [
     {
+      title: 'Código',
+      key: 'codigo',
+      width: 120,
+      fixed: 'left' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13 }}>
+          <div>{record.codigo || '-'}</div>
+          {record.referencia && (
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+              {record.referencia}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
-      onCell: () => ({ style: { paddingLeft: 16 } }),
-      onHeaderCell: () => ({ style: { paddingLeft: 16 } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
           <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
-            <span>
-              {record.codigo && <span>{record.codigo}</span>}
-              {record.codigo && record.referencia && <span>{' | '}</span>}
-              {record.referencia && <span>{record.referencia}</span>}
-            </span>
+            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
+            {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
           </div>
         </div>
       ),
@@ -207,7 +219,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       title: 'Cantidad',
       dataIndex: 'cantidad',
       key: 'cantidad',
-      width: 100,
+      width: 120,
       align: 'right' as const,
       render: (_: any, record: any) => (
         <div>
@@ -398,7 +410,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
                   onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                 />
               </div>
-              <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 600 }} />
+              <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
             </>
           ),
         },
@@ -484,12 +496,12 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={18}>
             {renderDatosGenerales(3)}
             {renderTabs()}
           </Col>
 
-          <Col lg={6}>
+          <Col xxl={6}>
             <TotalesCard subTotal={data.subTotal || 0} descuento={0} impuestos={0} total={data.total} nota={data.nota} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
@@ -506,15 +518,17 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         <div>
           {renderDatosGenerales(1)}
           {renderTabs()}
-          <TotalesCard subTotal={data.subTotal || 0} descuento={0} impuestos={0} total={data.total} nota={data.nota} alignRight={true}
-            monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-            monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
-            tasa={data.tasa ?? 1}
-          />
-          <DocumentosRelacionadosCard
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard subTotal={data.subTotal || 0} descuento={0} impuestos={0} total={data.total} nota={data.nota} alignRight={true}
+              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              tasa={data.tasa ?? 1}
+            />
+            <DocumentosRelacionadosCard
             documentos={documentosRelacionados}
             currentId={data?.id}
           />
+          </div>
         </div>
       )}
 

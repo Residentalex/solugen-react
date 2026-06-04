@@ -899,6 +899,12 @@ const Automatizaciones: React.FC = () => {
           placeholder="Buscar..."
           allowClear
           onSearch={handleSearch}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              (e.target as HTMLInputElement).blur();
+              handleSearch('');
+            }
+          }}
           style={{ width: 320 }}
           prefix={<SearchOutlined className="paces-text-icon" />}
         />
@@ -1158,6 +1164,12 @@ const Automatizaciones: React.FC = () => {
             placeholder="Buscar..."
             allowClear
             onSearch={handleTemplateSearch}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                (e.target as HTMLInputElement).blur();
+                handleTemplateSearch('');
+              }
+            }}
             prefix={<SearchOutlined className="paces-text-icon" />}
             style={{ width: '100%', marginBottom: 8 }}
           />

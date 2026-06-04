@@ -520,7 +520,7 @@ const OrdenCompraFormulario: React.FC = () => {
       )}
 
       <Row gutter={16}>
-        <Col lg={18} xs={24}>
+        <Col xxl={24} xs={24}>
           <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
             <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
               <Row gutter={[16, 24]}>
@@ -602,37 +602,6 @@ const OrdenCompraFormulario: React.FC = () => {
               ),
             }]}
           />
-        </Col>
-
-        <Col lg={6} xs={24}>
-          <Card title={<span style={{ fontSize: 14, fontWeight: 600 }}>Suplidor</span>} className="paces-card" style={{ marginBottom: 16 }}>
-            <div style={{ fontWeight: 600 }}>
-              {selectedSuplidor ? toTitleCase(selectedSuplidor.nombre) : 'Seleccione un suplidor'}
-            </div>
-            {selectedSuplidor?.identificacion && (
-              <div className="paces-text-secondary" style={{ fontSize: 13, marginTop: 4 }}>
-                RNC: {selectedSuplidor.identificacion}
-              </div>
-            )}
-          </Card>
-
-          <Card title={<span style={{ fontSize: 14, fontWeight: 600 }}>Totales</span>} className="paces-card">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span className="paces-text-secondary">Subtotal</span>
-                <span>{formatNumber(totales.subTotal)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span className="paces-text-secondary">Descuento</span>
-                <span>{formatNumber(totales.descuento)}</span>
-              </div>
-            </div>
-            <Divider style={{ margin: '12px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700 }}>
-              <span>Total</span>
-              <span style={{ color: '#556ee6' }}>{formatCurrency(totales.total)}</span>
-            </div>
-          </Card>
         </Col>
       </Row>
 

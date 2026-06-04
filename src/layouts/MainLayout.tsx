@@ -7,6 +7,8 @@ import { Sucursal, type AuthSucursalPermitidaDTO, type PantallaDTO } from '../ty
 import { useCompanyStore } from '../stores/companyStore';
 import { useUIStore } from '../stores/uiStore';
 import { useNotificacionesStore } from '../stores/notificacionesStore';
+import { useChatStore } from '../stores/chatStore';
+import ChatWidget from '../components/ChatWidget/ChatWidget';
 import GenesisLogo from '../components/GenesisLogo';
 import Sidebar from './Sidebar';
 import SidebarDocBtn from '../components/SidebarDocBtn';
@@ -193,6 +195,17 @@ const MainLayout: React.FC = () => {
     };
   }, [isAuthenticated]);
 
+  // Chat: conexion SignalR
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    useChatStore.getState().conectarSignalR();
+
+    return () => {
+      useChatStore.getState().desconectarSignalR();
+    };
+  }, [isAuthenticated]);
+
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth <= 1600 && !sidebarCollapsed) {
@@ -375,6 +388,8 @@ const MainLayout: React.FC = () => {
 
         <BuscadorGlobalModal open={searchOpen} onClose={() => setSearchOpen(false)} />
       </Layout>
+
+      <ChatWidget />
     </Layout>
   );
 };

@@ -178,6 +178,12 @@ const Tickets: React.FC = () => {
               placeholder="Buscar ticket..."
               allowClear
               onSearch={(val) => setSearchText(val)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  (e.target as HTMLInputElement).blur();
+                  setSearchText('');
+                }
+              }}
               style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />

@@ -169,26 +169,39 @@ const CotizacionVentaDetalle: React.FC = () => {
     return null;
   }
 
-  const isLarge = screens.lg ?? true;
+  const isLarge = screens.xxl === true;
 
   const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
   const detalleColumns = [
     {
+      title: 'Código',
+      key: 'codigo',
+      width: 120,
+      fixed: 'left' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13 }}>
+          <div>{record.codigo || '-'}</div>
+          {record.referencia && (
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+              {record.referencia}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
-      onHeaderCell: () => ({ style: { paddingLeft: 8 } }),
       render: (_: any, record: any) => (
-        <div style={{ fontSize: 13, paddingLeft: 8 }}>
+        <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
           <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
-            <span>
-              {record.codigo && <span>{record.codigo}</span>}
-              {record.codigo && record.referencia && <span>{' | '}</span>}
-              {record.referencia && <span>{record.referencia}</span>}
-            </span>
+            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
+            {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
           </div>
         </div>
       ),
@@ -197,7 +210,7 @@ const CotizacionVentaDetalle: React.FC = () => {
       title: 'Cantidad',
       dataIndex: 'cantidad',
       key: 'cantidad',
-      width: 100,
+      width: 120,
       align: 'right' as const,
       render: (_: any, record: any) => (
         <div>
@@ -215,6 +228,7 @@ const CotizacionVentaDetalle: React.FC = () => {
       key: 'precio',
       width: 130,
       align: 'right' as const,
+      responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => {
         const precioBase = Number(record.precio) || 0;
         const pctDesc = Number(record.porcentajeDescuento) || 0;
@@ -236,6 +250,7 @@ const CotizacionVentaDetalle: React.FC = () => {
       key: 'descuento',
       width: 120,
       align: 'right' as const,
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
           <div>{formatNumber(record.porcentajeDescuento || 0)}%</div>
@@ -251,6 +266,7 @@ const CotizacionVentaDetalle: React.FC = () => {
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
           <div>{formatNumber(record.subTotal || 0)}</div>
@@ -263,6 +279,7 @@ const CotizacionVentaDetalle: React.FC = () => {
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
@@ -275,11 +292,12 @@ const CotizacionVentaDetalle: React.FC = () => {
     {
       title: 'Total',
       key: 'total',
-      width: 130,
+      width: 120,
       align: 'right' as const,
-      onHeaderCell: () => ({ style: { paddingRight: 8 } }),
+      onCell: () => ({ style: { paddingRight: 16 } }),
+      onHeaderCell: () => ({ style: { paddingRight: 16 } }),
       render: (_: any, record: any) => (
-        <div style={{ paddingRight: 8 }}>
+        <div>
           <strong>{formatNumber(record.total || 0)}</strong>
           <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
         </div>
@@ -469,7 +487,7 @@ const CotizacionVentaDetalle: React.FC = () => {
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={18}>
             <Card className="paces-card" size="small" title={
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 16, fontWeight: 600 }}>
@@ -560,7 +578,7 @@ const CotizacionVentaDetalle: React.FC = () => {
             />
           </Col>
 
-          <Col lg={6}>
+          <Col xxl={6}>
             <EntidadCard entidad={data.entidad} fallbackTitulo="Cliente" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
@@ -621,8 +639,6 @@ const CotizacionVentaDetalle: React.FC = () => {
               </Descriptions>
           </Card>
 
-          <EntidadCard entidad={data.entidad} fallbackTitulo="Cliente" />
-
           <Tabs
             defaultActiveKey="detalles"
             type="card"
@@ -666,17 +682,19 @@ const CotizacionVentaDetalle: React.FC = () => {
             ]}
           />
 
-          <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
-            monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-            monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
-            tasa={data.tasa ?? 1}
-          />
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
+              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              tasa={data.tasa ?? 1}
+            />
 
           <DocumentosRelacionadosCard
             documentos={documentosRelacionados}
             currentId={data?.id}
             rutaMap={{ COT: 'FCotizacion' }}
           />
+          </div>
         </div>
       )}
 

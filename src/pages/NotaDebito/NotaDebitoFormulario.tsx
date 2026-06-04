@@ -30,6 +30,8 @@ import type {
   ImpuestoRetencionDTO,
   AsientoDTO,
 } from '../../types/notaDebito';
+import type { UnidadMedidaDTO } from '../../types/productos';
+import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 
@@ -354,9 +356,11 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   // NCF
   const [ncfTipo, setNcfTipo] = useState<'documento' | 'modificado'>('documento');
   const [ncfModificadoVal, setNcfModificadoVal] = useState('');
+  const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
 
   const [form] = Form.useForm();
-  const isLarge = screens.lg ?? true;
+  const sinOC = true;
+  const isLarge = screens.xxl === true;
 
   // ===== Watchers =====
   const montoTotalWatch = Form.useWatch('montoTotal', form) || 0;
@@ -378,9 +382,11 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   useEffect(() => {
     setActiveModule(codigoPantalla);
     const pageTitle = mode === 'crear'
-      ? `Nueva Nota de Débito - ${entidadLabel}`
-      : `Editar Nota de Débito - ${entidadLabel}`;
+      ? `Nueva Nota de D├®bito - ${entidadLabel}`
+      : `Editar Nota de D├®bito - ${entidadLabel}`;
     setPageTitleOverride(pageTitle);
+
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
 
     if (mode === 'crear') {
       form.setFieldsValue({
@@ -894,7 +900,9 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   // ===== Encabezado =====
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-      <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
+      <Row gutter={16}>
+        <Col xs={24} xxl={18}>
+          <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           {/* Fila 1: Tipo + Concepto */}
           <Col xs={24} sm={12} lg={8}>
@@ -1021,6 +1029,19 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           </Col>
         </Row>
       </Form>
+        </Col>
+        <Col xs={24} xxl={6}>
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard
+              subTotal={totales.subTotal}
+              descuento={totales.descuento}
+              impuestos={totales.impuestos}
+              total={totales.total}
+              hideTitle
+            />
+          </div>
+        </Col>
+      </Row>
     </Card>
   );
 
@@ -1203,39 +1224,15 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={24}>
             {renderEncabezado()}
             {contenidoPestanas}
           </Col>
-          <Col lg={6}>
-            <EntidadCard entidad={selectedEntidad} fallbackTitulo={entidadLabel} />
-            <TotalesCard
-              subTotal={totales.subTotal}
-              descuento={0}
-              impuestos={totales.impuestos}
-              total={Number(montoTotalWatch) || 0}
-              alignRight={false}
-              monedaNombre={data?.moneda?.nombre || (selectedConcepto?.moneda as any)?.nombre || 'Peso Dominicano'}
-              monedaSimbolo={data?.moneda?.simbolo || (selectedConcepto?.moneda as any)?.simbolo || 'RD$'}
-              tasa={Form.useWatch('tasa', form) || 1}
-            />
-          </Col>
-        </Row>
+          </Row>
       ) : (
         /* === MOBILE LAYOUT (< lg) === */
         <div>
           {renderEncabezado()}
-          <EntidadCard entidad={selectedEntidad} fallbackTitulo={entidadLabel} />
-          <TotalesCard
-            subTotal={totales.subTotal}
-            descuento={0}
-            impuestos={totales.impuestos}
-            total={Number(montoTotalWatch) || 0}
-            alignRight={true}
-            monedaNombre={data?.moneda?.nombre || (selectedConcepto?.moneda as any)?.nombre || 'Peso Dominicano'}
-            monedaSimbolo={data?.moneda?.simbolo || (selectedConcepto?.moneda as any)?.simbolo || 'RD$'}
-            tasa={Form.useWatch('tasa', form) || 1}
-          />
           {contenidoPestanas}
         </div>
       )}

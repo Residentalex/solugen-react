@@ -29,6 +29,7 @@ import { conceptosApi } from '../../api/conceptosApi';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
 import { productoApi } from '../../api/productoApi';
 import { parametrosApi } from '../../api/parametrosApi';
+import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import BuscarOrdenCompraModal from '../../components/BuscarOrdenCompraModal/BuscarOrdenCompraModal';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import EntradaAlmacenGuide from './EntradaAlmacenGuide';
@@ -49,6 +50,7 @@ import type {
   ConceptoDTO, AlmacenDTO, SuplidorDTO,
   OrdenCompraVistaDTO, DetalleOrdenCompraVistaDTO,
 } from '../../types/entradaAlmacen';
+import type { UnidadMedidaDTO } from '../../types/productos';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 
@@ -146,6 +148,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const [detalles, setDetalles] = useState<DetalleEntradaAlmacenDTO[]>([]);
   const [entidadesCache, setEntidadesCache] = useState<SuplidorDTO[]>([]);
   const [almacenesCache, setAlmacenesCache] = useState<AlmacenDTO[]>([]);
+  const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
   const [conceptoSearchText, setConceptoSearchText] = useState('');
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
@@ -254,6 +257,10 @@ const EntradaAlmacenFormulario: React.FC = () => {
     conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
     // Obtener fecha de cierre de inventario
     parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch(() => {});
+    // Cargar unidades de medida
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => {
+      message.error(extraerMensajeError(err) || 'Error al cargar unidades de medida');
+    });
 
     // Inicializar fechas en modo crear
     if (mode === 'crear') {
@@ -920,6 +927,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
 
 
+  const sinOC = ocDetallesData.length === 0;
+
   // ===== Grid de detalles editable (responsive) =====
   const detalleColumns = [
     {
@@ -929,59 +938,74 @@ const EntradaAlmacenFormulario: React.FC = () => {
       render: () => <DragHandle />,
     },
     {
+      title: 'Código',
+      key: 'codigo',
+      width: 120,
+      fixed: 'left' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: DetalleEntradaAlmacenDTO) => (
+        <div style={{ fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>{record.codigo || '-'}</span>
+            {ocDetallesData.length > 0 && (() => {
+              const fechaVencida = record.fechaVencimiento ? new Date(record.fechaVencimiento) < new Date() : false;
+              const tieneCoincidencia = ocDetallesData.some((d: DetalleOrdenCompraVistaDTO) =>
+                d.codigo === record.codigo
+                && (Math.abs(Number(d.costo) - Number(record.costo)) <= 1 || Number(record.cantidadBonificable) !== 0)
+                && Number(d.medida?.factor || 1) === Number(record.medida?.factor || 1)
+                && !d.nota?.trim()
+              );
+              const ocMatch = ocDetallesData.length > 0
+                && (tieneCoincidencia || Number(record.cantidadBonificable) > 0)
+                && (!record.tieneVencimiento || record.fechaVencimiento)
+                && !fechaVencida;
+
+              if (ocMatch) {
+                return <Tooltip title="Coincide con OC"><CheckCircleOutlined style={{ color: '#34c38f', fontSize: 12 }} /></Tooltip>;
+              }
+              let motivo = 'No coincide con la OC';
+              const detalleOC = ocDetallesData.find((d: DetalleOrdenCompraVistaDTO) => d.codigo === record.codigo);
+              if (!detalleOC) {
+                motivo = 'Código no encontrado en la OC';
+              } else if (record.tieneVencimiento && !record.fechaVencimiento) {
+                motivo = 'Requiere fecha de vencimiento';
+              } else if (record.fechaVencimiento && new Date(record.fechaVencimiento) < new Date()) {
+                motivo = 'Fecha de vencimiento vencida';
+              } else if (detalleOC.nota?.trim()) {
+                motivo = `OC tiene nota: ${detalleOC.nota}`;
+              } else if (Number(detalleOC.medida?.factor || 1) !== Number(record.medida?.factor || 1)) {
+                motivo = `Factor OC: ${detalleOC.medida?.factor || 1} | ENP: ${record.medida?.factor || 1}`;
+              } else if (Number(record.cantidadBonificable) === 0 && Math.abs(Number(detalleOC.costo) - Number(record.costo)) > 1) {
+                motivo = `Costo OC: ${formatNumber(detalleOC.costo)} | ENP: ${formatNumber(record.costo)}`;
+              }
+              return (
+                <Tooltip title={motivo}>
+                  <CloseCircleOutlined style={{ color: '#d9d9d9', fontSize: 12 }} />
+                </Tooltip>
+              );
+            })()}
+          </div>
+          {record.referencia && (
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+              {record.referencia}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
       title: 'Artículo',
       key: 'articulo',
-      fixed: 'left' as const,
       ellipsis: true,
       render: (_: any, record: DetalleEntradaAlmacenDTO) => {
-        const fechaVencida = record.fechaVencimiento ? new Date(record.fechaVencimiento) < new Date() : false;
-        const tieneCoincidencia = ocDetallesData.some((d: DetalleOrdenCompraVistaDTO) =>
-          d.codigo === record.codigo
-          && (Math.abs(Number(d.costo) - Number(record.costo)) <= 1 || Number(record.cantidadBonificable) !== 0)
-          && Number(d.medida?.factor || 1) === Number(record.medida?.factor || 1)
-          && !d.nota?.trim()
-        );
-        const ocMatch = ocDetallesData.length > 0
-          && (tieneCoincidencia || Number(record.cantidadBonificable) > 0)
-          && (!record.tieneVencimiento || record.fechaVencimiento)
-          && !fechaVencida;
         return (
           <div style={{ fontSize: 13 }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <span style={{ flex: 1 }}>{toTitleCase(record.articulo || '')}</span>
-              {ocDetallesData.length > 0 && (() => {
-                if (ocMatch) {
-                  return <Tooltip title="Coincide con OC"><CheckCircleOutlined style={{ color: '#34c38f', fontSize: 12 }} /></Tooltip>;
-                }
-                let motivo = 'No coincide con la OC';
-                const detalleOC = ocDetallesData.find((d: DetalleOrdenCompraVistaDTO) => d.codigo === record.codigo);
-                if (!detalleOC) {
-                  motivo = 'Código no encontrado en la OC';
-                } else if (record.tieneVencimiento && !record.fechaVencimiento) {
-                  motivo = 'Requiere fecha de vencimiento';
-                } else if (record.fechaVencimiento && new Date(record.fechaVencimiento) < new Date()) {
-                  motivo = 'Fecha de vencimiento vencida';
-                } else if (detalleOC.nota?.trim()) {
-                  motivo = `OC tiene nota: ${detalleOC.nota}`;
-                } else if (Number(detalleOC.medida?.factor || 1) !== Number(record.medida?.factor || 1)) {
-                  motivo = `Factor OC: ${detalleOC.medida?.factor || 1} | ENP: ${record.medida?.factor || 1}`;
-                } else if (Number(record.cantidadBonificable) === 0 && Math.abs(Number(detalleOC.costo) - Number(record.costo)) > 1) {
-                  motivo = `Costo OC: ${formatNumber(detalleOC.costo)} | ENP: ${formatNumber(record.costo)}`;
-                }
-                return (
-                  <Tooltip title={motivo}>
-                    <CloseCircleOutlined style={{ color: '#d9d9d9', fontSize: 12 }} />
-                  </Tooltip>
-                );
-              })()}
             </div>
             <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
-              <span>
-                {record.codigo && <span>{record.codigo}</span>}
-                {record.codigo && record.referencia && <span>{' | '}</span>}
-                {record.referencia && <span>{record.referencia}</span>}
-              </span>
-              {record.fechaVencimiento && <span className="paces-text-secondary">V: {formatDate(record.fechaVencimiento)}</span>}
+              {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
+              {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
             </div>
           </div>
         );
@@ -991,7 +1015,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       title: 'Cantidad',
       dataIndex: 'cantidad',
       key: 'cantidad',
-      width: 130,
+      width: 100,
       align: 'right' as const,
       shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) =>
         record.cantidad !== prevRecord.cantidad || record.medida?.nombre !== prevRecord.medida?.nombre,
@@ -1018,7 +1042,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
               handleDetalleCalculate(detalles[idx].id, 'cantidad', val);
             }}
           />
-          {detalles[idx]?.medida?.nombre && (
+          {!sinOC && detalles[idx]?.medida?.nombre && (
             <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
               {toTitleCase(detalles[idx].medida.nombre)}
             </div>
@@ -1026,6 +1050,41 @@ const EntradaAlmacenFormulario: React.FC = () => {
         </div>
       ),
     },
+    ...(sinOC ? [{
+      title: 'Medida',
+      key: 'medida',
+      width: 160,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: DetalleEntradaAlmacenDTO, _idx: number) => {
+        const curId = record.medida?.idExterno;
+        const hasMatch = medidasCache.some((m) => m.idExterno === curId);
+        return (
+        <Select
+          size="small"
+          style={{ width: '100%' }}
+          key={medidasCache.length}
+          value={hasMatch ? curId : undefined}
+          onChange={(idExterno) => {
+            const medida = medidasCache.find((m) => m.idExterno === idExterno);
+            if (medida) {
+              handleDetalleCalculate(record.id, 'medida', {
+                nombre: medida.nombre,
+                codigo: medida.codigo,
+                factor: medida.factor,
+                idExterno: medida.idExterno,
+              });
+            }
+          }}
+        >
+          {medidasCache.map((m) => (
+            <Select.Option key={m.idExterno} value={m.idExterno}>
+              {toTitleCase(m.nombre)}
+            </Select.Option>
+          ))}
+        </Select>
+      );
+      },
+    }] : []),
     {
       title: 'Costo',
       dataIndex: 'costo',
@@ -1225,20 +1284,22 @@ const EntradaAlmacenFormulario: React.FC = () => {
     // ncfValue, refValue y tasaValue vienen del watcher reactivo (component-level Form.useWatch)
     return (
     <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-      <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
-        <Row gutter={[16, 24]}>
-          {/* Fila 1: OrdenCompra + Concepto */}
-          <Col xs={24} sm={12} lg={9}>
-            <div ref={ordenCompraRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Orden Compra" externalValue={ordenCompraNoDoc}>
-                  <Input placeholder=" " value={ordenCompraNoDoc} readOnly />
-                </FloatingField>
-              </div>
-              <Button icon={<SearchOutlined />} onClick={handleBuscarOC} />
-            </div>
-            <Form.Item name="ordenCompra" hidden><Input /></Form.Item>
-          </Col>
+      <Row gutter={16}>
+        <Col xs={24} xxl={18}>
+          <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
+            <Row gutter={[16, 24]}>
+              {/* Fila 1: OrdenCompra + Concepto */}
+              <Col xs={24} sm={12} lg={9}>
+                <div ref={ordenCompraRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+                  <div style={{ flex: 1 }}>
+                    <FloatingField label="Orden Compra" externalValue={ordenCompraNoDoc}>
+                      <Input placeholder=" " value={ordenCompraNoDoc} readOnly />
+                    </FloatingField>
+                  </div>
+                  <Button icon={<SearchOutlined />} onClick={handleBuscarOC} />
+                </div>
+                <Form.Item name="ordenCompra" hidden><Input /></Form.Item>
+              </Col>
 
           <Col xs={24} sm={12} lg={15}>
             <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
@@ -1349,138 +1410,139 @@ const EntradaAlmacenFormulario: React.FC = () => {
             </Form.Item>
           </Col>
 
-          {/* Fila 4: Botones rápidos para campos opcionales + TotalesCard */}
+          {/* Fila 4: Campos rápidos (NCF, Referencia, Tasa) */}
           <Col xs={24}>
-            <Row gutter={16}>
-              <Col xs={24} xl={18}>
-                <div style={{ marginBottom: 16 }}>
-                  <Space size={[8, 8]} wrap>
-                    {/* NCF */}
-                    <div ref={ncfRef}>
-                      {editingField === 'ncf' ? (
-                        <Input
-                          size="small"
-                          style={{ width: 200 }}
-                          placeholder="NCF"
-                          maxLength={19}
-                          autoFocus
-                          defaultValue={editingValueRef.current as string}
-                          onChange={(e) => {
-                            editingValueRef.current = e.target.value;
-                          }}
-                          onPressEnter={() => commitFieldEditor()}
-                          onBlur={() => commitFieldEditor()}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Escape') {
-                              e.stopPropagation();
-                              cancelFieldEditor();
-                            }
-                          }}
-                        />
-                      ) : ncfValue ? (
-                        <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
-                          NCF: {ncfValue} <EditOutlined />
-                        </Tag>
-                      ) : (
-                        <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
-                          <PlusOutlined /> NCF
-                        </Tag>
-                      )}
-                    </div>
-
-                    {/* Referencia */}
-                    {editingField === 'referencia' ? (
-                      <Input
-                        size="small"
-                        style={{ width: 200 }}
-                        placeholder="Referencia"
-                        autoFocus
-                        defaultValue={editingValueRef.current as string}
-                        onChange={(e) => {
-                          editingValueRef.current = e.target.value;
-                        }}
-                        onPressEnter={() => commitFieldEditor()}
-                        onBlur={() => commitFieldEditor()}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') {
-                            e.stopPropagation();
-                            cancelFieldEditor();
-                          }
-                        }}
-                      />
-                    ) : refValue ? (
-                      <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
-                        Ref: {refValue} <EditOutlined />
-                      </Tag>
-                    ) : (
-                      <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
-                        <PlusOutlined /> Referencia
-                      </Tag>
-                    )}
-
-                    {/* Tasa */}
-                    {editingField === 'tasa' ? (
-                      <InputNumber
-                        size="small"
-                        style={{ width: 120 }}
-                        min={0}
-                        step={0.01}
-                        placeholder="Tasa"
-                        autoFocus
-                        defaultValue={editingValueRef.current as number}
-                        onChange={(val) => {
-                          editingValueRef.current = val ?? 1;
-                        }}
-                        onPressEnter={() => commitFieldEditor()}
-                        onBlur={() => commitFieldEditor()}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') {
-                            e.stopPropagation();
-                            cancelFieldEditor();
-                          }
-                        }}
-                      />
-                    ) : tasaValue !== 1 ? (
-                      <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
-                        Tasa: {tasaValue} <EditOutlined />
-                      </Tag>
-                    ) : (
-                      <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
-                        <PlusOutlined /> Tasa
-                      </Tag>
-                    )}
-                  </Space>
+            <div style={{ marginBottom: 16 }}>
+              <Space size={[8, 8]} wrap>
+                {/* NCF */}
+                <div ref={ncfRef}>
+                  {editingField === 'ncf' ? (
+                    <Input
+                      size="small"
+                      style={{ width: 200 }}
+                      placeholder="NCF"
+                      maxLength={19}
+                      autoFocus
+                      defaultValue={editingValueRef.current as string}
+                      onChange={(e) => {
+                        editingValueRef.current = e.target.value;
+                      }}
+                      onPressEnter={() => commitFieldEditor()}
+                      onBlur={() => commitFieldEditor()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          e.stopPropagation();
+                          cancelFieldEditor();
+                        }
+                      }}
+                    />
+                  ) : ncfValue ? (
+                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
+                      NCF: {ncfValue} <EditOutlined />
+                    </Tag>
+                  ) : (
+                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
+                      <PlusOutlined /> NCF
+                    </Tag>
+                  )}
                 </div>
-                {/* Hidden form items para campos rápidos */}
-                <Form.Item name="ncf" hidden><Input /></Form.Item>
-                <Form.Item name="referencia" hidden><Input /></Form.Item>
-                <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
-                <Form.Item name="moneda" hidden><Input /></Form.Item>
-                {/* Nota */}
-                <Form.Item name="nota" style={{ marginBottom: 0 }}>
-                  <FloatingField label="Nota">
-                    <TextArea rows={3} />
-                  </FloatingField>
-                </Form.Item>
-              </Col>
-              <Col xs={24} xl={6}>
-                <div style={{ marginTop: 16, marginBottom: 16 }}>
-                  <TotalesCard
-                    subTotal={totales.subTotal}
-                    descuento={totales.descuento}
-                    impuestos={totales.impuestos}
-                    total={totales.total}
-                    hideTitle
-                    monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
-                    monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
-                    tasa={tasaValue ?? data?.tasa ?? 1}
+
+                {/* Referencia */}
+                {editingField === 'referencia' ? (
+                  <Input
+                    size="small"
+                    style={{ width: 200 }}
+                    placeholder="Referencia"
+                    autoFocus
+                    defaultValue={editingValueRef.current as string}
+                    onChange={(e) => {
+                      editingValueRef.current = e.target.value;
+                    }}
+                    onPressEnter={() => commitFieldEditor()}
+                    onBlur={() => commitFieldEditor()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.stopPropagation();
+                        cancelFieldEditor();
+                      }
+                    }}
                   />
-                </div>
-              </Col>
-            </Row>
+                ) : refValue ? (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
+                    Ref: {refValue} <EditOutlined />
+                  </Tag>
+                ) : (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
+                    <PlusOutlined /> Referencia
+                  </Tag>
+                )}
+
+                {/* Tasa */}
+                {editingField === 'tasa' ? (
+                  <InputNumber
+                    size="small"
+                    style={{ width: 120 }}
+                    min={0}
+                    step={0.01}
+                    placeholder="Tasa"
+                    autoFocus
+                    defaultValue={editingValueRef.current as number}
+                    onChange={(val) => {
+                      editingValueRef.current = val ?? 1;
+                    }}
+                    onPressEnter={() => commitFieldEditor()}
+                    onBlur={() => commitFieldEditor()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.stopPropagation();
+                        cancelFieldEditor();
+                      }
+                    }}
+                  />
+                ) : tasaValue !== 1 ? (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
+                    Tasa: {tasaValue} <EditOutlined />
+                  </Tag>
+                ) : (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
+                    <PlusOutlined /> Tasa
+                  </Tag>
+                )}
+              </Space>
+            </div>
+            {/* Hidden form items para campos rápidos */}
+            <Form.Item name="ncf" hidden><Input /></Form.Item>
+            <Form.Item name="referencia" hidden><Input /></Form.Item>
+            <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
+            <Form.Item name="moneda" hidden><Input /></Form.Item>
           </Col>
-        </Row>
-      </Form>
+
+          {/* Fila 5: Nota */}
+          <Col xs={24}>
+            <Form.Item name="nota" style={{ marginBottom: 0 }}>
+              <FloatingField label="Nota">
+                <TextArea rows={3} />
+              </FloatingField>
+            </Form.Item>
+          </Col>
+            </Row>
+          </Form>
+        </Col>
+        <Col xs={24} xxl={6}>
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard
+              subTotal={totales.subTotal}
+              descuento={totales.descuento}
+              impuestos={totales.impuestos}
+              total={totales.total}
+              hideTitle
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+              tasa={tasaValue ?? data?.tasa ?? 1}
+            />
+          </div>
+        </Col>
+      </Row>
     </Card>
     );
   };
