@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { authApi } from '../../api/authApi';
+import EntidadImagen from '../../components/EntidadImagen';
 
 const { Text, Title } = Typography;
 
@@ -118,23 +119,13 @@ const MiPerfil: React.FC = () => {
       {/* ===== Identity Card ===== */}
       <Card className="paces-card-erp" style={{ borderRadius: 10, marginBottom: 24 }}>
         <div style={{ padding: '24px 28px', display: 'flex', alignItems: 'center', gap: 18 }}>
-          <div
-            style={{
-              width: 46,
-              height: 46,
-              borderRadius: 10,
-              background: 'var(--paces-primary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 20,
-              color: '#fff',
-              fontWeight: 700,
-              flexShrink: 0,
-            }}
-          >
-            {inicial}
-          </div>
+          <EntidadImagen
+            tipo="USUARIO"
+            entidadID={usuario?.id ?? 0}
+            fallback={inicial}
+            size={46}
+            style={{ borderRadius: 10 }}
+          />
           <div style={{ flex: 1, lineHeight: 1.4 }}>
             <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--paces-text-heading)' }}>
               {usuario.nombre || 'Sin nombre'}

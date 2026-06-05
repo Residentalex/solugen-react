@@ -24,8 +24,11 @@ export const ticketApi = {
     await apiClient.put(`${BASE}/${sucursal}/${ticketID}/estado`, request);
   },
 
-  obtenerPendientes: async (sucursal: number, usuarioID: number): Promise<TicketDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<TicketDTO[]>>(`${BASE}/${sucursal}/pendientes/${usuarioID}`);
+  obtenerPendientes: async (sucursal: number, usuarioID: number, cantidad?: number, salto?: number): Promise<TicketDTO[]> => {
+    const params: Record<string, number> = {};
+    if (cantidad !== undefined) params.cantidad = cantidad;
+    if (salto !== undefined) params.salto = salto;
+    const { data } = await apiClient.get<ApiResponse<TicketDTO[]>>(`${BASE}/${sucursal}/pendientes/${usuarioID}`, { params });
     return data.data;
   },
 };

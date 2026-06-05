@@ -4,8 +4,7 @@ import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Tooltip, Modal, Alert, App
 } from 'antd';
 import {
-  ArrowLeftOutlined, LockFilled,
-  CloseCircleOutlined,
+  LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
   FileTextOutlined, FileSearchOutlined,
 } from '@ant-design/icons';
@@ -25,6 +24,7 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import ErrorDetalle from '../../components/ErrorDetalle';
 
 const FacturaSuplidorDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -241,27 +241,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
     );
   }
 
-  if (loadingError && !data) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
-        <div style={{ marginTop: 16, fontSize: 16, color: '#ff4d4f' }}>
-          Error al cargar el documento
-        </div>
-        <div style={{ marginTop: 8 }} className="paces-text-secondary">
-          Verifique que el documento exista en la sucursal seleccionada.
-        </div>
-        <Button
-          type="primary"
-          icon={<ArrowLeftOutlined />}
-          style={{ marginTop: 24 }}
-          onClick={() => navigate('/FRDE')}
-        >
-          Volver al listado
-        </Button>
-      </div>
-    );
-  }
+  if (loadingError && !data) { return <ErrorDetalle rutaVolver="/FRDE" onRecargar={handleRefresh} />; }
 
   if (!data) {
     return null;

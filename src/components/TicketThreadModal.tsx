@@ -95,7 +95,7 @@ const TicketThreadModal: React.FC<Props> = ({ open, ticketID, onClose }) => {
       onCancel={onClose}
       footer={null}
       width={640}
-      destroyOnHidden
+      destroyOnClose
     >
       {loading ? (
         <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
@@ -107,6 +107,9 @@ const TicketThreadModal: React.FC<Props> = ({ open, ticketID, onClose }) => {
             <Tag color={ESTADO_COLORS[ticket.estado] || 'default'}>{ticket.estado}</Tag>
             <Tag>{ticket.prioridad}</Tag>
             <span style={{ fontSize: 12, color: '#888' }}>{formatFecha(ticket.fechaCreacion)}</span>
+            <span style={{ fontSize: 12, color: '#888' }}>
+              {ticket.nombreUsuarioOrigen ? `Creado por: ${ticket.nombreUsuarioOrigen}` : ''}
+            </span>
           </div>
 
           {/* Mensaje original */}
@@ -136,7 +139,7 @@ const TicketThreadModal: React.FC<Props> = ({ open, ticketID, onClose }) => {
                     border: '1px solid #f0f0f0',
                   }}>
                     <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>
-                      Usuario #{r.usuarioID} · {formatFecha(r.fechaCreacion)}
+                      {r.nombreUsuario || `Usuario #${r.usuarioID}`} · {formatFecha(r.fechaCreacion)}
                     </div>
                     <Typography.Text>{r.mensaje}</Typography.Text>
                   </div>

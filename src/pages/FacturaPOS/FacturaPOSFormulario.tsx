@@ -622,6 +622,7 @@ const FacturaPOSFormulario: React.FC = () => {
       title: 'ArtÃ­culo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -638,6 +639,7 @@ const FacturaPOSFormulario: React.FC = () => {
       key: 'cantidad',
       width: 100,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, _record: DetalleFacturaPOSDTO, idx: number) => (
         <div>
           <InputNumber
@@ -688,8 +690,8 @@ const FacturaPOSFormulario: React.FC = () => {
             }}
           >
             {medidasCache.map((m) => (
-              <Select.Option key={m.idExterno} value={m.idExterno}>
-                {toTitleCase(m.nombre)}
+              <Select.Option key={m.idExterno ?? 0} value={m.idExterno}>
+                {toTitleCase(m.nombre || '')}
               </Select.Option>
             ))}
           </Select>
@@ -702,6 +704,7 @@ const FacturaPOSFormulario: React.FC = () => {
       key: 'precio',
       width: 130,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       shouldCellUpdate: (record: DetalleFacturaPOSDTO, prevRecord: DetalleFacturaPOSDTO) => record.precio !== prevRecord.precio || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
       render: (_: any, record: DetalleFacturaPOSDTO, idx: number) => {
@@ -737,6 +740,7 @@ const FacturaPOSFormulario: React.FC = () => {
       key: 'porcentajeDescuento',
       width: 90,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, _record: DetalleFacturaPOSDTO, idx: number) => (
         <InputNumber
           size="small"
@@ -758,6 +762,7 @@ const FacturaPOSFormulario: React.FC = () => {
       key: 'descuento',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaPOSDTO) => (
         <div>
@@ -771,6 +776,7 @@ const FacturaPOSFormulario: React.FC = () => {
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaPOSDTO) => (
         <Text>{formatNumber(record.subTotal || 0)}</Text>
@@ -781,6 +787,7 @@ const FacturaPOSFormulario: React.FC = () => {
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaPOSDTO) => (
         <div>
@@ -797,6 +804,7 @@ const FacturaPOSFormulario: React.FC = () => {
       key: 'total',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleFacturaPOSDTO) => (
         <Text strong>{formatNumber(record.total || 0)}</Text>
       ),

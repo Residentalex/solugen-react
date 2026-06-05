@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { MovimientoDTO } from '../types/movimiento';
+import type { MovimientoArticuloDTO } from '../types/movimientoPorPlantilla';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/Movimiento';
@@ -41,6 +42,18 @@ export const movimientoApi = {
     const { data } = await apiClient.get<ApiResponse<number>>(
       `${BASE}/total/${sucursal}/detallado`,
       { params }
+    );
+    return data.data;
+  },
+
+  obtenerPorPlantilla: async (
+    sucursal: number,
+    plantilla: string,
+    fecha?: string
+  ): Promise<MovimientoArticuloDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<MovimientoArticuloDTO[]>>(
+      `${BASE}/${sucursal}/plantilla`,
+      { params: { plantilla, fecha: fecha || new Date().toISOString() } }
     );
     return data.data;
   },

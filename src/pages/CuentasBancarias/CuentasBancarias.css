@@ -1,0 +1,342 @@
+/* ===== Cuentas Bancarias - Card Grid Styles ===== */
+
+/* Stagger animation */
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.cuenta-card-wrapper {
+  animation: cardFadeIn 0.35s ease both;
+}
+
+/* Card base — compact */
+.cuenta-bancaria-card {
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  cursor: pointer;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.05);
+  position: relative;
+}
+
+.cuenta-bancaria-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(85, 110, 230, 0.12), 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-color: #556ee6;
+}
+
+.cuenta-bancaria-card:active {
+  transform: translateY(-1px) scale(0.99);
+  transition-duration: 0.08s;
+}
+
+/* Inactive */
+.cuenta-inactiva {
+  opacity: 0.55;
+  filter: grayscale(35%);
+}
+.cuenta-inactiva:hover {
+  opacity: 0.75;
+  filter: grayscale(15%);
+}
+
+/* ===== Header ===== */
+.cuenta-card-header {
+  position: relative;
+  height: 76px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px 14px 10px;
+  overflow: hidden;
+}
+
+.cuenta-card-header::before {
+  content: '';
+  position: absolute;
+  top: -24px; right: -24px;
+  width: 90px; height: 90px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+}
+
+.cuenta-card-header::after {
+  content: '';
+  position: absolute;
+  bottom: -30px; left: -14px;
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+}
+
+/* Card chip */
+.cuenta-card-chip {
+  position: absolute;
+  bottom: 26px; right: 14px;
+  width: 30px; height: 20px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, rgba(255,215,0,0.5), rgba(255,215,0,0.2));
+  border: 1px solid rgba(255,215,0,0.15);
+  z-index: 1;
+}
+.cuenta-usd .cuenta-card-chip {
+  background: linear-gradient(135deg, rgba(16,185,129,0.4), rgba(16,185,129,0.15));
+  border-color: rgba(16,185,129,0.2);
+}
+
+/* Header top row */
+.cuenta-card-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  position: relative;
+  z-index: 2;
+}
+
+.cuenta-card-banco {
+  color: rgba(255,255,255,0.92) !important;
+  font-size: 11px !important;
+  font-weight: 600;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+/* Moneda badge */
+.cuenta-card-moneda-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 2px;
+  font-size: 8px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+
+.cuenta-card-status-tag {
+  flex-shrink: 0;
+}
+.cuenta-card-status-tag.ant-tag-success,
+.cuenta-card-status-tag.ant-tag-error {
+  font-size: 9px !important;
+  line-height: 16px !important;
+  padding: 0 5px !important;
+  border: none !important;
+}
+.cuenta-card-status-tag.ant-tag-success {
+  background: rgba(255,255,255,0.18) !important;
+  color: #fff !important;
+}
+.cuenta-card-status-tag.ant-tag-error {
+  background: rgba(0,0,0,0.2) !important;
+  color: rgba(255,255,255,0.85) !important;
+}
+
+/* Masked account */
+.cuenta-card-number {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Courier New', monospace;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: rgba(255,255,255,0.8);
+  position: relative;
+  z-index: 2;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  user-select: none;
+}
+
+/* ===== Body ===== */
+.cuenta-card-body {
+  padding: 12px 14px 8px;
+}
+
+/* Balance hero */
+.cuenta-card-balance-section {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.cuenta-balance-hero {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: rgba(0,0,0,0.85);
+  letter-spacing: -0.3px;
+}
+.cuenta-balance-hero.no-disponible {
+  font-size: 13px;
+  font-weight: 400;
+  color: rgba(0,0,0,0.35);
+}
+
+.balance-usd {
+  color: #10b981 !important;
+}
+
+.cuenta-balance-label {
+  display: block;
+  font-size: 10px;
+  margin-top: 1px;
+  opacity: 0.65;
+}
+
+/* Divider */
+.cuenta-card-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(0,0,0,0.06), transparent);
+  margin-bottom: 8px;
+}
+
+/* Account name */
+.cuenta-card-nombre {
+  font-size: 12px;
+  display: block;
+  margin-bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Data grid */
+.cuenta-card-datos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 10px;
+}
+
+.cuenta-card-dato-label {
+  font-size: 9px;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: rgba(0,0,0,0.4);
+}
+
+.cuenta-card-dato-valor {
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(0,0,0,0.75);
+}
+
+/* ===== Footer ===== */
+.cuenta-card-footer {
+  border-top: 1px solid rgba(0,0,0,0.05);
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+}
+
+.cuenta-footer-btn {
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 50% !important;
+  color: rgba(0,0,0,0.35) !important;
+  font-size: 12px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.cuenta-footer-btn:hover {
+  color: #556ee6 !important;
+  background: rgba(85,110,230,0.06) !important;
+}
+
+/* ===== USD specific ===== */
+.cuenta-usd {
+  border: 1.5px solid rgba(16,185,129,0.25) !important;
+}
+.cuenta-usd .cuenta-card-header {
+  border-bottom: 2px solid rgba(16,185,129,0.35);
+}
+.cuenta-usd:hover {
+  border-color: #10b981 !important;
+  box-shadow: 0 4px 12px rgba(16,185,129,0.12), 0 8px 24px rgba(0,0,0,0.08) !important;
+}
+
+/* ===== Dark mode overrides ===== */
+body.theme-dark-default .cuenta-balance-hero,
+body.theme-dark-ocean .cuenta-balance-hero,
+body.theme-dark-midnight .cuenta-balance-hero {
+  color: rgba(255,255,255,0.88);
+}
+body.theme-dark-default .cuenta-balance-hero.no-disponible,
+body.theme-dark-ocean .cuenta-balance-hero.no-disponible,
+body.theme-dark-midnight .cuenta-balance-hero.no-disponible {
+  color: rgba(255,255,255,0.3);
+}
+body.theme-dark-default .cuenta-card-dato-label,
+body.theme-dark-ocean .cuenta-card-dato-label,
+body.theme-dark-midnight .cuenta-card-dato-label {
+  color: rgba(255,255,255,0.35);
+}
+body.theme-dark-default .cuenta-card-dato-valor,
+body.theme-dark-ocean .cuenta-card-dato-valor,
+body.theme-dark-midnight .cuenta-card-dato-valor {
+  color: rgba(255,255,255,0.7);
+}
+body.theme-dark-default .cuenta-card-footer,
+body.theme-dark-ocean .cuenta-card-footer,
+body.theme-dark-midnight .cuenta-card-footer {
+  border-top-color: rgba(255,255,255,0.06);
+}
+body.theme-dark-default .cuenta-footer-btn,
+body.theme-dark-ocean .cuenta-footer-btn,
+body.theme-dark-midnight .cuenta-footer-btn {
+  color: rgba(255,255,255,0.3) !important;
+}
+body.theme-dark-default .cuenta-footer-btn:hover,
+body.theme-dark-ocean .cuenta-footer-btn:hover,
+body.theme-dark-midnight .cuenta-footer-btn:hover {
+  color: #6c7ff0 !important;
+}
+body.theme-dark-default .cuenta-card-divider,
+body.theme-dark-ocean .cuenta-card-divider,
+body.theme-dark-midnight .cuenta-card-divider {
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.06), transparent);
+}
+body.theme-dark-default .cuenta-bancaria-card,
+body.theme-dark-ocean .cuenta-bancaria-card,
+body.theme-dark-midnight .cuenta-bancaria-card {
+  border-color: rgba(255,255,255,0.08);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.3);
+}
+body.theme-dark-default .cuenta-bancaria-card:hover,
+body.theme-dark-ocean .cuenta-bancaria-card:hover,
+body.theme-dark-midnight .cuenta-bancaria-card:hover {
+  box-shadow: 0 4px 16px rgba(85,110,230,0.2), 0 8px 24px rgba(0,0,0,0.4);
+}
+
+/* ===== Skeleton ===== */
+.cuenta-card-skeleton {
+  border-radius: 12px;
+  overflow: hidden;
+}
+.cuenta-card-skeleton-header {
+  height: 76px;
+  background: linear-gradient(135deg, #e8e8e8, #f5f5f5);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+}
+
+/* Empty */
+.cuenta-empty-icon {
+  font-size: 48px;
+  color: #d9d9d9;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 576px) {
+  .cuenta-card-datos { grid-template-columns: 1fr; }
+  .cuenta-card-header { height: 70px; padding: 8px 12px 8px; }
+  .cuenta-card-number { font-size: 11px; letter-spacing: 1.5px; }
+  .cuenta-balance-hero { font-size: 18px; }
+  .cuenta-card-chip { width: 26px; height: 18px; bottom: 22px; }
+}

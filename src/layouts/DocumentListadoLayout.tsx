@@ -38,6 +38,8 @@ interface DocumentListadoLayoutProps<T> {
     onSearch: (value: string) => void;
     pageSize: number;
     onPageSizeChange: (value: number) => void;
+    extraLeft?: React.ReactNode;
+    extraRight?: React.ReactNode;
     showCrear?: boolean;
     onCrear?: () => void;
     showEditar?: boolean;

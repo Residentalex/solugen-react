@@ -5,10 +5,12 @@ import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { ticketApi } from '../../api/ticketApi';
+import { usuarioApi } from '../../api/usuarioApi';
 import TicketThreadModal from '../../components/TicketThreadModal';
 import PermissionGate from '../../components/PermissionGate';
 import type { TicketDTO } from '../../types/ticket';
 import type { CrearTicketRequest } from '../../types/ticket';
+import type { UsuarioDTO } from '../../types/administracion';
 
 const { TextArea } = Input;
 
@@ -49,6 +51,7 @@ const Tickets: React.FC = () => {
   const [creando, setCreando] = useState(false);
   const [form] = Form.useForm();
   const [loadingError, setLoadingError] = useState(false);
+  const [usuarios, setUsuarios] = useState<UsuarioDTO[]>([]);
 
   useEffect(() => {
     setActiveModule('MTicket');
@@ -58,7 +61,7 @@ const Tickets: React.FC = () => {
     if (!sucursal || !usuarioID) return;
     setLoading(true);
     try {
-      const data = await ticketApi.obtenerPendientes(sucursal, usuarioID);
+      const data = await ticketApi.obtenerPendientes(sucursal, usuarioID, pageSize);
       setTickets(data);
     } catch {
       setLoadingError(true);
@@ -69,7 +72,10 @@ const Tickets: React.FC = () => {
 
   useEffect(() => {
     cargarTickets();
-  }, [cargarTickets]);
+    if (sucursal) {
+      usuarioApi.obtenerListado(sucursal).then(setUsuarios).catch(() => {});
+    }
+  }, [cargarTickets, sucursal]);
 
   const handleCrear = useCallback(async () => {
     if (!sucursal || !usuarioID) return;
@@ -264,8 +270,17 @@ const Tickets: React.FC = () => {
               ]}
             />
           </Form.Item>
-          <Form.Item name="usuarioAsignadoID" label="Asignar a (ID de usuario)" initialValue={usuarioID}>
-            <Input type="number" min={1} placeholder="ID del usuario" />
+          <Form.Item name="usuarioAsignadoID" label="Asignar a" initialValue={usuarioID}>
+            <Select
+              showSearch
+              placeholder="Buscar usuario..."
+              filterOption={(input, option) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              options={usuarios
+                .filter(u => u.activo)
+                .map(u => ({ label: `${u.nombre} (${u.nombreUsuario})`, value: u.id }))}
+            />
           </Form.Item>
         </Form>
       </Modal>

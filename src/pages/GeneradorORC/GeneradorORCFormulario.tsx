@@ -703,6 +703,7 @@ const GeneradorORCFormulario: React.FC = () => {
           key: `${suc}_cant`,
           width: 80,
           align: 'right' as const,
+          onCell: () => ({ style: { verticalAlign: 'top' } }),
           render: (_: any, record: DetalleGeneradorDTO) => {
             const refKey = `${record.codigo}_cant_${suc}`;
             return (
@@ -735,6 +736,7 @@ const GeneradorORCFormulario: React.FC = () => {
           key: `${suc}_bonif`,
           width: 75,
           align: 'right' as const,
+          onCell: () => ({ style: { verticalAlign: 'top' } }),
           render: (_: any, record: DetalleGeneradorDTO) => {
             const refKey = `${record.codigo}_bonif_${suc}`;
             return (
@@ -768,6 +770,7 @@ const GeneradorORCFormulario: React.FC = () => {
           width: 75,
           align: 'right' as const,
           responsive: ['sm', 'md', 'lg'] as any,
+          onCell: () => ({ style: { verticalAlign: 'top' } }),
           render: (_: any, record: DetalleGeneradorDTO) => (
             <span className="gorc-cell-readonly">{record.existencias?.[suc] ?? 0}</span>
           ),
@@ -780,6 +783,7 @@ const GeneradorORCFormulario: React.FC = () => {
           width: 75,
           align: 'right' as const,
           responsive: ['sm', 'md', 'lg'] as any,
+          onCell: () => ({ style: { verticalAlign: 'top' } }),
           render: (_: any, record: DetalleGeneradorDTO) => (
             <span className="gorc-cell-readonly">{record.existenciasFisicas?.[suc] ?? 0}</span>
           ),
@@ -797,6 +801,7 @@ const GeneradorORCFormulario: React.FC = () => {
         width: 90,
         fixed: 'left' as const,
         ellipsis: true,
+        onCell: () => ({ style: { verticalAlign: 'top' } }),
         render: (_: any, record: DetalleGeneradorDTO) => (
           <Text style={{ fontSize: 12 }}>{record.codigo}</Text>
         ),
@@ -811,6 +816,7 @@ const GeneradorORCFormulario: React.FC = () => {
             key: 'producto',
             width: 200,
             ellipsis: true,
+            onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
               <Tooltip title={record.producto}>
                 <Text style={{ fontSize: 12 }}>{toTitleCase(record.producto || '')}</Text>
@@ -822,6 +828,7 @@ const GeneradorORCFormulario: React.FC = () => {
             key: 'referencia',
             width: 110,
             ellipsis: true,
+            onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
               <Text style={{ fontSize: 12 }} className="paces-text-secondary">{record.referencia || '-'}</Text>
             ),
@@ -830,6 +837,7 @@ const GeneradorORCFormulario: React.FC = () => {
             title: 'Medida',
             key: 'medida',
             width: 100,
+            onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
               <Text style={{ fontSize: 12 }}>{record.medida?.nombre || '-'}</Text>
             ),
@@ -839,6 +847,7 @@ const GeneradorORCFormulario: React.FC = () => {
             key: 'costo',
             width: 90,
             align: 'right' as const,
+            onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
               <Text style={{ fontSize: 12 }}>{formatCurrency(record.costo || 0)}</Text>
             ),
@@ -848,6 +857,7 @@ const GeneradorORCFormulario: React.FC = () => {
             key: 'margen',
             width: 80,
             align: 'right' as const,
+            onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
               <Text style={{ fontSize: 12 }}>{(record.margen || 0).toFixed(2)}%</Text>
             ),
@@ -857,6 +867,7 @@ const GeneradorORCFormulario: React.FC = () => {
             key: 'precioSugerido',
             width: 100,
             align: 'right' as const,
+            onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
               <Text style={{ fontSize: 12 }}>{formatCurrency(record.precioSugerido || 0)}</Text>
             ),
@@ -877,6 +888,7 @@ const GeneradorORCFormulario: React.FC = () => {
             key: 'subTotal',
             width: 110,
             align: 'right' as const,
+            onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
               <Text style={{ fontSize: 12 }}>{formatCurrency(record.subTotal || 0)}</Text>
             ),
@@ -886,6 +898,7 @@ const GeneradorORCFormulario: React.FC = () => {
             key: 'porcentajeDescuento',
             width: 80,
             align: 'right' as const,
+            onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => {
               const refKey = `${record.codigo}_pctDesc`;
               return (
@@ -919,6 +932,7 @@ const GeneradorORCFormulario: React.FC = () => {
             key: 'descuento',
             width: 100,
             align: 'right' as const,
+            onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
               <Text style={{ fontSize: 12 }}>{formatCurrency(record.descuento || 0)}</Text>
             ),
@@ -928,6 +942,7 @@ const GeneradorORCFormulario: React.FC = () => {
             key: 'impuestos',
             width: 100,
             align: 'right' as const,
+            onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
               <Text style={{ fontSize: 12 }}>{formatCurrency(record.impuestos || 0)}</Text>
             ),
@@ -937,6 +952,7 @@ const GeneradorORCFormulario: React.FC = () => {
             key: 'total',
             width: 110,
             align: 'right' as const,
+            onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
               <Text strong style={{ fontSize: 12, color: 'var(--paces-primary)' }}>
                 {formatCurrency(record.total || 0)}
@@ -1060,10 +1076,10 @@ const GeneradorORCFormulario: React.FC = () => {
         <Col xs={24} xxl={6}>
           <div style={{ marginTop: 24 }}>
             <TotalesCard
-              subTotal={totales.subTotal}
-              descuento={totales.descuento}
-              impuestos={totales.impuestos}
-              total={totales.total}
+              subTotal={totalesGenerales.subTotal}
+              descuento={totalesGenerales.descuento}
+              impuestos={totalesGenerales.impuestos}
+              total={totalesGenerales.total}
               hideTitle
             />
           </div>

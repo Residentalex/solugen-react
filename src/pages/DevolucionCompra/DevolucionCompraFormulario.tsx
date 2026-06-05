@@ -1173,6 +1173,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       title: 'ArtÃ­culo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -1189,6 +1190,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       key: 'cantidad',
       width: 100,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       shouldCellUpdate: (record: DetalleDevolucionCompraDTO, prevRecord: DetalleDevolucionCompraDTO) =>
         record.cantidad !== prevRecord.cantidad || record.medida?.nombre !== prevRecord.medida?.nombre,
       render: (_: any, _record: DetalleDevolucionCompraDTO, idx: number) => (
@@ -1241,8 +1243,8 @@ const DevolucionCompraFormulario: React.FC = () => {
             }}
           >
             {medidasCache.map((m) => (
-              <Select.Option key={m.idExterno} value={m.idExterno}>
-                {toTitleCase(m.nombre)}
+              <Select.Option key={m.idExterno ?? 0} value={m.idExterno}>
+                {toTitleCase(m.nombre || '')}
               </Select.Option>
             ))}
           </Select>
@@ -1255,6 +1257,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       key: 'costo',
       width: 130,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       shouldCellUpdate: (record: DetalleDevolucionCompraDTO, prevRecord: DetalleDevolucionCompraDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
       render: (_: any, record: DetalleDevolucionCompraDTO, idx: number) => {
@@ -1290,6 +1293,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       key: 'porcentajeDescuento',
       width: 90,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, _record: DetalleDevolucionCompraDTO, idx: number) => (
 <InputNumber
           size="small"
@@ -1312,6 +1316,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       key: 'descuento',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleDevolucionCompraDTO) => (
         <div>
@@ -1325,6 +1330,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleDevolucionCompraDTO) => (
         <Text>{formatNumber(record.subTotal || 0)}</Text>
@@ -1335,6 +1341,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleDevolucionCompraDTO) => (
         <div>
@@ -1351,6 +1358,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       key: 'total',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleDevolucionCompraDTO) => (
         <Text strong>{formatNumber(record.total || 0)}</Text>
       ),

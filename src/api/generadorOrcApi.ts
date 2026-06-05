@@ -11,7 +11,8 @@ export const generadorOrcApi = {
     hasta?: string,
     cantidad?: number,
     salto?: number,
-    search?: string
+    search?: string,
+    estado?: number
   ): Promise<GeneradorOrdenCompraDTO[]> => {
     const params: Record<string, string | number> = {};
     if (desde) params.desde = desde;
@@ -19,6 +20,7 @@ export const generadorOrcApi = {
     if (cantidad) params.cantidad = cantidad;
     if (salto) params.salto = salto;
     if (search) params.search = search;
+    if (estado !== undefined) params.estado = estado;
 
     const { data } = await apiClient.get<ApiResponse<GeneradorOrdenCompraDTO[]>>(`${BASE}/${sucursal}`, { params });
     return data.data;

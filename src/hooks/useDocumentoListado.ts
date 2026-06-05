@@ -75,9 +75,15 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
   const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
     setLoading(true);
     try {
-      const desde = filtros.desde ?? rangoDefault.desde;
-      const hasta = filtros.hasta ?? rangoDefault.hasta;
       const cfg = configRef.current;
+      let desde = filtros.desde ?? rangoDefault.desde;
+      let hasta = filtros.hasta ?? rangoDefault.hasta;
+
+      if (busqueda.length > 2 && cfg.modulo !== 'FPV') {
+        if (!filtros.desde) desde = '19000101000000';
+        if (!filtros.hasta) hasta = '20991231235959';
+      }
+
       let resultados: T[];
 
       if (busqueda.length > 2) {

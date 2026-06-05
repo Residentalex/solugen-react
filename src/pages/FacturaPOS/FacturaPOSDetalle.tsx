@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Tooltip, Typography
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Tooltip, Typography
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -10,9 +10,6 @@ import {
   LockFilled,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  IdcardOutlined,
-  PhoneOutlined,
-  EnvironmentOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -21,22 +18,11 @@ import { facturaPOSApi } from '../../api/facturaPOSApi';
 import type { FacturaPOSDTO } from '../../types/facturaPOS';
 import PermissionGate from '../../components/PermissionGate';
 import LogTable from '../../components/LogTable';
+import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import EntidadCard from '../../components/EntidadCard';
+import TotalesCard from '../../components/TotalesCard';
 
 const { Text } = Typography;
-
-const ESTADO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Borrador', color: 'default' },
-  1: { label: 'Aplicado', color: 'success' },
-  2: { label: 'Autorizado', color: 'processing' },
-  3: { label: 'Anulado', color: 'error' },
-  4: { label: 'Pagado', color: 'cyan' },
-  5: { label: 'Abierto', color: 'warning' },
-  6: { label: 'Cerrado', color: 'default' },
-};
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
 
 function formatNumber(n: number): string {
   return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -52,105 +38,6 @@ function formatDate(val: string): string {
   if (isNaN(d.getTime())) return val;
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
-
-interface ClienteCardProps {
-  entidad: { nombre: string; identificacion: string; telefono?: string; direccion?: string } | undefined;
-  cliente: { nombre: string; identificacion: string; telefono?: string; direccion?: string } | undefined;
-}
-
-const ClienteCard: React.FC<ClienteCardProps> = ({ entidad, cliente }) => {
-  const identificacion = cliente?.identificacion || entidad?.identificacion || '';
-  const telefono = entidad?.telefono || cliente?.telefono || '';
-  const direccion = entidad?.direccion ? toTitleCase(entidad.direccion) : cliente?.direccion ? toTitleCase(cliente.direccion) : '-';
-
-  return (
-    <Card
-      title={<span style={{ fontSize: 16, fontWeight: 600 }}>{toTitleCase(cliente?.nombre || entidad?.nombre || 'Cliente')}</span>}
-      className="paces-card"
-      style={{ marginBottom: 16 }}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {identificacion && identificacion !== '-' && (
-          <div style={{ fontSize: 13 }}>
-            <IdcardOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {identificacion}
-          </div>
-        )}
-        {telefono && telefono !== '-' && (
-          <div style={{ fontSize: 13 }}>
-            <PhoneOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {telefono}
-          </div>
-        )}
-        {direccion && direccion !== '-' && (
-          <div style={{ fontSize: 13, color: '#595959' }}>
-            <EnvironmentOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-            {direccion}
-          </div>
-        )}
-      </div>
-    </Card>
-  );
-};
-
-interface TotalesCardProps {
-  subTotal: number;
-  descuento: number;
-  impuestos: number;
-  total: number;
-  nota: string;
-  alignRight: boolean;
-  monedaSimbolo?: string;
-  monedaNombre?: string;
-  tasa?: number;
-}
-
-const TotalesCard: React.FC<TotalesCardProps> = ({ subTotal, descuento, impuestos, total, nota, alignRight, monedaSimbolo, monedaNombre, tasa }) => (
-  <Card
-    title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    className="paces-card"
-  >
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
-      {monedaSimbolo && tasa !== undefined && (
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
-        </div>
-      )}
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
-        <span>{formatNumber(subTotal)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Descuento</span>}
-        <span>{formatNumber(descuento)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
-        {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
-        <span>{formatNumber(impuestos)}</span>
-      </div>
-    </div>
-
-    <Divider style={{ margin: '12px 0' }} />
-
-    <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
-      {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
-    </div>
-
-    {nota && (
-      <>
-        <Divider style={{ margin: '12px 0' }} />
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, textAlign: alignRight ? 'right' : undefined }} className="paces-text-secondary">Notas</div>
-          <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', lineHeight: 1.5, textAlign: alignRight ? 'right' : undefined }} className="paces-text-dark">
-            {nota}
-          </div>
-        </div>
-      </>
-    )}
-  </Card>
-);
 
 const FacturaPOSDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -222,7 +109,7 @@ const FacturaPOSDetalle: React.FC = () => {
 
   const isLarge = screens.xxl === true;
 
-  const estadoInfo = ESTADO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
   const detalleColumns = [
@@ -247,6 +134,7 @@ const FacturaPOSDetalle: React.FC = () => {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -263,6 +151,7 @@ const FacturaPOSDetalle: React.FC = () => {
       key: 'cantidad',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div>
           <div>{formatNumber(record.cantidad || 0)}</div>
@@ -280,6 +169,7 @@ const FacturaPOSDetalle: React.FC = () => {
       key: 'precio',
       width: 130,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => {
         const pctDesc = Number(record.porcentajeDescuento) || 0;
@@ -302,6 +192,7 @@ const FacturaPOSDetalle: React.FC = () => {
       key: 'descuento',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
@@ -318,6 +209,7 @@ const FacturaPOSDetalle: React.FC = () => {
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
@@ -331,6 +223,7 @@ const FacturaPOSDetalle: React.FC = () => {
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
@@ -347,7 +240,7 @@ const FacturaPOSDetalle: React.FC = () => {
       key: 'total',
       width: 120,
       align: 'right' as const,
-      onCell: () => ({ style: { paddingRight: 16 } }),
+      onCell: () => ({ style: { verticalAlign: 'top', paddingRight: 16 } }),
       onHeaderCell: () => ({ style: { paddingRight: 16 } }),
       render: (_: any, record: any) => (
         <div>
@@ -577,7 +470,7 @@ const FacturaPOSDetalle: React.FC = () => {
           </Col>
 
           <Col xxl={6}>
-            <ClienteCard entidad={data.entidad} cliente={data.cliente} />
+            <EntidadCard entidad={data.cliente} entidadSecundaria={data.entidad} fallbackTitulo="Cliente" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
@@ -618,7 +511,7 @@ const FacturaPOSDetalle: React.FC = () => {
               </Descriptions>
             </Card>
 
-            <ClienteCard entidad={data.entidad} cliente={data.cliente} />
+            <EntidadCard entidad={data.cliente} entidadSecundaria={data.entidad} fallbackTitulo="Cliente" />
 
           <Tabs
             defaultActiveKey="detalles"

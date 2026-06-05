@@ -26,6 +26,7 @@ import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import PermissionGate from '../../components/PermissionGate';
 import DetalleToolbar from '../../components/DetalleToolbar';
+import ErrorDetalle from '../../components/ErrorDetalle';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
@@ -291,25 +292,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
   }
 
   if (loadingError && !data) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
-        <div style={{ marginTop: 16, fontSize: 16, color: '#ff4d4f' }}>
-          Error al cargar el documento
-        </div>
-        <div style={{ marginTop: 8 }} className="paces-text-secondary">
-          Verifique que el documento exista en la sucursal seleccionada.
-        </div>
-        <Button
-          type="primary"
-          icon={<ArrowLeftOutlined />}
-          style={{ marginTop: 24 }}
-          onClick={() => navigate('/FENP')}
-        >
-          Volver al listado
-        </Button>
-      </div>
-    );
+    return <ErrorDetalle rutaVolver="/FENP" onRecargar={handleRefresh} />;
   }
   if (!data) return null;
 
@@ -322,11 +305,11 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
     {
       title: 'Código',
       key: 'codigo',
-      width: 120,
+      width: 100,
       fixed: 'left' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
+        <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{record.codigo || '-'}</span>
             {(() => {
@@ -376,7 +359,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
             })()}
           </div>
           {record.referencia && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto' }}>
               {record.referencia}
             </div>
           )}
@@ -387,12 +370,13 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
+        <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <span style={{ flex: 1 }}>{toTitleCase(record.articulo || '')}</span>
           </div>
-          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between', marginTop: 'auto' }}>
             {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
             {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
           </div>
@@ -403,8 +387,9 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
       title: 'Cantidad',
       dataIndex: 'cantidad',
       key: 'cantidad',
-      width: 120,
+      width: 110,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => {
         const enpFactor = Number(record.medida?.factor) || 1;
         const totalEnBase = (record.cantidad || 0) * enpFactor;
@@ -413,24 +398,24 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
         const tieneDevolucion = totalDevuelto > 0;
 
         return (
-          <div>
-            {tieneDevolucion ? (
-              <div>
-                <span style={{ textDecoration: 'line-through', color: '#ff4d4f', marginRight: 8 }}>
-                  {formatNumber(record.cantidad || 0)}
-                </span>
-                <span style={{ color: '#34c38f', fontWeight: 600, fontSize: 13 }}>
-                  {formatNumber(saldo / enpFactor)}
-                </span>
-              </div>
-            ) : (
-              <div>{formatNumber(record.cantidad || 0)}</div>
-            )}
-            {record.medida?.nombre && (
-              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
-                {record.medida.nombre}
-              </div>
-            )}
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div>
+              {tieneDevolucion ? (
+                <div>
+                  <span style={{ textDecoration: 'line-through', color: '#ff4d4f', marginRight: 8 }}>
+                    {formatNumber(record.cantidad || 0)}
+                  </span>
+                  <span style={{ color: '#34c38f', fontWeight: 600, fontSize: 13 }}>
+                    {formatNumber(saldo / enpFactor)}
+                  </span>
+                </div>
+              ) : (
+                <div>{formatNumber(record.cantidad || 0)}</div>
+              )}
+            </div>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', marginTop: 'auto', minHeight: 17 }}>
+              {record.medida?.nombre || ''}
+            </div>
           </div>
         );
       },
@@ -439,8 +424,9 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
       title: 'Costo',
       dataIndex: 'costo',
       key: 'costo',
-      width: 130,
+      width: 110,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => {
         const costoBase = Number(record.costo) || 0;
@@ -449,9 +435,9 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
         const costoConDescuento = costoBase - ((costoBase * pctDesc) / 100);
         const costoUnitario = costoConDescuento / factor;
         return (
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div>{formatNumber(costoBase)}</div>
-            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
               {formatNumber(costoUnitario)} × {factor}
             </div>
           </div>
@@ -461,29 +447,16 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
     {
       title: 'Descuento',
       key: 'descuento',
-      width: 120,
+      width: 100,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div>{formatNumber(record.porcentajeDescuento || 0)}%</div>
-          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
+          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto' }}>
             {formatNumber(record.descuento || 0)}
           </div>
-        </div>
-      ),
-    },
-    {
-      title: 'SubTotal',
-      dataIndex: 'subTotal',
-      key: 'subTotal',
-      width: 120,
-      align: 'right' as const,
-      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
-      render: (_: any, record: any) => (
-        <div>
-          <div>{formatNumber(record.subTotal || 0)}</div>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
         </div>
       ),
     },
@@ -492,6 +465,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
@@ -506,14 +480,14 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
-      width: 120,
+      width: 100,
       align: 'right' as const,
-      onCell: () => ({ style: { paddingRight: 16 } }),
+      onCell: () => ({ style: { verticalAlign: 'top', paddingRight: 16 } }),
       onHeaderCell: () => ({ style: { paddingRight: 16 } }),
       render: (_: any, record: any) => (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <Text strong>{formatNumber(record.total || 0)}</Text>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+          <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto' }}>&nbsp;</div>
         </div>
       ),
     },
@@ -776,7 +750,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
-                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
                     </>
                   ),
                 },
@@ -800,7 +774,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
 
           <Col xxl={6}>
             <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
@@ -892,7 +866,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
                         onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                       />
                     </div>
-                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
                   </>
                 ),
               },
@@ -914,7 +888,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
           />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
@@ -945,7 +919,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
 
       {/* Modal de Visor de Scanner */}
       <Modal
-        title="Factura Escaneada"
+        title="Documento Escaneado"
         open={scannerModalOpen}
         onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
         width="80%"

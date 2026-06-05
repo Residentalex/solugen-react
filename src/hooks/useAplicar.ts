@@ -79,7 +79,7 @@ export function useAplicar() {
       setConectado(false);
       // Si había una operación en curso, marcarla como fallida
       // Usamos loadingRef en vez de loading para evitar stale closure
-      if (loadingRef.current || !completadoRef.current) {
+      if (loadingRef.current) {
         marcarErrorConexion('El servidor dejó de responder. La operación se ha interrumpido.');
       }
     });

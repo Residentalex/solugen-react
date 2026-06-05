@@ -37,6 +37,7 @@ export const facturaPOSApi = {
     if (filtro.documento) params.documento = filtro.documento;
     if (filtro.nCF) params.nCF = filtro.nCF;
     if (filtro.concepto) params.concepto = filtro.concepto;
+    if (filtro.entidad) params.cliente = filtro.entidad;
     if (filtro.cliente) params.cliente = filtro.cliente;
     if (filtro.referencia) params.referencia = filtro.referencia;
     if (filtro.almacen) params.almacen = filtro.almacen;

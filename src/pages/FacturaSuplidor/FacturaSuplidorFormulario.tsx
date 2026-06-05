@@ -1177,6 +1177,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       title: 'ArtÃ­culo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -1193,6 +1194,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       key: 'cantidad',
       width: 100,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       shouldCellUpdate: (record: DetalleFacturaSuplidorDTO, prevRecord: DetalleFacturaSuplidorDTO) =>
         record.cantidad !== prevRecord.cantidad || record.medida?.nombre !== prevRecord.medida?.nombre,
       render: (_: any, _record: DetalleFacturaSuplidorDTO, idx: number) => (
@@ -1245,8 +1247,8 @@ const FacturaSuplidorFormulario: React.FC = () => {
             }}
           >
             {medidasCache.map((m) => (
-              <Select.Option key={m.idExterno} value={m.idExterno}>
-                {toTitleCase(m.nombre)}
+              <Select.Option key={m.idExterno ?? 0} value={m.idExterno}>
+                {toTitleCase(m.nombre || '')}
               </Select.Option>
             ))}
           </Select>
@@ -1259,6 +1261,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       key: 'costo',
       width: 130,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       shouldCellUpdate: (record: DetalleFacturaSuplidorDTO, prevRecord: DetalleFacturaSuplidorDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
       render: (_: any, record: DetalleFacturaSuplidorDTO, idx: number) => {
@@ -1294,6 +1297,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       key: 'porcentajeDescuento',
       width: 90,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, _record: DetalleFacturaSuplidorDTO, idx: number) => (
         <InputNumber
           size="small"
@@ -1316,6 +1320,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       key: 'descuento',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaSuplidorDTO) => (
         <Text>{formatNumber(record.descuento || 0)}</Text>
@@ -1327,6 +1332,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaSuplidorDTO) => (
         <Text>{formatNumber(record.subTotal || 0)}</Text>
@@ -1337,6 +1343,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaSuplidorDTO) => (
         <div>
@@ -1353,6 +1360,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       key: 'total',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleFacturaSuplidorDTO) => (
         <Text strong>{formatNumber(record.total || 0)}</Text>
       ),
@@ -1372,25 +1380,6 @@ const FacturaSuplidorFormulario: React.FC = () => {
             onClick: () => handleEliminarFila(detalles[idx].id),
           },
         ];
-
-        if (detalles[idx]?.tieneVencimiento) {
-          items.unshift({
-            key: 'vencimiento',
-            label: detalles[idx].fechaVencimiento ? `Venc: ${formatDate(detalles[idx].fechaVencimiento!)}` : 'Fecha Vencimiento',
-            icon: <CalendarOutlined />,
-            danger: false,
-            onClick: () => setFechaVencimientoModal({ open: true, detalleId: detalles[idx].id }),
-          });
-        }
-
-        return (
-          <Dropdown menu={{ items }} trigger={['click']}>
-            <Button type="text" size="small" icon={<MoreOutlined />} />
-          </Dropdown>
-        );
-      },
-    },
-  ];
 
         if (detalles[idx]?.tieneVencimiento) {
           items.unshift({

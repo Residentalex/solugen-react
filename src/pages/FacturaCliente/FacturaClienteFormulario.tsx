@@ -734,6 +734,7 @@ const FacturaClienteFormulario: React.FC = () => {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleFacturaClienteDTO) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -750,6 +751,7 @@ const FacturaClienteFormulario: React.FC = () => {
       key: 'cantidad',
       width: 100,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       shouldCellUpdate: (record: DetalleFacturaClienteDTO, prevRecord: DetalleFacturaClienteDTO) =>
         record.cantidad !== prevRecord.cantidad || record.medida?.nombre !== prevRecord.medida?.nombre,
       render: (_: any, _record: DetalleFacturaClienteDTO, idx: number) => (
@@ -781,7 +783,7 @@ const FacturaClienteFormulario: React.FC = () => {
       width: 160,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleFacturaClienteDTO, _idx: number) => {
-        const curId = record.medida?.idExterno;
+        const curId = record.medida?.id;
         const hasMatch = medidasCache.some((m: any) => m.idExterno === curId);
         return (
           <Select
@@ -816,6 +818,7 @@ const FacturaClienteFormulario: React.FC = () => {
       key: 'precio',
       width: 130,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       shouldCellUpdate: (record: DetalleFacturaClienteDTO, prevRecord: DetalleFacturaClienteDTO) => record.precio !== prevRecord.precio || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
       render: (_: any, record: DetalleFacturaClienteDTO, idx: number) => {
@@ -851,6 +854,7 @@ const FacturaClienteFormulario: React.FC = () => {
       key: 'porcentajeDescuento',
       width: 90,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, _record: DetalleFacturaClienteDTO, idx: number) => (
         <InputNumber
           size="small"
@@ -872,6 +876,7 @@ const FacturaClienteFormulario: React.FC = () => {
       key: 'descuento',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaClienteDTO) => (
         <div>
@@ -885,6 +890,7 @@ const FacturaClienteFormulario: React.FC = () => {
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaClienteDTO) => (
         <Text>{formatNumber(record.subTotal || 0)}</Text>
@@ -895,6 +901,7 @@ const FacturaClienteFormulario: React.FC = () => {
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaClienteDTO) => (
         <div>
@@ -911,6 +918,7 @@ const FacturaClienteFormulario: React.FC = () => {
       key: 'total',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleFacturaClienteDTO) => (
         <Text strong>{formatNumber(record.total || 0)}</Text>
       ),

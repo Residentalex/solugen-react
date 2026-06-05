@@ -17,6 +17,8 @@ import {
   CalendarOutlined,
   HolderOutlined,
   BarcodeOutlined,
+  CheckCircleFilled,
+  CheckCircleOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -25,6 +27,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { salidaAlmacenApi } from '../../api/salidaAlmacenApi';
 import { productoApi } from '../../api/productoApi';
+import { parametrosApi } from '../../api/parametrosApi';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import ScannerModal from '../../components/ScannerModal/ScannerModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
@@ -125,6 +128,9 @@ const SalidaAlmacenFormulario: React.FC = () => {
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
+  const [modoDescuento, setModoDescuento] = useState<'porcentaje' | 'pesos'>('porcentaje');
+  const [verificados, setVerificados] = useState<Set<number>>(new Set());
+  const [fechaCierreInventario, setFechaCierreInventario] = useState<string | null>(null);
 
   const editValuesRef = useRef<Record<string, any>>({});
   const navigationConfirmedRef = useFormularioNavigation();
@@ -194,7 +200,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
   const sinOC = true;
-  const isLarge = screens.xxl === true;
+  const isLarge = screens.xl ?? true;
 
   // ===== Determinar estado =====
   const estado = data?.estado ?? 0;
@@ -206,12 +212,14 @@ const SalidaAlmacenFormulario: React.FC = () => {
   // ===== Cargar datos de apoyo al montar =====
   useEffect(() => {
     setActiveModule('FSAP');
-    const pageTitle = mode === 'crear' ? 'Nueva Salida de Almacén' : 'Editar Salida de Almacén';
+    const pageTitle = mode === 'crear' ? 'Nuevo Salida de Almacén' : 'Editar Salida de Almacén';
     setPageTitleOverride(pageTitle);
 
     // Cargar almacenes
     salidaAlmacenApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
+    // Obtener fecha de cierre de inventario
+    parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch(() => {});
 
     // Inicializar fechas en modo crear
     if (mode === 'crear') {
@@ -236,6 +244,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
     salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
+        setPageTitleOverride(`Editar - ${res.documento?.codigo || 'SAP'}-${res.noDocumento || ''}`);
         setDetalles(res.detalles || []);
         setSelectedConcepto(res.concepto || null);
         setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
@@ -292,14 +301,15 @@ const SalidaAlmacenFormulario: React.FC = () => {
         } else {
           if (id) {
             setLoading(true);
-            salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
-              .then((res) => {
-                setData(res);
-                setDetalles(res.detalles || []);
-                setSelectedConcepto(res.concepto || null);
-                setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
-                setSelectedEntidad(res.suplidor || res.entidad || null);
-                setSelectedAlmacen(res.almacen || null);
+    salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setData(res);
+        setPageTitleOverride(`Editar - ${res.documento?.codigo || 'SAP'}-${res.noDocumento || ''}`);
+        setDetalles(res.detalles || []);
+        setSelectedConcepto(res.concepto || null);
+        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+        setSelectedEntidad(res.suplidor || res.entidad || null);
+        setSelectedAlmacen(res.almacen || null);
 
                 const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
 
@@ -345,6 +355,24 @@ const SalidaAlmacenFormulario: React.FC = () => {
     if (suplidoresCache.length > 0 && !values.suplidor && !selectedEntidad) return 'El suplidor es requerido';
     if (detalles.length === 0) return 'No se puede crear un documento de SALIDA ALMACEN sin detalle.';
     if (!detalles.some((d) => (d.cantidad || 0) > 0)) return 'Debe tener al menos un detalle con cantidad > 0';
+
+    // Validar fecha contra cierre de inventario
+    if (fechaCierreInventario) {
+      const cierreDate = parseDateRaw(fechaCierreInventario);
+      if (cierreDate) {
+        const cierreTs = dayjs(cierreDate).startOf('day').valueOf();
+
+        const fechaDoc = values.fechaDocumento;
+        if (fechaDoc && dayjs(fechaDoc).startOf('day').valueOf() <= cierreTs) {
+          return 'La fecha del documento no puede ser menor o igual a la fecha de cierre de inventario';
+        }
+
+        const fechaRec = values.fechaRecibo;
+        if (fechaRec && dayjs(fechaRec).startOf('day').valueOf() <= cierreTs) {
+          return 'La fecha de recibo no puede ser menor o igual a la fecha de cierre de inventario';
+        }
+      }
+    }
 
     // Validar productos con vencimiento
     const sinVencimiento = detalles.filter((d) => d.tieneVencimiento && !d.fechaVencimiento);
@@ -501,6 +529,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
     salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
+        setPageTitleOverride(`Editar - ${res.documento?.codigo || 'SAP'}-${res.noDocumento || ''}`);
         setDetalles(res.detalles || []);
         setSelectedConcepto(res.concepto || null);
         setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
@@ -558,6 +587,12 @@ const SalidaAlmacenFormulario: React.FC = () => {
     setDetalles((prev) =>
       prev.map((d) => {
         if (d.id !== id) return d;
+        if (field === 'descuento') {
+          const subTotal = (d.cantidad || 0) * (d.costo || 0);
+          const pctCalculado = subTotal > 0 ? Math.round((Number(value) / subTotal) * 100 * 100) / 100 : 0;
+          const updated = { ...d, descuento: Number(value), porcentajeDescuento: pctCalculado };
+          return calcularFila(updated);
+        }
         const updated = { ...d, [field]: value };
         return calcularFila(updated);
       })
@@ -625,6 +660,18 @@ const SalidaAlmacenFormulario: React.FC = () => {
         medida: producto.medida,
       };
       return [calcularFila(filled), ...prev];
+    });
+  };
+
+  const handleToggleVerificar = (id: number) => {
+    setVerificados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
     });
   };
 
@@ -699,26 +746,35 @@ const SalidaAlmacenFormulario: React.FC = () => {
       render: () => <DragHandle />,
     },
     {
-      title: 'CÃ³digo',
+      title: 'Código',
       key: 'codigo',
       width: 120,
       fixed: 'left' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
-          <div>{record.codigo || '-'}</div>
-          {record.referencia && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
-              {record.referencia}
+      render: (_: any, record: DetalleSalidaAlmacenDTO) => {
+        const verificado = verificados.has(record.id);
+        return (
+          <div style={{ fontSize: 13 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>{record.codigo || '-'}</span>
+              {verificado ? (
+                <CheckCircleFilled style={{ color: '#4fc3f7', fontSize: 14 }} />
+              ) : null}
             </div>
-          )}
-        </div>
-      ),
+            {record.referencia && (
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+                {record.referencia}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
-      title: 'ArtÃ­culo',
+      title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -735,6 +791,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
       key: 'cantidad',
       width: 100,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       shouldCellUpdate: (record: DetalleSalidaAlmacenDTO, prevRecord: DetalleSalidaAlmacenDTO) =>
         record.cantidad !== prevRecord.cantidad || record.medida?.nombre !== prevRecord.medida?.nombre,
       render: (_: any, _record: DetalleSalidaAlmacenDTO, idx: number) => (
@@ -787,8 +844,8 @@ const SalidaAlmacenFormulario: React.FC = () => {
             }}
           >
             {medidasCache.map((m) => (
-              <Select.Option key={m.idExterno} value={m.idExterno}>
-                {toTitleCase(m.nombre)}
+              <Select.Option key={m.idExterno ?? 0} value={m.idExterno}>
+                {toTitleCase(m.nombre || '')}
               </Select.Option>
             ))}
           </Select>
@@ -801,6 +858,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
       key: 'costo',
       width: 130,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       shouldCellUpdate: (record: DetalleSalidaAlmacenDTO, prevRecord: DetalleSalidaAlmacenDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
       render: (_: any, record: DetalleSalidaAlmacenDTO, idx: number) => {
@@ -836,31 +894,61 @@ const SalidaAlmacenFormulario: React.FC = () => {
       key: 'descuento',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
-      shouldCellUpdate: (record: DetalleSalidaAlmacenDTO, prevRecord: DetalleSalidaAlmacenDTO) =>
-        record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.descuento !== prevRecord.descuento,
-      render: (_: any, _record: DetalleSalidaAlmacenDTO, idx: number) => (
-        <div>
-          <InputNumber
-            size="small"
-            style={{ width: '100%' }}
-            styles={{ input: { textAlign: 'right' } }}
-            addonAfter="%"
-            min={0}
-            max={100}
-            step={0.01}
-            precision={2}
-            controls={false}
-            defaultValue={detalles[idx]?.porcentajeDescuento}
-            onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] = val || 0; }}
-            onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] ?? (detalles[idx]?.porcentajeDescuento || 0); handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val); }}
-            onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] ?? (detalles[idx]?.porcentajeDescuento || 0); handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val); }}
-          />
-          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
-            {formatNumber(detalles[idx]?.descuento || 0)}
+      render: (_: any, _record: DetalleSalidaAlmacenDTO, idx: number) =>
+        modoDescuento === 'porcentaje' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber
+                key={`pct_${detalles[idx].id}_${modoDescuento}`}
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                max={100}
+                step={0.01}
+                precision={2}
+                controls={false}
+                defaultValue={detalles[idx]?.porcentajeDescuento}
+                onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_descuento`] = val || 0; }}
+                onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento; handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val); }}
+                onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento; handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val); }}
+              />
+              <span onClick={() => setModoDescuento('pesos')} style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                <Input size="small" placeholder="%" disabled style={{ width: 36, textAlign: 'center', borderLeft: 'none', pointerEvents: 'none' }} />
+              </span>
+            </Space.Compact>
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto' }}>
+              {formatNumber(detalles[idx]?.descuento || 0)}
+            </div>
           </div>
-        </div>
-      ),
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber
+                key={`pesos_${detalles[idx].id}_${modoDescuento}`}
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                step={0.01}
+                precision={2}
+                controls={false}
+                defaultValue={detalles[idx]?.descuento}
+                onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_descuento_pesos`] = val || 0; }}
+                onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_descuento_pesos`] ?? detalles[idx]?.descuento; handleDetalleCalculate(detalles[idx].id, 'descuento', val); }}
+                onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_descuento_pesos`] ?? detalles[idx]?.descuento; handleDetalleCalculate(detalles[idx].id, 'descuento', val); }}
+              />
+              <span onClick={() => setModoDescuento('porcentaje')} style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                <Input size="small" placeholder="$" disabled style={{ width: 36, textAlign: 'center', borderLeft: 'none', pointerEvents: 'none' }} />
+              </span>
+            </Space.Compact>
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto' }}>
+              {formatNumber(detalles[idx]?.porcentajeDescuento || 0)}%
+            </div>
+          </div>
+        ),
     },
     {
       title: 'SubTotal',
@@ -868,6 +956,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleSalidaAlmacenDTO) => (
         <div>
@@ -881,6 +970,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleSalidaAlmacenDTO) => (
         <div>
@@ -897,6 +987,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
       key: 'total',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleSalidaAlmacenDTO) => (
         <div>
           <Text strong>{formatNumber(record.total || 0)}</Text>
@@ -910,6 +1001,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
       width: 50,
       onCell: () => ({ style: { paddingRight: 8 } }),
       render: (_: any, _record: DetalleSalidaAlmacenDTO, idx: number) => {
+        const verificado = verificados.has(detalles[idx].id);
         const items = [
           {
             key: 'eliminar',
@@ -919,6 +1011,14 @@ const SalidaAlmacenFormulario: React.FC = () => {
             onClick: () => handleEliminarFila(detalles[idx].id),
           },
         ];
+
+        items.unshift({
+          key: 'verificar',
+          label: verificado ? 'Desverificar' : 'Verificar',
+          icon: <CheckCircleOutlined style={{ color: verificado ? '#4fc3f7' : undefined }} />,
+          danger: false,
+          onClick: () => handleToggleVerificar(detalles[idx].id),
+        });
 
         if (detalles[idx]?.tieneVencimiento) {
           items.unshift({
@@ -1030,16 +1130,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
             </Form.Item>
           </Col>
 
-          {/* Fila 4: Nota */}
-          <Col xs={24}>
-            <Form.Item name="nota" style={{ marginBottom: 0 }}>
-              <FloatingField label="Nota">
-                <TextArea rows={3} />
-              </FloatingField>
-            </Form.Item>
-          </Col>
-
-          {/* Fila 5: Campos rápidos (Referencia, Tasa, Moneda) */}
+          {/* Fila 4: Campos rápidos (Referencia, Tasa, Moneda) */}
           <Col xs={24}>
             <div style={{ marginBottom: 16 }}>
               <Space size={[8, 8]} wrap>
@@ -1100,6 +1191,15 @@ const SalidaAlmacenFormulario: React.FC = () => {
             <Form.Item name="referencia" hidden><Input /></Form.Item>
             <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
             <Form.Item name="moneda" hidden><Input /></Form.Item>
+          </Col>
+
+          {/* Fila 5: Nota */}
+          <Col xs={24}>
+            <Form.Item name="nota" style={{ marginBottom: 0 }}>
+              <FloatingField label="Nota">
+                <TextArea rows={3} />
+              </FloatingField>
+            </Form.Item>
           </Col>
         </Row>
       </Form>

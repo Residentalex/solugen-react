@@ -1,11 +1,23 @@
 import { apiClient } from './client';
-import type { FiltroSolicitudPago, SolicitudPagoVistaDTO, SolicitudPagoDTO } from '../types/solicitudPago';
+import type { FiltroSolicitudPago, SolicitudPagoVistaDTO, SolicitudPagoDTO, SolicitudPagoCrearDTO, SolicitudPagoActualizarDTO } from '../types/solicitudPago';
 import type { TransaccionBancariaVistaDTO } from '../types/transaccion';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/SPA';
 
 export const solicitudPagoApi = {
+  crear: async (sucursal: number, dto: SolicitudPagoCrearDTO): Promise<SolicitudPagoDTO> => {
+    const { data } = await apiClient.post<ApiResponse<SolicitudPagoDTO>>(`${BASE}/${sucursal}`, dto);
+    if (!data.data) throw new Error('Error al crear solicitud de pago');
+    return data.data;
+  },
+
+  actualizar: async (sucursal: number, dto: SolicitudPagoActualizarDTO): Promise<SolicitudPagoDTO> => {
+    const { data } = await apiClient.put<ApiResponse<SolicitudPagoDTO>>(`${BASE}/${sucursal}`, dto);
+    if (!data.data) throw new Error('Error al actualizar solicitud de pago');
+    return data.data;
+  },
+
   obtenerResumido: async (
     sucursal: number,
     desde?: string,

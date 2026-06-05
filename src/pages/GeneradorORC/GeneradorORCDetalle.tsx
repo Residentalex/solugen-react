@@ -163,7 +163,7 @@ const GeneradorORCDetalle: React.FC = () => {
       {
         title: 'Cant.', key: `${suc}_cant`, width: 80, align: 'right' as const,
         onHeaderCell: () => ({ className: SUC_BAND[suc] || '' }),
-        onCell: () => ({ className: `gorc-cell-${suc.toLowerCase()}` }),
+        onCell: () => ({ className: `gorc-cell-${suc.toLowerCase()}`, style: { verticalAlign: 'top' } }),
         render: (_: any, record: DetalleGeneradorDTO) => (
           <div>
             <Text strong>{formatNumber(record.cantidades?.[suc] ?? 0)}</Text>
@@ -178,13 +178,13 @@ const GeneradorORCDetalle: React.FC = () => {
       {
         title: 'Bonif.', key: `${suc}_bonif`, width: 75, align: 'right' as const,
         onHeaderCell: () => ({ className: SUC_BAND[suc] || '' }),
-        onCell: () => ({ className: `gorc-cell-${suc.toLowerCase()}` }),
+        onCell: () => ({ className: `gorc-cell-${suc.toLowerCase()}`, style: { verticalAlign: 'top' } }),
         render: (_: any, record: DetalleGeneradorDTO) => formatNumber(record.cantidadesBonificadas?.[suc] ?? 0),
       },
       {
         title: 'Exist.\nConteo', key: `${suc}_existconteo`, width: 90, align: 'right' as const,
         onHeaderCell: () => ({ className: SUC_BAND[suc] || '' }),
-        onCell: () => ({ className: `gorc-cell-${suc.toLowerCase()}` }),
+        onCell: () => ({ className: `gorc-cell-${suc.toLowerCase()}`, style: { verticalAlign: 'top' } }),
         render: (_: any, record: DetalleGeneradorDTO) => (
           <div>
             <div>{formatNumber(record.existencias?.[suc] ?? 0)}</div>
@@ -204,7 +204,7 @@ const GeneradorORCDetalle: React.FC = () => {
       children: [
         {
           title: 'Artículo', key: 'producto',
-          onCell: () => ({ style: { paddingLeft: 16 } }),
+          onCell: () => ({ style: { verticalAlign: 'top', paddingLeft: 16 } }),
           onHeaderCell: () => ({ style: { paddingLeft: 16 } }),
           render: (_: any, record: DetalleGeneradorDTO) => (
             <div style={{ fontSize: 13 }}>
@@ -219,14 +219,17 @@ const GeneradorORCDetalle: React.FC = () => {
         },
         {
           title: 'Costo', dataIndex: 'costo', key: 'costo', width: 90, align: 'right' as const,
+          onCell: () => ({ style: { verticalAlign: 'top' } }),
           render: (costo: number) => formatNumber(costo || 0),
         },
         {
           title: 'Margen %', dataIndex: 'margen', key: 'margen', width: 100, align: 'right' as const,
+          onCell: () => ({ style: { verticalAlign: 'top' } }),
           render: (margen: number) => `${(margen || 0).toFixed(2)}%`,
         },
         {
           title: 'P. Sugerido', dataIndex: 'precioSugerido', key: 'precioSugerido', width: 100, align: 'right' as const,
+          onCell: () => ({ style: { verticalAlign: 'top' } }),
           render: (val: number) => formatNumber(val || 0),
         },
       ],
@@ -242,10 +245,12 @@ const GeneradorORCDetalle: React.FC = () => {
       children: [
         {
           title: 'SubTotal', dataIndex: 'subTotal', key: 'subTotal', width: 110, align: 'right' as const,
+          onCell: () => ({ style: { verticalAlign: 'top' } }),
           render: (val: number) => formatNumber(val || 0),
         },
         {
           title: 'Descuento', key: 'descuento_comb', width: 100, align: 'right' as const,
+          onCell: () => ({ style: { verticalAlign: 'top' } }),
           render: (_: any, record: DetalleGeneradorDTO) => (
             <div>
               <div>{(record.porcentajeDescuento || 0).toFixed(2)}%</div>
@@ -257,6 +262,7 @@ const GeneradorORCDetalle: React.FC = () => {
         },
         {
           title: 'Impuesto', dataIndex: 'impuestos', key: 'impuestos', width: 140, align: 'right' as const,
+          onCell: () => ({ style: { verticalAlign: 'top' } }),
           render: (_: any, record: DetalleGeneradorDTO) => (
             <div>
               <div>{formatNumber(record.impuestos || 0)}</div>
@@ -270,6 +276,7 @@ const GeneradorORCDetalle: React.FC = () => {
         },
         {
           title: 'Total', dataIndex: 'total', key: 'total', width: 110, align: 'right' as const,
+          onCell: () => ({ style: { verticalAlign: 'top' } }),
           render: (val: number) => <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(val || 0)}</Text>,
         },
       ],

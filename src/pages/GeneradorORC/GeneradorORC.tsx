@@ -49,9 +49,23 @@ const GeneradorORC: React.FC = () => {
   const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
     setLoading(true);
     try {
-      const desde = filtros.desde ?? rangoDefault.desde;
-      const hasta = filtros.hasta ?? rangoDefault.hasta;
-      const resultados = await generadorOrcApi.obtenerVista(sucursalActiva, desde, hasta, filas, (pagina - 1) * filas, busqueda);
+      let desde = filtros.desde ?? rangoDefault.desde;
+      let hasta = filtros.hasta ?? rangoDefault.hasta;
+      let resultados;
+      if (busqueda.length > 2) {
+        if (!filtros.desde) desde = '19000101000000';
+        if (!filtros.hasta) hasta = '20991231235959';
+        resultados = await generadorOrcApi.filtrar(sucursalActiva, {
+          cantidad: filas,
+          salto: (pagina - 1) * filas,
+          desde,
+          hasta,
+          documento: busqueda,
+          estado: filtros.estado ?? 0,
+        });
+      } else {
+        resultados = await generadorOrcApi.obtenerVista(sucursalActiva, desde, hasta, filas, (pagina - 1) * filas, busqueda, filtros.estado);
+      }
       setData(resultados);
       setTotal(resultados.length < filas ? (pagina - 1) * filas + resultados.length : pagina * filas + 1);
     } catch {

@@ -45,6 +45,7 @@ import ReciboIngresoDetalle from './pages/ReciboIngreso/ReciboIngresoDetalle';
 import ReciboIngresoFormulario from './pages/ReciboIngreso/ReciboIngresoFormulario';
 import Usuarios from './pages/Usuarios/Usuarios';
 import UsuarioDetalle from './pages/Usuarios/UsuarioDetalle';
+import UsuarioFormulario from './pages/Usuarios/UsuarioFormulario';
 import Roles from './pages/Roles/Roles';
 import RolFormulario from './pages/Roles/RolFormulario';
 import Productos from './pages/Productos/Productos';
@@ -79,6 +80,7 @@ import ProveedorDetalle from './pages/Proveedores/ProveedorDetalle';
 import Bancos from './pages/Bancos/Bancos';
 import Ofertas from './pages/Ofertas/Ofertas';
 import CuentasBancarias from './pages/CuentasBancarias/CuentasBancarias';
+import FTransBanco from './pages/CuentasBancarias/CuentaBancariaDetalle';
 import UnidadesMedida from './pages/UnidadesMedida/UnidadesMedida';
 import CategoriasArticulo from './pages/CategoriasArticulo/CategoriasArticulo';
 import FamiliasArticulo from './pages/FamiliasArticulo/FamiliasArticulo';
@@ -105,6 +107,7 @@ import GeneradorORC from './pages/GeneradorORC/GeneradorORC';
 import GeneradorORCDetalle from './pages/GeneradorORC/GeneradorORCDetalle';
 import GeneradorORCFormulario from './pages/GeneradorORC/GeneradorORCFormulario';
 import Tickets from './pages/Tickets/Tickets';
+import Empleados from './pages/Empleados/Empleados';
 import VisualizarConsulta from './pages/Notificaciones/VisualizarConsulta';
 import PlantillaSuplidor from './pages/PlantillaSuplidor/PlantillaSuplidor';
 import PlantillaSuplidorDetalle from './pages/PlantillaSuplidor/PlantillaSuplidorDetalle';
@@ -230,6 +233,8 @@ const App: React.FC = () => {
             <Route path="FRI/:id/editar" element={<ReciboIngresoFormulario />} />
             <Route path="FRI/:id" element={<ReciboIngresoDetalle />} />
             <Route path="MUsuario" element={<Usuarios />} />
+            <Route path="MUsuario/nuevo" element={<UsuarioFormulario />} />
+            <Route path="MUsuario/:id/editar" element={<UsuarioFormulario />} />
             <Route path="MUsuario/:id" element={<UsuarioDetalle />} />
             <Route path="MROL" element={<Roles />} />
             <Route path="MROL/nuevo" element={<RolFormulario />} />
@@ -270,6 +275,7 @@ const App: React.FC = () => {
             <Route path="MBanco" element={<Bancos />} />
             <Route path="FOfertas" element={<Ofertas />} />
             <Route path="MCuentaBanco" element={<CuentasBancarias />} />
+            <Route path="FTransBanco" element={<FTransBanco />} />
             <Route path="MUnidadMedida" element={<UnidadesMedida />} />
             <Route path="MCategoria" element={<CategoriasArticulo />} />
             <Route path="MFamilia" element={<FamiliasArticulo />} />
@@ -282,8 +288,10 @@ const App: React.FC = () => {
             <Route path="MReceta" element={<Recetas />} />
             <Route path="MAutomatizacion" element={<Automatizaciones />} />
             <Route path="MPerfil" element={<MiPerfil />} />
-            <Route path="FTURNOS" element={<Turnos />} />
-            <Route path="FConteos" element={<Conteos />} />
+          <Route path="MEMP" element={<Empleados />} />
+          <Route path="MEMP/:codigo" element={<Empleados />} />
+          <Route path="FTURNOS" element={<Turnos />} />
+          <Route path="FConteos" element={<Conteos />} />
             <Route path="CMovimientosProductos" element={<MovimientosProductos />} />
             <Route path="CDocRevisados" element={<Proximamente modulo="Documentos Revisados" codigo="CDocRevisados" />} />
             <Route path="FPRODPEND" element={<Proximamente modulo="Productos Pendientes" codigo="FPRODPEND" />} />

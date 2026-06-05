@@ -43,6 +43,30 @@ export interface SolicitudPagoDTO {
   logs: import('./entradaAlmacen').LogDTO[];
 }
 
+/** DTO para crear una Solicitud de Pago */
+export interface SolicitudPagoCrearDTO {
+  fechaDocumento: string;
+  conceptoCodigo: string;
+  entidadId: string;
+  cuentaBancaria: string;
+  referencia: string;
+  ncf: string;
+  nota: string;
+  subTotal: number;
+  descuento: number;
+  impuestos: number;
+  retenciones: number;
+  total: number;
+  tasa: number;
+  simboloMoneda: string;
+  nombreMoneda: string;
+}
+
+/** DTO para actualizar una Solicitud de Pago */
+export interface SolicitudPagoActualizarDTO extends SolicitudPagoCrearDTO {
+  id: number;
+}
+
 /** Filtros para SPA */
 export interface FiltroSolicitudPago {
   cantidad?: number;

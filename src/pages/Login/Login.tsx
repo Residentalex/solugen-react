@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuthStore } from '../../stores/authStore';
@@ -19,8 +19,10 @@ const Login: React.FC = () => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const navigate = useNavigate();
 
+  const loginInProgress = useRef(false);
+
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !loginInProgress.current) {
       const returnUrl = sessionStorage.getItem('returnUrl');
       sessionStorage.removeItem('returnUrl');
       navigate(returnUrl || '/', { replace: true });
@@ -45,6 +47,7 @@ const Login: React.FC = () => {
       return;
     }
 
+    loginInProgress.current = true;
     setLoading(true);
     try {
       const equipo = getEquipo();
@@ -81,6 +84,7 @@ const Login: React.FC = () => {
       const apiMsg = err.response?.data?.errorMessage || err.response?.data?.ErrorMessage;
       setError(apiMsg || err.message || 'Usuario o contraseña inválida.');
     } finally {
+      loginInProgress.current = false;
       setLoading(false);
     }
   };

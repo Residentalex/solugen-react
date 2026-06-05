@@ -1,25 +1,25 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Typography, Tooltip, Modal, Alert, App
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, Typography, Tooltip, Modal, Alert, App, DatePicker, Dropdown
 } from 'antd';
+import dayjs from 'dayjs';
 
 import {
-  ArrowLeftOutlined,
   LockFilled,
-  CloseCircleOutlined,
-  IdcardOutlined,
-  PhoneOutlined,
-  EnvironmentOutlined,
+  CheckCircleFilled,
+  CheckCircleOutlined,
+  CalendarOutlined,
+  MoreOutlined,
   FileTextOutlined,
   FileSearchOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import ErrorDetalle from '../../components/ErrorDetalle';
 import { apiClient } from '../../api/client';
 import { salidaAlmacenApi } from '../../api/salidaAlmacenApi';
-import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import { useAplicar } from '../../hooks/useAplicar';
@@ -67,8 +67,10 @@ const SalidaAlmacenDetalle: React.FC = () => {
   const [scannerUrl, setScannerUrl] = useState<string | null>(null);
   const [scannerLoading, setScannerLoading] = useState(false);
   const [documentosRelacionados, setDocumentosRelacionados] = React.useState<DocumentoRelacionDTO[]>([]);
+  const [verificados, setVerificados] = useState<Set<number>>(new Set());
+  const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
 
-  const { message: messageApi } = App.useApp();
+  const { message, modal } = App.useApp();
   const operacion = useAplicar();
   const screens = Grid.useBreakpoint();
 
@@ -85,7 +87,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
       })
       .catch((err: any) => {
         const msg = extraerMensajeError(err, 'Error al cargar el documento');
-        messageApi.error(msg);
+        message.error(msg);
         setLoadingError(true);
       })
   }, [id, sucursalActiva, setPageTitleOverride]);
@@ -102,7 +104,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
     salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         if (!res) {
-          messageApi.error('Documento no encontrado en la sucursal seleccionada.');
+          message.error('Documento no encontrado en la sucursal seleccionada.');
           setLoadingError(true);
           return;
         }
@@ -115,7 +117,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
       })
       .catch((err: any) => {
         const msg = extraerMensajeError(err, 'Error al cargar el documento');
-        messageApi.error(msg);
+        message.error(msg);
         setLoadingError(true);
       })
       .finally(() => setLoading(false));
@@ -128,7 +130,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
       .then(rel => setDocumentosRelacionados(rel || []))
       .catch(() => {
         setDocumentosRelacionados([]);
-        messageApi.warning('No se pudieron cargar los documentos relacionados');
+        message.warning('No se pudieron cargar los documentos relacionados');
       });
   }, [data?.id]);
 
@@ -141,10 +143,38 @@ const SalidaAlmacenDetalle: React.FC = () => {
       setScannerUrl(url);
       setScannerModalOpen(true);
     } catch {
-      messageApi.error('Error al cargar el archivo escaneado');
+      message.error('Error al cargar el archivo escaneado');
     } finally {
       setScannerLoading(false);
     }
+  };
+
+  const handleFechaVencimiento = (date: dayjs.Dayjs | null) => {
+    if (fechaVencimientoModal.detalleId) {
+      setData((prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          detalles: prev.detalles.map((d: any) => {
+            if (d.id !== fechaVencimientoModal.detalleId) return d;
+            return { ...d, fechaVencimiento: date ? date.format('YYYY-MM-DD') : undefined };
+          }),
+        };
+      });
+    }
+    setFechaVencimientoModal({ open: false, detalleId: 0 });
+  };
+
+  const handleToggleVerificar = (id: number) => {
+    setVerificados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   if (loading || (!data && !loadingError)) {
@@ -156,25 +186,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
     );
   }
   if (loadingError && !data) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
-        <div style={{ marginTop: 16, fontSize: 16, color: '#ff4d4f' }}>
-          Error al cargar el documento
-        </div>
-        <div style={{ marginTop: 8 }} className="paces-text-secondary">
-          Verifique que el documento exista en la sucursal seleccionada.
-        </div>
-        <Button
-          type="primary"
-          icon={<ArrowLeftOutlined />}
-          style={{ marginTop: 24 }}
-          onClick={() => navigate('/FSAP')}
-        >
-          Volver al listado
-        </Button>
-      </div>
-    );
+    return <ErrorDetalle rutaVolver="/FSAP" onRecargar={handleRefresh} />;
   }
 
   const isLarge = screens.xxl === true;
@@ -197,24 +209,33 @@ const SalidaAlmacenDetalle: React.FC = () => {
     {
       title: 'Código',
       key: 'codigo',
-      width: 120,
+      width: 100,
       fixed: 'left' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
-          <div>{record.codigo || '-'}</div>
-          {record.referencia && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
-              {record.referencia}
+      render: (_: any, record: any) => {
+        const verificado = verificados.has(record.id);
+        return (
+          <div style={{ fontSize: 13 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>{record.codigo || '-'}</span>
+              {verificado ? (
+                <CheckCircleFilled style={{ color: '#4fc3f7', fontSize: 14 }} />
+              ) : null}
             </div>
-          )}
-        </div>
-      ),
+            {record.referencia && (
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+                {record.referencia}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -229,8 +250,9 @@ const SalidaAlmacenDetalle: React.FC = () => {
       title: 'Cantidad',
       dataIndex: 'cantidad',
       key: 'cantidad',
-      width: 120,
+      width: 110,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div>
           <div>{formatNumber(record.cantidad || 0)}</div>
@@ -246,8 +268,9 @@ const SalidaAlmacenDetalle: React.FC = () => {
       title: 'Costo',
       dataIndex: 'costo',
       key: 'costo',
-      width: 130,
+      width: 110,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => {
         const costoBase = Number(record.costo) || 0;
@@ -268,8 +291,9 @@ const SalidaAlmacenDetalle: React.FC = () => {
     {
       title: 'Descuento',
       key: 'descuento',
-      width: 120,
+      width: 100,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
@@ -281,24 +305,11 @@ const SalidaAlmacenDetalle: React.FC = () => {
       ),
     },
     {
-      title: 'SubTotal',
-      dataIndex: 'subTotal',
-      key: 'subTotal',
-      width: 120,
-      align: 'right' as const,
-      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
-      render: (_: any, record: any) => (
-        <div>
-          <div>{formatNumber(record.subTotal || 0)}</div>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
-        </div>
-      ),
-    },
-    {
       title: 'Impuestos',
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
@@ -313,9 +324,9 @@ const SalidaAlmacenDetalle: React.FC = () => {
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
-      width: 120,
+      width: 100,
       align: 'right' as const,
-      onCell: () => ({ style: { paddingRight: 16 } }),
+      onCell: () => ({ style: { verticalAlign: 'top', paddingRight: 16 } }),
       onHeaderCell: () => ({ style: { paddingRight: 16 } }),
       render: (_: any, record: any) => (
         <div>
@@ -335,7 +346,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
 
     // Verificación temprana del scanner
     if (tieneScan === false) {
-      messageApi.warning('Debe escanear el documento antes de aplicar.');
+      message.warning('Debe escanear el documento antes de aplicar.');
       return;
     }
 
@@ -349,11 +360,11 @@ const SalidaAlmacenDetalle: React.FC = () => {
     try {
       const documento = `${(data as any).documento.codigo || ''}-${(data as any).noDocumento || ''}`;
       await salidaAlmacenApi.desaplicar(sucursalActiva, documento);
-      messageApi.success('Documento desaplicado exitosamente');
+      message.success('Documento desaplicado exitosamente');
       handleRefresh();
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al desaplicar');
-      messageApi.error(msg);
+      message.error(msg);
     } finally {
       setSaving(false);
     }
@@ -364,12 +375,12 @@ const SalidaAlmacenDetalle: React.FC = () => {
     setSaving(true);
     try {
       await salidaAlmacenApi.anular(sucursalActiva, data as any);
-      messageApi.success('Documento anulado exitosamente');
+      message.success('Documento anulado exitosamente');
       const res = await salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
-      messageApi.error(msg);
+      message.error(msg);
     } finally {
       setSaving(false);
     }
@@ -390,12 +401,12 @@ const SalidaAlmacenDetalle: React.FC = () => {
     setSaving(true);
     try {
       await salidaAlmacenApi.revisado(sucursalActiva, parseInt(id));
-      messageApi.success('Documento marcado como revisado');
+      message.success('Documento marcado como revisado');
       const res = await salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al marcar revisado');
-      messageApi.error(msg);
+      message.error(msg);
     } finally {
       setSaving(false);
     }
@@ -406,12 +417,12 @@ const SalidaAlmacenDetalle: React.FC = () => {
     setSaving(true);
     try {
       await salidaAlmacenApi.reversar(sucursalActiva, parseInt(id));
-      messageApi.success('Documento reversado exitosamente');
+      message.success('Documento reversado exitosamente');
       const res = await salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al reversar');
-      messageApi.error(msg);
+      message.error(msg);
     } finally {
       setSaving(false);
     }
@@ -444,10 +455,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
         onImprimir={async () => {
           setImprimiendo(true);
           try {
-            const sucursalParam = data.codigoSucursal
-              ? obtenerNombreEnumSucursal(data.codigoSucursal)
-              : sucursalActiva;
-            const res = await apiClient.get(`/reportes/inventario/salida/${sucursalParam}/${id}`, {
+            const res = await apiClient.post(`/reportes/inventario/salida`, data, {
               responseType: 'blob',
             });
             const blobUrl = URL.createObjectURL(res.data);
@@ -463,7 +471,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
               }, 30000);
             }, 2000);
           } catch {
-            messageApi.error('Error al generar el PDF');
+            message.error('Error al generar el PDF');
           } finally {
             setImprimiendo(false);
           }
@@ -513,12 +521,15 @@ const SalidaAlmacenDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Doc. Generado">{data.noDocumentoGenerado || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Fecha Entrega">{data.fechaRecibo ? formatDate(data.fechaRecibo) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Almacen" span={2}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+                <Descriptions.Item label="Fecha Doc.:">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto:">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="NCF:">{data.ncf || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha Entrega:">{data.fechaRecibo ? formatDate(data.fechaRecibo) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Entidad:">{data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : (data.entidad?.nombre ? toTitleCase(data.entidad.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Referencia:">{data.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label=" "><span /></Descriptions.Item>
+                <Descriptions.Item label="Almacén:" span={2}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Nota:" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -540,7 +551,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
-                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
                     </>
                   ),
                 },
@@ -548,14 +559,14 @@ const SalidaAlmacenDetalle: React.FC = () => {
                   key: 'asientos',
                   label: `Asientos (${data.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 900 }} />
+                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 800 }} />
                   ),
                 },
                 {
                   key: 'historial',
                   label: `Historial (${data.logs?.length || 0})`,
                   children: (
-                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
+                    <LogTable dataSource={data.logs || []} scroll={{ x: 800 }} />
                   ),
                 },
               ]}
@@ -564,7 +575,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
 
           <Col xxl={6}>
             <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
@@ -610,12 +621,14 @@ const SalidaAlmacenDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Doc. Generado">{data.noDocumentoGenerado || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Fecha Entrega">{data.fechaRecibo ? formatDate(data.fechaRecibo) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+                <Descriptions.Item label="Fecha Doc.:">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto:">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="NCF:">{data.ncf || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha Entrega:">{data.fechaRecibo ? formatDate(data.fechaRecibo) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Entidad:">{data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : (data.entidad?.nombre ? toTitleCase(data.entidad.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Referencia:">{data.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Almacén:">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Nota:"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -637,7 +650,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
-                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
                     </>
                   ),
                 },
@@ -645,21 +658,21 @@ const SalidaAlmacenDetalle: React.FC = () => {
                   key: 'asientos',
                   label: `Asientos (${data.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 900 }} />
+                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 800 }} />
                   ),
                 },
                 {
                   key: 'historial',
                   label: `Historial (${data.logs?.length || 0})`,
                   children: (
-                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
+                    <LogTable dataSource={data.logs || []} scroll={{ x: 800 }} />
                   ),
                 },
               ]}
             />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
@@ -672,6 +685,22 @@ const SalidaAlmacenDetalle: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de Fecha de Vencimiento */}
+      <Modal
+        title="Fecha de Vencimiento"
+        open={fechaVencimientoModal.open}
+        onCancel={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
+        onOk={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
+        footer={null}
+        destroyOnHidden
+      >
+        <DatePicker
+          style={{ width: '100%' }}
+          format="YYYY-MM-DD"
+          onChange={handleFechaVencimiento}
+        />
+      </Modal>
 
       {/* Modal de Visor de Scanner */}
       <Modal

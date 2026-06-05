@@ -578,6 +578,7 @@ const CotizacionVentaFormulario: React.FC = () => {
       title: 'ArtÃ­culo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -594,6 +595,7 @@ const CotizacionVentaFormulario: React.FC = () => {
       key: 'cantidad',
       width: 100,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, _record: DetalleFacturaPOSDTO, idx: number) => (
         <div>
           <InputNumber
@@ -644,8 +646,8 @@ const CotizacionVentaFormulario: React.FC = () => {
             }}
           >
             {medidasCache.map((m) => (
-              <Select.Option key={m.idExterno} value={m.idExterno}>
-                {toTitleCase(m.nombre)}
+              <Select.Option key={m.idExterno ?? 0} value={m.idExterno}>
+                {toTitleCase(m.nombre || '')}
               </Select.Option>
             ))}
           </Select>
@@ -655,6 +657,7 @@ const CotizacionVentaFormulario: React.FC = () => {
     {
       title: 'Precio',
       dataIndex: 'precio',
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       key: 'precio',
       width: 130,
       align: 'right' as const,
@@ -691,6 +694,7 @@ const CotizacionVentaFormulario: React.FC = () => {
     {
       title: '% Desc',
       key: 'porcentajeDescuento',
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       width: 90,
       align: 'right' as const,
       render: (_: any, _record: DetalleFacturaPOSDTO, idx: number) => (
@@ -712,6 +716,7 @@ const CotizacionVentaFormulario: React.FC = () => {
     {
       title: 'Descuento $',
       key: 'descuento',
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       width: 120,
       align: 'right' as const,
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
@@ -724,6 +729,7 @@ const CotizacionVentaFormulario: React.FC = () => {
     {
       title: 'SubTotal',
       dataIndex: 'subTotal',
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
@@ -735,6 +741,7 @@ const CotizacionVentaFormulario: React.FC = () => {
     {
       title: 'Imp.',
       key: 'impuestos',
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       width: 140,
       align: 'right' as const,
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
@@ -750,6 +757,7 @@ const CotizacionVentaFormulario: React.FC = () => {
     {
       title: 'Total',
       dataIndex: 'total',
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       key: 'total',
       width: 120,
       align: 'right' as const,

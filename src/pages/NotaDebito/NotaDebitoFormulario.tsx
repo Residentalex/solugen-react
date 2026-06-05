@@ -1034,9 +1034,9 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           <div style={{ marginTop: 24 }}>
             <TotalesCard
               subTotal={totales.subTotal}
-              descuento={totales.descuento}
+              descuento={0}
               impuestos={totales.impuestos}
-              total={totales.total}
+              total={Number(montoTotalWatch) || 0}
               hideTitle
             />
           </div>

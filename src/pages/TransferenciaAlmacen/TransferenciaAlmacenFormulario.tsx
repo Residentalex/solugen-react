@@ -606,6 +606,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       title: 'ArtÃ­culo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -622,6 +623,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       key: 'cantidad',
       width: 100,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       shouldCellUpdate: (record: DetalleTransferenciaAlmacenDTO, prevRecord: DetalleTransferenciaAlmacenDTO) =>
         record.cantidad !== prevRecord.cantidad || (record as any).medida?.nombre !== (prevRecord as any).medida?.nombre,
       render: (_: any, _record: DetalleTransferenciaAlmacenDTO, idx: number) => (
@@ -680,8 +682,8 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
             }}
           >
             {medidasCache.map((m) => (
-              <Select.Option key={m.idExterno} value={m.idExterno}>
-                {toTitleCase(m.nombre)}
+              <Select.Option key={m.idExterno ?? 0} value={m.idExterno}>
+                {toTitleCase(m.nombre || '')}
               </Select.Option>
             ))}
           </Select>
@@ -694,6 +696,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       key: 'total',
       width: 100,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       shouldCellUpdate: (record: DetalleTransferenciaAlmacenDTO, prevRecord: DetalleTransferenciaAlmacenDTO) =>
         record.total !== prevRecord.total,
       render: (_: any, record: DetalleTransferenciaAlmacenDTO) => (
@@ -914,8 +917,8 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
           <div style={{ marginTop: 24 }}>
             <TotalesCard
               subTotal={totales.subTotal}
-              descuento={totales.descuento}
-              impuestos={totales.impuestos}
+              descuento={0}
+              impuestos={0}
               total={totales.total}
               hideTitle
             />

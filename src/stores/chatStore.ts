@@ -4,6 +4,33 @@ import { chatHub } from '../api/chatHub';
 import { useAuthStore } from './authStore';
 import type { ChatConversacionListDTO, ChatMensajeDTO } from '../types/chat';
 
+// --- Helper para notificaciones del navegador ---
+function mostrarNotificacionChat(remitenteNombre: string, contenido: string, conversacionId: number): void {
+  const truncar = (texto: string, max: number) =>
+    texto.length > max ? texto.substring(0, max) + '...' : texto;
+
+  const mostrar = () => {
+    if (Notification.permission !== 'granted') return;
+    const notification = new Notification(`Nuevo mensaje de ${remitenteNombre}`, {
+      body: truncar(contenido, 100),
+    });
+    notification.onclick = () => {
+      window.focus();
+      useChatStore.getState().abrir();
+      useChatStore.getState().seleccionarConversacion(conversacionId);
+      notification.close();
+    };
+  };
+
+  if (Notification.permission === 'granted') {
+    mostrar();
+  } else if (Notification.permission === 'default') {
+    Notification.requestPermission().then((perm) => {
+      if (perm === 'granted') mostrar();
+    });
+  }
+}
+
 type ViewState = 'closed' | 'list' | 'chat';
 
 interface ChatState {
@@ -36,6 +63,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   cargando: false,
 
   abrir: () => {
+    // Solicitar permiso de notificaciones (disparado por click del usuario en la burbuja)
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
     set({ viewState: 'list' });
     get().cargarConversaciones();
   },
@@ -94,14 +125,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!convId || !contenido.trim()) return;
 
     try {
-      const mensaje = await chatApi.enviarMensaje(convId, { contenido });
-      set((state) => ({
-        mensajes: {
-          ...state.mensajes,
-          [convId]: [...(state.mensajes[convId] || []), mensaje],
-        },
-      }));
-      chatHub.enviarMensaje(convId, contenido);
+      await chatHub.enviarMensaje(convId, contenido);
     } catch (err: any) {
       console.error('Error al enviar mensaje:', err?.response?.data?.errorMessage || err);
     }
@@ -173,6 +197,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ),
       };
     });
+
+    // Mostrar notificación del navegador si el chat está cerrado y no es mi propio mensaje
+    if (currentUser !== mensaje.remitenteID && !isActive) {
+      mostrarNotificacionChat(mensaje.remitenteNombre, mensaje.contenido, convId);
+    }
   },
 
   cargarConversaciones: async () => {

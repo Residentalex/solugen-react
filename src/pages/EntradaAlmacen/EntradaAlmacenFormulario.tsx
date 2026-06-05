@@ -13,6 +13,7 @@ import {
   MoreOutlined,
   CalendarOutlined,
   HolderOutlined,
+  CheckCircleFilled,
   CheckCircleOutlined,
   CloseCircleOutlined,
   BarcodeOutlined,
@@ -170,6 +171,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const [comodines, setComodines] = useState<any[]>([]);
   const [fechaCierreInventario, setFechaCierreInventario] = useState<string | null>(null);
   const [modoDescuento, setModoDescuento] = useState<'porcentaje' | 'pesos'>('porcentaje');
+  const [verificados, setVerificados] = useState<Set<number>>(new Set());
 
   const editValuesRef = useRef<Record<string, any>>({});
 
@@ -250,7 +252,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   // ===== Cargar datos de apoyo al montar =====
   useEffect(() => {
     setActiveModule('FENP');
-    const pageTitle = mode === 'crear' ? 'Nueva Entrada de Almacén' : 'Editar Entrada de Almacén';
+    const pageTitle = mode === 'crear' ? 'Nuevo Entrada de Almacén' : '';
     setPageTitleOverride(pageTitle);
 
     // Cargar catálogos
@@ -259,7 +261,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch(() => {});
     // Cargar unidades de medida
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => {
-      message.error(extraerMensajeError(err) || 'Error al cargar unidades de medida');
+      message.error(extraerMensajeError(err, 'Error al cargar unidades de medida'));
     });
 
     // Inicializar fechas en modo crear
@@ -285,7 +287,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
-        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento} - Editar`);
+        setPageTitleOverride(`Editar - ${res.documento.codigo}-${res.noDocumento}`);
         setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
         setSelectedConcepto(res.concepto || null);
         setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
@@ -375,7 +377,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
             entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
               .then((res) => {
         setData(res);
-        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento} - Editar`);
+        setPageTitleOverride(`Editar - ${res.documento.codigo}-${res.noDocumento}`);
         setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
                 setSelectedConcepto(res.concepto || null);
                 setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
@@ -794,7 +796,29 @@ const EntradaAlmacenFormulario: React.FC = () => {
     };
 
   const handleEliminarFila = (id: number) => {
-    setDetalles((prev) => prev.filter((d) => d.id !== id));
+    Modal.confirm({
+      title: 'Eliminar detalle',
+      icon: <ExclamationCircleOutlined />,
+      content: '¿Está seguro de eliminar este detalle?',
+      okText: 'Sí',
+      cancelText: 'No',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        setDetalles((prev) => prev.filter((d) => d.id !== id));
+      },
+    });
+  };
+
+  const handleToggleVerificar = (id: number) => {
+    setVerificados((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   };
 
   const handleDetalleUpdateValue = (id: number, field: string, value: any) => {
@@ -944,10 +968,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
       fixed: 'left' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleEntradaAlmacenDTO) => (
-        <div style={{ fontSize: 13 }}>
+        <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{record.codigo || '-'}</span>
-            {ocDetallesData.length > 0 && (() => {
+            {(() => {
+              const verificado = verificados.has(record.id);
               const fechaVencida = record.fechaVencimiento ? new Date(record.fechaVencimiento) < new Date() : false;
               const tieneCoincidencia = ocDetallesData.some((d: DetalleOrdenCompraVistaDTO) =>
                 d.codigo === record.codigo
@@ -960,9 +985,26 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 && (!record.tieneVencimiento || record.fechaVencimiento)
                 && !fechaVencida;
 
+              const SKY_BLUE = '#4fc3f7';
+
+              if (ocMatch && verificado) {
+                return (
+                  <Tooltip title="Coincide con OC · Verificado">
+                    <CheckCircleFilled style={{ color: '#34c38f', fontSize: 14 }} />
+                  </Tooltip>
+                );
+              }
+
               if (ocMatch) {
                 return <Tooltip title="Coincide con OC"><CheckCircleOutlined style={{ color: '#34c38f', fontSize: 12 }} /></Tooltip>;
               }
+
+              if (verificado) {
+                return <Tooltip title="Verificado manualmente"><CheckCircleOutlined style={{ color: SKY_BLUE, fontSize: 12 }} /></Tooltip>;
+              }
+
+              if (ocDetallesData.length === 0) return null;
+
               let motivo = 'No coincide con la OC';
               const detalleOC = ocDetallesData.find((d: DetalleOrdenCompraVistaDTO) => d.codigo === record.codigo);
               if (!detalleOC) {
@@ -986,7 +1028,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
             })()}
           </div>
           {record.referencia && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto' }}>
               {record.referencia}
             </div>
           )}
@@ -997,13 +1039,14 @@ const EntradaAlmacenFormulario: React.FC = () => {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleEntradaAlmacenDTO) => {
         return (
-          <div style={{ fontSize: 13 }}>
+          <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
               <span style={{ flex: 1 }}>{toTitleCase(record.articulo || '')}</span>
             </div>
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between', marginTop: 'auto' }}>
               {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
               {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
             </div>
@@ -1017,10 +1060,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
       key: 'cantidad',
       width: 100,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) =>
         record.cantidad !== prevRecord.cantidad || record.medida?.nombre !== prevRecord.medida?.nombre,
       render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
           <InputNumber
             size="small"
             style={{ width: '100%' }}
@@ -1042,11 +1086,9 @@ const EntradaAlmacenFormulario: React.FC = () => {
               handleDetalleCalculate(detalles[idx].id, 'cantidad', val);
             }}
           />
-          {!sinOC && detalles[idx]?.medida?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
-              {toTitleCase(detalles[idx].medida.nombre)}
-            </div>
-          )}
+          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto', minHeight: 18 }}>
+            {!sinOC && detalles[idx]?.medida?.nombre ? toTitleCase(detalles[idx].medida.nombre) : ''}
+          </div>
         </div>
       ),
     },
@@ -1077,8 +1119,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
           }}
         >
           {medidasCache.map((m) => (
-            <Select.Option key={m.idExterno} value={m.idExterno}>
-              {toTitleCase(m.nombre)}
+            <Select.Option key={m.idExterno ?? 0} value={m.idExterno}>
+              {toTitleCase(m.nombre || '')}
             </Select.Option>
           ))}
         </Select>
@@ -1091,6 +1133,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       key: 'costo',
       width: 130,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
       render: (_: any, record: DetalleEntradaAlmacenDTO, idx: number) => {
@@ -1100,7 +1143,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         const costoConDescuento = costoBase - ((costoBase * pctDesc) / 100);
         const costoUnitario = costoConDescuento / factor;
         return (
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
             <InputNumber
               size="small"
               style={{ width: '100%' }}
@@ -1122,7 +1165,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 handleDetalleCalculate(detalles[idx].id, 'costo', val);
               }}
             />
-            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
               {formatNumber(costoUnitario)} × {factor}
             </div>
           </div>
@@ -1134,10 +1177,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
       key: 'descuento',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) =>
         modoDescuento === 'porcentaje' ? (
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
             <Space.Compact style={{ width: '100%' }}>
               <InputNumber
                 key={`pct_${detalles[idx].id}_${modoDescuento}`}
@@ -1163,15 +1207,15 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 }}
               />
               <span onClick={() => setModoDescuento('pesos')} style={{ cursor: 'pointer', display: 'inline-flex' }}>
-                <Input placeholder="%" disabled style={{ width: 36, textAlign: 'center', borderLeft: 'none', pointerEvents: 'none' }} />
+                <Input size="small" placeholder="%" disabled style={{ width: 36, textAlign: 'center', borderLeft: 'none', pointerEvents: 'none' }} />
               </span>
             </Space.Compact>
-            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto' }}>
               {formatNumber(detalles[idx]?.descuento || 0)}
             </div>
           </div>
         ) : (
-          <div>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
             <Space.Compact style={{ width: '100%' }}>
               <InputNumber
                 key={`pesos_${detalles[idx].id}_${modoDescuento}`}
@@ -1196,10 +1240,10 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 }}
               />
               <span onClick={() => setModoDescuento('porcentaje')} style={{ cursor: 'pointer', display: 'inline-flex' }}>
-                <Input placeholder="$" disabled style={{ width: 36, textAlign: 'center', borderLeft: 'none', pointerEvents: 'none' }} />
+                <Input size="small" placeholder="$" disabled style={{ width: 36, textAlign: 'center', borderLeft: 'none', pointerEvents: 'none' }} />
               </span>
             </Space.Compact>
-            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto' }}>
               {formatNumber(detalles[idx]?.porcentajeDescuento || 0)}%
             </div>
           </div>
@@ -1211,11 +1255,12 @@ const EntradaAlmacenFormulario: React.FC = () => {
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleEntradaAlmacenDTO) => (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <Text>{formatNumber(record.subTotal || 0)}</Text>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+          <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto' }}>&nbsp;</div>
         </div>
       ),
     },
@@ -1224,13 +1269,14 @@ const EntradaAlmacenFormulario: React.FC = () => {
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleEntradaAlmacenDTO) => (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div>{formatNumber(record.impuestos || 0)}</div>
-          {record.impuesto?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
-          )}
+          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto', minHeight: 18 }}>
+            {record.impuesto?.nombre ? toTitleCase(record.impuesto.nombre) : ''}
+          </div>
         </div>
       ),
     },
@@ -1240,10 +1286,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
       key: 'total',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleEntradaAlmacenDTO) => (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <Text strong>{formatNumber(record.total || 0)}</Text>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+          <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto' }}>&nbsp;</div>
         </div>
       ),
     },
@@ -1252,6 +1299,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       key: 'acciones',
       width: 50,
       render: (_: any, record: DetalleEntradaAlmacenDTO, idx: number) => {
+        const verificado = verificados.has(record.id);
         const items = [
           {
             key: 'eliminar',
@@ -1268,6 +1316,14 @@ const EntradaAlmacenFormulario: React.FC = () => {
           icon: <CalendarOutlined />,
           danger: false,
           onClick: () => setFechaVencimientoModal({ open: true, detalleId: record.id }),
+        });
+
+        items.unshift({
+          key: 'verificar',
+          label: verificado ? 'Desverificar' : 'Verificar',
+          icon: <CheckCircleOutlined style={{ color: verificado ? '#4fc3f7' : undefined }} />,
+          danger: false,
+          onClick: () => handleToggleVerificar(record.id),
         });
 
         return (

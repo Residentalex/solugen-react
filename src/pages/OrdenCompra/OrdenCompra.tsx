@@ -22,7 +22,6 @@ const OrdenCompra: React.FC = () => {
     modulo: 'FORC',
     fetchVista: (sucursal, desde, hasta, filas, salto, estado) =>
       ordenCompraApi.obtenerResumido(sucursal, destino, {
-        suplidor: undefined,
         desde,
         hasta,
         cantidad: filas,
@@ -32,8 +31,10 @@ const OrdenCompra: React.FC = () => {
     fetchFiltrar: (sucursal, params) =>
       ordenCompraApi.filtrar(sucursal, destino, {
         cantidad: params.cantidad,
+        salto: params.salto,
         documento: params.documento,
         suplidor: params.documento,
+        concepto: params.concepto,
         desde: params.desde,
         hasta: params.hasta,
       }),

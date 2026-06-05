@@ -76,6 +76,8 @@ Tres pantallas definen el canon visual del sistema. Cualquier pantalla nueva deb
 - **Detalle/consulta**: `src/pages/EntradaAlmacen/EntradaAlmacenDetalle.tsx`
 - **Crear/editar**: `src/pages/EntradaAlmacen/EntradaAlmacenFormulario.tsx`
 
+> **Estos tres archivos son el canon visual y estructural del sistema y no deben modificarse.** Cualquier ajuste visual, nuevo patrón o mejora debe implementarse en el módulo destino correspondiente, no alterando los archivos plantilla `EntradaAlmacen.tsx`, `EntradaAlmacenDetalle.tsx` ni `EntradaAlmacenFormulario.tsx`.
+
 ### Patrón de listado (aplica a todas las listas)
 
 Estructura obligatoria:

@@ -9,6 +9,7 @@ import { useUIStore } from '../stores/uiStore';
 import { useNotificacionesStore } from '../stores/notificacionesStore';
 import { useChatStore } from '../stores/chatStore';
 import ChatWidget from '../components/ChatWidget/ChatWidget';
+import EntidadImagen from '../components/EntidadImagen';
 import GenesisLogo from '../components/GenesisLogo';
 import Sidebar from './Sidebar';
 import SidebarDocBtn from '../components/SidebarDocBtn';
@@ -40,6 +41,7 @@ const { useBreakpoint } = Grid;
 const pageTitles: Record<string, string> = {
   Dashboard: 'Dashboard',
   MUsuario: 'Usuarios',
+  MEMP: 'Empleados',
   MROL: 'Roles',
   MSucursal: 'Sucursales',
   MServidor: 'Servidores',
@@ -142,15 +144,7 @@ const MainLayout: React.FC = () => {
   const pageTitleOverride = useUIStore((s: any) => s.pageTitleOverride);
   const themeName = useUIStore((s: any) => s.themeName);
   const screens = useBreakpoint();
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
-  useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  const activeBreakpoint = (Object.entries(screens).find(([, v]) => v)?.[0] || 'xs') as string;
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -326,7 +320,6 @@ const MainLayout: React.FC = () => {
           </div>
 
           <div className="paces-topbar-right">
-            <Tag style={{ marginRight: 8, fontSize: 11, lineHeight: '20px', height: 24 }}>{windowWidth}px · {activeBreakpoint}</Tag>
             <ThemeSwitcher />
             <NotificacionDropdown />
             {sucursalesFiltradas.length > 1 && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && activeModule !== 'MTicket' && activeModule !== 'notificaciones' && (
@@ -344,9 +337,13 @@ const MainLayout: React.FC = () => {
             )}
             <Dropdown menu={{ items: userMenuItems, onClick: handleMenuClick }} placement="bottomRight" trigger={['click']}>
               <div className="paces-topbar-user">
-                <div className="paces-avatar">
-                  {usuario?.nombre?.charAt(0)?.toUpperCase() || 'U'}
-                </div>
+                <EntidadImagen
+                  tipo="USUARIO"
+                  entidadID={usuario?.id ?? 0}
+                  fallback={usuario?.nombre?.charAt(0)?.toUpperCase() || 'U'}
+                  size={32}
+                  className="paces-avatar"
+                />
                 <span className="paces-topbar-user-name">
                   {toTitleCase(usuario?.nombre) || usuario?.nombreUsuario || 'Usuario'}
                 </span>

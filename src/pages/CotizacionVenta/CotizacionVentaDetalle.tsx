@@ -4,8 +4,7 @@ import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Modal, Tooltip, Alert, App
 } from 'antd';
 import {
-  ArrowLeftOutlined, LockFilled,
-  CloseCircleOutlined,
+  LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
   FileTextOutlined, FileSearchOutlined,
 } from '@ant-design/icons';
@@ -26,6 +25,7 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import ErrorDetalle from '../../components/ErrorDetalle';
 
 const CotizacionVentaDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -143,27 +143,7 @@ const CotizacionVentaDetalle: React.FC = () => {
     );
   }
 
-  if (loadingError && !data) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
-        <div style={{ marginTop: 16, fontSize: 16, color: '#ff4d4f' }}>
-          Error al cargar el documento
-        </div>
-        <div style={{ marginTop: 8 }} className="paces-text-secondary">
-          Verifique que el documento exista en la sucursal seleccionada.
-        </div>
-        <Button
-          type="primary"
-          icon={<ArrowLeftOutlined />}
-          style={{ marginTop: 24 }}
-          onClick={() => navigate('/FCotizacion')}
-        >
-          Volver al listado
-        </Button>
-      </div>
-    );
-  }
+  if (loadingError && !data) { return <ErrorDetalle rutaVolver="/FVEN" onRecargar={handleRefresh} />; }
 
   if (!data) {
     return null;
@@ -196,6 +176,7 @@ const CotizacionVentaDetalle: React.FC = () => {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -212,6 +193,7 @@ const CotizacionVentaDetalle: React.FC = () => {
       key: 'cantidad',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div>
           <div>{formatNumber(record.cantidad || 0)}</div>
@@ -228,6 +210,7 @@ const CotizacionVentaDetalle: React.FC = () => {
       key: 'precio',
       width: 130,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => {
         const precioBase = Number(record.precio) || 0;
@@ -250,6 +233,7 @@ const CotizacionVentaDetalle: React.FC = () => {
       key: 'descuento',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
@@ -266,6 +250,7 @@ const CotizacionVentaDetalle: React.FC = () => {
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
@@ -279,6 +264,7 @@ const CotizacionVentaDetalle: React.FC = () => {
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
@@ -294,7 +280,7 @@ const CotizacionVentaDetalle: React.FC = () => {
       key: 'total',
       width: 120,
       align: 'right' as const,
-      onCell: () => ({ style: { paddingRight: 16 } }),
+      onCell: () => ({ style: { verticalAlign: 'top', paddingRight: 16 } }),
       onHeaderCell: () => ({ style: { paddingRight: 16 } }),
       render: (_: any, record: any) => (
         <div>

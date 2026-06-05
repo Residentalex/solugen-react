@@ -353,7 +353,7 @@ const OrdenCompraFormulario: React.FC = () => {
       dataIndex: 'articulo',
       key: 'articulo',
       ellipsis: true,
-      onCell: () => ({ style: { paddingLeft: 8 } }),
+      onCell: () => ({ style: { verticalAlign: 'top', paddingLeft: 8 } }),
       render: (_: any, __: any, idx: number) => (
         <div style={{ fontSize: 13 }}>
           <Input size="small" placeholder="Artículo" value={detalles[idx]?.articulo || ''}
@@ -370,6 +370,7 @@ const OrdenCompraFormulario: React.FC = () => {
       key: 'cantidad',
       width: 100,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, __: any, idx: number) => (
         <InputNumber size="small" style={{ width: '100%' }} styles={{ input: { textAlign: 'right' } }} min={0} step={0.01} precision={2} controls={false}
           value={detalles[idx]?.cantidad}
@@ -382,6 +383,7 @@ const OrdenCompraFormulario: React.FC = () => {
       width: 130,
       align: 'right' as const,
       responsive: ['sm' as const, 'md' as const, 'lg' as const],
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, __: any, idx: number) => {
         const costoBase = Number(detalles[idx]?.costo) || 0;
         const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
@@ -405,6 +407,7 @@ const OrdenCompraFormulario: React.FC = () => {
       key: 'descuento',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, __: any, idx: number) => (
         <InputNumber size="small" style={{ width: '100%' }} min={0} max={100} step={0.01} precision={2}
           value={detalles[idx]?.porcentajeDescuento}
@@ -418,6 +421,7 @@ const OrdenCompraFormulario: React.FC = () => {
       width: 120,
       align: 'right' as const,
       responsive: ['md' as const, 'lg' as const],
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleOrcEditable) => <Text>{formatNumber(record.subTotal || 0)}</Text>,
     },
     {
@@ -425,6 +429,7 @@ const OrdenCompraFormulario: React.FC = () => {
       key: 'total',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleOrcEditable) => <Text strong>{formatNumber(record.total || 0)}</Text>,
     },
     {

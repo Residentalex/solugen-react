@@ -535,6 +535,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       title: 'ArtÃ­culo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -545,14 +546,14 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         </div>
       ),
     },
-    { title: 'Tipo', dataIndex: 'tipo', key: 'tipo', width: 100 },
-    { title: 'Cantidad', dataIndex: 'cantidad', key: 'cantidad', width: 100, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Medida', dataIndex: 'udm', key: 'medida', width: 80, render: (v: string) => v || '-' },
-    { title: 'Precio', dataIndex: 'precio', key: 'precio', width: 110, align: 'right' as const, responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const], render: (v: number) => formatNumber(v) },
-    { title: 'SubTotal', dataIndex: 'subTotal', key: 'subTotal', width: 120, align: 'right' as const, responsive: ['lg' as const, 'xl' as const, 'xxl' as const], render: (v: number) => formatNumber(v) },
-    { title: 'Impuestos', dataIndex: 'impuestos', key: 'impuestos', width: 140, align: 'right' as const, responsive: ['lg' as const, 'xl' as const, 'xxl' as const], render: (v: number) => formatNumber(v) },
-    { title: 'Descuento', dataIndex: 'descuento', key: 'descuento', width: 120, align: 'right' as const, responsive: ['lg' as const, 'xl' as const, 'xxl' as const], render: (v: number) => formatNumber(v) },
-    { title: 'Total', dataIndex: 'total', key: 'total', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
+    { title: 'Tipo', dataIndex: 'tipo', key: 'tipo', width: 100, onCell: () => ({ style: { verticalAlign: 'top' } }) },
+    { title: 'Cantidad', dataIndex: 'cantidad', key: 'cantidad', width: 100, align: 'right' as const, onCell: () => ({ style: { verticalAlign: 'top' } }), render: (v: number) => formatNumber(v) },
+    { title: 'Medida', dataIndex: 'udm', key: 'medida', width: 80, onCell: () => ({ style: { verticalAlign: 'top' } }), render: (v: string) => v || '-' },
+    { title: 'Precio', dataIndex: 'precio', key: 'precio', width: 110, align: 'right' as const, responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const], onCell: () => ({ style: { verticalAlign: 'top' } }), render: (v: number) => formatNumber(v) },
+    { title: 'SubTotal', dataIndex: 'subTotal', key: 'subTotal', width: 120, align: 'right' as const, responsive: ['lg' as const, 'xl' as const, 'xxl' as const], onCell: () => ({ style: { verticalAlign: 'top' } }), render: (v: number) => formatNumber(v) },
+    { title: 'Impuestos', dataIndex: 'impuestos', key: 'impuestos', width: 140, align: 'right' as const, responsive: ['lg' as const, 'xl' as const, 'xxl' as const], onCell: () => ({ style: { verticalAlign: 'top' } }), render: (v: number) => formatNumber(v) },
+    { title: 'Descuento', dataIndex: 'descuento', key: 'descuento', width: 120, align: 'right' as const, responsive: ['lg' as const, 'xl' as const, 'xxl' as const], onCell: () => ({ style: { verticalAlign: 'top' } }), render: (v: number) => formatNumber(v) },
+    { title: 'Total', dataIndex: 'total', key: 'total', width: 120, align: 'right' as const, onCell: () => ({ style: { verticalAlign: 'top' } }), render: (v: number) => <strong>{formatNumber(v)}</strong> },
   ];
 
   const devolucionesColumns = [

@@ -1,16 +1,18 @@
 import React from 'react';
-import { Button } from 'antd';
-import { CloseCircleOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { Button, Space } from 'antd';
+import { CloseCircleOutlined, ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 
 interface Props {
   mensaje?: string;
   rutaVolver?: string;
+  onRecargar?: () => void;
 }
 
 const ErrorDetalle: React.FC<Props> = ({ 
   mensaje = 'Error al cargar el documento',
-  rutaVolver = '/'
+  rutaVolver = '/',
+  onRecargar,
 }) => {
   const navigate = useNavigate();
 
@@ -23,14 +25,18 @@ const ErrorDetalle: React.FC<Props> = ({
       <div style={{ marginTop: 8 }} className="paces-text-secondary">
         Verifique que el documento exista en la sucursal seleccionada.
       </div>
-      <Button 
-        type="primary" 
-        icon={<ArrowLeftOutlined />} 
-        style={{ marginTop: 24 }} 
-        onClick={() => navigate(rutaVolver)}
-      >
-        Volver al listado
-      </Button>
+      <Space style={{ marginTop: 24 }}>
+        <Button
+          type="primary"
+          icon={<ArrowLeftOutlined />}
+          onClick={() => navigate(rutaVolver)}
+        >
+          Volver al listado
+        </Button>
+        {onRecargar && (
+          <Button icon={<ReloadOutlined />} onClick={onRecargar} />
+        )}
+      </Space>
     </div>
   );
 };

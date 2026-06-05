@@ -6,10 +6,11 @@ import {
 import { ThunderboltOutlined, SearchOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
-import { analisisCompraApi } from '../../api/analisisCompraApi';
+import { movimientoApi } from '../../api/movimientoApi';
 import { conteoApi } from '../../api/conteoApi';
-import type { MovimientoArticuloAgrupadoDTO } from '../../types/movimientoPorPlantilla';
+import type { MovimientoArticuloAgrupadoDTO, MovimientoArticuloDTO } from '../../types/movimientoPorPlantilla';
 import type { PlantillaConteoFisicoDTO } from '../../api/conteoApi';
+import dayjs, { Dayjs } from 'dayjs';
 
 
 // ---------------------------------------------------------------------------
@@ -197,6 +198,9 @@ const MovimientoPorPlantilla: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
 
+  // Fecha seleccionada
+  const [fechaSeleccionada, setFechaSeleccionada] = useState<Dayjs>(dayjs());
+
   // Búsqueda local en resultados
   const [searchText, setSearchText] = useState('');
 
@@ -222,21 +226,68 @@ const MovimientoPorPlantilla: React.FC = () => {
     setLoadingError(false);
     setLoading(true);
     try {
-      const res = await analisisCompraApi.obtenerPorPlantilla(
-        sucursalActiva,
-        plantillaCodigo
+      const res = await movimientoApi.obtenerPorPlantilla(
+        sucursalActiva, 
+        plantillaCodigo, 
+        fechaSeleccionada.format('YYYYMMDD') + '000000'
       );
-      setData(res);
-      if (!res || res.length === 0) {
+
+      // Agrupar los movimientos individuales en el formato que espera la tabla
+      const agrupadoMap = new Map<string, MovimientoArticuloAgrupadoDTO>();
+      res.forEach((item: MovimientoArticuloDTO) => {
+        const key = `${item.codigo}|${item.sucursal}`;
+        if (!agrupadoMap.has(key)) {
+          agrupadoMap.set(key, {
+            codigo: item.codigo,
+            articulo: item.articulo || '',
+            sucursal: item.sucursal || '',
+            prefijo: '',
+            compras: 0,
+            ventas: 0,
+            transferencias: 0,
+            ultimaCompra: null,
+            ultimaVenta: null,
+            existencia: 0,
+            tiempo: '-',
+          });
+        }
+        const entry = agrupadoMap.get(key)!;
+        const tipoDoc = (item.tipoDocumento || '').toUpperCase();
+        if (tipoDoc === 'ENP') {
+          entry.compras += Math.abs(item.cantidad);
+          if (!entry.ultimaCompra || item.fecha > entry.ultimaCompra) {
+            entry.ultimaCompra = item.fecha;
+          }
+        } else if (tipoDoc === 'SAP' || tipoDoc === 'TRP') {
+          entry.transferencias += Math.abs(item.cantidad);
+        } else if (tipoDoc === 'PV' || tipoDoc === 'FAC') {
+          entry.ventas += Math.abs(item.cantidad);
+          if (!entry.ultimaVenta || item.fecha > entry.ultimaVenta) {
+            entry.ultimaVenta = item.fecha;
+          }
+        }
+        entry.existencia += item.cantidad;
+      });
+
+      // Calcular tiempo para cada grupo
+      const dataAgrupada = Array.from(agrupadoMap.values());
+      dataAgrupada.forEach((item) => {
+        item.tiempo = calcularTiempo(item.ultimaVenta, item.ultimaCompra);
+      });
+
+      setData(dataAgrupada);
+      if (!dataAgrupada || dataAgrupada.length === 0) {
         message.info('No se encontraron resultados para esta plantilla');
       }
-    } catch {
+    } catch (err: any) {
       setLoadingError(true);
       setData(null);
+      const msg = extraerMensajeError(err, 'Error al cargar los datos');
+      message.error(msg);
     } finally {
       setLoading(false);
     }
-  }, [plantillaCodigo, sucursalActiva]);
+  }, [plantillaCodigo, sucursalActiva, fechaSeleccionada]);
 
   // Seleccionar plantilla desde el modal
   const handleSeleccionarPlantilla = useCallback(
@@ -397,6 +448,8 @@ const MovimientoPorPlantilla: React.FC = () => {
             <DatePicker
               format="DD/MM/YYYY"
               style={{ width: '100%' }}
+              value={fechaSeleccionada}
+              onChange={(date) => setFechaSeleccionada(date || dayjs())}
             />
           </Col>
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Button, Space, Row, Col, Divider, Grid,
+  Card, Table, Button, Space, Row, Col, Grid,
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal,
 } from 'antd';
 import {
@@ -27,6 +27,7 @@ import type {
   DetalleImportarDTO,
 } from '../../types/importarInventario';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import TotalesCard from '../../components/TotalesCard';
 import { TIPO_DOC_LABELS, TIPO_DOC_ROUTES } from '../../types/importarInventario';
 import type { ConceptoDTO, AlmacenDTO, SuplidorDTO, EntradaAlmacenDTO, DetalleEntradaAlmacenDTO } from '../../types/entradaAlmacen';
 import type { SalidaAlmacenFullDTO, DetalleSalidaAlmacenDTO } from '../../types/salidaAlmacen';
@@ -39,10 +40,6 @@ const { TextArea } = Input;
 // ===== Helpers =====
 function formatNumber(n: number): string {
   return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
 }
 
 function toTitleCase(str: string): string {
@@ -890,42 +887,6 @@ const ImportarInventario: React.FC = () => {
     </Card>
   );
 
-  // ===== Card de totales =====
-  const renderTotalesCard = (alignRight: boolean) => {
-    const monSim = selectedConcepto?.moneda?.simbolo || 'RD$';
-    const monNom = selectedConcepto?.moneda?.nombre || 'Peso Dominicano';
-    return (
-    <Card
-      title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-      className="paces-card"
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{toTitleCase(monNom)} ({monSim})</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Subtotal</span>}
-          <span>{formatNumber(totales.subTotal)}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Descuento</span>}
-          <span>{formatNumber(totales.descuento)}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
-          {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
-          <span>{formatNumber(totales.impuestos)}</span>
-        </div>
-      </div>
-      <Divider style={{ margin: '12px 0' }} />
-      <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
-        {!alignRight && <span>Total</span>}
-        <span style={{ color: 'var(--paces-primary)' }}>{monSim} {formatNumber(totales.total)}</span>
-      </div>
-    </Card>
-  );
-  };
-
   return (
     <div>
       {renderToolbar()}
@@ -986,7 +947,15 @@ const ImportarInventario: React.FC = () => {
           </Col>
 
           <Col lg={6}>
-            {renderTotalesCard(false)}
+            <TotalesCard
+              subTotal={totales.subTotal}
+              descuento={totales.descuento}
+              impuestos={totales.impuestos}
+              total={totales.total}
+              monedaSimbolo={selectedConcepto?.moneda?.simbolo || 'RD$'}
+              monedaNombre={selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+              tasa={1}
+            />
           </Col>
         </Row>
       ) : (
@@ -1031,7 +1000,16 @@ const ImportarInventario: React.FC = () => {
             />
           </Card>
 
-          {renderTotalesCard(true)}
+          <TotalesCard
+            subTotal={totales.subTotal}
+            descuento={totales.descuento}
+            impuestos={totales.impuestos}
+            total={totales.total}
+            monedaSimbolo={selectedConcepto?.moneda?.simbolo || 'RD$'}
+            monedaNombre={selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+            tasa={1}
+            alignRight
+          />
         </div>
       )}
     </div>

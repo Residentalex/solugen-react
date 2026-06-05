@@ -6,7 +6,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { asientoContableApi } from '../../api/asientoContableApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
-import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
+import { formatCurrency, formatDateRaw, formatDateParam, toTitleCase } from '../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import type { TransaccionVistaDTO } from '../../types/transaccion';
@@ -32,24 +32,41 @@ const AsientosContables: React.FC = () => {
   const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
 
   const rangoDefault = useMemo(() => ({
-    desde: '20000101000000',
-    hasta: '20991231000000',
+    desde: formatDateParam(new Date(Date.now() - 30 * 86400000)),
+    hasta: formatDateParam(new Date()),
   }), []);
 
-  const cargarDatos = useCallback(async (pagina: number, filas: number) => {
+  const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
     setLoading(true);
     try {
-      const desde = filtros.desde ?? rangoDefault.desde;
-      const hasta = filtros.hasta ?? rangoDefault.hasta;
-      const result = await asientoContableApi.obtenerVista(
-        sucursalActiva, desde, hasta, filas, (pagina - 1) * filas, filtros.estado
-      );
-      setData(result);
-      setTotal(
-        result.length < filas
-          ? (pagina - 1) * filas + result.length + 1
-          : (pagina - 1) * filas + result.length + filas
-      );
+      let desde = filtros.desde ?? rangoDefault.desde;
+      let hasta = filtros.hasta ?? rangoDefault.hasta;
+
+      if (busqueda.length > 2) {
+        if (!filtros.desde) desde = '19000101000000';
+        if (!filtros.hasta) hasta = '20991231235959';
+        const result = await asientoContableApi.filtrarConAsientos(
+          sucursalActiva, filas, (pagina - 1) * filas,
+          desde, hasta, filtros.estado,
+          busqueda, busqueda, busqueda, busqueda
+        );
+        setData(result);
+        setTotal(
+          result.length < filas
+            ? (pagina - 1) * filas + result.length
+            : pagina * filas + 1
+        );
+      } else {
+        const result = await asientoContableApi.obtenerVista(
+          sucursalActiva, desde, hasta, filas, (pagina - 1) * filas, filtros.estado
+        );
+        setData(result);
+        setTotal(
+          result.length < filas
+            ? (pagina - 1) * filas + result.length + 1
+            : (pagina - 1) * filas + result.length + filas
+        );
+      }
     } catch {
       setLoadingError(true);
     } finally {
@@ -57,19 +74,9 @@ const AsientosContables: React.FC = () => {
     }
   }, [sucursalActiva, rangoDefault, filtros]);
 
-  const filteredData = useMemo(() => {
-    if (!searchText || searchText.length < 2) return data;
-    const q = searchText.toLowerCase();
-    return data.filter((item) =>
-      [item.documento, item.entidad, item.concepto, item.ncf].some(
-        (field) => (field || '').toLowerCase().includes(q)
-      )
-    );
-  }, [data, searchText]);
-
   useEffect(() => {
-    cargarDatos(page, pageSize);
-  }, [page, pageSize, refreshTrigger, cargarDatos]);
+    cargarDatos(page, pageSize, searchText);
+  }, [page, pageSize, refreshTrigger, searchText, cargarDatos]);
 
   useEffect(() => {
     setActiveModule('FAsientoContable');
@@ -155,10 +162,10 @@ const AsientosContables: React.FC = () => {
   return (
     <DocumentListadoLayout<TransaccionVistaDTO>
       columns={columns}
-      data={filteredData}
+      data={data}
       rowKey="id"
       loading={loading}
-      total={searchText.length >= 2 ? filteredData.length : total}
+      total={total}
       page={page}
       pageSize={pageSize}
       scrollX={1100}

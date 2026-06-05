@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography } from 'antd';
+import { Typography, Space } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { salidaAlmacenApi } from '../../api/salidaAlmacenApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
@@ -42,20 +42,27 @@ const SalidaAlmacen: React.FC = () => {
       title: 'Fecha',
       dataIndex: 'fecha',
       key: 'fecha',
-      width: 110,
-      render: (f: string) => <Text>{formatDateRaw(f)}</Text>,
+      width: 130,
+      render: (f: string, record: MovimientoVistaDTO) => (
+        <div style={{ lineHeight: 1.4 }}>
+          <div style={{ fontSize: 12 }}>{formatDateRaw(f)}</div>
+          <div style={{ fontSize: 10, color: '#888' }}>Entregado: {record.fechaEntrega ? formatDateRaw(record.fechaEntrega) : '-'}</div>
+        </div>
+      ),
     },
     {
       title: 'Entidad',
       dataIndex: 'entidad',
       key: 'entidad',
-      render: (name: string) => <EntidadColumnCell name={name} />,
+      render: (name: string, record: MovimientoVistaDTO) => (
+        <EntidadColumnCell name={name} diasCredito={record.diasCredito} />
+      ),
     },
     {
       title: 'Concepto',
       dataIndex: 'concepto',
       key: 'concepto',
-      width: 350,
+      width: 280,
       ellipsis: true,
       render: (concepto: string) => <Text>{toTitleCase(concepto) || ''}</Text>,
     },
@@ -80,7 +87,7 @@ const SalidaAlmacen: React.FC = () => {
       title: 'Estado',
       dataIndex: 'estado',
       key: 'estado',
-      width: 100,
+      width: 130,
       render: (estado: number, record: MovimientoVistaDTO) => (
         <EstadoColumnCell estado={estado} periodo={record.periodo} />
       ),
@@ -96,7 +103,7 @@ const SalidaAlmacen: React.FC = () => {
       total={state.total}
       page={state.page}
       pageSize={state.pageSize}
-      scrollX={1260}
+      scrollX={1350}
       selectedRowId={state.selectedRow?.id}
       loadingError={state.loadingError}
       errorMessage="Error al cargar salidas de almacén"

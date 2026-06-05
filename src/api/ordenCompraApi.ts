@@ -11,9 +11,11 @@ export const ordenCompraApi = {
     params: {
       documento?: string;
       suplidor?: string;
+      concepto?: string;
       desde?: string;
       hasta?: string;
       cantidad?: number;
+      salto?: number;
     }
   ): Promise<OrdenCompraVistaDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<OrdenCompraVistaDTO[]> | OrdenCompraVistaDTO[]>(

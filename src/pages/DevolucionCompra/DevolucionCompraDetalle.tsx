@@ -4,9 +4,7 @@ import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Typography, Tooltip, Alert, Modal, App,
 } from 'antd';
 import {
-  ArrowLeftOutlined,
   LockFilled,
-  CloseCircleOutlined,
   IdcardOutlined,
   PhoneOutlined,
   EnvironmentOutlined,
@@ -29,6 +27,7 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import ErrorDetalle from '../../components/ErrorDetalle';
 
 const { Text } = Typography;
 
@@ -160,22 +159,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       </div>
     );
   }
-  if (loadingError && !data) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <CloseCircleOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />
-        <div style={{ marginTop: 16, fontSize: 16, color: '#ff4d4f' }}>
-          Error al cargar el documento
-        </div>
-        <div style={{ marginTop: 8 }} className="paces-text-secondary">
-          Verifique que el documento exista en la sucursal seleccionada.
-        </div>
-        <Button type="primary" icon={<ArrowLeftOutlined />} style={{ marginTop: 24 }} onClick={() => navigate('/FDVC')}>
-          Volver al listado
-        </Button>
-      </div>
-    );
-  }
+  if (loadingError && !data) { return <ErrorDetalle rutaVolver="/FDVC" onRecargar={handleRefresh} />; }
 
   const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
@@ -215,6 +199,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -231,6 +216,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       key: 'cantidad',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div>
           <div>{formatNumber(record.cantidad || 0)}</div>
@@ -248,6 +234,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       key: 'costo',
       width: 130,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => {
         const costoBase = Number(record.costo) || 0;
@@ -270,6 +257,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       key: 'descuento',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
@@ -286,6 +274,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       key: 'subTotal',
       width: 120,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
@@ -299,6 +288,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       key: 'impuestos',
       width: 140,
       align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
@@ -315,7 +305,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       key: 'total',
       width: 120,
       align: 'right' as const,
-      onCell: () => ({ style: { paddingRight: 16 } }),
+      onCell: () => ({ style: { verticalAlign: 'top', paddingRight: 16 } }),
       onHeaderCell: () => ({ style: { paddingRight: 16 } }),
       render: (_: any, record: any) => (
         <div>

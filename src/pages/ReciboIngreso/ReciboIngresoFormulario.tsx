@@ -484,6 +484,12 @@ const ReciboIngresoFormulario: React.FC = () => {
   const totalCobrado = cobros.reduce((s, c) => s + (c.monto || 0), 0);
   const cuentasPorCobrar = (totalValue || 0) - totalCobrado;
   const diferencia = (totalValue || 0) - totalCobrado;
+  const totales = {
+    subTotal: (totalValue || 0) - (data?.impuestos || 0),
+    descuento: data?.descuento || 0,
+    impuestos: data?.impuestos || 0,
+    total: totalValue || 0,
+  };
 
   // Totales de asientos
   const totalDebitos = asientos.reduce((s, r) => s + ((r.tipoAsiento === 'D' || r.tipoAsiento === 0) ? r.monto : 0), 0);

@@ -8,7 +8,9 @@ export interface TicketDTO {
   modulo?: string;
   sucursalID: number;
   usuarioOrigenID: number;
+  nombreUsuarioOrigen?: string;
   usuarioAsignadoID?: number;
+  nombreUsuarioAsignado?: string;
   fechaCreacion: string;
   fechaActualizacion?: string;
   activo: boolean;
@@ -19,6 +21,7 @@ export interface TicketRespuestaDTO {
   id: number;
   ticketID: number;
   usuarioID: number;
+  nombreUsuario?: string;
   mensaje: string;
   fechaCreacion: string;
 }

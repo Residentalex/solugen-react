@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Input, Select, Tag, Button, Modal, Form, Input as AntInput, Switch, message, Space, Row, Col, Card, Typography, Alert } from 'antd';
+import { Table, Input, Select, Tag, Button, message, Space, Card, Typography, Alert } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
+import EntidadImagen from '../../components/EntidadImagen';
 import { useNavigate, Link } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { Sucursal } from '../../types/auth';
 import { useUIStore } from '../../stores/uiStore';
 import { usuarioApi } from '../../api/usuarioApi';
-import { empleadoApi, type EmpleadoDTO } from '../../api/empleadoApi';
+
 import type { UsuarioDTO } from '../../types/administracion';
 
 function formatFecha(iso?: string): string {
@@ -18,13 +19,6 @@ function formatFecha(iso?: string): string {
 
 function letraInicial(nombre: string): string {
   return (nombre || '?').charAt(0).toUpperCase();
-}
-
-function colorDesdeTexto(texto: string): string {
-  const colores = ['#556ee6', '#f46a6a', '#34c38f', '#f1b44c', '#50a5f1', '#e83e8c', '#6f42c1', '#20c997'];
-  let hash = 0;
-  for (let i = 0; i < texto.length; i++) hash = texto.charCodeAt(i) + ((hash << 5) - hash);
-  return colores[Math.abs(hash) % colores.length];
 }
 
 const { Text } = Typography;
@@ -43,11 +37,6 @@ const Usuarios: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [loadingError, setLoadingError] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editando, setEditando] = useState<UsuarioDTO | null>(null);
-  const [form] = Form.useForm();
-  const [guardando, setGuardando] = useState(false);
-  const [empleados, setEmpleados] = useState<EmpleadoDTO[]>([]);
 
   const cargarDatos = useCallback(async (busqueda?: string) => {
     setLoading(true);
@@ -79,42 +68,7 @@ const Usuarios: React.FC = () => {
   };
 
   const abrirNuevo = () => {
-    setEditando(null);
-    form.resetFields();
-    setModalVisible(true);
-    empleadoApi.obtenerTodos(SUCURSAL_SEGURIDAD).then(setEmpleados).catch(() => {});
-  };
-
-  const guardar = async () => {
-    try {
-      const values = await form.validateFields();
-      setGuardando(true);
-      if (editando) {
-        await usuarioApi.actualizar(SUCURSAL_SEGURIDAD, { ...editando, ...values });
-        message.success('Usuario actualizado correctamente');
-        setModalVisible(false);
-      } else {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        const pass = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-        const creado = await usuarioApi.crear(SUCURSAL_SEGURIDAD, { ...values, contrasena: pass, debeCambiarClave: true });
-        Modal.success({
-          title: 'Usuario creado',
-          content: (
-            <div>
-              <p>Usuario creado correctamente.</p>
-              <p><strong>Contraseña temporal:</strong> <code style={{ fontSize: 16 }}>{creado.contrasena || '(generada)'}</code></p>
-            </div>
-          ),
-        });
-        setModalVisible(false);
-      }
-      cargarDatos();
-    } catch (err: any) {
-      if (err?.errorFields) return;
-      message.error(err?.response?.data?.errorMessage || 'Error al guardar usuario');
-    } finally {
-      setGuardando(false);
-    }
+    navigate('/MUsuario/nuevo');
   };
 
   const columns: ColumnsType<UsuarioDTO> = [
@@ -125,14 +79,12 @@ const Usuarios: React.FC = () => {
       fixed: 'left',
       render: (_, record) => (
         <Link to={`/MUsuario/${record.id}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 34, height: 34, borderRadius: '50%',
-            backgroundColor: colorDesdeTexto(record.nombreUsuario),
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontWeight: 600, fontSize: 14, flexShrink: 0,
-          }}>
-            {letraInicial(record.nombre)}
-          </div>
+          <EntidadImagen
+            tipo="USUARIO"
+            entidadID={record.id}
+            fallback={letraInicial(record.nombre)}
+            size={34}
+          />
           <div>
             <Text className="paces-text-primary" strong style={{ fontSize: 13, lineHeight: 1.3 }}>
               {record.nombreUsuario}
@@ -263,65 +215,6 @@ const Usuarios: React.FC = () => {
           }}
         />
       </Card>
-
-      <Modal
-        title={editando ? 'Editar Usuario' : 'Nuevo Usuario'}
-        open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        onOk={guardar}
-        confirmLoading={guardando}
-        width={560}
-        okText="Guardar"
-        cancelText="Cancelar"
-      >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="nombreUsuario" label="Usuario" rules={[{ required: true, message: 'Obligatorio' }]}>
-                <AntInput placeholder="Nombre de cuenta" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="nombre" label="Nombre completo" rules={[{ required: true, message: 'Obligatorio' }]}>
-                <AntInput placeholder="Nombre y apellidos" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="empleadoID" label="Empleado">
-                <Select
-                  showSearch
-                  placeholder="Buscar empleado..."
-                  allowClear
-                  filterOption={(input, option) =>
-                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                  }
-                  options={empleados.map(e => ({ label: `${e.codigo} - ${e.nombre}`, value: e.codigo }))}
-                  onChange={(codigo) => {
-                    if (!codigo) return;
-                    const emp = empleados.find(e => e.codigo === codigo);
-                    if (!emp) return;
-                    form.setFieldValue('nombre', emp.nombre);
-                    const partes = emp.nombre.trim().split(/\s+/);
-                    const apellido = partes[0] || '';
-                    const nombre = partes[partes.length - 1] || '';
-                    form.setFieldValue('nombreUsuario', (nombre.charAt(0) + apellido).toUpperCase());
-                  }}
-                />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="diasVigencia" label="Vigencia (días)" initialValue={30} rules={[{ required: true, message: 'Obligatorio' }]}>
-                <AntInput type="number" min={1} max={365} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item name="activo" label="Activo" valuePropName="checked" initialValue={true}>
-            <Switch checkedChildren="Sí" unCheckedChildren="No" />
-          </Form.Item>
-        </Form>
-      </Modal>
     </>
   );
 };

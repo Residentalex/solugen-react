@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { TransaccionVistaDTO, FiltroTransaccion } from '../types/transaccion';
+import type { TransaccionDTO, TransaccionVistaDTO, FiltroTransaccion } from '../types/transaccion';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/Transaccion';
@@ -49,8 +49,8 @@ export const distribucionBalanceApi = {
     return data.data;
   },
 
-  obtenerPorId: async (sucursal: number, id: number): Promise<TransaccionVistaDTO> => {
-    const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO>>(`/DBA/${sucursal}/${id}`);
+  obtenerPorId: async (sucursal: number, id: number): Promise<TransaccionDTO> => {
+    const { data } = await apiClient.get<ApiResponse<TransaccionDTO>>(`${BASE}/${sucursal}/${id}`);
     return data.data;
   },
 

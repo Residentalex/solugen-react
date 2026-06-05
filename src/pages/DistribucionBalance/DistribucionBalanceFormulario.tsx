@@ -115,6 +115,12 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const totalDebitosDBA = debitos.reduce((s, t) => s + (t.monto || 0), 0);
   const totalCreditosDBA = creditos.reduce((s, t) => s + (t.monto || 0), 0);
   const pendienteDBA = totalDebitosDBA - totalCreditosDBA;
+  const totales = {
+    subTotal: data?.subTotal || 0,
+    descuento: data?.descuento || 0,
+    impuestos: data?.impuestos || 0,
+    total: data?.total || 0,
+  };
 
   // ===== Quick field editors =====
   const openFieldEditor = (field: string) => {
