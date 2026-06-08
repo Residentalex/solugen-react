@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography, Space } from 'antd';
+import { Typography, Space, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { salidaAlmacenApi } from '../../api/salidaAlmacenApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
@@ -10,11 +10,14 @@ import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { MovimientoVistaDTO } from '../../types/entradaAlmacen';
+import { useAuthStore } from '../../stores/authStore';
 
 const { Text } = Typography;
 
 const SalidaAlmacen: React.FC = () => {
   const navigate = useNavigate();
+
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<MovimientoVistaDTO>({
     modulo: 'FSAP',
@@ -26,6 +29,24 @@ const SalidaAlmacen: React.FC = () => {
     tituloReporte: 'SAP',
     tituloError: 'Error al cargar salidas de almacén',
   });
+
+  const handleClonar = async () => {
+    if (!state.selectedRow) return;
+    try {
+      const data = await salidaAlmacenApi.obtenerPorId(sucursalActiva, state.selectedRow.id);
+      const cloneData = {
+        ...data,
+        id: 0,
+        noDocumento: '',
+        estado: 0,
+        asientos: [],
+        logs: [],
+      };
+      navigate('/FSAP/nuevo', { state: { cloneData } });
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al obtener datos para clonar');
+    }
+  };
 
   const columns: ColumnsType<MovimientoVistaDTO> = [
     {
@@ -127,6 +148,9 @@ const SalidaAlmacen: React.FC = () => {
         showEditar: true,
         editarDisabled: !puedeEditar,
         onEditar: () => navigate(`/FSAP/${state.selectedRow!.id}/editar`),
+        showClonar: true,
+        clonarDisabled: !state.selectedRow,
+        onClonar: handleClonar,
         showImprimir: true,
         imprimirDisabled: !state.selectedRow,
         onImprimir: actions.handleImprimir,

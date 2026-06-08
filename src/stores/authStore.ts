@@ -71,11 +71,11 @@ interface AuthState {
     sucursalesPermitidas: AuthSucursalPermitidaDTO[];
   }) => void;
   marcarClaveCambiada: () => void;
-  setSucursalActiva: (sucursal: Sucursal) => void;
+  setSucursalActiva: (sucursal: Sucursal) => Promise<void>;
   setAppVersion: (version: string) => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   accessToken: localStorage.getItem('accessToken') || '',
   refreshToken: localStorage.getItem('refreshToken') || '',
   usuario: obtenerUsuario(),
@@ -91,7 +91,6 @@ export const useAuthStore = create<AuthState>((set) => ({
     const sesion = await authApi.login(request);
     localStorage.setItem('accessToken', sesion.accessToken);
     localStorage.setItem('refreshToken', sesion.refreshToken);
-    localStorage.setItem('usuario', JSON.stringify(sesion.usuario));
     localStorage.setItem('sucursalesPermitidas', JSON.stringify(sesion.sucursalesPermitidas));
     localStorage.setItem('equipo', request.equipo);
     localStorage.setItem('ip', request.ip);
@@ -108,6 +107,15 @@ export const useAuthStore = create<AuthState>((set) => ({
       ip: request.ip,
       isAuthenticated: true,
     });
+
+    try {
+      const pantallas = await authApi.obtenerPantallasPorSucursal(sesion.sucursalActiva, sesion.usuario.id);
+      const usuarioFiltrado = { ...sesion.usuario, pantallas };
+      localStorage.setItem('usuario', JSON.stringify(usuarioFiltrado));
+      set({ usuario: usuarioFiltrado });
+    } catch {
+      localStorage.setItem('usuario', JSON.stringify(sesion.usuario));
+    }
   },
 
   logout: () => {
@@ -159,9 +167,20 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
   },
 
-  setSucursalActiva: (sucursal) => {
+  setSucursalActiva: async (sucursal) => {
     localStorage.setItem('sucursalActiva', sucursal.toString());
     set({ sucursalActiva: sucursal });
+    const state = get();
+    if (state.usuario) {
+      try {
+        const pantallas = await authApi.obtenerPantallasPorSucursal(sucursal, state.usuario.id);
+        const usuarioActualizado: AuthUsuarioSesionDTO = { ...state.usuario, pantallas };
+        localStorage.setItem('usuario', JSON.stringify(usuarioActualizado));
+        set({ usuario: usuarioActualizado });
+      } catch {
+        // mantener pantallas actuales si falla
+      }
+    }
   },
 
   setAppVersion: (version) => {

@@ -49,7 +49,14 @@ const FacturaCliente: React.FC = () => {
       title: 'Cliente',
       dataIndex: 'entidad',
       key: 'entidad',
-      render: (name: string) => <EntidadColumnCell name={name} />,
+      render: (name: string, record: any) => (
+        <div>
+          <EntidadColumnCell name={name} />
+          {record.identificacion && (
+            <div className="paces-text-secondary" style={{ fontSize: 10 }}>RNC: {record.identificacion}</div>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Concepto',

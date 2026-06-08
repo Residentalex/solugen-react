@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Tooltip, Typography, Modal, Alert, App
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Tooltip, Typography, Modal, Alert, App, QRCode
 } from 'antd';
 import {
   LockFilled,
@@ -10,7 +10,11 @@ import {
   EnvironmentOutlined,
   FileTextOutlined,
   FileSearchOutlined,
+  SendOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons';
+import PermissionGate from '../../components/PermissionGate';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -23,12 +27,18 @@ import { useAplicar } from '../../hooks/useAplicar';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
 import type { FacturaClienteDTO, AsientoContableDTO } from '../../types/facturaCliente';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
+import { transaccionApi } from '../../api/transaccionApi';
+import ModalAnular from '../../components/ModalAnular/ModalAnular';
+import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
+import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
+import CobrosMinimal from '../../components/CobrosCard/CobrosMinimal';
+import NotasSeguimientoCard from '../../components/NotasSeguimientoCard';
 
 const { Text } = Typography;
 
@@ -51,10 +61,15 @@ const FacturaClienteDetalle: React.FC = () => {
   const [scannerUrl, setScannerUrl] = useState<string | null>(null);
   const [scannerLoading, setScannerLoading] = useState(false);
   const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionDTO[]>([]);
+  const [modalAnularOpen, setModalAnularOpen] = useState(false);
+  const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
+  const [pagosAsociados, setPagosAsociados] = useState<any[]>([]);
   const screens = Grid.useBreakpoint();
   const { message } = App.useApp();
   const operacion = useAplicar();
   const [operacionTitulo, setOperacionTitulo] = useState('');
+  const [estadoDGII, setEstadoDGII] = useState<any>(null);
+  const [enviandoDGII, setEnviandoDGII] = useState(false);
 
   const handleRefresh = useCallback(() => {
     if (!id) return;
@@ -69,9 +84,19 @@ const FacturaClienteDetalle: React.FC = () => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Cargar documentos relacionados desde DOCUMENTOS_RELACION
-        documentoRelacionApi.obtenerPorTransaccion(parseInt(id))
+        documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva)
           .then(rel => setDocumentosRelacionados(rel || []))
           .catch(() => setDocumentosRelacionados([]));
+        // Cargar pagos asociados
+        transaccionApi.obtenerAsociadasInventario(sucursalActiva, parseInt(id))
+          .then((transacciones) => setPagosAsociados(transacciones || []))
+          .catch(() => setPagosAsociados([]));
+        // Cargar estado DGII
+        if (res.tipo?.envioDGII) {
+          apiClient.get(`/EnvioDGII/${sucursalActiva}/${res.id}`)
+            .then(({ data }: any) => setEstadoDGII(data?.data || null))
+            .catch(() => setEstadoDGII(null));
+        }
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al recargar';
@@ -102,6 +127,16 @@ const FacturaClienteDetalle: React.FC = () => {
         facturaClienteApi.verificarScan(sucursalActiva, parseInt(id))
           .then((scanRes) => setTieneScan(scanRes.existe))
           .catch(() => setTieneScan(false));
+        // Cargar estado DGII
+        if (res.tipo?.envioDGII) {
+          apiClient.get(`/EnvioDGII/${sucursalActiva}/${res.id}`)
+            .then(({ data }: any) => setEstadoDGII(data?.data || null))
+            .catch(() => setEstadoDGII(null));
+        }
+        // Cargar pagos asociados
+        transaccionApi.obtenerAsociadasInventario(sucursalActiva, parseInt(id))
+          .then((transacciones) => setPagosAsociados(transacciones || []))
+          .catch(() => setPagosAsociados([]));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
@@ -114,13 +149,13 @@ const FacturaClienteDetalle: React.FC = () => {
   // Cargar documentos relacionados desde DOCUMENTOS_RELACION
   useEffect(() => {
     if (!data?.id) return;
-    documentoRelacionApi.obtenerPorTransaccion(data.id)
+    documentoRelacionApi.obtenerPorTransaccion(data.id, sucursalActiva)
       .then(rel => setDocumentosRelacionados(rel || []))
       .catch(() => {
         setDocumentosRelacionados([]);
         message.warning('No se pudieron cargar los documentos relacionados');
       });
-  }, [data?.id]);
+  }, [data?.id, sucursalActiva]);
 
   if (loading || (!data && !loadingError)) {
     return (
@@ -141,6 +176,7 @@ const FacturaClienteDetalle: React.FC = () => {
 
   const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
+  const tienePagos = pagosAsociados.length > 0;
 
   // ===== Detalles filtrados por búsqueda =====
   const detallesFiltrados = detalleSearch
@@ -165,9 +201,11 @@ const FacturaClienteDetalle: React.FC = () => {
         <div style={{ fontSize: 13 }}>
           <div>{record.codigo || '-'}</div>
           {record.referencia && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
-              {record.referencia}
-            </div>
+            <Tooltip title={record.referencia}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                {record.referencia}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -198,9 +236,11 @@ const FacturaClienteDetalle: React.FC = () => {
         <div>
           <div>{formatNumber(record.cantidad || 0)}</div>
           {record.medida?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
-              {record.medida.nombre}
-            </div>
+            <Tooltip title={record.medida.nombre}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {record.medida.nombre}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -271,7 +311,11 @@ const FacturaClienteDetalle: React.FC = () => {
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
           {record.impuesto?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
+            <Tooltip title={record.impuesto.nombre}>
+              <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {toTitleCase(record.impuesto.nombre)}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -311,7 +355,7 @@ const FacturaClienteDetalle: React.FC = () => {
     }
   };
 
-  const handleDesaplicar = async () => {
+  const handleDesaplicarConfirm = async (_motivo: string) => {
     if (!id || !data) return;
     setSaving(true);
     try {
@@ -319,6 +363,7 @@ const FacturaClienteDetalle: React.FC = () => {
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
       await facturaClienteApi.desaplicar(origen, documento);
       message.success('Documento desaplicado exitosamente');
+      setModalDesaplicarOpen(false);
       handleRefresh();
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al desaplicar');
@@ -334,16 +379,39 @@ const FacturaClienteDetalle: React.FC = () => {
       message.warning('Debe escanear la factura antes de aplicar.');
       return;
     }
+
+    // Validar DGII si el tipo lo requiere
+    if (data?.tipo?.envioDGII && !estadoDGII?.codigoQR) {
+      message.error('Debe enviar el documento a la DGII antes de aplicar.');
+      return;
+    }
+
+    // FC15 - Validar FechaPermitida
+    if (data?.documento?.fechaPermitida === 'MenorIgualFechaDia') {
+      const hoy = new Date();
+      const fechaDoc = new Date(data.fechaDocumento);
+      if (fechaDoc > hoy) {
+        message.error('La fecha del documento no puede ser mayor a la fecha del día.');
+        return;
+      }
+    }
+
     setOperacionTitulo(`Aplicando FAC-${data?.noDocumento || id}`);
     operacion.ejecutar(`/FAC/${sucursalActiva}/aplicar/${id}`, handleRefresh);
   };
 
-  const handleAnular = async () => {
+  const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
     if (!data) return;
     setSaving(true);
     try {
-      await facturaClienteApi.anular(sucursalActiva, data as any);
+      const dto = {
+        ...data,
+        fechaDocumento: dataAnular.fecha,
+        nota: `${data.nota || ''} Documento anulado por: ${dataAnular.motivo}.`,
+      };
+      await facturaClienteApi.anular(sucursalActiva, dto);
       message.success('Documento anulado exitosamente');
+      setModalAnularOpen(false);
       const res = await facturaClienteApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
@@ -356,6 +424,14 @@ const FacturaClienteDetalle: React.FC = () => {
 
   const handlePostear = () => {
     if (!data) return;
+    if (data.concepto?.noAsientos) {
+      message.info('El concepto no genera asientos contables.');
+      return;
+    }
+    if (data.estado !== 1) {
+      message.info('Debe aplicar el documento antes de postear.');
+      return;
+    }
     setOperacionTitulo(`Posteando FAC-${data?.noDocumento || id}`);
     operacion.ejecutar(
       `/FAC/${sucursalActiva}/postear`,
@@ -394,6 +470,49 @@ const FacturaClienteDetalle: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleEnviarDGII = async () => {
+    if (!id || !data) return;
+    setEnviandoDGII(true);
+    try {
+      await apiClient.put(`/EnvioDGII/${sucursalActiva}/MarcarEnviado`, null, {
+        params: { transaccionID: parseInt(id) }
+      });
+      message.success('Documento enviado a la DGII exitosamente');
+      const { data: resp } = await apiClient.get(`/EnvioDGII/${sucursalActiva}/${id}`);
+      setEstadoDGII(resp?.data || null);
+      handleRefresh();
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al enviar a la DGII';
+      message.error(msg);
+    } finally {
+      setEnviandoDGII(false);
+    }
+  };
+
+  const handleReasignarNCF = async () => {
+    if (!id || !data) return;
+    Modal.confirm({
+      title: 'Reasignar NCF',
+      icon: <ExclamationCircleOutlined />,
+      content: '¿Desea reasignar un nuevo NCF a esta factura?',
+      okText: 'Sí',
+      cancelText: 'No',
+      onOk: async () => {
+        setSaving(true);
+        try {
+          await apiClient.put(`/Transaccion/${sucursalActiva}/reasignarNCF/${id}`);
+          message.success('NCF reasignado correctamente');
+          handleRefresh();
+        } catch (err: any) {
+          const msg = err?.response?.data?.errorMessage || 'Error al reasignar NCF';
+          message.error(msg);
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
   };
 
   function extraerMensajeError(err: any, fallback: string): string {
@@ -436,6 +555,34 @@ const FacturaClienteDetalle: React.FC = () => {
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
         onVolver={() => navigate('/FFAC')}
+        extraButtons={
+          <PermissionGate codigoPantalla="FFAC" accion="APLICAR">
+            {data?.tipo?.envioDGII && (
+              <Space>
+                <Button
+                  icon={<SendOutlined />}
+                  onClick={handleEnviarDGII}
+                  loading={enviandoDGII}
+                  disabled={data.estado !== 1}
+                  size="small"
+                >
+                  Enviar DGII
+                </Button>
+                <Button
+                  icon={<FileTextOutlined />}
+                  onClick={handleReasignarNCF}
+                  disabled={data.estado !== 1}
+                  size="small"
+                >
+                  Reasignar NCF
+                </Button>
+                {estadoDGII?.codigoQR && (
+                  <Tag color="success" icon={<CheckCircleOutlined />}>DGII OK</Tag>
+                )}
+              </Space>
+            )}
+          </PermissionGate>
+        }
         onImprimir={async () => {
           setImprimiendo(true);
           try {
@@ -464,10 +611,10 @@ const FacturaClienteDetalle: React.FC = () => {
         }}
         onEditar={() => navigate(`/FFAC/${id}/editar`)}
         onAplicar={handleAplicar}
-        onAnular={handleAnular}
-        onPostear={handlePostear}
+        onAnular={tienePagos ? undefined : async () => setModalAnularOpen(true)}
+        onPostear={data.concepto?.noAsientos ? undefined : handlePostear}
         onRevisado={handleRevisado}
-        onDesaplicar={handleDesaplicar}
+        onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
       />
 
@@ -535,6 +682,26 @@ const FacturaClienteDetalle: React.FC = () => {
                   ),
                 },
                 {
+                  key: 'transacciones',
+                  label: `Documentos (${data?.transaccionesAsociadas?.length || 0})`,
+                  children: (
+                    <TransaccionesAsociadasCard
+                      documentos={data?.transaccionesAsociadas || []}
+                      readOnly={true}
+                    />
+                  ),
+                },
+                {
+                  key: 'notas',
+                  label: `Notas (${data?.notasSeguimiento?.length || 0})`,
+                  children: (
+                    <NotasSeguimientoCard
+                      notas={data?.notasSeguimiento || []}
+                      readOnly={true}
+                    />
+                  ),
+                },
+                {
                   key: 'asientos',
                   label: `Asientos (${data.asientos?.length || 0})`,
                   children: (
@@ -558,7 +725,14 @@ const FacturaClienteDetalle: React.FC = () => {
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
-            />
+            >
+              <CobrosMinimal cobrosArray={data?.cobros} loading={loading} />
+            </TotalesCard>
+            {estadoDGII?.codigoQR && (
+              <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                <QRCode value={estadoDGII.codigoQR} size={140} />
+              </div>
+            )}
             <DocumentosRelacionadosCard
               documentos={documentosRelacionados}
               currentId={data?.id}
@@ -628,6 +802,26 @@ const FacturaClienteDetalle: React.FC = () => {
                 ),
               },
               {
+                key: 'transacciones',
+                label: `Documentos (${data?.transaccionesAsociadas?.length || 0})`,
+                children: (
+                  <TransaccionesAsociadasCard
+                    documentos={data?.transaccionesAsociadas || []}
+                    readOnly={true}
+                  />
+                ),
+              },
+              {
+                key: 'notas',
+                label: `Notas (${data?.notasSeguimiento?.length || 0})`,
+                children: (
+                  <NotasSeguimientoCard
+                    notas={data?.notasSeguimiento || []}
+                    readOnly={true}
+                  />
+                ),
+              },
+              {
                 key: 'asientos',
                 label: `Asientos (${data.asientos?.length || 0})`,
                 children: (
@@ -649,7 +843,14 @@ const FacturaClienteDetalle: React.FC = () => {
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
-            />
+            >
+              <CobrosMinimal cobrosArray={data?.cobros} loading={loading} />
+            </TotalesCard>
+            {estadoDGII?.codigoQR && (
+              <div style={{ textAlign: 'center' }}>
+                <QRCode value={estadoDGII.codigoQR} size={140} />
+              </div>
+            )}
           </div>
 
           <DocumentosRelacionadosCard
@@ -682,6 +883,24 @@ const FacturaClienteDetalle: React.FC = () => {
         )}
       </Modal>
 
+      {/* Modal de Anulación */}
+      <ModalAnular
+        open={modalAnularOpen}
+        onClose={() => setModalAnularOpen(false)}
+        onConfirm={handleAnularConfirm}
+        documento={`${data.documento.codigo}-${data.noDocumento}`}
+        fechaDocumento={data.fechaDocumento}
+        periodoCerrado={data.periodo === 6}
+      />
+
+      {/* Modal de Desaplicar */}
+      <ModalDesaplicar
+        open={modalDesaplicarOpen}
+        onClose={() => setModalDesaplicarOpen(false)}
+        onConfirm={handleDesaplicarConfirm}
+        tituloDocumento={`${data.documento.codigo}-${data.noDocumento}`}
+      />
+
       {/* Modal de Progreso para Aplicar/Postear */}
       <ModalProgreso
         open={operacion.loading || !!operacion.completado}
@@ -695,3 +914,4 @@ const FacturaClienteDetalle: React.FC = () => {
 };
 
 export default FacturaClienteDetalle;
+

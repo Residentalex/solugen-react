@@ -490,7 +490,9 @@ const Notificaciones: React.FC = () => {
                   }}
                   locale={{
                     emptyText: (
-                      <Empty description="No hay notificaciones pendientes" />
+                      <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Empty description="No hay notificaciones pendientes" />
+                      </div>
                     ),
                   }}
                   pagination={{
@@ -523,11 +525,13 @@ const Notificaciones: React.FC = () => {
                   size="middle"
                   locale={{
                     emptyText: (
-                      <Empty description="No has enviado notificaciones">
-                        <Button type="primary" onClick={() => setModalVisible(true)}>
-                          Enviar primera notificación
-                        </Button>
-                      </Empty>
+                      <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Empty description="No has enviado notificaciones">
+                          <Button type="primary" onClick={() => setModalVisible(true)}>
+                            Enviar primera notificación
+                          </Button>
+                        </Empty>
+                      </div>
                     ),
                   }}
                   pagination={{
@@ -559,7 +563,11 @@ const Notificaciones: React.FC = () => {
                   scroll={{ x: 1100 }}
                   size="middle"
                   locale={{
-                    emptyText: <Empty description="No hay notificaciones en el historial" />,
+                    emptyText: (
+                      <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Empty description="No hay notificaciones en el historial" />
+                      </div>
+                    ),
                   }}
                   pagination={{
                     pageSize,

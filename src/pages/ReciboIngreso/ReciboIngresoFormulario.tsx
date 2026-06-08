@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Popover,
 } from 'antd';
 import {
   SaveOutlined,
@@ -52,6 +53,10 @@ const MEDIO_COBRO_LABELS: Record<string, string> = {
   TarjetaRegalo: 'Tarjeta Regalo',
   NotaCredito: 'Nota Crédito',
 };
+
+// ===== Helpers para tipo de asiento =====
+function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
+function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
 
 // ===== Factory para Cobros =====
 function crearCobrosIniciales(): CobroDTO[] {
@@ -112,6 +117,13 @@ const ReciboIngresoFormulario: React.FC = () => {
   const editingValueRef = useRef<string | number>('');
   const fieldCloseHandledRef = useRef(false);
 
+  // Refs para la guía paso a paso
+  const tipoRef = useRef<HTMLDivElement>(null);
+  const conceptoRef = useRef<HTMLDivElement>(null);
+  const entidadRef = useRef<HTMLDivElement>(null);
+  const totalRef = useRef<HTMLDivElement>(null);
+  const documentosRef = useRef<HTMLDivElement>(null);
+
   const [form] = Form.useForm();
 
   // Watchers
@@ -145,7 +157,20 @@ const ReciboIngresoFormulario: React.FC = () => {
     fieldCloseHandledRef.current = true;
     const field = editingField;
     if (field) {
-      form.setFieldsValue({ [field]: editingValueRef.current });
+      const oldValue = form.getFieldValue(field);
+      const newValue = editingValueRef.current;
+      form.setFieldsValue({ [field]: newValue });
+
+      // RI13 - Si se cambió la tasa, preguntar si actualizar montos
+      if (field === 'tasa' && oldValue !== newValue) {
+        Modal.confirm({
+          title: 'Actualizar montos',
+          icon: <ExclamationCircleOutlined />,
+          content: '¿Desea actualizar los montos en base a la nueva tasa?',
+          okText: 'Sí',
+          cancelText: 'No',
+        });
+      }
     }
     setEditingField(null);
   };
@@ -299,20 +324,20 @@ const ReciboIngresoFormulario: React.FC = () => {
       }
     }
 
-    // Validar distribución: Σ(pagos.Monto) ≤ Total (diferencia clave con NC/ND)
+    // RI17 - Validar distribución vs total
     if (transaccionesAsociadas.length > 0) {
-      const sumaMontos = transaccionesAsociadas.reduce((s, t) => s + (t.monto || 0), 0);
-      if (sumaMontos > (values.total || 0) + 0.01) {
-        return 'La suma de montos en Documentos Relacionados no puede exceder el Total';
+      const distribuido = transaccionesAsociadas.reduce((s, t) => s + (t.monto || 0), 0);
+      if (distribuido > (values.total || 0)) {
+        return 'El monto distribuido en las facturas no puede ser mayor al total del documento.';
       }
     }
 
-    // Validar asientos cuadrados
+    // RI8 - Validar asientos cuadrados
     if (asientos.length > 0) {
-      const totalDebitos = asientos.reduce((s, r) => s + ((r.tipoAsiento === 'D' || r.tipoAsiento === 0) ? r.monto : 0), 0);
-      const totalCreditos = asientos.reduce((s, r) => s + ((r.tipoAsiento === 'C' || r.tipoAsiento === 1) ? r.monto : 0), 0);
+      const totalDebitos = asientos.reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
+      const totalCreditos = asientos.reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
       if (Math.abs(totalDebitos - totalCreditos) > 0.01) {
-        return 'Los asientos contables no están cuadrados';
+        return 'Los asientos contables no están cuadrados. Los débitos deben ser igual a los créditos.';
       }
     }
 
@@ -492,8 +517,8 @@ const ReciboIngresoFormulario: React.FC = () => {
   };
 
   // Totales de asientos
-  const totalDebitos = asientos.reduce((s, r) => s + ((r.tipoAsiento === 'D' || r.tipoAsiento === 0) ? r.monto : 0), 0);
-  const totalCreditos = asientos.reduce((s, r) => s + ((r.tipoAsiento === 'C' || r.tipoAsiento === 1) ? r.monto : 0), 0);
+  const totalDebitos = asientos.reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
+  const totalCreditos = asientos.reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
 
   // ===== Columnas =====
   const asociadasColumns = [
@@ -585,11 +610,11 @@ const ReciboIngresoFormulario: React.FC = () => {
     },
     {
       title: 'Débito', key: 'debito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => (r.tipoAsiento === 'D' || r.tipoAsiento === 0) ? formatNumber(r.monto) : '',
+      render: (_: any, r: AsientoContableDTO) => esDebito(r.tipoAsiento) ? formatNumber(r.monto) : '',
     },
     {
       title: 'Crédito', key: 'credito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => (r.tipoAsiento === 'C' || r.tipoAsiento === 1) ? formatNumber(r.monto) : '',
+      render: (_: any, r: AsientoContableDTO) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '',
     },
   ];
 
@@ -610,25 +635,27 @@ const ReciboIngresoFormulario: React.FC = () => {
         <Row gutter={[16, 24]}>
           {/* Fila 1: Tipo + Concepto */}
           <Col xs={24} sm={12} lg={9}>
-            <Form.Item name="tipo" style={{ marginBottom: 0 }}>
-              <FloatingField label="Tipo">
-                <Select
-                  allowClear
-                  showSearch
-                  optionFilterProp="children"
-                  onChange={handleTipoChange}
-                >
-                  {tiposCache.map((tc) => (
-                    <Select.Option key={tc.codigo} value={tc.codigo}>
-                      {toTitleCase(tc.nombre)}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </FloatingField>
-            </Form.Item>
+            <div ref={tipoRef}>
+              <Form.Item name="tipo" style={{ marginBottom: 0 }}>
+                <FloatingField label="Tipo">
+                  <Select
+                    allowClear
+                    showSearch
+                    optionFilterProp="children"
+                    onChange={handleTipoChange}
+                  >
+                    {tiposCache.map((tc) => (
+                      <Select.Option key={tc.codigo} value={tc.codigo}>
+                        {toTitleCase(tc.nombre)}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </FloatingField>
+              </Form.Item>
+            </div>
           </Col>
           <Col xs={24} sm={12} lg={15}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
               <div style={{ flex: 1 }}>
                 <FloatingField label="Concepto" required>
                   <Input
@@ -656,15 +683,35 @@ const ReciboIngresoFormulario: React.FC = () => {
           {/* Fila 2: Entidad */}
           <Col xs={24} sm={12} lg={12}>
             <Form.Item name="entidad" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Entidad Desde" required>
+              <FloatingField label="Entidad Desde" required ref={entidadRef}>
                 <Select
                   allowClear
                   showSearch
                   optionFilterProp="children"
                   notFoundContent="Seleccione un concepto primero"
                   onChange={(val) => {
-                    const ent = entidadesCache.find((e: any) => e.codigo === val);
-                    setSelectedEntidad(ent || null);
+                    // RI18 - Si hay documentos asignados y se cambia entidad, preguntar
+                    if (transaccionesAsociadas.length > 0) {
+                      const oldVal = form.getFieldValue('entidad');
+                      Modal.confirm({
+                        title: 'Cambiar entidad',
+                        icon: <ExclamationCircleOutlined />,
+                        content: 'La entidad tiene documentos asignados. Se borrarán los documentos agregados. ¿Está seguro?',
+                        okText: 'Sí, cambiar',
+                        cancelText: 'No',
+                        onOk: () => {
+                          setTransaccionesAsociadas([]);
+                          const ent = entidadesCache.find((e: any) => e.codigo === val);
+                          setSelectedEntidad(ent || null);
+                        },
+                        onCancel: () => {
+                          form.setFieldsValue({ entidad: oldVal || undefined });
+                        },
+                      });
+                    } else {
+                      const ent = entidadesCache.find((e: any) => e.codigo === val);
+                      setSelectedEntidad(ent || null);
+                    }
                   }}
                   onDropdownVisibleChange={(open) => {
                     if (open && !selectedConcepto) {
@@ -705,11 +752,13 @@ const ReciboIngresoFormulario: React.FC = () => {
             </Form.Item>
           </Col>
           <Col xs={24} sm={12} lg={6}>
-            <Form.Item name="total" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Monto Total" required>
-                <InputNumber style={{ width: '100%' }} min={0} step={0.01} precision={2} />
-              </FloatingField>
-            </Form.Item>
+            <div ref={totalRef}>
+              <Form.Item name="total" required style={{ marginBottom: 0 }}>
+                <FloatingField label="Monto Total" required>
+                  <InputNumber style={{ width: '100%' }} min={0} step={0.01} precision={2} />
+                </FloatingField>
+              </Form.Item>
+            </div>
           </Col>
 
           {/* Fila 4: Campos rápidos */}
@@ -838,7 +887,7 @@ const ReciboIngresoFormulario: React.FC = () => {
     key: 'documentos',
     label: `Documentos Relacionados (${transaccionesAsociadas.length})`,
     children: (
-      <div>
+      <div ref={documentosRef}>
         <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Space>
             <Text className="paces-text-secondary">
@@ -1043,7 +1092,169 @@ const ReciboIngresoFormulario: React.FC = () => {
           />
           </div>
       )}
+
+      {/* RI19 - Guía paso a paso */}
+      {(mode === 'crear' || esBorrador) && (
+        <ReciboIngresoGuide
+          mode={mode}
+          tipo={selectedTipo}
+          concepto={selectedConcepto}
+          entidad={selectedEntidad}
+          total={totalValue}
+          transaccionesCount={transaccionesAsociadas.length}
+          tipoRef={tipoRef}
+          conceptoRef={conceptoRef}
+          entidadRef={entidadRef}
+          totalRef={totalRef}
+          documentosRef={documentosRef}
+        />
+      )}
     </div>
+  );
+};
+
+// ===== Componente Guía paso a paso para ReciboIngreso (RI19) =====
+interface ReciboIngresoGuideProps {
+  mode: 'crear' | 'editar';
+  tipo: any | null;
+  concepto: any | null;
+  entidad: any | null;
+  total: number;
+  transaccionesCount: number;
+  tipoRef: React.RefObject<HTMLDivElement | null>;
+  conceptoRef: React.RefObject<HTMLDivElement | null>;
+  entidadRef: React.RefObject<HTMLDivElement | null>;
+  totalRef: React.RefObject<HTMLDivElement | null>;
+  documentosRef: React.RefObject<HTMLDivElement | null>;
+}
+
+interface GuideStep {
+  key: string;
+  title: string;
+  description: string;
+  target: () => HTMLDivElement | null;
+}
+
+const ReciboIngresoGuide: React.FC<ReciboIngresoGuideProps> = ({
+  tipo, concepto, entidad, total, transaccionesCount,
+  tipoRef, conceptoRef, entidadRef, totalRef, documentosRef,
+}) => {
+  const [open, setOpen] = useState(false);
+  const dismissedStepRef = useRef<string | null>(null);
+  const currentStepRef = useRef<GuideStep | null>(null);
+
+  const getCurrentStep = useCallback((): GuideStep | null => {
+    const steps: GuideStep[] = [
+      {
+        key: 'tipo',
+        title: 'Paso 1: Tipo',
+        description: 'Debe elegir un tipo de documento para continuar.',
+        target: () => tipoRef.current,
+      },
+      {
+        key: 'concepto',
+        title: 'Paso 2: Concepto',
+        description: 'Seleccione un concepto. Las opciones dependen del tipo seleccionado.',
+        target: () => conceptoRef.current,
+      },
+      {
+        key: 'entidad',
+        title: 'Paso 3: Entidad',
+        description: 'Seleccione la entidad (cliente) asociada al recibo de ingreso.',
+        target: () => entidadRef.current,
+      },
+      {
+        key: 'monto',
+        title: 'Paso 4: Monto',
+        description: 'Ingrese el monto total del recibo de ingreso.',
+        target: () => totalRef.current,
+      },
+      {
+        key: 'documentos',
+        title: 'Paso 5: Documentos',
+        description: 'Agregue los documentos/pagos asociados al recibo de ingreso.',
+        target: () => documentosRef.current,
+      },
+    ];
+
+    if (!tipo) return steps[0];
+    if (!concepto) return steps[1];
+    if (!entidad) return steps[2];
+    if (!total || total === 0) return steps[3];
+    if (transaccionesCount === 0) return steps[4];
+
+    return null;
+  }, [tipo, concepto, entidad, total, transaccionesCount, tipoRef, conceptoRef, entidadRef, totalRef, documentosRef]);
+
+  currentStepRef.current = getCurrentStep();
+
+  useEffect(() => {
+    const current = getCurrentStep();
+    if (current) {
+      if (dismissedStepRef.current !== current.key) {
+        setOpen(true);
+      }
+    } else {
+      setOpen(false);
+      dismissedStepRef.current = null;
+    }
+  }, [getCurrentStep]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.ant-popover')) return;
+      setOpen(false);
+      if (currentStepRef.current) {
+        dismissedStepRef.current = currentStepRef.current.key;
+      }
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [open]);
+
+  const currentStep = getCurrentStep();
+  if (!currentStep) return null;
+
+  const targetElement = currentStep.target();
+  if (!targetElement) return null;
+
+  const rect = targetElement.getBoundingClientRect();
+
+  return createPortal(
+    <Popover
+      open={open}
+      onOpenChange={(visible: boolean) => {
+        if (!visible) {
+          setOpen(false);
+          dismissedStepRef.current = currentStep.key;
+        }
+      }}
+      title={currentStep.title}
+      content={currentStep.description}
+      placement="top"
+      trigger={[]}
+      rootClassName="guide-popover"
+    >
+      <span
+        style={{
+          position: 'fixed',
+          top: rect.top,
+          left: rect.left,
+          width: rect.width,
+          height: rect.height,
+          pointerEvents: 'none',
+          zIndex: -1,
+        }}
+      />
+    </Popover>,
+    document.body,
   );
 };
 

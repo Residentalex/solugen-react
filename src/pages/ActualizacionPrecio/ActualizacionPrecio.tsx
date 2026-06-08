@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Table, Input, Select, Tag, Button, Card, Typography, Modal, Descriptions, DatePicker, Alert } from 'antd';
+import { Table, Input, Select, Tag, Button, Card, Typography, Modal, Descriptions, DatePicker, Alert, Empty } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -274,7 +274,7 @@ const ActualizacionPrecio: React.FC = () => {
           scroll={{ x: 1200 }}
           size="middle"
           locale={{
-            emptyText: loading ? ' ' : 'No se encontraron actualizaciones de precio',
+            emptyText: loading ? ' ' : <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No se encontraron actualizaciones de precio" /></div>,
           }}
           onRow={() => ({
             style: { cursor: 'default' },

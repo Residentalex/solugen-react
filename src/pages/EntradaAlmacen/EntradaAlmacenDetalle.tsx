@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Dropdown, Modal, DatePicker, Typography, Tooltip, Descriptions, Alert, App
+  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Dropdown, Modal, DatePicker, Typography, Tooltip, Descriptions, Alert, App, Badge, Empty
 } from 'antd';
 import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  ExclamationCircleOutlined,
   LockFilled,
   FileTextOutlined,
   FileSearchOutlined,
@@ -20,7 +21,9 @@ import { apiClient } from '../../api/client';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
+import { transaccionApi } from '../../api/transaccionApi';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
+import { productoApi } from '../../api/productoApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
@@ -32,6 +35,8 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { useAplicar } from '../../hooks/useAplicar';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
+import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
+import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
@@ -55,6 +60,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
   const [detalleSearch, setDetalleSearch] = useState('');
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
   const [tieneScan, setTieneScan] = useState<boolean | null>(null);
+  const [tienePagos, setTienePagos] = useState(false);
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
   const [scannerUrl, setScannerUrl] = useState<string | null>(null);
   const [scannerLoading, setScannerLoading] = useState(false);
@@ -63,6 +69,11 @@ const EntradaAlmacenDetalle: React.FC = () => {
   const [devolucionesData, setDevolucionesData] = useState<any[]>([]);
 const [facturaData, setFacturaData] = useState<any>(null);
 const [documentosRelacionados, setDocumentosRelacionados] = React.useState<DocumentoRelacionDTO[]>([]);
+const [modalAnularOpen, setModalAnularOpen] = useState(false);
+const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
+const [vencimientoPendientes, setVencimientoPendientes] = useState<{ id: number; codigo: string; articulo: string }[]>([]);
+const [vencimientoModalOpen, setVencimientoModalOpen] = useState(false);
+const [vencimientoFechas, setVencimientoFechas] = useState<Record<number, dayjs.Dayjs>>({});
 
   const { message, modal } = App.useApp();
 
@@ -82,13 +93,13 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
   // Cargar documentos relacionados desde DOCUMENTOS_RELACION
   React.useEffect(() => {
     if (!data?.id) return;
-    documentoRelacionApi.obtenerPorTransaccion(data.id)
+    documentoRelacionApi.obtenerPorTransaccion(data.id, sucursalActiva)
       .then(rel => setDocumentosRelacionados(rel || []))
       .catch(() => {
         setDocumentosRelacionados([]);
         message.warning('No se pudieron cargar los documentos relacionados');
       });
-  }, [data?.id]);
+  }, [data?.id, sucursalActiva]);
 
   const handleRefresh = useCallback(() => {
     if (!id) return;
@@ -113,7 +124,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
           .then((dvcs) => setDevolucionesData(dvcs))
           .catch(() => {});
         // Cargar documentos relacionados desde DOCUMENTOS_RELACION
-        documentoRelacionApi.obtenerPorTransaccion(parseInt(id))
+        documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva)
           .then(rel => setDocumentosRelacionados(rel || []))
           .catch(() => message.warning('No se pudieron cargar los documentos relacionados'));
         // Cargar factura RDE si el concepto genera una
@@ -220,6 +231,10 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
         entradaAlmacenApi.verificarScan(sucursalActiva, parseInt(id))
           .then((scanRes) => setTieneScan(scanRes.existe))
           .catch(() => setTieneScan(false));
+        // Cargar transacciones/pagos asociados
+        transaccionApi.obtenerAsociadasInventario(sucursalActiva, parseInt(id))
+          .then((transacciones) => setTienePagos(transacciones.length > 0))
+          .catch(() => setTienePagos(false));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
@@ -278,6 +293,19 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
     );
     return pantalla?.acciones.includes('VISUALIZAR') ?? false;
   }, []);
+
+  const tienePermisoDESAPLICAR = React.useMemo(() => {
+    const usuario = useAuthStore.getState().usuario;
+    if (!usuario) return false;
+    const pantalla = usuario.pantallas.find(
+      (p) => p.codigo?.toUpperCase() === 'FENP'
+    );
+    return pantalla?.acciones.includes('DESAPLICAR') ?? false;
+  }, []);
+
+  const tieneDetalleConAumentoPrecio = React.useMemo(() => {
+    return (data?.detalles || []).some((d) => (d.familia?.aumentoPrecioMaximo ?? 0) > 0);
+  }, [data?.detalles]);
 
   const operacion = useAplicar();
   const [operacionTitulo, setOperacionTitulo] = useState('');
@@ -359,9 +387,11 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
             })()}
           </div>
           {record.referencia && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto' }}>
-              {record.referencia}
-            </div>
+            <Tooltip title={record.referencia}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                {record.referencia}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -413,9 +443,11 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
                 <div>{formatNumber(record.cantidad || 0)}</div>
               )}
             </div>
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', marginTop: 'auto', minHeight: 17 }}>
-              {record.medida?.nombre || ''}
-            </div>
+            <Tooltip title={record.medida?.nombre || ''}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', marginTop: 'auto', minHeight: 17, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {record.medida?.nombre || ''}
+              </div>
+            </Tooltip>
           </div>
         );
       },
@@ -471,7 +503,11 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
           {record.impuesto?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
+            <Tooltip title={record.impuesto.nombre}>
+              <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {toTitleCase(record.impuesto.nombre)}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -496,7 +532,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
   // asientoColumns reemplazado por AsientosContableTable compartido
 
   // ===== Handlers de acciones de estado =====
-  const handleDesaplicar = async () => {
+  const handleDesaplicarConfirm = async (motivo: string) => {
     if (!id || !data) return;
     setSaving(true);
     try {
@@ -504,6 +540,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
       await entradaAlmacenApi.desaplicar(origen, documento);
       message.success('Documento desaplicado exitosamente');
+      setModalDesaplicarOpen(false);
       handleRefresh();
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al desaplicar');
@@ -513,7 +550,7 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
     }
   };
 
-  const handleAplicar = () => {
+  const handleAplicar = async () => {
     if (!id) return;
 
     // Verificación temprana del scanner (solo obligatorio si tiene Orden de Compra)
@@ -522,19 +559,98 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
       return;
     }
 
+    // Si el usuario tiene permiso DESAPLICAR y hay detalles con aumento configurado,
+    // mostrar confirmación antes de aplicar
+    if (tienePermisoDESAPLICAR && tieneDetalleConAumentoPrecio) {
+      const confirmed = await new Promise<boolean>((resolve) => {
+        modal.confirm({
+          title: 'Advertencia de sobreprecio',
+          icon: <ExclamationCircleOutlined />,
+          content: 'Hay productos cuyo costo podría superar el porcentaje de aumento máximo permitido de su familia. ¿Desea continuar aplicando?',
+          okText: 'Sí, aplicar',
+          cancelText: 'No, cancelar',
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      });
+
+      if (!confirmed) return;
+      // La ejecución continúa al final tras validación de vencimiento
+    }
+
+    // ===== Validar fechas de vencimiento (solo si tiene OrdenCompra) =====
+    if (data?.ordenCompra?.noDocumento && data.detalles?.length) {
+      try {
+        const codigos = data.detalles.map((d) => d.codigo).filter(Boolean) as string[];
+        const codigosConVencimiento = await productoApi.obtenerProductosVencimiento(Sucursal.Compra, codigos);
+
+        if (codigosConVencimiento.length > 0) {
+          // Filtrar detalles que tienen vencimiento pero no tienen fecha
+          const pendientes = data.detalles
+            .filter((d) => codigosConVencimiento.includes(d.codigo) && !d.fechaVencimiento)
+            .map((d) => ({ id: d.id, codigo: d.codigo, articulo: d.articulo }));
+
+          if (pendientes.length > 0) {
+            setVencimientoPendientes(pendientes);
+            setVencimientoFechas({});
+            setVencimientoModalOpen(true);
+            return; // Esperar a que el usuario complete las fechas
+          }
+        }
+      } catch (err: any) {
+        const msg = err?.response?.data?.errorMessage || 'Error al validar fechas de vencimiento';
+        message.warning(msg);
+        // No bloquear la aplicación si falla la consulta de vencimiento
+      }
+    }
+
+    // Flujo normal (sin bloqueos)
     setOperacionTitulo(`Aplicando ENP-${data?.noDocumento || id}`);
+    const confirmarSP = (tienePermisoDESAPLICAR && tieneDetalleConAumentoPrecio);
     operacion.ejecutar(
-      `/ENP/${sucursalActiva}/aplicar/${id}`,
+      `/ENP/${sucursalActiva}/aplicar/${id}${confirmarSP ? '?confirmarSobrePrecio=true' : ''}`,
       handleRefresh
     );
   };
 
-  const handleAnular = async () => {
+  const handleVencimientoConfirm = () => {
+    // Actualizar las fechas en los detalles
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        detalles: prev.detalles.map((d) => {
+          const fecha = vencimientoFechas[d.id];
+          if (!fecha) return d;
+          return { ...d, fechaVencimiento: fecha.format('YYYY-MM-DD') };
+        }),
+      };
+    });
+    setVencimientoModalOpen(false);
+    setVencimientoPendientes([]);
+    setVencimientoFechas({});
+
+    // Continuar con la aplicación (disparar el operacion.ejecutar)
+    setOperacionTitulo(`Aplicando ENP-${data?.noDocumento || id}`);
+    const confirmarSP = (tienePermisoDESAPLICAR && tieneDetalleConAumentoPrecio);
+    operacion.ejecutar(
+      `/ENP/${sucursalActiva}/aplicar/${id}${confirmarSP ? '?confirmarSobrePrecio=true' : ''}`,
+      handleRefresh
+    );
+  };
+
+  const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
     if (!data) return;
     setSaving(true);
     try {
-      await entradaAlmacenApi.anular(sucursalActiva, data as any);
+      const dto = {
+        ...data,
+        fechaDocumento: dataAnular.fecha,
+        nota: `${data.nota || ''} Documento anulado por: ${dataAnular.motivo}.`,
+      };
+      await entradaAlmacenApi.anular(sucursalActiva, dto);
       message.success('Documento anulado exitosamente');
+      setModalAnularOpen(false);
       const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
@@ -547,6 +663,15 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
 
   const handlePostear = () => {
     if (!data) return;
+    if (data.concepto?.noAsientos) {
+      message.info('El concepto no genera asientos contables.');
+      return;
+    }
+    // Seguridad: si no está en estado Aplicado (Validado=1), aplicar primero (como en desktop)
+    if (data.estado !== 1) {
+      message.info('Debe aplicar el documento antes de postear.');
+      return;
+    }
     setOperacionTitulo(`Posteando ENP-${data?.noDocumento || id}`);
     operacion.ejecutar(
       `/ENP/${sucursalActiva}/postear`,
@@ -653,10 +778,10 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
         }}
         onEditar={() => navigate(`/FENP/${id}/editar`)}
         onAplicar={handleAplicar}
-        onAnular={handleAnular}
-        onPostear={handlePostear}
+        onAnular={tienePagos ? undefined : async () => setModalAnularOpen(true)}
+        onPostear={data.concepto?.noAsientos ? undefined : handlePostear}
         onRevisado={handleRevisado}
-        onDesaplicar={handleDesaplicar}
+        onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
         extraButtons={
           data.estado === 1 ? (
@@ -752,6 +877,86 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
                       </div>
                       <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
                     </>
+                  ),
+                },
+                {
+                  key: 'devoluciones',
+                  label: (
+                    <span>
+                      Devoluciones
+                      {devolucionesData.length > 0 && (
+                        <Badge count={devolucionesData.length}
+                          style={{ marginLeft: 6, backgroundColor: '#556ee6' }} />
+                      )}
+                    </span>
+                  ),
+                  children: devolucionesData.length === 0 ? (
+                    <Empty
+                      image={<RollbackOutlined style={{ fontSize: 32, color: '#bfbfbf' }} />}
+                      imageStyle={{ height: 40 }}
+                      description="Sin devoluciones registradas"
+                    />
+                  ) : (
+                    <Table
+                      dataSource={devolucionesData}
+                      rowKey="id"
+                      size="small"
+                      pagination={false}
+                      scroll={{ x: 600 }}
+                      rowClassName={(record: any) =>
+                        record.estado === 3 ? 'paces-row-anulado' : ''
+                      }
+                      columns={[
+                        {
+                          title: 'Documento',
+                          key: 'documento',
+                          width: 130,
+                          render: (_: any, record: any) => (
+                            tienePermisoFDVC ? (
+                              <a
+                                className="paces-doc-link"
+                                onClick={() => navigate(`/FDVC/${record.id}`)}
+                                style={{ cursor: 'pointer' }}
+                              >
+                                DVC-{record.noDocumento}
+                              </a>
+                            ) : (
+                              <span>DVC-{record.noDocumento}</span>
+                            )
+                          ),
+                        },
+                        {
+                          title: 'Fecha',
+                          key: 'fecha',
+                          width: 110,
+                          render: (_: any, record: any) => formatDate(record.fechaDocumento),
+                        },
+                        {
+                          title: 'Suplidor',
+                          key: 'suplidor',
+                          responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
+                          render: (_: any, record: any) => toTitleCase(record.suplidor?.nombre || record.entidad?.nombre || ''),
+                        },
+                        {
+                          title: 'Total',
+                          key: 'total',
+                          width: 120,
+                          align: 'right',
+                          render: (_: any, record: any) => (
+                            <Typography.Text strong>{formatCurrency(record.total || 0)}</Typography.Text>
+                          ),
+                        },
+                        {
+                          title: 'Estado',
+                          key: 'estado',
+                          width: 110,
+                          render: (_: any, record: any) => {
+                            const info = ESTADO_DOCUMENTO_MAP[record.estado] || { label: 'Desconocido', color: 'default' };
+                            return <Tag color={info.color}>{info.label}</Tag>;
+                          },
+                        },
+                      ]}
+                    />
                   ),
                 },
                 {
@@ -871,6 +1076,86 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
                 ),
               },
               {
+                key: 'devoluciones',
+                label: (
+                  <span>
+                    Devoluciones
+                    {devolucionesData.length > 0 && (
+                      <Badge count={devolucionesData.length}
+                        style={{ marginLeft: 6, backgroundColor: '#556ee6' }} />
+                    )}
+                  </span>
+                ),
+                children: devolucionesData.length === 0 ? (
+                  <Empty
+                    image={<RollbackOutlined style={{ fontSize: 32, color: '#bfbfbf' }} />}
+                    imageStyle={{ height: 40 }}
+                    description="Sin devoluciones registradas"
+                  />
+                ) : (
+                  <Table
+                    dataSource={devolucionesData}
+                    rowKey="id"
+                    size="small"
+                    pagination={false}
+                    scroll={{ x: 600 }}
+                    rowClassName={(record: any) =>
+                      record.estado === 3 ? 'paces-row-anulado' : ''
+                    }
+                    columns={[
+                      {
+                        title: 'Documento',
+                        key: 'documento',
+                        width: 130,
+                        render: (_: any, record: any) => (
+                          tienePermisoFDVC ? (
+                            <a
+                              className="paces-doc-link"
+                              onClick={() => navigate(`/FDVC/${record.id}`)}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              DVC-{record.noDocumento}
+                            </a>
+                          ) : (
+                            <span>DVC-{record.noDocumento}</span>
+                          )
+                        ),
+                      },
+                      {
+                        title: 'Fecha',
+                        key: 'fecha',
+                        width: 110,
+                        render: (_: any, record: any) => formatDate(record.fechaDocumento),
+                      },
+                      {
+                        title: 'Suplidor',
+                        key: 'suplidor',
+                        responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
+                        render: (_: any, record: any) => toTitleCase(record.suplidor?.nombre || record.entidad?.nombre || ''),
+                      },
+                      {
+                        title: 'Total',
+                        key: 'total',
+                        width: 120,
+                        align: 'right',
+                        render: (_: any, record: any) => (
+                          <Typography.Text strong>{formatCurrency(record.total || 0)}</Typography.Text>
+                        ),
+                      },
+                      {
+                        title: 'Estado',
+                        key: 'estado',
+                        width: 110,
+                        render: (_: any, record: any) => {
+                          const info = ESTADO_DOCUMENTO_MAP[record.estado] || { label: 'Desconocido', color: 'default' };
+                          return <Tag color={info.color}>{info.label}</Tag>;
+                        },
+                      },
+                    ]}
+                  />
+                ),
+              },
+              {
                 key: 'asientos',
                 label: `Asientos (${data.asientos?.length || 0})`,
                 children: (
@@ -938,6 +1223,72 @@ const [documentosRelacionados, setDocumentosRelacionados] = React.useState<Docum
             <Spin />
           </div>
         )}
+      </Modal>
+
+      {/* Modal Desaplicar */}
+      <ModalDesaplicar
+        open={modalDesaplicarOpen}
+        onClose={() => setModalDesaplicarOpen(false)}
+        onConfirm={handleDesaplicarConfirm}
+        tituloDocumento={`${data.documento.codigo}-${data.noDocumento}`}
+      />
+
+      {/* Modal Anular */}
+      <ModalAnular
+        open={modalAnularOpen}
+        onClose={() => setModalAnularOpen(false)}
+        onConfirm={handleAnularConfirm}
+        documento={`${data.documento.codigo}-${data.noDocumento}`}
+        fechaDocumento={data.fechaDocumento}
+        periodoCerrado={data.periodo === 6}
+      />
+
+      {/* Modal de Fechas de Vencimiento Pendientes */}
+      <Modal
+        title="Fechas de Vencimiento Requeridas"
+        open={vencimientoModalOpen}
+        onCancel={() => { setVencimientoModalOpen(false); setVencimientoPendientes([]); setVencimientoFechas({}); }}
+        width={520}
+        destroyOnClose
+        maskClosable={false}
+        footer={
+          <Space>
+            <Button onClick={() => { setVencimientoModalOpen(false); setVencimientoPendientes([]); setVencimientoFechas({}); }}>
+              Cancelar
+            </Button>
+            <Button
+              type="primary"
+              disabled={vencimientoPendientes.some((p) => !vencimientoFechas[p.id])}
+              onClick={handleVencimientoConfirm}
+            >
+              Aplicar
+            </Button>
+          </Space>
+        }
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Text>Los siguientes productos requieren fecha de vencimiento:</Text>
+        </div>
+        {vencimientoPendientes.map((p) => (
+          <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 500, fontSize: 13 }}>{p.codigo}</div>
+              <div className="paces-text-secondary" style={{ fontSize: 12 }}>{p.articulo}</div>
+            </div>
+            <DatePicker
+              style={{ width: 160 }}
+              format="YYYY-MM-DD"
+              value={vencimientoFechas[p.id] || null}
+              onChange={(date) => {
+                setVencimientoFechas((prev) => ({
+                  ...prev,
+                  [p.id]: date || undefined as any,
+                }));
+              }}
+              disabledDate={(current) => current && current.isBefore(dayjs(), 'day')}
+            />
+          </div>
+        ))}
       </Modal>
 
       {/* Modal de Progreso para Aplicar/Postear */}

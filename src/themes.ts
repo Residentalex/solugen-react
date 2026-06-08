@@ -9,7 +9,8 @@ export type ThemeName =
   | 'dark-rose'
   | 'light-amber'
   | 'dark-amber'
-  | 'light-genesis';
+  | 'light-genesis'
+  | 'basic-devexpress';
 
 export interface ThemeConfig {
   isDark: boolean;
@@ -298,9 +299,33 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
      topbarSearchBg: '#f8fafc',
      hoverBg: 'rgba(37,99,235,0.08)',
      selectedBg: 'rgba(37,99,235,0.12)',
-     tableHeaderFontSize: 12,
-     tableCellFontSize: 11,
-   },
+      tableHeaderFontSize: 12,
+      tableCellFontSize: 11,
+    },
+  'basic-devexpress': {
+    isDark: false,
+    primaryColor: '#4A90D9',
+    primaryHover: '#357ABD',
+    primaryActive: '#2A6DA8',
+    primaryShadow: '0 2px 6px rgba(74,144,217,0.25)',
+    bgLayout: '#f5f5f5',
+    bgContainer: '#ffffff',
+    bgElevated: '#ffffff',
+    text: '#333333',
+    textSecondary: '#666666',
+    textHeading: '#222222',
+    border: '#e0e0e0',
+    borderSecondary: '#eeeeee',
+    sidebarBg: '#fafafa',
+    sidebarBorder: '#e0e0e0',
+    topbarBg: '#ffffff',
+    topbarBorder: '#e0e0e0',
+    topbarSearchBg: '#f5f5f5',
+    hoverBg: 'rgba(74,144,217,0.06)',
+    selectedBg: 'rgba(74,144,217,0.10)',
+    tableHeaderFontSize: 12,
+    tableCellFontSize: 11,
+  },
 };
 
 export function getIsDarkFromTheme(name: ThemeName): boolean {

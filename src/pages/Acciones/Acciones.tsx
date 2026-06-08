@@ -264,7 +264,7 @@ const Acciones: React.FC = () => {
             pageSize,
             showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} acciones`,
           }}
-          locale={{ emptyText: <Empty description="No hay acciones registradas" /> }}
+          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay acciones registradas" /></div> }}
         />
       </Card>
 

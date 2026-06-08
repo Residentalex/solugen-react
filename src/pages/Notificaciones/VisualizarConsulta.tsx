@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Table, Card, Button, Alert, Typography, message, Tag, Select } from 'antd';
+import { Table, Card, Button, Alert, Typography, message, Tag, Select, Empty } from 'antd';
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { notificacionesApi } from '../../api/notificacionesApi';
@@ -78,7 +78,7 @@ const VisualizarConsulta: React.FC = () => {
           loading={loading}
           scroll={{ x: 'max-content' }}
           size="middle"
-          locale={{ emptyText: 'No hay datos' }}
+          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay datos" /></div> }}
           pagination={{
             pageSize,
             showSizeChanger: false,

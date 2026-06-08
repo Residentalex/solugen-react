@@ -82,7 +82,7 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({
           },
           style: { cursor: 'pointer' },
         })}
-        locale={{ emptyText: <Empty description="No hay conceptos" /> }}
+        locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay conceptos" /></div> }}
       />
     </Modal>
   );

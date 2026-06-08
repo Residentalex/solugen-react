@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Popover, Alert,
@@ -47,6 +47,7 @@ import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
+import { SalidaAlmacenGuide } from './SalidaAlmacenGuide';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
@@ -102,6 +103,8 @@ function filaVacia(): DetalleSalidaAlmacenDTO {
 const SalidaAlmacenFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const cloneData = (location.state as any)?.cloneData;
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
@@ -130,9 +133,11 @@ const SalidaAlmacenFormulario: React.FC = () => {
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
   const [modoDescuento, setModoDescuento] = useState<'porcentaje' | 'pesos'>('porcentaje');
   const [verificados, setVerificados] = useState<Set<number>>(new Set());
+  const [fechaCierreContable, setFechaCierreContable] = useState<string | null>(null);
   const [fechaCierreInventario, setFechaCierreInventario] = useState<string | null>(null);
 
   const editValuesRef = useRef<Record<string, any>>({});
+  const tasaAnteriorRef = useRef<number>(1);
   const navigationConfirmedRef = useFormularioNavigation();
 
   // Refs para la guía
@@ -215,11 +220,41 @@ const SalidaAlmacenFormulario: React.FC = () => {
     const pageTitle = mode === 'crear' ? 'Nuevo Salida de Almacén' : 'Editar Salida de Almacén';
     setPageTitleOverride(pageTitle);
 
+    const cleanup = () => {
+      resetToolbar();
+      setPageTitleOverride('');
+    };
+
+    // === Si viene de Clonar ===
+    if (cloneData) {
+      setDetalles((cloneData.detalles || []).map((d: DetalleSalidaAlmacenDTO) => calcularFila(d)));
+      setSelectedConcepto(cloneData.concepto || null);
+      setConceptoSearchText(toTitleCase(cloneData.concepto?.nombre || ''));
+      setSelectedEntidad(cloneData.suplidor || cloneData.entidad || null);
+      setSelectedAlmacen(cloneData.almacen || null);
+
+      const fechaDoc = cloneData.fechaDocumento ? parseDateRaw(cloneData.fechaDocumento) : null;
+      form.setFieldsValue({
+        concepto: cloneData.concepto?.codigo || '',
+        suplidor: cloneData.suplidor?.codigo || cloneData.entidad?.codigo || '',
+        almacen: cloneData.almacen?.codigo || '',
+        fechaDocumento: fechaDoc ? dayjs(fechaDoc) : dayjs(),
+        fechaRecibo: cloneData.fechaRecibo ? dayjs(parseDateRaw(cloneData.fechaRecibo)) : dayjs(),
+        ncf: cloneData.ncf || '',
+        referencia: cloneData.referencia || '',
+        moneda: cloneData.moneda?.nombre || '',
+        tasa: cloneData.tasa || 1,
+        nota: cloneData.nota || '',
+      });
+      return cleanup;
+    }
+
     // Cargar almacenes
     salidaAlmacenApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
-    // Obtener fecha de cierre de inventario
+    // Obtener fechas de cierre (contable e inventario)
     parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch(() => {});
+    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch(() => {});
 
     // Inicializar fechas en modo crear
     if (mode === 'crear') {
@@ -229,11 +264,8 @@ const SalidaAlmacenFormulario: React.FC = () => {
       });
     }
 
-    return () => {
-      resetToolbar();
-      setPageTitleOverride('');
-    };
-  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form]);
+    return cleanup;
+  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form, cloneData]);
 
   // ===== Cargar datos si es modo editar =====
   useEffect(() => {
@@ -245,7 +277,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
       .then((res) => {
         setData(res);
         setPageTitleOverride(`Editar - ${res.documento?.codigo || 'SAP'}-${res.noDocumento || ''}`);
-        setDetalles(res.detalles || []);
+        setDetalles((res.detalles || []).map((d: DetalleSalidaAlmacenDTO) => calcularFila(d)));
         setSelectedConcepto(res.concepto || null);
         setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
         setSelectedEntidad(res.suplidor || res.entidad || null);
@@ -283,6 +315,36 @@ const SalidaAlmacenFormulario: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
+
+  // ===== Efecto para detectar cambios en la tasa y preguntar por actualización de costos =====
+  useEffect(() => {
+    const nuevaTasa = tasaValue;
+    const tasaAnterior = tasaAnteriorRef.current;
+
+    // Solo si cambió realmente y no es el valor inicial
+    if (tasaAnterior !== nuevaTasa && tasaAnterior !== 1 && editingField === null) {
+      Modal.confirm({
+        title: 'Actualizar costos',
+        icon: <ExclamationCircleOutlined />,
+        content: `¿Desea actualizar los costos de los detalles en base a la nueva tasa (${tasaAnterior} → ${nuevaTasa})?`,
+        onOk: () => {
+          setDetalles((prev) =>
+            prev.map((d) => {
+              const costoActual = d.costo || 0;
+              const nuevoCosto = Math.round((costoActual / nuevaTasa) * 100) / 100;
+              return calcularFila({ ...d, costo: nuevoCosto });
+            })
+          );
+          message.success('Costos actualizados correctamente');
+        },
+        onCancel: () => {
+          // No hacer nada, solo mantener la tasa nueva sin actualizar costos
+        },
+      });
+    }
+
+    tasaAnteriorRef.current = nuevaTasa;
+  }, [tasaValue, editingField]);
 
   // ===== Handlers =====
   const handleCancelar = () => {
@@ -356,20 +418,26 @@ const SalidaAlmacenFormulario: React.FC = () => {
     if (detalles.length === 0) return 'No se puede crear un documento de SALIDA ALMACEN sin detalle.';
     if (!detalles.some((d) => (d.cantidad || 0) > 0)) return 'Debe tener al menos un detalle con cantidad > 0';
 
-    // Validar fecha contra cierre de inventario
-    if (fechaCierreInventario) {
-      const cierreDate = parseDateRaw(fechaCierreInventario);
-      if (cierreDate) {
-        const cierreTs = dayjs(cierreDate).startOf('day').valueOf();
+    // Validar fecha contra cierre contable e inventario (usar la mayor)
+    const fechas: (string | null)[] = [fechaCierreContable, fechaCierreInventario];
+    const fechasValidas = fechas.filter((f): f is string => f !== null);
+    if (fechasValidas.length > 0) {
+      const timestamps = fechasValidas.map((f) => {
+        const d = parseDateRaw(f);
+        return d ? dayjs(d).startOf('day').valueOf() : 0;
+      }).filter((t) => t > 0);
+
+      if (timestamps.length > 0) {
+        const cierreMaxTs = Math.max(...timestamps);
 
         const fechaDoc = values.fechaDocumento;
-        if (fechaDoc && dayjs(fechaDoc).startOf('day').valueOf() <= cierreTs) {
-          return 'La fecha del documento no puede ser menor o igual a la fecha de cierre de inventario';
+        if (fechaDoc && dayjs(fechaDoc).startOf('day').valueOf() <= cierreMaxTs) {
+          return 'La fecha del documento no puede ser menor o igual a la fecha de cierre (contable o de inventario)';
         }
 
         const fechaRec = values.fechaRecibo;
-        if (fechaRec && dayjs(fechaRec).startOf('day').valueOf() <= cierreTs) {
-          return 'La fecha de recibo no puede ser menor o igual a la fecha de cierre de inventario';
+        if (fechaRec && dayjs(fechaRec).startOf('day').valueOf() <= cierreMaxTs) {
+          return 'La fecha de recibo no puede ser menor o igual a la fecha de cierre (contable o de inventario)';
         }
       }
     }
@@ -504,6 +572,15 @@ const SalidaAlmacenFormulario: React.FC = () => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaObj };
     });
+
+    // === Auto-asignar almacén del concepto ===
+    if (concepto.almacen?.codigo) {
+      const al = almacenesCache.find(a => a.codigo === concepto.almacen!.codigo);
+      if (al) {
+        setSelectedAlmacen(al);
+        form.setFieldsValue({ almacen: al.codigo });
+      }
+    }
   };
 
   const handleConceptoSearchClick = () => {
@@ -530,7 +607,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
       .then((res) => {
         setData(res);
         setPageTitleOverride(`Editar - ${res.documento?.codigo || 'SAP'}-${res.noDocumento || ''}`);
-        setDetalles(res.detalles || []);
+        setDetalles((res.detalles || []).map((d: DetalleSalidaAlmacenDTO) => calcularFila(d)));
         setSelectedConcepto(res.concepto || null);
         setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
         setSelectedEntidad(res.suplidor || res.entidad || null);
@@ -1477,151 +1554,6 @@ const SalidaAlmacenFormulario: React.FC = () => {
   );
 };
 
-// ===== Componente Guía paso a paso para SAP =====
-interface SalidaAlmacenGuideProps {
-  mode: 'crear' | 'editar';
-  concepto: ConceptoDTO | null;
-  suplidor: SuplidorDTO | null;
-  almacen: AlmacenDTO | null;
-  detallesCount: number;
-  conceptoRef: React.RefObject<HTMLDivElement | null>;
-  suplidorRef: React.RefObject<HTMLDivElement | null>;
-  almacenRef: React.RefObject<HTMLDivElement | null>;
-  agregarFilaRef: React.RefObject<HTMLDivElement | null>;
-  suplidoresDisponibles?: boolean;
-}
 
-interface GuideStep {
-  key: string;
-  title: string;
-  description: string;
-  target: () => HTMLDivElement | null;
-}
-
-const SalidaAlmacenGuide: React.FC<SalidaAlmacenGuideProps> = ({
-  concepto,
-  suplidor,
-  almacen,
-  detallesCount,
-  conceptoRef,
-  suplidorRef,
-  almacenRef,
-  agregarFilaRef,
-  suplidoresDisponibles,
-}) => {
-  const [open, setOpen] = useState(false);
-  const dismissedStepRef = useRef<string | null>(null);
-  const currentStepRef = useRef<GuideStep | null>(null);
-
-  const getCurrentStep = useCallback((): GuideStep | null => {
-    const steps: GuideStep[] = [
-      {
-        key: 'concepto',
-        title: 'Paso 1: Concepto',
-        description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento.',
-        target: () => conceptoRef.current,
-      },
-      {
-        key: 'almacen',
-        title: 'Paso 2: Almacén',
-        description: 'Seleccione el almacén desde donde saldrá la mercancía.',
-        target: () => almacenRef.current,
-      },
-      {
-        key: 'suplidor',
-        title: 'Paso 3: Entidad',
-        description: 'Seleccione la entidad destino de la salida.',
-        target: () => suplidorRef.current,
-      },
-      {
-        key: 'productos',
-        title: 'Paso 4: Productos',
-        description: 'Agregue productos al documento usando el botón "Agregar fila" o "Buscar Producto".',
-        target: () => agregarFilaRef.current,
-      },
-    ];
-
-    if (!concepto) return steps[0];
-    if (!almacen) return steps[1];
-    if (suplidoresDisponibles && !suplidor) return steps[2];
-    if (detallesCount === 0) return steps[3];
-
-    return null;
-  }, [concepto, almacen, suplidor, detallesCount, suplidoresDisponibles, conceptoRef, almacenRef, suplidorRef, agregarFilaRef]);
-
-  currentStepRef.current = getCurrentStep();
-
-  useEffect(() => {
-    const current = getCurrentStep();
-    if (current) {
-      if (dismissedStepRef.current !== current.key) {
-        setOpen(true);
-      }
-    } else {
-      setOpen(false);
-      dismissedStepRef.current = null;
-    }
-  }, [getCurrentStep]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.closest('.ant-popover')) return;
-      setOpen(false);
-      if (currentStepRef.current) {
-        dismissedStepRef.current = currentStepRef.current.key;
-      }
-    };
-
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [open]);
-
-  const currentStep = getCurrentStep();
-  if (!currentStep) return null;
-
-  const targetElement = currentStep.target();
-  if (!targetElement) return null;
-
-  const rect = targetElement.getBoundingClientRect();
-
-  return createPortal(
-    <Popover
-      open={open}
-      onOpenChange={(visible: boolean) => {
-        if (!visible) {
-          setOpen(false);
-          dismissedStepRef.current = currentStep.key;
-        }
-      }}
-      title={currentStep.title}
-      content={currentStep.description}
-      placement="top"
-      trigger={[]}
-      rootClassName="guide-popover"
-    >
-      <span
-        style={{
-          position: 'fixed',
-          top: rect.top,
-          left: rect.left,
-          width: rect.width,
-          height: rect.height,
-          pointerEvents: 'none',
-          zIndex: -1,
-        }}
-      />
-    </Popover>,
-    document.body,
-  );
-};
 
 export default SalidaAlmacenFormulario;

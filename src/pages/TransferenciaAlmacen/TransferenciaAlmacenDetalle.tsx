@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Typography, Tooltip, Modal, Alert, App
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Divider, Input, Typography, Tooltip, Modal, Alert, App
 } from 'antd';
 import {
   LockFilled,
@@ -18,8 +18,9 @@ import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import { useAplicar } from '../../hooks/useAplicar';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
+import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
+import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
-import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
@@ -62,7 +63,9 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionDTO[]>([]);
   const operacion = useAplicar();
   const [operacionTitulo, setOperacionTitulo] = useState('');
-  const screens = Grid.useBreakpoint();
+  const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
+  const [modalAnularOpen, setModalAnularOpen] = useState(false);
+
   const { message: messageApi } = App.useApp();
 
   useEffect(() => {
@@ -146,7 +149,6 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   }
   if (loadingError && !data) { return <ErrorDetalle rutaVolver="/FALM" onRecargar={handleRefresh} />; }
 
-  const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
@@ -173,9 +175,11 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         <div style={{ fontSize: 13 }}>
           <div>{record.codigo || '-'}</div>
           {record.referencia && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
-              {record.referencia}
-            </div>
+            <Tooltip title={record.referencia}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                {record.referencia}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -206,25 +210,12 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         <div>
           <div>{formatNumber(record.cantidad || 0)}</div>
           {record.medida?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
-              {record.medida.nombre}
-            </div>
+            <Tooltip title={record.medida.nombre}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {record.medida.nombre}
+              </div>
+            </Tooltip>
           )}
-        </div>
-      ),
-    },
-    {
-      title: 'Total',
-      dataIndex: 'total',
-      key: 'total',
-      width: 120,
-      align: 'right' as const,
-      onCell: () => ({ style: { verticalAlign: 'top', paddingRight: 16 } }),
-      onHeaderCell: () => ({ style: { paddingRight: 16 } }),
-      render: (_: any, record: any) => (
-        <div>
-          <Text strong>{formatNumber(record.total || 0)}</Text>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
         </div>
       ),
     },
@@ -243,37 +234,35 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
     );
   };
 
-  const handleDesaplicar = async () => {
+  const handleDesaplicarConfirm = async (motivo: string) => {
     if (!id || !data) return;
-    setSaving(true);
     try {
-      const origen = data.codigoSucursal || String(sucursalActiva);
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
       await transferenciaAlmacenApi.desaplicar(sucursalActiva, documento);
       messageApi.success('Documento desaplicado exitosamente');
+      setModalDesaplicarOpen(false);
       const res = await transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al desaplicar');
       messageApi.error(msg);
-    } finally {
-      setSaving(false);
+      throw err; // Re-lanzar para que el modal no se cierre en error
     }
   };
 
-  const handleAnular = async () => {
-    if (!data) return;
-    setSaving(true);
+  const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
+    if (!data || !id) return;
     try {
-      await transferenciaAlmacenApi.anular(sucursalActiva, data as any);
+      const payload = { ...(data as any), motivo: dataAnular.motivo, fechaAnulacion: dataAnular.fecha };
+      await transferenciaAlmacenApi.anular(sucursalActiva, payload);
       messageApi.success('Documento anulado exitosamente');
-      const res = await transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setModalAnularOpen(false);
+      const res = await transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
       messageApi.error(msg);
-    } finally {
-      setSaving(false);
+      throw err;
     }
   };
 
@@ -391,7 +380,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
                   onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                 />
               </div>
-              <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+              <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
             </>
           ),
         },
@@ -467,51 +456,23 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         }}
         onEditar={() => navigate(`/FTRP/${id}/editar`)}
         onAplicar={handleAplicar}
-        onAnular={handleAnular}
+        confirmActions={false}
+        onAnular={async () => setModalAnularOpen(true)}
         onPostear={handlePostear}
         onRevisado={handleRevisado}
-        onDesaplicar={handleDesaplicar}
+        onDesaplicar={async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
       />
 
-      {isLarge ? (
-        /* === DESKTOP LAYOUT (≥ lg) === */
-        <Row gutter={16}>
-          <Col xxl={18}>
-            {renderDatosGenerales(3)}
-            {renderTabs()}
-          </Col>
-
-          <Col xxl={6}>
-            <TotalesCard subTotal={data.subTotal || 0} descuento={0} impuestos={0} total={data.total} nota={data.nota} alignRight={false}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
-              tasa={data.tasa ?? 1}
-            />
-            <DocumentosRelacionadosCard
-              documentos={documentosRelacionados}
-              currentId={data?.id}
-            />
-          </Col>
-        </Row>
-      ) : (
-        /* === MOBILE LAYOUT (< lg) === */
-        <div>
-          {renderDatosGenerales(1)}
-          {renderTabs()}
-          <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal || 0} descuento={0} impuestos={0} total={data.total} nota={data.nota} alignRight={true}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
-              tasa={data.tasa ?? 1}
-            />
-            <DocumentosRelacionadosCard
-            documentos={documentosRelacionados}
-            currentId={data?.id}
-          />
-          </div>
-        </div>
-      )}
+      {/* Siempre una sola columna — no hay TotalesCard ni EntidadCard */}
+      <div>
+        {renderDatosGenerales(3)}
+        {renderTabs()}
+        <DocumentosRelacionadosCard
+          documentos={documentosRelacionados}
+          currentId={data?.id}
+        />
+      </div>
 
       {/* Modal de Visor de Scanner */}
       <Modal
@@ -531,6 +492,25 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
           <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
         )}
       </Modal>
+
+      {/* Modal Desaplicar */}
+      <ModalDesaplicar
+        open={modalDesaplicarOpen}
+        onClose={() => setModalDesaplicarOpen(false)}
+        onConfirm={handleDesaplicarConfirm}
+        tituloDocumento={`${data?.documento?.codigo || 'TRP'}-${data?.noDocumento || id}`}
+        loading={saving}
+      />
+
+      {/* Modal Anular */}
+      <ModalAnular
+        open={modalAnularOpen}
+        onClose={() => setModalAnularOpen(false)}
+        onConfirm={handleAnularConfirm}
+        documento={`${data?.documento?.codigo || 'TRP'}-${data?.noDocumento || ''}`}
+        fechaDocumento={data?.fechaDocumento || ''}
+        periodoCerrado={data?.periodo === 6}
+      />
 
       {/* Modal de Progreso para Aplicar/Postear */}
       <ModalProgreso

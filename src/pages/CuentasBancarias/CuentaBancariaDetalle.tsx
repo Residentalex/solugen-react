@@ -526,7 +526,7 @@ const FTransBanco: React.FC = () => {
                 onChange: (page) => setCurrentPage(page),
               }}
               rowClassName="paces-row-hover"
-              locale={{ emptyText: 'No hay movimientos para esta cuenta' }}
+              locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay movimientos para esta cuenta" /></div> }}
             />
           </div>
         </>

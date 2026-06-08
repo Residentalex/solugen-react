@@ -398,7 +398,7 @@ const Pantallas: React.FC = () => {
               `${range[0]}-${range[1]} de ${total} pantallas`,
           }}
           locale={{
-            emptyText: <Empty description="No hay pantallas registradas" />,
+            emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay pantallas registradas" /></div>,
           }}
         />
       </div>

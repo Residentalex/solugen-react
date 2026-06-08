@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Alert, Table, Card, Input, Select, Button, Modal, Descriptions, Typography, Tag, Divider } from 'antd';
+import { Alert, Table, Card, Input, Select, Button, Modal, Descriptions, Typography, Tag, Divider, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -252,9 +252,12 @@ const Ofertas: React.FC = () => {
               `${t} registros`,
           }}
           locale={{
-            emptyText: searchText
-              ? 'No se encontraron ofertas para la búsqueda'
-              : 'No hay ofertas registradas',
+            emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {searchText
+                ? <Empty description="No se encontraron ofertas para la búsqueda" />
+                : <Empty description="No hay ofertas registradas" />
+              }
+            </div>,
           }}
         />
       </Card>

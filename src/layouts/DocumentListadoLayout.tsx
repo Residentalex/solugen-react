@@ -45,6 +45,9 @@ interface DocumentListadoLayoutProps<T> {
     showEditar?: boolean;
     editarDisabled?: boolean;
     onEditar?: () => void;
+    showClonar?: boolean;
+    clonarDisabled?: boolean;
+    onClonar?: () => void;
     showImprimir?: boolean;
     imprimirDisabled?: boolean;
     onImprimir?: () => void;

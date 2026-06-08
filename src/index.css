@@ -363,6 +363,40 @@ body.theme-dark-amber {
   --paces-table-cell-font-size: 9px;
 }
 
+/* basic-devexpress */
+body.theme-basic-devexpress {
+  --paces-bg-layout: #f5f5f5;
+  --paces-bg-container: #ffffff;
+  --paces-bg-elevated: #ffffff;
+  --paces-text: #333333;
+  --paces-text-secondary: #666666;
+  --paces-text-heading: #222222;
+  --paces-border: #e0e0e0;
+  --paces-border-secondary: #eeeeee;
+  --paces-primary: #4A90D9;
+  --paces-primary-hover: #357ABD;
+  --paces-primary-active: #2A6DA8;
+  --paces-primary-shadow: 0 2px 6px rgba(74,144,217,0.25);
+  --paces-sidebar-bg: #fafafa;
+  --paces-sidebar-border: #e0e0e0;
+  --paces-topbar-bg: #ffffff;
+  --paces-topbar-border: #e0e0e0;
+  --paces-topbar-search-bg: #f5f5f5;
+  --paces-hover-bg: rgba(74,144,217,0.06);
+  --paces-selected-bg: rgba(74,144,217,0.10);
+  --paces-scrollbar-thumb: #c8c8c8;
+  --paces-scrollbar-thumb-hover: #a8a8a8;
+  --paces-menu-item-hover-color: #4A90D9;
+  --paces-menu-item-selected-color: #4A90D9;
+  --paces-logo-border: #e0e0e0;
+  --paces-shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --paces-card-border: #e0e0e0;
+  --paces-login-card-bg: #ffffff;
+  --paces-login-card-border: rgba(0,0,0,0.04);
+  --paces-table-header-font-size: 10px;
+  --paces-table-cell-font-size: 9px;
+}
+
 /* liga - hibrido neutral entre dark y light */
 body.theme-liga {
   --paces-bg-layout: #e8e5df;
@@ -1633,6 +1667,11 @@ body.theme-dark-amber .doc-content code,
 body.theme-liga .doc-content code {
   background: rgba(255, 255, 255, 0.08);
   color: #e0e0e0;
+}
+
+/* ===== Fila anulada en tablas (opacidad reducida) ===== */
+.paces-row-anulado td {
+  opacity: 0.45;
 }
 
 /* ===== GORC Table - Bandas de color en encabezados agrupados ===== */

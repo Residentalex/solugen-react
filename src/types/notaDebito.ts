@@ -1,4 +1,5 @@
 import type { DocumentoDTO } from './documento';
+import type { ConceptoDTO, EntidadDTO, AsientoContableDTO, LogDTO } from './entradaAlmacen';
 
 export interface NotaDebitoDTO {
   id: number;
@@ -36,39 +37,25 @@ export interface NotaDebitoFullDTO {
   tasa: number;
   debitos: number;
   creditos: number;
+  bienes?: number;
+  servicios?: number;
   documento: DocumentoDTO;
   concepto?: ConceptoDTO | null;
   tipo?: TipoDTO | null;
   entidad?: EntidadDTO | null;
   moneda?: { nombre: string; simbolo: string; codigo: string } | null;
+  sucursal?: { codigo: string; nombre: string } | null;
+  codigoSucursal?: string;
   transaccionesAsociadas?: DocumentoRelacionadoDTO[];
   devoluciones?: DevolucionAsociadaDTO[];
   impuestosRetenciones?: ImpuestoRetencionDTO[];
-  asientos?: AsientoDTO[];
+  asientos?: AsientoContableDTO[];
   logs?: LogDTO[];
-}
-
-export interface ConceptoDTO {
-  codigo: string;
-  nombre?: string;
-  noImpuesto?: boolean;
-  noAsientos?: boolean;
-  activo?: boolean;
-  moneda?: { nombre: string; codigo: string };
 }
 
 export interface TipoDTO {
   codigo: string;
   nombre?: string;
-}
-
-export interface EntidadDTO {
-  codigo: string;
-  nombre?: string;
-  identificacion?: string;
-  telefono?: string;
-  direccion?: string;
-  diasCredito?: number;
 }
 
 export interface DocumentoRelacionadoDTO {
@@ -98,21 +85,4 @@ export interface ImpuestoRetencionDTO {
   tipo?: string; // 'Impuesto' | 'Retencion' | 'Informativo' | 'Otro'
   monto: number;
   baseImponible?: number;
-}
-
-export interface AsientoDTO {
-  id?: number;
-  cuentaContable?: { noCuenta: string; nombre: string };
-  descripcion?: string;
-  monto: number;
-  tipoAsiento?: number | string;
-}
-
-export interface LogDTO {
-  id?: number;
-  fecha?: string;
-  usuario?: { nombre?: string; nombreUsuario?: string };
-  estacion?: string;
-  accion?: number;
-  descripcion?: string;
 }

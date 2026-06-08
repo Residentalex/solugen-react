@@ -1,10 +1,11 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography } from 'antd';
+import { Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { notaDebitoApi } from '../../api/notaDebitoApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { useDocumentoListado } from '../../hooks/useDocumentoListado';
+import { useAuthStore } from '../../stores/authStore';
 import EntidadColumnCell from '../../components/EntidadColumnCell';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
@@ -19,6 +20,7 @@ interface NotaDebitoProps {
 
 const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
   const navigate = useNavigate();
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const codigoPantalla = tipoEntidad === 'SUP' ? 'FNDSUP' : 'FNDCLI';
   const entidadLabel = tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente';
 
@@ -104,6 +106,24 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
     },
   ];
 
+  const handleClonar = async () => {
+    if (!state.selectedRow) return;
+    try {
+      const data = await notaDebitoApi.obtenerPorId(sucursalActiva, state.selectedRow.id);
+      const cloneData = {
+        ...data,
+        id: 0,
+        noDocumento: '',
+        estado: 0,
+        asientos: [],
+        logs: [],
+      };
+      navigate(`/${codigoPantalla}/nuevo`, { state: { cloneData } });
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al obtener datos para clonar');
+    }
+  };
+
   return (
     <DocumentListadoLayout<TransaccionVistaDTO>
       columns={columns}
@@ -137,6 +157,9 @@ const NotaDebito: React.FC<NotaDebitoProps> = ({ tipoEntidad }) => {
         showEditar: true,
         editarDisabled: !puedeEditar,
         onEditar: () => navigate(`/${codigoPantalla}/${state.selectedRow!.id}/editar`),
+        showClonar: true,
+        clonarDisabled: !state.selectedRow,
+        onClonar: handleClonar,
         showImprimir: true,
         imprimirDisabled: !state.selectedRow,
         onImprimir: actions.handleImprimir,

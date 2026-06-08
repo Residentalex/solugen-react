@@ -6,6 +6,7 @@ export interface ClienteDTO {
   identificacion: string;
   telefono?: string;
   direccion?: string;
+  exentoImpuesto?: boolean;
 }
 
 export interface SecuenciaNCFDTO {
@@ -120,6 +121,8 @@ export interface FacturaPOSFormularioDTO {
   tasa: number;
   diasCredito: number;
   turno?: string;
+  cajero?: string;
+  caja?: string;
 
   concepto: ConceptoDTO | null;
   cliente: ClienteDTO | null;
@@ -157,6 +160,8 @@ export interface FacturaPOSDTO {
   total: number;
   tasa: number;
   turno?: string;
+  cajero?: string;
+  caja?: string;
   documento: DocumentoDTO;
   entidad: EntidadDTO;
   cliente: ClienteDTO;

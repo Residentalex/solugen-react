@@ -321,7 +321,7 @@ const Configuracion: React.FC = () => {
           loading={loading}
           scroll={{ x: 900 }}
           size="middle"
-          locale={{ emptyText: <Empty description="No hay reglas de notificación configuradas" /> }}
+          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay reglas de notificación configuradas" /></div> }}
           pagination={false}
         />
       </Card>

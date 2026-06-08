@@ -203,6 +203,7 @@ const DevolucionCompraFormulario: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const entradaId = (location.state as any)?.entradaId;
+  const cloneData = (location.state as any)?.cloneData;
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
@@ -245,6 +246,7 @@ const DevolucionCompraFormulario: React.FC = () => {
   const suplidorRef = useRef<HTMLDivElement>(null);
   const almacenRef = useRef<HTMLDivElement>(null);
   const agregarFilaRef = useRef<HTMLDivElement>(null);
+  const entradaRef = useRef<HTMLDivElement>(null);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -283,7 +285,26 @@ const DevolucionCompraFormulario: React.FC = () => {
     fieldCloseHandledRef.current = true;
     const field = editingField;
     if (field) {
-      form.setFieldsValue({ [field]: editingValueRef.current });
+      const oldValue = form.getFieldValue(field);
+      const newValue = editingValueRef.current;
+      form.setFieldsValue({ [field]: newValue });
+
+      // Si se cambió la tasa y hay detalles, preguntar si actualizar costos
+      if (field === 'tasa' && detalles.length > 0 && oldValue !== newValue) {
+        Modal.confirm({
+          title: 'Actualizar costos',
+          icon: <ExclamationCircleOutlined />,
+          content: '¿Desea actualizar los costos en base a la nueva tasa?',
+          okText: 'Sí',
+          cancelText: 'No',
+          onOk: () => {
+            const tasaNueva = Number(newValue) || 1;
+            setDetalles((prev) =>
+              prev.map((d) => calcularFila({ ...d, costo: (d.costo || 0) / tasaNueva }))
+            );
+          },
+        });
+      }
     }
     setEditingField(null);
   };
@@ -320,6 +341,37 @@ const DevolucionCompraFormulario: React.FC = () => {
     const pageTitle = mode === 'crear' ? 'Nueva Devolución de Compra' : 'Editar Devolución de Compra';
     setPageTitleOverride(pageTitle);
 
+    const cleanup = () => {
+      resetToolbar();
+      setPageTitleOverride('');
+    };
+
+    // === Si viene de Clonar ===
+    if (cloneData) {
+      setDetalles((cloneData.detalles || []).map((d: DetalleDevolucionCompraDTO) => calcularFila(d)));
+      setSelectedTipo(cloneData.tipo || null);
+      setSelectedConcepto(cloneData.concepto || null);
+      setConceptoSearchText(toTitleCase(cloneData.concepto?.nombre || ''));
+      setSelectedEntidad(cloneData.suplidor || cloneData.entidad || null);
+      setSelectedAlmacen(cloneData.almacen || null);
+      setSelectedEntrada(cloneData.entrada || null);
+
+      const fechaDoc = cloneData.fechaDocumento ? parseDateRaw(cloneData.fechaDocumento) : null;
+      form.setFieldsValue({
+        tipo: cloneData.tipo?.codigo || '',
+        concepto: cloneData.concepto?.codigo || '',
+        suplidor: cloneData.suplidor?.codigo || cloneData.entidad?.codigo || '',
+        almacen: cloneData.almacen?.codigo || '',
+        fechaDocumento: fechaDoc ? dayjs(fechaDoc) : dayjs(),
+        ncf: cloneData.ncf || '',
+        referencia: cloneData.referencia || '',
+        moneda: cloneData.moneda?.nombre || '',
+        tasa: cloneData.tasa || 1,
+        nota: cloneData.nota || '',
+      });
+      return cleanup;
+    }
+
     // Cargar catálogos iniciales
     devolucionCompraApi.obtenerAlmacenes(sucursalActiva).then(r => setAlmacenesCache(r || [])).catch(() => {});
     devolucionCompraApi.obtenerTipos(sucursalActiva).then(r => setTiposCache(r || [])).catch(() => {});
@@ -332,11 +384,8 @@ const DevolucionCompraFormulario: React.FC = () => {
       });
     }
 
-    return () => {
-      resetToolbar();
-      setPageTitleOverride('');
-    };
-  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form]);
+    return cleanup;
+  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form, cloneData]);
 
   // ===== Cargar datos si es modo editar =====
   useEffect(() => {
@@ -699,6 +748,7 @@ const DevolucionCompraFormulario: React.FC = () => {
           const nuevosDetalles = (detalleEntrada.detalles || []).map((d: any, idx: number) => ({
             ...filaVacia(),
             id: -(idx + 1),
+            idExterno: d.idExterno || d.id,
             codigo: d.codigo || '',
             articulo: d.articulo || '',
             referencia: d.referencia || '',
@@ -730,6 +780,7 @@ const DevolucionCompraFormulario: React.FC = () => {
             const nuevosDetalles = (detalleEntrada.detalles || []).map((d: any, idx: number) => ({
               ...filaVacia(),
               id: -(idx + 1),
+              idExterno: d.idExterno || d.id,
               codigo: d.codigo || '',
               articulo: d.articulo || '',
               referencia: d.referencia || '',
@@ -980,6 +1031,7 @@ const DevolucionCompraFormulario: React.FC = () => {
 
           {/* Fila 2: Entrada de Referencia + Concepto */}
           <Col xs={24} sm={12} lg={9}>
+            <div ref={entradaRef}>
             <FloatingField label="Entrada de Referencia">
               <Space.Compact style={{ width: '100%' }}>
                 <Input
@@ -993,6 +1045,7 @@ const DevolucionCompraFormulario: React.FC = () => {
                 )}
               </Space.Compact>
             </FloatingField>
+            </div>
             <Form.Item name="referencia" hidden><Input /></Form.Item>
           </Col>
           <Col xs={24} sm={12} lg={15}>
@@ -1674,12 +1727,14 @@ const DevolucionCompraFormulario: React.FC = () => {
           concepto={selectedConcepto}
           suplidor={selectedEntidad}
           almacen={selectedAlmacen}
+          entrada={selectedEntrada}
           detallesCount={detalles.length}
           tipoRef={tipoRef}
           conceptoRef={conceptoRef}
           suplidorRef={suplidorRef}
           almacenRef={almacenRef}
           agregarFilaRef={agregarFilaRef}
+          entradaRef={entradaRef}
           suplidoresDisponibles={suplidoresCache.length > 0}
         />
       )}
@@ -1710,12 +1765,14 @@ interface DevolucionCompraGuideProps {
   concepto: ConceptoDTO | null;
   suplidor: SuplidorDTO | null;
   almacen: AlmacenDTO | null;
+  entrada: any | null;
   detallesCount: number;
   tipoRef: React.RefObject<HTMLDivElement | null>;
   conceptoRef: React.RefObject<HTMLDivElement | null>;
   suplidorRef: React.RefObject<HTMLDivElement | null>;
   almacenRef: React.RefObject<HTMLDivElement | null>;
   agregarFilaRef: React.RefObject<HTMLDivElement | null>;
+  entradaRef: React.RefObject<HTMLDivElement | null>;
   suplidoresDisponibles?: boolean;
 }
 
@@ -1731,12 +1788,14 @@ const DevolucionCompraGuide: React.FC<DevolucionCompraGuideProps> = ({
   concepto,
   suplidor,
   almacen,
+  entrada,
   detallesCount,
   tipoRef,
   conceptoRef,
   suplidorRef,
   almacenRef,
   agregarFilaRef,
+  entradaRef,
   suplidoresDisponibles,
 }) => {
   const [open, setOpen] = useState(false);
@@ -1752,16 +1811,16 @@ const DevolucionCompraGuide: React.FC<DevolucionCompraGuideProps> = ({
         target: () => tipoRef.current,
       },
       {
-        key: 'concepto',
-        title: 'Paso 2: Concepto',
-        description: 'Seleccione un concepto. Las opciones disponibles dependen del tipo seleccionado.',
-        target: () => conceptoRef.current,
+        key: 'entrada',
+        title: 'Paso 2: Entrada de Referencia',
+        description: 'Seleccione una Entrada de Almacén de referencia para cargar sus productos.',
+        target: () => entradaRef.current,
       },
       {
-        key: 'almacen',
-        title: 'Paso 3: Almacén',
-        description: 'Seleccione el almacén donde se registrará la devolución.',
-        target: () => almacenRef.current,
+        key: 'concepto',
+        title: 'Paso 3: Concepto',
+        description: 'Seleccione un concepto. Las opciones disponibles dependen del tipo seleccionado.',
+        target: () => conceptoRef.current,
       },
       {
         key: 'suplidor',
@@ -1770,21 +1829,30 @@ const DevolucionCompraGuide: React.FC<DevolucionCompraGuideProps> = ({
         target: () => suplidorRef.current,
       },
       {
+        key: 'almacen',
+        title: 'Paso 5: Almacén',
+        description: 'Seleccione el almacén donde se registrará la devolución.',
+        target: () => almacenRef.current,
+      },
+      {
         key: 'productos',
-        title: 'Paso 5: Productos',
+        title: 'Paso 6: Productos',
         description: 'Agregue productos usando "Agregar fila", "Buscar Producto" o importando desde una Entrada de Almacén.',
         target: () => agregarFilaRef.current,
       },
     ];
 
+    // Lógica de prioridad (mismo orden que MostrarGuia del desktop)
     if (!tipo) return steps[0];
-    if (!concepto) return steps[1];
-    if (!almacen) return steps[2];
+    // Paso 2: Entrada solo si el tipo requiere referencia
+    if (tipo?.requiereReferencia && !entrada) return steps[1];
+    if (!concepto) return steps[2];
     if (suplidoresDisponibles && !suplidor) return steps[3];
-    if (detallesCount === 0) return steps[4];
+    if (!almacen) return steps[4];
+    if (detallesCount === 0) return steps[5];
 
     return null;
-  }, [tipo, concepto, almacen, suplidor, detallesCount, suplidoresDisponibles, tipoRef, conceptoRef, suplidorRef, almacenRef, agregarFilaRef]);
+  }, [tipo, concepto, almacen, suplidor, entrada, detallesCount, suplidoresDisponibles, tipoRef, conceptoRef, suplidorRef, almacenRef, agregarFilaRef, entradaRef]);
 
   currentStepRef.current = getCurrentStep();
 

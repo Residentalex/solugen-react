@@ -248,7 +248,7 @@ const CuentaContableDetalle: React.FC = () => {
               loading={loadingMovimientos}
               size="middle"
               className="paces-list-table"
-              locale={{ emptyText: <Empty description="No hay movimientos registrados" /> }}
+              locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay movimientos registrados" /></div> }}
               pagination={{
                 current: pagina,
                 pageSize: pageSize,

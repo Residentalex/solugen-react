@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Popover,
 } from 'antd';
 import {
   SaveOutlined,
@@ -28,7 +29,6 @@ import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type {
   ConceptoDTO, AlmacenDTO, ClienteDTO, TipoDTO,
-  AsientoContableDTO,
 } from '../../types/facturaCliente';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import type { DetalleFacturaClienteDTO, FacturaClienteFullDTO } from '../../types/facturaCliente';
@@ -38,6 +38,8 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
+import ImpuestosFacturaEditables from '../../components/ImpuestosFacturaEditables';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
@@ -91,6 +93,15 @@ function filaVacia(): DetalleFacturaClienteDTO {
   };
 }
 
+// FC19 - Validación de formato NCF
+const esNcfValido = (ncf: string): boolean => {
+  if (!ncf) return true;
+  const upper = ncf.toUpperCase();
+  if (upper.startsWith('B')) return upper.length === 11;
+  if (upper.startsWith('E')) return upper.length === 13;
+  return false;
+};
+
 
 
 // ===== Componente principal =====
@@ -123,11 +134,16 @@ const FacturaClienteFormulario: React.FC = () => {
   const [detalleSearch, setDetalleSearch] = useState('');
   const [activeId, setActiveId] = useState<number | null>(null);
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
+  const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
+  const [impuestosFactura, setImpuestosFactura] = useState<any[]>([]);
 
   // Cache de medidas
   const [medidasCache, setMedidasCache] = useState<any[]>([]);
+  const [sucursalesCache, setSucursalesCache] = useState<any[]>([]);
+  const [selectedSucursal, setSelectedSucursal] = useState<any>(null);
 
   // Refs para la guía
+  const tipoRef = useRef<HTMLDivElement>(null);
   const conceptoRef = useRef<HTMLDivElement>(null);
   const clienteRef = useRef<HTMLDivElement>(null);
   const almacenRef = useRef<HTMLDivElement>(null);
@@ -170,7 +186,34 @@ const FacturaClienteFormulario: React.FC = () => {
     fieldCloseHandledRef.current = true;
     const field = editingField;
     if (field) {
-      form.setFieldsValue({ [field]: editingValueRef.current });
+      const oldValue = editingOriginalValue.current;
+      const newValue = editingValueRef.current;
+      form.setFieldsValue({ [field]: newValue });
+
+      // FC19 - Validar formato NCF
+      if (field === 'ncf') {
+        const ncfStr = String(newValue || '');
+        if (!esNcfValido(ncfStr)) {
+          message.warning('Formato de NCF incorrecto. B=11 dígitos, E=13 dígitos.');
+        }
+      }
+
+      // FC20 - Si se cambió la tasa y hay detalles, preguntar si actualizar costos
+      if (field === 'tasa' && detalles.length > 0 && oldValue !== newValue) {
+        Modal.confirm({
+          title: 'Actualizar costos',
+          icon: <ExclamationCircleOutlined />,
+          content: '¿Desea actualizar los costos en base a la nueva tasa?',
+          okText: 'Sí',
+          cancelText: 'No',
+          onOk: () => {
+            const tasaNueva = Number(newValue) || 1;
+            setDetalles((prev) =>
+              prev.map((d) => calcularFila({ ...d, costo: (d.costo || 0) / tasaNueva }))
+            );
+          },
+        });
+      }
     }
     setEditingField(null);
   };
@@ -215,6 +258,11 @@ const FacturaClienteFormulario: React.FC = () => {
     // Cargar almacenes y tipos
     facturaClienteApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
     facturaClienteApi.obtenerTipos(sucursalActiva).then(setTiposCache).catch(() => {});
+    // Cargar sucursales desde el auth store
+    const authSucursales = useAuthStore.getState().sucursalesPermitidas;
+    if (authSucursales.length > 0) {
+      setSucursalesCache(authSucursales);
+    }
     // Cargar unidades de medida
     import('../../api/unidadMedidaApi').then(({ unidadMedidaApi }) => {
       unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => message.error('Error al cargar medidas'));
@@ -277,6 +325,8 @@ const FacturaClienteFormulario: React.FC = () => {
         };
         setData(full);
         setDetalles(full.detalles);
+        setAsientosLocales(full.asientos || []);
+        setImpuestosFactura((full as any).impuestosFactura || []);
         setSelectedConcepto(full.concepto);
         setSelectedCliente(full.cliente);
         setSelectedAlmacen(full.almacen);
@@ -298,6 +348,11 @@ const FacturaClienteFormulario: React.FC = () => {
           tasa: full.tasa || 1,
           nota: full.nota || '',
         });
+
+        // Restaurar sucursal
+        if ((full as any).sucursal) {
+          setSelectedSucursal((full as any).sucursal);
+        }
 
         // Cargar clientes según el concepto
         if (full.concepto?.codigo) {
@@ -365,10 +420,13 @@ const FacturaClienteFormulario: React.FC = () => {
                 };
                 setData(full);
                 setDetalles(full.detalles);
+                setAsientosLocales(full.asientos || []);
+                setImpuestosFactura((full as any).impuestosFactura || []);
                 setSelectedConcepto(full.concepto);
                 setSelectedCliente(full.cliente);
                 setSelectedAlmacen(full.almacen);
                 setSelectedTipo(full.tipo);
+                setSelectedSucursal((full as any).sucursal || null);
 
                 const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
                 const fechaVenc = full.fechaVencimiento ? parseDateRaw(full.fechaVencimiento) : null;
@@ -411,7 +469,10 @@ const FacturaClienteFormulario: React.FC = () => {
 
     if (!selectedConcepto) return 'Debe elegir un Concepto para poder continuar';
     if (!values.cliente && !selectedCliente) return 'Debe elegir un Cliente para poder continuar';
-    if (tieneProductos && !selectedAlmacen && !values.almacen) return 'Debe elegir un Almacén (hay productos en los detalles)';
+    // FC16 - Almacén requerido solo si hay productos (no servicios)
+    if (!selectedAlmacen && !values.almacen && detalles.some((d) => (d.tipoArticulo || 'Producto') === 'Producto')) {
+      return 'El almacén es requerido para productos.';
+    }
 
     const fechaDoc = values.fechaDocumento;
     if (fechaDoc) {
@@ -428,6 +489,26 @@ const FacturaClienteFormulario: React.FC = () => {
     const sinVencimiento = detalles.filter((d) => d.tieneVencimiento && !d.fechaVencimiento);
     if (sinVencimiento.length > 0) {
       return `Los siguientes productos requieren fecha de vencimiento: ${sinVencimiento.map((d) => d.articulo).join(', ')}`;
+    }
+
+    // Validar asientos cuadrados si existen
+    const asientosAValidar = asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []);
+    if (asientosAValidar.length > 0) {
+      const totalDeb = asientosAValidar.reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
+      const totalCred = asientosAValidar.reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
+      if (Math.abs(totalDeb - totalCred) > 0.01) {
+        return 'Los asientos contables no están cuadrados. Los débitos deben ser igual a los créditos.';
+      }
+    }
+
+    // FC15 - Validar según FechaPermitida del documento
+    if (data?.documento?.fechaPermitida === 'MenorIgualFechaDia') {
+      const fechaDoc = values.fechaDocumento;
+      if (fechaDoc && dayjs.isDayjs(fechaDoc)) {
+        if (fechaDoc.isAfter(dayjs(), 'day')) {
+          return 'La fecha del documento no puede ser mayor a la fecha del día.';
+        }
+      }
     }
 
     return null;
@@ -479,8 +560,10 @@ const FacturaClienteFormulario: React.FC = () => {
       almacen: selectedAlmacen || { nombre: '', codigo: '' },
       cliente: clienteSel || { nombre: '', codigo: '', identificacion: '' },
       tipo: selectedTipo || null,
+      sucursal: selectedSucursal || base.sucursal || { nombre: '', codigo: '', identificacion: '' },
       detalles: detalles.map((d) => calcularFila(d)),
-      asientos: base.asientos || [],
+      asientos: asientosLocales.length > 0 ? asientosLocales : (base.asientos || []),
+      impuestosFactura: impuestosFactura,
       logs: base.logs || [],
     };
   };
@@ -678,24 +761,9 @@ const FacturaClienteFormulario: React.FC = () => {
     total: detalles.reduce((s, d) => s + (d.total || 0), 0),
   };
 
-  // ===== Columnas de la tabla de asientos =====
+  // ===== Funciones auxiliares para asientos =====
   function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
   function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
-  const totalDebitos = (data?.asientos || []).reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
-  const totalCreditos = (data?.asientos || []).reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
-
-  const asientoColumns = [
-    { title: 'Cuenta', key: 'cuenta', width: 120,
-      render: (_: any, r: AsientoContableDTO) => r.cuentaContable?.noCuenta || '-' },
-    { title: 'Nombre', key: 'nombre', ellipsis: true,
-      render: (_: any, r: AsientoContableDTO) => r.cuentaContable?.nombre ? toTitleCase(r.cuentaContable.nombre) : '-' },
-    { title: 'Descripcion', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
-      render: (v: string) => v ? toTitleCase(v) : '-' },
-    { title: 'Debito', key: 'debito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => esDebito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-    { title: 'Credito', key: 'credito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-  ];
 
   // ===== Loading state =====
   if (loading) {
@@ -967,25 +1035,33 @@ const FacturaClienteFormulario: React.FC = () => {
             <Row gutter={[16, 24]}>
               {/* Fila 1: Tipo + Concepto */}
               <Col xs={24} sm={12} lg={9}>
-                <Form.Item name="tipo" style={{ marginBottom: 0 }}>
-                  <FloatingField label="Tipo Documento">
-                    <Select
-                      allowClear
-                      showSearch
-                      optionFilterProp="children"
-                      onChange={(val) => {
-                        const t = tiposCache.find((tc) => tc.codigo === val);
-                        setSelectedTipo(t || null);
-                      }}
-                    >
-                      {tiposCache.map((tc) => (
-                        <Select.Option key={tc.codigo} value={tc.codigo}>
-                          {toTitleCase(tc.nombre)}
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  </FloatingField>
-                </Form.Item>
+                <div ref={tipoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+                  <div style={{ flex: 1 }}>
+                    <Form.Item name="tipo" style={{ marginBottom: 0 }}>
+                      <FloatingField label="Tipo Documento">
+                        <Select
+                          allowClear
+                          showSearch
+                          optionFilterProp="children"
+                          placeholder=" "
+                          onChange={(val) => {
+                            const t = tiposCache.find((tc) => tc.codigo === val);
+                            setSelectedTipo(t || null);
+                          }}
+                          onClear={() => {
+                            setSelectedTipo(null);
+                          }}
+                        >
+                          {tiposCache.map((tc) => (
+                            <Select.Option key={tc.codigo} value={tc.codigo}>
+                              {toTitleCase(tc.nombre)}
+                            </Select.Option>
+                          ))}
+                        </Select>
+                      </FloatingField>
+                    </Form.Item>
+                  </div>
+                </div>
               </Col>
               <Col xs={24} sm={12} lg={15}>
                 <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
@@ -1031,6 +1107,16 @@ const FacturaClienteFormulario: React.FC = () => {
                       onChange={(val) => {
                         const cli = clientesCache.find((e) => e.codigo === val);
                         setSelectedCliente(cli || null);
+                        // FC17 - Si el cliente es exento de impuestos, limpiar
+                        if (cli?.exentoImpuesto && detalles.some((d) => (d.impuesto?.porcentaje || 0) > 0)) {
+                          message.warning('El cliente está exento de impuestos. Se eliminarán los impuestos de los detalles.');
+                          setDetalles((prev) =>
+                            prev.map((d) => {
+                              const limpio = { ...d, impuesto: undefined, impuestos: 0 };
+                              return calcularFila(limpio);
+                            })
+                          );
+                        }
                       }}
                     >
                       {clientesCache.map((cli) => (
@@ -1193,7 +1279,32 @@ const FacturaClienteFormulario: React.FC = () => {
                 <Form.Item name="moneda" hidden><Input /></Form.Item>
               </Col>
 
-              {/* Fila 5: Nota */}
+              {/* Fila 5: Sucursal Contable */}
+              <Col xs={24} sm={12} lg={8}>
+                <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
+                  <FloatingField label="Sucursal Contable">
+                    <Select
+                      allowClear
+                      showSearch
+                      optionFilterProp="children"
+                      placeholder=" "
+                      value={selectedSucursal?.sucursal ?? undefined}
+                      onChange={(val) => {
+                        const suc = sucursalesCache.find((s: any) => s.sucursal === val);
+                        setSelectedSucursal(suc || null);
+                      }}
+                    >
+                      {sucursalesCache.map((suc: any) => (
+                        <Select.Option key={suc.sucursal} value={suc.sucursal}>
+                          {toTitleCase(suc.nombre || '')}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </FloatingField>
+                </Form.Item>
+              </Col>
+
+              {/* Fila 6: Nota */}
               <Col xs={24}>
                 <Form.Item name="nota" style={{ marginBottom: 0 }}>
                   <FloatingField label="Nota">
@@ -1244,8 +1355,11 @@ const FacturaClienteFormulario: React.FC = () => {
           asientos: res.asientos || [], logs: res.logs || [],
         };
         setData(full); setDetalles(full.detalles);
+        setAsientosLocales(full.asientos || []);
+        setImpuestosFactura((full as any).impuestosFactura || []);
         setSelectedConcepto(full.concepto); setSelectedCliente(full.cliente);
         setSelectedAlmacen(full.almacen); setSelectedTipo(full.tipo);
+        setSelectedSucursal((full as any).sucursal || null);
         const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
         const fechaVenc = full.fechaVencimiento ? parseDateRaw(full.fechaVencimiento) : null;
         form.setFieldsValue({
@@ -1361,31 +1475,29 @@ const FacturaClienteFormulario: React.FC = () => {
                     </>
                   ),
                 },
-                ...(data?.asientos && data.asientos.length > 0
-                  ? [{
-                      key: 'asientos',
-                      label: `Asientos (${data?.asientos?.length || 0})`,
-                      children: (
-                        <Table
-                          dataSource={data?.asientos || []}
-                          columns={asientoColumns}
-                          rowKey="id"
-                          size="small"
-                          pagination={false}
-                          scroll={{ x: 900 }}
-                          summary={() => (
-                            <Table.Summary fixed>
-                              <Table.Summary.Row>
-                                <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                                <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                                <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                              </Table.Summary.Row>
-                            </Table.Summary>
-                          )}
-                        />
-                      ),
-                    }]
-                  : []),
+                {
+                  key: 'impuestos',
+                  label: `Impuestos (${impuestosFactura.length})`,
+                  children: (
+                    <ImpuestosFacturaEditables
+                      impuestos={impuestosFactura}
+                      onChange={setImpuestosFactura}
+                      editable={mode === 'crear' || mode === 'editar'}
+                    />
+                  ),
+                },
+                {
+                  key: 'asientos',
+                  label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
+                  children: (
+                    <AsientosContableEditables
+                      asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
+                      onChange={setAsientosLocales}
+                      editable={mode === 'crear' || mode === 'editar'}
+                      scroll={{ x: 900 }}
+                    />
+                  ),
+                },
                 ...(data?.logs && data.logs.length > 0
                   ? [{
                       key: 'historial',
@@ -1464,31 +1576,29 @@ const FacturaClienteFormulario: React.FC = () => {
                   </>
                 ),
               },
-              ...(data?.asientos && data.asientos.length > 0
-                ? [{
-                    key: 'asientos',
-                    label: `Asientos (${data?.asientos?.length || 0})`,
-                    children: (
-                      <Table
-                        dataSource={data?.asientos || []}
-                        columns={asientoColumns}
-                        rowKey="id"
-                        size="small"
-                        pagination={false}
-                        scroll={{ x: 900 }}
-                        summary={() => (
-                          <Table.Summary fixed>
-                            <Table.Summary.Row>
-                              <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                              <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                              <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                            </Table.Summary.Row>
-                          </Table.Summary>
-                        )}
-                      />
-                    ),
-                  }]
-                : []),
+              {
+                key: 'impuestos',
+                label: `Impuestos (${impuestosFactura.length})`,
+                children: (
+                  <ImpuestosFacturaEditables
+                    impuestos={impuestosFactura}
+                    onChange={setImpuestosFactura}
+                    editable={mode === 'crear' || mode === 'editar'}
+                  />
+                ),
+              },
+              {
+                key: 'asientos',
+                label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
+                children: (
+                  <AsientosContableEditables
+                    asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
+                    onChange={setAsientosLocales}
+                    editable={mode === 'crear' || mode === 'editar'}
+                    scroll={{ x: 900 }}
+                  />
+                ),
+              },
               ...(data?.logs && data.logs.length > 0
                 ? [{
                     key: 'historial',
@@ -1518,7 +1628,153 @@ const FacturaClienteFormulario: React.FC = () => {
           onChange={handleFechaVencimiento}
         />
       </Modal>
+
+      {/* Guía paso a paso */}
+      {(mode === 'crear' || esBorrador) && (
+        <FacturaClienteGuide
+          mode={mode}
+          tipo={selectedTipo}
+          concepto={selectedConcepto}
+          cliente={selectedCliente}
+          detallesCount={detalles.length}
+          tipoRef={tipoRef}
+          conceptoRef={conceptoRef}
+          clienteRef={clienteRef}
+          agregarFilaRef={agregarFilaRef}
+        />
+      )}
     </div>
+  );
+};
+
+// ===== Componente Guía paso a paso para FacturaCliente =====
+interface FacturaClienteGuideProps {
+  mode: 'crear' | 'editar';
+  tipo: any | null;
+  concepto: any | null;
+  cliente: any | null;
+  detallesCount: number;
+  tipoRef: React.RefObject<HTMLDivElement | null>;
+  conceptoRef: React.RefObject<HTMLDivElement | null>;
+  clienteRef: React.RefObject<HTMLDivElement | null>;
+  agregarFilaRef: React.RefObject<HTMLDivElement | null>;
+}
+
+interface GuideStep {
+  key: string;
+  title: string;
+  description: string;
+  target: () => HTMLDivElement | null;
+}
+
+const FacturaClienteGuide: React.FC<FacturaClienteGuideProps> = ({
+  tipo, concepto, cliente, detallesCount,
+  tipoRef, conceptoRef, clienteRef, agregarFilaRef,
+}) => {
+  const [open, setOpen] = useState(false);
+  const dismissedStepRef = useRef<string | null>(null);
+  const currentStepRef = useRef<GuideStep | null>(null);
+
+  const getCurrentStep = useCallback((): GuideStep | null => {
+    const steps: GuideStep[] = [
+      {
+        key: 'tipo',
+        title: 'Paso 1: Tipo de Documento',
+        description: 'Debe elegir un tipo de documento antes de seleccionar el concepto.',
+        target: () => tipoRef.current,
+      },
+      {
+        key: 'concepto',
+        title: 'Paso 2: Concepto',
+        description: 'Seleccione un concepto. Las opciones dependen del tipo seleccionado.',
+        target: () => conceptoRef.current,
+      },
+      {
+        key: 'cliente',
+        title: 'Paso 3: Cliente',
+        description: 'Seleccione el cliente. El RNC se mostrará automáticamente.',
+        target: () => clienteRef.current,
+      },
+      {
+        key: 'productos',
+        title: 'Paso 4: Productos',
+        description: 'Agregue productos usando "Agregar producto" o el scanner.',
+        target: () => agregarFilaRef.current,
+      },
+    ];
+
+    if (!tipo) return steps[0];
+    if (!concepto) return steps[1];
+    if (!cliente) return steps[2];
+    if (detallesCount === 0) return steps[3];
+
+    return null;
+  }, [tipo, concepto, cliente, detallesCount, tipoRef, conceptoRef, clienteRef, agregarFilaRef]);
+
+  currentStepRef.current = getCurrentStep();
+
+  useEffect(() => {
+    const current = getCurrentStep();
+    if (current) {
+      if (dismissedStepRef.current !== current.key) {
+        setOpen(true);
+      }
+    } else {
+      setOpen(false);
+      dismissedStepRef.current = null;
+    }
+  }, [getCurrentStep]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.ant-popover')) return;
+      setOpen(false);
+      if (currentStepRef.current) {
+        dismissedStepRef.current = currentStepRef.current.key;
+      }
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [open]);
+
+  if (!getCurrentStep()) return null;
+
+  const targetElement = getCurrentStep()!.target();
+  if (!targetElement) return null;
+
+  const rect = targetElement.getBoundingClientRect();
+
+  return createPortal(
+    <Popover
+      open={open}
+      onOpenChange={(visible) => {
+        if (!visible) {
+          setOpen(false);
+          if (currentStepRef.current) {
+            dismissedStepRef.current = currentStepRef.current.key;
+          }
+        }
+      }}
+      title={getCurrentStep()!.title}
+      content={getCurrentStep()!.description}
+      placement="top"
+      trigger={[]}
+      rootClassName="guide-popover"
+    >
+      <span style={{
+        position: 'fixed', top: rect.top, left: rect.left,
+        width: rect.width, height: rect.height,
+        pointerEvents: 'none', zIndex: -1,
+      }} />
+    </Popover>,
+    document.body,
   );
 };
 

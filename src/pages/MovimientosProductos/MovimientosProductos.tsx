@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Table, Card, Input, Typography, Alert, Button, Select, Switch, Space, Popover, Badge, DatePicker } from 'antd';
+import { Table, Card, Input, Typography, Alert, Button, Select, Switch, Space, Popover, Badge, DatePicker, Empty, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined,
@@ -369,7 +369,7 @@ const MovimientosProductos: React.FC = () => {
       title: 'Fecha',
       dataIndex: 'fecha',
       key: 'fecha',
-      width: 120,
+      width: 100,
       render: (f: string) => <Text>{formatDate(f)}</Text>,
     },
     {
@@ -382,13 +382,20 @@ const MovimientosProductos: React.FC = () => {
     {
       title: 'Artículo',
       key: 'articulo',
-      width: 250,
-      render: (_: unknown, record: MovimientoDTO) => (
-        <Text>
-          <Text strong>{record.codigo}</Text>
-          {record.articulo ? <Text> - {toTitleCase(record.articulo)}</Text> : null}
-        </Text>
-      ),
+      ellipsis: true,
+      render: (_: unknown, record: MovimientoDTO) => {
+        const fullText = record.articulo
+          ? `${record.codigo} - ${toTitleCase(record.articulo)}`
+          : record.codigo;
+        return (
+          <Tooltip title={fullText}>
+            <Text>
+              <Text strong>{record.codigo}</Text>
+              {record.articulo ? <Text> - {toTitleCase(record.articulo)}</Text> : null}
+            </Text>
+          </Tooltip>
+        );
+      },
     },
     {
       title: 'Almacén',
@@ -401,7 +408,7 @@ const MovimientosProductos: React.FC = () => {
       title: 'Cantidad',
       dataIndex: 'cantidad',
       key: 'cantidad',
-      width: 100,
+      width: 90,
       align: 'right',
       render: (val: number) => (
         <Text style={{ color: val < 0 ? '#f5222d' : undefined }}>
@@ -413,7 +420,7 @@ const MovimientosProductos: React.FC = () => {
       title: 'Costo',
       dataIndex: 'costo',
       key: 'costo',
-      width: 130,
+      width: 110,
       align: 'right',
       render: (val: number) => <Text>{formatCurrency(val)}</Text>,
     },
@@ -421,7 +428,7 @@ const MovimientosProductos: React.FC = () => {
       title: 'Tipo Doc.',
       dataIndex: 'tipoDocumento',
       key: 'tipoDocumento',
-      width: 120,
+      width: 100,
       render: (val: string) => <Text>{val || '-'}</Text>,
     },
     {
@@ -510,7 +517,7 @@ const MovimientosProductos: React.FC = () => {
           dataSource={datosPaginados}
           rowKey={(record) => `${record.documento}-${record.codigo}-${record.almacen}`}
           loading={loading}
-          scroll={{ x: 1400 }}
+          scroll={{ x: 900 }}
           size="middle"
           onChange={handleTableChange}
           pagination={{
@@ -521,7 +528,17 @@ const MovimientosProductos: React.FC = () => {
             showTotal: (t) => `${t} registros`,
           }}
           className="paces-border-top paces-list-table"
-          locale={generated ? undefined : { emptyText: 'Presione "Generar" para cargar los movimientos' }}
+          locale={{
+            emptyText: generated ? (
+              <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Empty description="No se encontraron movimientos para los filtros seleccionados" />
+              </div>
+            ) : (
+              <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Empty description='Presione "Generar" para cargar los movimientos' />
+              </div>
+            ),
+          }}
           summary={generated ? () => (
             <Table.Summary.Row>
               <Table.Summary.Cell index={0} colSpan={4}>

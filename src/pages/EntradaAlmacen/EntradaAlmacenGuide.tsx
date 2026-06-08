@@ -16,12 +16,15 @@ export interface EntradaAlmacenGuideProps {
   almacen: AlmacenDTO | null;
   /** Detalles del documento */
   detallesCount: number;
+  /** Valor actual del NCF */
+  ncf?: string;
   /** Refs a los elementos del DOM */
   conceptoRef: React.RefObject<HTMLElement | null>;
   suplidorRef: React.RefObject<HTMLElement | null>;
   ordenCompraRef: React.RefObject<HTMLElement | null>;
   almacenRef: React.RefObject<HTMLElement | null>;
   agregarFilaRef: React.RefObject<HTMLElement | null>;
+  ncfRef?: React.RefObject<HTMLElement | null>;
 }
 
 interface GuideStep {
@@ -42,6 +45,8 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
   ordenCompraRef,
   almacenRef,
   agregarFilaRef,
+  ncf,
+  ncfRef,
 }) => {
   const [open, setOpen] = useState(false);
   const dismissedStepRef = useRef<string | null>(null);
@@ -80,6 +85,12 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
         description: 'Agregue productos al documento.',
         target: () => agregarFilaRef.current,
       },
+      {
+        key: 'ncf',
+        title: 'NCF',
+        description: 'El concepto requiere un NCF de factura. Debe digitar el NCF para poder continuar.',
+        target: () => ncfRef?.current || null,
+      },
     ];
 
     // Lógica de prioridad
@@ -89,9 +100,11 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
     if (!almacen) return steps[3];
     // Solo pedir productos manuales si no hay OC seleccionada
     if (!ordenCompra && detallesCount === 0) return steps[4];
+    // NCF requerido si el concepto genera RDE
+    if (concepto?.docAGenerar === 'RDE' && !ncf) return steps[5];
 
     return null;
-  }, [concepto, suplidor, ordenCompra, almacen, detallesCount, conceptoRef, suplidorRef, ordenCompraRef, almacenRef, agregarFilaRef]);
+  }, [concepto, suplidor, ordenCompra, almacen, detallesCount, ncf, conceptoRef, suplidorRef, ordenCompraRef, almacenRef, agregarFilaRef, ncfRef]);
 
   // Mantener ref sincronizada para usar en handlers sin stale closures
   currentStepRef.current = currentStep;

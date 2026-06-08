@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Tooltip, Modal, Alert, App
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Tooltip, Modal, Alert, App
 } from 'antd';
 import {
   LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
-  FileTextOutlined, FileSearchOutlined,
+  FileTextOutlined, FileSearchOutlined, ReloadOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
@@ -25,6 +25,9 @@ import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosC
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
+import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
+import ModalAnular from '../../components/ModalAnular/ModalAnular';
+import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 
 interface NotaDebitoDetalleProps {
   tipoEntidad: 'SUP' | 'CLI';
@@ -43,12 +46,14 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
-  const [detalleSearch, setDetalleSearch] = useState('');
+  const [recalculando, setRecalculando] = useState(false);
   const [tieneScan, setTieneScan] = useState<boolean | null>(null);
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
   const [scannerUrl, setScannerUrl] = useState<string | null>(null);
   const [scannerLoading, setScannerLoading] = useState(false);
   const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionDTO[]>([]);
+  const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
+  const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const screens = Grid.useBreakpoint();
 
   const codigoPantalla = tipoEntidad === 'SUP' ? 'FNDSUP' : 'FNDCLI';
@@ -152,36 +157,35 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
     );
   };
 
-  const handleAnular = async () => {
-    if (!data) return;
-    setSaving(true);
+  const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
+    if (!data || !id) return;
     try {
-      await notaDebitoApi.anular(sucursalActiva, data as any);
+      const payload = { ...(data as any), motivo: dataAnular.motivo, fechaAnulacion: dataAnular.fecha };
+      await notaDebitoApi.anular(sucursalActiva, payload);
       message.success('Documento anulado exitosamente');
-      const res = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setModalAnularOpen(false);
+      const res = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
       message.error(msg);
-    } finally {
-      setSaving(false);
+      throw err;
     }
   };
 
-  const handleDesaplicar = async () => {
+  const handleDesaplicarConfirm = async (motivo: string) => {
     if (!id || !data) return;
-    setSaving(true);
     try {
       const origen = obtenerNombreEnumSucursal(data.codigoSucursal || String(sucursalActiva));
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
       await notaDebitoApi.desaplicar(origen, documento);
       message.success('Documento desaplicado exitosamente');
+      setModalDesaplicarOpen(false);
       handleRefresh();
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al desaplicar');
       message.error(msg);
-    } finally {
-      setSaving(false);
+      throw err;
     }
   };
 
@@ -227,6 +231,22 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
     }
   };
 
+  const handleRecalcular = async () => {
+    if (!id) return;
+    setRecalculando(true);
+    try {
+      await notaDebitoApi.recalcular(sucursalActiva, parseInt(id));
+      const res = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id));
+      setData(res);
+      message.success('Documento recalculado correctamente');
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al recalcular');
+      message.error(msg);
+    } finally {
+      setRecalculando(false);
+    }
+  };
+
   function extraerMensajeError(err: any, fallback: string): string {
     const data = err?.response?.data;
     if (!data) return fallback;
@@ -261,26 +281,6 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
   const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
-
-  // ===== Documentos filtrados por búsqueda =====
-  const documentosFiltrados = detalleSearch
-    ? (data?.transaccionesAsociadas || []).filter((d: any) => {
-        const q = detalleSearch.toLowerCase();
-        return (
-          (d.documento || '').toLowerCase().includes(q) ||
-          (d.nCF || '').toLowerCase().includes(q)
-        );
-      })
-    : (data?.transaccionesAsociadas || []);
-
-  const asociadasColumns = [
-    { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
-    { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 140, render: (v: string) => v || '-' },
-    { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Pagado', dataIndex: 'pagado', key: 'pagado', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Pendiente', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
-    { title: 'Monto a Pagar', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
-  ];
 
   // asientoColumns reemplazado por AsientosContableTable compartido
 
@@ -333,12 +333,22 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
           }
         }}
         onEditar={() => navigate(`/${codigoPantalla}/${id}/editar`)}
+        confirmActions={false}
         onAplicar={handleAplicar}
-        onAnular={handleAnular}
+        onAnular={async () => setModalAnularOpen(true)}
         onPostear={handlePostear}
         onRevisado={handleRevisado}
-        onDesaplicar={handleDesaplicar}
+        onDesaplicar={async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
+        extraButtons={id ? (
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={handleRecalcular}
+            loading={recalculando}
+          >
+            Recalcular
+          </Button>
+        ) : undefined}
       />
 
       {isLarge ? (
@@ -387,20 +397,12 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
               items={[
                 {
                   key: 'documentos',
-                  label: `Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`,
+                  label: `Documentos (${data?.transaccionesAsociadas?.length || 0})`,
                   children: (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                        <Input.Search
-                          placeholder="Buscar documento..."
-                          allowClear
-                          style={{ maxWidth: 250 }}
-                          onSearch={(value) => setDetalleSearch(value)}
-                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                        />
-                      </div>
-                      <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
-                    </>
+                    <TransaccionesAsociadasCard
+                      documentos={data?.transaccionesAsociadas || []}
+                      readOnly={true}
+                    />
                   ),
                 },
                 {
@@ -423,7 +425,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
 
           <Col xxl={6}>
             <EntidadCard entidad={data.entidad} fallbackTitulo={tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente'} />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
@@ -479,20 +481,12 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
             items={[
               {
                 key: 'documentos',
-                label: `Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`,
+                label: `Documentos (${data?.transaccionesAsociadas?.length || 0})`,
                 children: (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                      <Input.Search
-                        placeholder="Buscar documento..."
-                        allowClear
-                        style={{ maxWidth: 250 }}
-                        onSearch={(value) => setDetalleSearch(value)}
-                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                      />
-                    </div>
-                    <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
-                  </>
+                  <TransaccionesAsociadasCard
+                    documentos={data?.transaccionesAsociadas || []}
+                    readOnly={true}
+                  />
                 ),
               },
               {
@@ -513,7 +507,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
           />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
@@ -557,6 +551,22 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
         eventos={operacion.eventos}
         completado={operacion.completado}
         onClose={() => operacion.reset()}
+      />
+
+      <ModalDesaplicar
+        open={modalDesaplicarOpen}
+        onClose={() => setModalDesaplicarOpen(false)}
+        onConfirm={handleDesaplicarConfirm}
+        tituloDocumento={`${data?.documento?.codigo || rutaBase}-${data?.noDocumento || id}`}
+      />
+
+      <ModalAnular
+        open={modalAnularOpen}
+        onClose={() => setModalAnularOpen(false)}
+        onConfirm={handleAnularConfirm}
+        documento={`${data?.documento?.codigo || rutaBase}-${data?.noDocumento || ''}`}
+        fechaDocumento={data?.fechaDocumento || ''}
+        periodoCerrado={data?.periodo === 6}
       />
     </div>
   );

@@ -113,6 +113,7 @@ const FacturaPOSFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const authUser = useAuthStore((s) => s.usuario);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
@@ -883,6 +884,28 @@ const FacturaPOSFormulario: React.FC = () => {
                 />
               </FloatingField>
             </Form.Item>
+          </Col>
+
+          <Col xs={24} sm={12} lg={12}>
+            <FloatingField label="Cajero">
+              <Input
+                placeholder=" "
+                value={mode === 'crear' ? (authUser?.nombre || '') : (data?.cajero || '')}
+                readOnly
+              />
+            </FloatingField>
+          </Col>
+          <Col xs={24} sm={12} lg={12}>
+            <FloatingField label="Caja">
+              <Input
+                placeholder=" "
+                value={(() => {
+                  const turnoVal = form.getFieldValue('turno') || '';
+                  return turnoVal.length >= 3 ? turnoVal.substring(1, 3) : (data?.caja || '');
+                })()}
+                readOnly
+              />
+            </FloatingField>
           </Col>
 
           {conceptoInfo && (

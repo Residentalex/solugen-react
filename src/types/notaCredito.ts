@@ -86,6 +86,7 @@ export interface NotaCreditoFullDTO {
   estado: number;
   periodo: number;
   ncf: string;
+  ncfModificado?: string;
   nota: string;
   referencia: string;
   tasa: number;

@@ -180,9 +180,12 @@ const Almacenes: React.FC = () => {
             setPage(pagination.current || 1);
           }}
           locale={{
-            emptyText: searchText
-              ? <Empty description="Sin resultados para la búsqueda" />
-              : <Empty description="No hay almacenes configurados" />
+            emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {searchText
+                ? <Empty description="Sin resultados para la búsqueda" />
+                : <Empty description="No hay almacenes configurados" />
+              }
+            </div>
           }}
         />
       </Card>

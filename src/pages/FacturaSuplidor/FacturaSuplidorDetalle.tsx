@@ -1,18 +1,22 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Tooltip, Modal, Alert, App
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Tooltip, Modal, Alert, App
 } from 'antd';
 import {
   LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
   FileTextOutlined, FileSearchOutlined,
+  ExclamationCircleOutlined, RedoOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
+import ModalAnular from '../../components/ModalAnular/ModalAnular';
+import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
+import { transaccionApi } from '../../api/transaccionApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
@@ -25,6 +29,7 @@ import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosC
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
+import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 
 const FacturaSuplidorDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -38,13 +43,17 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
-  const [detalleSearch, setDetalleSearch] = useState('');
+
   const [tieneScan, setTieneScan] = useState<boolean | null>(null);
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
   const [scannerUrl, setScannerUrl] = useState<string | null>(null);
   const [scannerLoading, setScannerLoading] = useState(false);
   const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionDTO[]>([]);
+  const [modalAnularOpen, setModalAnularOpen] = useState(false);
+  const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
+  const [pagosAsociados, setPagosAsociados] = useState<any[]>([]);
   const [operacionTitulo, setOperacionTitulo] = useState('');
+  const [recalculando, setRecalculando] = useState(false);
 
   const { message: messageApi } = App.useApp();
   const operacion = useAplicar();
@@ -77,6 +86,10 @@ const FacturaSuplidorDetalle: React.FC = () => {
         documentoRelacionApi.obtenerPorTransaccion(data.id)
           .then(rel => setDocumentosRelacionados(rel || []))
           .catch(() => setDocumentosRelacionados([]));
+        // Cargar pagos asociados
+        transaccionApi.obtenerAsociadasInventario(sucursalActiva, data.id)
+          .then((transacciones) => setPagosAsociados(transacciones || []))
+          .catch(() => setPagosAsociados([]));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al cargar el documento';
@@ -107,6 +120,10 @@ const FacturaSuplidorDetalle: React.FC = () => {
         documentoRelacionApi.obtenerPorTransaccion(data.id)
           .then(rel => setDocumentosRelacionados(rel || []))
           .catch(() => setDocumentosRelacionados([]));
+        // Cargar pagos asociados
+        transaccionApi.obtenerAsociadasInventario(sucursalActiva, data.id)
+          .then((transacciones) => setPagosAsociados(transacciones || []))
+          .catch(() => setPagosAsociados([]));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al cargar el documento';
@@ -133,10 +150,30 @@ const FacturaSuplidorDetalle: React.FC = () => {
 
   const handleAplicar = () => {
     if (!id) return;
+
+    // Validar scanner (ya existe)
     if (tieneScan === false) {
       messageApi.warning('Debe escanear la factura antes de aplicar.');
       return;
     }
+
+    // Mejora F15: Validar FechaPermitida del documento
+    if (data?.documento?.fechaPermitida === 'MenorIgualFechaDia') {
+      const hoy = new Date();
+      const fechaDoc = new Date(data.fechaDocumento);
+      if (fechaDoc > hoy) {
+        messageApi.error('La fecha del documento no puede ser mayor a la fecha del día.');
+        return;
+      }
+      if (data.fechaEntrega) {
+        const fechaEntrega = new Date(data.fechaEntrega);
+        if (fechaEntrega > hoy) {
+          messageApi.error('La fecha de entrega no puede ser mayor a la fecha del día.');
+          return;
+        }
+      }
+    }
+
     setOperacionTitulo(`Aplicando RDE-${data?.noDocumento || id}`);
     operacion.ejecutar(
       `/RDE/${sucursalActiva}/aplicar/${id}`,
@@ -146,6 +183,14 @@ const FacturaSuplidorDetalle: React.FC = () => {
 
   const handlePostear = () => {
     if (!data) return;
+    if (data.concepto?.noAsientos) {
+      messageApi.info('El concepto no genera asientos contables.');
+      return;
+    }
+    if (data.estado !== 1) {
+      messageApi.info('Debe aplicar el documento antes de postear.');
+      return;
+    }
     setOperacionTitulo(`Posteando RDE-${data?.noDocumento || id}`);
     operacion.ejecutar(
       `/RDE/${sucursalActiva}/postear`,
@@ -154,7 +199,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
     );
   };
 
-  const handleDesaplicar = async () => {
+  const handleDesaplicarConfirm = async (_motivo: string) => {
     if (!id || !data) return;
     setSaving(true);
     try {
@@ -162,6 +207,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
       await facturaSuplidorApi.desaplicar(origen, documento);
       messageApi.success('Documento desaplicado exitosamente');
+      setModalDesaplicarOpen(false);
       handleRefresh();
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al desaplicar');
@@ -201,12 +247,48 @@ const FacturaSuplidorDetalle: React.FC = () => {
     }
   };
 
-  const handleAnular = async () => {
+  const handleRecalcular = async () => {
+    if (!id || !data) return;
+    const confirmed = await new Promise<boolean>((resolve) => {
+      Modal.confirm({
+        title: 'Recalcular',
+        icon: <ExclamationCircleOutlined />,
+        content: '¿Desea recalcular los pagos de este documento?',
+        okText: 'Sí, recalcular',
+        cancelText: 'No',
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!confirmed) return;
+
+    setRecalculando(true);
+    try {
+      await apiClient.put(
+        `/Transaccion/${sucursalActiva}/recalcularPagos/${id}`
+      );
+      messageApi.success('Documento recalculado correctamente');
+      handleRefresh();
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al recalcular';
+      messageApi.error(msg);
+    } finally {
+      setRecalculando(false);
+    }
+  };
+
+  const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
     if (!data) return;
     setSaving(true);
     try {
-      await facturaSuplidorApi.anular(sucursalActiva, data as any);
+      const dto = {
+        ...data,
+        fechaDocumento: dataAnular.fecha,
+        nota: `${data.nota || ''} Documento anulado por: ${dataAnular.motivo}.`,
+      };
+      await facturaSuplidorApi.anular(sucursalActiva, dto);
       messageApi.success('Documento anulado exitosamente');
+      setModalAnularOpen(false);
       handleRefresh();
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
@@ -250,26 +332,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
-
-  // ===== Documentos filtrados por búsqueda =====
-  const documentosFiltrados = detalleSearch
-    ? (data?.transaccionesAsociadas || []).filter((d: any) => {
-        const q = detalleSearch.toLowerCase();
-        return (
-          (d.documento || '').toLowerCase().includes(q) ||
-          (d.nCF || '').toLowerCase().includes(q)
-        );
-      })
-    : (data?.transaccionesAsociadas || []);
-
-  const asociadasColumns = [
-    { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
-    { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 140, render: (v: string) => v || '-' },
-    { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Pagado', dataIndex: 'pagado', key: 'pagado', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Saldo', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
-    { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
-  ];
+  const tienePagos = pagosAsociados.length > 0;
 
   // asientoColumns reemplazado por AsientosContableTable compartido
 
@@ -323,11 +386,21 @@ const FacturaSuplidorDetalle: React.FC = () => {
         }}
         onEditar={() => navigate(`/FRDE/${id}/editar`)}
         onAplicar={handleAplicar}
-        onAnular={handleAnular}
-        onPostear={handlePostear}
+        onAnular={tienePagos ? undefined : async () => setModalAnularOpen(true)}
+        onPostear={data.concepto?.noAsientos ? undefined : handlePostear}
         onRevisado={handleRevisado}
-        onDesaplicar={handleDesaplicar}
+        onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
+        extraButtons={
+          <Button
+            icon={<RedoOutlined />}
+            onClick={handleRecalcular}
+            loading={recalculando}
+            disabled={data.estado !== 1}
+          >
+            Recalcular
+          </Button>
+        }
       />
 
       {isLarge ? (
@@ -380,20 +453,12 @@ const FacturaSuplidorDetalle: React.FC = () => {
               items={[
                 {
                   key: 'documentos',
-                  label: `Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`,
+                  label: `Documentos (${data?.transaccionesAsociadas?.length || 0})`,
                   children: (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                        <Input.Search
-                          placeholder="Buscar documento..."
-                          allowClear
-                          style={{ maxWidth: 250 }}
-                          onSearch={(value) => setDetalleSearch(value)}
-                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                        />
-                      </div>
-                      <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
-                    </>
+                    <TransaccionesAsociadasCard
+                      documentos={data?.transaccionesAsociadas || []}
+                      readOnly={false}
+                    />
                   ),
                 },
                 {
@@ -475,20 +540,12 @@ const FacturaSuplidorDetalle: React.FC = () => {
             items={[
               {
                 key: 'documentos',
-                label: `Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`,
+                label: `Documentos (${data?.transaccionesAsociadas?.length || 0})`,
                 children: (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                      <Input.Search
-                        placeholder="Buscar documento..."
-                        allowClear
-                        style={{ maxWidth: 250 }}
-                        onSearch={(value) => setDetalleSearch(value)}
-                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                      />
-                    </div>
-                    <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
-                  </>
+                  <TransaccionesAsociadasCard
+                    documentos={data?.transaccionesAsociadas || []}
+                    readOnly={false}
+                  />
                 ),
               },
               {
@@ -545,6 +602,24 @@ const FacturaSuplidorDetalle: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* Modal de Anular */}
+      <ModalAnular
+        open={modalAnularOpen}
+        onClose={() => setModalAnularOpen(false)}
+        onConfirm={handleAnularConfirm}
+        documento={`${data.documento.codigo}-${data.noDocumento}`}
+        fechaDocumento={data.fechaDocumento}
+        periodoCerrado={data.periodo === 6}
+      />
+
+      {/* Modal de Desaplicar */}
+      <ModalDesaplicar
+        open={modalDesaplicarOpen}
+        onClose={() => setModalDesaplicarOpen(false)}
+        onConfirm={handleDesaplicarConfirm}
+        tituloDocumento={`${data.documento.codigo}-${data.noDocumento}`}
+      />
 
       {/* Modal de Progreso para Aplicar/Postear */}
       <ModalProgreso

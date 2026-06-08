@@ -1,0 +1,1008 @@
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  Card, Tabs, Tag, Button, Space, Row, Col, Grid,
+  message, Form, Input, Select, Switch, Typography, Modal, Alert, Spin,
+  Table, Empty,
+} from 'antd';
+import {
+  SearchOutlined, SaveOutlined, CloseOutlined, ExclamationCircleOutlined,
+} from '@ant-design/icons';
+import { useAuthStore } from '../../stores/authStore';
+import { useUIStore } from '../../stores/uiStore';
+import { conceptosApi } from '../../api/conceptosApi';
+import { documentosApi } from '../../api/documentosApi';
+import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { toTitleCase, extraerMensajeError } from '../../utils/formats';
+import type { ConceptoDTO, CompaniaDTO, AlmacenDTO } from '../../types/entradaAlmacen';
+import type { DocumentoDTO } from '../../types/documento';
+
+const { Text } = Typography;
+
+// ===== Modal inline para buscar documentos (catálogo) =====
+interface BuscarDocumentoInlineModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSelect: (doc: DocumentoDTO) => void;
+  documentos: DocumentoDTO[];
+}
+
+const BuscarDocumentoInlineModal: React.FC<BuscarDocumentoInlineModalProps> = ({ open, onClose, onSelect, documentos }) => {
+  const [filtered, setFiltered] = useState<DocumentoDTO[]>(documentos);
+
+  useEffect(() => { setFiltered(documentos); }, [documentos, open]);
+
+  const handleSearch = (val: string) => {
+    if (!val) { setFiltered(documentos); return; }
+    const f = val.toLowerCase();
+    setFiltered(documentos.filter(d => d.codigo.toLowerCase().includes(f) || (d.nombre || '').toLowerCase().includes(f)));
+  };
+
+  const columnas = [
+    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
+    { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true, render: (v: string) => toTitleCase(v) },
+  ];
+
+  return (
+    <Modal title="Buscar Documento" open={open} onCancel={onClose} footer={null} width={600} destroyOnClose>
+      <Input.Search
+        placeholder="Buscar por código o nombre..."
+        allowClear
+        onSearch={handleSearch}
+        style={{ marginBottom: 16 }}
+      />
+      <Table
+        dataSource={filtered}
+        columns={columnas}
+        rowKey="codigo"
+        size="small"
+        pagination={{ pageSize: 10, showSizeChanger: false }}
+        onRow={(record) => ({
+          onClick: () => { onSelect(record); onClose(); },
+          style: { cursor: 'pointer' },
+        })}
+        locale={{ emptyText: <Empty description="No hay documentos" /> }}
+      />
+    </Modal>
+  );
+};
+
+const TIPO_INGRESO_OPTIONS = [
+  { value: 0, label: 'Ninguno' },
+  { value: 1, label: 'Operaciones' },
+  { value: 2, label: 'Financieros' },
+  { value: 3, label: 'Extraordinarios' },
+  { value: 4, label: 'Arrendamientos' },
+  { value: 5, label: 'Venta Activo' },
+  { value: 6, label: 'Otros Ingresos' },
+];
+
+const ConceptoFormulario: React.FC = () => {
+  const { codigo } = useParams<{ codigo: string }>();
+  const navigate = useNavigate();
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const setActiveModule = useUIStore((s) => s.setActiveModule);
+  const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+  const resetToolbar = useUIStore((s) => s.resetToolbar);
+  const screens = Grid.useBreakpoint();
+
+  const mode: 'crear' | 'editar' = codigo && codigo !== 'nuevo' ? 'editar' : 'crear';
+
+  const [form] = Form.useForm();
+  const navigationConfirmedRef = useFormularioNavigation();
+
+  const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [data, setData] = useState<ConceptoDTO | null>(null);
+
+  // Catálogos
+  const [almacenes, setAlmacenes] = useState<AlmacenDTO[]>([]);
+  const [sucursales, setSucursales] = useState<CompaniaDTO[]>([]);
+  const [documentos, setDocumentos] = useState<DocumentoDTO[]>([]);
+
+  // Modales
+  const [docModalOpen, setDocModalOpen] = useState(false);
+  const [conceptoDestinoModalOpen, setConceptoDestinoModalOpen] = useState(false);
+  const [conceptoReplicaModalOpen, setConceptoReplicaModalOpen] = useState(false);
+
+  // Textos de display
+  const [docAGenerarText, setDocAGenerarText] = useState('');
+  const [conceptoDestinoText, setConceptoDestinoText] = useState('');
+  const [conceptoReplicaText, setConceptoReplicaText] = useState('');
+
+  const isLarge = screens.xxl === true;
+
+  // Watchers reactivos
+  const replicarValue = Form.useWatch('replicar', form);
+  const sucDestValue = Form.useWatch('sucDest', form);
+  const docAGenerarValue = Form.useWatch('docAGenerar', form);
+  const noImpuestoValue = Form.useWatch('noImpuesto', form);
+  const noActualizaCostosValue = Form.useWatch('noActualizaCostos', form);
+  const noAsientosValue = Form.useWatch('noAsientos', form);
+  const activoValue = Form.useWatch('activo', form);
+
+  // ===== Cargar catálogos al montar =====
+  useEffect(() => {
+    setActiveModule('MConcepto');
+    const pageTitle = mode === 'crear' ? 'Nuevo Concepto' : '';
+    setPageTitleOverride(pageTitle);
+
+    conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenes).catch(() => {});
+    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursales).catch(() => {});
+    documentosApi.obtenerDocumentos(sucursalActiva).then(setDocumentos).catch(() => {});
+
+    return () => {
+      resetToolbar();
+      setPageTitleOverride('');
+    };
+  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva]);
+
+  // ===== Cargar datos si es modo editar =====
+  useEffect(() => {
+    if (mode === 'crear') return;
+    if (!codigo || codigo === 'nuevo') return;
+
+    setLoading(true);
+    conceptosApi.obtenerConcepto(sucursalActiva, codigo)
+      .then((res) => {
+        setData(res);
+        setPageTitleOverride(`Editar - ${res.codigo}`);
+
+        // Poblar display texts
+        const docGenEncontrado = documentos.find(d => d.codigo === res.docAGenerar);
+        setDocAGenerarText(docGenEncontrado
+          ? `${docGenEncontrado.codigo} - ${toTitleCase(docGenEncontrado.nombre || '')}`
+          : (res.docAGenerar || ''));
+
+        if (res.sucursalDestino?.codigo) {
+          setConceptoDestinoText(res.conceptoDestino || '');
+        }
+
+        if (res.sucursalReplica?.codigo && res.conceptoReplica) {
+          setConceptoReplicaText(res.conceptoReplica);
+        }
+
+        // Poblar formulario
+        form.setFieldsValue({
+          codigo: res.codigo,
+          nombre: res.nombre,
+          activo: res.activo ?? true,
+          docAGenerar: res.docAGenerar,
+          noImpuesto: res.noImpuesto ?? false,
+          noAsientos: res.noAsientos ?? false,
+          noActualizaCostos: res.noActualizaCostos ?? false,
+          replicar: res.replicar ?? false,
+          sucursalReplica: res.sucursalReplica?.codigo,
+          tipoIngreso: res.tipoIngreso,
+          codAlm: res.almacen?.codigo,
+          sucDest: res.sucursalDestino?.codigo,
+          conceptoDestino: res.conceptoDestino,
+          conceptoReplica: res.conceptoReplica,
+        });
+      })
+      .catch((err: any) => {
+        const msg = extraerMensajeError(err, 'Error al cargar el concepto');
+        message.error(msg);
+        setLoadingError(true);
+        navigationConfirmedRef.current = true;
+        navigate('/MConcepto');
+      })
+      .finally(() => setLoading(false));
+  }, [mode, codigo, sucursalActiva, form, navigate, documentos, setPageTitleOverride, navigationConfirmedRef]);
+
+  // ===== Handlers =====
+  const handleGuardar = async () => {
+    try {
+      const values = await form.validateFields();
+      setSaving(true);
+
+      // Custom validaciones de negocio
+      const docAGenerarVal = values.docAGenerar;
+      const sucDestVal = values.sucDest;
+      const replicarVal = values.replicar;
+      const sucursalReplicaVal = values.sucursalReplica;
+      const conceptoReplicaVal = values.conceptoReplica;
+      const conceptoDestinoVal = values.conceptoDestino;
+
+      if (docAGenerarVal) {
+        if (!sucDestVal) {
+          message.error('Debe seleccionar una Sucursal Destino cuando hay un Documento a Generar');
+          setSaving(false);
+          return;
+        }
+        // Si sucDest es distinta a la sucursal actual, conceptoDestino es requerido
+        const encontrada = sucursales.find(s => s.codigo === sucDestVal);
+        const sucDestNum = (encontrada as any)?.sucursal ?? (encontrada as any)?.id ?? -1;
+        if (sucDestNum !== sucursalActiva && !conceptoDestinoVal) {
+          message.error('Debe seleccionar un Concepto Destino cuando la Sucursal Destino es diferente');
+          setSaving(false);
+          return;
+        }
+      }
+
+      if (replicarVal) {
+        if (!sucursalReplicaVal) {
+          message.error('Debe seleccionar una Sucursal Réplica');
+          setSaving(false);
+          return;
+        }
+        if (!conceptoReplicaVal) {
+          message.error('Debe seleccionar un Concepto Réplica');
+          setSaving(false);
+          return;
+        }
+      }
+
+      const dto: ConceptoDTO = {
+        codigo: values.codigo,
+        nombre: values.nombre,
+        activo: values.activo,
+        docAGenerar: values.docAGenerar,
+        noImpuesto: values.noImpuesto,
+        noAsientos: values.noAsientos,
+        noActualizaCostos: values.noActualizaCostos,
+        replicar: values.replicar,
+        sucursalReplica: values.sucursalReplica
+          ? sucursales.find(s => s.codigo === values.sucursalReplica) as any
+          : undefined,
+        tipoIngreso: values.tipoIngreso,
+        almacen: values.codAlm
+          ? almacenes.find(a => a.codigo === values.codAlm)
+          : undefined,
+        sucursalDestino: values.sucDest
+          ? sucursales.find(s => s.codigo === values.sucDest) as any
+          : undefined,
+        conceptoDestino: values.conceptoDestino,
+        conceptoReplica: values.conceptoReplica,
+      };
+
+      if (mode === 'crear') {
+        const result = await conceptosApi.crearConcepto(sucursalActiva, dto);
+        message.success('Concepto creado exitosamente');
+        navigationConfirmedRef.current = true;
+        navigate(`/MConcepto/${result.codigo}`);
+      } else {
+        await conceptosApi.actualizarConcepto(sucursalActiva, codigo!, dto);
+        message.success('Concepto actualizado exitosamente');
+        navigationConfirmedRef.current = true;
+        navigate(`/MConcepto/${codigo}`);
+      }
+    } catch (err: any) {
+      if (err?.errorFields) return; // error de validación del form
+      const msg = extraerMensajeError(err, 'Error al guardar el concepto');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancelar = () => {
+    if (form.isFieldsTouched()) {
+      Modal.confirm({
+        title: 'Cancelar',
+        icon: <ExclamationCircleOutlined />,
+        content: '¿Está seguro que desea descartar los cambios realizados?',
+        okText: 'Sí, descartar',
+        cancelText: 'No, continuar editando',
+        okButtonProps: { danger: true },
+        onOk: () => {
+          navigationConfirmedRef.current = true;
+          if (mode === 'editar' && codigo) {
+            navigate(`/MConcepto/${codigo}`);
+          } else {
+            navigate('/MConcepto');
+          }
+        },
+      });
+    } else {
+      navigationConfirmedRef.current = true;
+      if (mode === 'editar' && codigo) {
+        navigate(`/MConcepto/${codigo}`);
+      } else {
+        navigate('/MConcepto');
+      }
+    }
+  };
+
+  const handleLimpiarDocAGenerar = () => {
+    setDocAGenerarText('');
+    form.setFieldsValue({ docAGenerar: undefined });
+    // Limpiar dependientes
+    handleSucDestChange(undefined);
+    setConceptoDestinoText('');
+    form.setFieldsValue({ conceptoDestino: undefined });
+  };
+
+  const handleDocumentoSelect = (doc: DocumentoDTO) => {
+    setDocAGenerarText(`${doc.codigo} - ${toTitleCase(doc.nombre || '')}`);
+    form.setFieldsValue({ docAGenerar: doc.codigo });
+  };
+
+  const handleConceptoDestinoSelect = (concepto: ConceptoDTO) => {
+    setConceptoDestinoText(`${concepto.codigo} - ${toTitleCase(concepto.nombre)}`);
+    form.setFieldsValue({ conceptoDestino: concepto.codigo });
+  };
+
+  const handleBuscarConceptoDestino = () => {
+    if (!sucDestValue) {
+      message.warning('Primero seleccione una Sucursal Destino');
+      return;
+    }
+    const docAGenerar = form.getFieldValue('docAGenerar');
+    if (!docAGenerar) {
+      message.warning('Primero seleccione un Documento a Generar');
+      return;
+    }
+    setConceptoDestinoModalOpen(true);
+  };
+
+  const handleConceptoReplicaSelect = (concepto: ConceptoDTO) => {
+    setConceptoReplicaText(`${concepto.codigo} - ${toTitleCase(concepto.nombre)}`);
+    form.setFieldsValue({ conceptoReplica: concepto.codigo });
+  };
+
+  const handleBuscarConceptoReplica = () => {
+    const sucReplica = form.getFieldValue('sucursalReplica');
+    if (!sucReplica) {
+      message.warning('Primero seleccione una Sucursal Réplica');
+      return;
+    }
+    setConceptoReplicaModalOpen(true);
+  };
+
+  const handleSucursalReplicaChange = (value: string | undefined) => {
+    if (!value) {
+      setConceptoReplicaText('');
+      form.setFieldValue('conceptoReplica', undefined);
+    }
+  };
+
+  // ===== Loading state =====
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: 80 }}>
+        <Spin size="large" />
+        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando concepto...</div>
+      </div>
+    );
+  }
+
+  // ===== Error state =====
+  if (loadingError) {
+    return (
+      <div>
+        <Alert
+          message="Error al cargar el formulario"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <Button onClick={() => navigate('/MConcepto')}>Volver al listado</Button>
+      </div>
+    );
+  }
+
+  const handleReplicarChange = (checked: boolean) => {
+    if (!checked) {
+      form.setFieldValue('sucursalReplica', undefined);
+      setConceptoReplicaText('');
+      form.setFieldValue('conceptoReplica', undefined);
+    }
+  };
+
+  const handleSucDestChange = (value: string | undefined) => {
+    if (!value) {
+      setConceptoDestinoText('');
+      form.setFieldValue('conceptoDestino', undefined);
+    }
+  };
+
+  return (
+    <div>
+      {/* Toolbar inline */}
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+        <div style={{ flex: 1 }} />
+        <Space wrap>
+          {mode === 'editar' && data && (
+            <Tag color={data.activo ? 'green' : 'default'}>{data.activo ? 'Activo' : 'Inactivo'}</Tag>
+          )}
+          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
+            Guardar
+          </Button>
+          <Button icon={<CloseOutlined />} onClick={handleCancelar}>
+            Cancelar
+          </Button>
+        </Space>
+      </div>
+
+      {isLarge ? (
+        /* === DESKTOP LAYOUT (≥ xxl) === */
+        <Row gutter={16}>
+          <Col xxl={18}>
+            {/* Datos Generales */}
+            <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+              <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
+                <Row gutter={[16, 24]}>
+                  <Col xs={24} sm={12} lg={8}>
+                    <Form.Item
+                      name="codigo"
+                      label="Código"
+                      rules={mode === 'crear' ? [{ required: true, message: 'El código es requerido' }] : []}
+                    >
+                      <Input disabled={mode === 'editar'} placeholder="Código del concepto" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12} lg={8}>
+                    <Form.Item
+                      name="nombre"
+                      label="Nombre"
+                      rules={[{ required: true, message: 'El nombre es requerido' }]}
+                    >
+                      <Input placeholder="Nombre del concepto" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={12} lg={4}>
+                    <Form.Item name="activo" valuePropName="checked" label="Activo" initialValue={true}>
+                      <Switch checkedChildren="Activo" unCheckedChildren="Inactivo" />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              </Form>
+            </Card>
+
+            {/* Tabs */}
+            <Tabs
+              type="card"
+              items={[
+                {
+                  key: 'inventario',
+                  label: 'Inventario',
+                  children: (
+                    <div style={{ paddingTop: 16 }}>
+                      <Form form={form} layout="vertical" size="middle">
+                        <Row gutter={[16, 24]}>
+                          <Col xs={24} sm={12} lg={8}>
+                            <Form.Item name="noImpuesto" valuePropName="checked" label="Sin Impuesto" initialValue={false}>
+                              <Switch />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} sm={12} lg={8}>
+                            <Form.Item name="noActualizaCostos" valuePropName="checked" label="No Actualiza Costos" initialValue={false}>
+                              <Switch />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} sm={12} lg={8}>
+                            <Form.Item name="codAlm" label="Almacén">
+                              <Select
+                                allowClear
+                                placeholder="Seleccionar almacén..."
+                                showSearch
+                                optionFilterProp="label"
+                                options={almacenes.map(a => ({ value: a.codigo, label: a.nombre }))}
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+
+                        {/* Card: GENERAR DOCUMENTO */}
+                        <Card className="paces-card" size="small" title="GENERAR DOCUMENTO" style={{ marginBottom: 16 }}>
+                          <Row gutter={[16, 24]}>
+                            <Col xs={24} sm={12} lg={8}>
+                              <Form.Item name="docAGenerar" hidden>
+                                <Input />
+                              </Form.Item>
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Documento a generar</Text>
+                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+                                  <div style={{ flex: 1 }}>
+                                    <Input
+                                      placeholder="Buscar documento..."
+                                      value={docAGenerarText}
+                                      readOnly
+                                    />
+                                  </div>
+                                  {docAGenerarText && (
+                                    <Button icon={<CloseOutlined />} onClick={handleLimpiarDocAGenerar} />
+                                  )}
+                                  <Button icon={<SearchOutlined />} onClick={() => setDocModalOpen(true)} />
+                                </div>
+                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Genera otro documento al aplicar</Text>
+                              </div>
+                            </Col>
+                            <Col xs={24} sm={12} lg={8}>
+                              <Form.Item
+                                name="sucDest"
+                                label="Sucursal destino"
+                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si hay documento a generar</Text>}
+                              >
+                                <Select
+                                  allowClear
+                                  placeholder="Seleccionar sucursal..."
+                                  showSearch
+                                  optionFilterProp="label"
+                                  disabled={!docAGenerarValue}
+                                  options={sucursales.map(s => ({ value: s.codigo, label: toTitleCase(s.nombre) }))}
+                                  onChange={handleSucDestChange}
+                                />
+                              </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={12} lg={8}>
+                              <Form.Item name="conceptoDestino" hidden>
+                                <Input />
+                              </Form.Item>
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Concepto destino</Text>
+                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+                                  <div style={{ flex: 1 }}>
+                                    <Input
+                                      placeholder="Buscar concepto destino..."
+                                      value={conceptoDestinoText}
+                                      readOnly
+                                      disabled={!sucDestValue}
+                                    />
+                                  </div>
+                                  <Button
+                                    icon={<SearchOutlined />}
+                                    onClick={handleBuscarConceptoDestino}
+                                    disabled={!sucDestValue}
+                                  />
+                                </div>
+                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Obligatorio si la sucursal destino es diferente</Text>
+                              </div>
+                            </Col>
+                          </Row>
+                        </Card>
+
+                        {/* Card: REPLICAR A OTRA SUCURSAL */}
+                        <Card className="paces-card" size="small" title="REPLICAR A OTRA SUCURSAL">
+                          <Row gutter={[16, 24]}>
+                            <Col xs={24} sm={12} lg={8}>
+                              <Form.Item
+                                name="replicar"
+                                valuePropName="checked"
+                                label="Replicar"
+                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Replica el mismo documento a otra sucursal</Text>}
+                                initialValue={false}
+                              >
+                                <Switch onChange={handleReplicarChange} />
+                              </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={12} lg={8}>
+                              <Form.Item
+                                name="sucursalReplica"
+                                label="Sucursal réplica"
+                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si Replicar está activo</Text>}
+                                rules={replicarValue ? [{ required: true, message: 'Debe seleccionar una sucursal réplica' }] : []}
+                              >
+                                <Select
+                                  allowClear
+                                  placeholder="Seleccionar sucursal..."
+                                  showSearch
+                                  optionFilterProp="label"
+                                  disabled={!replicarValue}
+                                  options={sucursales.map(s => ({ value: s.codigo, label: toTitleCase(s.nombre) }))}
+                                  onChange={handleSucursalReplicaChange}
+                                />
+                              </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={12} lg={8}>
+                              <Form.Item name="conceptoReplica" hidden>
+                                <Input />
+                              </Form.Item>
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Concepto réplica</Text>
+                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+                                  <div style={{ flex: 1 }}>
+                                    <Input
+                                      placeholder="Buscar concepto réplica..."
+                                      value={conceptoReplicaText}
+                                      readOnly
+                                      disabled={!replicarValue}
+                                    />
+                                  </div>
+                                  <Button
+                                    icon={<SearchOutlined />}
+                                    onClick={handleBuscarConceptoReplica}
+                                    disabled={!replicarValue}
+                                  />
+                                </div>
+                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Concepto que usará en la sucursal réplica</Text>
+                              </div>
+                            </Col>
+                          </Row>
+                        </Card>
+                      </Form>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'contabilidad',
+                  label: 'Contabilidad',
+                  children: (
+                    <div style={{ paddingTop: 16 }}>
+                      <Form form={form} layout="vertical" size="middle">
+                        <Row gutter={[16, 24]}>
+                          <Col xs={24} sm={12} lg={8}>
+                            <Form.Item name="noAsientos" valuePropName="checked" label="No genera asientos" initialValue={false}>
+                              <Switch />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} sm={12} lg={8}>
+                            <Form.Item name="tipoIngreso" label="Tipo Ingreso">
+                              <Select
+                                allowClear
+                                placeholder="Seleccionar tipo..."
+                                options={TIPO_INGRESO_OPTIONS}
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+                      </Form>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </Col>
+
+          <Col xxl={6}>
+            <Card
+              className="paces-card"
+              size="small"
+              title={<span style={{ fontSize: 16, fontWeight: 600 }}>Opciones</span>}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Activo</Text>
+                  <br />
+                  <Tag color={activoValue !== false ? 'green' : 'default'}>
+                    {activoValue !== false ? 'Activo' : 'Inactivo'}
+                  </Tag>
+                </div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Sin Impuesto</Text>
+                  <br />
+                  <Tag color={noImpuestoValue ? 'orange' : 'default'}>
+                    {noImpuestoValue ? 'Sí' : 'No'}
+                  </Tag>
+                </div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>No Actualiza Costos</Text>
+                  <br />
+                  <Tag color={noActualizaCostosValue ? 'orange' : 'default'}>
+                    {noActualizaCostosValue ? 'Sí' : 'No'}
+                  </Tag>
+                </div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>No genera asientos</Text>
+                  <br />
+                  <Tag color={noAsientosValue ? 'orange' : 'default'}>
+                    {noAsientosValue ? 'Sí' : 'No'}
+                  </Tag>
+                </div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Replicar</Text>
+                  <br />
+                  <Tag color={replicarValue ? 'blue' : 'default'}>
+                    {replicarValue ? 'Sí' : 'No'}
+                  </Tag>
+                </div>
+              </div>
+            </Card>
+          </Col>
+        </Row>
+      ) : (
+        /* === COMPACT/MOBILE LAYOUT (< xxl) === */
+        <div>
+          <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+            <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
+              <Row gutter={[16, 24]}>
+                <Col xs={24}>
+                  <Form.Item
+                    name="codigo"
+                    label="Código"
+                    rules={mode === 'crear' ? [{ required: true, message: 'El código es requerido' }] : []}
+                  >
+                    <Input disabled={mode === 'editar'} placeholder="Código del concepto" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24}>
+                  <Form.Item
+                    name="nombre"
+                    label="Nombre"
+                    rules={[{ required: true, message: 'El nombre es requerido' }]}
+                  >
+                    <Input placeholder="Nombre del concepto" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24}>
+                  <Form.Item name="activo" valuePropName="checked" label="Activo" initialValue={true}>
+                    <Switch checkedChildren="Activo" unCheckedChildren="Inactivo" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Form>
+          </Card>
+
+          <Tabs
+            type="card"
+            items={[
+              {
+                  key: 'inventario',
+                  label: 'Inventario',
+                  children: (
+                    <div style={{ paddingTop: 16 }}>
+                      <Form form={form} layout="vertical" size="middle">
+                        <Row gutter={[16, 24]}>
+                          <Col xs={24}>
+                            <Form.Item name="noImpuesto" valuePropName="checked" label="Sin Impuesto" initialValue={false}>
+                              <Switch />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24}>
+                            <Form.Item name="noActualizaCostos" valuePropName="checked" label="No Actualiza Costos" initialValue={false}>
+                              <Switch />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24}>
+                            <Form.Item name="codAlm" label="Almacén">
+                              <Select
+                                allowClear
+                                placeholder="Seleccionar almacén..."
+                                showSearch
+                                optionFilterProp="label"
+                                options={almacenes.map(a => ({ value: a.codigo, label: a.nombre }))}
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+
+                        {/* Card: GENERAR DOCUMENTO */}
+                        <Card className="paces-card" size="small" title="GENERAR DOCUMENTO" style={{ marginBottom: 16 }}>
+                          <Row gutter={[16, 24]}>
+                            <Col xs={24}>
+                              <Form.Item name="docAGenerar" hidden>
+                                <Input />
+                              </Form.Item>
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Documento a generar</Text>
+                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+                                  <div style={{ flex: 1 }}>
+                                    <Input
+                                      placeholder="Buscar documento..."
+                                      value={docAGenerarText}
+                                      readOnly
+                                    />
+                                  </div>
+                                  {docAGenerarText && (
+                                    <Button icon={<CloseOutlined />} onClick={handleLimpiarDocAGenerar} />
+                                  )}
+                                  <Button icon={<SearchOutlined />} onClick={() => setDocModalOpen(true)} />
+                                </div>
+                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Genera otro documento al aplicar</Text>
+                              </div>
+                            </Col>
+                            <Col xs={24}>
+                              <Form.Item
+                                name="sucDest"
+                                label="Sucursal destino"
+                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si hay documento a generar</Text>}
+                              >
+                                <Select
+                                  allowClear
+                                  placeholder="Seleccionar sucursal..."
+                                  showSearch
+                                  optionFilterProp="label"
+                                  disabled={!docAGenerarValue}
+                                  options={sucursales.map(s => ({ value: s.codigo, label: toTitleCase(s.nombre) }))}
+                                  onChange={handleSucDestChange}
+                                />
+                              </Form.Item>
+                            </Col>
+                            <Col xs={24}>
+                              <Form.Item name="conceptoDestino" hidden>
+                                <Input />
+                              </Form.Item>
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Concepto destino</Text>
+                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+                                  <div style={{ flex: 1 }}>
+                                    <Input
+                                      placeholder="Buscar concepto destino..."
+                                      value={conceptoDestinoText}
+                                      readOnly
+                                      disabled={!sucDestValue}
+                                    />
+                                  </div>
+                                  <Button
+                                    icon={<SearchOutlined />}
+                                    onClick={handleBuscarConceptoDestino}
+                                    disabled={!sucDestValue}
+                                  />
+                                </div>
+                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Obligatorio si la sucursal destino es diferente</Text>
+                              </div>
+                            </Col>
+                          </Row>
+                        </Card>
+
+                        {/* Card: REPLICAR A OTRA SUCURSAL */}
+                        <Card className="paces-card" size="small" title="REPLICAR A OTRA SUCURSAL">
+                          <Row gutter={[16, 24]}>
+                            <Col xs={24}>
+                              <Form.Item
+                                name="replicar"
+                                valuePropName="checked"
+                                label="Replicar"
+                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Replica el mismo documento a otra sucursal</Text>}
+                                initialValue={false}
+                              >
+                                <Switch onChange={handleReplicarChange} />
+                              </Form.Item>
+                            </Col>
+                            <Col xs={24}>
+                              <Form.Item
+                                name="sucursalReplica"
+                                label="Sucursal réplica"
+                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si Replicar está activo</Text>}
+                                rules={replicarValue ? [{ required: true, message: 'Debe seleccionar una sucursal réplica' }] : []}
+                              >
+                                <Select
+                                  allowClear
+                                  placeholder="Seleccionar sucursal..."
+                                  showSearch
+                                  optionFilterProp="label"
+                                  disabled={!replicarValue}
+                                  options={sucursales.map(s => ({ value: s.codigo, label: toTitleCase(s.nombre) }))}
+                                  onChange={handleSucursalReplicaChange}
+                                />
+                              </Form.Item>
+                            </Col>
+                            <Col xs={24}>
+                              <Form.Item name="conceptoReplica" hidden>
+                                <Input />
+                              </Form.Item>
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Concepto réplica</Text>
+                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+                                  <div style={{ flex: 1 }}>
+                                    <Input
+                                      placeholder="Buscar concepto réplica..."
+                                      value={conceptoReplicaText}
+                                      readOnly
+                                      disabled={!replicarValue}
+                                    />
+                                  </div>
+                                  <Button
+                                    icon={<SearchOutlined />}
+                                    onClick={handleBuscarConceptoReplica}
+                                    disabled={!replicarValue}
+                                  />
+                                </div>
+                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Concepto que usará en la sucursal réplica</Text>
+                              </div>
+                            </Col>
+                          </Row>
+                        </Card>
+                      </Form>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'contabilidad',
+                  label: 'Contabilidad',
+                  children: (
+                    <div style={{ paddingTop: 16 }}>
+                      <Form form={form} layout="vertical" size="middle">
+                        <Row gutter={[16, 24]}>
+                          <Col xs={24}>
+                            <Form.Item name="noAsientos" valuePropName="checked" label="No genera asientos" initialValue={false}>
+                              <Switch />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24}>
+                            <Form.Item name="tipoIngreso" label="Tipo Ingreso">
+                              <Select
+                                allowClear
+                                placeholder="Seleccionar tipo..."
+                                options={TIPO_INGRESO_OPTIONS}
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+                      </Form>
+                    </div>
+                  ),
+                },
+            ]}
+          />
+
+          <div style={{ marginTop: 24 }}>
+            <Card
+              className="paces-card"
+              size="small"
+              title={<span style={{ fontSize: 16, fontWeight: 600 }}>Opciones</span>}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Activo</Text>
+                  <br />
+                  <Tag color={activoValue !== false ? 'green' : 'default'}>
+                    {activoValue !== false ? 'Activo' : 'Inactivo'}
+                  </Tag>
+                </div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Sin Impuesto</Text>
+                  <br />
+                  <Tag color={noImpuestoValue ? 'orange' : 'default'}>
+                    {noImpuestoValue ? 'Sí' : 'No'}
+                  </Tag>
+                </div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>No Actualiza Costos</Text>
+                  <br />
+                  <Tag color={noActualizaCostosValue ? 'orange' : 'default'}>
+                    {noActualizaCostosValue ? 'Sí' : 'No'}
+                  </Tag>
+                </div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>No genera asientos</Text>
+                  <br />
+                  <Tag color={noAsientosValue ? 'orange' : 'default'}>
+                    {noAsientosValue ? 'Sí' : 'No'}
+                  </Tag>
+                </div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>Replicar</Text>
+                  <br />
+                  <Tag color={replicarValue ? 'blue' : 'default'}>
+                    {replicarValue ? 'Sí' : 'No'}
+                  </Tag>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Buscar Documento */}
+      <BuscarDocumentoInlineModal
+        open={docModalOpen}
+        onClose={() => setDocModalOpen(false)}
+        onSelect={handleDocumentoSelect}
+        documentos={documentos}
+      />
+
+      {/* Modal Buscar Concepto Destino */}
+      <BuscarConceptoModal
+        open={conceptoDestinoModalOpen}
+        onClose={() => setConceptoDestinoModalOpen(false)}
+        onSelect={handleConceptoDestinoSelect}
+        title="Buscar Concepto Destino"
+        fetchConceptos={() => {
+          const encontrada = sucDestValue ? sucursales.find(s => s.codigo === sucDestValue) : undefined;
+          const sucDestSucursal = (encontrada as any)?.sucursal ?? (encontrada as any)?.id ?? sucursalActiva;
+          return conceptosApi.obtenerConceptos(sucDestSucursal);
+        }}
+      />
+
+      {/* Modal Buscar Concepto Réplica */}
+      <BuscarConceptoModal
+        open={conceptoReplicaModalOpen}
+        onClose={() => setConceptoReplicaModalOpen(false)}
+        onSelect={handleConceptoReplicaSelect}
+        title="Buscar Concepto Réplica"
+        fetchConceptos={() => {
+          const sucReplicaCod = form.getFieldValue('sucursalReplica');
+          const encontrada = sucReplicaCod ? sucursales.find(s => s.codigo === sucReplicaCod) : undefined;
+          const sucReplicaSucursal = (encontrada as any)?.sucursal ?? (encontrada as any)?.id ?? sucursalActiva;
+          return conceptosApi.obtenerConceptos(sucReplicaSucursal);
+        }}
+      />
+    </div>
+  );
+};
+
+export default ConceptoFormulario;

@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert,
@@ -12,28 +12,32 @@ import {
   SearchOutlined,
   ClearOutlined,
   ExclamationCircleOutlined,
+  EditOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { notaDebitoApi } from '../../api/notaDebitoApi';
 import { conceptosApi } from '../../api/conceptosApi';
+import { parametrosApi } from '../../api/parametrosApi';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type {
   NotaDebitoFullDTO,
-  ConceptoDTO,
   TipoDTO,
-  EntidadDTO,
   DocumentoRelacionadoDTO,
   DevolucionAsociadaDTO,
   ImpuestoRetencionDTO,
-  AsientoDTO,
 } from '../../types/notaDebito';
+import type { ConceptoDTO, EntidadDTO, AsientoContableDTO } from '../../types/entradaAlmacen';
 import type { UnidadMedidaDTO } from '../../types/productos';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
+import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import BuscarTipoModal from '../../components/BuscarTipoModal/BuscarTipoModal';
+import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
+import BuscarDevolucionModal from '../../components/BuscarDevolucionModal/BuscarDevolucionModal';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -42,6 +46,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { NotaDebitoGuide } from './NotaDebitoGuide';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -75,245 +80,6 @@ function validarNcfModificado(val: string): boolean {
   return b0Pattern.test(val) || e3Pattern.test(val);
 }
 
-// ===== Modal de búsqueda de Tipo =====
-interface BuscarTipoModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (tipo: TipoDTO) => void;
-}
-
-const BuscarTipoModal: React.FC<BuscarTipoModalProps> = ({ open, onClose, onSelect }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const [tipos, setTipos] = useState<TipoDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const cargar = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data } = await import('../../api/client').then(m =>
-        m.apiClient.get<any>(`/Tipo/${sucursalActiva}/documento/ND`)
-      );
-      setTipos(data?.data || []);
-    } catch {
-      message.error('Error al cargar tipos');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (open) cargar();
-  }, [open, cargar]);
-
-  const columnas = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-    { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-      render: (v: string) => toTitleCase(v) },
-  ];
-
-  return (
-    <Modal title="Buscar Tipo" open={open} onCancel={onClose} footer={null} width={600} destroyOnHidden>
-      <Table
-        dataSource={tipos}
-        columns={columnas}
-        rowKey="codigo"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: () => { onSelect(record); onClose(); },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
-};
-
-// ===== Modal de búsqueda de Documentos Relacionados (facturas) =====
-interface BuscarDocumentoModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (docs: DocumentoRelacionadoDTO[]) => void;
-  tipoEntidad: 'SUP' | 'CLI';
-}
-
-const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({ open, onClose, onSelect, tipoEntidad }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const [documentos, setDocumentos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-
-  const cargar = useCallback(async () => {
-    setLoading(true);
-    try {
-      const tipoDoc = tipoEntidad === 'SUP' ? 'FRDE' : 'FFAC';
-      const desde = dayjs().subtract(1, 'year').format('YYYYMMDD') + '000000';
-      const hasta = dayjs().format('YYYYMMDD') + '235959';
-      const { data } = await import('../../api/client').then(m =>
-        m.apiClient.get<any>(`/Transaccion/${sucursalActiva}/tipo/${tipoDoc}`, {
-          params: { desde, hasta, TipoEntidad: tipoEntidad }
-        })
-      );
-      // Filtrar solo facturas con estado >= 1 (aplicadas)
-      const facturas = (data?.data || []).filter((f: any) => (f.estado || 0) >= 1);
-      setDocumentos(facturas);
-    } catch {
-      message.error('Error al cargar documentos');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva, tipoEntidad]);
-
-  useEffect(() => {
-    if (open) { cargar(); setSelectedRowKeys([]); }
-  }, [open, cargar]);
-
-  const columnas = [
-    { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
-    { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 140, render: (v: string) => v || '-' },
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => formatDate(v) },
-    { title: 'Total', dataIndex: 'total', key: 'total', width: 120, align: 'right' as const,
-      render: (v: number) => formatNumber(v) },
-    { title: `Saldo`, key: 'saldo', width: 120, align: 'right' as const,
-      render: (_: any, r: any) => formatNumber(r.saldoPendiente || r.total || 0) },
-  ];
-
-  const handleConfirm = () => {
-    const selected = selectedRowKeys.map((key) => {
-      const doc = documentos.find((d) => d.id === key);
-      return {
-        transaccionAsociadaID: doc?.id,
-        documento: doc?.documento,
-        nCF: doc?.ncf,
-        montoOriginal: doc?.total || 0,
-        pagado: doc?.pagado || 0,
-        saldoPendiente: doc?.saldoPendiente || doc?.total || 0,
-        monto: 0,
-      } as DocumentoRelacionadoDTO;
-    });
-    onSelect(selected);
-    onClose();
-  };
-
-  return (
-    <Modal
-      title="Buscar Documentos Relacionados"
-      open={open}
-      onCancel={onClose}
-      footer={
-        <Space>
-          <Button onClick={onClose}>Cancelar</Button>
-          <Button type="primary" onClick={handleConfirm} disabled={selectedRowKeys.length === 0}>
-            Agregar ({selectedRowKeys.length})
-          </Button>
-        </Space>
-      }
-      width={800}
-      destroyOnHidden
-    >
-      <Table
-        dataSource={documentos}
-        columns={columnas}
-        rowKey="id"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys),
-        }}
-        scroll={{ x: 600 }}
-      />
-    </Modal>
-  );
-};
-
-// ===== Modal de búsqueda de Devoluciones (DVC) =====
-interface BuscarDevolucionModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (docs: DevolucionAsociadaDTO[]) => void;
-}
-
-const BuscarDevolucionModal: React.FC<BuscarDevolucionModalProps> = ({ open, onClose, onSelect }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const [devoluciones, setDevoluciones] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-
-  const cargar = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data } = await import('../../api/client').then(m =>
-        m.apiClient.get<any>(`/DVC/${sucursalActiva}`)
-      );
-      const items = (data?.data || []).filter((d: any) => (d.estado || 0) >= 1);
-      setDevoluciones(items);
-    } catch {
-      message.error('Error al cargar devoluciones');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (open) { cargar(); setSelectedRowKeys([]); }
-  }, [open, cargar]);
-
-  const columnas = [
-    { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => formatDate(v) },
-    { title: 'Total', dataIndex: 'total', key: 'total', width: 120, align: 'right' as const,
-      render: (v: number) => formatNumber(v) },
-  ];
-
-  const handleConfirm = () => {
-    const selected = selectedRowKeys.map((key) => {
-      const dev = devoluciones.find((d) => d.id === key);
-      return {
-        id: dev?.id,
-        documento: dev?.documento,
-        fecha: dev?.fecha,
-        monto: dev?.total || 0,
-        montoAsignado: 0,
-      } as DevolucionAsociadaDTO;
-    });
-    onSelect(selected);
-    onClose();
-  };
-
-  return (
-    <Modal
-      title="Buscar Devoluciones"
-      open={open}
-      onCancel={onClose}
-      footer={
-        <Space>
-          <Button onClick={onClose}>Cancelar</Button>
-          <Button type="primary" onClick={handleConfirm} disabled={selectedRowKeys.length === 0}>
-            Agregar ({selectedRowKeys.length})
-          </Button>
-        </Space>
-      }
-      width={700}
-      destroyOnHidden
-    >
-      <Table
-        dataSource={devoluciones}
-        columns={columnas}
-        rowKey="id"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys),
-        }}
-      />
-    </Modal>
-  );
-};
-
 
 
 // ===== Componente principal =====
@@ -324,6 +90,8 @@ interface NotaDebitoFormularioProps {
 const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const cloneData = (location.state as any)?.cloneData;
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
@@ -358,15 +126,70 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const [ncfModificadoVal, setNcfModificadoVal] = useState('');
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
 
+  // Artículos (solo CLI)
+  const [detallesMovimiento, setDetallesMovimiento] = useState<any[]>([]);
+
+  // Quick field editors (para NCF, Referencia, Tasa)
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const editingOriginalValue = useRef<string | number>('');
+  const editingValueRef = useRef<string | number>('');
+  const fieldCloseHandledRef = useRef(false);
+
+  // Nuevos estados para alineación con NC
+  const [asientos, setAsientos] = useState<any[]>([]);
+  const [fechaCierreContable, setFechaCierreContable] = useState<string | null>(null);
+  const [sucursalesCache, setSucursalesCache] = useState<any[]>([]);
+  const [selectedSucursal, setSelectedSucursal] = useState<any>(null);
+  const [conceptoInfo, setConceptoInfo] = useState<string>('');
+
+  // Refs para la guía
+  const conceptoRef = useRef<HTMLDivElement>(null);
+  const sucursalRef = useRef<HTMLDivElement>(null);
+  const entidadRef = useRef<HTMLDivElement>(null);
+  const documentosRef = useRef<HTMLDivElement>(null);
+
   const [form] = Form.useForm();
   const sinOC = true;
   const isLarge = screens.xxl === true;
 
   // ===== Watchers =====
-  const montoTotalWatch = Form.useWatch('montoTotal', form) || 0;
+  const montoTotalWatch = Form.useWatch('total', form) || 0;
+  const ncfValue = Form.useWatch('ncf', form) || '';
+  const refValue = Form.useWatch('referencia', form) || '';
+  const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
   // ===== Totales derivados =====
   const totales = calcularTotales(impuestosRetenciones, Number(montoTotalWatch) || 0);
+
+  // ===== Quick field editors =====
+  const openFieldEditor = (field: string) => {
+    const val = form.getFieldValue(field);
+    const defaultVal = field === 'tasa' ? 1 : '';
+    editingOriginalValue.current = val ?? defaultVal;
+    editingValueRef.current = val ?? defaultVal;
+    setEditingField(field);
+    fieldCloseHandledRef.current = false;
+  };
+
+  const commitFieldEditor = () => {
+    if (fieldCloseHandledRef.current) return;
+    fieldCloseHandledRef.current = true;
+    const field = editingField;
+    if (field) {
+      form.setFieldsValue({ [field]: editingValueRef.current });
+    }
+    setEditingField(null);
+  };
+
+  const cancelFieldEditor = () => {
+    if (fieldCloseHandledRef.current) return;
+    fieldCloseHandledRef.current = true;
+    const field = editingField;
+    if (field) {
+      form.setFieldsValue({ [field]: editingOriginalValue.current });
+    }
+    setEditingField(null);
+  };
 
   // ===== Estado info =====
   const estado = data?.estado ?? 0;
@@ -387,12 +210,45 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     setPageTitleOverride(pageTitle);
 
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
+    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch(() => {});
+    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch(() => {});
+
+    // === Si viene de Clonar ===
+    if (cloneData) {
+      setSelectedConcepto(cloneData.concepto || null);
+      setSelectedEntidad(cloneData.entidad || null);
+      setSelectedSucursal(cloneData.sucursal || null);
+      setDocumentosRelacionados(cloneData.transaccionesAsociadas || []);
+      setDevoluciones(cloneData.devoluciones || []);
+      setImpuestosRetenciones(cloneData.impuestosRetenciones || []);
+      setAsientos(cloneData.asientos || []);
+      setDetallesMovimiento(cloneData.detallesMovimiento || cloneData.detalles || []);
+      setNcfModificadoVal(cloneData.ncfModificado || '');
+      setNcfTipo(cloneData.ncfModificado ? 'modificado' : 'documento');
+
+      const fechaDoc = cloneData.fechaDocumento ? parseDateRaw(cloneData.fechaDocumento) : null;
+      form.setFieldsValue({
+        concepto: cloneData.concepto?.codigo || '',
+        tipo: cloneData.tipo?.codigo || '',
+        entidad: cloneData.entidad?.codigo || '',
+        fechaDocumento: fechaDoc ? dayjs(fechaDoc) : dayjs(),
+        total: cloneData.total || 0,
+        ncf: cloneData.ncf || '',
+        tasa: cloneData.tasa || 1,
+        referencia: cloneData.referencia || '',
+        nota: cloneData.nota || '',
+        sucursal: cloneData.sucursal?.codigo || '',
+        bienes: cloneData.bienes || 0,
+        servicios: cloneData.servicios || 0,
+      });
+      return () => { resetToolbar(); setPageTitleOverride(''); };
+    }
 
     if (mode === 'crear') {
       form.setFieldsValue({
-        fecha: dayjs(),
+        fechaDocumento: dayjs(),
         tasa: 1,
-        montoTotal: 0,
+        total: 0,
       });
     }
 
@@ -400,7 +256,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       resetToolbar();
       setPageTitleOverride('');
     };
-  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, codigoPantalla, entidadLabel, form]);
+  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, codigoPantalla, entidadLabel, form, sucursalActiva, cloneData]);
 
   // ===== Cargar datos si es modo editar =====
   useEffect(() => {
@@ -446,6 +302,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         setDocumentosRelacionados(full.transaccionesAsociadas || []);
         setDevoluciones(full.devoluciones || []);
         setImpuestosRetenciones(full.impuestosRetenciones || []);
+        setAsientos(full.asientos || []);
+        setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);
         setNcfModificadoVal(full.ncfModificado || '');
         setNcfTipo(full.ncfModificado ? 'modificado' : 'documento');
 
@@ -455,15 +313,18 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           concepto: full.concepto?.codigo || '',
           tipo: full.tipo?.codigo || '',
           entidad: full.entidad?.codigo || '',
-          fecha: fechaDoc ? dayjs(fechaDoc) : null,
-          montoTotal: full.total || 0,
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          total: full.total || 0,
           ncf: full.ncf || '',
           tasa: full.tasa || 1,
           referencia: full.referencia || '',
           nota: full.nota || '',
+          sucursal: full.sucursal?.codigo || full.codigoSucursal || '',
+          bienes: full.bienes || 0,
+          servicios: full.servicios || 0,
         });
 
-        // Cargar entidades según el concepto
+        // Cargar entidades seg├║n el concepto
         if (full.concepto?.codigo) {
           conceptosApi.obtenerEntidades(sucursalActiva, full.concepto.codigo)
             .then(setEntidadesCache)
@@ -520,6 +381,14 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       if (!prev) return prev;
       return { ...prev, moneda: monedaFull };
     });
+
+    // === Indicadores de concepto ===
+    const infoParts: string[] = [];
+    if (concepto.noImpuesto) infoParts.push('* No Impuestos *');
+    if (concepto.noAsientos) infoParts.push('* No Asientos *');
+    if (concepto.activo === false) infoParts.push('* Concepto Inactivo *');
+    if (concepto.noActualizaCostos) infoParts.push('* No Actualiza Costos *');
+    setConceptoInfo(infoParts.join(''));
   };
 
   const handleConceptoClear = () => {
@@ -541,13 +410,6 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const handleTipoClear = () => {
     setSelectedTipo(null);
     form.setFieldsValue({ tipo: '' });
-  };
-
-  // ===== Handlers de Entidad =====
-  const handleEntidadChange = (value: string) => {
-    const entidad = entidadesCache.find((e) => e.codigo === value);
-    setSelectedEntidad(entidad || null);
-    form.setFieldsValue({ entidad: value });
   };
 
   // ===== Handlers de Documentos Relacionados =====
@@ -622,17 +484,28 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   };
 
   // ===== Validación =====
-  const validarFormulario = (): string | null => {
+  const validarFormulario = async (): Promise<string | null> => {
     const values = form.getFieldsValue();
 
     if (!selectedConcepto) return 'El Concepto es obligatorio';
     if (!values.entidad && !selectedEntidad) return `El ${entidadLabel} es obligatorio`;
 
     // Fecha ≤ hoy
-    const fechaDoc = values.fecha;
+    const fechaDoc = values.fechaDocumento;
     if (fechaDoc) {
       const hoy = dayjs().endOf('day');
       if (dayjs(fechaDoc).isAfter(hoy)) return 'La fecha del documento no puede ser mayor a hoy';
+    }
+
+    // Validar fecha contra cierre contable
+    if (fechaCierreContable) {
+      const cierreDate = parseDateRaw(fechaCierreContable);
+      if (cierreDate) {
+        const cierreTs = dayjs(cierreDate).startOf('day').valueOf();
+        if (fechaDoc && dayjs(fechaDoc).startOf('day').valueOf() <= cierreTs) {
+          return 'La fecha del documento no puede ser menor o igual a la fecha de cierre';
+        }
+      }
     }
 
     // Validar NCF Modificado
@@ -641,7 +514,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     }
 
     // Validar distribución de documentos relacionados
-    const totalMonto = Number(values.montoTotal) || 0;
+    const totalMonto = Number(values.total) || 0;
     const sumaDocs = documentosRelacionados.reduce((s, d) => s + (d.monto || 0), 0);
     if (documentosRelacionados.length > 0 && Math.abs(sumaDocs - totalMonto) > 0.01) {
       return 'La distribución de documentos relacionados debe igualar el Total';
@@ -655,11 +528,35 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       }
     }
 
-    // Validar asientos cuadrados (solo en editar si ya existen)
-    if (data?.asientos && data.asientos.length > 0) {
-      const deb = data.asientos.reduce((s, a) => s + ((typeof a.tipoAsiento === 'number' ? a.tipoAsiento === 0 : a.tipoAsiento === 'D') ? a.monto : 0), 0);
-      const cred = data.asientos.reduce((s, a) => s + ((typeof a.tipoAsiento === 'number' ? a.tipoAsiento === 1 : a.tipoAsiento === 'C') ? a.monto : 0), 0);
+    // Validar margen de impuestos
+    if (impuestosRetenciones.length > 0) {
+      for (const imp of impuestosRetenciones) {
+        const porcentaje = imp.porcentaje || 0;
+        const montoPromedio = totalMonto * ((porcentaje + 1) / 100);
+        if (imp.monto > montoPromedio) {
+          return `El monto del impuesto ${imp.nombre || ''} superó el margen permitido.`;
+        }
+      }
+    }
+
+    // Validar asientos cuadrados
+    if (asientos.length > 0) {
+      const deb = asientos.reduce((s, a) => s + ((typeof a.tipoAsiento === 'number' ? a.tipoAsiento === 0 : a.tipoAsiento === 'D') ? a.monto : 0), 0);
+      const cred = asientos.reduce((s, a) => s + ((typeof a.tipoAsiento === 'number' ? a.tipoAsiento === 1 : a.tipoAsiento === 'C') ? a.monto : 0), 0);
       if (Math.abs(deb - cred) > 0.01) return 'Los asientos contables no están cuadrados';
+    }
+
+    // Validar NCF duplicado
+    const ncfVal = values.ncf?.trim();
+    if (ncfVal && selectedEntidad?.codigo) {
+      try {
+        const ncfExiste = await notaDebitoApi.verificarNCF(sucursalActiva, ncfVal, selectedEntidad.codigo);
+        if (ncfExiste) {
+          return `El NCF ${ncfVal} ya fue usado en otro documento`;
+        }
+      } catch {
+        // Si falla la verificación, continuar
+      }
     }
 
     return null;
@@ -672,13 +569,13 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
     const entidadSel = entidadesCache.find((e) => e.codigo === values.entidad) || selectedEntidad;
 
-    const fechaDoc = values.fecha
-      ? (typeof values.fecha === 'object' && values.fecha.toDate
-        ? toISOFormat(values.fecha.toDate())
-        : values.fecha)
+    const fechaDoc = values.fechaDocumento
+      ? (typeof values.fechaDocumento === 'object' && values.fechaDocumento.toDate
+        ? toISOFormat(values.fechaDocumento.toDate())
+        : values.fechaDocumento)
       : toISOFormat(new Date());
 
-    const montoTotal = Number(values.montoTotal) || 0;
+    const montoTotal = Number(values.total) || 0;
     const totalImpuestos = impuestosRetenciones
       .filter((i) => i.tipo === 'Impuesto' || i.tipo === 'Informativo' || i.tipo === 'Otro' || !i.tipo)
       .reduce((s, i) => s + (i.monto || 0), 0);
@@ -694,6 +591,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       referencia: values.referencia || '',
       nota: values.nota || '',
       tasa: values.tasa || 1,
+      bienes: values.bienes || 0,
+      servicios: values.servicios || 0,
       subTotal: Math.round((montoTotal - totalImpuestos) * 100) / 100,
       descuento: 0,
       impuestos: Math.round(totalImpuestos * 100) / 100,
@@ -706,17 +605,19 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       tipo: selectedTipo || { codigo: '', nombre: '' },
       entidad: entidadSel ? { codigo: entidadSel.codigo, nombre: entidadSel.nombre || '', identificacion: entidadSel.identificacion || '', telefono: entidadSel.telefono } : { codigo: '', nombre: '' },
       moneda: base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+      sucursal: selectedSucursal ? { codigo: selectedSucursal.codigo || selectedSucursal.idExterno, nombre: selectedSucursal.nombre || '' } : undefined,
       transaccionesAsociadas: documentosRelacionados,
       devoluciones,
       impuestosRetenciones,
-      asientos: base.asientos || [],
+      asientos: asientos || [],
+      detallesMovimiento: tipoEntidad === 'CLI' ? detallesMovimiento : [],
       logs: base.logs || [],
     };
   };
 
   // ===== Acciones =====
   const handleGuardar = async () => {
-    const error = validarFormulario();
+    const error = await validarFormulario();
     if (error) {
       message.error(error);
       return;
@@ -743,17 +644,14 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   };
 
   const handleGenerarAsientos = async () => {
-    if (!id) {
-      message.warning('Debe guardar el documento antes de generar asientos');
-      return;
-    }
-    if (!data) return;
+    if (!id) return;
     setSaving(true);
     try {
-      await notaDebitoApi.recalcularPagos(sucursalActiva, parseInt(id));
-      const updated = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id)) as any;
-      setData((prev) => prev ? { ...prev, asientos: updated.asientos || [] } : prev);
-      message.success('Asientos generados exitosamente');
+      const result = await notaDebitoApi.recalcularPagos(sucursalActiva, parseInt(id)) as any;
+      if (result?.asientos) {
+        setAsientos(result.asientos);
+      }
+      message.success('Asientos generados automáticamente');
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
       message.error(msg);
@@ -877,23 +775,15 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     },
   ];
 
-  const asientoColumns = [
-    { title: 'Cuenta', key: 'cuenta', width: 120,
-      render: (_: any, r: AsientoDTO) => r.cuentaContable?.noCuenta || '-' },
-    { title: 'Nombre', key: 'nombre', ellipsis: true,
-      render: (_: any, r: AsientoDTO) => r.cuentaContable?.nombre ? toTitleCase(r.cuentaContable.nombre) : '-' },
-    { title: 'Descripción', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
-      render: (v: string) => v ? toTitleCase(v) : '-' },
-    { title: 'Débito', key: 'debito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoDTO) => (r.tipoAsiento === 0 || r.tipoAsiento === 'D') ? formatNumber(r.monto) : '' },
-    { title: 'Crédito', key: 'credito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoDTO) => (r.tipoAsiento === 1 || r.tipoAsiento === 'C') ? formatNumber(r.monto) : '' },
+  // ===== Columnas de Artículos (solo CLI) =====
+  const detalleMovimientoColumns = [
+    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
+    { title: 'Artículo', dataIndex: 'articulo', key: 'articulo', ellipsis: true },
+    { title: 'Cantidad', dataIndex: 'cantidad', key: 'cantidad', width: 100, align: 'right' as const,
+      render: (v: number) => formatNumber(v || 0) },
+    { title: 'Total', dataIndex: 'total', key: 'total', width: 120, align: 'right' as const,
+      render: (v: number) => formatNumber(v || 0) },
   ];
-
-  function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
-  function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
-  const totalDebitos = (data?.asientos || []).reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
-  const totalCreditos = (data?.asientos || []).reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
 
   // ===== Toolbar =====
 
@@ -904,7 +794,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
-          {/* Fila 1: Tipo + Concepto */}
+          {/* Fila 1: Tipo + Concepto + Sucursal */}
           <Col xs={24} sm={12} lg={8}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
               <div style={{ flex: 1 }}>
@@ -919,7 +809,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           </Col>
 
           <Col xs={24} sm={12} lg={8}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
               <div style={{ flex: 1 }}>
                 <FloatingField label="Concepto" required>
                   <Input placeholder=" " value={selectedConcepto?.nombre || ''} readOnly />
@@ -929,72 +819,215 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
               {selectedConcepto && <Button icon={<ClearOutlined />} onClick={handleConceptoClear} />}
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
+            {conceptoInfo && (
+              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
+            )}
           </Col>
 
-          <Col xs={24} sm={12} lg={8}>
-            <Form.Item label={entidadLabel} name="entidad" required>
-              <Select
-                showSearch
-                allowClear
-                placeholder={`Seleccionar ${entidadLabel}`}
-                optionFilterProp="children"
-                value={selectedEntidad?.codigo}
-                onChange={handleEntidadChange}
-                options={entidadesCache.map((e) => ({
-                  value: e.codigo,
-                  label: `${e.codigo} - ${toTitleCase(e.nombre || '')}`,
-                }))}
-              />
+          <Col xs={24} sm={12} lg={8} ref={sucursalRef}>
+            <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
+              <FloatingField label="Sucursal">
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="children"
+                  onChange={(val) => {
+                    const s = sucursalesCache.find((x: any) => x.codigo === val || x.idExterno === val);
+                    setSelectedSucursal(s || null);
+                  }}
+                  options={sucursalesCache.map((s: any) => ({
+                    value: s.codigo || s.idExterno,
+                    label: toTitleCase(s.nombre || ''),
+                  }))}
+                />
+              </FloatingField>
             </Form.Item>
           </Col>
 
-          {/* Fila 2: RNC + Nombre + Fecha */}
+          {/* Fila 2: Entidad + RNC + Nombre */}
+          <Col xs={24} sm={12} lg={12} ref={entidadRef}>
+            <Form.Item name="entidad" required style={{ marginBottom: 0 }}>
+              <FloatingField label={entidadLabel} required>
+                <Select
+                  showSearch
+                  allowClear
+                  placeholder={`Seleccionar ${entidadLabel}`}
+                  optionFilterProp="children"
+                  onChange={(val) => {
+                    if (!val) { setSelectedEntidad(null); return; }
+                    const ent = entidadesCache.find((e: any) => e.codigo === val);
+                    if (!ent) return;
+
+                    const tieneDocs = documentosRelacionados.length > 0 || devoluciones.length > 0;
+                    if (tieneDocs && selectedEntidad) {
+                      Modal.confirm({
+                        title: 'Cambiar entidad',
+                        icon: <ExclamationCircleOutlined />,
+                        content: `La entidad ${ent.nombre} tiene documentos asignados. Se borrarán los documentos agregados. ¿Está seguro?`,
+                        okText: 'Sí, cambiar',
+                        cancelText: 'No',
+                        okButtonProps: { danger: true },
+                        onOk: () => {
+                          setSelectedEntidad(ent);
+                          setDocumentosRelacionados([]);
+                          setDevoluciones([]);
+                          form.setFieldsValue({ entidad: ent.codigo });
+                        },
+                        onCancel: () => {
+                          form.setFieldsValue({ entidad: selectedEntidad.codigo });
+                        },
+                      });
+                    } else {
+                      setSelectedEntidad(ent);
+                    }
+                  }}
+                  options={entidadesCache.map((e) => ({
+                    value: e.codigo,
+                    label: `${e.codigo} - ${toTitleCase(e.nombre || '')}`,
+                  }))}
+                />
+              </FloatingField>
+            </Form.Item>
+          </Col>
+
           <Col xs={24} sm={12} lg={6}>
-            <Form.Item label="RNC">
+            <FloatingField label="RNC">
               <Input value={selectedEntidad?.identificacion || ''} readOnly />
-            </Form.Item>
+            </FloatingField>
           </Col>
 
           <Col xs={24} sm={12} lg={6}>
-            <Form.Item label="Nombre">
+            <FloatingField label="Nombre">
               <Input value={selectedEntidad?.nombre ? toTitleCase(selectedEntidad.nombre) : ''} readOnly />
+            </FloatingField>
+          </Col>
+
+          {/* Fila 3: Fecha + Monto Total + Bienes + Servicios */}
+          <Col xs={24} sm={12} lg={6}>
+            <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
+              <FloatingField label="Fecha" required>
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+              </FloatingField>
             </Form.Item>
           </Col>
 
           <Col xs={24} sm={12} lg={6}>
-            <Form.Item label="Fecha" name="fecha" required>
-              <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-            </Form.Item>
-          </Col>
-
-          {/* Fila 3: Monto Total + Tasa + Referencia */}
-          <Col xs={24} sm={12} lg={6}>
-            <Form.Item label="Monto Total" name="montoTotal" required>
-              <InputNumber style={{ width: '100%' }} min={0} step={0.01} precision={2} />
+            <Form.Item name="total" required style={{ marginBottom: 0 }}>
+              <FloatingField label="Monto Total" required>
+                <InputNumber style={{ width: '100%' }} min={0} step={0.01} precision={2} />
+              </FloatingField>
             </Form.Item>
           </Col>
 
           <Col xs={24} sm={12} lg={6}>
-            <Form.Item label="Tasa" name="tasa">
-              <InputNumber style={{ width: '100%' }} min={0} step={0.01} precision={4} />
+            <Form.Item name="bienes" style={{ marginBottom: 0 }}>
+              <FloatingField label="Bienes">
+                <InputNumber style={{ width: '100%' }} min={0} step={0.01} precision={2} />
+              </FloatingField>
             </Form.Item>
           </Col>
 
           <Col xs={24} sm={12} lg={6}>
-            <Form.Item label="Referencia" name="referencia">
-              <Input placeholder="Referencia del documento" />
+            <Form.Item name="servicios" style={{ marginBottom: 0 }}>
+              <FloatingField label="Servicios">
+                <InputNumber style={{ width: '100%' }} min={0} step={0.01} precision={2} />
+              </FloatingField>
             </Form.Item>
           </Col>
 
-          {/* Fila 4: NCF + NCF Modificado */}
-          <Col xs={24} sm={12} lg={6}>
-            <Form.Item label="NCF" name="ncf">
-              <Input placeholder="NCF del documento" />
-            </Form.Item>
+          {/* Fila 4: Campos rápidos (NCF, Referencia, Tasa) como tags inline editables */}
+          <Col xs={24}>
+            <div style={{ marginBottom: 16 }}>
+              <Space size={[8, 8]} wrap>
+                {/* NCF */}
+                <div>
+                  {editingField === 'ncf' ? (
+                    <Input
+                      size="small"
+                      style={{ width: 200 }}
+                      placeholder="NCF"
+                      maxLength={19}
+                      autoFocus
+                      defaultValue={editingValueRef.current as string}
+                      onChange={(e) => { editingValueRef.current = e.target.value; }}
+                      onPressEnter={() => commitFieldEditor()}
+                      onBlur={() => commitFieldEditor()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                      }}
+                    />
+                  ) : ncfValue ? (
+                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
+                      NCF: {ncfValue} <EditOutlined />
+                    </Tag>
+                  ) : (
+                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
+                      <PlusOutlined /> NCF
+                    </Tag>
+                  )}
+                </div>
+
+                {/* Referencia */}
+                {editingField === 'referencia' ? (
+                  <Input
+                    size="small"
+                    style={{ width: 200 }}
+                    placeholder="Referencia"
+                    autoFocus
+                    defaultValue={editingValueRef.current as string}
+                    onChange={(e) => { editingValueRef.current = e.target.value; }}
+                    onPressEnter={() => commitFieldEditor()}
+                    onBlur={() => commitFieldEditor()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                    }}
+                  />
+                ) : refValue ? (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
+                    Ref: {refValue} <EditOutlined />
+                  </Tag>
+                ) : (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
+                    <PlusOutlined /> Referencia
+                  </Tag>
+                )}
+
+                {/* Tasa */}
+                {editingField === 'tasa' ? (
+                  <InputNumber
+                    size="small"
+                    style={{ width: 120 }}
+                    min={0}
+                    step={0.01}
+                    placeholder="Tasa"
+                    autoFocus
+                    defaultValue={editingValueRef.current as number}
+                    onChange={(val) => { editingValueRef.current = val ?? 1; }}
+                    onPressEnter={() => commitFieldEditor()}
+                    onBlur={() => commitFieldEditor()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                    }}
+                  />
+                ) : tasaValue !== 1 ? (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
+                    Tasa: {tasaValue} <EditOutlined />
+                  </Tag>
+                ) : (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
+                    <PlusOutlined /> Tasa
+                  </Tag>
+                )}
+              </Space>
+            </div>
+            <Form.Item name="ncf" hidden><Input /></Form.Item>
+            <Form.Item name="referencia" hidden><Input /></Form.Item>
+            <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
           </Col>
 
+          {/* Fila: NCF Tipo + NCF Modificado */}
           <Col xs={24} sm={12} lg={6}>
-            <Form.Item label="Tipo NCF">
+            <FloatingField label="Tipo NCF">
               <Select
                 value={ncfTipo}
                 onChange={handleNcfTipoChange}
@@ -1003,30 +1036,38 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
                   { value: 'modificado', label: 'NCF Modificado' },
                 ]}
               />
-            </Form.Item>
+            </FloatingField>
           </Col>
 
           {ncfTipo === 'modificado' && (
             <Col xs={24} sm={12} lg={6}>
-              <Form.Item label="NCF Modificado" required={ncfTipo === 'modificado'}
+              <Form.Item
+                required={ncfTipo === 'modificado'}
                 validateStatus={ncfModificadoVal && !validarNcfModificado(ncfModificadoVal) ? 'error' : undefined}
                 help={ncfModificadoVal && !validarNcfModificado(ncfModificadoVal) ? 'Formato: B0+9dígitos o E3+10dígitos' : undefined}
+                style={{ marginBottom: 0 }}
               >
-                <Input
-                  placeholder="NCF Modificado"
-                  value={ncfModificadoVal}
-                  onChange={(e) => setNcfModificadoVal(e.target.value)}
-                />
+                <FloatingField label="NCF Modificado" required={ncfTipo === 'modificado'}>
+                  <Input
+                    placeholder="NCF Modificado"
+                    value={ncfModificadoVal}
+                    onChange={(e) => setNcfModificadoVal(e.target.value)}
+                  />
+                </FloatingField>
               </Form.Item>
             </Col>
           )}
 
           {/* Fila 5: Nota */}
           <Col xs={24} sm={24} lg={12}>
-            <Form.Item label="Nota" name="nota">
-              <TextArea rows={2} maxLength={500} showCount placeholder="Nota (máx 500 caracteres)" />
+            <Form.Item name="nota" style={{ marginBottom: 0 }}>
+              <FloatingField label="Nota">
+                <TextArea rows={2} maxLength={500} showCount placeholder="Nota (máx 500 caracteres)" />
+              </FloatingField>
             </Form.Item>
           </Col>
+
+          <Form.Item name="moneda" hidden><Input /></Form.Item>
         </Row>
       </Form>
         </Col>
@@ -1051,7 +1092,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       key: 'documentos',
       label: `Documentos (${documentosRelacionados.length})`,
       children: (
-        <>
+        <div ref={documentosRef}>
           <div style={{ marginBottom: 8 }}>
             <Button type="dashed" icon={<PlusOutlined />} onClick={() => setBuscarDocModalOpen(true)}>
               Agregar Documento
@@ -1065,9 +1106,34 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
             pagination={false}
             scroll={{ x: 800 }}
           />
-        </>
+        </div>
       ),
     },
+    // Tab 2: Artículos (solo CLI)
+    ...(tipoEntidad === 'CLI' ? [{
+      key: 'articulos',
+      label: `Artículos (${detallesMovimiento.length})`,
+      children: (
+        <div>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-start' }}>
+            <Button type="dashed" icon={<PlusOutlined />} onClick={() => {
+              const nuevoId = -(detallesMovimiento.length + 1);
+              setDetallesMovimiento(prev => [...prev, { id: nuevoId, codigo: '', articulo: '', cantidad: 0, total: 0 }]);
+            }}>
+              Agregar fila
+            </Button>
+          </div>
+          <Table
+            dataSource={detallesMovimiento}
+            columns={detalleMovimientoColumns}
+            rowKey="id"
+            size="small"
+            pagination={false}
+            scroll={{ x: 600 }}
+          />
+        </div>
+      ),
+    }] : []),
     ...(tipoEntidad === 'SUP' ? [{
       key: 'devoluciones',
       label: `Devoluciones (${devoluciones.length})`,
@@ -1117,34 +1183,16 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     },
     {
       key: 'asientos',
-      label: `Asientos (${data?.asientos?.length || 0})`,
+      label: `Asientos (${asientos.length})`,
       children: (
-        <>
-          {mode === 'editar' && (
-            <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button icon={<ExclamationCircleOutlined />} loading={saving} onClick={handleGenerarAsientos}>
-                GENERAR
-              </Button>
-            </div>
-          )}
-          <Table
-            dataSource={data?.asientos || []}
-            columns={asientoColumns}
-            rowKey={(r) => r.id || 0}
-            size="small"
-            pagination={false}
-            scroll={{ x: 600 }}
-            summary={() => (
-              <Table.Summary fixed>
-                <Table.Summary.Row>
-                  <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                </Table.Summary.Row>
-              </Table.Summary>
-            )}
-          />
-        </>
+        <AsientosContableEditables
+          asientos={asientos}
+          onChange={setAsientos}
+          editable={estado === 0}
+          onGenerar={handleGenerarAsientos}
+          generando={saving}
+          disableGenerar={!id}
+        />
       ),
     },
     {
@@ -1186,14 +1234,18 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         setDocumentosRelacionados(full.transaccionesAsociadas || []);
         setDevoluciones(full.devoluciones || []);
         setImpuestosRetenciones(full.impuestosRetenciones || []);
+        setAsientos(full.asientos || []);
+        setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);
         setNcfModificadoVal(full.ncfModificado || '');
         setNcfTipo(full.ncfModificado ? 'modificado' : 'documento');
         const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
         form.setFieldsValue({
           concepto: full.concepto?.codigo || '', tipo: full.tipo?.codigo || '',
-          entidad: full.entidad?.codigo || '', fecha: fechaDoc ? dayjs(fechaDoc) : null,
-          montoTotal: full.total || 0, ncf: full.ncf || '', tasa: full.tasa || 1,
+          entidad: full.entidad?.codigo || '', fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          total: full.total || 0, ncf: full.ncf || '', tasa: full.tasa || 1,
           referencia: full.referencia || '', nota: full.nota || '',
+          sucursal: full.sucursal?.codigo || full.codigoSucursal || '',
+          bienes: full.bienes || 0, servicios: full.servicios || 0,
         });
       })
       .catch((err: any) => {
@@ -1248,18 +1300,35 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         open={tipoModalOpen}
         onClose={() => setTipoModalOpen(false)}
         onSelect={handleTipoSelect}
+        tipoDocumento="ND"
       />
       <BuscarDocumentoModal
         open={buscarDocModalOpen}
         onClose={() => setBuscarDocModalOpen(false)}
         onSelect={handleDocRelacionadoSelect}
         tipoEntidad={tipoEntidad}
+        montoTotal={Number(montoTotalWatch) || 0}
       />
       {tipoEntidad === 'SUP' && (
         <BuscarDevolucionModal
           open={buscarDevModalOpen}
           onClose={() => setBuscarDevModalOpen(false)}
           onSelect={handleDevolucionSelect}
+        />
+      )}
+
+      {/* Guía paso a paso (solo en modo crear o editar borrador) */}
+      {(mode === 'crear' || esBorrador) && (
+        <NotaDebitoGuide
+          mode={mode}
+          concepto={selectedConcepto}
+          sucursal={selectedSucursal}
+          entidad={selectedEntidad}
+          detallesCount={documentosRelacionados.length + devoluciones.length}
+          conceptoRef={conceptoRef}
+          sucursalRef={sucursalRef}
+          entidadRef={entidadRef}
+          documentosRef={documentosRef}
         />
       )}
     </div>

@@ -59,8 +59,10 @@ export const entradaAlmacenApi = {
     return data.data;
   },
 
-  aplicar: async (sucursal: number, id: number): Promise<EntradaAlmacenDTO> => {
-    const { data } = await apiClient.put<ApiResponse<EntradaAlmacenDTO>>(`${BASE}/${sucursal}/aplicar/${id}`);
+  aplicar: async (sucursal: number, id: number, confirmarSobrePrecio?: boolean): Promise<any> => {
+    const params: Record<string, string | boolean> = {};
+    if (confirmarSobrePrecio) params.confirmarSobrePrecio = true;
+    const { data } = await apiClient.put(`${BASE}/${sucursal}/aplicar/${id}`, null, { params });
     return data.data;
   },
 

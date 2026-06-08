@@ -441,24 +441,27 @@ const SecuenciasNCF: React.FC = () => {
             showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} secuencias`,
           }}
           locale={{
-            emptyText:
-              data.length === 0 ? (
-                <Empty description="No hay secuencias NCF registradas" />
-              ) : (
-                <Empty description="No se encontraron secuencias para los filtros aplicados">
-                  <Button
-                    type="link"
-                    onClick={() => {
-                      setSearchText('');
-                      setFiltroEstado('todas');
-                      setFiltroVencimiento('todas');
-                      setPagina(1);
-                    }}
-                  >
-                    Limpiar filtros
-                  </Button>
-                </Empty>
-              ),
+            emptyText: (
+              <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {data.length === 0 ? (
+                  <Empty description="No hay secuencias NCF registradas" />
+                ) : (
+                  <Empty description="No se encontraron secuencias para los filtros aplicados">
+                    <Button
+                      type="link"
+                      onClick={() => {
+                        setSearchText('');
+                        setFiltroEstado('todas');
+                        setFiltroVencimiento('todas');
+                        setPagina(1);
+                      }}
+                    >
+                      Limpiar filtros
+                    </Button>
+                  </Empty>
+                )}
+              </div>
+            ),
           }}
         />
       </Card>

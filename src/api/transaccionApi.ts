@@ -148,6 +148,21 @@ export const transaccionApi = {
     );
     return data.data;
   },
+
+  /** Obtener transacciones asociadas de inventario (pagos) */
+  obtenerAsociadasInventario: async (sucursal: number, id: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/asociadasINV/${id}`);
+    return data.data || [];
+  },
+
+  /** Obtener transacciones asociadas desde DOCASOC */
+  obtenerAsociadas: async (sucursal: number, id: number, origen?: string, todas?: boolean): Promise<any[]> => {
+    const params: Record<string, string> = {};
+    if (origen) params.origen = origen;
+    if (todas) params.todas = 'true';
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/asociadas/${id}`, { params });
+    return data.data || [];
+  },
 };
 
 export { formatDateParam };

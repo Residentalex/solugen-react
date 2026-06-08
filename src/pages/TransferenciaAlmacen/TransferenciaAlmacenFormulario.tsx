@@ -1,9 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Popover, Alert, Dropdown,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Dropdown,
 } from 'antd';
 import {
   SaveOutlined,
@@ -27,6 +26,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
 import { productoApi } from '../../api/productoApi';
+import { parametrosApi } from '../../api/parametrosApi';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import ScannerModal from '../../components/ScannerModal/ScannerModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
@@ -40,9 +40,9 @@ import type { DetalleTransferenciaAlmacenDTO, TransferenciaAlmacenFullDTO } from
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import { TransferenciaAlmacenGuide } from './TransferenciaAlmacenGuide';
 
 import EntidadCard from '../../components/EntidadCard';
-import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
@@ -93,6 +93,8 @@ function filaVacia(): DetalleTRPInterno {
 const TransferenciaAlmacenFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const cloneData = (location.state as any)?.cloneData;
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
@@ -117,8 +119,11 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
   const [detalleSearch, setDetalleSearch] = useState('');
   const [activeId, setActiveId] = useState<number | null>(null);
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
+  const [fechaCierreContable, setFechaCierreContable] = useState<string | null>(null);
+  const [fechaCierreInventario, setFechaCierreInventario] = useState<string | null>(null);
 
   const editValuesRef = useRef<Record<string, any>>({});
+  const tasaAnteriorRef = useRef<number>(1);
   const navigationConfirmedRef = useFormularioNavigation();
 
   const sensors = useSensors(
@@ -202,9 +207,42 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
     const pageTitle = mode === 'crear' ? 'Nueva Transferencia de Almacén' : 'Editar Transferencia de Almacén';
     setPageTitleOverride(pageTitle);
 
+    const cleanup = () => {
+      resetToolbar();
+      setPageTitleOverride('');
+    };
+
+    // === Si viene de Clonar ===
+    if (cloneData) {
+      setDetalles((cloneData.detalles || []).map((d: any) => {
+        const _costo = d.total && d.cantidad ? d.total / d.cantidad : 0;
+        return calcularFila({ ...d, _costo });
+      }));
+      setSelectedConcepto(cloneData.concepto || null);
+      setConceptoSearchText(toTitleCase(cloneData.concepto?.nombre || ''));
+      setSelectedAlmacen(cloneData.almacen || null);
+      setSelectedAlmacenDestino(cloneData.almacenDestino || null);
+
+      const fechaDoc = cloneData.fechaDocumento ? parseDateRaw(cloneData.fechaDocumento) : null;
+      form.setFieldsValue({
+        concepto: cloneData.concepto?.codigo || '',
+        almacen: cloneData.almacen?.codigo || '',
+        almacenDestino: cloneData.almacenDestino?.codigo || '',
+        fechaDocumento: fechaDoc ? dayjs(fechaDoc) : dayjs(),
+        ncf: cloneData.ncf || '',
+        referencia: cloneData.referencia || '',
+        moneda: cloneData.moneda?.nombre || '',
+        tasa: cloneData.tasa || 1,
+        nota: cloneData.nota || '',
+      });
+      return cleanup;
+    }
+
     // Cargar almacenes
     transferenciaAlmacenApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
+    parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch(() => {});
+    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch(() => {});
 
     // Inicializar fecha en modo crear
     if (mode === 'crear') {
@@ -213,11 +251,8 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       });
     }
 
-    return () => {
-      resetToolbar();
-      setPageTitleOverride('');
-    };
-  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form]);
+    return cleanup;
+  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form, cloneData]);
 
   // ===== Cargar datos si es modo editar =====
   useEffect(() => {
@@ -256,6 +291,32 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
+
+  // ===== Detectar cambio de tasa y preguntar si actualizar costos =====
+  useEffect(() => {
+    const nuevaTasa = tasaValue;
+    const tasaAnterior = tasaAnteriorRef.current;
+
+    if (tasaAnterior !== nuevaTasa && tasaAnterior !== 1 && editingField === null) {
+      Modal.confirm({
+        title: 'Actualizar costos',
+        icon: <ExclamationCircleOutlined />,
+        content: `¿Desea actualizar los costos de los detalles en base a la nueva tasa (${tasaAnterior} → ${nuevaTasa})?`,
+        onOk: () => {
+          setDetalles((prev) =>
+            prev.map((d) => {
+              const costoLimpio = (d as any)._costo || 0;
+              const nuevoCosto = Math.round((costoLimpio / nuevaTasa) * 100) / 100;
+              return calcularFila({ ...d, _costo: nuevoCosto });
+            })
+          );
+          message.success('Costos actualizados correctamente');
+        },
+      });
+    }
+
+    tasaAnteriorRef.current = nuevaTasa;
+  }, [tasaValue, editingField]);
 
   // ===== Handlers =====
   const handleCancelar = () => {
@@ -318,6 +379,26 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
     if (selectedAlmacen && selectedAlmacenDestino && selectedAlmacen.codigo === selectedAlmacenDestino.codigo) {
       return 'No puedes transferir al mismo Almacen';
     }
+
+    // Validar fecha contra cierre contable e inventario (usar la mayor)
+    const fechas: (string | null)[] = [fechaCierreContable, fechaCierreInventario];
+    const fechasValidas = fechas.filter((f): f is string => f !== null);
+    if (fechasValidas.length > 0) {
+      const timestamps = fechasValidas.map((f) => {
+        const d = parseDateRaw(f);
+        return d ? dayjs(d).startOf('day').valueOf() : 0;
+      }).filter((t) => t > 0);
+
+      if (timestamps.length > 0) {
+        const cierreMaxTs = Math.max(...timestamps);
+        const values = form.getFieldsValue();
+        const fechaDoc = values.fechaDocumento;
+        if (fechaDoc && dayjs(fechaDoc).startOf('day').valueOf() <= cierreMaxTs) {
+          return 'La fecha del documento no puede ser menor o igual a la fecha de cierre (contable o de inventario)';
+        }
+      }
+    }
+
     if (detalles.length === 0) return 'No se puede crear un documento de TRANSFERENCIA ALMACEN sin detalle.';
     if (!detalles.some((d) => (d.cantidad || 0) > 0)) return 'Debe tener al menos un detalle con cantidad > 0';
     return null;
@@ -544,12 +625,6 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
     form.setFieldsValue({ almacenDestino: codigo });
   };
 
-  // ===== Totales calculados =====
-  const totales = {
-    subTotal: detalles.reduce((s, d) => s + (d.subTotal || 0), 0),
-    total: detalles.reduce((s, d) => s + (d.total || 0), 0),
-  };
-
   // ===== Columnas de la tabla de asientos =====
   function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
   function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
@@ -690,19 +765,6 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
         );
       },
     }] : []),
-    {
-      title: 'Total',
-      dataIndex: 'total',
-      key: 'total',
-      width: 100,
-      align: 'right' as const,
-      onCell: () => ({ style: { verticalAlign: 'top' } }),
-      shouldCellUpdate: (record: DetalleTransferenciaAlmacenDTO, prevRecord: DetalleTransferenciaAlmacenDTO) =>
-        record.total !== prevRecord.total,
-      render: (_: any, record: DetalleTransferenciaAlmacenDTO) => (
-        <Text strong>{formatNumber(record.total || 0)}</Text>
-      ),
-    },
     {
       title: '',
       key: 'acciones',
@@ -913,17 +975,6 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
         </Row>
       </Form>
         </Col>
-        <Col xs={24} xxl={6}>
-          <div style={{ marginTop: 24 }}>
-            <TotalesCard
-              subTotal={totales.subTotal}
-              descuento={0}
-              impuestos={0}
-              total={totales.total}
-              hideTitle
-            />
-          </div>
-        </Col>
       </Row>
     </Card>
   );
@@ -1052,7 +1103,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                             rowKey="id"
                             size="small"
                             pagination={false}
-                            scroll={{ x: 900 }}
+                            scroll={{ x: 800 }}
                             components={{ body: { row: SortableRow } }}
                           />
                         </SortableContext>
@@ -1136,23 +1187,23 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                        <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                          <Table
                            dataSource={detallesFiltrados}
-                           columns={detalleColumns}
-                           rowKey="id"
-                           size="small"
-                           pagination={false}
-                           scroll={{ x: 900 }}
-                           components={{ body: { row: SortableRow } }}
-                         />
-                       </SortableContext>
-                       <DragOverlay>
-                         {activeId ? (
-                           <div style={{ padding: '8px 12px', background: '#fafafa', border: '1px solid #d9d9d9', borderRadius: 4, opacity: 0.8 }}>
-                             Arrastrando...
-                           </div>
-                         ) : null}
-                       </DragOverlay>
-                     </DndContext>
-                  </>
+                            columns={detalleColumns}
+                            rowKey="id"
+                            size="small"
+                            pagination={false}
+                             scroll={{ x: 800 }}
+                             components={{ body: { row: SortableRow } }}
+                           />
+                         </SortableContext>
+                         <DragOverlay>
+                           {activeId ? (
+                             <div style={{ padding: '8px 12px', background: '#fafafa', border: '1px solid #d9d9d9', borderRadius: 4, opacity: 0.8 }}>
+                               Arrastrando...
+                            </div>
+                          ) : null}
+                        </DragOverlay>
+                      </DndContext>
+                   </>
                 ),
               },
               {
@@ -1206,151 +1257,6 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
         />
       )}
     </div>
-  );
-};
-
-// ===== Componente Guía paso a paso para TRP =====
-interface TransferenciaAlmacenGuideProps {
-  mode: 'crear' | 'editar';
-  concepto: ConceptoDTO | null;
-  almacenOrigen: AlmacenDTO | null;
-  almacenDestino: AlmacenDTO | null;
-  detallesCount: number;
-  conceptoRef: React.RefObject<HTMLDivElement | null>;
-  almacenOrigenRef: React.RefObject<HTMLDivElement | null>;
-  almacenDestinoRef: React.RefObject<HTMLDivElement | null>;
-  agregarFilaRef: React.RefObject<HTMLDivElement | null>;
-}
-
-interface GuideStep {
-  key: string;
-  title: string;
-  description: string;
-  target: () => HTMLDivElement | null;
-}
-
-const TransferenciaAlmacenGuide: React.FC<TransferenciaAlmacenGuideProps> = ({
-  concepto,
-  almacenOrigen,
-  almacenDestino,
-  detallesCount,
-  conceptoRef,
-  almacenOrigenRef,
-  almacenDestinoRef,
-  agregarFilaRef,
-}) => {
-  const [open, setOpen] = useState(false);
-  const dismissedStepRef = useRef<string | null>(null);
-  const currentStepRef = useRef<GuideStep | null>(null);
-
-  const getCurrentStep = useCallback((): GuideStep | null => {
-    const steps: GuideStep[] = [
-      {
-        key: 'concepto',
-        title: 'Paso 1: Concepto',
-        description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento.',
-        target: () => conceptoRef.current,
-      },
-      {
-        key: 'almacenOrigen',
-        title: 'Paso 2: Almacén Origen',
-        description: 'Seleccione el almacén desde donde saldrá la mercancía.',
-        target: () => almacenOrigenRef.current,
-      },
-      {
-        key: 'almacenDestino',
-        title: 'Paso 3: Almacén Destino',
-        description: 'Seleccione el almacén de destino. Debe ser diferente al almacén origen.',
-        target: () => almacenDestinoRef.current,
-      },
-      {
-        key: 'productos',
-        title: 'Paso 4: Productos',
-        description: 'Agregue productos al documento usando el botón "Agregar fila" o "Buscar Producto".',
-        target: () => agregarFilaRef.current,
-      },
-    ];
-
-    if (!concepto) return steps[0];
-    if (!almacenOrigen) return steps[1];
-    if (!almacenDestino) return steps[2];
-    if (detallesCount === 0) return steps[3];
-
-    return null;
-  }, [concepto, almacenOrigen, almacenDestino, detallesCount, conceptoRef, almacenOrigenRef, almacenDestinoRef, agregarFilaRef]);
-
-  currentStepRef.current = getCurrentStep();
-
-  useEffect(() => {
-    const current = getCurrentStep();
-    if (current) {
-      if (dismissedStepRef.current !== current.key) {
-        setOpen(true);
-      }
-    } else {
-      setOpen(false);
-      dismissedStepRef.current = null;
-    }
-  }, [getCurrentStep]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.closest('.ant-popover')) return;
-      setOpen(false);
-      if (currentStepRef.current) {
-        dismissedStepRef.current = currentStepRef.current.key;
-      }
-    };
-
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [open]);
-
-  const currentStep = getCurrentStep();
-  if (!currentStep) return null;
-
-  const targetElement = currentStep.target();
-  if (!targetElement) return null;
-
-  const rect = targetElement.getBoundingClientRect();
-
-  return createPortal(
-    <Popover
-      open={open}
-      onOpenChange={(visible: boolean) => {
-        if (!visible) {
-          setOpen(false);
-          dismissedStepRef.current = currentStep.key;
-        }
-      }}
-      title={currentStep.title}
-      content={currentStep.description}
-      placement="top"
-      trigger={[]}
-      rootClassName="guide-popover"
-    >
-      <span
-        style={{
-          position: 'fixed',
-          top: rect.top,
-          left: rect.left,
-          width: rect.width,
-          height: rect.height,
-          pointerEvents: 'none',
-          zIndex: -1,
-        }}
-      />
-    </Popover>,
-    document.body,
   );
 };
 

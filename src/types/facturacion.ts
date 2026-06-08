@@ -62,6 +62,8 @@ export interface FacturaVistaDTO {
   periodo?: string;
   turno?: string;
   codigoSucursal?: string;
+  cajero?: string;
+  caja?: string;
 }
 
 export interface FiltroFacturacion {
@@ -103,4 +105,5 @@ export interface EnvioDGIIDTO {
   estado?: string;
   mensaje?: string;
   archivo?: string;
+  codigoQR?: string;
 }

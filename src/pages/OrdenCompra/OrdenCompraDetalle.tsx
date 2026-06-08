@@ -284,9 +284,11 @@ const OrdenCompraDetalle: React.FC = () => {
         <div style={{ fontSize: 13 }}>
           <div>{record.codigo || '-'}</div>
           {record.referencia && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
-              {record.referencia}
-            </div>
+            <Tooltip title={record.referencia}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                {record.referencia}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -317,9 +319,11 @@ const OrdenCompraDetalle: React.FC = () => {
         <div>
           <div>{formatNumber(record.cantidad || 0)}</div>
           {record.medida?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
-              {record.medida.nombre}
-            </div>
+            <Tooltip title={record.medida.nombre}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {record.medida.nombre}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Input, Select, Tag, Button, message, Card, Typography, Modal, Descriptions, Alert } from 'antd';
+import { Table, Input, Select, Tag, Button, message, Card, Typography, Modal, Descriptions, Alert, Empty } from 'antd';
 import { ReloadOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import PermissionGate from '../../components/PermissionGate';
@@ -258,7 +258,7 @@ const Servicios: React.FC = () => {
           rowClassName="paces-row-hover"
           className="paces-border-top paces-list-table"
           locale={{
-            emptyText: loading ? ' ' : 'No se encontraron servicios',
+            emptyText: loading ? ' ' : <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No se encontraron servicios" /></div>,
           }}
           onRow={() => ({
             style: { cursor: 'default' },

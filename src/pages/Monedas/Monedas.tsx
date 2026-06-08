@@ -222,7 +222,7 @@ const Monedas: React.FC = () => {
             pageSize,
             showTotal: (t) => `${t} registros`,
           }}
-          locale={{ emptyText: <Empty description="No hay monedas registradas" /> }}
+          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay monedas registradas" /></div> }}
         />
       </Card>
 

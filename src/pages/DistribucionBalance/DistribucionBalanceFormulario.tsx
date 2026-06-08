@@ -21,6 +21,7 @@ import { distribucionBalanceApi } from '../../api/distribucionBalanceApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { tipoApi } from '../../api/tipoApi';
 import { clienteApi } from '../../api/clienteApi';
+import { parametrosApi } from '../../api/parametrosApi';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type { ConceptoDTO, AsientoContableDTO, LogDTO } from '../../types/entradaAlmacen';
@@ -31,6 +32,7 @@ import type {
 import type { TipoDocumentoDTO } from '../../types/transaccion';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
+import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 
 import EntidadCard from '../../components/EntidadCard';
@@ -40,6 +42,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { DistribucionBalanceGuide } from './DistribucionBalanceGuide';
 
 const { TextArea } = Input;
 
@@ -75,10 +78,17 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
   const [logs, setLogs] = useState<LogDTO[]>([]);
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
+  const [fechaCierreContable, setFechaCierreContable] = useState<string | null>(null);
+  const [selectedDebitos, setSelectedDebitos] = useState<React.Key[]>([]);
+  const [selectedCreditos, setSelectedCreditos] = useState<React.Key[]>([]);
 
   // Concepto modal
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
   const [conceptoSearchText, setConceptoSearchText] = useState('');
+
+  // Refs para la guía
+  const conceptoRef = useRef<HTMLDivElement>(null);
+  const entidadRef = useRef<HTMLDivElement>(null);
 
   // Quick fields
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -165,6 +175,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       .then((tipos) => setTiposCache(tipos as any))
       .catch(() => {});
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
+    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch(() => {});
 
     if (mode === 'crear') {
       form.setFieldsValue({
@@ -269,7 +280,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   };
 
   // ===== Validación =====
-  const validarFormulario = (): string | null => {
+  const validarFormulario = async (): Promise<string | null> => {
     const values = form.getFieldsValue();
 
     if (!selectedConcepto) return 'Debe elegir un Concepto';
@@ -280,6 +291,17 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       const hoy = dayjs().endOf('day');
       if (dayjs(fechaDoc).isAfter(hoy)) {
         return 'La fecha del documento no puede ser mayor a hoy';
+      }
+    }
+
+    // Validar fecha contra cierre contable
+    if (fechaCierreContable) {
+      const cierreDate = parseDateRaw(fechaCierreContable);
+      if (cierreDate) {
+        const cierreTs = dayjs(cierreDate).startOf('day').valueOf();
+        if (fechaDoc && dayjs(fechaDoc).startOf('day').valueOf() <= cierreTs) {
+          return 'La fecha del documento no puede ser menor o igual a la fecha de cierre';
+        }
       }
     }
 
@@ -350,7 +372,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
 
   // ===== Acciones =====
   const handleGuardar = async () => {
-    const error = validarFormulario();
+    const error = await validarFormulario();
     if (error) {
       message.error(error);
       return;
@@ -438,11 +460,38 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     );
   };
 
-  // ===== Totales para asientos =====
-  function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
-  function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
-  const totalDebAsientos = asientos.reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
-  const totalCreAsientos = asientos.reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
+  // ===== Handlers de eliminación =====
+  const handleEliminarFila = (id: number | string) => {
+    setTransaccionesAsociadas((prev) => prev.filter((t: any) => {
+      const tid = t.transaccionAsociadaID || t.id;
+      return tid !== id;
+    }));
+    setSelectedDebitos([]);
+    setSelectedCreditos([]);
+  };
+
+  const handleEliminarSeleccionados = (tipo: 'debito' | 'credito') => {
+    const selected = tipo === 'debito' ? selectedDebitos : selectedCreditos;
+    if (selected.length === 0) return;
+
+    Modal.confirm({
+      title: 'Eliminar documentos',
+      icon: <ExclamationCircleOutlined />,
+      content: `¿Está seguro de eliminar ${selected.length} documento(s) seleccionados?`,
+      okText: 'Sí, eliminar',
+      cancelText: 'No',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        const idsAEliminar = new Set(selected);
+        setTransaccionesAsociadas((prev) => prev.filter((t: any) => {
+          const tid = t.transaccionAsociadaID || t.id;
+          return !idsAEliminar.has(tid);
+        }));
+        if (tipo === 'debito') setSelectedDebitos([]);
+        else setSelectedCreditos([]);
+      },
+    });
+  };
 
   // ===== Columnas de transacciones asociadas =====
   const asociadasColumns: any[] = [
@@ -483,20 +532,56 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
         />
       ),
     },
+    {
+      title: '',
+      key: 'accion',
+      width: 50,
+      render: (_: any, record: any) => (
+        <Button
+          type="text"
+          size="small"
+          danger
+          icon={<DeleteOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleEliminarFila(record.transaccionAsociadaID || record.id);
+          }}
+        />
+      ),
+    },
   ];
 
-  const asientoColumns = [
-    { title: 'Cuenta', key: 'cuenta', width: 120,
-      render: (_: any, r: AsientoContableDTO) => r.cuentaContable?.noCuenta || '-' },
-    { title: 'Nombre', key: 'nombre', ellipsis: true,
-      render: (_: any, r: AsientoContableDTO) => r.cuentaContable?.nombre ? toTitleCase(r.cuentaContable.nombre) : '-' },
-    { title: 'Descripcion', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
-      render: (v: string) => v ? toTitleCase(v) : '-' },
-    { title: 'Debito', key: 'debito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => esDebito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-    { title: 'Credito', key: 'credito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-  ];
+  // ===== Handle refresh =====
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res: any) => {
+        setData(res);
+        setTransaccionesAsociadas(res.transaccionesAsociadas || []);
+        setAsientos(res.asientos || []);
+        setLogs(res.logs || []);
+        setSelectedConcepto(res.concepto || null);
+        setSelectedEntidad(res.entidad || null);
+        if (res.tipo) setSelectedTipo(res.tipo);
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          tipo: res.tipo?.codigo || res.codigoTipo || '',
+          concepto: res.concepto?.codigo || '',
+          entidad: res.entidad?.codigo || res.codigoEntidad || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          ncf: res.ncf || '', referencia: res.referencia || '',
+          tasa: res.tasa || 1, nota: res.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg); setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
 
   // ===== Loading state =====
   if (loading) {
@@ -536,7 +621,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
           </Col>
 
           <Col xs={24} sm={12} lg={15}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
               <div style={{ flex: 1 }}>
                 <FloatingField label="Concepto" required>
                   <Input
@@ -564,7 +649,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
             </Form.Item>
           </Col>
 
-          <Col xs={24} sm={12} lg={15}>
+          <Col xs={24} sm={12} lg={15} ref={entidadRef}>
             <Form.Item name="entidad" required style={{ marginBottom: 0 }}>
               <FloatingField label={entidadLabel} required>
                 <Select
@@ -740,13 +825,24 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     label: `Débitos (${debitos.length})`,
     children: (
       <div>
+        {selectedDebitos.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <Button danger icon={<DeleteOutlined />} onClick={() => handleEliminarSeleccionados('debito')}>
+              Eliminar ({selectedDebitos.length})
+            </Button>
+          </div>
+        )}
         <Table
           dataSource={debitos}
           columns={asociadasColumns}
           rowKey={(r) => r.transaccionAsociadaID || r.id || Math.random()}
           size="small"
           pagination={false}
-          scroll={{ x: 1000 }}
+          scroll={{ x: 1100 }}
+          rowSelection={{
+            selectedRowKeys: selectedDebitos,
+            onChange: (keys) => setSelectedDebitos(keys),
+          }}
           summary={() => (
             <Table.Summary fixed>
               <Table.Summary.Row>
@@ -770,13 +866,24 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     label: `Créditos (${creditos.length})`,
     children: (
       <div>
+        {selectedCreditos.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <Button danger icon={<DeleteOutlined />} onClick={() => handleEliminarSeleccionados('credito')}>
+              Eliminar ({selectedCreditos.length})
+            </Button>
+          </div>
+        )}
         <Table
           dataSource={creditos}
           columns={asociadasColumns}
           rowKey={(r) => r.transaccionAsociadaID || r.id || Math.random()}
           size="small"
           pagination={false}
-          scroll={{ x: 1000 }}
+          scroll={{ x: 1100 }}
+          rowSelection={{
+            selectedRowKeys: selectedCreditos,
+            onChange: (keys) => setSelectedCreditos(keys),
+          }}
           summary={() => (
             <Table.Summary fixed>
               <Table.Summary.Row>
@@ -799,35 +906,14 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     key: 'asientos',
     label: `Asientos Contables (${asientos.length})`,
     children: (
-      <div>
-        <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button
-            icon={<ExclamationCircleOutlined />}
-            onClick={handleGenerarAsientos}
-            loading={saving}
-            disabled={!id}
-          >
-            GENERAR
-          </Button>
-        </div>
-        <Table
-          dataSource={asientos}
-          columns={asientoColumns}
-          rowKey={(r) => r.id || Math.random()}
-          size="small"
-          pagination={false}
-          scroll={{ x: 600 }}
-          summary={() => (
-            <Table.Summary fixed>
-              <Table.Summary.Row>
-                <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebAsientos)}</strong></Table.Summary.Cell>
-                <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreAsientos)}</strong></Table.Summary.Cell>
-              </Table.Summary.Row>
-            </Table.Summary>
-          )}
-        />
-      </div>
+      <AsientosContableEditables
+        asientos={asientos}
+        onChange={setAsientos}
+        editable={estado === 0}
+        onGenerar={handleGenerarAsientos}
+        generando={saving}
+        disableGenerar={!id}
+      />
     ),
   });
 
@@ -839,37 +925,6 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       <LogTable dataSource={logs} scroll={{ x: 900 }} />
     ),
   });
-
-  const handleRefresh = useCallback(() => {
-    if (mode === 'crear') return;
-    if (!id) return;
-    setLoadingError(false);
-    setLoading(true);
-    distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res: any) => {
-        setData(res);
-        setTransaccionesAsociadas(res.transaccionesAsociadas || []);
-        setAsientos(res.asientos || []);
-        setLogs(res.logs || []);
-        setSelectedConcepto(res.concepto || null);
-        setSelectedEntidad(res.entidad || null);
-        if (res.tipo) setSelectedTipo(res.tipo);
-        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
-        form.setFieldsValue({
-          tipo: res.tipo?.codigo || res.codigoTipo || '',
-          concepto: res.concepto?.codigo || '',
-          entidad: res.entidad?.codigo || res.codigoEntidad || '',
-          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          ncf: res.ncf || '', referencia: res.referencia || '',
-          tasa: res.tasa || 1, nota: res.nota || '',
-        });
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg); setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form, mode]);
 
   // ===== Render principal =====
   return (
@@ -923,6 +978,18 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
           />
           <BalanceFooter />
           </div>
+      )}
+
+      {/* Guía paso a paso (solo en modo crear o editar borrador) */}
+      {(mode === 'crear' || esBorrador) && (
+        <DistribucionBalanceGuide
+          mode={mode}
+          concepto={selectedConcepto}
+          entidad={selectedEntidad}
+          detallesCount={debitos.length + creditos.length}
+          conceptoRef={conceptoRef}
+          entidadRef={entidadRef}
+        />
       )}
     </div>
   );

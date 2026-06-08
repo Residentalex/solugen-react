@@ -280,7 +280,7 @@ const Turnos: React.FC = () => {
           loading={loading}
           size="middle"
           scroll={{ x: 1100 }}
-          locale={{ emptyText: <Empty description="No hay turnos registrados" /> }}
+          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay turnos registrados" /></div> }}
           pagination={{
             current: page,
             pageSize,

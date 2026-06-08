@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tag, Spin, Button, Row, Col, Divider, Grid, message, Typography, Descriptions, Alert, Input
+  Card, Table, Tag, Spin, Button, Row, Col, Divider, Grid, message, Typography, Descriptions, Alert, Input, Tooltip
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -168,9 +168,11 @@ const GeneradorORCDetalle: React.FC = () => {
           <div>
             <Text strong>{formatNumber(record.cantidades?.[suc] ?? 0)}</Text>
             {record.medida?.nombre && (
-              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
-                {record.medida.nombre}
-              </div>
+              <Tooltip title={record.medida.nombre}>
+                <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {record.medida.nombre}
+                </div>
+              </Tooltip>
             )}
           </div>
         ),
@@ -267,9 +269,11 @@ const GeneradorORCDetalle: React.FC = () => {
             <div>
               <div>{formatNumber(record.impuestos || 0)}</div>
               {(record.impuesto as any)?.nombre && (
-                <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
-                  {toTitleCase((record.impuesto as any).nombre)}
-                </div>
+                <Tooltip title={(record.impuesto as any).nombre}>
+                  <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {toTitleCase((record.impuesto as any).nombre)}
+                  </div>
+                </Tooltip>
               )}
             </div>
           ),

@@ -53,6 +53,8 @@ import ProductoDetalle from './pages/Productos/ProductoDetalle';
 import ProductosImportar from './pages/Productos/ProductosImportar';
 import Monedas from './pages/Monedas/Monedas';
 import Conceptos from './pages/Conceptos/Conceptos';
+import ConceptoDetalle from './pages/Conceptos/ConceptoDetalle';
+import ConceptoFormulario from './pages/Conceptos/ConceptoFormulario';
 import Pantallas from './pages/Pantallas/Pantallas';
 import TiposCuenta from './pages/TiposCuenta/TiposCuenta';
 import CuentasContables from './pages/CuentasContables/CuentasContables';
@@ -97,6 +99,7 @@ import Servicios from './pages/Servicios/Servicios';
 import ActualizacionPrecio from './pages/ActualizacionPrecio/ActualizacionPrecio';
 import Turnos from './pages/Turnos/Turnos';
 import Conteos from './pages/Conteos/Conteos';
+import ConteoDetalle from './pages/Conteos/ConteoDetalle';
 import MovimientosProductos from './pages/MovimientosProductos/MovimientosProductos';
 import ImportarInventario from './pages/ImportarInventario/ImportarInventario';
 import ActualizacionCostos from './pages/ActualizacionCostos/ActualizacionCostos';
@@ -244,6 +247,9 @@ const App: React.FC = () => {
             <Route path="MProducto/importar" element={<ProductosImportar />} />
             <Route path="MMoneda" element={<Monedas />} />
             <Route path="MConcepto" element={<Conceptos />} />
+            <Route path="MConcepto/nuevo" element={<ConceptoFormulario />} />
+            <Route path="MConcepto/:codigo/editar" element={<ConceptoFormulario />} />
+            <Route path="MConcepto/:codigo" element={<ConceptoDetalle />} />
             <Route path="MAccion" element={<Acciones />} />
             <Route path="MPantalla" element={<Pantallas />} />
             <Route path="MTipoCuenta" element={<TiposCuenta />} />
@@ -292,6 +298,7 @@ const App: React.FC = () => {
           <Route path="MEMP/:codigo" element={<Empleados />} />
           <Route path="FTURNOS" element={<Turnos />} />
           <Route path="FConteos" element={<Conteos />} />
+          <Route path="FConteos/:documento" element={<ConteoDetalle />} />
             <Route path="CMovimientosProductos" element={<MovimientosProductos />} />
             <Route path="CDocRevisados" element={<Proximamente modulo="Documentos Revisados" codigo="CDocRevisados" />} />
             <Route path="FPRODPEND" element={<Proximamente modulo="Productos Pendientes" codigo="FPRODPEND" />} />

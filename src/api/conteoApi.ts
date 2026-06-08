@@ -52,4 +52,15 @@ export const conteoApi = {
     );
     return data.data;
   },
+
+  obtenerPorDocumento: async (
+    sucursal: number,
+    documento: string
+  ): Promise<ConteoFisicoDTO> => {
+    const docSinPrefijo = documento.startsWith('IF-') ? documento.slice(3) : documento;
+    const { data } = await apiClient.get<ApiResponse<ConteoFisicoDTO>>(
+      `${BASE}/${sucursal}/documento/${encodeURIComponent(docSinPrefijo)}`
+    );
+    return data.data;
+  },
 };

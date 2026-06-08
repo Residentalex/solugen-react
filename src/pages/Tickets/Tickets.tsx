@@ -234,7 +234,7 @@ const Tickets: React.FC = () => {
           scroll={{ x: 750 }}
           size="middle"
           locale={{
-            emptyText: <Empty description="No hay tickets" />,
+            emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay tickets" /></div>,
           }}
           pagination={{
             showSizeChanger: false,

@@ -201,7 +201,7 @@ const TiposCuenta: React.FC = () => {
             pageSize,
             showTotal: (t) => `${t} registros`,
           }}
-          locale={{ emptyText: <Empty description="No hay tipos de cuenta registrados" /> }}
+          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay tipos de cuenta registrados" /></div> }}
         />
       </Card>
 

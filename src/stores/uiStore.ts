@@ -99,6 +99,7 @@ const validThemes: ThemeName[] = [
   'light-rose', 'dark-rose',
   'light-amber', 'dark-amber',
   'light-genesis',
+  'basic-devexpress',
 ];
 let initialTheme: ThemeName = 'light-default';
 if (savedRaw && (validThemes as readonly string[]).includes(savedRaw)) {

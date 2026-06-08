@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Button, Space, Row, Col, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Tooltip,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Divider, Alert, Badge, Empty, Tooltip,
 } from 'antd';
 import {
   DeleteOutlined,
@@ -17,6 +17,8 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   BarcodeOutlined,
+  PercentageOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -26,6 +28,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
 
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
+import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
 import { productoApi } from '../../api/productoApi';
@@ -133,6 +136,8 @@ function filaVacia(): DetalleEntradaAlmacenDTO {
 const EntradaAlmacenFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const cloneData = (location.state as any)?.cloneData;
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
@@ -169,9 +174,14 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const [ocProductosModalOpen, setOcProductosModalOpen] = useState(false);
   const [ocProductoSearch, setOcProductoSearch] = useState('');
   const [comodines, setComodines] = useState<any[]>([]);
+  const [fechaCierreContable, setFechaCierreContable] = useState<string | null>(null);
   const [fechaCierreInventario, setFechaCierreInventario] = useState<string | null>(null);
   const [modoDescuento, setModoDescuento] = useState<'porcentaje' | 'pesos'>('porcentaje');
   const [verificados, setVerificados] = useState<Set<number>>(new Set());
+  const [detallesDevolucion, setDetallesDevolucion] = useState<any[]>([]);
+  const [modalDevolucionOpen, setModalDevolucionOpen] = useState(false);
+  const [detalleDevolucionActivo, setDetalleDevolucionActivo] = useState<any>(null);
+  const [cantidadDevolucionInput, setCantidadDevolucionInput] = useState<number>(0);
 
   const editValuesRef = useRef<Record<string, any>>({});
 
@@ -212,7 +222,26 @@ const EntradaAlmacenFormulario: React.FC = () => {
     fieldCloseHandledRef.current = true;
     const field = editingField;
     if (field) {
-      form.setFieldsValue({ [field]: editingValueRef.current });
+      const oldValue = form.getFieldValue(field);
+      const newValue = editingValueRef.current;
+      form.setFieldsValue({ [field]: newValue });
+
+      // Si se cambió la tasa y hay detalles, preguntar si actualizar costos
+      if (field === 'tasa' && detalles.length > 0 && oldValue !== newValue) {
+        Modal.confirm({
+          title: 'Actualizar costos',
+          icon: <ExclamationCircleOutlined />,
+          content: '¿Desea actualizar los costos en base a la nueva tasa?',
+          okText: 'Sí',
+          cancelText: 'No',
+          onOk: () => {
+            const tasaNueva = Number(newValue) || 1;
+            setDetalles((prev) =>
+              prev.map((d) => calcularFila({ ...d, costo: (d.costo || 0) / tasaNueva }))
+            );
+          },
+        });
+      }
     }
     setEditingField(null);
   };
@@ -255,10 +284,42 @@ const EntradaAlmacenFormulario: React.FC = () => {
     const pageTitle = mode === 'crear' ? 'Nuevo Entrada de Almacén' : '';
     setPageTitleOverride(pageTitle);
 
+    const cleanup = () => {
+      resetToolbar();
+      setPageTitleOverride('');
+    };
+
+    // === Si viene de Clonar ===
+    if (cloneData) {
+      setDetalles((cloneData.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
+      setSelectedConcepto(cloneData.concepto || null);
+      setConceptoSearchText(toTitleCase(cloneData.concepto?.nombre || ''));
+      setSelectedEntidad(cloneData.suplidor || cloneData.entidad || null);
+      setSelectedAlmacen(cloneData.almacen || null);
+
+      const fechaDoc = cloneData.fechaDocumento ? parseDateRaw(cloneData.fechaDocumento) : null;
+      form.setFieldsValue({
+        conceptoNombre: cloneData.concepto?.nombre || '',
+        concepto: cloneData.concepto?.codigo || '',
+        suplidor: cloneData.suplidor?.codigo || cloneData.entidad?.codigo || '',
+        almacen: cloneData.almacen?.codigo || '',
+        fechaDocumento: fechaDoc ? dayjs(fechaDoc) : dayjs(),
+        fechaRecibo: cloneData.fechaEntrega ? dayjs(parseDateRaw(cloneData.fechaEntrega)) : dayjs(),
+        ncf: cloneData.ncf || '',
+        referencia: cloneData.referencia || '',
+        ordenCompra: cloneData.ordenCompra?.noDocumento || '',
+        moneda: cloneData.moneda?.nombre || '',
+        tasa: cloneData.tasa || 1,
+        nota: cloneData.nota || '',
+      });
+      return cleanup;
+    }
+
     // Cargar catálogos
     conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
-    // Obtener fecha de cierre de inventario
+    // Obtener fechas de cierre (contable e inventario)
     parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch(() => {});
+    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch(() => {});
     // Cargar unidades de medida
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => {
       message.error(extraerMensajeError(err, 'Error al cargar unidades de medida'));
@@ -272,11 +333,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
       });
     }
 
-    return () => {
-      resetToolbar();
-      setPageTitleOverride('');
-    };
-  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form]);
+    return cleanup;
+  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form, cloneData]);
 
   // ===== Cargar datos si es modo editar =====
   useEffect(() => {
@@ -439,20 +497,26 @@ const EntradaAlmacenFormulario: React.FC = () => {
     if (detalles.length === 0) return 'Debe agregar al menos un detalle';
     if (!detalles.some((d) => (d.cantidad || 0) > 0)) return 'Debe tener al menos un detalle con cantidad > 0';
 
-    // Validar fecha contra cierre de inventario
-    if (fechaCierreInventario) {
-      const cierreDate = parseDateRaw(fechaCierreInventario);
-      if (cierreDate) {
-        const cierreTs = dayjs(cierreDate).startOf('day').valueOf();
+    // Validar fecha contra cierre contable e inventario (usar la mayor)
+    const fechas: (string | null)[] = [fechaCierreContable, fechaCierreInventario];
+    const fechasValidas = fechas.filter((f): f is string => f !== null);
+    if (fechasValidas.length > 0) {
+      const timestamps = fechasValidas.map((f) => {
+        const d = parseDateRaw(f);
+        return d ? dayjs(d).startOf('day').valueOf() : 0;
+      }).filter((t) => t > 0);
+
+      if (timestamps.length > 0) {
+        const cierreMaxTs = Math.max(...timestamps);
 
         const fechaDoc = values.fechaDocumento;
-        if (fechaDoc && dayjs(fechaDoc).startOf('day').valueOf() <= cierreTs) {
-          return 'La fecha del documento no puede ser menor o igual a la fecha de cierre de inventario';
+        if (fechaDoc && dayjs(fechaDoc).startOf('day').valueOf() <= cierreMaxTs) {
+          return 'La fecha del documento no puede ser menor o igual a la fecha de cierre (contable o de inventario)';
         }
 
         const fechaRec = values.fechaRecibo;
-        if (fechaRec && dayjs(fechaRec).startOf('day').valueOf() <= cierreTs) {
-          return 'La fecha de recibo no puede ser menor o igual a la fecha de cierre de inventario';
+        if (fechaRec && dayjs(fechaRec).startOf('day').valueOf() <= cierreMaxTs) {
+          return 'La fecha de recibo no puede ser menor o igual a la fecha de cierre (contable o de inventario)';
         }
       }
     }
@@ -527,17 +591,68 @@ const EntradaAlmacenFormulario: React.FC = () => {
     }
 
     setSaving(true);
+    let entidadGuardada: any = null;
     try {
       const dto = construirDTO();
       if (mode === 'crear') {
         const result = await entradaAlmacenApi.crear(sucursalActiva, dto);
+        entidadGuardada = result;
         message.success('Entrada de almacén creada exitosamente');
-        navigationConfirmedRef.current = true;
-        navigate(`/FENP/${result.id}`);
       } else {
         await entradaAlmacenApi.actualizar(sucursalActiva, dto);
+        entidadGuardada = { id: parseInt(id!), noDocumento: data?.noDocumento };
         message.success('Entrada de almacén actualizada exitosamente');
-        navigationConfirmedRef.current = true;
+      }
+
+      // ===== Crear DVC si hay devoluciones pendientes =====
+      if (detallesDevolucion.length > 0) {
+        try {
+          const dvcDTO: any = {
+            id: 0,
+            fechaDocumento: toISOFormat(new Date()),
+            noDocumento: '',
+            estado: 0,
+            periodo: new Date().getMonth() + 1,
+            referencia: entidadGuardada?.noDocumento || data?.noDocumento || '',
+            ncf: '',
+            nota: `Devolución generada desde ENP-${entidadGuardada?.noDocumento || data?.noDocumento}`,
+            tasa: dto.tasa || 1,
+            concepto: selectedConcepto || { nombre: '', codigo: '' },
+            almacen: dto.almacen,
+            suplidor: dto.suplidor || dto.entidad,
+            entidad: dto.entidad,
+            tipo: null,
+            entrada: { id: entidadGuardada?.id || parseInt(id!), noDocumento: entidadGuardada?.noDocumento || data?.noDocumento },
+            moneda: dto.moneda,
+            documento: { codigo: 'DVC' },
+            subTotal: detallesDevolucion.reduce((s: number, d: any) => s + (d.subTotal || 0), 0),
+            descuento: detallesDevolucion.reduce((s: number, d: any) => s + (d.descuento || 0), 0),
+            impuestos: detallesDevolucion.reduce((s: number, d: any) => s + (d.impuestos || 0), 0),
+            total: detallesDevolucion.reduce((s: number, d: any) => s + (d.total || 0), 0),
+            detalles: detallesDevolucion,
+            asientos: [],
+            logs: [],
+          };
+
+          const dvcCreada = await devolucionCompraApi.crear(sucursalActiva, dvcDTO);
+          message.success(
+            `Entrada guardada. DVC-${dvcCreada.noDocumento} creada exitosamente.`,
+            6
+          );
+        } catch (errDVC: any) {
+          const msgDVC = extraerMensajeError(errDVC, 'Error desconocido');
+          message.warning(
+            `Entrada guardada, pero ocurrió un error al crear la DVC: ${msgDVC}`,
+            8
+          );
+          // NO bloquear la navegación — la ENP ya se guardó
+        }
+      }
+
+      navigationConfirmedRef.current = true;
+      if (mode === 'crear') {
+        navigate(`/FENP/${entidadGuardada.id}`);
+      } else {
         navigate(`/FENP/${id}`);
       }
     } catch (err: any) {
@@ -725,6 +840,40 @@ const EntradaAlmacenFormulario: React.FC = () => {
   };
 
   // ===== Handlers de detalles =====
+  const handleDescuentoGlobal = () => {
+    let descuentoGlobal = 0;
+    Modal.confirm({
+      title: 'Descuento global',
+      icon: <ExclamationCircleOutlined />,
+      content: (
+        <div>
+          <Typography.Text className="paces-text-secondary">
+            Aplicar descuento porcentual a todos los productos:
+          </Typography.Text>
+          <InputNumber
+            autoFocus
+            style={{ width: '100%', marginTop: 8 }}
+            min={0}
+            max={100}
+            step={0.01}
+            precision={2}
+            placeholder="0.00"
+            onChange={(val) => { descuentoGlobal = val || 0; }}
+          />
+        </div>
+      ),
+      okText: 'Aplicar',
+      cancelText: 'Cancelar',
+      onOk: () => {
+        if (descuentoGlobal > 0) {
+          setDetalles((prev) =>
+            prev.map((d) => calcularFila({ ...d, porcentajeDescuento: descuentoGlobal }))
+          );
+        }
+      },
+    });
+  };
+
   const handleAgregarFila = () => {
     setDetalles((prev) => [{ ...filaVacia(), id: -(prev.length + 1) }, ...prev]);
   };
@@ -1296,6 +1445,37 @@ const EntradaAlmacenFormulario: React.FC = () => {
     },
     {
       title: '',
+      key: 'devolver',
+      width: 50,
+      responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => {
+        const yaDevuelto = detallesDevolucion
+          .filter((d) => d.idExterno === record.id)
+          .reduce((s, d) => s + (d.cantidad || 0), 0);
+        const disponible = (record.cantidad || 0) - yaDevuelto;
+        const tieneDevolucion = yaDevuelto > 0;
+
+        return (
+          <Tooltip title={disponible <= 0 ? 'Sin cantidad disponible' : (tieneDevolucion ? 'Modificar cantidad a devolver' : 'Agregar a devolución')}>
+            <Button
+              type="text"
+              size="small"
+              icon={<RollbackOutlined />}
+              style={{ color: tieneDevolucion ? '#556ee6' : '#8c8c8c' }}
+              disabled={disponible <= 0}
+              onClick={() => {
+                setDetalleDevolucionActivo(record);
+                setCantidadDevolucionInput(0);
+                setModalDevolucionOpen(true);
+              }}
+            />
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: '',
       key: 'acciones',
       width: 50,
       render: (_: any, record: DetalleEntradaAlmacenDTO, idx: number) => {
@@ -1336,6 +1516,150 @@ const EntradaAlmacenFormulario: React.FC = () => {
   ];
 
   // ===== Encabezado del formulario =====
+  // ===== Modal de cantidad a devolver (DVC) =====
+  const renderModalDevolucion = () => {
+    if (!detalleDevolucionActivo) return null;
+    const record = detalleDevolucionActivo;
+    const yaDevuelto = detallesDevolucion
+      .filter((d) => d.idExterno === record.id)
+      .reduce((s, d) => s + (d.cantidad || 0), 0);
+    const disponible = (record.cantidad || 0) - yaDevuelto;
+
+    return (
+      <Modal
+        title="Devolver producto"
+        open={modalDevolucionOpen}
+        onCancel={() => { setModalDevolucionOpen(false); setDetalleDevolucionActivo(null); }}
+        width={420}
+        destroyOnClose
+        maskClosable={false}
+        footer={
+          <Space>
+            <Button onClick={() => { setModalDevolucionOpen(false); setDetalleDevolucionActivo(null); }}>Cancelar</Button>
+            <Button
+              type="primary"
+              icon={<RollbackOutlined />}
+              disabled={!cantidadDevolucionInput || cantidadDevolucionInput <= 0 || cantidadDevolucionInput > disponible}
+              onClick={() => {
+                const nuevoDetalle: any = {
+                  id: -(detallesDevolucion.length + 1),
+                  idExterno: record.id,
+                  codigo: record.codigo,
+                  articulo: record.articulo,
+                  referencia: record.referencia || '',
+                  cantidad: cantidadDevolucionInput,
+                  costo: record.costo || 0,
+                  subTotal: (cantidadDevolucionInput * (record.costo || 0)),
+                  porcentajeDescuento: record.porcentajeDescuento || 0,
+                  descuento: 0,
+                  impuesto: record.impuesto,
+                  impuestos: 0,
+                  total: (cantidadDevolucionInput * (record.costo || 0)),
+                  familia: record.familia,
+                  medida: record.medida,
+                  tipoArticulo: record.tipoArticulo || 'Producto',
+                  nota: '',
+                };
+                setDetallesDevolucion((prev) => [...prev, nuevoDetalle]);
+                setModalDevolucionOpen(false);
+                setDetalleDevolucionActivo(null);
+                message.success('Producto agregado a la lista de devolución');
+              }}
+            >
+              Agregar a devolución
+            </Button>
+          </Space>
+        }
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+          <div>
+            <Typography.Text strong style={{ fontSize: 14 }}>{record.codigo}</Typography.Text>
+            <br />
+            {record.referencia && (
+              <Typography.Text className="paces-text-secondary" style={{ fontSize: 12 }}>
+                {record.referencia}
+              </Typography.Text>
+            )}
+          </div>
+          <div style={{ flex: 1 }}>
+            <Typography.Text style={{ fontSize: 13 }}>{toTitleCase(record.articulo || '')}</Typography.Text>
+            <br />
+            {record.familia?.nombre && (
+              <Tag style={{ fontSize: 11 }}>{toTitleCase(record.familia.nombre)}</Tag>
+            )}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Typography.Text className="paces-text-secondary">Cantidad recibida:</Typography.Text>
+            <Typography.Text>{formatNumber(record.cantidad || 0)}</Typography.Text>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <Typography.Text className="paces-text-secondary">Ya devuelto:</Typography.Text>
+            <Typography.Text style={yaDevuelto > 0 ? { color: '#ff4d4f' } : {}}>{formatNumber(yaDevuelto)}</Typography.Text>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Typography.Text className="paces-text-secondary">Disponible:</Typography.Text>
+            <Typography.Text style={{ color: '#34c38f', fontWeight: 600, fontSize: 14 }}>{formatNumber(disponible)}</Typography.Text>
+          </div>
+        </div>
+
+        <Divider style={{ margin: '12px 0' }} />
+
+        <div style={{ marginBottom: 4 }}>
+          <Typography.Text strong>Cantidad a devolver:</Typography.Text>
+        </div>
+        <InputNumber
+          autoFocus
+          style={{ width: '100%' }}
+          min={0.01}
+          max={disponible}
+          step={0.01}
+          precision={2}
+          value={cantidadDevolucionInput || undefined}
+          onChange={(val) => setCantidadDevolucionInput(val || 0)}
+          onPressEnter={() => {
+            if (cantidadDevolucionInput > 0 && cantidadDevolucionInput <= disponible) {
+              const nuevoDetalle: any = {
+                id: -(detallesDevolucion.length + 1),
+                idExterno: record.id,
+                codigo: record.codigo,
+                articulo: record.articulo,
+                referencia: record.referencia || '',
+                cantidad: cantidadDevolucionInput,
+                costo: record.costo || 0,
+                subTotal: (cantidadDevolucionInput * (record.costo || 0)),
+                porcentajeDescuento: record.porcentajeDescuento || 0,
+                descuento: 0,
+                impuesto: record.impuesto,
+                impuestos: 0,
+                total: (cantidadDevolucionInput * (record.costo || 0)),
+                familia: record.familia,
+                medida: record.medida,
+                tipoArticulo: record.tipoArticulo || 'Producto',
+                nota: '',
+              };
+              setDetallesDevolucion((prev) => [...prev, nuevoDetalle]);
+              setModalDevolucionOpen(false);
+              setDetalleDevolucionActivo(null);
+              message.success('Producto agregado a la lista de devolución');
+            }
+          }}
+          placeholder="0.00"
+        />
+        {cantidadDevolucionInput > disponible && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginTop: 8 }}
+            message={`La cantidad no puede superar el disponible (${formatNumber(disponible)})`}
+          />
+        )}
+      </Modal>
+    );
+  };
+
   const renderEncabezado = () => {
     // ncfValue, refValue y tasaValue vienen del watcher reactivo (component-level Form.useWatch)
     return (
@@ -1631,7 +1955,12 @@ const EntradaAlmacenFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        fetchConceptos={() => conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'ENP')}
+        fetchConceptos={() => {
+          const sucDest = data?.concepto?.sucursalDestino?.id
+            ?? data?.sucursal?.id
+            ?? sucursalActiva;
+          return conceptosApi.obtenerConceptosPorDocumento(sucDest, 'ENP');
+        }}
       />
 
       <BuscarOrdenCompraModal
@@ -1823,6 +2152,9 @@ const EntradaAlmacenFormulario: React.FC = () => {
                             Agregar producto
                           </Button>
                           <Button icon={<BarcodeOutlined />} onClick={() => setScannerModalOpen(true)} />
+                          <Button icon={<PercentageOutlined />} onClick={handleDescuentoGlobal}>
+                            Dto. global
+                          </Button>
                         </Space>
                         <Input.Search
                           placeholder="Buscar detalle..."
@@ -1855,6 +2187,141 @@ const EntradaAlmacenFormulario: React.FC = () => {
                           ) : null}
                         </DragOverlay>
                       </DndContext>
+                    </>
+                  ),
+                },
+                {
+                  key: 'devoluciones',
+                  label: (
+                    <span>
+                      Devoluciones
+                      {detallesDevolucion.length > 0 && (
+                        <Badge count={detallesDevolucion.length}
+                          style={{ marginLeft: 6, backgroundColor: '#556ee6' }} />
+                      )}
+                    </span>
+                  ),
+                  children: (
+                    <>
+                      {detallesDevolucion.length === 0 ? (
+                        <Empty
+                          image={<RollbackOutlined style={{ fontSize: 32, color: '#bfbfbf' }} />}
+                          imageStyle={{ height: 40 }}
+                          description={
+                            <span>
+                              Sin productos para devolver<br />
+                              <Typography.Text className="paces-text-secondary" style={{ fontSize: 12 }}>
+                                Haga clic en el ícono ↩ de un detalle para agregar productos
+                              </Typography.Text>
+                            </span>
+                          }
+                        />
+                      ) : (
+                        <>
+                          <Alert
+                            type="info"
+                            showIcon
+                            style={{ marginBottom: 12 }}
+                            message="Al guardar este documento, se creará automáticamente una Devolución de Compra (DVC) con los productos listados."
+                          />
+                          <Table
+                            dataSource={detallesDevolucion}
+                            rowKey="id"
+                            size="small"
+                            pagination={false}
+                            scroll={{ x: 700 }}
+                            columns={[
+                              {
+                                title: 'Código',
+                                key: 'codigo',
+                                width: 120,
+                                fixed: 'left',
+                                onCell: () => ({ style: { verticalAlign: 'top' } }),
+                                render: (_: any, record: any) => (
+                                  <div>
+                                    <div>{record.codigo}</div>
+                                    {record.referencia && (
+                                      <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+                                        {record.referencia}
+                                      </div>
+                                    )}
+                                  </div>
+                                ),
+                              },
+                              {
+                                title: 'Artículo',
+                                key: 'articulo',
+                                ellipsis: true,
+                                onCell: () => ({ style: { verticalAlign: 'top' } }),
+                                render: (_: any, record: any) => (
+                                  <div>
+                                    <div>{toTitleCase(record.articulo || '')}</div>
+                                    {record.familia?.nombre && (
+                                      <Tag style={{ fontSize: 11 }}>{toTitleCase(record.familia.nombre)}</Tag>
+                                    )}
+                                  </div>
+                                ),
+                              },
+                              {
+                                title: 'Cant. a devolver',
+                                key: 'cantidad',
+                                width: 110,
+                                align: 'right',
+                                onCell: () => ({ style: { verticalAlign: 'top' } }),
+                                render: (_: any, record: any) => (
+                                  <div>
+                                    <div>{formatNumber(record.cantidad || 0)}</div>
+                                    <div className="paces-text-secondary" style={{ fontSize: 11 }}>
+                                      {record.medida?.nombre || ''}
+                                    </div>
+                                  </div>
+                                ),
+                              },
+                              {
+                                title: 'Costo',
+                                key: 'costo',
+                                width: 110,
+                                align: 'right',
+                                responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
+                                render: (_: any, record: any) => formatNumber(record.costo || 0),
+                              },
+                              {
+                                title: 'Total',
+                                key: 'total',
+                                width: 110,
+                                align: 'right',
+                                render: (_: any, record: any) => (
+                                  <Typography.Text strong>{formatNumber(record.total || 0)}</Typography.Text>
+                                ),
+                              },
+                              {
+                                title: '',
+                                key: 'acciones',
+                                width: 50,
+                                render: (_: any, record: any) => (
+                                  <Tooltip title="Quitar de la lista">
+                                    <Button
+                                      type="text"
+                                      danger
+                                      size="small"
+                                      icon={<DeleteOutlined />}
+                                      onClick={() => setDetallesDevolucion((prev) => prev.filter((d) => d.id !== record.id))}
+                                    />
+                                  </Tooltip>
+                                ),
+                              },
+                            ]}
+                            footer={() => (
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                                <Typography.Text className="paces-text-secondary">Total estimado a devolver:</Typography.Text>
+                                <Typography.Text strong style={{ fontSize: 14 }}>
+                                  {formatCurrency(detallesDevolucion.reduce((s: number, d: any) => s + (d.total || 0), 0))}
+                                </Typography.Text>
+                              </div>
+                            )}
+                          />
+                        </>
+                      )}
                     </>
                   ),
                 },
@@ -1903,6 +2370,9 @@ const EntradaAlmacenFormulario: React.FC = () => {
                           Agregar producto
                         </Button>
                         <Button icon={<BarcodeOutlined />} onClick={() => setScannerModalOpen(true)} />
+                        <Button icon={<PercentageOutlined />} onClick={handleDescuentoGlobal}>
+                          Dto. global
+                        </Button>
                       </Space>
                       <Input.Search
                         placeholder="Buscar detalle..."
@@ -1939,6 +2409,141 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 ),
               },
               {
+                key: 'devoluciones',
+                label: (
+                  <span>
+                    Devoluciones
+                    {detallesDevolucion.length > 0 && (
+                      <Badge count={detallesDevolucion.length}
+                        style={{ marginLeft: 6, backgroundColor: '#556ee6' }} />
+                    )}
+                  </span>
+                ),
+                children: (
+                  <>
+                    {detallesDevolucion.length === 0 ? (
+                      <Empty
+                        image={<RollbackOutlined style={{ fontSize: 32, color: '#bfbfbf' }} />}
+                        imageStyle={{ height: 40 }}
+                        description={
+                          <span>
+                            Sin productos para devolver<br />
+                            <Typography.Text className="paces-text-secondary" style={{ fontSize: 12 }}>
+                              Haga clic en el ícono ↩ de un detalle para agregar productos
+                            </Typography.Text>
+                          </span>
+                        }
+                      />
+                    ) : (
+                      <>
+                        <Alert
+                          type="info"
+                          showIcon
+                          style={{ marginBottom: 12 }}
+                          message="Al guardar este documento, se creará automáticamente una Devolución de Compra (DVC) con los productos listados."
+                        />
+                        <Table
+                          dataSource={detallesDevolucion}
+                          rowKey="id"
+                          size="small"
+                          pagination={false}
+                          scroll={{ x: 700 }}
+                          columns={[
+                            {
+                              title: 'Código',
+                              key: 'codigo',
+                              width: 120,
+                              fixed: 'left',
+                              onCell: () => ({ style: { verticalAlign: 'top' } }),
+                              render: (_: any, record: any) => (
+                                <div>
+                                  <div>{record.codigo}</div>
+                                  {record.referencia && (
+                                    <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+                                      {record.referencia}
+                                    </div>
+                                  )}
+                                </div>
+                              ),
+                            },
+                            {
+                              title: 'Artículo',
+                              key: 'articulo',
+                              ellipsis: true,
+                              onCell: () => ({ style: { verticalAlign: 'top' } }),
+                              render: (_: any, record: any) => (
+                                <div>
+                                  <div>{toTitleCase(record.articulo || '')}</div>
+                                  {record.familia?.nombre && (
+                                    <Tag style={{ fontSize: 11 }}>{toTitleCase(record.familia.nombre)}</Tag>
+                                  )}
+                                </div>
+                              ),
+                            },
+                            {
+                              title: 'Cant. a devolver',
+                              key: 'cantidad',
+                              width: 110,
+                              align: 'right',
+                              onCell: () => ({ style: { verticalAlign: 'top' } }),
+                              render: (_: any, record: any) => (
+                                <div>
+                                  <div>{formatNumber(record.cantidad || 0)}</div>
+                                  <div className="paces-text-secondary" style={{ fontSize: 11 }}>
+                                    {record.medida?.nombre || ''}
+                                  </div>
+                                </div>
+                              ),
+                            },
+                            {
+                              title: 'Costo',
+                              key: 'costo',
+                              width: 110,
+                              align: 'right',
+                              responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
+                              render: (_: any, record: any) => formatNumber(record.costo || 0),
+                            },
+                            {
+                              title: 'Total',
+                              key: 'total',
+                              width: 110,
+                              align: 'right',
+                              render: (_: any, record: any) => (
+                                <Typography.Text strong>{formatNumber(record.total || 0)}</Typography.Text>
+                              ),
+                            },
+                            {
+                              title: '',
+                              key: 'acciones',
+                              width: 50,
+                              render: (_: any, record: any) => (
+                                <Tooltip title="Quitar de la lista">
+                                  <Button
+                                    type="text"
+                                    danger
+                                    size="small"
+                                    icon={<DeleteOutlined />}
+                                    onClick={() => setDetallesDevolucion((prev) => prev.filter((d) => d.id !== record.id))}
+                                  />
+                                </Tooltip>
+                              ),
+                            },
+                          ]}
+                          footer={() => (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                              <Typography.Text className="paces-text-secondary">Total estimado a devolver:</Typography.Text>
+                              <Typography.Text strong style={{ fontSize: 14 }}>
+                                {formatCurrency(detallesDevolucion.reduce((s: number, d: any) => s + (d.total || 0), 0))}
+                              </Typography.Text>
+                            </div>
+                          )}
+                        />
+                      </>
+                    )}
+                  </>
+                ),
+              },
+              {
                 key: 'asientos',
                 label: `Asientos (${data?.asientos?.length || 0})`,
                 children: (
@@ -1958,6 +2563,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
         </div>
       )}
 
+      {renderModalDevolucion()}
+
       {/* Guía paso a paso (solo en modo crear o editar borrador) */}
       {(mode === 'crear' || esBorrador) && (
         <EntradaAlmacenGuide
@@ -1967,11 +2574,13 @@ const EntradaAlmacenFormulario: React.FC = () => {
           ordenCompra={selectedOC}
           almacen={selectedAlmacen}
           detallesCount={detalles.length}
+          ncf={ncfValue}
           conceptoRef={conceptoRef}
           suplidorRef={suplidorRef}
           ordenCompraRef={ordenCompraRef}
           almacenRef={almacenRef}
           agregarFilaRef={agregarFilaRef}
+          ncfRef={ncfRef}
         />
       )}
 

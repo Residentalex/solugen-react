@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Card, Table, Input, Select, Button, Typography, message, Spin, DatePicker, Checkbox,
-  Modal, Space, Row, Col,
+  Modal, Space, Row, Col, Empty,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -860,7 +860,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
             onClick: () => seleccionarEntidad(record),
             style: { cursor: 'pointer' },
           })}
-          locale={{ emptyText: 'Sin resultados' }}
+          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
         />
       </Modal>
 
@@ -893,7 +893,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
             onClick: () => seleccionarCategoria(record),
             style: { cursor: 'pointer' },
           })}
-          locale={{ emptyText: 'Sin resultados' }}
+          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
         />
       </Modal>
     </>

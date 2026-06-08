@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Tooltip, Typography
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Tooltip, Typography, QRCode
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -21,6 +21,7 @@ import LogTable from '../../components/LogTable';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
+import CobrosMinimal from '../../components/CobrosCard/CobrosMinimal';
 
 const { Text } = Typography;
 
@@ -123,9 +124,11 @@ const FacturaPOSDetalle: React.FC = () => {
         <div style={{ fontSize: 13 }}>
           <div>{record.codigo || '-'}</div>
           {record.referencia && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
-              {record.referencia}
-            </div>
+            <Tooltip title={record.referencia}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                {record.referencia}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -156,9 +159,11 @@ const FacturaPOSDetalle: React.FC = () => {
         <div>
           <div>{formatNumber(record.cantidad || 0)}</div>
           {record.medida?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
-              {record.medida.nombre}
-            </div>
+            <Tooltip title={record.medida.nombre}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {record.medida.nombre}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -229,7 +234,11 @@ const FacturaPOSDetalle: React.FC = () => {
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
           {record.impuesto?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
+            <Tooltip title={record.impuesto.nombre}>
+              <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {toTitleCase(record.impuesto.nombre)}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -330,7 +339,7 @@ const FacturaPOSDetalle: React.FC = () => {
             <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
             setImprimiendo(true);
             try {
-              const res = await apiClient.post('/reportes/facturacion/pos', data, {
+              const res = await apiClient.post(`/reportes/facturacion/pos/${sucursalActiva}`, data, {
                 responseType: 'blob',
               });
               const blobUrl = URL.createObjectURL(res.data);
@@ -377,19 +386,7 @@ const FacturaPOSDetalle: React.FC = () => {
               <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handlePostear}>Postear</Button>
             </PermissionGate>
           )}
-          {data.estado === 0 && data.periodo !== 6 && (
-            <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleAplicar}>
-              Aplicar
-            </Button>
-          )}
-          {data.estado !== 3 && (
-            <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
-              Anular
-            </Button>
-          )}
-          {data.estado === 1 && (
-            <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handlePostear}>Postear</Button>
-          )}
+
         </Space>
       </div>
 
@@ -420,8 +417,8 @@ const FacturaPOSDetalle: React.FC = () => {
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Hora">{data.fechaDocumento ? new Date(data.fechaDocumento).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Almacen" span={2}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Cajero">{(data as any).creadoPor?.nombre ? toTitleCase((data as any).creadoPor.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Punto de Venta">-</Descriptions.Item>
+                <Descriptions.Item label="Cajero">{data.cajero ? toTitleCase(data.cajero) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Punto de Venta">{data.caja || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Turno">{data.turno || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
@@ -436,26 +433,6 @@ const FacturaPOSDetalle: React.FC = () => {
                   label: `Detalles (${data.detalles?.length || 0})`,
                   children: (
                     <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-                  ),
-                },
-                {
-                  key: 'cobros',
-                  label: `Cobros (${data.cobros?.length || 0})`,
-                  children: (
-                    data.cobros && data.cobros.length > 0 ? (
-                      <Table dataSource={data.cobros || []} columns={[
-                        { title: 'Efectivo', dataIndex: 'efectivo', key: 'efectivo', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                        { title: 'Cheque', dataIndex: 'cheque', key: 'cheque', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                        { title: 'Transferencia', dataIndex: 'transferencia', key: 'transferencia', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                        { title: 'Tarjeta Crédito', dataIndex: 'tarjetaCredito', key: 'tarjetaCredito', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                        { title: 'Tarjeta Débito', dataIndex: 'tarjetaDebito', key: 'tarjetaDebito', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                        { title: 'Bono', dataIndex: 'bono', key: 'bono', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                        { title: 'Tarjeta Regalo', dataIndex: 'tarjetaRegalo', key: 'tarjetaRegalo', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                        { title: 'Nota Crédito', dataIndex: 'notaCredito', key: 'notaCredito', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                      ]} rowKey={(_record, i) => (i ?? 0).toString()} size="small" pagination={false} scroll={{ x: 900 }} />
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: 24 }} className="paces-text-secondary">Sin cobros registrados</div>
-                    )
                   ),
                 },
                 {
@@ -475,7 +452,14 @@ const FacturaPOSDetalle: React.FC = () => {
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
-            />
+            >
+              <CobrosMinimal cobrosPOS={data.cobros?.[0]} loading={loading} />
+            </TotalesCard>
+            {data?.envioDGII?.codigoQR && (
+              <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                <QRCode value={data.envioDGII.codigoQR} size={140} />
+              </div>
+            )}
           </Col>
         </Row>
       ) : (
@@ -504,8 +488,8 @@ const FacturaPOSDetalle: React.FC = () => {
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Hora">{data.fechaDocumento ? new Date(data.fechaDocumento).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Cajero">{(data as any).creadoPor?.nombre ? toTitleCase((data as any).creadoPor.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Punto de Venta">-</Descriptions.Item>
+                <Descriptions.Item label="Cajero">{data.cajero ? toTitleCase(data.cajero) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Punto de Venta">{data.caja || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Turno">{data.turno || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
@@ -525,26 +509,6 @@ const FacturaPOSDetalle: React.FC = () => {
                 ),
               },
               {
-                key: 'cobros',
-                label: `Cobros (${data.cobros?.length || 0})`,
-                children: (
-                  data.cobros && data.cobros.length > 0 ? (
-                    <Table dataSource={data.cobros || []} columns={[
-                      { title: 'Efectivo', dataIndex: 'efectivo', key: 'efectivo', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                      { title: 'Cheque', dataIndex: 'cheque', key: 'cheque', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                      { title: 'Transferencia', dataIndex: 'transferencia', key: 'transferencia', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                      { title: 'Tarjeta Crédito', dataIndex: 'tarjetaCredito', key: 'tarjetaCredito', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                      { title: 'Tarjeta Débito', dataIndex: 'tarjetaDebito', key: 'tarjetaDebito', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                      { title: 'Bono', dataIndex: 'bono', key: 'bono', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                      { title: 'Tarjeta Regalo', dataIndex: 'tarjetaRegalo', key: 'tarjetaRegalo', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                      { title: 'Nota Crédito', dataIndex: 'notaCredito', key: 'notaCredito', align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
-                    ]} rowKey={(_record, i) => (i ?? 0).toString()} size="small" pagination={false} scroll={{ x: 900 }} />
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: 24 }} className="paces-text-secondary">Sin cobros registrados</div>
-                  )
-                ),
-              },
-              {
                 key: 'historial',
                 label: `Historial (${data.logs?.length || 0})`,
                 children: (
@@ -559,7 +523,14 @@ const FacturaPOSDetalle: React.FC = () => {
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
-            />
+            >
+              <CobrosMinimal cobrosPOS={data.cobros?.[0]} loading={loading} />
+            </TotalesCard>
+            {data?.envioDGII?.codigoQR && (
+              <div style={{ textAlign: 'center' }}>
+                <QRCode value={data.envioDGII.codigoQR} size={140} />
+              </div>
+            )}
           </div>
         </div>
       )}

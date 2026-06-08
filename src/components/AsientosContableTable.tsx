@@ -36,6 +36,13 @@ const columns = [
     align: 'right' as const,
     render: (_: any, r: any) => (esCredito(r.tipoAsiento) ? formatNumber(r.monto) : ''),
   },
+  {
+    title: 'Generado',
+    key: 'generado',
+    width: 90,
+    align: 'center' as const,
+    render: (_: any, r: any) => (r.generado === false ? 'Manual' : 'Auto'),
+  },
 ];
 
 interface AsientosContableTableProps {
@@ -59,7 +66,7 @@ const AsientosContableTable: React.FC<AsientosContableTableProps> = ({ asientos,
       summary={() => (
         <Table.Summary fixed>
           <Table.Summary.Row>
-            <Table.Summary.Cell index={0} colSpan={2}>
+            <Table.Summary.Cell index={0} colSpan={3}>
               <strong>Totales</strong>
             </Table.Summary.Cell>
             <Table.Summary.Cell index={1} align="right">

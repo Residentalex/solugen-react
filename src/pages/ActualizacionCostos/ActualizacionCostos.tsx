@@ -373,7 +373,7 @@ const ActualizacionCostos: React.FC = () => {
           scroll={{ x: 1050 }}
           size="middle"
           locale={{
-            emptyText: <Empty description={emptyDescription} />,
+            emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description={emptyDescription} /></div>,
           }}
           pagination={{
             pageSize,

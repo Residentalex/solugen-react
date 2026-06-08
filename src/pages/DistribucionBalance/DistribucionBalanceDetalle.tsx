@@ -1,22 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Tooltip
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Input, Tooltip, Typography, Empty
 } from 'antd';
 import {
-  ArrowLeftOutlined, LockFilled,
+  ArrowLeftOutlined, LockFilled, ReloadOutlined
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { distribucionBalanceApi } from '../../api/distribucionBalanceApi';
+import { transaccionApi } from '../../api/transaccionApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
+import DocumentosBalanceCard from '../../components/DocumentosBalanceCard';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
-import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
+import ModalAnular from '../../components/ModalAnular/ModalAnular';
+import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
+import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 interface DistribucionBalanceDetalleProps {
@@ -24,17 +29,23 @@ interface DistribucionBalanceDetalleProps {
 }
 
 const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({ tipoEntidad }) => {
+  const { Text } = Typography;
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
   const [data, setData] = useState<any>(null);
+  const [asociadas, setAsociadas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imprimiendo, setImprimiendo] = useState(false);
-  const [detalleSearch, setDetalleSearch] = useState('');
+  const [recalculando, setRecalculando] = useState(false);
+  const [debitosSearch, setDebitosSearch] = useState('');
+  const [creditosSearch, setCreditosSearch] = useState('');
+  const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
+  const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const screens = Grid.useBreakpoint();
 
   const codigoPantalla = tipoEntidad === 'SUP' ? 'FDBASUP' : 'FDBACLI';
@@ -59,6 +70,11 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
         setData(res);
         const data = res as any;
         setPageTitleOverride(`${data.documento.codigo}-${data.noDocumento}`);
+
+        // Cargar transacciones asociadas (débitos/créditos)
+        transaccionApi.obtenerAsociadas(sucursalActiva, parseInt(id), 'Debito', true)
+          .then((asoc) => setAsociadas(asoc || []))
+          .catch(() => setAsociadas([]));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al cargar el documento';
@@ -67,6 +83,31 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  const debitos = (asociadas || []).filter(
+    (t: any) => t.origenCuenta === 0
+  );
+  const creditos = (asociadas || []).filter(
+    (t: any) => t.origenCuenta === 1
+  );
+
+  const debitosFiltrados = useMemo(() => {
+    if (!debitosSearch) return debitos;
+    const q = debitosSearch.toLowerCase();
+    return debitos.filter((d: any) =>
+      (d.documento || '').toLowerCase().includes(q) ||
+      (d.nCF || '').toLowerCase().includes(q)
+    );
+  }, [debitos, debitosSearch]);
+
+  const creditosFiltrados = useMemo(() => {
+    if (!creditosSearch) return creditos;
+    const q = creditosSearch.toLowerCase();
+    return creditos.filter((d: any) =>
+      (d.documento || '').toLowerCase().includes(q) ||
+      (d.nCF || '').toLowerCase().includes(q)
+    );
+  }, [creditos, creditosSearch]);
 
   if (loading) {
     return (
@@ -97,25 +138,23 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
   const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
 
-  // ===== Documentos filtrados por búsqueda =====
-  const documentosFiltrados = detalleSearch
-    ? (data?.transaccionesAsociadas || []).filter((d: any) => {
-        const q = detalleSearch.toLowerCase();
-        return (
-          (d.documento || '').toLowerCase().includes(q) ||
-          (d.nCF || '').toLowerCase().includes(q)
-        );
-      })
-    : (data?.transaccionesAsociadas || []);
-
-  const asociadasColumns = [
+  // ===== Columnas para Débitos y Créditos =====
+  const asociadasColumnsDebito = [
+    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 100, render: (v: string) => formatDate(v) },
     { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
-    { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 140, render: (v: string) => v || '-' },
+    { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 140, render: (v: string) => v || '—' },
     { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Pagado', dataIndex: 'pagado', key: 'pagado', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Saldo', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
-    { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
+    { title: 'Pagado', dataIndex: 'pagado', key: 'pagado', width: 110, align: 'right' as const, render: (v: number) => formatNumber(v) },
+    { title: 'Saldo Pendiente', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (v: number) => <Text strong style={{ color: v > 0 ? '#faad14' : undefined }}>{formatNumber(v)}</Text> },
+    { title: 'Retención', dataIndex: 'retencion', key: 'retencion', width: 110, align: 'right' as const, responsive: ['md' as const], render: (v: number) => formatNumber(v || 0) },
+    { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const, render: (v: number) => <Text strong style={{ color: '#556ee6' }}>{formatNumber(v)}</Text> },
   ];
+
+  const asociadasColumnsCredito = asociadasColumnsDebito.map(col =>
+    col.key === 'monto'
+      ? { ...col, render: (v: number) => <Text strong style={{ color: '#34c38f' }}>{formatNumber(v)}</Text> }
+      : col
+  );
 
   // asientoColumns reemplazado por AsientosContableTable compartido
 
@@ -136,19 +175,36 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
     }
   };
 
-  const handleAnular = async () => {
-    if (!data) return;
-    setSaving(true);
+  const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
+    if (!data || !id) return;
     try {
-      await distribucionBalanceApi.anular(sucursalActiva, data as any);
+      const payload = { ...(data as any), motivo: dataAnular.motivo, fechaAnulacion: dataAnular.fecha };
+      await distribucionBalanceApi.anular(sucursalActiva, payload);
       message.success('Documento anulado exitosamente');
-      const res = await distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setModalAnularOpen(false);
+      const res = await distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
       message.error(msg);
-    } finally {
-      setSaving(false);
+      throw err;
+    }
+  };
+
+  const handleDesaplicarConfirm = async (motivo: string) => {
+    if (!id || !data) return;
+    try {
+      const origen = obtenerNombreEnumSucursal(data.codigoSucursal || String(sucursalActiva));
+      const documento = `${data.documento.codigo}-${data.noDocumento}`;
+      await distribucionBalanceApi.desaplicar(sucursalActiva, documento);
+      message.success('Documento desaplicado exitosamente');
+      setModalDesaplicarOpen(false);
+      const res = await distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al desaplicar');
+      message.error(msg);
+      throw err;
     }
   };
 
@@ -162,6 +218,54 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al postear');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRecalcular = async () => {
+    if (!id) return;
+    setRecalculando(true);
+    try {
+      await distribucionBalanceApi.recalcular(sucursalActiva, parseInt(id));
+      message.success('Documento recalculado correctamente');
+      const res = await distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al recalcular');
+      message.error(msg);
+    } finally {
+      setRecalculando(false);
+    }
+  };
+
+  const handleRevisado = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await distribucionBalanceApi.revisado(sucursalActiva, parseInt(id));
+      message.success('Documento marcado como revisado');
+      const res = await distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al marcar revisado');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReversar = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      await distribucionBalanceApi.reversar(sucursalActiva, parseInt(id));
+      message.success('Documento reversado exitosamente');
+      const res = await distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id));
+      setData(res);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al reversar');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -219,9 +323,21 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
         }}
         onEditar={() => navigate(`/${codigoPantalla}/${id}/editar`)}
         onAplicar={handleAplicar}
-        onAnular={handleAnular}
+        onDesaplicar={async () => setModalDesaplicarOpen(true)}
+        onAnular={async () => setModalAnularOpen(true)}
         onPostear={handlePostear}
+        onRevisado={handleRevisado}
+        onReversar={handleReversar}
         confirmActions={false}
+        extraButtons={
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={handleRecalcular}
+            loading={recalculando}
+          >
+            Recalcular
+          </Button>
+        }
       />
 
       {isLarge ? (
@@ -261,20 +377,12 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
               items={[
                 {
                   key: 'documentos',
-                  label: `Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`,
+                  label: `Documentos (${debitos.length + creditos.length})`,
                   children: (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                        <Input.Search
-                          placeholder="Buscar documento..."
-                          allowClear
-                          style={{ maxWidth: 250 }}
-                          onSearch={(value) => setDetalleSearch(value)}
-                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                        />
-                      </div>
-                      <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
-                    </>
+                    <DocumentosBalanceCard
+                      debitos={debitos}
+                      creditos={creditos}
+                    />
                   ),
                 },
                 {
@@ -300,7 +408,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
             {data.beneficiario && (
               <EntidadCard entidad={data.beneficiario} titulo="Beneficiario" />
             )}
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={false}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
@@ -343,20 +451,12 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
             items={[
               {
                 key: 'documentos',
-                label: `Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`,
+                label: `Documentos (${debitos.length + creditos.length})`,
                 children: (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                      <Input.Search
-                        placeholder="Buscar documento..."
-                        allowClear
-                        style={{ maxWidth: 250 }}
-                        onSearch={(value) => setDetalleSearch(value)}
-                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                      />
-                    </div>
-                    <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
-                  </>
+                  <DocumentosBalanceCard
+                    debitos={debitos}
+                    creditos={creditos}
+                  />
                 ),
               },
               {
@@ -376,8 +476,8 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
               ]}
           />
 
-          <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={true}
+          <div style={{ marginTop: 16 }}>
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={true}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
@@ -385,6 +485,31 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
           </div>
         </div>
       )}
+
+      <ModalDesaplicar
+        open={modalDesaplicarOpen}
+        onClose={() => setModalDesaplicarOpen(false)}
+        onConfirm={handleDesaplicarConfirm}
+        tituloDocumento={`${data?.documento?.codigo || 'DBA'}-${data?.noDocumento || id}`}
+      />
+
+      <ModalAnular
+        open={modalAnularOpen}
+        onClose={() => setModalAnularOpen(false)}
+        onConfirm={handleAnularConfirm}
+        documento={`${data?.documento?.codigo || 'DBA'}-${data?.noDocumento || ''}`}
+        fechaDocumento={data?.fechaDocumento || ''}
+        periodoCerrado={data?.periodo === 6}
+      />
+
+      {/* Modal de Progreso para operaciones de estado */}
+      <ModalProgreso
+        open={saving}
+        titulo={`${data?.documento?.codigo || 'DBA'}-${data?.noDocumento || id}`}
+        eventos={[]}
+        completado={saving ? null : { exito: true }}
+        onClose={() => {}}
+      />
     </div>
   );
 };

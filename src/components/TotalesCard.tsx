@@ -14,11 +14,13 @@ interface TotalesCardProps {
   monedaNombre?: string;
   tasa?: number;
   hideTitle?: boolean;
+  children?: React.ReactNode;
 }
 
 const TotalesCard: React.FC<TotalesCardProps> = ({
   subTotal, descuento, impuestos, total, retenciones, nota,
   alignRight = false, monedaSimbolo, monedaNombre, tasa, hideTitle = false,
+  children,
 }) => (
   <Card
     title={hideTitle ? null : <span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
@@ -70,6 +72,8 @@ const TotalesCard: React.FC<TotalesCardProps> = ({
         </div>
       </>
     )}
+
+    {children}
   </Card>
 );
 

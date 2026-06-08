@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Table,
   Card,
@@ -7,9 +8,6 @@ import {
   Tag,
   Button,
   Typography,
-  Modal,
-  Descriptions,
-  Divider,
   Alert,
   Empty,
 } from 'antd';
@@ -79,6 +77,7 @@ function formatDateParam(d: Date): string {
 }
 
 const Conteos: React.FC = () => {
+  const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const updateToolbar = useUIStore((s) => s.updateToolbar);
@@ -91,8 +90,6 @@ const Conteos: React.FC = () => {
   const [pageSize] = useState(FILAS_POR_PAGINA);
   const [fechaTrigger, setFechaTrigger] = useState(0);
   const [loadingError, setLoadingError] = useState(false);
-  const [detalleItem, setDetalleItem] = useState<ConteoFisicoDTO | null>(null);
-  const [detalleOpen, setDetalleOpen] = useState(false);
 
   const dateParamsRef = useRef({
     desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
@@ -161,8 +158,7 @@ const Conteos: React.FC = () => {
   };
 
   const abrirDetalle = (record: ConteoFisicoDTO) => {
-    setDetalleItem(record);
-    setDetalleOpen(true);
+    navigate(`/FConteos/${record.documento}`, { state: record });
   };
 
   const columns: ColumnsType<ConteoFisicoDTO> = [
@@ -301,7 +297,9 @@ const Conteos: React.FC = () => {
           size="middle"
           locale={{
             emptyText: (
-              <Empty description="No hay conteos registrados" />
+              <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Empty description="No hay conteos registrados" />
+              </div>
             ),
           }}
           onRow={(record) => ({
@@ -319,89 +317,6 @@ const Conteos: React.FC = () => {
           className="paces-border-top paces-list-table"
         />
       </Card>
-
-      <Modal
-        title={`Conteo: ${detalleItem?.documento || ''}`}
-        open={detalleOpen}
-        onCancel={() => setDetalleOpen(false)}
-        footer={null}
-        width={600}
-      >
-        {detalleItem && (
-          <>
-            <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label="Documento">
-                {detalleItem.documento}
-              </Descriptions.Item>
-              <Descriptions.Item label="Fecha">
-                {formatDate(detalleItem.fecha)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Almacén">
-                {toTitleCase(detalleItem.almacen)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Usuario">
-                {toTitleCase(detalleItem.usuario) || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Suplidor">
-                {detalleItem.nombreSuplidor ? toTitleCase(detalleItem.nombreSuplidor) : detalleItem.codigoSuplidor || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Cantidad">
-                {detalleItem.cantidad.toLocaleString('es-DO')}
-              </Descriptions.Item>
-              <Descriptions.Item label="Costo">
-                {formatCurrency(detalleItem.costo)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Nota">
-                {detalleItem.nota || '-'}
-              </Descriptions.Item>
-
-              <Descriptions.Item label="Bloqueado">
-                <Tag color={detalleItem.bloqueado ? 'red' : 'green'}>
-                  {detalleItem.bloqueado ? 'Sí' : 'No'}
-                </Tag>
-              </Descriptions.Item>
-            </Descriptions>
-
-            {detalleItem.detalles?.length > 0 && (
-              <>
-                <Divider>Detalles ({detalleItem.detalles.length})</Divider>
-                <Table
-                  dataSource={detalleItem.detalles}
-                  size="small"
-                  pagination={false}
-                  rowKey="codigo"
-                  scroll={{ x: 500 }}
-                >
-                  <Table.Column
-                    title="Código"
-                    dataIndex="codigo"
-                    width={100}
-                  />
-                  <Table.Column
-                    title="Artículo"
-                    dataIndex="articulo"
-                    ellipsis
-                  />
-                  <Table.Column
-                    title="Cantidad"
-                    dataIndex="cantidad"
-                    align="right"
-                    width={100}
-                    render={(v: number) => v.toLocaleString('es-DO')}
-                  />
-                  <Table.Column
-                    title="Costo"
-                    dataIndex="ultimoCosto"
-                    align="right"
-                    width={120}
-                    render={(v: number) => formatCurrency(v)}
-                  />
-                </Table>
-              </>
-            )}
-          </>
-        )}
-      </Modal>
     </>
   );
 };

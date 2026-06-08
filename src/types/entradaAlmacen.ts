@@ -54,6 +54,8 @@ export interface ConceptoDTO {
   noImpuesto?: boolean;
   noAsientos?: boolean;
   noActualizaCostos?: boolean;
+  replicar?: boolean;
+  sucursalReplica?: CompaniaDTO;
   activo?: boolean;
   moneda?: MonedaDTO;
   almacen?: AlmacenDTO;
@@ -61,6 +63,7 @@ export interface ConceptoDTO {
   tipoIngreso?: number;
   sucursalDestino?: CompaniaDTO;
   conceptoDestino?: string;
+  conceptoReplica?: string;
   entidades?: TipoEntidadDTO[];
   documentos?: DocumentoDTO[];
 }
@@ -81,6 +84,7 @@ export interface AlmacenDTO {
 }
 
 export interface CompaniaDTO extends EntidadDTO {
+  id?: number;
   slogan?: string;
   rnc?: string;
   telefono?: string;
@@ -128,7 +132,7 @@ export interface DetalleEntradaAlmacenDTO {
   idExterno?: number;
   idTransaccionExterna?: number;
   tieneVencimiento?: boolean;
-  familia?: { nombre: string; idExterno: string };
+  familia?: { nombre: string; idExterno: string; aumentoPrecioMaximo?: number };
   categoria?: { nombre: string; codigo: string; idExterno: string };
   medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
   impuesto?: { nombre: string; porcentaje: number; codigo: string; idExterno: string };

@@ -64,7 +64,9 @@ export const salidaAlmacenApi = {
   },
 
   desaplicar: async (sucursal: number, documento: string): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/desaplicar?sucursal=${sucursal}&documento=${documento}`);
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/desaplicar`, null, {
+      params: { origen: sucursal, documento }
+    });
     return data.data;
   },
 
@@ -83,12 +85,12 @@ export const salidaAlmacenApi = {
   },
 
   revisado: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/revisado/${id}`);
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/Revisado/${id}`);
     return data.data;
   },
 
   reversar: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/reversar/${id}`);
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/Reversar/${id}`);
     return data.data;
   },
 

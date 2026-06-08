@@ -35,6 +35,7 @@ export interface TipoDTO {
   codigo: string;
   nombre: string;
   requiereReferencia: boolean;
+  envioDGII?: boolean;
 }
 
 export interface DetalleFacturaClienteDTO {
@@ -96,6 +97,7 @@ export interface FacturaClienteDTO {
   almacen: AlmacenDTO;
   sucursal: EntidadDTO;
   codigoSucursal?: string;
+  tipo?: TipoDTO;
   envioDGII: EnvioDGIIDTO;
   secuenciaNCF: SecuenciaNCFDTO;
   detalles: DetalleFacturaClienteDTO[];
@@ -103,6 +105,8 @@ export interface FacturaClienteDTO {
   logs: LogDTO[];
   cobros?: any[];
   transaccionNCF?: any;
+  transaccionesAsociadas?: any[];
+  notasSeguimiento?: any[];
 }
 
 // ===== FullDTO para formulario (crear/editar) con campos anulables =====
@@ -131,7 +135,13 @@ export interface FacturaClienteFullDTO {
   impuestos: number;
   total: number;
 
+  sucursal?: any;
+
   detalles: DetalleFacturaClienteDTO[];
   asientos?: AsientoContableDTO[];
   logs?: LogDTO[];
+  cobros?: any[];
+  notasSeguimiento?: any[];
+  transaccionesAsociadas?: any[];
+  impuestosFactura?: any[];
 }

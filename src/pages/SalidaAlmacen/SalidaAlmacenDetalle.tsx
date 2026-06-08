@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, Typography, Tooltip, Modal, Alert, App, DatePicker, Dropdown
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, Typography, Tooltip, Modal, Alert, App, DatePicker, Dropdown, Radio
 } from 'antd';
 import dayjs from 'dayjs';
 
@@ -24,6 +24,8 @@ import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import { useAplicar } from '../../hooks/useAplicar';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
+import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
+import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -69,6 +71,8 @@ const SalidaAlmacenDetalle: React.FC = () => {
   const [documentosRelacionados, setDocumentosRelacionados] = React.useState<DocumentoRelacionDTO[]>([]);
   const [verificados, setVerificados] = useState<Set<number>>(new Set());
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
+  const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
+  const [modalAnularOpen, setModalAnularOpen] = useState(false);
 
   const { message, modal } = App.useApp();
   const operacion = useAplicar();
@@ -223,9 +227,11 @@ const SalidaAlmacenDetalle: React.FC = () => {
               ) : null}
             </div>
             {record.referencia && (
-              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
-                {record.referencia}
-              </div>
+              <Tooltip title={record.referencia}>
+                <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                  {record.referencia}
+                </div>
+              </Tooltip>
             )}
           </div>
         );
@@ -257,9 +263,11 @@ const SalidaAlmacenDetalle: React.FC = () => {
         <div>
           <div>{formatNumber(record.cantidad || 0)}</div>
           {record.medida?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
-              {record.medida.nombre}
-            </div>
+            <Tooltip title={record.medida.nombre}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {record.medida.nombre}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -315,7 +323,11 @@ const SalidaAlmacenDetalle: React.FC = () => {
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
           {record.impuesto?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
+            <Tooltip title={record.impuesto.nombre}>
+              <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {toTitleCase(record.impuesto.nombre)}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -344,8 +356,8 @@ const SalidaAlmacenDetalle: React.FC = () => {
   const handleAplicar = () => {
     if (!id) return;
 
-    // Verificación temprana del scanner
-    if (tieneScan === false) {
+    // Verificación temprana del scanner (solo obligatorio si no genera documento derivado)
+    if (tieneScan === false && !data?.concepto?.docAGenerar) {
       message.warning('Debe escanear el documento antes de aplicar.');
       return;
     }
@@ -354,35 +366,35 @@ const SalidaAlmacenDetalle: React.FC = () => {
     operacion.ejecutar(`/SAP/${sucursalActiva}/aplicar/${id}`, handleRefresh);
   };
 
-  const handleDesaplicar = async () => {
+  const handleDesaplicarConfirm = async (motivo: string) => {
     if (!id || !data) return;
-    setSaving(true);
     try {
       const documento = `${(data as any).documento.codigo || ''}-${(data as any).noDocumento || ''}`;
       await salidaAlmacenApi.desaplicar(sucursalActiva, documento);
       message.success('Documento desaplicado exitosamente');
+      setModalDesaplicarOpen(false);
       handleRefresh();
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al desaplicar');
       message.error(msg);
-    } finally {
-      setSaving(false);
+      throw err; // Re-lanzar para que el modal no se cierre en error
     }
   };
 
-  const handleAnular = async () => {
-    if (!data) return;
-    setSaving(true);
+  const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
+    if (!data || !id) return;
     try {
-      await salidaAlmacenApi.anular(sucursalActiva, data as any);
+      // Incluir motivo en el payload de anulación
+      const payload = { ...(data as any), motivo: dataAnular.motivo, fechaAnulacion: dataAnular.fecha };
+      await salidaAlmacenApi.anular(sucursalActiva, payload);
       message.success('Documento anulado exitosamente');
-      const res = await salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      setModalAnularOpen(false);
+      const res = await salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
       message.error(msg);
-    } finally {
-      setSaving(false);
+      throw err; // Re-lanzar para que el modal no se cierre en error
     }
   };
 
@@ -428,6 +440,59 @@ const SalidaAlmacenDetalle: React.FC = () => {
     }
   };
 
+  const imprimirConFormato = async (formato: string) => {
+    setImprimiendo(true);
+    try {
+      const res = await apiClient.post(`/reportes/inventario/salida?formato=${formato}`, data, {
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(res.data);
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = blobUrl;
+      document.body.appendChild(iframe);
+      setTimeout(() => {
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+          URL.revokeObjectURL(blobUrl);
+        }, 30000);
+      }, 2000);
+    } catch {
+      message.error('Error al generar el PDF');
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
+  const handleImprimir = async () => {
+    if (data?.concepto?.sucursalDestino) {
+      imprimirConFormato('general');
+      return;
+    }
+
+    let formatoSeleccionado = 'consumo';
+
+    modal.confirm({
+      title: 'Formato de impresión',
+      icon: <FileTextOutlined />,
+      content: (
+        <Radio.Group
+          defaultValue="consumo"
+          onChange={(e) => { formatoSeleccionado = e.target.value; }}
+        >
+          <Radio value="consumo" style={{ display: 'block', marginBottom: 8 }}>
+            Salida por Consumo
+          </Radio>
+          <Radio value="decomiso" style={{ display: 'block' }}>
+            Salida por Decomiso
+          </Radio>
+        </Radio.Group>
+      ),
+      onOk: () => imprimirConFormato(formatoSeleccionado),
+    });
+  };
+
   return (
     <div>
       {loadingError && (
@@ -452,36 +517,14 @@ const SalidaAlmacenDetalle: React.FC = () => {
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
         onVolver={() => navigate('/FSAP')}
-        onImprimir={async () => {
-          setImprimiendo(true);
-          try {
-            const res = await apiClient.post(`/reportes/inventario/salida`, data, {
-              responseType: 'blob',
-            });
-            const blobUrl = URL.createObjectURL(res.data);
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = blobUrl;
-            document.body.appendChild(iframe);
-            setTimeout(() => {
-              iframe.contentWindow?.print();
-              setTimeout(() => {
-                document.body.removeChild(iframe);
-                URL.revokeObjectURL(blobUrl);
-              }, 30000);
-            }, 2000);
-          } catch {
-            message.error('Error al generar el PDF');
-          } finally {
-            setImprimiendo(false);
-          }
-        }}
+        onImprimir={handleImprimir}
         onEditar={() => navigate(`/FSAP/${id}/editar`)}
+        confirmActions={false}
         onAplicar={handleAplicar}
-        onAnular={handleAnular}
+        onAnular={async () => setModalAnularOpen(true)}
         onPostear={handlePostear}
         onRevisado={handleRevisado}
-        onDesaplicar={handleDesaplicar}
+        onDesaplicar={async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
       />
 
@@ -523,12 +566,10 @@ const SalidaAlmacenDetalle: React.FC = () => {
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Fecha Doc.:">{formatDate(data.fechaDocumento)}</Descriptions.Item>
                 <Descriptions.Item label="Concepto:">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="NCF:">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Fecha Entrega:">{data.fechaRecibo ? formatDate(data.fechaRecibo) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Entidad:">{data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : (data.entidad?.nombre ? toTitleCase(data.entidad.nombre) : '-')}</Descriptions.Item>
                 <Descriptions.Item label="Referencia:">{data.referencia || '-'}</Descriptions.Item>
-                <Descriptions.Item label=" "><span /></Descriptions.Item>
-                <Descriptions.Item label="Almacén:" span={2}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha Entrega:">{data.fechaRecibo ? formatDate(data.fechaRecibo) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Entidad:" span={2}>{data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : (data.entidad?.nombre ? toTitleCase(data.entidad.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Almacén:" span={3}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Nota:" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
@@ -623,10 +664,9 @@ const SalidaAlmacenDetalle: React.FC = () => {
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Fecha Doc.:">{formatDate(data.fechaDocumento)}</Descriptions.Item>
                 <Descriptions.Item label="Concepto:">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="NCF:">{data.ncf || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Referencia:">{data.referencia || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha Entrega:">{data.fechaRecibo ? formatDate(data.fechaRecibo) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Entidad:">{data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : (data.entidad?.nombre ? toTitleCase(data.entidad.nombre) : '-')}</Descriptions.Item>
-                <Descriptions.Item label="Referencia:">{data.referencia || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Almacén:">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Nota:"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
@@ -685,6 +725,25 @@ const SalidaAlmacenDetalle: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal Desaplicar */}
+      <ModalDesaplicar
+        open={modalDesaplicarOpen}
+        onClose={() => setModalDesaplicarOpen(false)}
+        onConfirm={handleDesaplicarConfirm}
+        tituloDocumento={data ? `${data.documento.codigo}-${data.noDocumento}` : undefined}
+        loading={saving}
+      />
+
+      {/* Modal Anular */}
+      <ModalAnular
+        open={modalAnularOpen}
+        onClose={() => setModalAnularOpen(false)}
+        onConfirm={handleAnularConfirm}
+        documento={data ? `${data.documento.codigo}-${data.noDocumento}` : ''}
+        fechaDocumento={data?.fechaDocumento || ''}
+        periodoCerrado={data?.periodo === 6}
+      />
 
       {/* Modal de Fecha de Vencimiento */}
       <Modal

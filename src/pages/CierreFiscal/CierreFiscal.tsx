@@ -199,7 +199,7 @@ const CierreFiscal: React.FC = () => {
             rowKey="key"
             pagination={false}
             size="middle"
-            locale={{ emptyText: <Empty description="No hay datos de períodos" /> }}
+            locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay datos de períodos" /></div> }}
           />
         </Card>
       </Spin>

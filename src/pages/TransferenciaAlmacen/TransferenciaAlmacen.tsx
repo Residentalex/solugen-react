@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography } from 'antd';
+import { Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
@@ -10,11 +10,14 @@ import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { MovimientoVistaDTO } from '../../types/transferenciaAlmacen';
+import { useAuthStore } from '../../stores/authStore';
 
 const { Text } = Typography;
 
 const TransferenciaAlmacen: React.FC = () => {
   const navigate = useNavigate();
+
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<MovimientoVistaDTO>({
     modulo: 'FTRP',
@@ -26,6 +29,24 @@ const TransferenciaAlmacen: React.FC = () => {
     tituloReporte: 'TRP',
     tituloError: 'Error al cargar transferencias de almacén',
   });
+
+  const handleClonar = async () => {
+    if (!state.selectedRow) return;
+    try {
+      const data = await transferenciaAlmacenApi.obtenerPorId(sucursalActiva, state.selectedRow.id);
+      const cloneData = {
+        ...data,
+        id: 0,
+        noDocumento: '',
+        estado: 0,
+        asientos: [],
+        logs: [],
+      };
+      navigate('/FTRP/nuevo', { state: { cloneData } });
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al obtener datos para clonar');
+    }
+  };
 
   const columns: ColumnsType<MovimientoVistaDTO> = [
     {
@@ -74,16 +95,6 @@ const TransferenciaAlmacen: React.FC = () => {
       render: (alm: string) => <Text>{toTitleCase(alm) || ''}</Text>,
     },
     {
-      title: 'Total',
-      dataIndex: 'total',
-      key: 'total',
-      width: 160,
-      align: 'right',
-      render: (total: number) => (
-        <Text strong className="paces-text-total">{formatCurrency(total)}</Text>
-      ),
-    },
-    {
       title: 'Estado',
       dataIndex: 'estado',
       key: 'estado',
@@ -103,7 +114,7 @@ const TransferenciaAlmacen: React.FC = () => {
       total={state.total}
       page={state.page}
       pageSize={state.pageSize}
-      scrollX={1400}
+      scrollX={1200}
       selectedRowId={state.selectedRow?.id}
       loadingError={state.loadingError}
       errorMessage="Error al cargar transferencias de almacén"
@@ -127,6 +138,9 @@ const TransferenciaAlmacen: React.FC = () => {
         showEditar: true,
         editarDisabled: !puedeEditar,
         onEditar: () => navigate(`/FTRP/${state.selectedRow!.id}/editar`),
+        showClonar: true,
+        clonarDisabled: !state.selectedRow,
+        onClonar: handleClonar,
         showImprimir: true,
         imprimirDisabled: !state.selectedRow,
         onImprimir: actions.handleImprimir,

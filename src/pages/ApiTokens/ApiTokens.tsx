@@ -202,7 +202,7 @@ const ApiTokens: React.FC = () => {
             showSizeChanger: false,
             showTotal: (t) => `${t} registros`,
           }}
-          locale={{ emptyText: <Empty description="No hay tokens registrados" /> }}
+          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay tokens registrados" /></div> }}
         />
       </Card>
 

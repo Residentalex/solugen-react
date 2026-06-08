@@ -1,6 +1,6 @@
 import React from 'react';
 import { Input, Button } from 'antd';
-import { SearchOutlined, ReloadOutlined, PlusOutlined, EditOutlined, PrinterOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined, EditOutlined, CopyOutlined, PrinterOutlined } from '@ant-design/icons';
 import FiltrosDocumento from './FiltrosDocumento/FiltrosDocumento';
 import PageSizeSelect from './PageSizeSelect';
 import PermissionGate from './PermissionGate';
@@ -27,6 +27,10 @@ interface DocumentListadoToolbarProps {
   editarDisabled?: boolean;
   onEditar?: () => void;
 
+  showClonar?: boolean;
+  clonarDisabled?: boolean;
+  onClonar?: () => void;
+
   showImprimir?: boolean;
   imprimirDisabled?: boolean;
   onImprimir?: () => void;
@@ -52,6 +56,9 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
   showEditar,
   editarDisabled,
   onEditar,
+  showClonar,
+  clonarDisabled,
+  onClonar,
   showImprimir,
   imprimirDisabled,
   onImprimir,
@@ -103,6 +110,11 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
           <Button icon={<EditOutlined />} disabled={editarDisabled} onClick={onEditar}>
             Editar
           </Button>
+        </PermissionGate>
+      )}
+      {showClonar && onClonar && (
+        <PermissionGate accion="CREAR">
+          <Button icon={<CopyOutlined />} disabled={clonarDisabled} onClick={onClonar} />
         </PermissionGate>
       )}
       {showImprimir && onImprimir && (

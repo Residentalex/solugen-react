@@ -89,6 +89,20 @@ export const notaCreditoApi = {
     return data.data;
   },
 
+  recalcular: async (sucursal: number, id: number): Promise<any> => {
+    const { data } = await apiClient.put(`/Transaccion/${sucursal}/recalcularPagos/${id}`);
+    return data;
+  },
+
+  ajustarAsociadaInventario: async (
+    sucursal: number, transaccionID: number, asociadaID: number, monto: number, perdida: number
+  ): Promise<any> => {
+    const { data } = await apiClient.put(
+      `/Transaccion/${sucursal}/ajustarAsociadaINV/${transaccionID}/${asociadaID}/${monto}/${perdida}`
+    );
+    return data;
+  },
+
   verificarScan: async (sucursal: number, id: number): Promise<{ existe: boolean }> => {
     const { data } = await apiClient.get<ApiResponse<{ existe: boolean }>>(`${BASE}/${sucursal}/${id}/scanner/verificar`);
     return data.data;
@@ -107,5 +121,16 @@ export const notaCreditoApi = {
 
   reversar: async (sucursal: number, id: number): Promise<void> => {
     await apiClient.post(`${BASE}/${sucursal}/${id}/Reversar`);
+  },
+
+  verificarNCF: async (sucursal: number, ncf: string, idEntidad: string): Promise<boolean> => {
+    try {
+      const { data } = await apiClient.get(`/Transaccion/${sucursal}/ncf`, {
+        params: { ncf, idEntidad }
+      });
+      return data?.data != null;
+    } catch {
+      return true;
+    }
   },
 };

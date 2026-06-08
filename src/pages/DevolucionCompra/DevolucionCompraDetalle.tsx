@@ -16,15 +16,19 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
+import { transaccionApi } from '../../api/transaccionApi';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 
 import { useAplicar } from '../../hooks/useAplicar';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
+import ModalAnular from '../../components/ModalAnular/ModalAnular';
+import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
+import DistribucionPagosCard from '../../components/DistribucionPagosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
@@ -49,6 +53,11 @@ const DevolucionCompraDetalle: React.FC = () => {
   const [scannerLoading, setScannerLoading] = useState(false);
   const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionDTO[]>([]);
   const screens = Grid.useBreakpoint();
+
+  const [modalAnularOpen, setModalAnularOpen] = useState(false);
+  const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
+  const [pagosAsociados, setPagosAsociados] = useState<any[]>([]);
+  const [loadingPagos, setLoadingPagos] = useState(false);
 
   const { message: messageApi } = App.useApp();
   const operacion = useAplicar();
@@ -88,13 +97,35 @@ const DevolucionCompraDetalle: React.FC = () => {
   // Cargar documentos relacionados desde DOCUMENTOS_RELACION
   useEffect(() => {
     if (!data?.id) return;
-    documentoRelacionApi.obtenerPorTransaccion(data.id)
+    documentoRelacionApi.obtenerPorTransaccion(data.id, sucursalActiva)
       .then(rel => setDocumentosRelacionados(rel || []))
       .catch(() => {
         setDocumentosRelacionados([]);
         messageApi.warning('No se pudieron cargar los documentos relacionados');
       });
-  }, [data?.id]);
+  }, [data?.id, sucursalActiva]);
+
+  // Cargar pagos asociados
+  useEffect(() => {
+    if (!data?.id) return;
+    setLoadingPagos(true);
+    transaccionApi.obtenerAsociadasInventario(sucursalActiva, data.id)
+      .then((transacciones) => setPagosAsociados(transacciones || []))
+      .catch(() => {
+        setPagosAsociados([]);
+        messageApi.warning('No se pudieron cargar los pagos asociados');
+      })
+      .finally(() => setLoadingPagos(false));
+  }, [data?.id, sucursalActiva]);
+
+  const handleDocumentoPagoClick = (doc: any) => {
+    const tipo = (doc.tipoDocumento || '').toUpperCase();
+    if (tipo === 'ND' && doc.id) {
+      navigate(`/FNDSUP/${doc.id}`);
+    } else if (doc.id) {
+      navigate(`/FTRN/${doc.id}`);
+    }
+  };
 
   function extraerMensajeError(err: any, fallback: string): string {
     const data = err?.response?.data;
@@ -125,7 +156,7 @@ const DevolucionCompraDetalle: React.FC = () => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Cargar documentos relacionados desde DOCUMENTOS_RELACION
-        documentoRelacionApi.obtenerPorTransaccion(parseInt(id))
+        documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva)
           .then(rel => setDocumentosRelacionados(rel || []))
           .catch(() => setDocumentosRelacionados([]));
       })
@@ -164,6 +195,7 @@ const DevolucionCompraDetalle: React.FC = () => {
   const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
+  const tienePagos = pagosAsociados.length > 0;
 
   // ===== Detalles filtrados por búsqueda =====
   const detallesFiltrados = detalleSearch
@@ -188,9 +220,11 @@ const DevolucionCompraDetalle: React.FC = () => {
         <div style={{ fontSize: 13 }}>
           <div>{record.codigo || '-'}</div>
           {record.referencia && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
-              {record.referencia}
-            </div>
+            <Tooltip title={record.referencia}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                {record.referencia}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -221,9 +255,11 @@ const DevolucionCompraDetalle: React.FC = () => {
         <div>
           <div>{formatNumber(record.cantidad || 0)}</div>
           {record.medida?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
-              {record.medida.nombre}
-            </div>
+            <Tooltip title={record.medida.nombre}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {record.medida.nombre}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -294,7 +330,11 @@ const DevolucionCompraDetalle: React.FC = () => {
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
           {record.impuesto?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
+            <Tooltip title={record.impuesto.nombre}>
+              <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {toTitleCase(record.impuesto.nombre)}
+              </div>
+            </Tooltip>
           )}
         </div>
       ),
@@ -332,13 +372,14 @@ const DevolucionCompraDetalle: React.FC = () => {
     operacion.ejecutar(`/DVC/${sucursalActiva}/aplicar/${id}`, handleRefresh);
   };
 
-  const handleDesaplicar = async () => {
+  const handleDesaplicarConfirm = async (motivo: string) => {
     if (!id || !data) return;
     setSaving(true);
     try {
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
       await devolucionCompraApi.desaplicar(sucursalActiva, documento);
       messageApi.success('Documento desaplicado exitosamente');
+      setModalDesaplicarOpen(false);
       const res = await devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
     } catch (err: any) {
@@ -349,12 +390,18 @@ const DevolucionCompraDetalle: React.FC = () => {
     }
   };
 
-  const handleAnular = async () => {
+  const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
     if (!data) return;
     setSaving(true);
     try {
-      await devolucionCompraApi.anular(sucursalActiva, data as any);
+      const dto = {
+        ...data,
+        fechaDocumento: dataAnular.fecha,
+        nota: `${data.nota || ''} Documento anulado por: ${dataAnular.motivo}.`,
+      };
+      await devolucionCompraApi.anular(sucursalActiva, dto);
       messageApi.success('Documento anulado exitosamente');
+      setModalAnularOpen(false);
       const res = await devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
@@ -367,6 +414,15 @@ const DevolucionCompraDetalle: React.FC = () => {
 
   const handlePostear = () => {
     if (!data) return;
+    if (data.concepto?.noAsientos) {
+      messageApi.info('El concepto no genera asientos contables.');
+      return;
+    }
+    // Seguridad: si no está en estado Aplicado (Validado=1), aplicar primero (como en desktop)
+    if (data.estado !== 1) {
+      messageApi.info('Debe aplicar el documento antes de postear.');
+      return;
+    }
     setOperacionTitulo(`Posteando DVC-${data?.noDocumento || id}`);
     operacion.ejecutar(
       `/DVC/${sucursalActiva}/postear`,
@@ -464,10 +520,10 @@ const DevolucionCompraDetalle: React.FC = () => {
         }}
         onEditar={() => navigate(`/FDVC/${id}/editar`)}
         onAplicar={handleAplicar}
-        onAnular={handleAnular}
-        onPostear={handlePostear}
+        onAnular={tienePagos ? undefined : async () => setModalAnularOpen(true)}
+        onPostear={data.concepto?.noAsientos ? undefined : handlePostear}
         onRevisado={handleRevisar}
-        onDesaplicar={handleDesaplicar}
+        onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
       />
 
@@ -561,6 +617,13 @@ const DevolucionCompraDetalle: React.FC = () => {
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
+            />
+            <DistribucionPagosCard
+              documentos={pagosAsociados}
+              totalDocumento={data.total}
+              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+              loading={loadingPagos}
+              onDocumentoClick={handleDocumentoPagoClick}
             />
             <DocumentosRelacionadosCard
               documentos={documentosRelacionados}
@@ -656,6 +719,13 @@ const DevolucionCompraDetalle: React.FC = () => {
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
             />
+            <DistribucionPagosCard
+              documentos={pagosAsociados}
+              totalDocumento={data.total}
+              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
+              loading={loadingPagos}
+              onDocumentoClick={handleDocumentoPagoClick}
+            />
             <DocumentosRelacionadosCard
               documentos={documentosRelacionados}
               currentId={data?.id}
@@ -663,6 +733,24 @@ const DevolucionCompraDetalle: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de Anular */}
+      <ModalAnular
+        open={modalAnularOpen}
+        onClose={() => setModalAnularOpen(false)}
+        onConfirm={handleAnularConfirm}
+        documento={`${data.documento.codigo}-${data.noDocumento}`}
+        fechaDocumento={data.fechaDocumento}
+        periodoCerrado={data.periodo === 6}
+      />
+
+      {/* Modal de Desaplicar */}
+      <ModalDesaplicar
+        open={modalDesaplicarOpen}
+        onClose={() => setModalDesaplicarOpen(false)}
+        onConfirm={handleDesaplicarConfirm}
+        tituloDocumento={`${data.documento.codigo}-${data.noDocumento}`}
+      />
 
       {/* Modal de Progreso para Aplicar/Postear */}
       <ModalProgreso

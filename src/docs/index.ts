@@ -26,6 +26,8 @@ const DOCS_INDEX: DocModulo[] = [
     icon: React.createElement(InboxOutlined),
     docs: [
       { key: 'inventario/entrada-almacen', label: 'Entrada de Almacén (ENP)' },
+      { key: 'inventario/salida-almacen', label: 'Salida de Almacén (SAP)' },
+      { key: 'inventario/transferencia-almacen', label: 'Transferencia de Almacén (TRP)' },
     ],
   },
   {
@@ -44,7 +46,11 @@ const DOCS_INDEX: DocModulo[] = [
     key: 'contabilidad',
     label: 'Contabilidad',
     icon: React.createElement(AuditOutlined),
-    docs: [],
+    docs: [
+      { key: 'contabilidad/note-credito', label: 'Nota de Crédito (NC)' },
+      { key: 'contabilidad/note-debito', label: 'Nota de Débito (ND)' },
+      { key: 'contabilidad/distribucion-balance', label: 'Distribución de Balance (DBA)' },
+    ],
   },
   {
     key: 'administracion',

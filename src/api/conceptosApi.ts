@@ -80,4 +80,9 @@ export const conceptosApi = {
     const { data } = await apiClient.put<ApiResponse<ConceptoDTO>>(`${CONCEPTOS_BASE}/${sucursal}/${codigo}`, dto);
     return data.data;
   },
+
+  crearConcepto: async (sucursal: number, dto: ConceptoDTO): Promise<ConceptoDTO> => {
+    const { data } = await apiClient.post<ApiResponse<ConceptoDTO>>(`${CONCEPTOS_BASE}/${sucursal}`, dto);
+    return data.data;
+  },
 };

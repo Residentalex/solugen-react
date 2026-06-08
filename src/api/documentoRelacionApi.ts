@@ -16,9 +16,11 @@ export interface DocumentoRelacionDTO {
 }
 
 export const documentoRelacionApi = {
-  obtenerPorTransaccion: async (idTransaccion: number): Promise<DocumentoRelacionDTO[]> => {
+  obtenerPorTransaccion: async (idTransaccion: number, sucursal?: number): Promise<DocumentoRelacionDTO[]> => {
+    const params = sucursal !== undefined ? { sucursal } : {};
     const { data } = await apiClient.get<ApiResponse<DocumentoRelacionDTO[]>>(
-      `/DocumentoRelacion/${idTransaccion}`
+      `/DocumentoRelacion/${idTransaccion}`,
+      { params }
     );
     return data.data;
   },

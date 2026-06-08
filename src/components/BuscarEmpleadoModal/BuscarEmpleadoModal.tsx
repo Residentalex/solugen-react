@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Modal, Input, Table, Button, Typography } from 'antd';
+import { Modal, Input, Table, Button, Typography, Empty } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { empleadoApi, type EmpleadoDTO } from '../../api/empleadoApi';
@@ -78,7 +78,7 @@ const BuscarEmpleadoModal: React.FC<Props> = ({ open, onClose, onSelect }) => {
         size="small"
         pagination={false}
         scroll={{ y: 350 }}
-        locale={{ emptyText: 'No hay empleados' }}
+        locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay empleados" /></div> }}
         onRow={(record) => ({
           style: { cursor: 'pointer' },
           onClick: () => {

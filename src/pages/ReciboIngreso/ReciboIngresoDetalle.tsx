@@ -6,18 +6,21 @@ import {
 import {
   LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
-  FileTextOutlined, FileSearchOutlined,
+  FileTextOutlined, FileSearchOutlined, WarningFilled,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { reciboIngresoApi } from '../../api/reciboIngresoApi';
+import { transaccionApi } from '../../api/transaccionApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import LogTable from '../../components/LogTable';
-import AsientosContableTable from '../../components/AsientosContableTable';
+import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import { useAplicar } from '../../hooks/useAplicar';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
+import ModalAnular from '../../components/ModalAnular/ModalAnular';
+import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -25,6 +28,10 @@ import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosC
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
+
+// ===== Helpers para tipo de asiento =====
+function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
+function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
 
 const ReciboIngresoDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -43,6 +50,9 @@ const ReciboIngresoDetalle: React.FC = () => {
   const [scannerUrl, setScannerUrl] = useState<string | null>(null);
   const [scannerLoading, setScannerLoading] = useState(false);
   const [documentosRelacionados, setDocumentosRelacionados] = React.useState<DocumentoRelacionDTO[]>([]);
+  const [modalAnularOpen, setModalAnularOpen] = useState(false);
+  const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
+  const [pagosAsociados, setPagosAsociados] = useState<any[]>([]);
   const screens = Grid.useBreakpoint();
 
   const { message } = App.useApp();
@@ -71,8 +81,12 @@ const ReciboIngresoDetalle: React.FC = () => {
         reciboIngresoApi.verificarScan(sucursalActiva, parseInt(id))
           .then((scanRes) => setTieneScan(scanRes.existe))
           .catch(() => setTieneScan(false));
+        // Cargar pagos asociados
+        transaccionApi.obtenerAsociadasInventario(sucursalActiva, parseInt(id))
+          .then((transacciones) => setPagosAsociados(transacciones || []))
+          .catch(() => setPagosAsociados([]));
         // Cargar documentos relacionados desde DOCUMENTOS_RELACION
-        documentoRelacionApi.obtenerPorTransaccion(parseInt(id))
+        documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva)
           .then(rel => setDocumentosRelacionados(rel || []))
           .catch(() => setDocumentosRelacionados([]));
       })
@@ -100,6 +114,10 @@ const ReciboIngresoDetalle: React.FC = () => {
         reciboIngresoApi.verificarScan(sucursalActiva, parseInt(id))
           .then((scanRes) => setTieneScan(scanRes.existe))
           .catch(() => setTieneScan(false));
+        // Cargar pagos asociados
+        transaccionApi.obtenerAsociadasInventario(sucursalActiva, parseInt(id))
+          .then((transacciones) => setPagosAsociados(transacciones || []))
+          .catch(() => setPagosAsociados([]));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
@@ -112,13 +130,13 @@ const ReciboIngresoDetalle: React.FC = () => {
   // Cargar documentos relacionados desde DOCUMENTOS_RELACION
   React.useEffect(() => {
     if (!data?.id) return;
-    documentoRelacionApi.obtenerPorTransaccion(data.id)
+    documentoRelacionApi.obtenerPorTransaccion(data.id, sucursalActiva)
       .then(rel => setDocumentosRelacionados(rel || []))
       .catch(() => {
         setDocumentosRelacionados([]);
         message.warning('No se pudieron cargar los documentos relacionados');
       });
-  }, [data?.id]);
+  }, [data?.id, sucursalActiva]);
 
   if (loading && !data) {
     return (
@@ -162,7 +180,7 @@ const ReciboIngresoDetalle: React.FC = () => {
   // asientoColumns reemplazado por AsientosContableTable compartido
 
   // ===== Handlers de acciones de estado =====
-  const handleDesaplicar = async () => {
+  const handleDesaplicarConfirm = async (_motivo: string) => {
     if (!id || !data) return;
     setSaving(true);
     try {
@@ -170,6 +188,7 @@ const ReciboIngresoDetalle: React.FC = () => {
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
       await reciboIngresoApi.desaplicar(sucursalActiva, documento);
       message.success('Documento desaplicado exitosamente');
+      setModalDesaplicarOpen(false);
       handleRefresh();
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al desaplicar');
@@ -188,6 +207,16 @@ const ReciboIngresoDetalle: React.FC = () => {
       return;
     }
 
+    // Validar FechaPermitida del documento
+    if (data?.documento?.fechaPermitida === 'MenorIgualFechaDia') {
+      const hoy = new Date();
+      const fechaDoc = new Date(data.fechaDocumento);
+      if (fechaDoc > hoy) {
+        message.error('La fecha del documento no puede ser mayor a la fecha del día.');
+        return;
+      }
+    }
+
     setOperacionTitulo(`Aplicando FRI-${data?.noDocumento || id}`);
     operacion.ejecutar(
       `/FRI/${sucursalActiva}/aplicar/${id}`,
@@ -195,12 +224,18 @@ const ReciboIngresoDetalle: React.FC = () => {
     );
   };
 
-  const handleAnular = async () => {
+  const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
     if (!data) return;
     setSaving(true);
     try {
-      await reciboIngresoApi.anular(sucursalActiva, data as any);
+      const dto = {
+        ...data,
+        fechaDocumento: dataAnular.fecha,
+        nota: `${data.nota || ''} Documento anulado por: ${dataAnular.motivo}.`,
+      };
+      await reciboIngresoApi.anular(sucursalActiva, dto);
       message.success('Documento anulado exitosamente');
+      setModalAnularOpen(false);
       const res = await reciboIngresoApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
     } catch (err: any) {
@@ -213,9 +248,17 @@ const ReciboIngresoDetalle: React.FC = () => {
 
   const handlePostear = () => {
     if (!data) return;
-    setOperacionTitulo(`Posteando FRI-${data?.noDocumento || id}`);
+    if (data.concepto?.noAsientos) {
+      message.info('El concepto no genera asientos contables.');
+      return;
+    }
+    if (data.estado !== 1) {
+      message.info('Debe aplicar el documento antes de postear.');
+      return;
+    }
+    setOperacionTitulo(`Posteando RI-${data?.noDocumento || id}`);
     operacion.ejecutar(
-      `/FRI/${sucursalActiva}/postear`,
+      `/RI/${sucursalActiva}/postear`,
       handleRefresh,
       data
     );
@@ -267,6 +310,15 @@ const ReciboIngresoDetalle: React.FC = () => {
       setScannerLoading(false);
     }
   };
+
+  const tienePagos = pagosAsociados.length > 0;
+
+  // RI8 - Verificar si los asientos están cuadrados
+  const asientosNoCuadrados = (data?.asientos?.length || 0) > 0 ? (() => {
+    const totalDeb = (data?.asientos || []).reduce((s: number, r: any) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
+    const totalCred = (data?.asientos || []).reduce((s: number, r: any) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
+    return Math.abs(totalDeb - totalCred) > 0.01;
+  })() : false;
 
   function extraerMensajeError(err: any, fallback: string): string {
     const data = err?.response?.data;
@@ -335,10 +387,10 @@ const ReciboIngresoDetalle: React.FC = () => {
         }}
         onEditar={() => navigate(`/FRI/${id}/editar`)}
         onAplicar={handleAplicar}
-        onAnular={handleAnular}
-        onPostear={handlePostear}
+        onAnular={tienePagos ? undefined : async () => setModalAnularOpen(true)}
+        onPostear={data.concepto?.noAsientos ? undefined : handlePostear}
         onRevisado={handleRevisado}
-        onDesaplicar={handleDesaplicar}
+        onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
       />
 
@@ -406,7 +458,23 @@ const ReciboIngresoDetalle: React.FC = () => {
                   key: 'asientos',
                   label: `Asientos (${data.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                    <>
+                      {asientosNoCuadrados && (
+                        <Alert
+                          message="Los asientos contables no están cuadrados. Los débitos deben ser igual a los créditos."
+                          type="warning"
+                          showIcon
+                          icon={<WarningFilled />}
+                          style={{ marginBottom: 16 }}
+                        />
+                      )}
+                      <AsientosContableEditables
+                        asientos={data?.asientos || []}
+                        onChange={(nuevos) => setData((prev: any) => prev ? { ...prev, asientos: nuevos } : prev)}
+                        editable={false}
+                        scroll={{ x: 900 }}
+                      />
+                    </>
                   ),
                 },
                 {
@@ -495,9 +563,25 @@ const ReciboIngresoDetalle: React.FC = () => {
               {
                 key: 'asientos',
                 label: `Asientos (${data.asientos?.length || 0})`,
-                children: (
-                  <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
-                ),
+                  children: (
+                    <>
+                      {asientosNoCuadrados && (
+                        <Alert
+                          message="Los asientos contables no están cuadrados. Los débitos deben ser igual a los créditos."
+                          type="warning"
+                          showIcon
+                          icon={<WarningFilled />}
+                          style={{ marginBottom: 16 }}
+                        />
+                      )}
+                      <AsientosContableEditables
+                        asientos={data?.asientos || []}
+                        onChange={(nuevos) => setData((prev: any) => prev ? { ...prev, asientos: nuevos } : prev)}
+                        editable={false}
+                        scroll={{ x: 900 }}
+                      />
+                    </>
+                  ),
               },
               {
                 key: 'historial',
@@ -546,6 +630,24 @@ const ReciboIngresoDetalle: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* Modal de Anular */}
+      <ModalAnular
+        open={modalAnularOpen}
+        onClose={() => setModalAnularOpen(false)}
+        onConfirm={handleAnularConfirm}
+        documento={`${data.documento.codigo}-${data.noDocumento}`}
+        fechaDocumento={data.fechaDocumento}
+        periodoCerrado={data.periodo === 6}
+      />
+
+      {/* Modal de Desaplicar */}
+      <ModalDesaplicar
+        open={modalDesaplicarOpen}
+        onClose={() => setModalDesaplicarOpen(false)}
+        onConfirm={handleDesaplicarConfirm}
+        tituloDocumento={`${data.documento.codigo}-${data.noDocumento}`}
+      />
 
       {/* Modal de Progreso para Aplicar/Postear */}
       <ModalProgreso
