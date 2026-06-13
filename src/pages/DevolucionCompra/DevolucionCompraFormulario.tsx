@@ -21,6 +21,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   RedoOutlined,
+  PercentageOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -142,6 +143,7 @@ const DevolucionCompraFormulario: React.FC = () => {
   const [entradaDetallesData, setEntradaDetallesData] = useState<any[]>([]);
   const [comodines, setComodines] = useState<any[]>([]);
   const [productosOrigenModalOpen, setProductosOrigenModalOpen] = useState(false);
+  const [modoDescuento, setModoDescuento] = useState<'porcentaje' | 'pesos'>('porcentaje');
   const [detalleSearch, setDetalleSearch] = useState('');
   const [activeId, setActiveId] = useState<number | null>(null);
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
@@ -235,8 +237,8 @@ const DevolucionCompraFormulario: React.FC = () => {
   const ncfValue = Form.useWatch('ncf', form) || '';
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
-  const sinOC = true;
-  const isLarge = screens.xxl === true;
+  const sinOC = entradaDetallesData.length === 0;
+  const isLarge = screens.xl ?? true;
 
   // ===== Determinar estado =====
   const estado = data?.estado ?? 0;
@@ -768,6 +770,19 @@ const DevolucionCompraFormulario: React.FC = () => {
   };
 
   const handleDetalleCalculate = (idFila: number, field: string, value: any) => {
+    if (field === 'cantidad' && entradaDetallesData.length > 0) {
+      const detalle = detalles.find((d) => d.id === idFila);
+      if (detalle) {
+        const entradaDetalle = entradaDetallesData.find((d: any) => d.codigo === detalle.codigo);
+        if (entradaDetalle) {
+          const disponible = Number(entradaDetalle.cantidad) || 0;
+          if (Number(value) > disponible) {
+            message.warning(`La cantidad disponible en la entrada es ${disponible}. Se ajustará automáticamente.`);
+            value = disponible;
+          }
+        }
+      }
+    }
     setDetalles((prev) =>
       prev.map((d) => {
         if (d.id !== idFila) return d;
@@ -775,6 +790,34 @@ const DevolucionCompraFormulario: React.FC = () => {
         return calcularFila(updated);
       })
     );
+  };
+
+  const handleDescuentoGlobal = () => {
+    let pct = 0;
+    Modal.confirm({
+      title: 'Descuento global',
+      content: (
+        <div style={{ marginTop: 8 }}>
+          <InputNumber
+            style={{ width: '100%' }}
+            min={0}
+            max={100}
+            step={0.01}
+            precision={2}
+            placeholder="Porcentaje de descuento"
+            addonAfter="%"
+            onChange={(val) => { pct = val ?? 0; }}
+            autoFocus
+          />
+        </div>
+      ),
+      onOk: () => {
+        setDetalles((prev) => prev.map((d) => {
+          const updated = calcularFila({ ...d, porcentajeDescuento: pct });
+          return updated;
+        }));
+      },
+    });
   };
 
   const handleAddProductoClick = () => {
@@ -827,6 +870,14 @@ const DevolucionCompraFormulario: React.FC = () => {
   };
 
   const handleScannerProducto = (producto: any) => {
+    if (entradaDetallesData.length > 0) {
+      const existeEnEntrada = entradaDetallesData.some((d: any) => d.codigo === producto.codigo);
+      const esComodin = comodines.some((c: any) => (c.codigo || c.idExterno) === producto.codigo);
+      if (!existeEnEntrada && !esComodin) {
+        message.warning(`El producto ${producto.codigo} no pertenece a la entrada seleccionada ni es un comodín`);
+        return;
+      }
+    }
     const nuevaFila = filaVacia();
     const nuevoId = -(detalles.length + 1);
     setDetalles((prev) => {
@@ -1125,6 +1176,9 @@ const DevolucionCompraFormulario: React.FC = () => {
               impuestos={totales.impuestos}
               total={totales.total}
               hideTitle
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+              tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </div>
         </Col>
@@ -1146,16 +1200,24 @@ const DevolucionCompraFormulario: React.FC = () => {
       width: 120,
       fixed: 'left' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
-          <div>{record.codigo || '-'}</div>
-          {record.referencia && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
-              {record.referencia}
+      render: (_: any, record: any) => {
+        const existeEnEntrada = entradaDetallesData.length > 0 && entradaDetallesData.some((d: any) => d.codigo === record.codigo);
+        return (
+          <div style={{ fontSize: 13 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span>{record.codigo || '-'}</span>
+              {entradaDetallesData.length > 0 && (
+                existeEnEntrada
+                  ? <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 14 }} />
+                  : <CloseCircleOutlined style={{ color: '#999', fontSize: 14 }} />
+              )}
             </div>
-          )}
-        </div>
-      ),
+            {record.referencia && (
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>{record.referencia}</div>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: 'Artículo',
@@ -1277,40 +1339,57 @@ const DevolucionCompraFormulario: React.FC = () => {
       },
     },
     {
-      title: '% Desc',
-      key: 'porcentajeDescuento',
-      width: 90,
-      align: 'right' as const,
-      onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, _record: DetalleDevolucionCompraDTO, idx: number) => (
-<InputNumber
-          size="small"
-          style={{ width: '100%' }}
-          min={0}
-          max={100}
-          step={0.01}
-          precision={2}
-          controls={false}
-          defaultValue={detalles[idx]?.porcentajeDescuento}
-          onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] = val ?? 0; }}
-          onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] ?? (detalles[idx]?.porcentajeDescuento || 0); handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val); }}
-          onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] ?? (detalles[idx]?.porcentajeDescuento || 0); handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val); }}
-          addonAfter="%"
-        />
-      ),
-    },
-    {
-      title: 'Descuento',
+      title: modoDescuento === 'porcentaje' ? 'Descuento %' : 'Descuento $',
       key: 'descuento',
-      width: 120,
+      width: 140,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
-      render: (_: any, record: DetalleDevolucionCompraDTO) => (
-        <div>
-          <Text>{formatNumber(record.descuento || 0)}</Text>
-        </div>
-      ),
+      render: (_: any, record: DetalleDevolucionCompraDTO, idx: number) => {
+        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
+        const subTotal = Number(detalles[idx]?.subTotal) || 0;
+        const montoDesc = subTotal * pctDesc / 100;
+        return (
+          <Space.Compact style={{ width: '100%' }}>
+            <InputNumber
+              size="small"
+              style={{ width: '100%' }}
+              styles={{ input: { textAlign: 'right' } }}
+              min={0}
+              max={modoDescuento === 'porcentaje' ? 100 : undefined}
+              step={0.01}
+              precision={2}
+              controls={false}
+              defaultValue={modoDescuento === 'porcentaje' ? pctDesc : montoDesc}
+              onChange={(val) => {
+                if (modoDescuento === 'porcentaje') {
+                  editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] = val ?? 0;
+                } else {
+                  const newPct = subTotal > 0 ? ((val ?? 0) / subTotal * 100) : 0;
+                  editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] = newPct;
+                }
+              }}
+              onBlur={() => {
+                const raw = editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`];
+                const val = raw ?? detalles[idx]?.porcentajeDescuento ?? 0;
+                handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
+              }}
+              onPressEnter={() => {
+                const raw = editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`];
+                const val = raw ?? detalles[idx]?.porcentajeDescuento ?? 0;
+                handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
+              }}
+            />
+            <Button
+              size="small"
+              style={{ borderInlineStart: 'none' }}
+              onClick={() => setModoDescuento(modoDescuento === 'porcentaje' ? 'pesos' : 'porcentaje')}
+            >
+              {modoDescuento === 'porcentaje' ? '%' : '$'}
+            </Button>
+          </Space.Compact>
+        );
+      },
     },
     {
       title: 'SubTotal',
@@ -1334,9 +1413,9 @@ const DevolucionCompraFormulario: React.FC = () => {
       render: (_: any, record: DetalleDevolucionCompraDTO) => (
         <div>
           <div>{formatNumber(record.impuestos || 0)}</div>
-          {record.impuesto?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
-          )}
+          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, minHeight: 18 }}>
+            {record.impuesto?.nombre ? toTitleCase(record.impuesto.nombre) : ''}
+          </div>
         </div>
       ),
     },
@@ -1550,6 +1629,9 @@ const DevolucionCompraFormulario: React.FC = () => {
                             Agregar producto
                           </Button>
                           <Button icon={<BarcodeOutlined />} onClick={() => setScannerModalOpen(true)} />
+                  <Button icon={<PercentageOutlined />} onClick={handleDescuentoGlobal}>
+                            Dto. global
+                          </Button>
                         </Space>
                         <Input.Search
                           placeholder="Buscar detalle..."
