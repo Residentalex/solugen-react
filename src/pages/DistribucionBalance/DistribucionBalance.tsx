@@ -1,10 +1,11 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography } from 'antd';
+import { Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { distribucionBalanceApi } from '../../api/distribucionBalanceApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { useDocumentoListado } from '../../hooks/useDocumentoListado';
+import { useAuthStore } from '../../stores/authStore';
 import EntidadColumnCell from '../../components/EntidadColumnCell';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
@@ -19,6 +20,7 @@ interface DistribucionBalanceProps {
 
 const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }) => {
   const navigate = useNavigate();
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const codigoPantalla = tipoEntidad === 'SUP' ? 'FDBASUP' : 'FDBACLI';
   const entidadLabel = tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente';
 
@@ -43,12 +45,30 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
     tituloError: 'Error al cargar distribuciones de balance',
   });
 
+  const handleClonar = async () => {
+    if (!state.selectedRow) return;
+    try {
+      const data = await distribucionBalanceApi.obtenerPorId(sucursalActiva, state.selectedRow.id);
+      const cloneData = {
+        ...data,
+        id: 0,
+        noDocumento: '',
+        estado: 0,
+        asientos: [],
+        logs: [],
+      };
+      navigate(`/${codigoPantalla}/nuevo`, { state: { cloneData } });
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al obtener datos para clonar');
+    }
+  };
+
   const columns: ColumnsType<TransaccionVistaDTO> = [
     {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 160,
+      width: 180,
       fixed: 'left',
       render: (doc: string, record: TransaccionVistaDTO) => (
         <Link to={`/${codigoPantalla}/${record.id}`} className="paces-doc-link"><Text strong>{doc}</Text></Link>
@@ -66,7 +86,14 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
       dataIndex: 'entidad',
       key: 'entidad',
       ellipsis: true,
-      render: (name: string) => <EntidadColumnCell name={name} />,
+      render: (name: string, record: any) => (
+        <div>
+          <EntidadColumnCell name={name} />
+          {record.identificacion && (
+            <div className="paces-text-secondary" style={{ fontSize: 10 }}>RNC: {record.identificacion}</div>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Concepto',
@@ -106,7 +133,7 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
       total={state.total}
       page={state.page}
       pageSize={state.pageSize}
-      scrollX={1150}
+      scrollX={1170}
       selectedRowId={state.selectedRow?.id}
       loadingError={state.loadingError}
       errorMessage="Error al cargar distribuciones de balance"
@@ -130,7 +157,9 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
         showEditar: true,
         editarDisabled: !puedeEditar,
         onEditar: () => navigate(`/${codigoPantalla}/${state.selectedRow!.id}/editar`),
-        showClonar: false,
+        showClonar: true,
+        clonarDisabled: !state.selectedRow,
+        onClonar: handleClonar,
         showImprimir: true,
         imprimirDisabled: !state.selectedRow,
         onImprimir: actions.handleImprimir,

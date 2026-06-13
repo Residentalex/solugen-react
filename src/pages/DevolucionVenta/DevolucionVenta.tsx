@@ -1,10 +1,11 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography } from 'antd';
+import { Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { devolucionVentaApi } from '../../api/devolucionVentaApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { useDocumentoListado } from '../../hooks/useDocumentoListado';
+import { useAuthStore } from '../../stores/authStore';
 import EntidadColumnCell from '../../components/EntidadColumnCell';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
@@ -16,6 +17,7 @@ const { Text } = Typography;
 
 const DevolucionVenta: React.FC = () => {
   const navigate = useNavigate();
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const { screenCode, documentCode } = useScreenConfig();
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<FacturaVistaDTO>({
@@ -28,6 +30,24 @@ const DevolucionVenta: React.FC = () => {
     tituloReporte: 'DV',
     tituloError: 'Error al cargar devoluciones de venta',
   });
+
+  const handleClonar = async () => {
+    if (!state.selectedRow) return;
+    try {
+      const data = await devolucionVentaApi.obtenerPorId(sucursalActiva, state.selectedRow.id);
+      const cloneData = {
+        ...data,
+        id: 0,
+        noDocumento: '',
+        estado: 0,
+        asientos: [],
+        logs: [],
+      };
+      navigate('/FDEV/nuevo', { state: { cloneData } });
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al obtener datos para clonar');
+    }
+  };
 
   const columns: ColumnsType<FacturaVistaDTO> = [
     {
@@ -51,7 +71,14 @@ const DevolucionVenta: React.FC = () => {
       title: 'Cliente',
       dataIndex: 'entidad',
       key: 'entidad',
-      render: (name: string) => <EntidadColumnCell name={name} />,
+      render: (name: string, record: any) => (
+        <div>
+          <EntidadColumnCell name={name} />
+          {record.identificacion && (
+            <div className="paces-text-secondary" style={{ fontSize: 10 }}>RNC: {record.identificacion}</div>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Factura',
@@ -136,7 +163,9 @@ const DevolucionVenta: React.FC = () => {
         showEditar: true,
         editarDisabled: !puedeEditar,
         onEditar: () => navigate(`/FDEV/${state.selectedRow!.id}/editar`),
-        showClonar: false,
+        showClonar: true,
+        clonarDisabled: !state.selectedRow,
+        onClonar: handleClonar,
         showImprimir: true,
         imprimirDisabled: !state.selectedRow,
         onImprimir: actions.handleImprimir,

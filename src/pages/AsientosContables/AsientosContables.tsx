@@ -98,12 +98,21 @@ const AsientosContables: React.FC = () => {
     setSelectedRow(record);
   };
 
+  const handleNuevo = () => navigate('/FAsientoContable/nuevo');
+  const handleEditar = () => {
+    if (selectedRow) navigate(`/FAsientoContable/${selectedRow.id}/editar`);
+  };
+  const handleClonar = async () => {
+    if (!selectedRow) return;
+    message.info('Función de clonar no disponible para asientos contables');
+  };
+
   const columns: ColumnsType<TransaccionVistaDTO> = [
     {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 200,
+      width: 180,
       fixed: 'left',
       render: (doc: any, record: TransaccionVistaDTO) => (
         <Link to={`/FAsientoContable/${record.id}`} className="paces-doc-link">
@@ -168,7 +177,7 @@ const AsientosContables: React.FC = () => {
       total={total}
       page={page}
       pageSize={pageSize}
-      scrollX={1100}
+      scrollX={1080}
       selectedRowId={selectedRow?.id}
       loadingError={loadingError}
       errorMessage="Error al cargar asientos contables"
@@ -188,6 +197,14 @@ const AsientosContables: React.FC = () => {
         pageSize,
         onPageSizeChange: (v) => { setPageSize(v); setPage(1); },
         onRefresh: handleRefresh,
+        showCrear: true,
+        onCrear: handleNuevo,
+        showEditar: true,
+        editarDisabled: !selectedRow,
+        onEditar: handleEditar,
+        showClonar: true,
+        clonarDisabled: !selectedRow,
+        onClonar: handleClonar,
       }}
     />
   );

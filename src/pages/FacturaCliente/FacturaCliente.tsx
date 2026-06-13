@@ -55,7 +55,7 @@ const FacturaCliente: React.FC = () => {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 160,
+      width: 180,
       fixed: 'left',
       render: (doc: string, record: FacturaVistaDTO) => (
         <Link to={`/FFAC/${record.id}`} className="paces-doc-link"><Text strong>{doc}</Text></Link>
@@ -126,7 +126,7 @@ const FacturaCliente: React.FC = () => {
       total={state.total}
       page={state.page}
       pageSize={state.pageSize}
-      scrollX={1350}
+      scrollX={1370}
       selectedRowId={state.selectedRow?.id}
       loadingError={state.loadingError}
       errorMessage="Error al cargar facturas de cliente"

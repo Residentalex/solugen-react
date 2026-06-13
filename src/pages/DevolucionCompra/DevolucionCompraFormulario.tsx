@@ -569,6 +569,7 @@ const DevolucionCompraFormulario: React.FC = () => {
     const tipo = tiposCache.find((t) => t.codigo === tipoCodigo) || null;
     setSelectedTipo(tipo);
     setSelectedConcepto(null);
+    setConceptoSearchText('');
     setConceptoInfo('');
     form.setFieldsValue({ concepto: '' });
   };
@@ -576,6 +577,7 @@ const DevolucionCompraFormulario: React.FC = () => {
   const handleTipoClear = () => {
     setSelectedTipo(null);
     setSelectedConcepto(null);
+    setConceptoSearchText('');
     setConceptoInfo('');
     form.setFieldsValue({ tipo: '', concepto: '' });
   };
@@ -1253,7 +1255,7 @@ const DevolucionCompraFormulario: React.FC = () => {
             step={0.01}
             precision={2}
             controls={false}
-            defaultValue={detalles[idx]?.cantidad}
+            value={detalles[idx]?.cantidad}
             onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_cantidad`] = val ?? 0; }}
             onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? (detalles[idx]?.cantidad || 0); handleDetalleCalculate(detalles[idx].id, 'cantidad', val); }}
             onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? (detalles[idx]?.cantidad || 0); handleDetalleCalculate(detalles[idx].id, 'cantidad', val); }}
@@ -1326,7 +1328,7 @@ const DevolucionCompraFormulario: React.FC = () => {
               step={0.01}
               precision={2}
               controls={false}
-              defaultValue={detalles[idx]?.costo}
+              value={detalles[idx]?.costo}
               onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_costo`] = val ?? 0; }}
               onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_costo`] ?? (detalles[idx]?.costo || 0); handleDetalleCalculate(detalles[idx].id, 'costo', val); }}
               onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_costo`] ?? (detalles[idx]?.costo || 0); handleDetalleCalculate(detalles[idx].id, 'costo', val); }}
@@ -1339,57 +1341,81 @@ const DevolucionCompraFormulario: React.FC = () => {
       },
     },
     {
-      title: modoDescuento === 'porcentaje' ? 'Descuento %' : 'Descuento $',
+      title: 'Descuento',
       key: 'descuento',
-      width: 140,
+      width: 120,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
-      render: (_: any, record: DetalleDevolucionCompraDTO, idx: number) => {
-        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
-        const subTotal = Number(detalles[idx]?.subTotal) || 0;
-        const montoDesc = subTotal * pctDesc / 100;
-        return (
-          <Space.Compact style={{ width: '100%' }}>
-            <InputNumber
-              size="small"
-              style={{ width: '100%' }}
-              styles={{ input: { textAlign: 'right' } }}
-              min={0}
-              max={modoDescuento === 'porcentaje' ? 100 : undefined}
-              step={0.01}
-              precision={2}
-              controls={false}
-              defaultValue={modoDescuento === 'porcentaje' ? pctDesc : montoDesc}
-              onChange={(val) => {
-                if (modoDescuento === 'porcentaje') {
-                  editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] = val ?? 0;
-                } else {
-                  const newPct = subTotal > 0 ? ((val ?? 0) / subTotal * 100) : 0;
-                  editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] = newPct;
-                }
-              }}
-              onBlur={() => {
-                const raw = editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`];
-                const val = raw ?? detalles[idx]?.porcentajeDescuento ?? 0;
-                handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
-              }}
-              onPressEnter={() => {
-                const raw = editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`];
-                const val = raw ?? detalles[idx]?.porcentajeDescuento ?? 0;
-                handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
-              }}
-            />
-            <Button
-              size="small"
-              style={{ borderInlineStart: 'none' }}
-              onClick={() => setModoDescuento(modoDescuento === 'porcentaje' ? 'pesos' : 'porcentaje')}
-            >
-              {modoDescuento === 'porcentaje' ? '%' : '$'}
-            </Button>
-          </Space.Compact>
-        );
-      },
+      render: (_: any, _record: DetalleDevolucionCompraDTO, idx: number) =>
+        modoDescuento === 'porcentaje' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber
+                key={`pct_${detalles[idx].id}_${modoDescuento}`}
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                max={100}
+                step={0.01}
+                precision={2}
+                controls={false}
+                defaultValue={detalles[idx]?.porcentajeDescuento}
+                onChange={(val) => {
+                  editValuesRef.current[`${detalles[idx].id}_descuento`] = val || 0;
+                }}
+                onBlur={() => {
+                  const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
+                  handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
+                }}
+                onPressEnter={() => {
+                  const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
+                  handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
+                }}
+              />
+              <span onClick={() => setModoDescuento('pesos')} style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                <Input size="small" placeholder="%" disabled style={{ width: 36, textAlign: 'center', borderLeft: 'none', pointerEvents: 'none' }} />
+              </span>
+            </Space.Compact>
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto' }}>
+              {formatNumber(detalles[idx]?.descuento || 0)}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber
+                key={`pesos_${detalles[idx].id}_${modoDescuento}`}
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                step={0.01}
+                precision={2}
+                controls={false}
+                defaultValue={detalles[idx]?.descuento}
+                onChange={(val) => {
+                  editValuesRef.current[`${detalles[idx].id}_descuento_pesos`] = val || 0;
+                }}
+                onBlur={() => {
+                  const val = editValuesRef.current[`${detalles[idx].id}_descuento_pesos`] ?? detalles[idx]?.descuento;
+                  handleDetalleCalculate(detalles[idx].id, 'descuento', val);
+                }}
+                onPressEnter={() => {
+                  const val = editValuesRef.current[`${detalles[idx].id}_descuento_pesos`] ?? detalles[idx]?.descuento;
+                  handleDetalleCalculate(detalles[idx].id, 'descuento', val);
+                }}
+              />
+              <span onClick={() => setModoDescuento('porcentaje')} style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                <Input size="small" placeholder="$" disabled style={{ width: 36, textAlign: 'center', borderLeft: 'none', pointerEvents: 'none' }} />
+              </span>
+            </Space.Compact>
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto' }}>
+              {formatNumber(detalles[idx]?.porcentajeDescuento || 0)}%
+            </div>
+          </div>
+        ),
     },
     {
       title: 'SubTotal',

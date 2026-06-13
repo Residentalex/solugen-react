@@ -55,7 +55,7 @@ const EntradaAlmacen: React.FC = () => {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 160,
+      width: 180,
       fixed: 'left',
       render: (doc: string, record: MovimientoVistaDTO) => (
         <Link to={`/FENP/${record.id}`} className="paces-doc-link"><Text strong>{doc}</Text></Link>
@@ -65,20 +65,20 @@ const EntradaAlmacen: React.FC = () => {
       title: 'Fecha',
       dataIndex: 'fecha',
       key: 'fecha',
-      width: 130,
-      render: (f: string, record: MovimientoVistaDTO) => (
-        <div style={{ lineHeight: 1.4 }}>
-          <div style={{ fontSize: 12 }}>{formatDateRaw(f)}</div>
-          <div style={{ fontSize: 10, color: '#888' }}>Recibo: {record.fechaEntrega ? formatDateRaw(record.fechaEntrega) : '-'}</div>
-        </div>
-      ),
+      width: 110,
+      render: (f: string) => <Text>{formatDateRaw(f)}</Text>,
     },
     {
       title: 'Entidad',
       dataIndex: 'entidad',
       key: 'entidad',
-      render: (name: string, record: MovimientoVistaDTO) => (
-        <EntidadColumnCell name={name} diasCredito={record.diasCredito} />
+      render: (name: string, record: any) => (
+        <div>
+          <EntidadColumnCell name={name} diasCredito={record.diasCredito} />
+          {record.identificacion && (
+            <div className="paces-text-secondary" style={{ fontSize: 10 }}>RNC: {record.identificacion}</div>
+          )}
+        </div>
       ),
     },
     {

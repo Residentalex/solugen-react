@@ -34,7 +34,7 @@ const FacturaPOS: React.FC = () => {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 160,
+      width: 180,
       fixed: 'left',
       render: (doc: string, record: FacturaVistaDTO) => (
         <Link to={`/FPV/${record.id}`} className="paces-doc-link"><Text strong>{doc}</Text></Link>
@@ -51,7 +51,14 @@ const FacturaPOS: React.FC = () => {
       title: 'Cliente',
       dataIndex: 'entidad',
       key: 'entidad',
-      render: (name: string) => <EntidadColumnCell name={name} />,
+      render: (name: string, record: any) => (
+        <div>
+          <EntidadColumnCell name={name} />
+          {record.identificacion && (
+            <div className="paces-text-secondary" style={{ fontSize: 10 }}>RNC: {record.identificacion}</div>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Concepto',
@@ -123,7 +130,7 @@ const FacturaPOS: React.FC = () => {
       total={state.total}
       page={state.page}
       pageSize={state.pageSize}
-      scrollX={1500}
+      scrollX={1520}
       selectedRowId={state.selectedRow?.id}
       loadingError={state.loadingError}
       errorMessage="Error al cargar facturas POS"

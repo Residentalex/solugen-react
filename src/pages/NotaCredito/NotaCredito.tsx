@@ -52,7 +52,7 @@ const NotaCredito: React.FC<NotaCreditoProps> = ({ tipoEntidad }) => {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 160,
+      width: 180,
       fixed: 'left',
       render: (doc: string, record: TransaccionVistaDTO) => (
         <Link to={`/${codigoPantalla}/${record.id}`} className="paces-doc-link"><Text strong>{doc}</Text></Link>
@@ -70,7 +70,14 @@ const NotaCredito: React.FC<NotaCreditoProps> = ({ tipoEntidad }) => {
       dataIndex: 'entidad',
       key: 'entidad',
       ellipsis: true,
-      render: (name: string) => <EntidadColumnCell name={name} />,
+      render: (name: string, record: any) => (
+        <div>
+          <EntidadColumnCell name={name} />
+          {record.identificacion && (
+            <div className="paces-text-secondary" style={{ fontSize: 10 }}>RNC: {record.identificacion}</div>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Concepto',
@@ -135,7 +142,7 @@ const NotaCredito: React.FC<NotaCreditoProps> = ({ tipoEntidad }) => {
       total={state.total}
       page={state.page}
       pageSize={state.pageSize}
-      scrollX={1350}
+      scrollX={1370}
       selectedRowId={state.selectedRow?.id}
       loadingError={state.loadingError}
       errorMessage="Error al cargar notas crédito"

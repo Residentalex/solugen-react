@@ -55,7 +55,7 @@ const DevolucionCompra: React.FC = () => {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 160,
+      width: 180,
       fixed: 'left',
       render: (doc: string, record: MovimientoVistaDTO) => (
         <Link to={`/FDVC/${record.id}`} className="paces-doc-link"><Text strong>{doc}</Text></Link>
@@ -72,7 +72,14 @@ const DevolucionCompra: React.FC = () => {
       title: 'Entidad',
       dataIndex: 'entidad',
       key: 'entidad',
-      render: (name: string) => <EntidadColumnCell name={name} />,
+      render: (name: string, record: any) => (
+        <div>
+          <EntidadColumnCell name={name} />
+          {record.identificacion && (
+            <div className="paces-text-secondary" style={{ fontSize: 10 }}>RNC: {record.identificacion}</div>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Concepto',
@@ -112,7 +119,7 @@ const DevolucionCompra: React.FC = () => {
       total={state.total}
       page={state.page}
       pageSize={state.pageSize}
-      scrollX={1210}
+      scrollX={1230}
       selectedRowId={state.selectedRow?.id}
       loadingError={state.loadingError}
       errorMessage="Error al cargar devoluciones de compra"
