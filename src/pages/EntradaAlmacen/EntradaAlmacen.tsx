@@ -65,8 +65,13 @@ const EntradaAlmacen: React.FC = () => {
       title: 'Fecha',
       dataIndex: 'fecha',
       key: 'fecha',
-      width: 110,
-      render: (f: string) => <Text>{formatDateRaw(f)}</Text>,
+      width: 130,
+      render: (f: string, record: MovimientoVistaDTO) => (
+        <div style={{ lineHeight: 1.4 }}>
+          <div style={{ fontSize: 12 }}>{formatDateRaw(f)}</div>
+          <div style={{ fontSize: 10, color: '#888' }}>Recibo: {record.fechaEntrega ? formatDateRaw(record.fechaEntrega) : '-'}</div>
+        </div>
+      ),
     },
     {
       title: 'Entidad',

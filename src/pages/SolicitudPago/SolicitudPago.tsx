@@ -161,7 +161,7 @@ const SolicitudPago: React.FC = () => {
         showClonar: true,
         clonarDisabled: !state.selectedRow,
         onClonar: handleClonar,
-        showImprimir: true,
+        showImprimir: false,
         imprimirDisabled: !state.selectedRow,
         onImprimir: actions.handleImprimir,
         showEditar: true,

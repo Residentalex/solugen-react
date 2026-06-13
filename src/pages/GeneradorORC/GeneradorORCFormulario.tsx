@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Avatar, Card, Table, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
+  Avatar, Card, Table, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Checkbox,
   message, Form, Input, InputNumber, DatePicker, Typography, Modal, Dropdown, Alert, Skeleton, Drawer, Descriptions,
 } from 'antd';
 import {
@@ -16,7 +16,6 @@ import {
   DownloadOutlined,
   SyncOutlined,
   DatabaseOutlined,
-  IdcardOutlined,
   CalendarOutlined,
   BarChartOutlined,
   EyeOutlined,
@@ -345,7 +344,6 @@ const GeneradorORCFormulario: React.FC = () => {
         const fechaVal = res.fecha ? dayjs(res.fecha) : null;
         form.setFieldsValue({
           fecha: fechaVal,
-          numero: res.numero || '',
           notas: res.notas || '',
         });
       })
@@ -691,7 +689,7 @@ const GeneradorORCFormulario: React.FC = () => {
           setSuplidorSearchText(toTitleCase(res.suplidor.nombre));
         }
         const fechaVal = res.fecha ? dayjs(res.fecha) : null;
-        form.setFieldsValue({ fecha: fechaVal, numero: res.numero || '', notas: res.notas || '' });
+        form.setFieldsValue({ fecha: fechaVal, notas: res.notas || '' });
       })
       .catch((err: any) => {
         message.error(err?.response?.data?.errorMessage || 'Error al recargar');
@@ -1051,28 +1049,25 @@ const GeneradorORCFormulario: React.FC = () => {
     <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
-          <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
-        <Row gutter={[16, 24]}>
-          <Col xs={24} sm={12} lg={6}>
-            <Form.Item name="fecha" label="Fecha" rules={[{ required: true, message: 'Campo requerido' }]}>
-              <DatePicker
-                format="YYYY-MM-DD"
-                style={{ width: '100%' }}
-                disabledDate={(current) => {
-                  if (!current) return false;
-                  if (fechaCierreContable && current.isBefore(fechaCierreContable, 'day')) return true;
-                  if (current.isAfter(dayjs().add(1, 'day'), 'day')) return true;
-                  return false;
-                }}
-              />
+          <Form form={form} layout="vertical" size="middle">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={12} lg={8}>
+            <Form.Item name="fecha" rules={[{ required: true, message: 'Campo requerido' }]}>
+              <FloatingField label="Fecha" required>
+                <DatePicker
+                  format="YYYY-MM-DD"
+                  style={{ width: '100%' }}
+                  disabledDate={(current) => {
+                    if (!current) return false;
+                    if (fechaCierreContable && current.isBefore(fechaCierreContable, 'day')) return true;
+                    if (current.isAfter(dayjs().add(1, 'day'), 'day')) return true;
+                    return false;
+                  }}
+                />
+              </FloatingField>
             </Form.Item>
           </Col>
-          <Col xs={24} sm={12} lg={6}>
-            <Form.Item name="numero" label="N° Documento">
-              <Input placeholder="Autogenerado" readOnly />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} lg={12}>
+          <Col xs={24} sm={12} lg={16}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
               <div style={{ flex: 1 }}>
                 <FloatingField label="Suplidor" required externalValue={suplidorSearchText}>
@@ -1084,34 +1079,26 @@ const GeneradorORCFormulario: React.FC = () => {
             <Form.Item name="suplidorCodigo" hidden><Input /></Form.Item>
           </Col>
           <Col xs={24}>
-            <Form.Item name="redondeo" valuePropName="checked">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  type="checkbox"
-                  id="redondeo-chk"
-                  checked={redondeoComercial}
-                  onChange={(e) => setRedondeoComercial(e.target.checked)}
-                  style={{ margin: 0 }}
-                />
-                <label htmlFor="redondeo-chk" style={{ cursor: 'pointer', margin: 0 }}>
-                  Redondeo Comercial
-                </label>
-              </div>
+            <Form.Item style={{ marginBottom: 0 }}>
+              <Checkbox
+                checked={redondeoComercial}
+                onChange={(e) => setRedondeoComercial(e.target.checked)}
+              >
+                Redondeo Comercial
+              </Checkbox>
             </Form.Item>
           </Col>
         </Row>
       </Form>
         </Col>
         <Col xs={24} xxl={6}>
-          <div style={{ marginTop: 24 }}>
-            <TotalesCard
-              subTotal={totalesGenerales.subTotal}
-              descuento={totalesGenerales.descuento}
-              impuestos={totalesGenerales.impuestos}
-              total={totalesGenerales.total}
-              hideTitle
-            />
-          </div>
+          <TotalesCard
+            subTotal={totalesGenerales.subTotal}
+            descuento={totalesGenerales.descuento}
+            impuestos={totalesGenerales.impuestos}
+            total={totalesGenerales.total}
+            hideTitle
+          />
         </Col>
       </Row>
     </Card>
