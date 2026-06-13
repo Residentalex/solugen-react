@@ -87,12 +87,7 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
       key: 'entidad',
       ellipsis: true,
       render: (name: string, record: any) => (
-        <div>
-          <EntidadColumnCell name={name} />
-          {record.identificacion && (
-            <div className="paces-text-secondary" style={{ fontSize: 10 }}>RNC: {record.identificacion}</div>
-          )}
-        </div>
+        <EntidadColumnCell name={name} identificacion={record.identificacion} />
       ),
     },
     {

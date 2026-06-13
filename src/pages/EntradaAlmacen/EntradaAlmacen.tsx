@@ -78,12 +78,7 @@ const EntradaAlmacen: React.FC = () => {
       dataIndex: 'entidad',
       key: 'entidad',
       render: (name: string, record: any) => (
-        <div>
-          <EntidadColumnCell name={name} diasCredito={record.diasCredito} />
-          {record.identificacion && (
-            <div className="paces-text-secondary" style={{ fontSize: 10 }}>RNC: {record.identificacion}</div>
-          )}
-        </div>
+        <EntidadColumnCell name={name} diasCredito={record.diasCredito} identificacion={record.identificacion} />
       ),
     },
     {
