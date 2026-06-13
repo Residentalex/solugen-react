@@ -39,6 +39,7 @@ import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConc
 import EntradaAlmacenGuide from './EntradaAlmacenGuide';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import ScannerModal from '../../components/ScannerModal/ScannerModal';
+import ProductosOrigenModal from '../../components/ProductosOrigenModal/ProductosOrigenModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import EntidadCard from '../../components/EntidadCard';
@@ -762,7 +763,17 @@ const EntradaAlmacenFormulario: React.FC = () => {
       setDetalles([]);
     }
 
-    // 2. Preguntar si cargar detalles
+    // 2. Cargar OC completa para tener los detalles (siempre, aunque no se carguen al detalle)
+    let ocDetalles: any[] = [];
+    try {
+      const ocCompleta = await ordenCompraApi.obtenerPorId(Sucursal.Compra, orden.id) as any;
+      ocDetalles = ocCompleta.detalles || [];
+      setOcDetallesData(ocDetalles);
+    } catch {
+      // Si falla la carga, continuar sin detalles de OC
+    }
+
+    // 3. Preguntar si cargar detalles
     const shouldLoad = await new Promise<boolean>((resolve) => {
       Modal.confirm({
         title: 'Cargar orden de compra',
@@ -774,12 +785,9 @@ const EntradaAlmacenFormulario: React.FC = () => {
       });
     });
 
-    // 3. Cargar detalles si confirma
+    // 4. Cargar detalles si confirma
     if (shouldLoad) {
       try {
-        const ocCompleta = await ordenCompraApi.obtenerPorId(Sucursal.Compra, orden.id) as any;
-        const ocDetalles = ocCompleta.detalles || [];
-        setOcDetallesData(ocDetalles);
         const nuevosDetalles: DetalleEntradaAlmacenDTO[] = ocDetalles
           .filter((d: any) => {
             const cantidad = (d.cantidad + (d.cantidadBonificable || 0)) - (d.cantidadRecibida || 0);
@@ -837,7 +845,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       }
     }
 
-    // 4. Asignar suplidor desde la OC solo si no hay uno seleccionado
+    // 5. Asignar suplidor desde la OC solo si no hay uno seleccionado
     if (!selectedEntidad) {
       const suplidorInfo: SuplidorDTO = {
         nombre: orden.suplidor.nombre,
@@ -2022,126 +2030,67 @@ const EntradaAlmacenFormulario: React.FC = () => {
         onSelect={handleScannerProducto}
       />
 
-      <Modal
-        title="Agregar producto"
+      <ProductosOrigenModal
         open={ocProductosModalOpen}
-        onCancel={() => { setOcProductoSearch(''); setOcProductosModalOpen(false); }}
-        footer={null}
-        width={700}
-        destroyOnHidden
-      >
-        <Tabs
-          type="card"
-          items={[
-            {
-              key: 'oc',
-              label: `OC (${ocDetallesData.filter((d: any) => !detalles.some((det: any) => det.codigo === d.codigo)).length})`,
-              children: (
-                <>
-                  <Input.Search
-                    placeholder="Buscar producto..."
-                    allowClear
-                    style={{ marginBottom: 16 }}
-                    onSearch={(value) => setOcProductoSearch(value)}
-                    onChange={(e) => { if (!e.target.value) setOcProductoSearch(''); }}
-                  />
-                  <Table
-                    dataSource={ocDetallesData.filter((d: any) => !detalles.some((det: any) => det.codigo === d.codigo)).filter((d: any) => {
-                      if (!ocProductoSearch) return true;
-                      const q = ocProductoSearch.toLowerCase();
-                      return (d.codigo || '').toLowerCase().includes(q) || (d.articulo || '').toLowerCase().includes(q);
-                    })}
-                    columns={[
-                      { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-                      { title: 'Artículo', dataIndex: 'articulo', key: 'articulo', ellipsis: true },
-                      { title: 'Cant. OC', dataIndex: 'cantidad', key: 'cantidad', width: 90, align: 'right' as const },
-                      { title: 'Costo', dataIndex: 'costo', key: 'costo', width: 100, align: 'right' as const,
-                        render: (v: number) => formatNumber(v) },
-                    ]}
-                    rowKey="id"
-                    size="small"
-                    pagination={{ pageSize: 10, showSizeChanger: false, showTotal: (t: number) => `${t} productos` }}
-                    onRow={(record: any) => ({
-                      onClick: () => {
-                        setDetalles((prev) => [
-                          calcularFila({
-                            ...filaVacia(),
-                            id: -(prev.length + 1),
-                            codigo: record.codigo,
-                            articulo: record.articulo,
-                            referencia: record.referencia || '',
-                            costo: record.costo || 0,
-                            cantidad: record.cantidad || 0,
-                            porcentajeDescuento: record.porcentajeDescuento || 0,
-                            familia: record.familia,
-                            medida: record.medida || { nombre: '', codigo: '', factor: 1, idExterno: 0 },
-                            impuesto: record.impuesto,
-                            porcentajeImpuesto: record.impuesto?.porcentaje ?? 0,
-                            cantidadBonificable: record.cantidadBonificable || 0,
-                          }),
-                          ...prev,
-                        ]);
-                        setOcProductoSearch('');
-                        setOcProductosModalOpen(false);
-                      },
-                      style: { cursor: 'pointer' },
-                    })}
-                    locale={{ emptyText: 'Todos los productos de la OC ya fueron agregados' }}
-                  />
-                </>
-              ),
-            },
-            {
-              key: 'comodines',
-              label: `Comodines (${comodines.filter((d: any) => !detalles.some((det: any) => det.codigo === d.codigo)).length})`,
-              children: (
-                <>
-                  <Input.Search
-                    placeholder="Buscar comodín..."
-                    allowClear
-                    style={{ marginBottom: 16 }}
-                  />
-                  <Table
-                    dataSource={comodines.filter((d: any) => !detalles.some((det: any) => det.codigo === d.codigo))}
-                    columns={[
-                      { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-                      { title: 'Artículo', dataIndex: 'nombre', key: 'nombre', ellipsis: true },
-                      { title: 'Costo', dataIndex: 'ultimoCosto', key: 'ultimoCosto', width: 100, align: 'right' as const,
-                        render: (v: number) => formatNumber(v || 0) },
-                    ]}
-                    rowKey="codigo"
-                    size="small"
-                    pagination={{ pageSize: 10, showSizeChanger: false, showTotal: (t: number) => `${t} productos` }}
-                    onRow={(record: any) => ({
-                      onClick: () => {
-                        setDetalles((prev) => [
-                          calcularFila({
-                            ...filaVacia(),
-                            id: -(prev.length + 1),
-                            codigo: record.codigo || record.idExterno,
-                            articulo: record.nombre,
-                            referencia: record.referencia || record.upc || '',
-                            costo: record.ultimoCosto || 0,
-                            cantidad: 1,
-                            familia: record.familia ? { nombre: record.familia.nombre, idExterno: record.familia.idExterno } : undefined,
-                            medida: record.unidadMedida || { nombre: '', codigo: '', factor: 1, idExterno: 0 },
-                            impuesto: record.impuestos?.[0]?.impuesto,
-                            porcentajeImpuesto: record.impuestos?.[0]?.impuesto?.porcentaje ?? 0,
-                          }),
-                          ...prev,
-                        ]);
-                        setOcProductosModalOpen(false);
-                      },
-                      style: { cursor: 'pointer' },
-                    })}
-                    locale={{ emptyText: 'No hay comodines disponibles' }}
-                  />
-                </>
-              ),
-            },
-          ]}
-        />
-      </Modal>
+        onClose={() => { setOcProductoSearch(''); setOcProductosModalOpen(false); }}
+        title="Agregar producto"
+        sourceLabel="OC"
+        sourceProducts={ocDetallesData}
+        comodines={comodines}
+        addedCodes={detalles.map((d) => d.codigo)}
+        sourceColumns={[
+          { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
+          { title: 'Artículo', dataIndex: 'articulo', key: 'articulo', ellipsis: true },
+          { title: 'Cant. OC', dataIndex: 'cantidad', key: 'cantidad', width: 90, align: 'right' as const },
+          { title: 'Costo', dataIndex: 'costo', key: 'costo', width: 100, align: 'right' as const,
+            render: (v: number) => formatNumber(v) },
+        ]}
+        comodinColumns={[
+          { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
+          { title: 'Artículo', dataIndex: 'nombre', key: 'nombre', ellipsis: true },
+          { title: 'Costo', dataIndex: 'ultimoCosto', key: 'ultimoCosto', width: 100, align: 'right' as const,
+            render: (v: number) => formatNumber(v || 0) },
+        ]}
+        onAddSourceProduct={(record) => {
+          setDetalles((prev) => [
+            calcularFila({
+              ...filaVacia(),
+              id: -(prev.length + 1),
+              codigo: record.codigo,
+              articulo: record.articulo,
+              referencia: record.referencia || '',
+              costo: record.costo || 0,
+              cantidad: record.cantidad || 0,
+              porcentajeDescuento: record.porcentajeDescuento || 0,
+              familia: record.familia,
+              medida: record.medida || { nombre: '', codigo: '', factor: 1, idExterno: 0 },
+              impuesto: record.impuesto,
+              porcentajeImpuesto: record.impuesto?.porcentaje ?? 0,
+              cantidadBonificable: record.cantidadBonificable || 0,
+            }),
+            ...prev,
+          ]);
+          setOcProductoSearch('');
+        }}
+        onAddComodin={(record) => {
+          setDetalles((prev) => [
+            calcularFila({
+              ...filaVacia(),
+              id: -(prev.length + 1),
+              codigo: record.codigo || record.idExterno,
+              articulo: record.nombre,
+              referencia: record.referencia || record.upc || '',
+              costo: record.ultimoCosto || 0,
+              cantidad: 1,
+              familia: record.familia ? { nombre: record.familia.nombre, idExterno: record.familia.idExterno } : undefined,
+              medida: record.unidadMedida || { nombre: '', codigo: '', factor: 1, idExterno: 0 },
+              impuesto: record.impuestos?.[0]?.impuesto,
+              porcentajeImpuesto: record.impuestos?.[0]?.impuesto?.porcentaje ?? 0,
+            }),
+            ...prev,
+          ]);
+        }}
+      />
 
       {isLarge ? (
         /* === DESKTOP LAYOUT (>= lg) === */

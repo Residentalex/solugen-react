@@ -33,6 +33,7 @@ import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProd
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import { BuscarEntradaModal } from '../../components/BuscarEntradaModal';
 import ScannerModal from '../../components/ScannerModal/ScannerModal';
+import ProductosOrigenModal from '../../components/ProductosOrigenModal/ProductosOrigenModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import PermissionGate from '../../components/PermissionGate';
 import '../../components/FloatingLabel/FloatingField.css';
@@ -138,6 +139,9 @@ const DevolucionCompraFormulario: React.FC = () => {
   const [productoModalOpen, setProductoModalOpen] = useState(false);
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
   const [entradaModalOpen, setEntradaModalOpen] = useState(false);
+  const [entradaDetallesData, setEntradaDetallesData] = useState<any[]>([]);
+  const [comodines, setComodines] = useState<any[]>([]);
+  const [productosOrigenModalOpen, setProductosOrigenModalOpen] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [activeId, setActiveId] = useState<number | null>(null);
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
@@ -637,6 +641,10 @@ const DevolucionCompraFormulario: React.FC = () => {
     try {
       const detalleEntrada = await devolucionCompraApi.obtenerDetalleEntrada(sucursalActiva, entrada.id);
 
+      // Guardar productos de la entrada en memoria para el modal compartido
+      setEntradaDetallesData(detalleEntrada.detalles || []);
+      productoApi.obtenerComodines(sucursalActiva).then(setComodines).catch(() => {});
+
       // Auto-asignar entrada
       setSelectedEntrada({
         id: detalleEntrada.id,
@@ -730,6 +738,7 @@ const DevolucionCompraFormulario: React.FC = () => {
 
   const handleEntradaClear = () => {
     setSelectedEntrada(null);
+    setEntradaDetallesData([]);
     form.setFieldsValue({ referencia: '' });
   };
 
@@ -766,6 +775,14 @@ const DevolucionCompraFormulario: React.FC = () => {
         return calcularFila(updated);
       })
     );
+  };
+
+  const handleAddProductoClick = () => {
+    if (selectedEntrada) {
+      setProductosOrigenModalOpen(true);
+    } else {
+      setProductoModalOpen(true);
+    }
   };
 
   const handleProductoSelect = (producto: any) => {
@@ -1441,6 +1458,63 @@ const DevolucionCompraFormulario: React.FC = () => {
         onSelect={handleProductoSelect}
         mode="compra"
       />
+      <ProductosOrigenModal
+        open={productosOrigenModalOpen}
+        onClose={() => setProductosOrigenModalOpen(false)}
+        title="Agregar producto"
+        sourceLabel="Entrada"
+        sourceProducts={entradaDetallesData}
+        comodines={comodines}
+        addedCodes={detalles.map((d) => d.codigo)}
+        sourceColumns={[
+          { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
+          { title: 'Artículo', dataIndex: 'articulo', key: 'articulo', ellipsis: true },
+          { title: 'Cant.', dataIndex: 'cantidad', key: 'cantidad', width: 90, align: 'right' as const },
+          { title: 'Costo', dataIndex: 'costo', key: 'costo', width: 100, align: 'right' as const,
+            render: (v: number) => formatNumber(v) },
+        ]}
+        comodinColumns={[
+          { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
+          { title: 'Artículo', dataIndex: 'nombre', key: 'nombre', ellipsis: true },
+          { title: 'Costo', dataIndex: 'ultimoCosto', key: 'ultimoCosto', width: 100, align: 'right' as const,
+            render: (v: number) => formatNumber(v || 0) },
+        ]}
+        onAddSourceProduct={(record) => {
+          setDetalles((prev) => [
+            calcularFila({
+              ...filaVacia(),
+              id: -(prev.length + 1),
+              codigo: record.codigo,
+              articulo: record.articulo,
+              referencia: record.referencia || '',
+              cantidad: record.cantidad || 0,
+              costo: record.costo || 0,
+              familia: record.familia,
+              medida: record.medida,
+              impuesto: record.impuesto,
+              tieneVencimiento: record.tieneVencimiento,
+            }),
+            ...prev,
+          ]);
+        }}
+        onAddComodin={(record) => {
+          setDetalles((prev) => [
+            calcularFila({
+              ...filaVacia(),
+              id: -(prev.length + 1),
+              codigo: record.codigo || record.idExterno,
+              articulo: record.nombre,
+              referencia: record.referencia || record.upc || '',
+              costo: record.ultimoCosto || 0,
+              cantidad: 1,
+              familia: record.familia,
+              medida: record.unidadMedida || { nombre: '', codigo: '', factor: 1, idExterno: 0 },
+              impuesto: record.impuestos?.[0]?.impuesto,
+            }),
+            ...prev,
+          ]);
+        }}
+      />
       <BuscarEntradaModal
         open={entradaModalOpen}
         onClose={() => setEntradaModalOpen(false)}
@@ -1472,7 +1546,7 @@ const DevolucionCompraFormulario: React.FC = () => {
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
                         <Space>
-                          <Button type="primary" icon={<PlusOutlined />} onClick={() => setProductoModalOpen(true)}>
+                  <Button type="primary" icon={<PlusOutlined />} onClick={handleAddProductoClick}>
                             Agregar producto
                           </Button>
                           <Button icon={<BarcodeOutlined />} onClick={() => setScannerModalOpen(true)} />
@@ -1563,7 +1637,7 @@ const DevolucionCompraFormulario: React.FC = () => {
                   <>
                     <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
                       <Space>
-                        <Button type="primary" icon={<PlusOutlined />} onClick={() => setProductoModalOpen(true)}>
+                        <Button type="primary" icon={<PlusOutlined />} onClick={handleAddProductoClick}>
                           Agregar producto
                         </Button>
                         <Button icon={<BarcodeOutlined />} onClick={() => setScannerModalOpen(true)} />
