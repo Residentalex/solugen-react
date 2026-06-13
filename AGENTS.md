@@ -79,6 +79,17 @@ Tres pantallas definen el canon visual del sistema. Cualquier pantalla nueva deb
 
 > **Estos tres archivos son el canon visual y estructural del sistema y no deben modificarse.** Cualquier ajuste visual, nuevo patrón o mejora debe implementarse en el módulo destino correspondiente, no alterando los archivos plantilla `EntradaAlmacen.tsx`, `EntradaAlmacenDetalle.tsx` ni `EntradaAlmacenFormulario.tsx`.
 
+## Modulos protegidos (no modificar sin notificar)
+
+Los siguientes modulos completos (listado, detalle y formulario) estan protegidos y **no deben modificarse** sin notificar explicitamente al usuario y recibir confirmacion:
+
+- `src/pages/EntradaAlmacen/`
+- `src/pages/SalidaAlmacen/`
+- `src/pages/DevolucionCompra/`
+- `src/pages/TransferenciaAlmacen/`
+
+Cualquier cambio propuesto en estos archivos debe explicarse al usuario y esperar su confirmacion antes de implementarse.
+
 ### Patrón de listado (aplica a todas las listas)
 
 Estructura obligatoria:
