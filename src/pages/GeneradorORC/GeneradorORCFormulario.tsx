@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Avatar, Card, Table, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
+  Avatar, Card, Table, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Checkbox,
   message, Form, Input, InputNumber, DatePicker, Typography, Modal, Dropdown, Alert, Skeleton, Drawer, Descriptions,
 } from 'antd';
 import {
@@ -16,7 +16,6 @@ import {
   DownloadOutlined,
   SyncOutlined,
   DatabaseOutlined,
-  IdcardOutlined,
   CalendarOutlined,
   BarChartOutlined,
   EyeOutlined,
@@ -37,6 +36,7 @@ import { generadorOrcApi } from '../../api/generadorOrcApi';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { productoApi } from '../../api/productoApi';
 import { parametrosApi } from '../../api/parametrosApi';
+import { conteoApi } from '../../api/conteoApi';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
@@ -219,6 +219,76 @@ const ModosCargaModal: React.FC<ModosCargaModalProps> = ({ open, onClose, onSele
   </Modal>
 );
 
+// ===== BuscarPlantillaGORCModal =====
+interface BuscarPlantillaGORCModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSelect: (plantilla: any) => void;
+  codigoSuplidor: string;
+}
+
+const BuscarPlantillaGORCModal: React.FC<BuscarPlantillaGORCModalProps> = ({ open, onClose, onSelect, codigoSuplidor }) => {
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await conteoApi.obtenerPlantillas(sucursalActiva, codigoSuplidor);
+      setData(Array.isArray(res) ? res : []);
+    } catch {
+      message.error('Error al cargar plantillas');
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [sucursalActiva, codigoSuplidor]);
+
+  useEffect(() => {
+    if (open) cargar();
+  }, [open, cargar]);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return data;
+    const term = search.trim().toLowerCase();
+    return data.filter((r) => r.codigo?.toLowerCase().includes(term));
+  }, [data, search]);
+
+  const columnas = [
+    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 150 },
+    { title: 'Suplidor', dataIndex: 'suplidor', key: 'suplidor', ellipsis: true,
+      render: (v: string) => toTitleCase(v || '') },
+  ];
+
+  return (
+    <Modal title="Buscar Plantilla de Conteo" open={open} onCancel={onClose} footer={null} width={600} destroyOnClose>
+      <Input.Search
+        placeholder="Buscar por código..."
+        allowClear
+        onSearch={(val) => setSearch(val)}
+        style={{ marginBottom: 16 }}
+      />
+      <Table
+        dataSource={filtered}
+        columns={columnas}
+        rowKey="id"
+        loading={loading}
+        size="small"
+        pagination={{ pageSize: 10, showSizeChanger: false }}
+        onRow={(record) => ({
+          onClick: () => {
+            onSelect(record);
+            onClose();
+          },
+          style: { cursor: 'pointer' },
+        })}
+      />
+    </Modal>
+  );
+};
+
 // ===== Componente principal =====
 const GeneradorORCFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -252,11 +322,13 @@ const GeneradorORCFormulario: React.FC = () => {
   const [suplidorModalOpen, setSuplidorModalOpen] = useState(false);
   const [productoModalOpen, setProductoModalOpen] = useState(false);
   const [modosCargaModalOpen, setModosCargaModalOpen] = useState(false);
+  const [plantillaModalOpen, setPlantillaModalOpen] = useState(false);
 
   const [detalleSearch, setDetalleSearch] = useState('');
   const [redondeoComercial, setRedondeoComercial] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
+  const [conteoDetallesData, setConteoDetallesData] = useState<any[] | null>(null);
 
   // Análisis / monitor
   const [analisisOpen, setAnalisisOpen] = useState(false);
@@ -345,7 +417,6 @@ const GeneradorORCFormulario: React.FC = () => {
         const fechaVal = res.fecha ? dayjs(res.fecha) : null;
         form.setFieldsValue({
           fecha: fechaVal,
-          numero: res.numero || '',
           notas: res.notas || '',
         });
       })
@@ -557,8 +628,75 @@ const GeneradorORCFormulario: React.FC = () => {
   }, [selectedSuplidor, sucursalActiva]);
 
   const handleCargarPlantilla = useCallback(() => {
-    message.info('Funcionalidad de carga por plantilla próximamente.');
-  }, []);
+    if (!selectedSuplidor) {
+      message.warning('Seleccione un suplidor primero');
+      return;
+    }
+    setPlantillaModalOpen(true);
+  }, [selectedSuplidor]);
+
+  const handlePlantillaSeleccionada = useCallback(async (plantilla: any) => {
+    if (!selectedSuplidor) return;
+    setCargandoMaestro(true);
+    try {
+      const ultimosConteos = await conteoApi.obtenerUltimos(sucursalActiva, selectedSuplidor.codigo);
+      const conteos = Array.isArray(ultimosConteos) ? ultimosConteos : [];
+      const conteo = conteos.find((c: any) => c.codigoPlantilla === plantilla.codigo) || conteos[0];
+
+      if (!conteo || !conteo.detalles || conteo.detalles.length === 0) {
+        message.info('No se encontraron productos en los conteos de esta plantilla.');
+        setConteoDetallesData(null);
+        return;
+      }
+
+      const detalles = conteo.detalles || [];
+      setConteoDetallesData(detalles);
+
+      const shouldLoad = await new Promise<boolean>((resolve) => {
+        Modal.confirm({
+          title: 'Cargar productos del conteo',
+          content: `¿Desea cargar los ${detalles.length} productos del conteo físico?`,
+          okText: 'Sí',
+          cancelText: 'No',
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      });
+
+      if (shouldLoad) {
+        const filas: DetalleGeneradorDTO[] = detalles.map((d: any) => ({
+          codigo: d.codigo || '',
+          referencia: d.referencia || '',
+          producto: d.articulo || '',
+          medida: d.medida ? { id: d.medida.codigo || 0, nombre: d.medida.nombre || '' } : null,
+          impuesto: null,
+          cantidades: { OP: d.cantidad || 0, HR: d.cantidad || 0, VH: d.cantidad || 0 },
+          cantidadesBonificadas: { OP: 0, HR: 0, VH: 0 },
+          existencias: { OP: 0, HR: 0, VH: 0 },
+          existenciasFisicas: { OP: 0, HR: 0, VH: 0 },
+          costo: d.ultimoCosto || 0,
+          margen: 0,
+          precioSugerido: 0,
+          subTotal: 0,
+          porcentajeDescuento: 0,
+          descuento: 0,
+          impuestos: 0,
+          total: 0,
+        }));
+
+        setDetalles(filas.map((f) => calcularFilaGORC(f)));
+        setLoadVersion((v) => v + 1);
+        message.success(`${filas.length} productos cargados del conteo`);
+      } else {
+        message.info('Productos del conteo guardados en memoria. Use "Cargar desde conteo" para agregarlos después.');
+      }
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al cargar conteo');
+      message.error(msg);
+    } finally {
+      setCargandoMaestro(false);
+    }
+  }, [sucursalActiva, selectedSuplidor]);
 
   // ===== Handler de detalle =====
   const handleCeldaCommit = useCallback((rowCodigo: string, campo: string, valor: number) => {
@@ -674,6 +812,35 @@ const GeneradorORCFormulario: React.FC = () => {
     message.success('Precios sugeridos recalculados');
   }, [factorRedondeo]);
 
+  const handleCargarConteoCache = useCallback(() => {
+    if (!conteoDetallesData || conteoDetallesData.length === 0) {
+      message.info('No hay productos de conteo en memoria. Cargue una plantilla primero.');
+      return;
+    }
+    const filas: DetalleGeneradorDTO[] = conteoDetallesData.map((d: any) => ({
+      codigo: d.codigo || '',
+      referencia: d.referencia || '',
+      producto: d.articulo || '',
+      medida: d.medida ? { id: d.medida.codigo || 0, nombre: d.medida.nombre || '' } : null,
+      impuesto: null,
+      cantidades: { OP: d.cantidad || 0, HR: d.cantidad || 0, VH: d.cantidad || 0 },
+      cantidadesBonificadas: { OP: 0, HR: 0, VH: 0 },
+      existencias: { OP: 0, HR: 0, VH: 0 },
+      existenciasFisicas: { OP: 0, HR: 0, VH: 0 },
+      costo: d.ultimoCosto || 0,
+      margen: 0,
+      precioSugerido: 0,
+      subTotal: 0,
+      porcentajeDescuento: 0,
+      descuento: 0,
+      impuestos: 0,
+      total: 0,
+    }));
+    setDetalles((prev) => [...prev, ...filas.map((f) => calcularFilaGORC(f))]);
+    setLoadVersion((v) => v + 1);
+    message.success(`${filas.length} productos cargados desde memoria`);
+  }, [conteoDetallesData]);
+
   // ===== Refresh =====
   const handleRefresh = useCallback(() => {
     if (mode === 'crear') return;
@@ -691,7 +858,7 @@ const GeneradorORCFormulario: React.FC = () => {
           setSuplidorSearchText(toTitleCase(res.suplidor.nombre));
         }
         const fechaVal = res.fecha ? dayjs(res.fecha) : null;
-        form.setFieldsValue({ fecha: fechaVal, numero: res.numero || '', notas: res.notas || '' });
+        form.setFieldsValue({ fecha: fechaVal, notas: res.notas || '' });
       })
       .catch((err: any) => {
         message.error(err?.response?.data?.errorMessage || 'Error al recargar');
@@ -1051,28 +1218,25 @@ const GeneradorORCFormulario: React.FC = () => {
     <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
-          <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
-        <Row gutter={[16, 24]}>
-          <Col xs={24} sm={12} lg={6}>
-            <Form.Item name="fecha" label="Fecha" rules={[{ required: true, message: 'Campo requerido' }]}>
-              <DatePicker
-                format="YYYY-MM-DD"
-                style={{ width: '100%' }}
-                disabledDate={(current) => {
-                  if (!current) return false;
-                  if (fechaCierreContable && current.isBefore(fechaCierreContable, 'day')) return true;
-                  if (current.isAfter(dayjs().add(1, 'day'), 'day')) return true;
-                  return false;
-                }}
-              />
+          <Form form={form} layout="vertical" size="middle">
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={12} lg={8}>
+            <Form.Item name="fecha" rules={[{ required: true, message: 'Campo requerido' }]}>
+              <FloatingField label="Fecha" required>
+                <DatePicker
+                  format="YYYY-MM-DD"
+                  style={{ width: '100%' }}
+                  disabledDate={(current) => {
+                    if (!current) return false;
+                    if (fechaCierreContable && current.isBefore(fechaCierreContable, 'day')) return true;
+                    if (current.isAfter(dayjs().add(1, 'day'), 'day')) return true;
+                    return false;
+                  }}
+                />
+              </FloatingField>
             </Form.Item>
           </Col>
-          <Col xs={24} sm={12} lg={6}>
-            <Form.Item name="numero" label="N° Documento">
-              <Input placeholder="Autogenerado" readOnly />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} lg={12}>
+          <Col xs={24} sm={12} lg={16}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
               <div style={{ flex: 1 }}>
                 <FloatingField label="Suplidor" required externalValue={suplidorSearchText}>
@@ -1084,34 +1248,26 @@ const GeneradorORCFormulario: React.FC = () => {
             <Form.Item name="suplidorCodigo" hidden><Input /></Form.Item>
           </Col>
           <Col xs={24}>
-            <Form.Item name="redondeo" valuePropName="checked">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  type="checkbox"
-                  id="redondeo-chk"
-                  checked={redondeoComercial}
-                  onChange={(e) => setRedondeoComercial(e.target.checked)}
-                  style={{ margin: 0 }}
-                />
-                <label htmlFor="redondeo-chk" style={{ cursor: 'pointer', margin: 0 }}>
-                  Redondeo Comercial
-                </label>
-              </div>
+            <Form.Item style={{ marginBottom: 0 }}>
+              <Checkbox
+                checked={redondeoComercial}
+                onChange={(e) => setRedondeoComercial(e.target.checked)}
+              >
+                Redondeo Comercial
+              </Checkbox>
             </Form.Item>
           </Col>
         </Row>
       </Form>
         </Col>
         <Col xs={24} xxl={6}>
-          <div style={{ marginTop: 24 }}>
-            <TotalesCard
-              subTotal={totalesGenerales.subTotal}
-              descuento={totalesGenerales.descuento}
-              impuestos={totalesGenerales.impuestos}
-              total={totalesGenerales.total}
-              hideTitle
-            />
-          </div>
+          <TotalesCard
+            subTotal={totalesGenerales.subTotal}
+            descuento={totalesGenerales.descuento}
+            impuestos={totalesGenerales.impuestos}
+            total={totalesGenerales.total}
+            hideTitle
+          />
         </Col>
       </Row>
     </Card>
@@ -1138,6 +1294,11 @@ const GeneradorORCFormulario: React.FC = () => {
             size="small"
           >
             Cargar Maestro / Plantilla
+          </Button>
+        )}
+        {conteoDetallesData && conteoDetallesData.length > 0 && (
+          <Button icon={<DatabaseOutlined />} onClick={handleCargarConteoCache} size="small">
+            Cargar desde conteo ({conteoDetallesData.length})
           </Button>
         )}
         <div style={{ flex: 1 }} />
@@ -1290,6 +1451,13 @@ const GeneradorORCFormulario: React.FC = () => {
         onClose={() => setModosCargaModalOpen(false)}
         onSeleccionarMaestro={handleCargarMaestro}
         onSeleccionarPlantilla={handleCargarPlantilla}
+      />
+
+      <BuscarPlantillaGORCModal
+        open={plantillaModalOpen}
+        onClose={() => setPlantillaModalOpen(false)}
+        onSelect={handlePlantillaSeleccionada}
+        codigoSuplidor={selectedSuplidor?.codigo || ''}
       />
 
       {/* ===== Monitor de Análisis (Drawer) ===== */}
