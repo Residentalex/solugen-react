@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import { useNavigate } from 'react-router-dom';
@@ -7,7 +7,6 @@ import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { almacenApi } from '../../api/almacenApi';
-import PermissionGate from '../../components/PermissionGate';
 import { toTitleCase } from '../../utils/formats';
 import type { AlmacenDTO } from '../../types/entradaAlmacen';
 
@@ -27,11 +26,18 @@ const Almacenes: React.FC = () => {
   const [detalleItem, setDetalleItem] = useState<AlmacenDTO | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['almacenes', sucursalActiva],
+    queryKey: ['almacenes', sucursalActiva, page, pageSize, searchText],
     queryFn: async () => {
-      if (sucursalActiva === undefined) return [];
-      const result = await almacenApi.obtenerListado(sucursalActiva);
-      return result || [];
+      if (sucursalActiva === undefined) return { datos: [], total: 0 };
+      const salto = (page - 1) * pageSize;
+      const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
+      if (searchText) params.busqueda = searchText;
+
+      const [resultados, totalCount] = await Promise.all([
+        almacenApi.filtrar(sucursalActiva, params),
+        almacenApi.obtenerTotal(sucursalActiva, { busqueda: searchText || undefined }),
+      ]);
+      return { datos: resultados || [], total: totalCount ?? 0 };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -52,17 +58,6 @@ const Almacenes: React.FC = () => {
     setDetalleItem(item);
     setDetalleVisible(true);
   };
-
-  const filteredData = useMemo(() => {
-    const list = data || [];
-    if (!searchText.trim()) return list;
-    const text = searchText.trim().toLowerCase();
-    return list.filter(
-      (item) =>
-        item.codigo?.toLowerCase().includes(text) ||
-        item.nombre?.toLowerCase().includes(text)
-    );
-  }, [data, searchText]);
 
   const columns: ColumnsType<AlmacenDTO> = [
     {
@@ -121,7 +116,7 @@ const Almacenes: React.FC = () => {
         />
         <Table<AlmacenDTO>
           columns={columns}
-          dataSource={filteredData}
+          dataSource={data?.datos || []}
           rowKey="codigo"
           loading={isLoading}
           scroll={{ x: 500 }}
@@ -131,12 +126,10 @@ const Almacenes: React.FC = () => {
           pagination={{
             current: page,
             pageSize,
-            total: filteredData.length,
+            total: data?.total || 0,
+            onChange: (p) => setPage(p),
             showSizeChanger: false,
             showTotal: (t) => `${t} registros`,
-          }}
-          onChange={(pagination) => {
-            setPage(pagination.current || 1);
           }}
           locale={{
             emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

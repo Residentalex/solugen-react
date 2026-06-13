@@ -1,7 +1,6 @@
-﻿import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Table, Button, Input, Select, Empty, message, Modal, Descriptions, Typography } from 'antd';
-import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Empty, Modal, Descriptions, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -28,11 +27,18 @@ const PuntosVenta: React.FC = () => {
   const [detalleItem, setDetalleItem] = useState<PuntoVentaDTO | null>(null);
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['puntosVenta', sucursalActiva],
+    queryKey: ['puntosVenta', sucursalActiva, page, pageSize, searchText],
     queryFn: async () => {
-      if (sucursalActiva === undefined) return [];
-      const result = await puntoVentaApi.obtenerListado(sucursalActiva);
-      return result || [];
+      if (sucursalActiva === undefined) return { datos: [], total: 0 };
+      const salto = (page - 1) * pageSize;
+      const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
+      if (searchText) params.busqueda = searchText;
+
+      const [resultados, totalCount] = await Promise.all([
+        puntoVentaApi.filtrarPuntosVenta(sucursalActiva, params),
+        puntoVentaApi.obtenerTotalPuntosVenta(sucursalActiva, { busqueda: searchText || undefined }),
+      ]);
+      return { datos: resultados || [], total: totalCount ?? 0 };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -53,18 +59,6 @@ const PuntosVenta: React.FC = () => {
     setDetalleItem(item);
     setDetalleVisible(true);
   };
-
-  const filteredData = useMemo(() => {
-    const list = data || [];
-    if (!searchText.trim()) return list;
-    const text = searchText.trim().toLowerCase();
-    return list.filter(
-      (item) =>
-        item.nombre?.toLowerCase().includes(text) ||
-        item.ip?.toLowerCase().includes(text) ||
-        item.ruta?.toLowerCase().includes(text)
-    );
-  }, [data, searchText]);
 
   const columns: ColumnsType<PuntoVentaDTO> = [
     {
@@ -108,7 +102,7 @@ const PuntosVenta: React.FC = () => {
 
       <Table<PuntoVentaDTO>
         columns={columns}
-        dataSource={filteredData}
+        dataSource={data?.datos || []}
         rowKey="nombre"
         loading={isLoading}
         scroll={{ x: 600 }}
@@ -117,12 +111,10 @@ const PuntosVenta: React.FC = () => {
         pagination={{
           current: page,
           pageSize,
-          total: filteredData.length,
+          total: data?.total || 0,
+          onChange: (p) => setPage(p),
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
-        }}
-        onChange={(pagination) => {
-          setPage(pagination.current || 1);
         }}
         locale={{
           emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

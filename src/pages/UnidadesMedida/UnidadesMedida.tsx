@@ -1,13 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Table, Card, Input, Select, Button, Modal, Form, InputNumber, message, Typography, Alert, Empty } from 'antd';
+import { Table, Card, Button, Modal, Form, Input, InputNumber, message, Typography, Alert, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import type { UnidadMedidaDTO } from '../../types/productos';
-import PermissionGate from '../../components/PermissionGate';
 import { toTitleCase } from '../../utils/formats';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
@@ -30,11 +28,18 @@ const UnidadesMedida: React.FC = () => {
   const [form] = Form.useForm();
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['unidadesMedida', sucursalActiva],
+    queryKey: ['unidadesMedida', sucursalActiva, page, pageSize, searchText],
     queryFn: async () => {
-      if (sucursalActiva === undefined) return [];
-      const result = await unidadMedidaApi.obtenerListado(sucursalActiva);
-      return result || [];
+      if (sucursalActiva === undefined) return { datos: [], total: 0 };
+      const salto = (page - 1) * pageSize;
+      const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
+      if (searchText) params.busqueda = searchText;
+
+      const [resultados, totalCount] = await Promise.all([
+        unidadMedidaApi.filtrar(sucursalActiva, params),
+        unidadMedidaApi.obtenerTotal(sucursalActiva, { busqueda: searchText || undefined }),
+      ]);
+      return { datos: resultados || [], total: totalCount ?? 0 };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -50,23 +55,6 @@ const UnidadesMedida: React.FC = () => {
     setPage(1);
     setSearchText(value);
   };
-
-  const filteredData = useMemo(() => {
-    const list = data || [];
-    if (!searchText) return list;
-    const lower = searchText.toLowerCase();
-    return list.filter(
-      (item) =>
-        item.codigo?.toLowerCase().includes(lower) ||
-        item.nombre?.toLowerCase().includes(lower)
-    );
-  }, [data, searchText]);
-
-  const paginatedData = useMemo(() => {
-    if (!filteredData) return [];
-    const start = (page - 1) * pageSize;
-    return filteredData.slice(start, start + pageSize);
-  }, [filteredData, page, pageSize]);
 
   const abrirNuevo = () => {
     if (!puedeCrear) return;
@@ -160,7 +148,7 @@ const UnidadesMedida: React.FC = () => {
         />
         <Table<UnidadMedidaDTO>
           columns={columns}
-          dataSource={paginatedData}
+          dataSource={data?.datos || []}
           rowKey={(r) => r.codigo || r.nombre || ''}
           loading={isLoading}
           scroll={{ x: 700 }}
@@ -175,7 +163,7 @@ const UnidadesMedida: React.FC = () => {
           pagination={{
             current: page,
             pageSize,
-            total: filteredData?.length || 0,
+            total: data?.total || 0,
             onChange: (p) => setPage(p),
             showSizeChanger: false,
             showTotal: (t) => `${t} registros`,

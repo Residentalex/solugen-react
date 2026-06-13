@@ -14,14 +14,17 @@ export interface BancoDTO {
 export const bancoApi = {
   obtenerListado: async (
     sucursal: number,
-    params?: { cantidad?: number; salto?: number }
+    params?: { cantidad?: number; salto?: number; busqueda?: string }
   ): Promise<BancoDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<BancoDTO[]>>(`${BASE}/${sucursal}`, { params });
     return data.data;
   },
 
-  obtenerTotal: async (sucursal: number): Promise<number> => {
-    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/total/${sucursal}`);
+  obtenerTotal: async (
+    sucursal: number,
+    params?: { busqueda?: string }
+  ): Promise<number> => {
+    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/total/${sucursal}`, { params });
     return data.data;
   },
 };

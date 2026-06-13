@@ -1,8 +1,7 @@
-﻿import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, Table, Card, Input, Select, Button, Modal, Descriptions, Typography, Tag, Divider, Empty } from 'antd';
+import { Alert, Table, Card, Button, Modal, Descriptions, Typography, Tag, Divider, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { ofertaApi } from '../../api/ofertaApi';
@@ -54,17 +53,25 @@ const Ofertas: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
 
+  const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(25);
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [detalleItem, setDetalleItem] = useState<OfertaDTO | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['ofertas', sucursalActiva],
+    queryKey: ['ofertas', sucursalActiva, page, pageSize, searchText],
     queryFn: async () => {
-      if (sucursalActiva === undefined) return [];
-      const result = await ofertaApi.obtenerListado(sucursalActiva);
-      return result || [];
+      if (sucursalActiva === undefined) return { datos: [], total: 0 };
+      const salto = (page - 1) * pageSize;
+      const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
+      if (searchText) params.busqueda = searchText;
+
+      const [resultados, totalCount] = await Promise.all([
+        ofertaApi.filtrar(sucursalActiva, params),
+        ofertaApi.obtenerTotal(sucursalActiva, { busqueda: searchText || undefined }),
+      ]);
+      return { datos: resultados || [], total: totalCount ?? 0 };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -78,28 +85,13 @@ const Ofertas: React.FC = () => {
 
   const handleSearch = (value: string) => {
     setSearchText(value);
+    setPage(1);
   };
 
   const abrirDetalle = (item: OfertaDTO) => {
     setDetalleItem(item);
     setDetalleVisible(true);
   };
-
-  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€ filtro local â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-
-  const filteredData = useMemo(() => {
-    const list = data || [];
-    const result = searchText
-      ? list.filter((item) => {
-          const lower = searchText.toLowerCase();
-          return (
-            item.codigo?.toLowerCase().includes(lower) ||
-            item.nombre?.toLowerCase().includes(lower)
-          );
-        })
-      : [...list];
-    return result.sort((a, b) => b.fechaFinal.localeCompare(a.fechaFinal));
-  }, [data, searchText]);
 
   /* â”€â”€â”€â”€â”€â”€â”€â”€â”€ columnas â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
@@ -184,26 +176,16 @@ const Ofertas: React.FC = () => {
         style={{ borderRadius: 8, overflow: 'hidden' }}
         styles={{ body: { padding: 0 } }}
       >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: 16,
-              flexWrap: 'wrap',
-            }}
-          >
         <CatalogoListadoToolbar
           onSearch={handleSearch}
           pageSize={pageSize}
           onPageSizeChange={(v) => { setPageSize(v); }}
           onReload={() => refetch()}
         />
-          </div>
 
         <Table<OfertaDTO>
           columns={columns}
-          dataSource={filteredData}
+          dataSource={data?.datos || []}
           rowKey="codigo"
           loading={isLoading}
           scroll={{ x: 1040 }}
@@ -211,8 +193,11 @@ const Ofertas: React.FC = () => {
           rowClassName="paces-row-hover"
           className="paces-border-top paces-list-table"
           pagination={{
-            showSizeChanger: false,
+            current: page,
             pageSize,
+            total: data?.total || 0,
+            onChange: (p) => setPage(p),
+            showSizeChanger: false,
             showTotal: (t) =>
               `${t} registros`,
           }}

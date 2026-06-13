@@ -32,13 +32,14 @@ const Bancos: React.FC = () => {
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['bancos', sucursalActiva, page, pageSize],
+    queryKey: ['bancos', sucursalActiva, page, pageSize, searchText],
     queryFn: async () => {
       const salto = (page - 1) * pageSize;
-      const params: { cantidad?: number; salto?: number } = { cantidad: pageSize, salto };
+      const params: { cantidad?: number; salto?: number; busqueda?: string } = { cantidad: pageSize, salto };
+      if (searchText) params.busqueda = searchText;
       const [resultados, totalCount] = await Promise.all([
         bancoApi.obtenerListado(sucursalActiva, params),
-        bancoApi.obtenerTotal(sucursalActiva),
+        bancoApi.obtenerTotal(sucursalActiva, { busqueda: searchText || undefined }),
       ]);
       return { datos: resultados || [], total: totalCount ?? 0 };
     },

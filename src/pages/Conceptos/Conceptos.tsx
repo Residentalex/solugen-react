@@ -1,12 +1,10 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  Table, Card, Input, Tag, Button, Typography, message, Space, Alert, Empty
+  Table, Card, Tag, Button, Typography, Alert, Empty
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
-import PermissionGate from '../../components/PermissionGate';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { conceptosApi } from '../../api/conceptosApi';
@@ -30,12 +28,18 @@ const Conceptos: React.FC = () => {
   const [pageSize, setPageSize] = useState(25);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['conceptos', sucursalActiva, searchText],
+    queryKey: ['conceptos', sucursalActiva, page, pageSize, searchText],
     queryFn: async () => {
-      if (sucursalActiva === undefined) return [];
-      const filtro = searchText || undefined;
-      const result = await conceptosApi.obtenerConceptos(sucursalActiva, filtro);
-      return result || [];
+      if (sucursalActiva === undefined) return { datos: [], total: 0 };
+      const salto = (page - 1) * pageSize;
+      const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
+      if (searchText) params.busqueda = searchText;
+
+      const [resultados, totalCount] = await Promise.all([
+        conceptosApi.filtrar(sucursalActiva, params),
+        conceptosApi.obtenerTotal(sucursalActiva, { busqueda: searchText || undefined }),
+      ]);
+      return { datos: resultados || [], total: totalCount ?? 0 };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -51,12 +55,6 @@ const Conceptos: React.FC = () => {
     setPage(1);
     setSearchText(value);
   };
-
-  const paginatedData = useMemo(() => {
-    if (!data) return [];
-    const start = (page - 1) * pageSize;
-    return data.slice(start, start + pageSize);
-  }, [data, page, pageSize]);
 
   const columns: ColumnsType<ConceptoDTO> = [
     {
@@ -122,7 +120,7 @@ const Conceptos: React.FC = () => {
         />
         <Table
           columns={columns}
-          dataSource={paginatedData}
+          dataSource={data?.datos || []}
           rowKey="codigo"
           loading={isLoading}
           scroll={{ x: 700 }}
@@ -130,7 +128,7 @@ const Conceptos: React.FC = () => {
           pagination={{
             current: page,
             pageSize,
-            total: data?.length || 0,
+            total: data?.total || 0,
             onChange: (p) => setPage(p),
             showSizeChanger: false,
             showTotal: (t) => `${t} registros`,

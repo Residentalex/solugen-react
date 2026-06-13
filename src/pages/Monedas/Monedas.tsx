@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Card,
@@ -8,19 +8,16 @@ import {
   Form,
   Input,
   InputNumber,
-  Select,
   message,
   Empty,
   Typography,
   Alert,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { monedaApi } from '../../api/monedaApi';
 import type { MonedaDTO } from '../../types/contabilidad';
-import PermissionGate from '../../components/PermissionGate';
 import { toTitleCase } from '../../utils/formats';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
@@ -46,11 +43,18 @@ const Monedas: React.FC = () => {
   const [form] = Form.useForm();
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['monedas', sucursalActiva],
+    queryKey: ['monedas', sucursalActiva, page, pageSize, searchText],
     queryFn: async () => {
-      if (sucursalActiva === undefined) return [];
-      const result = await monedaApi.obtenerListado(sucursalActiva);
-      return result || [];
+      if (sucursalActiva === undefined) return { datos: [], total: 0 };
+      const salto = (page - 1) * pageSize;
+      const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
+      if (searchText) params.busqueda = searchText;
+
+      const [resultados, totalCount] = await Promise.all([
+        monedaApi.filtrar(sucursalActiva, params),
+        monedaApi.obtenerTotal(sucursalActiva, { busqueda: searchText || undefined }),
+      ]);
+      return { datos: resultados || [], total: totalCount ?? 0 };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -66,23 +70,6 @@ const Monedas: React.FC = () => {
     setPage(1);
     setSearchText(value);
   };
-
-  const filteredData = useMemo(() => {
-    const list = data || [];
-    if (!searchText) return list;
-    const lower = searchText.toLowerCase();
-    return list.filter(
-      (item) =>
-        item.codigo.toLowerCase().includes(lower) ||
-        item.nombre.toLowerCase().includes(lower)
-    );
-  }, [data, searchText]);
-
-  const paginatedData = useMemo(() => {
-    if (!filteredData) return [];
-    const start = (page - 1) * pageSize;
-    return filteredData.slice(start, start + pageSize);
-  }, [filteredData, page, pageSize]);
 
   const abrirNuevo = () => {
     if (!puedeCrear) return;
@@ -202,7 +189,7 @@ const Monedas: React.FC = () => {
         />
         <Table<MonedaDTO>
           columns={columns}
-          dataSource={paginatedData}
+          dataSource={data?.datos || []}
           rowKey="id"
           loading={isLoading}
           scroll={{ x: 700 }}
@@ -212,7 +199,7 @@ const Monedas: React.FC = () => {
           pagination={{
             current: page,
             pageSize,
-            total: filteredData?.length || 0,
+            total: data?.total || 0,
             onChange: (p) => setPage(p),
             showSizeChanger: false,
             showTotal: (t) => `${t} registros`,

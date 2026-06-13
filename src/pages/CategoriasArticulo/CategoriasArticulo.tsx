@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import { useNavigate } from 'react-router-dom';
 import { Alert, Table, Card, Button, Typography, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import PermissionGate from '../../components/PermissionGate';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { categoriaArticuloApi } from '../../api/categoriaArticuloApi';
@@ -26,11 +25,18 @@ const CategoriasArticulo: React.FC = () => {
   const [pageSize, setPageSize] = useState(25);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['categoriasArticulo', sucursalActiva],
+    queryKey: ['categoriasArticulo', sucursalActiva, page, pageSize, searchText],
     queryFn: async () => {
-      if (sucursalActiva === undefined) return [];
-      const result = await categoriaArticuloApi.obtenerListado(sucursalActiva);
-      return result || [];
+      if (sucursalActiva === undefined) return { datos: [], total: 0 };
+      const salto = (page - 1) * pageSize;
+      const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
+      if (searchText) params.busqueda = searchText;
+
+      const [resultados, totalCount] = await Promise.all([
+        categoriaArticuloApi.filtrar(sucursalActiva, params),
+        categoriaArticuloApi.obtenerTotal(sucursalActiva, { busqueda: searchText || undefined }),
+      ]);
+      return { datos: resultados || [], total: totalCount ?? 0 };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -46,23 +52,6 @@ const CategoriasArticulo: React.FC = () => {
     setPage(1);
     setSearchText(value);
   };
-
-  const filteredData = useMemo(() => {
-    const list = data || [];
-    if (!searchText) return list;
-    const lower = searchText.toLowerCase();
-    return list.filter(
-      (item) =>
-        item.codigo?.toLowerCase().includes(lower) ||
-        item.nombre?.toLowerCase().includes(lower)
-    );
-  }, [data, searchText]);
-
-  const paginatedData = useMemo(() => {
-    if (!filteredData) return [];
-    const start = (page - 1) * pageSize;
-    return filteredData.slice(start, start + pageSize);
-  }, [filteredData, page, pageSize]);
 
   const columns: ColumnsType<CategoriaArticuloDTO> = [
     {
@@ -133,7 +122,7 @@ const CategoriasArticulo: React.FC = () => {
           />
       <Table<CategoriaArticuloDTO>
         columns={columns}
-        dataSource={paginatedData}
+        dataSource={data?.datos || []}
         rowKey={(r) => r.codigo || r.nombre || ''}
         loading={isLoading}
         scroll={{ x: 900 }}
@@ -148,7 +137,7 @@ const CategoriasArticulo: React.FC = () => {
           pagination={{
             current: page,
             pageSize,
-            total: filteredData?.length || 0,
+            total: data?.total || 0,
             onChange: (p) => setPage(p),
             showSizeChanger: false,
             showTotal: (t) => `${t} registros`,

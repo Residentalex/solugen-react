@@ -1,31 +1,26 @@
-﻿import React, { useEffect, useState, useMemo, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Table,
   Button,
-  Input,
   Select,
   Tag,
   message,
-  Space,
   Empty,
   Alert,
   Card,
+  Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
-import PermissionGate from '../../components/PermissionGate';
-
-const FILAS_POR_PAGINA = 25;
 import { useUIStore } from '../../stores/uiStore';
-import { Typography } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
-
-const { Text } = Typography;
 import { pantallaApi } from '../../api/pantallaApi';
 import type { PantallaDTO, PantallaEntidadDTO, ModuloDTO } from '../../types/auth';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+
+const { Text } = Typography;
+const FILAS_POR_PAGINA = 25;
 
 const Pantallas: React.FC = () => {
   const navigate = useNavigate();
@@ -34,6 +29,7 @@ const Pantallas: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.usuario?.sucursalActiva);
 
+  const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
   const [filtroModulo, setFiltroModulo] = useState<number | undefined>();
@@ -42,11 +38,26 @@ const Pantallas: React.FC = () => {
   const [entidadesPorPantalla, setEntidadesPorPantalla] = useState<Map<number, PantallaEntidadDTO[]>>(new Map());
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['pantallas', sucursalActiva],
+    queryKey: ['pantallas', sucursalActiva, page, pageSize, searchText, filtroModulo, filtroGrupo],
     queryFn: async () => {
-      if (sucursalActiva === undefined) return [];
-      const result = await pantallaApi.obtenerListado(sucursalActiva);
-      return result || [];
+      if (sucursalActiva === undefined) return { datos: [], total: 0 };
+      const salto = (page - 1) * pageSize;
+      const params: { cantidad: number; salto: number; busqueda?: string; moduloId?: number; grupo?: string } = {
+        cantidad: pageSize, salto,
+      };
+      if (searchText) params.busqueda = searchText;
+      if (filtroModulo !== undefined) params.moduloId = filtroModulo;
+      if (filtroGrupo) params.grupo = filtroGrupo;
+
+      const [resultados, totalCount] = await Promise.all([
+        pantallaApi.filtrar(sucursalActiva, params),
+        pantallaApi.obtenerTotalPantallas(sucursalActiva, {
+          busqueda: searchText || undefined,
+          moduloId: filtroModulo,
+          grupo: filtroGrupo,
+        }),
+      ]);
+      return { datos: resultados || [], total: totalCount ?? 0 };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -84,35 +95,19 @@ const Pantallas: React.FC = () => {
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar, cargarEntidades, cargarModulos]);
 
-  // Filtrado y búsqueda cliente
-  const filteredData = useMemo(() => {
-    let result = data || [];
-    if (filtroModulo !== undefined) {
-      result = result.filter((p) => p.modulos?.some((m) => m.id === filtroModulo));
-    }
-    if (filtroGrupo) {
-      result = result.filter((p) => p.grupo === filtroGrupo);
-    }
-    if (searchText) {
-      const term = searchText.toLowerCase();
-      result = result.filter(
-        (p) =>
-          p.nombre.toLowerCase().includes(term) ||
-          p.codigo.toLowerCase().includes(term),
-      );
-    }
-    return result;
-  }, [data, filtroModulo, filtroGrupo, searchText]);
-
-  // Grupos únicos disponibles en los datos
-  const gruposDisponibles = useMemo(() => {
-    const list = data || [];
-    const grupos = new Set(list.map((p) => p.grupo).filter(Boolean) as string[]);
-    return Array.from(grupos).sort();
-  }, [data]);
-
   const handleSearch = (value: string) => {
     setSearchText(value);
+    setPage(1);
+  };
+
+  const handleModuloChange = (val: number | undefined) => {
+    setFiltroModulo(val);
+    setPage(1);
+  };
+
+  const handleGrupoChange = (val: string | undefined) => {
+    setFiltroGrupo(val);
+    setPage(1);
   };
 
   const columns: ColumnsType<PantallaDTO> = [
@@ -208,7 +203,7 @@ const Pantallas: React.FC = () => {
         <CatalogoListadoToolbar
           onSearch={handleSearch}
           pageSize={pageSize}
-          onPageSizeChange={(v) => { setPageSize(v); }}
+          onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onNuevo={() => navigate('/MPantalla/nuevo')}
           onReload={() => refetch()}
           filtros={
@@ -218,7 +213,7 @@ const Pantallas: React.FC = () => {
                 allowClear
                 style={{ width: 160 }}
                 value={filtroModulo}
-                onChange={(val) => setFiltroModulo(val)}
+                onChange={handleModuloChange}
               >
                 {modulosCatalogo.map((m) => (
                   <Select.Option key={m.id} value={m.id}>
@@ -231,11 +226,11 @@ const Pantallas: React.FC = () => {
                 allowClear
                 style={{ width: 160 }}
                 value={filtroGrupo}
-                onChange={(val) => setFiltroGrupo(val)}
+                onChange={handleGrupoChange}
               >
-                {gruposDisponibles.map((g) => (
-                  <Select.Option key={g} value={g}>
-                    {g}
+                {[...new Set((data?.datos || []).map((p: PantallaDTO) => p.grupo).filter(Boolean))].sort().map((g) => (
+                  <Select.Option key={g as string} value={g as string}>
+                    {g as string}
                   </Select.Option>
                 ))}
               </Select>
@@ -244,7 +239,7 @@ const Pantallas: React.FC = () => {
         />
         <Table<PantallaDTO>
             columns={columns}
-            dataSource={filteredData}
+            dataSource={data?.datos || []}
             rowKey="id"
             loading={isLoading}
             scroll={{ x: 1200 }}
@@ -252,7 +247,10 @@ const Pantallas: React.FC = () => {
             rowClassName="paces-row-hover"
             className="paces-border-top paces-list-table"
             pagination={{
+              current: page,
               pageSize,
+              total: data?.total || 0,
+              onChange: (p) => setPage(p),
               showSizeChanger: false,
               showTotal: (t) => `${t} registros`,
             }}

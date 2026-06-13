@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Card,
@@ -7,18 +7,15 @@ import {
   Modal,
   Form,
   Input,
-  Select,
   message,
   Empty,
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { tipoCuentaApi } from '../../api/tipoCuentaApi';
 import type { TipoCuentaDTO } from '../../types/contabilidad';
-import PermissionGate from '../../components/PermissionGate';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
@@ -33,6 +30,7 @@ const TiposCuenta: React.FC = () => {
   const puedeEditar = pantallaActual?.acciones.includes('EDITAR') ?? false;
   const puedeCrear = pantallaActual?.acciones.includes('CREAR') ?? false;
 
+  const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(25);
   const [modalVisible, setModalVisible] = useState(false);
@@ -41,11 +39,18 @@ const TiposCuenta: React.FC = () => {
   const [form] = Form.useForm();
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['tiposCuenta', sucursalActiva],
+    queryKey: ['tiposCuenta', sucursalActiva, page, pageSize, searchText],
     queryFn: async () => {
-      if (sucursalActiva === undefined) return [];
-      const result = await tipoCuentaApi.obtenerListado(sucursalActiva);
-      return result || [];
+      if (sucursalActiva === undefined) return { datos: [], total: 0 };
+      const salto = (page - 1) * pageSize;
+      const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
+      if (searchText) params.busqueda = searchText;
+
+      const [resultados, totalCount] = await Promise.all([
+        tipoCuentaApi.filtrar(sucursalActiva, params),
+        tipoCuentaApi.obtenerTotal(sucursalActiva, { busqueda: searchText || undefined }),
+      ]);
+      return { datos: resultados || [], total: totalCount ?? 0 };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -59,18 +64,8 @@ const TiposCuenta: React.FC = () => {
 
   const handleSearch = (value: string) => {
     setSearchText(value);
+    setPage(1);
   };
-
-  const filteredData = useMemo(() => {
-    const list = data || [];
-    if (!searchText) return list;
-    const lower = searchText.toLowerCase();
-    return list.filter(
-      (item) =>
-        item.idExterno.toLowerCase().includes(lower) ||
-        item.nombre.toLowerCase().includes(lower)
-    );
-  }, [data, searchText]);
 
   const abrirNuevo = () => {
     if (!puedeCrear) return;
@@ -160,7 +155,7 @@ const TiposCuenta: React.FC = () => {
         />
         <Table<TipoCuentaDTO>
           columns={columns}
-          dataSource={filteredData}
+          dataSource={data?.datos || []}
           rowKey="idExterno"
           loading={isLoading}
           scroll={{ x: 500 }}
@@ -168,8 +163,11 @@ const TiposCuenta: React.FC = () => {
           rowClassName="paces-row-hover"
           className="paces-border-top paces-list-table"
           pagination={{
-            showSizeChanger: false,
+            current: page,
             pageSize,
+            total: data?.total || 0,
+            onChange: (p) => setPage(p),
+            showSizeChanger: false,
             showTotal: (t) => `${t} registros`,
           }}
           locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay tipos de cuenta registrados" /></div> }}

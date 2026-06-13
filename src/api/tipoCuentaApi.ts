@@ -15,6 +15,22 @@ export const tipoCuentaApi = {
     return data.data;
   },
 
+  filtrar: async (
+    sucursal: number,
+    filtro: { cantidad?: number; salto?: number; busqueda?: string }
+  ): Promise<TipoCuentaDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<TipoCuentaDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params: filtro });
+    return data.data;
+  },
+
+  obtenerTotal: async (
+    sucursal: number,
+    params?: { busqueda?: string }
+  ): Promise<number> => {
+    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/total/${sucursal}`, { params });
+    return data.data;
+  },
+
   crear: async (sucursal: number, dto: TipoCuentaDTO): Promise<TipoCuentaDTO> => {
     const { data } = await apiClient.post<ApiResponse<TipoCuentaDTO>>(`${BASE}/${sucursal}`, dto);
     return data.data;

@@ -13,4 +13,18 @@ export const servicioApi = {
     const { data } = await apiClient.get<ApiResponse<ServicioDTO>>(`${BASE}/${sucursal}/${codigo}`);
     return data.data;
   },
+  filtrar: async (
+    sucursal: number,
+    filtro: { cantidad?: number; salto?: number; busqueda?: string; activo?: boolean }
+  ): Promise<ServicioDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<ServicioDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params: filtro });
+    return data.data;
+  },
+  obtenerTotal: async (
+    sucursal: number,
+    params?: { busqueda?: string; activo?: boolean }
+  ): Promise<number> => {
+    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/total/${sucursal}`, { params });
+    return data.data;
+  },
 };

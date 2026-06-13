@@ -22,6 +22,22 @@ export const conceptosApi = {
     return data.data;
   },
 
+  filtrar: async (
+    sucursal: number,
+    filtro: { cantidad?: number; salto?: number; busqueda?: string }
+  ): Promise<ConceptoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`${CONCEPTOS_BASE}/${sucursal}/filtrar`, { params: filtro });
+    return data.data;
+  },
+
+  obtenerTotal: async (
+    sucursal: number,
+    params?: { busqueda?: string }
+  ): Promise<number> => {
+    const { data } = await apiClient.get<ApiResponse<number>>(`${CONCEPTOS_BASE}/total/${sucursal}`, { params });
+    return data.data;
+  },
+
   obtenerConceptosPorDocumento: async (sucursal: number, documento: string, filtro?: string): Promise<ConceptoDTO[]> => {
     const params: Record<string, string> = {};
     if (filtro) params.filtro = filtro;

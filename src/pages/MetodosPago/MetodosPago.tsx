@@ -1,7 +1,6 @@
-﻿import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Table, Input, Select, Button, Tag, Typography, Empty, Modal, Descriptions, Alert } from 'antd';
-import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Card, Table, Button, Tag, Typography, Empty, Modal, Descriptions, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -28,11 +27,18 @@ const MetodosPago: React.FC = () => {
   const [detalleItem, setDetalleItem] = useState<MetodoPagoDTO | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['metodosPago', sucursalActiva],
+    queryKey: ['metodosPago', sucursalActiva, page, pageSize, searchText],
     queryFn: async () => {
-      if (sucursalActiva === undefined) return [];
-      const result = await puntoVentaApi.obtenerMetodosPago(sucursalActiva);
-      return result || [];
+      if (sucursalActiva === undefined) return { datos: [], total: 0 };
+      const salto = (page - 1) * pageSize;
+      const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
+      if (searchText) params.busqueda = searchText;
+
+      const [resultados, totalCount] = await Promise.all([
+        puntoVentaApi.filtrarMetodosPago(sucursalActiva, params),
+        puntoVentaApi.obtenerTotalMetodosPago(sucursalActiva, { busqueda: searchText || undefined }),
+      ]);
+      return { datos: resultados || [], total: totalCount ?? 0 };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -53,17 +59,6 @@ const MetodosPago: React.FC = () => {
     setDetalleItem(item);
     setDetalleVisible(true);
   };
-
-  const filteredData = useMemo(() => {
-    const list = data || [];
-    if (!searchText.trim()) return list;
-    const text = searchText.trim().toLowerCase();
-    return list.filter(
-      (item) =>
-        item.nombre?.toLowerCase().includes(text) ||
-        item.codigo?.toLowerCase().includes(text)
-    );
-  }, [data, searchText]);
 
   const columns: ColumnsType<MetodoPagoDTO> = [
     {
@@ -135,7 +130,7 @@ const MetodosPago: React.FC = () => {
 
       <Table<MetodoPagoDTO>
         columns={columns}
-        dataSource={filteredData}
+        dataSource={data?.datos || []}
         rowKey="id"
         loading={isLoading}
         scroll={{ x: 600 }}
@@ -145,12 +140,10 @@ const MetodosPago: React.FC = () => {
         pagination={{
           current: page,
           pageSize,
-          total: filteredData.length,
+          total: data?.total || 0,
+          onChange: (p) => setPage(p),
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
-        }}
-        onChange={(pagination) => {
-          setPage(pagination.current || 1);
         }}
         locale={{
           emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

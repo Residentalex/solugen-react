@@ -15,6 +15,22 @@ export const impuestoApi = {
     return data;
   },
 
+  filtrar: async (
+    sucursal: number,
+    filtro: { cantidad?: number; salto?: number; busqueda?: string }
+  ): Promise<ImpuestoDTO[]> => {
+    const { data } = await apiClient.get<ImpuestoDTO[]>(`${BASE}/${sucursal}/filtrar`, { params: filtro });
+    return data;
+  },
+
+  obtenerTotal: async (
+    sucursal: number,
+    params?: { busqueda?: string }
+  ): Promise<number> => {
+    const { data } = await apiClient.get<number>(`${BASE}/total/${sucursal}`, { params });
+    return data;
+  },
+
   crear: async (sucursal: number, dto: Partial<ImpuestoDTO>): Promise<ImpuestoDTO> => {
     const { data } = await apiClient.post<ApiResponse<ImpuestoDTO>>(`${BASE}/${sucursal}`, dto);
     return data.data;

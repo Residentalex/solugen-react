@@ -15,6 +15,22 @@ export const monedaApi = {
     return data.data;
   },
 
+  filtrar: async (
+    sucursal: number,
+    filtro: { cantidad?: number; salto?: number; busqueda?: string }
+  ): Promise<MonedaDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<MonedaDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params: filtro });
+    return data.data;
+  },
+
+  obtenerTotal: async (
+    sucursal: number,
+    params?: { busqueda?: string }
+  ): Promise<number> => {
+    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/total/${sucursal}`, { params });
+    return data.data;
+  },
+
   crear: async (sucursal: number, moneda: MonedaDTO): Promise<MonedaDTO> => {
     const { data } = await apiClient.post<ApiResponse<MonedaDTO>>(`${BASE}/${sucursal}`, moneda);
     return data.data;

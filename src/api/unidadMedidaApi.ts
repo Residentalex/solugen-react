@@ -15,6 +15,22 @@ export const unidadMedidaApi = {
     return data;
   },
 
+  filtrar: async (
+    sucursal: number,
+    filtro: { cantidad?: number; salto?: number; busqueda?: string }
+  ): Promise<UnidadMedidaDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<UnidadMedidaDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params: filtro });
+    return data.data;
+  },
+
+  obtenerTotal: async (
+    sucursal: number,
+    params?: { busqueda?: string }
+  ): Promise<number> => {
+    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/total/${sucursal}`, { params });
+    return data.data;
+  },
+
   crear: async (sucursal: number, medida: UnidadMedidaDTO): Promise<UnidadMedidaDTO> => {
     const { data } = await apiClient.post<ApiResponse<UnidadMedidaDTO>>(`${BASE}/${sucursal}`, medida);
     return data.data;

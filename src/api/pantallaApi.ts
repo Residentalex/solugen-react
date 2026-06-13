@@ -11,6 +11,27 @@ export const pantallaApi = {
     return data.data;
   },
 
+  filtrar: async (
+    sucursal: number,
+    filtro: { cantidad?: number; salto?: number; busqueda?: string; moduloId?: number; grupo?: string }
+  ): Promise<PantallaDTO[]> => {
+    const params: Record<string, string | number | undefined> = { ...filtro };
+    const cleanParams: Record<string, string | number> = {};
+    Object.entries(params).forEach(([k, v]) => { if (v !== undefined) cleanParams[k] = v; });
+    const { data } = await apiClient.get<ApiResponse<PantallaDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params: cleanParams });
+    return data.data;
+  },
+
+  obtenerTotalPantallas: async (
+    sucursal: number,
+    params?: { busqueda?: string; moduloId?: number; grupo?: string }
+  ): Promise<number> => {
+    const cleanParams: Record<string, string | number> = {};
+    if (params) Object.entries(params).forEach(([k, v]) => { if (v !== undefined) cleanParams[k] = v; });
+    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/total/${sucursal}`, { params: cleanParams });
+    return data.data;
+  },
+
   obtenerPorId: async (sucursal: number, id: number): Promise<PantallaDTO> => {
     const { data } = await apiClient.get<ApiResponse<PantallaDTO>>(`${BASE}/${sucursal}/${id}`);
     return data.data;
