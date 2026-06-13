@@ -130,8 +130,8 @@ export const facturaClienteApi = {
   },
 
   obtenerClientes: async (sucursal: number): Promise<ClienteDTO[]> => {
-    const { data } = await apiClient.get<ClienteDTO[]>(`/Cliente/${sucursal}/activos`);
-    return data;
+    const { data } = await apiClient.get<ApiResponse<ClienteDTO[]>>(`/Cliente/${sucursal}/activos`);
+    return data.data ?? [];
   },
 
   obtenerTipos: async (sucursal: number): Promise<TipoDTO[]> => {

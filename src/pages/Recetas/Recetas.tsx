@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Table, Input, Select, Button, Typography, message, Tag, Alert } from 'antd';
+import { useQuery } from '@tanstack/react-query';
+import { Card, Table, Input, Select, Button, Typography, message, Tag, Alert, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { recetaApi } from '../../api/recetaApi';
 import type { ProductoRecetaDTO, IngredienteDTO } from '../../types/receta';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
 
@@ -28,9 +30,6 @@ const Recetas: React.FC = () => {
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
 
-  const [productos, setProductos] = useState<ProductoRecetaDTO[]>([]);
-  const [loadingLista, setLoadingLista] = useState(false);
-  const [loadingError, setLoadingError] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(25);
 
@@ -39,25 +38,22 @@ const Recetas: React.FC = () => {
   const [ingredientes, setIngredientes] = useState<IngredienteDTO[]>([]);
   const [loadingIngredientes, setLoadingIngredientes] = useState(false);
 
-  const cargarProductos = useCallback(async () => {
-    if (sucursalActiva === undefined) return;
-    setLoadingLista(true);
-    try {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['recetas', sucursalActiva],
+    queryFn: async () => {
+      if (sucursalActiva === undefined) return [];
       const result = await recetaApi.obtenerProductosConReceta(sucursalActiva);
-      setProductos(result);
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoadingLista(false);
-    }
-  }, [sucursalActiva]);
+      return result;
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('MReceta');
     updateToolbar({});
-    cargarProductos();
     return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarProductos]);
+  }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleSeleccionar = async (codigo: string, nombre: string) => {
     setProductoSeleccionado(codigo);
@@ -80,20 +76,12 @@ const Recetas: React.FC = () => {
     setIngredientes([]);
   };
 
-  const handleRefresh = () => {
-    setLoadingError(false);
-    setSearchText('');
-    handleVolver();
-    cargarProductos();
-  };
-
-  const filteredProductos = searchText
-    ? productos.filter(
-        (p) =>
-          p.codigo.toLowerCase().includes(searchText.toLowerCase()) ||
-          p.nombre.toLowerCase().includes(searchText.toLowerCase())
-      )
-    : productos;
+  const filteredProductos = (data || []).filter(
+    (p) =>
+      !searchText ||
+      p.codigo.toLowerCase().includes(searchText.toLowerCase()) ||
+      p.nombre.toLowerCase().includes(searchText.toLowerCase())
+  );
 
   const columnasProductos: ColumnsType<ProductoRecetaDTO> = [
     {
@@ -161,14 +149,14 @@ const Recetas: React.FC = () => {
 
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
           message="Error al cargar recetas"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={handleRefresh}>
+            <Button size="small" onClick={() => refetch()}>
               Reintentar
             </Button>
           }
@@ -179,11 +167,9 @@ const Recetas: React.FC = () => {
         className="paces-card-erp"
         style={{ borderRadius: 8, overflow: 'hidden' }}
       >
-      <div style={{ padding: '16px 24px 0' }}>
-        {/* Toolbar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-          {productoSeleccionado ? (
-            <>
+        {productoSeleccionado ? (
+          <div style={{ padding: "16px 24px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: 16, flexWrap: "wrap" }}>
               <Button icon={<ArrowLeftOutlined />} onClick={handleVolver}>
                 Volver
               </Button>
@@ -191,45 +177,25 @@ const Recetas: React.FC = () => {
                 <Tag color="blue" style={{ marginLeft: 4 }}>{productoSeleccionado}</Tag>
                 {toTitleCase(productoNombre)}
               </Text>
-            </>
-          ) : (
-            <>
-              <Input.Search
-                placeholder="Buscar producto..."
-                allowClear
-                onSearch={(val) => setSearchText(val)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    (e.target as HTMLInputElement).blur();
-                    setSearchText('');
-                  }
-                }}
-                style={{ width: 400 }}
-                prefix={<SearchOutlined className="paces-text-icon" />}
-              />
-              <Select
-                style={{ width: 65 }}
-                value={pageSize}
-                onChange={(v) => { setPageSize(v); }}
-                options={[
-                  { value: 25, label: '25' },
-                  { value: 50, label: '50' },
-                  { value: 100, label: '100' },
-                ]}
-              />
-            </>
-          )}
-          <div style={{ flex: 1 }} />
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-        </div>
+              <div style={{ flex: 1 }} />
+              <Button icon={<ReloadOutlined />} onClick={() => refetch()} />
+            </div>
+          </div>
+        ) : (
+          <CatalogoListadoToolbar
+            onSearch={(val) => setSearchText(val)}
+            pageSize={pageSize}
+            onPageSizeChange={(v) => { setPageSize(v); }}
+            onReload={() => refetch()}
+          />
+        )}
 
-        {/* Lista de productos con receta */}
         {!productoSeleccionado && (
           <Table<ProductoRecetaDTO>
             columns={columnasProductos}
             dataSource={filteredProductos}
             rowKey="codigo"
-            loading={loadingLista}
+            loading={isLoading}
             scroll={{ x: 600 }}
             size="middle"
             pagination={{
@@ -239,13 +205,17 @@ const Recetas: React.FC = () => {
             }}
             onRow={(record) => ({
               onClick: () => handleSeleccionar(record.codigo, record.nombre),
-              style: { cursor: 'pointer' },
-            })}
-            className="paces-border-top paces-list-table"
+              style: { cursor: "pointer" },
+          })}
+          locale={{
+            emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Empty description="No hay productos con receta registrados" />
+            </div>,
+          }}
+          className="paces-border-top paces-list-table"
           />
         )}
 
-        {/* Detalle de ingredientes */}
         {productoSeleccionado && (
           <Table<IngredienteDTO>
             columns={columnasIngredientes}
@@ -255,10 +225,14 @@ const Recetas: React.FC = () => {
             scroll={{ x: 750 }}
             size="middle"
             pagination={false}
-            className="paces-border-top paces-list-table"
+          locale={{
+            emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Empty description="No hay ingredientes registrados" />
+            </div>,
+          }}
+          className="paces-border-top paces-list-table"
           />
         )}
-      </div>
     </Card>
     </>
   );

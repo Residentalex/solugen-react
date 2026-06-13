@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { useDocumentoListado } from '../../hooks/useDocumentoListado';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import EntidadColumnCell from '../../components/EntidadColumnCell';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
@@ -19,8 +20,9 @@ const EntradaAlmacen: React.FC = () => {
 
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
 
+  const { screenCode } = useScreenConfig('FENP');
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<MovimientoVistaDTO>({
-    modulo: 'FENP',
+    modulo: screenCode,
     fetchVista: (sucursal, desde, hasta, filas, salto, estado) =>
       entradaAlmacenApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado),
     fetchFiltrar: (sucursal, params) =>

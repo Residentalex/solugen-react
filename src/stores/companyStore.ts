@@ -52,6 +52,19 @@ export const useCompanyStore = create<CompanyState>((set) => ({
       if (!json.isSuccess) throw new Error(json.errorMessage || 'Error desconocido');
 
       const config = json.data;
+
+      // Procesar fechas de cierre desde configuracionesSucursales
+      const fechasCierre: Record<number, any> = {};
+      const fechasCierreInv: Record<number, any> = {};
+      const fechasCierreFiscal: Record<number, any> = {};
+      if (config.configuracionesSucursales) {
+        for (const cs of config.configuracionesSucursales) {
+          if (cs.fechaCierre) fechasCierre[cs.sucursal] = cs.fechaCierre;
+          if (cs.fechaCierreInventario) fechasCierreInv[cs.sucursal] = cs.fechaCierreInventario;
+          if (cs.fechaCierreFiscal) fechasCierreFiscal[cs.sucursal] = cs.fechaCierreFiscal;
+        }
+      }
+
       set({
         data: {
           familias: config.familias || [],
@@ -62,9 +75,9 @@ export const useCompanyStore = create<CompanyState>((set) => ({
           sucursales: config.sucursales || [],
           tipoDevolucionCaliente: config.tipoDevolucionCaliente || null,
           facturasElectronicas: {},
-          fechasCierre: {},
-          fechasCierreInv: {},
-          fechasCierreFiscal: {},
+          fechasCierre,
+          fechasCierreInv,
+          fechasCierreFiscal,
         },
         loading: false,
       });

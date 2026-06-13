@@ -43,7 +43,7 @@ import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
-import FormularioToolbar from '../../components/FormularioToolbar';
+import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
@@ -293,7 +293,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     if (cloneData) {
       setDetalles((cloneData.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
       setSelectedConcepto(cloneData.concepto || null);
-      setConceptoSearchText(toTitleCase(cloneData.concepto?.nombre || ''));
+      setConceptoSearchText(`${cloneData.concepto?.codigo || ''} - ${toTitleCase(cloneData.concepto?.nombre || '')}`);
       setSelectedEntidad(cloneData.suplidor || cloneData.entidad || null);
       setSelectedAlmacen(cloneData.almacen || null);
 
@@ -348,7 +348,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         setPageTitleOverride(`Editar - ${res.documento.codigo}-${res.noDocumento}`);
         setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
         setSelectedConcepto(res.concepto || null);
-        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
 		// === DEFENSIVE: asegurar RNC desde entidad si suplidor no lo tiene ===
 		const suplidorFinal = res.suplidor
 		  ? { ...res.suplidor, identificacion: res.suplidor.identificacion || res.entidad?.identificacion || '' }
@@ -412,6 +412,23 @@ const EntradaAlmacenFormulario: React.FC = () => {
       .catch(() => {});
   }, [data?.ordenCompra?.id, ocDetallesData.length]);
 
+  // Cargar detalles de OC y comodines al abrir el modal si no se han cargado antes
+  useEffect(() => {
+    if (!ocProductosModalOpen || !selectedOC) return;
+    if (ocDetallesData.length > 0) return;
+
+    ordenCompraApi.obtenerPorId(Sucursal.Compra, selectedOC.id)
+      .then((oc: any) => {
+        if (oc.detalles?.length) {
+          setOcDetallesData(oc.detalles);
+        }
+      })
+      .catch(() => message.warning('No se pudieron cargar los detalles de la OC'));
+    productoApi.obtenerComodines(Sucursal.Compra)
+      .then(setComodines)
+      .catch(() => {});
+  }, [ocProductosModalOpen, selectedOC, ocDetallesData.length]);
+
   const navigationConfirmedRef = useFormularioNavigation();
 
   // ===== Handlers =====
@@ -438,7 +455,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         setPageTitleOverride(`Editar - ${res.documento.codigo}-${res.noDocumento}`);
         setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
                 setSelectedConcepto(res.concepto || null);
-                setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+                setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
                 // === DEFENSIVE: asegurar RNC desde entidad si suplidor no lo tiene ===
                 const suplidorFinal = res.suplidor
                   ? { ...res.suplidor, identificacion: res.suplidor.identificacion || res.entidad?.identificacion || '' }
@@ -666,7 +683,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   // ===== Handlers de concepto =====
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
-    setConceptoSearchText(toTitleCase(concepto.nombre));
+    setConceptoSearchText(`${concepto.codigo || ''} - ${toTitleCase(concepto.nombre)}`);
     setEditingField(null);
     form.setFieldsValue({ conceptoNombre: concepto.nombre });
 
@@ -1055,7 +1072,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         setData(res);
         setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
         setSelectedConcepto(res.concepto || null);
-        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
         const suplidorFinal = res.suplidor
           ? { ...res.suplidor, identificacion: res.suplidor.identificacion || res.entidad?.identificacion || '' }
           : res.entidad || null;
@@ -1663,32 +1680,38 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const renderEncabezado = () => {
     // ncfValue, refValue y tasaValue vienen del watcher reactivo (component-level Form.useWatch)
     return (
-    <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+    <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
             <Row gutter={[16, 24]}>
               {/* Fila 1: OrdenCompra + Concepto */}
               <Col xs={24} sm={12} lg={9}>
-                <div ref={ordenCompraRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-                  <div style={{ flex: 1 }}>
-                    <FloatingField label="Orden Compra" externalValue={ordenCompraNoDoc}>
-                      <Input placeholder=" " value={ordenCompraNoDoc} readOnly />
-                    </FloatingField>
-                  </div>
-                  <Button icon={<SearchOutlined />} onClick={handleBuscarOC} />
+                <div ref={ordenCompraRef}>
+                  <FloatingField label="Orden Compra" externalValue={ordenCompraNoDoc}>
+                    <Input
+                      placeholder=" "
+                      value={ordenCompraNoDoc}
+                      readOnly
+                      suffix={<SearchOutlined style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />}
+                      onClick={handleBuscarOC}
+                    />
+                  </FloatingField>
                 </div>
                 <Form.Item name="ordenCompra" hidden><Input /></Form.Item>
               </Col>
 
           <Col xs={24} sm={12} lg={15}>
-            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
-                  <Input placeholder=" " value={conceptoSearchText} readOnly />
-                </FloatingField>
-              </div>
-              <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
+            <div ref={conceptoRef}>
+              <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
+                <Input
+                  placeholder=" "
+                  value={conceptoSearchText}
+                  readOnly
+                  suffix={<SearchOutlined style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />}
+                  onClick={handleConceptoSearchClick}
+                />
+              </FloatingField>
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
             <Form.Item name="conceptoNombre" hidden><Input /></Form.Item>
@@ -1955,12 +1978,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        fetchConceptos={() => {
-          const sucDest = data?.concepto?.sucursalDestino?.id
-            ?? data?.sucursal?.id
-            ?? sucursalActiva;
-          return conceptosApi.obtenerConceptosPorDocumento(sucDest, 'ENP');
-        }}
+        sucursal={data?.concepto?.sucursalDestino?.id ?? data?.sucursal?.id ?? sucursalActiva}
+        documento="ENP"
       />
 
       <BuscarOrdenCompraModal
@@ -2143,7 +2162,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
                         <Space>
                           <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-                            if (ocDetallesData.length > 0) {
+                            if (selectedOC) {
                               setOcProductosModalOpen(true);
                             } else {
                               setProductoModalOpen(true);
@@ -2166,32 +2185,39 @@ const EntradaAlmacenFormulario: React.FC = () => {
                       </div>
                       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(Number(event.active.id)); }} onDragEnd={handleDragEnd}>
                         <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
-                        <Table
-                          dataSource={detallesFiltrados}
-                          columns={detalleColumns}
-                          rowKey="id"
-                          size="small"
-                          pagination={false}
-                          scroll={{ x: 1300 }}
-                          components={{ body: { row: SortableRow } }}
-                        />
-                        </SortableContext>
-                        <DragOverlay>
-                          {activeId ? (
-                            <div style={{ padding: '8px 16px', background: '#fff', border: '2px solid #556ee6', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8, width: 300 }}>
-                              <HolderOutlined style={{ color: '#556ee6' }} />
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {detalles.find((d) => d.id === activeId)?.articulo || 'Arrastrando...'}
-                              </span>
-                            </div>
-                          ) : null}
-                        </DragOverlay>
-                      </DndContext>
-                    </>
-                  ),
-                },
-                {
-                  key: 'devoluciones',
+                    <Table
+                      dataSource={detallesFiltrados}
+                      columns={detalleColumns}
+                      rowKey="id"
+                      size="small"
+                      pagination={false}
+                      scroll={{ x: 1300 }}
+                      components={{ body: { row: SortableRow } }}
+                      locale={{
+                        emptyText: (
+                          <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Empty description="Sin registros" />
+                          </div>
+                        ),
+                      }}
+                    />
+                    </SortableContext>
+                    <DragOverlay>
+                      {activeId ? (
+                        <div style={{ padding: '8px 16px', background: '#fff', border: '2px solid #556ee6', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8, width: 300 }}>
+                          <HolderOutlined style={{ color: '#556ee6' }} />
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {detalles.find((d) => d.id === activeId)?.articulo || 'Arrastrando...'}
+                          </span>
+                        </div>
+                      ) : null}
+                    </DragOverlay>
+                    </DndContext>
+                  </>
+                ),
+              },
+              {
+                key: 'devoluciones',
                   label: (
                     <span>
                       Devoluciones
@@ -2361,7 +2387,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                     <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
                       <Space>
                         <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-                          if (ocDetallesData.length > 0) {
+                          if (selectedOC) {
                             setOcProductosModalOpen(true);
                           } else {
                             setProductoModalOpen(true);
@@ -2604,3 +2630,4 @@ const EntradaAlmacenFormulario: React.FC = () => {
 };
 
 export default EntradaAlmacenFormulario;
+

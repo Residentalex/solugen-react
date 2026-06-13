@@ -99,6 +99,7 @@ const validThemes: ThemeName[] = [
   'light-rose', 'dark-rose',
   'light-amber', 'dark-amber',
   'light-genesis',
+  'light-spa',
   'basic-devexpress',
 ];
 let initialTheme: ThemeName = 'light-default';

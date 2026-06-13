@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Alert, Table, DatePicker, Tag, Card, Button, Typography,
   Modal, Descriptions, Divider, Input, Empty,
@@ -9,6 +10,7 @@ import { turnoApi } from '../../api/turnoApi';
 import type { TurnoDTO } from '../../types/turno';
 import type { ColumnsType } from 'antd/es/table';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
@@ -57,14 +59,9 @@ const Turnos: React.FC = () => {
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
 
-  const [data, setData] = useState<TurnoDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(FILAS_POR_PAGINA);
   const [selectedRow, setSelectedRow] = useState<TurnoDTO | null>(null);
-  const [fechaTrigger, setFechaTrigger] = useState(0);
-  const [loadingError, setLoadingError] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [detalleItem, setDetalleItem] = useState<TurnoDTO | null>(null);
 
@@ -72,36 +69,28 @@ const Turnos: React.FC = () => {
     desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
     hasta: formatDateParam(new Date()),
   });
+  const [dateTrigger, setDateTrigger] = useState(0);
 
-  const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
-    setLoading(true);
-    try {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['turnos', sucursalActiva, page, pageSize, searchText, dateTrigger],
+    queryFn: async () => {
       const params: { cantidad?: number; salto?: number; desde?: string; hasta?: string; turno?: string } = {
         desde: dateParamsRef.current.desde,
         hasta: dateParamsRef.current.hasta,
-        cantidad: filas,
-        salto: (pagina - 1) * filas,
+        cantidad: pageSize,
+        salto: (page - 1) * pageSize,
       };
-      if (busqueda) params.turno = busqueda;
+      if (searchText) params.turno = searchText;
 
       const result = await turnoApi.filtrar(sucursalActiva, params);
-      setData(result);
-      setTotal(
-        result.length < filas
-          ? (pagina - 1) * filas + result.length + 1
-          : (pagina - 1) * filas + result.length + filas
-      );
-      setLoadingError(false);
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    cargarDatos(page, pageSize, searchText);
-  }, [page, pageSize, fechaTrigger, searchText, cargarDatos]);
+      const total = result.length < pageSize
+        ? (page - 1) * pageSize + result.length + 1
+        : (page - 1) * pageSize + result.length + pageSize;
+      return { datos: result, total };
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('FTURNOS');
@@ -110,8 +99,7 @@ const Turnos: React.FC = () => {
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleRefresh = () => {
-    setLoadingError(false);
-    setFechaTrigger((n) => n + 1);
+    setDateTrigger((n) => n + 1);
   };
 
   const handleDateChange = (dates: any) => {
@@ -127,7 +115,7 @@ const Turnos: React.FC = () => {
       };
     }
     setPage(1);
-    setFechaTrigger((n) => n + 1);
+    setDateTrigger((n) => n + 1);
   };
 
   const handleSearch = (value: string) => {
@@ -230,7 +218,7 @@ const Turnos: React.FC = () => {
 
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
           message="Error al cargar turnos"
           type="error"
@@ -244,47 +232,34 @@ const Turnos: React.FC = () => {
         />
       )}
       <Card styles={{ body: { padding: 0 } }} className="paces-card-erp" style={{ borderRadius: 8 }}>
-        <div style={{ padding: '16px 24px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={25}
+          onPageSizeChange={(v) => {}}
+          ocultarPageSize
+          onReload={handleRefresh}
+          filtros={
             <RangePicker
               style={{ width: 180 }}
               format="YYYY-MM-DD"
               onChange={handleDateChange}
-              placeholder={['Desde', 'Hasta']}
+              placeholder={["Desde", "Hasta"]}
             />
-
-            <Input.Search
-              placeholder="Buscar turno..."
-              allowClear
-              onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-              style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-
-            <div style={{ flex: 1 }} />
-
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-          </div>
-        </div>
+          }
+        />
 
         <Table<TurnoDTO>
           columns={columns}
-          dataSource={data}
+          dataSource={data?.datos || []}
           rowKey="id"
-          loading={loading}
+          loading={isLoading}
           size="middle"
           scroll={{ x: 1100 }}
           locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay turnos registrados" /></div> }}
           pagination={{
             current: page,
             pageSize,
-            total,
+            total: data?.total || 0,
             showSizeChanger: false,
             showTotal: (t) => `Aprox. ${t} registros`,
           }}

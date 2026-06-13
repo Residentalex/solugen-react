@@ -15,6 +15,7 @@ import {
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { importarInventarioApi } from '../../api/importarInventarioApi';
@@ -73,31 +74,32 @@ function extraerMensajeError(err: any, fallback: string): string {
   return fallback;
 }
 
+// ===== Columnas de plantilla por tipo de documento =====
+const columnasPorTipo: Record<TipoDocInventario, string[]> = {
+  ENP: ['codigo', 'articulo', 'cantidad', 'costo', 'porcentajedescuento', 'porcentajeimpuesto', 'fechaVencimiento'],
+  SAP: ['codigo', 'articulo', 'cantidad', 'costo', 'porcentajedescuento', 'porcentajeimpuesto'],
+  TRP: ['codigo', 'articulo', 'cantidad', 'costo'],
+  DVC: ['codigo', 'articulo', 'cantidad', 'costo', 'porcentajedescuento', 'porcentajeimpuesto'],
+};
+
 // ===== Generación de plantilla CSV =====
 function generarPlantillaCSV(tipo: TipoDocInventario): string {
-  const columnasPorTipo: Record<TipoDocInventario, string[]> = {
-    ENP: ['codigo', 'articulo', 'cantidad', 'costo', 'porcentajedescuento', 'porcentajeimpuesto', 'fechaVencimiento'],
-    SAP: ['codigo', 'articulo', 'cantidad', 'costo', 'porcentajedescuento', 'porcentajeimpuesto'],
-    TRP: ['codigo', 'articulo', 'cantidad', 'costo'],
-    DVC: ['codigo', 'articulo', 'cantidad', 'costo', 'porcentajedescuento', 'porcentajeimpuesto'],
-  };
   const columnas = columnasPorTipo[tipo] || columnasPorTipo.ENP;
   const sep = (1.1).toLocaleString().indexOf(',') >= 0 ? ';' : ',';
   return '\uFEFF' + columnas.join(sep) + '\n';
 }
 
 function handleDescargarPlantilla(tipo: TipoDocInventario) {
-  const csv = generarPlantillaCSV(tipo);
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
+  const columnas = columnasPorTipo[tipo] || columnasPorTipo.ENP;
+  const data = [columnas.reduce((acc, col) => ({ ...acc, [col]: '' }), {})];
+
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  worksheet['!cols'] = columnas.map(() => ({ wch: 20 }));
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Plantilla');
+
   const label = TIPO_DOC_LABELS[tipo];
-  link.download = `plantilla_${label.replace(/\s+/g, '_')}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  XLSX.writeFile(workbook, `plantilla_${label.replace(/\s+/g, '_')}.xlsx`);
 }
 
 // ===== Cálculo de fila =====
@@ -275,7 +277,7 @@ const ImportarInventario: React.FC = () => {
   // ===== Concepto =====
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
-    setConceptoSearchText(toTitleCase(concepto.nombre));
+    setConceptoSearchText(`${concepto.codigo || ''} - ${toTitleCase(concepto.nombre)}`);
     form.setFieldsValue({ conceptoNombre: concepto.nombre });
 
     // === ConfigurarMoneda ===
@@ -315,36 +317,90 @@ const ImportarInventario: React.FC = () => {
     );
   };
 
-  // ===== Carga de CSV =====
+  // ===== Carga de CSV/Excel =====
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
+    const isExcel = file.name.endsWith('.xlsx');
+
     reader.onload = (evt) => {
-      const text = evt.target?.result as string;
-      if (!text) {
-        message.error('No se pudo leer el archivo');
-        return;
-      }
+      try {
+        let parsed: DetalleImportarDTO[];
 
-      const parsed = parseCSV(text);
-      if (parsed.length === 0) {
-        message.warning('El archivo no contiene datos válidos. Formato esperado: codigo,articulo,referencia,cantidad,costo,porcentajedescuento,porcentajeimpuesto');
-        return;
-      }
+        if (isExcel) {
+          const data = new Uint8Array(evt.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
-      setDetalles((prev) => {
-        const maxId = prev.length > 0 ? Math.min(...prev.map((d) => d.id)) : 0;
-        const nuevos = parsed.map((d, idx) => ({ ...d, id: maxId - 1 - idx }));
-        return [...prev, ...nuevos];
-      });
-      message.success(`${parsed.length} filas cargadas desde el archivo`);
+          if (rows.length < 2) {
+            message.warning('El archivo no contiene datos válidos.');
+            return;
+          }
+
+          const headers = (rows[0] as string[]).map((h) => String(h).trim().toLowerCase());
+          const idxCodigo = headers.indexOf('codigo');
+          const idxArticulo = headers.indexOf('articulo');
+          const idxRef = headers.indexOf('referencia');
+          const idxCant = headers.indexOf('cantidad');
+          const idxCosto = headers.indexOf('costo');
+          const idxPctDesc = headers.indexOf('porcentajedescuento');
+          const idxPctImp = headers.indexOf('porcentajeimpuesto');
+
+          parsed = [];
+          for (let i = 1; i < rows.length; i++) {
+            const cols = rows[i].map((c: any) => String(c ?? '').trim());
+            if (cols.every((c: string) => !c)) continue;
+
+            const fila: DetalleImportarDTO = {
+              ...filaVacia(),
+              id: -i,
+              codigo: idxCodigo >= 0 ? cols[idxCodigo] || '' : '',
+              articulo: idxArticulo >= 0 ? cols[idxArticulo] || '' : '',
+              referencia: idxRef >= 0 ? cols[idxRef] || '' : '',
+              cantidad: idxCant >= 0 ? parseFloat(cols[idxCant]) || 0 : 0,
+              costo: idxCosto >= 0 ? parseFloat(cols[idxCosto]) || 0 : 0,
+              porcentajeDescuento: idxPctDesc >= 0 ? parseFloat(cols[idxPctDesc]) || 0 : 0,
+              porcentajeImpuesto: idxPctImp >= 0 ? parseFloat(cols[idxPctImp]) || 0 : 0,
+            };
+            parsed.push(calcularFila(fila));
+          }
+        } else {
+          const text = evt.target?.result as string;
+          if (!text) {
+            message.error('No se pudo leer el archivo');
+            return;
+          }
+          parsed = parseCSV(text);
+        }
+
+        if (parsed.length === 0) {
+          message.warning('El archivo no contiene datos válidos.');
+          return;
+        }
+
+        setDetalles((prev) => {
+          const maxId = prev.length > 0 ? Math.min(...prev.map((d) => d.id)) : 0;
+          const nuevos = parsed.map((d, idx) => ({ ...d, id: maxId - 1 - idx }));
+          return [...prev, ...nuevos];
+        });
+        message.success(`${parsed.length} filas cargadas desde ${isExcel ? 'Excel' : 'CSV'}`);
+      } catch (err) {
+        message.error('Error al leer el archivo. Verifique el formato.');
+      }
     };
+
     reader.onerror = () => {
       message.error('Error al leer el archivo');
     };
-    reader.readAsText(file);
+
+    if (isExcel) {
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.readAsText(file, 'UTF-8');
+    }
 
     // Resetear input para permitir recargar el mismo archivo
     if (fileInputRef.current) {
@@ -895,7 +951,8 @@ const ImportarInventario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        fetchConceptos={() => importarInventarioApi.obtenerConceptos(sucursalActiva, tipoDocumento)}
+        sucursal={sucursalActiva}
+        documento={tipoDocumento}
       />
 
       {isLarge ? (
@@ -918,7 +975,7 @@ const ImportarInventario: React.FC = () => {
                   </Button>
                   <input
                     type="file"
-                    accept=".csv,.txt"
+                    accept=".csv,.txt,.xlsx"
                     ref={fileInputRef}
                     onChange={handleFileChange}
                     style={{ display: 'none' }}
@@ -927,7 +984,7 @@ const ImportarInventario: React.FC = () => {
                     Descargar plantilla
                   </Button>
                   <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
-                    Cargar CSV
+                    Cargar archivo
                   </Button>
                 </Space>
                 <Text type="secondary" style={{ fontSize: 12 }}>
@@ -976,7 +1033,7 @@ const ImportarInventario: React.FC = () => {
                 </Button>
                 <input
                   type="file"
-                  accept=".csv,.txt"
+                  accept=".csv,.txt,.xlsx"
                   ref={fileInputRef}
                   onChange={handleFileChange}
                   style={{ display: 'none' }}
@@ -985,7 +1042,7 @@ const ImportarInventario: React.FC = () => {
                   Descargar plantilla
                 </Button>
                 <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
-                  Cargar CSV
+                  Cargar archivo
                 </Button>
               </Space>
             </div>

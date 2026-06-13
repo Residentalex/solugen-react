@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Card,
@@ -17,7 +18,8 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import PermissionGate from '../../components/PermissionGate';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -32,40 +34,29 @@ const Acciones: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.usuario?.sucursalActiva);
 
-  const [data, setData] = useState<AccionDTO[]>([]);
-  const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<AccionDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(25);
-  const [loadingError, setLoadingError] = useState(false);
   const [form] = Form.useForm();
 
-  const cargarDatos = useCallback(async () => {
-    if (sucursalActiva === undefined) return;
-    setLoading(true);
-    try {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['acciones', sucursalActiva],
+    queryFn: async () => {
+      if (sucursalActiva === undefined) return [];
       const result = await accionApi.obtenerListado(sucursalActiva);
-      setData(result || []);
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  const handleRefresh = useCallback(() => {
-    setLoadingError(false);
-    cargarDatos();
-  }, [cargarDatos]);
+      return result || [];
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('MAccion');
     updateToolbar({});
-    cargarDatos();
     return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
+  }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const abrirNuevo = () => {
     setEditando(null);
@@ -102,7 +93,7 @@ const Acciones: React.FC = () => {
         message.success('Acción creada correctamente');
       }
       setModalVisible(false);
-      cargarDatos();
+      refetch();
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar acción');
@@ -123,7 +114,7 @@ const Acciones: React.FC = () => {
         try {
           await accionApi.eliminar(sucursalActiva, accion.id);
           message.success('Acción eliminada correctamente');
-          cargarDatos();
+          refetch();
         } catch (err: any) {
           message.error(err?.response?.data?.errorMessage || 'Error al eliminar acción');
         }
@@ -139,12 +130,12 @@ const Acciones: React.FC = () => {
     str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
   const filteredData = searchText
-    ? data.filter(
+    ? (data || []).filter(
         (item) =>
           item.codigo.toLowerCase().includes(searchText.toLowerCase()) ||
           item.nombre.toLowerCase().includes(searchText.toLowerCase())
       )
-    : data;
+    : (data || []);
 
   const columns: ColumnsType<AccionDTO> = [
     {
@@ -206,57 +197,32 @@ const Acciones: React.FC = () => {
     <>
       <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600, marginBottom: 16 }}>Acciones</h4>
 
-      {loadingError && (
+      {isError && (
         <Alert
           message="Error al cargar acciones"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={handleRefresh}>
+            <Button size="small" onClick={() => refetch()}>
               Reintentar
             </Button>
           }
         />
       )}
       <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
-        <div style={{ padding: '16px 24px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-            <Input.Search
-            placeholder="Buscar por código o nombre..."
-            allowClear
-            onSearch={handleSearch}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                (e.target as HTMLInputElement).blur();
-                handleSearch('');
-              }
-            }}
-            style={{ width: 400 }}
-            prefix={<SearchOutlined className="paces-text-icon" />}
-          />
-          <Select
-            style={{ width: 65 }}
-            value={pageSize}
-            onChange={(v) => { setPageSize(v); }}
-            options={[
-              { value: 25, label: '25' },
-              { value: 50, label: '50' },
-              { value: 100, label: '100' },
-            ]}
-          />
-            <div style={{ flex: 1 }} />
-            <PermissionGate accion="CREAR">
-              <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>Nuevo</Button>
-            </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-          </div>
-        </div>
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); }}
+          onNuevo={abrirNuevo}
+          onReload={() => refetch()}
+        />
         <Table<AccionDTO>
           columns={columns}
           dataSource={filteredData}
           rowKey="id"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 700 }}
           size="middle"
           pagination={{

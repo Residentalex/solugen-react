@@ -29,6 +29,11 @@ export interface AuthApiTokenListadoDTO {
 const BASE = '/api/ApiToken';
 
 export const apiTokenApi = {
+  renovar: async (id: number): Promise<AuthApiTokenResponseDTO> => {
+    const { data: response } = await apiClient.post<ApiResponse<AuthApiTokenResponseDTO>>(`${BASE}/renovar/${id}`);
+    return response.data;
+  },
+
   crear: async (data: AuthApiTokenCrearRequestDTO): Promise<AuthApiTokenResponseDTO> => {
     const { data: response } = await apiClient.post<ApiResponse<AuthApiTokenResponseDTO>>(`${BASE}/crear`, data);
     return response.data;

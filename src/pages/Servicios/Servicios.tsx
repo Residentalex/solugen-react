@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Table, Input, Select, Tag, Button, message, Card, Typography, Modal, Descriptions, Alert, Empty } from 'antd';
 import { ReloadOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -7,6 +8,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { servicioApi } from '../../api/servicioApi';
 import type { ServicioDTO } from '../../types/servicio';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 function formatCurrency(n: number): string {
   return new Intl.NumberFormat('es-DO', {
@@ -29,48 +31,38 @@ const Servicios: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
 
-  const [data, setData] = useState<ServicioDTO[]>([]);
-  const [filteredData, setFilteredData] = useState<ServicioDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingError, setLoadingError] = useState(false);
-  const [_searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState('');
   const [filtroActivo, setFiltroActivo] = useState<string>('todos');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [total, setTotal] = useState(0);
   const [detalleItem, setDetalleItem] = useState<ServicioDTO | null>(null);
   const [detalleOpen, setDetalleOpen] = useState(false);
 
-  const cargarDatos = useCallback(async () => {
-    if (sucursalActiva === undefined) return;
-    setLoading(true);
-    try {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['servicios', sucursalActiva],
+    queryFn: async () => {
+      if (sucursalActiva === undefined) return [];
       const resultados = await servicioApi.obtenerListado(sucursalActiva);
-      setData(resultados || []);
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
+      return resultados || [];
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('MServicio');
     updateToolbar({});
-    cargarDatos();
     return () => resetToolbar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setActiveModule, updateToolbar, resetToolbar, sucursalActiva]);
+  }, [setActiveModule, updateToolbar, resetToolbar]);
 
-  // Filtrar datos por búsqueda y estado activo/inactivo
-  const aplicarFiltros = useCallback((busqueda: string, activo: string, source: ServicioDTO[]) => {
-    let result = source;
+  const filteredData = useMemo(() => {
+    let result = data || [];
     // Filtro por activo/inactivo
-    if (activo === 'activos') result = result.filter((i) => i.activo);
-    else if (activo === 'inactivos') result = result.filter((i) => !i.activo);
+    if (filtroActivo === 'activos') result = result.filter((i) => i.activo);
+    else if (filtroActivo === 'inactivos') result = result.filter((i) => !i.activo);
     // Filtro por búsqueda de texto
-    if (busqueda.trim()) {
-      const q = busqueda.toLowerCase();
+    if (searchText.trim()) {
+      const q = searchText.toLowerCase();
       result = result.filter(
         (item) =>
           item.codigo.toLowerCase().includes(q) ||
@@ -79,15 +71,11 @@ const Servicios: React.FC = () => {
       );
     }
     return result;
-  }, []);
+  }, [data, searchText, filtroActivo]);
 
-  // Re-aplicar filtros cuando cambia data, searchText o filtroActivo
-  useEffect(() => {
-    const result = aplicarFiltros(_searchText, filtroActivo, data);
-    setFilteredData(result);
-    setTotal(result.length);
-    setPage(1);
-  }, [data, _searchText, filtroActivo, aplicarFiltros]);
+  const paginatedData = useMemo(() => {
+    return filteredData.slice((page - 1) * pageSize, page * pageSize);
+  }, [filteredData, page, pageSize]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -97,11 +85,6 @@ const Servicios: React.FC = () => {
   const handleFiltroActivoChange = (val: string) => {
     setFiltroActivo(val);
     setPage(1);
-  };
-
-  const handleRefresh = () => {
-    setLoadingError(false);
-    cargarDatos();
   };
 
   const abrirDetalle = async (codigo: string) => {
@@ -187,78 +170,55 @@ const Servicios: React.FC = () => {
     },
   ];
 
-  const paginatedData = filteredData.slice((page - 1) * pageSize, page * pageSize);
-
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
           message="Error al cargar servicios"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={handleRefresh}>
+            <Button size="small" onClick={() => refetch()}>
               Reintentar
             </Button>
           }
         />
       )}
       <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
-        <div style={{ padding: '16px 24px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-            <Input.Search
-              placeholder="Buscar por código, nombre o referencia..."
-              allowClear
-              onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-            style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
+          onNuevo={undefined}
+          onReload={() => refetch()}
+          filtros={
             <Select
               value={filtroActivo}
               onChange={handleFiltroActivoChange}
               style={{ width: 130 }}
               size="middle"
-              options={[
-                { value: 'todos', label: 'Todos' },
-                { value: 'activos', label: 'Solo activos' },
-                { value: 'inactivos', label: 'Solo inactivos' },
-              ]}
+              options={
+                [
+                  { value: "todos", label: "Todos" },
+                  { value: "activos", label: "Solo activos" },
+                  { value: "inactivos", label: "Solo inactivos" },
+                ]
+              }
             />
-            <Select
-              style={{ width: 65 }}
-              value={pageSize}
-              onChange={(v) => { setPageSize(v); setPage(1); }}
-              options={[
-                { value: 25, label: '25' },
-                { value: 50, label: '50' },
-                { value: 100, label: '100' },
-              ]}
-            />
-            <div style={{ flex: 1 }} />
-            <PermissionGate accion="CREAR">
-              <Button type="primary" icon={<PlusOutlined />}>Nuevo</Button>
-            </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-          </div>
-        </div>
+          }
+        />
         <Table<ServicioDTO>
           columns={columns}
           dataSource={paginatedData}
           rowKey="codigo"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 1200 }}
           size="middle"
           rowClassName="paces-row-hover"
           className="paces-border-top paces-list-table"
           locale={{
-            emptyText: loading ? ' ' : <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No se encontraron servicios" /></div>,
+            emptyText: isLoading ? ' ' : <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No se encontraron servicios" /></div>,
           }}
           onRow={() => ({
             style: { cursor: 'default' },
@@ -266,7 +226,7 @@ const Servicios: React.FC = () => {
           pagination={{
             current: page,
             pageSize: pageSize,
-            total: total,
+            total: filteredData.length,
             onChange: (newPage, newPageSize) => {
               if (newPageSize !== pageSize) {
                 setPageSize(newPageSize);

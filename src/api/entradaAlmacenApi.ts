@@ -106,4 +106,18 @@ export const entradaAlmacenApi = {
     });
     return data;
   },
+
+  obtenerUltimaEntrada: async (sucursal: number, codigo: string): Promise<{ codigo: string; nombre: string; fecha: string; documento: string; cantidad: number; ventas: number; salidas: number; devCompra: number; devVenta: number; ultimaVenta: string | null; tiempoVenta: string | null } | null> => {
+    const { data } = await apiClient.get<ApiResponse<{ codigo: string; nombre: string; fecha: string; documento: string; cantidad: number; ventas: number; salidas: number; devCompra: number; devVenta: number; ultimaVenta: string | null; tiempoVenta: string | null }>>(
+      `${BASE}/${sucursal}/ultima-entrada/${encodeURIComponent(codigo)}`
+    );
+    return data.data ?? null;
+  },
+
+  obtenerMovimientosProducto: async (sucursal: number, codigo: string): Promise<{ ultimaCompra: any; ventas: any[] }> => {
+    const { data } = await apiClient.get<ApiResponse<{ ultimaCompra: any; ventas: any[] }>>(
+      `${BASE}/${sucursal}/movimientos-producto/${encodeURIComponent(codigo)}`
+    );
+    return data.data ?? { ultimaCompra: null, ventas: [] };
+  },
 };

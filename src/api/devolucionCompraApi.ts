@@ -114,9 +114,7 @@ export const devolucionCompraApi = {
   },
 
   obtenerConceptos: async (sucursal: number, tipoId?: number): Promise<ConceptoDTO[]> => {
-    const params: Record<string, any> = {};
-    if (tipoId) params.tipoId = tipoId;
-    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}/documento/DVC`, { params });
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}/documento/DVC`);
     return data.data;
   },
 
@@ -136,7 +134,19 @@ export const devolucionCompraApi = {
   },
 
   buscarEntradas: async (sucursal: number, params?: any): Promise<any[]> => {
-    const { data } = await apiClient.get<ApiResponse<any[]>>(`/ENP/${sucursal}/vista`, { params });
+    const { entidad, texto, ...restParams } = params || {};
+    let url: string;
+    if (texto) {
+      url = `/ENP/${sucursal}/filtrar`;
+      restParams.documento = texto;
+      if (entidad) restParams.entidad = entidad;
+    } else if (entidad) {
+      url = `/ENP/${sucursal}/PorSuplidor`;
+      restParams.codigoEntidad = entidad;
+    } else {
+      url = `/ENP/${sucursal}`;
+    }
+    const { data } = await apiClient.get<ApiResponse<any[]>>(url, { params: restParams });
     return data.data;
   },
 

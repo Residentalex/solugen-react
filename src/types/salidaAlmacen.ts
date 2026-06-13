@@ -65,6 +65,7 @@ export interface SalidaAlmacenFullDTO {
   nota: string;
   tasa: number;
   tipoDocumento?: number;
+  revisado?: boolean;
 
   // Objetos anidados
   concepto: ConceptoDTO | null;

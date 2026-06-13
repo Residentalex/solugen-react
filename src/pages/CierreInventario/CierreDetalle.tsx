@@ -10,6 +10,7 @@ import {
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { cierreInventarioApi } from '../../api/cierreInventarioApi';
+import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 
 const { Text, Title } = Typography;
 
@@ -51,6 +52,7 @@ const CierreDetalle: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [cierreInfo, setCierreInfo] = useState<any>(null);
   const [searchText, setSearchText] = useState('');
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   const cargarDetalle = async () => {
     if (!cierreId) return;
@@ -180,6 +182,7 @@ const CierreDetalle: React.FC = () => {
         }}
       >
         <Space>
+          <SucursalDocumentoSelector value={sucursalDestino} onChange={setSucursalDestino} />
           <Button
             icon={<ArrowLeftOutlined />}
             onClick={() => navigate('/OCierreINV')}
@@ -253,6 +256,7 @@ const CierreDetalle: React.FC = () => {
                   {formatCurrency(cierreInfo.total)}
                 </Text>
               </Descriptions.Item>
+              <Descriptions.Item label={<span style={{ fontSize: 12 }}>Tipo</span>}>—</Descriptions.Item>
             </Descriptions>
           </Card>
         )}

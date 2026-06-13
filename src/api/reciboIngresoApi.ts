@@ -12,7 +12,8 @@ export const reciboIngresoApi = {
     hasta?: string,
     cantidad?: number,
     salto?: number,
-    estado?: number
+    estado?: number,
+    documentCode = TIPO_DOC
   ): Promise<TransaccionVistaDTO[]> => {
     const params: Record<string, string | number> = {};
     if (desde) params.desde = desde;
@@ -22,14 +23,15 @@ export const reciboIngresoApi = {
     if (estado !== undefined) params.estado = estado;
 
     const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO[]>>(
-      `${BASE}/${sucursal}/tipo/${TIPO_DOC}`, { params }
+      `${BASE}/${sucursal}/tipo/${documentCode}`, { params }
     );
     return data.data;
   },
 
   filtrar: async (
     sucursal: number,
-    filtro: FiltroTransaccion
+    filtro: FiltroTransaccion,
+    documentCode = TIPO_DOC
   ): Promise<TransaccionVistaDTO[]> => {
     const params: Record<string, string | number> = {};
     if (filtro.cantidad) params.cantidad = filtro.cantidad;
@@ -42,7 +44,7 @@ export const reciboIngresoApi = {
     if (filtro.entidad) params.entidad = filtro.entidad;
 
     const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO[]>>(
-      `${BASE}/${sucursal}/tipo/${TIPO_DOC}/filtrar`, { params }
+      `${BASE}/${sucursal}/tipo/${documentCode}/filtrar`, { params }
     );
     return data.data;
   },

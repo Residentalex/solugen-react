@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Popover, Alert,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Popover, Alert, Empty,
 } from 'antd';
 import {
   SaveOutlined,
@@ -31,6 +31,7 @@ import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 import { productoApi } from '../../api/productoApi';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import { BuscarEntradaModal } from '../../components/BuscarEntradaModal';
 import ScannerModal from '../../components/ScannerModal/ScannerModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import PermissionGate from '../../components/PermissionGate';
@@ -48,7 +49,7 @@ import LogTable from '../../components/LogTable';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
-import FormularioToolbar from '../../components/FormularioToolbar';
+import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
@@ -100,101 +101,6 @@ function filaVacia(): DetalleDevolucionCompraDTO {
     nota: '',
   };
 }
-
-// ===== Componente BuscarEntradaModal (para seleccionar ENP referencia) =====
-interface BuscarEntradaModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (entrada: any) => void;
-}
-
-const BuscarEntradaModal: React.FC<BuscarEntradaModalProps> = ({ open, onClose, onSelect }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const [resultados, setResultados] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const buscar = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await devolucionCompraApi.buscarEntradas(sucursalActiva, { cantidad: 50 });
-      setResultados(res || []);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al buscar entradas de almacén');
-      message.error(msg);
-      setResultados([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (open) buscar();
-  }, [open, buscar]);
-
-  const columnas = [
-    {
-      title: 'Documento',
-      dataIndex: 'documento',
-      key: 'documento',
-      width: 150,
-      render: (v: string) => <span className="paces-text-primary">{v}</span>,
-    },
-    {
-      title: 'Fecha',
-      dataIndex: 'fecha',
-      key: 'fecha',
-      width: 110,
-      render: (v: string) => formatDate(v),
-    },
-    {
-      title: 'Suplidor',
-      dataIndex: 'entidad',
-      key: 'entidad',
-      ellipsis: true,
-      render: (v: string) => toTitleCase(v || ''),
-    },
-    {
-      title: 'Total',
-      dataIndex: 'total',
-      key: 'total',
-      width: 130,
-      align: 'right' as const,
-      render: (v: number) => formatCurrency(v || 0),
-    },
-  ];
-
-  return (
-    <Modal
-      title="Buscar Entrada de Almacén"
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={800}
-      destroyOnHidden
-    >
-      <Input.Search
-        placeholder="Buscar..."
-        allowClear
-        onSearch={() => buscar()}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={resultados}
-        columns={columnas}
-        rowKey="id"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        scroll={{ y: 400 }}
-        onRow={(record) => ({
-          onClick: () => { onSelect(record); onClose(); },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
-};
-
 
 
 // ===== Componente principal =====
@@ -351,7 +257,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       setDetalles((cloneData.detalles || []).map((d: DetalleDevolucionCompraDTO) => calcularFila(d)));
       setSelectedTipo(cloneData.tipo || null);
       setSelectedConcepto(cloneData.concepto || null);
-      setConceptoSearchText(toTitleCase(cloneData.concepto?.nombre || ''));
+      setConceptoSearchText(`${cloneData.concepto?.codigo || ''} - ${toTitleCase(cloneData.concepto?.nombre || '')}`);
       setSelectedEntidad(cloneData.suplidor || cloneData.entidad || null);
       setSelectedAlmacen(cloneData.almacen || null);
       setSelectedEntrada(cloneData.entrada || null);
@@ -375,6 +281,7 @@ const DevolucionCompraFormulario: React.FC = () => {
     // Cargar catálogos iniciales
     devolucionCompraApi.obtenerAlmacenes(sucursalActiva).then(r => setAlmacenesCache(r || [])).catch(() => {});
     devolucionCompraApi.obtenerTipos(sucursalActiva).then(r => setTiposCache(r || [])).catch(() => {});
+    devolucionCompraApi.obtenerSuplidores(sucursalActiva).then(r => setSuplidoresCache(r || [])).catch(() => {});
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
 
     // Inicializar fecha en modo crear
@@ -399,7 +306,7 @@ const DevolucionCompraFormulario: React.FC = () => {
         setDetalles(res.detalles || []);
         setSelectedTipo(res.tipo || null);
         setSelectedConcepto(res.concepto || null);
-        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
         setSelectedEntidad(res.suplidor || res.entidad || null);
         setSelectedAlmacen(res.almacen || null);
         setSelectedEntrada(res.entrada || null);
@@ -523,7 +430,7 @@ const DevolucionCompraFormulario: React.FC = () => {
                 setDetalles(res.detalles || []);
                 setSelectedTipo(res.tipo || null);
                 setSelectedConcepto(res.concepto || null);
-                setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+                setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
                 setSelectedEntidad(res.suplidor || res.entidad || null);
                 setSelectedAlmacen(res.almacen || null);
                 setSelectedEntrada(res.entrada || null);
@@ -670,7 +577,7 @@ const DevolucionCompraFormulario: React.FC = () => {
   // ===== Handlers de Concepto =====
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
-    setConceptoSearchText(toTitleCase(concepto.nombre));
+    setConceptoSearchText(`${concepto.codigo || ''} - ${toTitleCase(concepto.nombre)}`);
     setEditingField(null);
     form.setFieldsValue({ concepto: concepto.codigo });
 
@@ -727,24 +634,50 @@ const DevolucionCompraFormulario: React.FC = () => {
 
   // ===== Handlers de Entrada Referencia =====
   const handleEntradaSelect = async (entrada: any) => {
-    // Preguntar si desea importar detalles si ya existen
-    if (detalles.length > 0) {
-      const shouldReplace = await new Promise<boolean>((resolve) => {
-        Modal.confirm({
-          title: '¿Desea Borrar todos los registros?',
-          icon: <ExclamationCircleOutlined />,
-          content: 'Ya existen detalles en el documento. ¿Desea borrarlos y cargar los de la entrada seleccionada?',
-          okText: 'Sí, borrar y cargar',
-          cancelText: 'No, mantener',
-          onOk: () => resolve(true),
-          onCancel: () => resolve(false),
-        });
+    try {
+      const detalleEntrada = await devolucionCompraApi.obtenerDetalleEntrada(sucursalActiva, entrada.id);
+
+      // Auto-asignar entrada
+      setSelectedEntrada({
+        id: detalleEntrada.id,
+        documento: `${detalleEntrada.documento?.codigo || 'ENP'}-${detalleEntrada.noDocumento || ''}`,
       });
 
-      if (shouldReplace) {
-        // Cargar detalle completo de la entrada
-        try {
-          const detalleEntrada = await devolucionCompraApi.obtenerDetalleEntrada(sucursalActiva, entrada.id);
+      // Auto-asignar suplidor desde la entrada
+      if (detalleEntrada.suplidor?.codigo) {
+        setSelectedEntidad(detalleEntrada.suplidor);
+        form.setFieldsValue({ suplidor: detalleEntrada.suplidor.codigo });
+      }
+
+      // Auto-asignar almacén desde la entrada
+      if (detalleEntrada.almacen?.codigo) {
+        setSelectedAlmacen(detalleEntrada.almacen);
+        form.setFieldsValue({ almacen: detalleEntrada.almacen.codigo });
+      }
+
+      // Auto-asignar moneda y tasa desde la entrada
+      if (detalleEntrada.moneda?.codigo) {
+        form.setFieldsValue({
+          moneda: detalleEntrada.moneda.nombre,
+          tasa: detalleEntrada.tasa || 1,
+        });
+      }
+
+      // Preguntar si desea importar detalles si ya existen
+      if (detalles.length > 0) {
+        const shouldReplace = await new Promise<boolean>((resolve) => {
+          Modal.confirm({
+            title: '¿Desea Borrar todos los registros?',
+            icon: <ExclamationCircleOutlined />,
+            content: 'Ya existen detalles en el documento. ¿Desea borrarlos y cargar los de la entrada seleccionada?',
+            okText: 'Sí, borrar y cargar',
+            cancelText: 'No, mantener',
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          });
+        });
+
+        if (shouldReplace) {
           const nuevosDetalles = (detalleEntrada.detalles || []).map((d: any, idx: number) => ({
             ...filaVacia(),
             id: -(idx + 1),
@@ -761,22 +694,15 @@ const DevolucionCompraFormulario: React.FC = () => {
             tieneVencimiento: d.tieneVencimiento,
           }));
           setDetalles(nuevosDetalles.map((d: DetalleDevolucionCompraDTO) => calcularFila(d)));
-        } catch (err: any) {
-          const msg = extraerMensajeError(err, 'Error al cargar detalles de la entrada');
-          message.error(msg);
         }
-      }
-    } else {
-      // No hay detalles, preguntar si cargar
-      Modal.confirm({
-        title: '¿Desea Cargar todos los registros?',
-        icon: <ExclamationCircleOutlined />,
-        content: '¿Desea cargar los productos de la entrada seleccionada?',
-        okText: 'Sí, cargar',
-        cancelText: 'No',
-        onOk: async () => {
-          try {
-            const detalleEntrada = await devolucionCompraApi.obtenerDetalleEntrada(sucursalActiva, entrada.id);
+      } else {
+        Modal.confirm({
+          title: '¿Desea Cargar todos los registros?',
+          icon: <ExclamationCircleOutlined />,
+          content: '¿Desea cargar los productos de la entrada seleccionada?',
+          okText: 'Sí, cargar',
+          cancelText: 'No',
+          onOk: () => {
             const nuevosDetalles = (detalleEntrada.detalles || []).map((d: any, idx: number) => ({
               ...filaVacia(),
               id: -(idx + 1),
@@ -793,19 +719,12 @@ const DevolucionCompraFormulario: React.FC = () => {
               tieneVencimiento: d.tieneVencimiento,
             }));
             setDetalles(nuevosDetalles.map((d: DetalleDevolucionCompraDTO) => calcularFila(d)));
-          } catch (err: any) {
-            const msg = extraerMensajeError(err, 'Error al cargar detalles de la entrada');
-            message.error(msg);
-          }
-        },
-      });
-    }
-
-    // Auto-asignar suplidor desde la entrada
-    setSelectedEntrada(entrada);
-    if (entrada?.suplidor?.codigo) {
-      setSelectedEntidad(entrada.suplidor);
-      form.setFieldsValue({ suplidor: entrada.suplidor.codigo });
+          },
+        });
+      }
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al cargar la entrada seleccionada');
+      message.error(msg);
     }
   };
 
@@ -973,7 +892,7 @@ const DevolucionCompraFormulario: React.FC = () => {
 
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
-    <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+    <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
@@ -994,7 +913,7 @@ const DevolucionCompraFormulario: React.FC = () => {
                     >
                       {tiposCache.map((t) => (
                         <Select.Option key={t.codigo} value={t.codigo}>
-                          {toTitleCase(t.nombre)}
+                          {t.codigo} - {toTitleCase(t.nombre)}
                         </Select.Option>
                       ))}
                     </Select>
@@ -1033,34 +952,33 @@ const DevolucionCompraFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={9}>
             <div ref={entradaRef}>
             <FloatingField label="Entrada de Referencia">
-              <Space.Compact style={{ width: '100%' }}>
-                <Input
-                  placeholder=" "
-                  value={selectedEntrada?.documento || form.getFieldValue('referencia') || ''}
-                  readOnly
-                />
-                <Button icon={<SearchOutlined />} onClick={() => setEntradaModalOpen(true)} />
-                {selectedEntrada && (
-                  <Button icon={<ClearOutlined />} onClick={handleEntradaClear} />
-                )}
-              </Space.Compact>
+              <Input
+                placeholder=" "
+                value={selectedEntrada?.documento || form.getFieldValue('referencia') || ''}
+                readOnly
+                suffix={
+                  <Space size={4}>
+                    <SearchOutlined onClick={() => setEntradaModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                    {selectedEntrada && <ClearOutlined onClick={handleEntradaClear} style={{ cursor: 'pointer' }} />}
+                  </Space>
+                }
+                onClick={() => setEntradaModalOpen(true)}
+              />
             </FloatingField>
             </div>
             <Form.Item name="referencia" hidden><Input /></Form.Item>
           </Col>
           <Col xs={24} sm={12} lg={15}>
-            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
-                  <Input
-                    placeholder=" "
-                    value={conceptoSearchText}
-                    readOnly
-                    onClick={handleConceptoSearchClick}
-                  />
-                </FloatingField>
-              </div>
-              <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
+            <div ref={conceptoRef}>
+              <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
+                <Input
+                  placeholder=" "
+                  value={conceptoSearchText}
+                  readOnly
+                  suffix={<SearchOutlined style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />}
+                  onClick={handleConceptoSearchClick}
+                />
+              </FloatingField>
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
@@ -1206,7 +1124,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       render: () => <DragHandle />,
     },
     {
-      title: 'CÃ³digo',
+      title: 'Código',
       key: 'codigo',
       width: 120,
       fixed: 'left' as const,
@@ -1223,7 +1141,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       ),
     },
     {
-      title: 'ArtÃ­culo',
+      title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
@@ -1462,7 +1380,7 @@ const DevolucionCompraFormulario: React.FC = () => {
         setDetalles(res.detalles || []);
         setSelectedTipo(res.tipo || null);
         setSelectedConcepto(res.concepto || null);
-        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
         setSelectedEntidad(res.suplidor || res.entidad || null);
         setSelectedAlmacen(res.almacen || null);
         setSelectedEntrada(res.entrada || null);
@@ -1513,10 +1431,9 @@ const DevolucionCompraFormulario: React.FC = () => {
           handleConceptoSelect(concepto);
           setConceptoModalOpen(false);
         }}
-        fetchConceptos={async () => {
-          if (!selectedTipo) return [];
-          return await devolucionCompraApi.obtenerConceptos(sucursalActiva, selectedTipo.idExterno);
-        }}
+        sucursal={sucursalActiva}
+        documento="DVC"
+        tipo={selectedTipo?.codigo}
       />
       <BuscarProductoModal
         open={productoModalOpen}
@@ -1528,6 +1445,8 @@ const DevolucionCompraFormulario: React.FC = () => {
         open={entradaModalOpen}
         onClose={() => setEntradaModalOpen(false)}
         onSelect={handleEntradaSelect}
+        entidad={selectedEntidad?.codigo}
+        onBuscar={devolucionCompraApi.buscarEntradas}
       />
       <ScannerModal
         open={scannerModalOpen}
@@ -1667,6 +1586,13 @@ const DevolucionCompraFormulario: React.FC = () => {
                       pagination={false}
                       scroll={{ x: 1300 }}
                       components={{ body: { row: SortableRow } }}
+                      locale={{
+                        emptyText: (
+                          <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Empty description="Sin registros" />
+                          </div>
+                        ),
+                      }}
                     />
                     </SortableContext>
                     <DragOverlay>
@@ -1930,3 +1856,4 @@ const DevolucionCompraGuide: React.FC<DevolucionCompraGuideProps> = ({
 };
 
 export default DevolucionCompraFormulario;
+

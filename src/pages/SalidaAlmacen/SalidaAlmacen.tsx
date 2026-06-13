@@ -11,6 +11,7 @@ import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats'
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { MovimientoVistaDTO } from '../../types/entradaAlmacen';
 import { useAuthStore } from '../../stores/authStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 
 const { Text } = Typography;
 
@@ -18,9 +19,10 @@ const SalidaAlmacen: React.FC = () => {
   const navigate = useNavigate();
 
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const { screenCode, documentCode } = useScreenConfig('FSAP');
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<MovimientoVistaDTO>({
-    modulo: 'FSAP',
+    modulo: screenCode,
     fetchVista: (sucursal, desde, hasta, filas, salto, estado) =>
       salidaAlmacenApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado),
     fetchFiltrar: (sucursal, params) =>

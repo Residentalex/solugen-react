@@ -1,5 +1,7 @@
 import React from 'react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { queryClient } from './lib/queryClient';
 import { useAuthStore } from './stores/authStore';
 import Login from './pages/Login/Login';
 import CambiarClave from './pages/CambiarClave/CambiarClave';
@@ -20,6 +22,7 @@ import TransferenciaAlmacenFormulario from './pages/TransferenciaAlmacen/Transfe
 import DevolucionVenta from './pages/DevolucionVenta/DevolucionVenta';
 import DevolucionVentaDetalle from './pages/DevolucionVenta/DevolucionVentaDetalle';
 import DevolucionVentaFormulario from './pages/DevolucionVenta/DevolucionVentaFormulario';
+import ReporteDevolucionVenta from './pages/ReporteDevolucionVenta/ReporteDevolucionVenta';
 import CotizacionVenta from './pages/CotizacionVenta/CotizacionVenta';
 import CotizacionVentaFormulario from './pages/CotizacionVenta/CotizacionVentaFormulario';
 import FacturaPOS from './pages/FacturaPOS/FacturaPOS';
@@ -56,6 +59,8 @@ import Conceptos from './pages/Conceptos/Conceptos';
 import ConceptoDetalle from './pages/Conceptos/ConceptoDetalle';
 import ConceptoFormulario from './pages/Conceptos/ConceptoFormulario';
 import Pantallas from './pages/Pantallas/Pantallas';
+import PantallaDetalle from './pages/Pantallas/PantallaDetalle';
+import PantallaFormulario from './pages/Pantallas/PantallaFormulario';
 import TiposCuenta from './pages/TiposCuenta/TiposCuenta';
 import CuentasContables from './pages/CuentasContables/CuentasContables';
 import CuentaContableDetalle from './pages/CuentasContables/CuentaContableDetalle';
@@ -74,6 +79,7 @@ import Acciones from './pages/Acciones/Acciones';
 import PlanesPago from './pages/PlanesPago/PlanesPago';
 import Almacenes from './pages/Almacenes/Almacenes';
 import Proximamente from './pages/Proximamente';
+import PermisosEspeciales from './pages/PermisosEspeciales/PermisosEspeciales';
 import OrdenCompra from './pages/OrdenCompra/OrdenCompra';
 import OrdenCompraDetalle from './pages/OrdenCompra/OrdenCompraDetalle';
 import OrdenCompraFormulario from './pages/OrdenCompra/OrdenCompraFormulario';
@@ -104,6 +110,7 @@ import MovimientosProductos from './pages/MovimientosProductos/MovimientosProduc
 import ImportarInventario from './pages/ImportarInventario/ImportarInventario';
 import ActualizacionCostos from './pages/ActualizacionCostos/ActualizacionCostos';
 import AntiguedadSaldos from './pages/AntiguedadSaldos/AntiguedadSaldos';
+import MayorAuxiliar from './pages/MayorAuxiliar/MayorAuxiliar';
 import CierreInventario from './pages/CierreInventario/CierreInventario';
 import CierreDetalle from './pages/CierreInventario/CierreDetalle';
 import GeneradorORC from './pages/GeneradorORC/GeneradorORC';
@@ -148,6 +155,7 @@ const PantallaGuard: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
 const App: React.FC = () => {
   return (
+    <QueryClientProvider client={queryClient}>
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -192,6 +200,7 @@ const App: React.FC = () => {
             <Route path="FDEV/nuevo" element={<DevolucionVentaFormulario />} />
             <Route path="FDEV/:id/editar" element={<DevolucionVentaFormulario />} />
             <Route path="FDEV/:id" element={<DevolucionVentaDetalle />} />
+            <Route path="RDEV" element={<ReporteDevolucionVenta />} />
             <Route path="FCotizacion" element={<CotizacionVenta />} />
             <Route path="FCotizacion/nuevo" element={<CotizacionVentaFormulario />} />
             <Route path="FCotizacion/:id/editar" element={<CotizacionVentaFormulario />} />
@@ -252,6 +261,9 @@ const App: React.FC = () => {
             <Route path="MConcepto/:codigo" element={<ConceptoDetalle />} />
             <Route path="MAccion" element={<Acciones />} />
             <Route path="MPantalla" element={<Pantallas />} />
+            <Route path="MPantalla/nuevo" element={<PantallaFormulario />} />
+            <Route path="MPantalla/:id/editar" element={<PantallaFormulario />} />
+            <Route path="MPantalla/:id" element={<PantallaDetalle />} />
             <Route path="MTipoCuenta" element={<TiposCuenta />} />
             <Route path="MCuentaContable" element={<CuentasContables />} />
             <Route path="MCuentaContable/:noCuenta" element={<CuentaContableDetalle />} />
@@ -318,6 +330,7 @@ const App: React.FC = () => {
           <Route path="OActualizacionCostos" element={<ActualizacionCostos />} />
           <Route path="RAntiguedaCXC" element={<AntiguedadSaldos tipoEntidad="CLI" />} />
           <Route path="RAntiguedadCXP" element={<AntiguedadSaldos tipoEntidad="SUP" />} />
+          <Route path="RMayorAux" element={<MayorAuxiliar />} />
           <Route path="ORepostear" element={<Repostear />} />
           <Route path="notificaciones" element={<Notificaciones />} />
           <Route path="notificaciones/config" element={<NotificacionesConfig />} />
@@ -331,7 +344,7 @@ const App: React.FC = () => {
             <Route path="mplantillasup/:id" element={<PlantillaSuplidorDetalle />} />
             <Route path="RMOVPLAN" element={<MovimientoPorPlantilla />} />
             <Route path="MServidor" element={<Proximamente modulo="Servidores" codigo="MServidor" />} />
-          <Route path="MPermiso" element={<Proximamente modulo="Permisos" codigo="MPermiso" />} />
+          <Route path="MPermiso" element={<PermisosEspeciales />} />
           <Route path="MAuditoria" element={<Proximamente modulo="Historial y Auditoría" codigo="MAuditoria" />} />
           <Route path="MEmpresa" element={<Proximamente modulo="Configuración de la Empresa" codigo="MEmpresa" />} />
           <Route path="MTerminal" element={<Proximamente modulo="Terminales" codigo="MTerminal" />} />
@@ -346,6 +359,7 @@ const App: React.FC = () => {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </QueryClientProvider>
   );
 };
 

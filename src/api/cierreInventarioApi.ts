@@ -1,6 +1,13 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
 
+export interface ExistenciaNegativa {
+  codPro: string;
+  articulo: string;
+  cantidad: number;
+  codAlmacen: string;
+}
+
 export const cierreInventarioApi = {
   /** Obtiene la fecha del último cierre de inventario */
   obtenerFechaCierre: async (sucursal: number): Promise<string> => {
@@ -8,9 +15,9 @@ export const cierreInventarioApi = {
     return data;
   },
 
-  /** Genera el cierre de inventario para la fecha indicada */
-  generarCierre: async (sucursal: number, fecha: string): Promise<number> => {
-    const { data } = await apiClient.post<ApiResponse<number>>(`/Existencia/${sucursal}/GenerarCierre?fecha=${fecha}`);
+  /** Genera el cierre de inventario completo (todo se procesa en backend) */
+  generarCierre: async (sucursal: number, fecha: string): Promise<boolean> => {
+    const { data } = await apiClient.post<ApiResponse<boolean>>(`/Existencia/${sucursal}/generar-cierre?fecha=${fecha}`);
     return data.data;
   },
 
@@ -23,6 +30,12 @@ export const cierreInventarioApi = {
   /** Obtiene el detalle de productos de un cierre específico */
   obtenerDetalleCierre: async (sucursal: number, cierreId: number): Promise<any[]> => {
     const { data } = await apiClient.get<any[]>(`/cierre/${sucursal}/detalle/${cierreId}`);
+    return data;
+  },
+
+  /** Obtiene productos con existencia negativa que bloquean el cierre */
+  obtenerExistenciasNegativas: async (sucursal: number): Promise<ExistenciaNegativa[]> => {
+    const { data } = await apiClient.get<ExistenciaNegativa[]>(`/Existencia/${sucursal}/existencias-negativas`);
     return data;
   },
 

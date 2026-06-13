@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
   message, Form, Input, InputNumber, Select, DatePicker, Modal, Alert,
-  Switch, Typography,
+  Switch, Typography, Empty,
 } from 'antd';
 import {
   SaveOutlined,
@@ -41,13 +41,14 @@ import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDo
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
-import FormularioToolbar from '../../components/FormularioToolbar';
+import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import { NotaCreditoGuide } from './NotaCreditoGuide';
 
+const { Text } = Typography;
 const { TextArea } = Input;
 
 // ===== Validación de formato NCF Modificado =====
@@ -554,7 +555,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     setConceptoSearchText('');
     form.setFieldsValue({ concepto: concepto.codigo });
 
-    // Cargar entidades segÃºn concepto
+    // Cargar entidades según concepto
     cargarEntidades(concepto.codigo);
 
     // === ConfigurarMoneda ===
@@ -655,7 +656,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
 
   const detalleMovimientoColumns = [
     {
-      title: 'CÃ³digo',
+      title: 'Código',
       key: 'codigo',
       width: 120,
       fixed: 'left' as const,
@@ -672,7 +673,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       ),
     },
     {
-      title: 'ArtÃ­culo',
+      title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
@@ -748,13 +749,45 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
 
   // ===== Encabezado =====
   const renderEncabezado = () => (
-    <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+    <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16, paddingBottom: 32 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
-          {/* Fila 1: Tipo + Concepto */}
-          <Col xs={24} sm={12} lg={9}>
+          {/* Fila 1: Fecha + Concepto */}
+          <Col xs={24} sm={12} lg={6}>
+            <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
+              <FloatingField label="Fecha" required>
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+              </FloatingField>
+            </Form.Item>
+          </Col>
+
+          <Col xs={24} sm={12} lg={18}>
+            <div ref={conceptoRef}>
+              <FloatingField label="Concepto" required>
+                <Input
+                  placeholder=" "
+                  value={selectedConcepto ? `${selectedConcepto.codigo} - ${toTitleCase(selectedConcepto.nombre)}` : ''}
+                  readOnly
+                  suffix={
+                    <Space size={4}>
+                      <SearchOutlined onClick={() => setConceptoModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                      {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
+                    </Space>
+                  }
+                  onClick={() => setConceptoModalOpen(true)}
+                />
+              </FloatingField>
+            </div>
+            <Form.Item name="concepto" hidden><Input /></Form.Item>
+            {conceptoInfo && (
+              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
+            )}
+          </Col>
+
+          {/* Fila 2: Tipo + Entidad */}
+          <Col xs={24} sm={12} lg={6}>
             <Form.Item name="tipo" style={{ marginBottom: 0 }}>
               <FloatingField label="Tipo">
                 <Select
@@ -765,39 +798,67 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
                 >
                   {tiposCache.map((tc) => (
                     <Select.Option key={tc.codigo} value={tc.codigo}>
-                      {toTitleCase(tc.nombre)}
+                      {tc.codigo} - {toTitleCase(tc.nombre)}
                     </Select.Option>
                   ))}
                 </Select>
               </FloatingField>
             </Form.Item>
           </Col>
-          <Col xs={24} sm={12} lg={15}>
-            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required>
-                  <Input
-                    placeholder=" "
-                    value={selectedConcepto ? toTitleCase(selectedConcepto.nombre) : conceptoSearchText}
-                    readOnly
-                    onClick={() => setConceptoModalOpen(true)}
-                  />
-                </FloatingField>
-              </div>
-              <Button icon={<SearchOutlined />} onClick={() => setConceptoModalOpen(true)} />
-              {selectedConcepto && (
-                <Button icon={<ClearOutlined />} onClick={handleConceptoClear} />
-              )}
-            </div>
-            <Form.Item name="concepto" hidden><Input /></Form.Item>
-            {conceptoInfo && (
-              <Col xs={24}>
-                <Typography.Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Typography.Text>
-              </Col>
-            )}
+
+          <Col xs={24} sm={12} lg={18} ref={entidadRef}>
+            <Form.Item name="entidad" required style={{ marginBottom: 0 }}>
+              <FloatingField label={entidadLabel} required>
+                <Select
+                  showSearch
+                  allowClear
+                  placeholder=" "
+                  optionFilterProp="label"
+                  onChange={(val) => {
+                    if (!val) { setSelectedEntidad(null); return; }
+                    const ent = entidadesCache.find((e: any) => e.codigo === val);
+                    if (!ent) return;
+
+                    const tieneDocs = transaccionesAsociadas.length > 0 || devoluciones.length > 0;
+                    if (tieneDocs && selectedEntidad) {
+                      Modal.confirm({
+                        title: 'Cambiar entidad',
+                        icon: <ExclamationCircleOutlined />,
+                        content: `La entidad ${ent.nombre} tiene documentos asignados. Se borrarán los documentos agregados. ¿Está seguro?`,
+                        okText: 'Sí, cambiar',
+                        cancelText: 'No',
+                        okButtonProps: { danger: true },
+                        onOk: () => {
+                          setSelectedEntidad(ent);
+                          setTransaccionesAsociadas([]);
+                          setDevoluciones([]);
+                          form.setFieldsValue({ entidad: ent.codigo });
+                        },
+                        onCancel: () => {
+                          form.setFieldsValue({ entidad: selectedEntidad.codigo });
+                        },
+                      });
+                    } else {
+                      setSelectedEntidad(ent);
+                    }
+                  }}
+                  onDropdownVisibleChange={(open) => {
+                    if (open && !selectedConcepto) {
+                      message.info('Seleccione un concepto primero');
+                    }
+                  }}
+                >
+                  {entidadesCache.map((ent: any) => (
+                    <Select.Option key={ent.codigo} value={ent.codigo} label={ent.nombre}>
+                      {toTitleCase(ent.nombre)}{ent.identificacion ? ` (${ent.identificacion})` : ''}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </FloatingField>
+            </Form.Item>
           </Col>
 
-          {/* Fila: Sucursal */}
+          {/* Fila 3: Sucursal + Monto Total + Bienes + Servicios */}
           <Col xs={24} sm={12} lg={6} ref={sucursalRef}>
             <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
               <FloatingField label="Sucursal">
@@ -818,88 +879,8 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
                 </Select>
               </FloatingField>
             </Form.Item>
-            <Form.Item name="sucursal" hidden><Input /></Form.Item>
           </Col>
 
-          {/* Fila 2: Entidad */}
-          <Col xs={24} sm={12} lg={12} ref={entidadRef}>
-            <Form.Item name="entidad" required style={{ marginBottom: 0 }}>
-              <FloatingField label={entidadLabel} required>
-                <Select
-                  allowClear
-                  showSearch
-                  optionFilterProp="children"
-                  notFoundContent="Seleccione un concepto primero"
-                  onChange={(val) => {
-                    if (!val) { setSelectedEntidad(null); return; }
-                    
-                    const ent = entidadesCache.find((e: any) => e.codigo === val);
-                    if (!ent) return;
-                    
-                    // Si hay documentos asignados, preguntar antes de cambiar
-                    const tieneDocs = transaccionesAsociadas.length > 0 || devoluciones.length > 0;
-                    if (tieneDocs && selectedEntidad) {
-                      Modal.confirm({
-                        title: 'Cambiar entidad',
-                        icon: <ExclamationCircleOutlined />,
-                        content: `La entidad ${ent.nombre} tiene documentos asignados. Se borrarán los documentos agregados. ¿Está seguro?`,
-                        okText: 'Sí, cambiar',
-                        cancelText: 'No',
-                        okButtonProps: { danger: true },
-                        onOk: () => {
-                          setSelectedEntidad(ent);
-                          setTransaccionesAsociadas([]);
-                          setDevoluciones([]);
-                          form.setFieldsValue({ entidad: ent.codigo });
-                        },
-                        onCancel: () => {
-                          // Restaurar valor anterior
-                          form.setFieldsValue({ entidad: selectedEntidad.codigo });
-                        },
-                      });
-                    } else {
-                      setSelectedEntidad(ent);
-                      form.setFieldsValue({ entidad: ent.codigo });
-                    }
-                  }}
-                  onDropdownVisibleChange={(open) => {
-                    if (open && !selectedConcepto) {
-                      message.info('Seleccione un concepto primero');
-                    }
-                  }}
-                >
-                  {entidadesCache.map((ent: any) => (
-                    <Select.Option key={ent.codigo} value={ent.codigo}>
-                      {toTitleCase(ent.nombre)}{ent.identificacion ? ` (${ent.identificacion})` : ''}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </FloatingField>
-            </Form.Item>
-          </Col>
-
-          {/* RNC ReadOnly */}
-          <Col xs={24} sm={12} lg={6}>
-            <FloatingField label="RNC">
-              <Input value={selectedEntidad?.identificacion || ''} readOnly />
-            </FloatingField>
-          </Col>
-
-          {/* Entidad Nombre ReadOnly */}
-          <Col xs={24} sm={12} lg={6}>
-            <FloatingField label="Nombre">
-              <Input value={selectedEntidad?.nombre ? toTitleCase(selectedEntidad.nombre) : ''} readOnly />
-            </FloatingField>
-          </Col>
-
-          {/* Fila 3: Fecha + Monto Total */}
-          <Col xs={24} sm={12} lg={6}>
-            <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Fecha" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-              </FloatingField>
-            </Form.Item>
-          </Col>
           <Col xs={24} sm={12} lg={6}>
             <Form.Item name="total" required style={{ marginBottom: 0 }}>
               <FloatingField label="Monto Total" required>
@@ -908,7 +889,6 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
             </Form.Item>
           </Col>
 
-          {/* Fila: Bienes + Servicios */}
           <Col xs={24} sm={12} lg={6}>
             <Form.Item name="bienes" style={{ marginBottom: 0 }}>
               <FloatingField label="Bienes">
@@ -916,6 +896,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
               </FloatingField>
             </Form.Item>
           </Col>
+
           <Col xs={24} sm={12} lg={6}>
             <Form.Item name="servicios" style={{ marginBottom: 0 }}>
               <FloatingField label="Servicios">
@@ -924,62 +905,76 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
             </Form.Item>
           </Col>
 
-          {/* Fila 4: Campos rápidos */}
-          <Col xs={24}>
-            <div style={{ marginBottom: 16 }}>
-              <Space size={[8, 8]} wrap>
-                {/* NCF */}
-                <div>
-                  {editingField === 'ncf' ? (
-                    <Input
-                      size="small"
-                      style={{ width: 200 }}
-                      placeholder="NCF"
-                      maxLength={19}
-                      autoFocus
-                      defaultValue={editingValueRef.current as string}
-                      onChange={(e) => { editingValueRef.current = e.target.value; }}
-                      onPressEnter={() => commitFieldEditor()}
-                      onBlur={() => commitFieldEditor()}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                      }}
-                    />
-                  ) : ncfValue ? (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                      NCF: {ncfValue} <EditOutlined />
-                    </Tag>
-                  ) : (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                      <PlusOutlined /> NCF
-                    </Tag>
-                  )}
-                </div>
+          {/* Fila 4: Nota + Botones rápidos */}
+          <Col xs={24} lg={18}>
+            <Form.Item name="nota" style={{ marginBottom: 0 }}>
+              <FloatingField label="Nota">
+                <TextArea rows={3} maxLength={500} showCount placeholder="Nota (máx 500 caracteres)" />
+              </FloatingField>
+            </Form.Item>
+          </Col>
 
-                {/* Selector NCF Modificado */}
-                <Select
-                  size="small"
-                  style={{ width: 160 }}
-                  value={ncfTipo}
-                  onChange={handleNcfTipoChange}
-                >
-                  <Select.Option value="documento">NCF Documento</Select.Option>
-                  <Select.Option value="modificado">NCF Modificado</Select.Option>
-                </Select>
+          <Col xs={24} lg={6}>
+            <Space size={[8, 8]} wrap>
+              {/* NCF */}
+              <div>
+                {editingField === 'ncf' ? (
+                  <Input
+                    size="small"
+                    style={{ width: 200 }}
+                    placeholder="NCF"
+                    maxLength={19}
+                    autoFocus
+                    defaultValue={editingValueRef.current as string}
+                    onChange={(e) => { editingValueRef.current = e.target.value; }}
+                    onPressEnter={() => commitFieldEditor()}
+                    onBlur={() => commitFieldEditor()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                    }}
+                  />
+                ) : ncfValue ? (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
+                    NCF: {ncfValue} <EditOutlined />
+                  </Tag>
+                ) : (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
+                    <PlusOutlined /> NCF
+                  </Tag>
+                )}
+              </div>
 
-                {ncfTipo === 'modificado' && (
+              {/* NCF Modificado como Tag rápido */}
+              <div>
+                {editingField === 'ncfModificado' ? (
                   <Input
                     size="small"
                     style={{ width: 200 }}
                     placeholder="NCF Modificado"
-                    maxLength={19}
-                    value={ncfModificadoVal}
-                    onChange={(e) => setNcfModificadoVal(e.target.value.toUpperCase())}
-                    status={ncfModificadoVal && !validarNcfModificado(ncfModificadoVal) ? 'error' : undefined}
+                    maxLength={20}
+                    autoFocus
+                    defaultValue={editingValueRef.current as string}
+                    onChange={(e) => { editingValueRef.current = e.target.value.toUpperCase(); }}
+                    onPressEnter={() => commitFieldEditor()}
+                    onBlur={() => commitFieldEditor()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                    }}
+                    status={editingValueRef.current && !validarNcfModificado(editingValueRef.current as string) ? 'error' : undefined}
                   />
+                ) : ncfModificadoVal ? (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncfModificado')}>
+                    NCF Mod: {ncfModificadoVal} <EditOutlined />
+                  </Tag>
+                ) : (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => { setNcfTipo('modificado'); openFieldEditor('ncfModificado'); }}>
+                    <PlusOutlined /> NCF Mod
+                  </Tag>
                 )}
+              </div>
 
-                {/* Referencia */}
+              {/* Referencia */}
+              <div>
                 {editingField === 'referencia' ? (
                   <Input
                     size="small"
@@ -1003,8 +998,10 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
                     <PlusOutlined /> Referencia
                   </Tag>
                 )}
+              </div>
 
-                {/* Tasa */}
+              {/* Tasa */}
+              <div>
                 {editingField === 'tasa' ? (
                   <InputNumber
                     size="small"
@@ -1030,21 +1027,14 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
                     <PlusOutlined /> Tasa
                   </Tag>
                 )}
-              </Space>
-            </div>
+              </div>
+            </Space>
             <Form.Item name="ncf" hidden><Input /></Form.Item>
             <Form.Item name="referencia" hidden><Input /></Form.Item>
             <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
           </Col>
 
-          {/* Fila 5: Nota */}
-          <Col xs={24}>
-            <Form.Item name="nota" style={{ marginBottom: 0 }}>
-              <FloatingField label="Nota">
-                <TextArea rows={3} maxLength={500} showCount />
-              </FloatingField>
-            </Form.Item>
-          </Col>
+          <Form.Item name="moneda" hidden><Input /></Form.Item>
         </Row>
       </Form>
         </Col>
@@ -1133,6 +1123,13 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
             size="small"
             pagination={false}
             scroll={{ x: 1200 }}
+            locale={{
+              emptyText: (
+                <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Empty description="Sin registros" />
+                </div>
+              ),
+            }}
           />
         </div>
       ),
@@ -1259,7 +1256,9 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        fetchConceptos={() => conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'NC')}
+        sucursal={sucursalActiva}
+        documento="NC"
+        tipo={selectedTipo?.codigo}
       />
 
       <BuscarDocumentoModal
@@ -1267,6 +1266,8 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         onClose={() => setBuscarDocModalOpen(false)}
         onSelect={handleDocRelacionadoSelect}
         tipoEntidad={tipoEntidad}
+        codEntidad={selectedEntidad?.codigo || ''}
+        origen={tipoEntidad === 'SUP' ? 1 : 0}
         montoTotal={Number(form.getFieldValue('total') || 0)}
       />
 
@@ -1315,3 +1316,4 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
 };
 
 export default NotaCreditoFormulario;
+

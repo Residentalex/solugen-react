@@ -1,13 +1,17 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Button, Form, Input, Switch, Checkbox, Spin, message, Grid, Collapse, Alert } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
+import { Card, Row, Col, Button, Form, Input, Switch, Checkbox, Spin, message, Grid, Collapse, Alert, Modal } from 'antd';
+import { ArrowLeftOutlined, SaveOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
 import { rolApi } from '../../api/rolApi';
 import type { RolFullDTO } from '../../types/administracion';
 import type { PantallaDTO } from '../../types/auth';
 import { useMemo } from 'react';
+import { permisoEspecialApi } from '../../api/permisoEspecialApi';
+import type { PermisoEspecialConRolDTO } from '../../types/auth';
+import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import PermissionGate from '../../components/PermissionGate';
 
 const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
 
@@ -19,10 +23,14 @@ const RolFormulario: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const screens = Grid.useBreakpoint();
 
+  const navigationConfirmedRef = useFormularioNavigation();
+
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [pantallasDisponibles, setPantallasDisponibles] = useState<PantallaDTO[]>([]);
+  const [permisosEspeciales, setPermisosEspeciales] = useState<PermisoEspecialConRolDTO[]>([]);
+  const [cargandoPermisosEspeciales, setCargandoPermisosEspeciales] = useState(false);
 
   // Deduplicar por id (safety: si backend devuelve la misma pantalla múltiples veces)
   const pantallasUnicas = useMemo(() => {
@@ -103,8 +111,31 @@ const RolFormulario: React.FC = () => {
           sel[pp.id] = [...(pp.acciones || [])];
         }
         setSelectedPantallas(sel);
+
+        setCargandoPermisosEspeciales(true);
+        try {
+          const result = await permisoEspecialApi.obtenerPorRol(SUCURSAL_SEGURIDAD, parseInt(id));
+          setPermisosEspeciales(result || []);
+        } catch {
+          // no crítico, los permisos especiales se cargan aparte
+        } finally {
+          setCargandoPermisosEspeciales(false);
+        }
       } else {
         form.setFieldsValue({ activo: true });
+
+        try {
+          const catalogo = await permisoEspecialApi.obtenerListado(SUCURSAL_SEGURIDAD);
+          setPermisosEspeciales(
+            (catalogo || []).filter(p => p.activo).map(p => ({
+              id: p.id,
+              codigo: p.codigo,
+              nombre: p.nombre,
+              activo: p.activo,
+              valor: false,
+            }))
+          );
+        } catch { /* ignorar */ }
       }
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
@@ -137,6 +168,12 @@ const RolFormulario: React.FC = () => {
     }));
   };
 
+  const handleTogglePermisoEspecial = (permisoId: number, checked: boolean) => {
+    setPermisosEspeciales((prev) =>
+      prev.map((p) => (p.id === permisoId ? { ...p, valor: checked } : p))
+    );
+  };
+
   const guardar = async () => {
     try {
       const values = await form.validateFields();
@@ -155,13 +192,28 @@ const RolFormulario: React.FC = () => {
         activo: values.activo ?? true,
         pantallas: pantallasPayload,
       };
+      let rolId = rolData?.id || 0;
       if (id) {
         await rolApi.actualizar(SUCURSAL_SEGURIDAD, payload as any);
         message.success('Rol actualizado correctamente');
       } else {
-        await rolApi.crear(SUCURSAL_SEGURIDAD, payload as any);
+        const creado = await rolApi.crear(SUCURSAL_SEGURIDAD, payload as any);
+        rolId = creado.id;
         message.success('Rol creado correctamente');
       }
+
+      try {
+        const payloadPermisos = permisosEspeciales
+          .filter(p => p.valor)
+          .map(p => ({ permisoId: p.id, valor: p.valor }));
+        if (payloadPermisos.length > 0) {
+          await permisoEspecialApi.asignarARol(SUCURSAL_SEGURIDAD, rolId, payloadPermisos);
+        }
+      } catch {
+        // no crítico, el rol ya se guardó
+      }
+
+      navigationConfirmedRef.current = true;
       navigate('/MROL');
     } catch (err: any) {
       if (err?.errorFields) return;
@@ -212,12 +264,27 @@ const RolFormulario: React.FC = () => {
           {id ? 'Editar Rol' : 'Nuevo Rol'}
         </h4>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/MROL')}>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => {
+            Modal.confirm({
+              title: 'Cancelar',
+              icon: <ExclamationCircleOutlined />,
+              content: '¿Está seguro que desea cancelar los cambios realizados?',
+              okText: 'Si, cancelar',
+              cancelText: 'No, continuar editando',
+              okButtonProps: { danger: true },
+              onOk: () => {
+                navigationConfirmedRef.current = true;
+                navigate('/MROL');
+              },
+            });
+          }}>
             Volver
           </Button>
-          <Button type="primary" icon={<SaveOutlined />} loading={guardando} onClick={guardar}>
-            Guardar
-          </Button>
+          <PermissionGate accion={id ? 'EDITAR' : 'CREAR'}>
+            <Button type="primary" icon={<SaveOutlined />} loading={guardando} onClick={guardar}>
+              Guardar
+            </Button>
+          </PermissionGate>
         </div>
       </div>
 
@@ -361,8 +428,37 @@ const RolFormulario: React.FC = () => {
                                       <span style={{ fontSize: 12 }}>{acc}</span>
                                     </Checkbox>
                                   </div>
-                                ))}
+                                 ))}
                               </div>
+                              {/* Permisos especiales de la pantalla */}
+                              {pp.permisosEspeciales && pp.permisosEspeciales.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4, marginLeft: 24, width: '100%' }}>
+                                  {pp.permisosEspeciales.map((peCodigo) => {
+                                    const permiso = permisosEspeciales.find(p => p.codigo === peCodigo);
+                                    const checked = permiso?.valor ?? false;
+                                    return (
+                                      <div key={peCodigo}
+                                        style={{
+                                          display: 'inline-flex', alignItems: 'center', padding: '1px 2px',
+                                          borderRadius: 4, fontSize: 11,
+                                          background: checked ? 'var(--paces-selected-bg)' : 'transparent',
+                                          border: checked ? '1px solid var(--paces-primary)' : '1px solid var(--paces-border)',
+                                        }}
+                                      >
+                                        <Checkbox
+                                          checked={checked}
+                                          onChange={(e) => {
+                                            if (permiso) handleTogglePermisoEspecial(permiso.id, e.target.checked);
+                                          }}
+                                          style={{ fontSize: 11, marginRight: 0 }}
+                                        >
+                                          <span style={{ fontSize: 11 }}>{permiso?.nombre || peCodigo}</span>
+                                        </Checkbox>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -374,6 +470,7 @@ const RolFormulario: React.FC = () => {
             />
           </div>
         )}
+        {/* Permisos especiales ahora se muestran dentro de cada pantalla */}
       </Card>
           </Col>
         </Row>

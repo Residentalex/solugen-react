@@ -58,7 +58,7 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
       {
         key: 'concepto',
         title: 'Concepto',
-        description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento.',
+        description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento, por ejemplo qué documento se va a generar, el almacén por defecto, o si va a generar asientos o no, etc.',
         target: () => conceptoRef.current,
       },
       {
@@ -70,25 +70,25 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
       {
         key: 'ordenCompra',
         title: 'Orden de Compra',
-        description: 'Seleccione una orden de compra si el suplidor requiere ORC, o puede dejarlo vacío.',
+        description: 'Seleccione una orden de compra.',
         target: () => ordenCompraRef.current,
       },
       {
         key: 'almacen',
         title: 'Almacén',
-        description: 'Seleccione el almacén donde se recibirá la mercancía.',
+        description: 'Debe elegir un almacén para poder continuar.',
         target: () => almacenRef.current,
       },
       {
         key: 'productos',
         title: 'Productos',
-        description: 'Agregue productos al documento.',
+        description: 'Seleccione productos a agregar para este Documento.',
         target: () => agregarFilaRef.current,
       },
       {
         key: 'ncf',
         title: 'NCF',
-        description: 'El concepto requiere un NCF de factura. Debe digitar el NCF para poder continuar.',
+        description: 'Debe digitar un NCF.',
         target: () => ncfRef?.current || null,
       },
     ];
@@ -96,6 +96,7 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
     // Lógica de prioridad
     if (!concepto) return steps[0];
     if (!suplidor) return steps[1];
+    // Solo pedir OC si el suplidor requiere ORC
     if (suplidor.requiereORC && !ordenCompra) return steps[2];
     if (!almacen) return steps[3];
     // Solo pedir productos manuales si no hay OC seleccionada
@@ -110,17 +111,12 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
   currentStepRef.current = currentStep;
 
   // Mostrar guía cuando cambia el paso (avance automático)
-  // Solo si el usuario no descartó ESTE paso específicamente
-  // Se usa ref en lugar de state para evitar stale closures:
-  // el efecto solo depende de currentStep?.key, pero necesita
-  // leer el valor más reciente de dismissedStep sin re-ejecutarse.
   useEffect(() => {
     if (currentStep) {
       if (dismissedStepRef.current !== currentStep.key) {
         setOpen(true);
       }
     } else {
-      // Todo completado, cerrar guía
       setOpen(false);
       dismissedStepRef.current = null;
     }
@@ -132,17 +128,13 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // No cerrar si el click es dentro del popover
-      if (target.closest('.ant-popover')) {
-        return;
-      }
+      if (target.closest('.ant-popover')) return;
       setOpen(false);
       if (currentStepRef.current) {
         dismissedStepRef.current = currentStepRef.current.key;
       }
     };
 
-    // Retraso para evitar que el evento que abrió el popover lo cierre inmediatamente
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClickOutside);
     }, 0);
@@ -153,7 +145,6 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
     };
   }, [open]);
 
-  // No renderizar nada si no hay paso
   if (!currentStep) return null;
 
   const targetElement = currentStep.target();

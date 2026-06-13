@@ -42,26 +42,26 @@ export const SalidaAlmacenGuide: React.FC<SalidaAlmacenGuideProps> = ({
     const steps: GuideStep[] = [
       {
         key: 'concepto',
-        title: 'Paso 1: Concepto',
-        description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento.',
+        title: 'Concepto',
+        description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento, por ejemplo qué documento se va a generar, el almacén por defecto, o si va a generar asientos o no, etc.',
         target: () => conceptoRef.current,
       },
       {
         key: 'almacen',
-        title: 'Paso 2: Almacén',
-        description: 'Seleccione el almacén desde donde saldrá la mercancía.',
+        title: 'Almacén',
+        description: 'Debe elegir un almacén para poder continuar.',
         target: () => almacenRef.current,
       },
       {
         key: 'suplidor',
-        title: 'Paso 3: Entidad',
-        description: 'Seleccione la entidad destino de la salida.',
+        title: 'Suplidor / Entidad',
+        description: 'Debe elegir una entidad para poder continuar.',
         target: () => suplidorRef.current,
       },
       {
         key: 'productos',
-        title: 'Paso 4: Productos',
-        description: 'Agregue productos al documento usando el botón "Agregar fila" o "Buscar Producto".',
+        title: 'Productos',
+        description: 'Seleccione productos a agregar para este Documento.',
         target: () => agregarFilaRef.current,
       },
     ];

@@ -11,6 +11,7 @@ import {
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { reciboIngresoApi } from '../../api/reciboIngresoApi';
 import { transaccionApi } from '../../api/transaccionApi';
@@ -39,6 +40,7 @@ const ReciboIngresoDetalle: React.FC = () => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+  const { screenCode, documentCode } = useScreenConfig();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
@@ -59,9 +61,10 @@ const ReciboIngresoDetalle: React.FC = () => {
 
   const operacion = useAplicar();
   const [operacionTitulo, setOperacionTitulo] = useState('');
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   useEffect(() => {
-    setActiveModule('FRI');
+    setActiveModule(screenCode);
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
@@ -363,7 +366,7 @@ const ReciboIngresoDetalle: React.FC = () => {
         onImprimir={async () => {
           setImprimiendo(true);
           try {
-            const res = await apiClient.get(`/reportes/contabilidad/reciboIngreso/${data.codigoSucursal ? obtenerNombreEnumSucursal(data.codigoSucursal) : sucursalActiva}/${id}`, {
+            const res = await apiClient.get(`/reportes/contabilidad/reciboIngreso/${sucursalActiva}/${id}`, {
               responseType: 'blob',
             });
             const blobUrl = URL.createObjectURL(res.data);
@@ -425,7 +428,10 @@ const ReciboIngresoDetalle: React.FC = () => {
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Tipo">
+                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                </Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
@@ -490,7 +496,7 @@ const ReciboIngresoDetalle: React.FC = () => {
 
           <Col xxl={6}>
             <EntidadCard entidad={data.entidad} fallbackTitulo="Entidad" />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={false}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
@@ -531,14 +537,17 @@ const ReciboIngresoDetalle: React.FC = () => {
             <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
               <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
               <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-              <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
-              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
-            </Descriptions>
-          </Card>
+               <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+               <Descriptions.Item label="Tipo">
+                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                </Descriptions.Item>
+               <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
+               <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+               <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
+             </Descriptions>
+           </Card>
 
-          <Tabs
+           <Tabs
             defaultActiveKey="documentos"
             type="card"
             items={[
@@ -594,7 +603,7 @@ const ReciboIngresoDetalle: React.FC = () => {
           />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={true}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={true}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}

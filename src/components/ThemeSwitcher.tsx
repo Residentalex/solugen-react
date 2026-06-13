@@ -13,6 +13,7 @@ const themeList: ThemeName[] = [
   'light-rose', 'dark-rose',
   'light-amber', 'dark-amber',
   'light-genesis',
+  'light-spa',
   'basic-devexpress',
 ];
 
@@ -60,7 +61,10 @@ const ThemeSwitcher: React.FC = () => {
               {theme.isDark ? <MoonOutlined /> : <SunOutlined />}
             </div>
             <span style={{ fontSize: 10, color: '#666', textAlign: 'center' }}>
-              {name === 'light-genesis' ? 'Genesis' : name === 'basic-devexpress' ? 'Basic DevExpress' : name.replace('-', ' ')}
+              {name === 'light-genesis' ? 'Genesis'
+                : name === 'light-spa' ? 'Spa Soft'
+                : name === 'basic-devexpress' ? 'Basic DevExpress'
+                : name.replace('-', ' ')}
             </span>
           </div>
         );

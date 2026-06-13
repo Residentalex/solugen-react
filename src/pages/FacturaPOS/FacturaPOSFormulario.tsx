@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Empty,
 } from 'antd';
 import {
   SaveOutlined,
@@ -35,7 +35,7 @@ import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
-import FormularioToolbar from '../../components/FormularioToolbar';
+import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
@@ -603,7 +603,7 @@ const FacturaPOSFormulario: React.FC = () => {
   // ===== Grid de detalles editable =====
   const detalleColumns = [
     {
-      title: 'CÃ³digo',
+      title: 'Código',
       key: 'codigo',
       width: 120,
       fixed: 'left' as const,
@@ -620,7 +620,7 @@ const FacturaPOSFormulario: React.FC = () => {
       ),
     },
     {
-      title: 'ArtÃ­culo',
+      title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
@@ -849,28 +849,28 @@ const FacturaPOSFormulario: React.FC = () => {
 
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
-    <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+    <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           {/* Fila 1: Concepto */}
           <Col xs={24} sm={12} lg={12}>
-            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required>
-                  <Input
-                    placeholder=" "
-                    value={selectedConcepto ? toTitleCase(selectedConcepto.nombre) : ''}
-                    readOnly
-                    onClick={handleConceptoSearchClick}
-                  />
-                </FloatingField>
-              </div>
-              <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
-              {selectedConcepto && (
-                <Button icon={<ClearOutlined />} onClick={handleConceptoClear} />
-              )}
+            <div ref={conceptoRef}>
+              <FloatingField label="Concepto" required>
+                <Input
+                  placeholder=" "
+                  value={selectedConcepto ? toTitleCase(selectedConcepto.nombre) : ''}
+                  readOnly
+                  suffix={
+                    <Space size={4}>
+                      <SearchOutlined onClick={handleConceptoSearchClick} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                      {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
+                    </Space>
+                  }
+                  onClick={handleConceptoSearchClick}
+                />
+              </FloatingField>
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
@@ -1201,7 +1201,8 @@ const FacturaPOSFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        fetchConceptos={() => facturaPOSApi.obtenerConceptos(sucursalActiva, 'FPV')}
+        sucursal={sucursalActiva}
+        documento="FPV"
       />
       <BuscarProductoModal
         open={productoModalOpen}
@@ -1263,6 +1264,13 @@ const FacturaPOSFormulario: React.FC = () => {
                         size="small"
                         pagination={false}
                         scroll={{ x: 1300 }}
+                        locale={{
+                          emptyText: (
+                            <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Empty description="Sin registros" />
+                            </div>
+                          ),
+                        }}
                       />
                     </>
                   ),
@@ -1357,6 +1365,13 @@ const FacturaPOSFormulario: React.FC = () => {
                       size="small"
                       pagination={false}
                       scroll={{ x: 1300 }}
+                      locale={{
+                        emptyText: (
+                          <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Empty description="Sin registros" />
+                          </div>
+                        ),
+                      }}
                     />
                   </>
                 ),
@@ -1410,3 +1425,4 @@ const FacturaPOSFormulario: React.FC = () => {
 };
 
 export default FacturaPOSFormulario;
+

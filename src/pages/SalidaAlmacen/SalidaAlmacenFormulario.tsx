@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Popover, Alert,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Popover, Alert, Empty,
 } from 'antd';
 import {
   SaveOutlined,
@@ -44,7 +44,7 @@ import LogTable from '../../components/LogTable';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
-import FormularioToolbar from '../../components/FormularioToolbar';
+import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { SalidaAlmacenGuide } from './SalidaAlmacenGuide';
@@ -229,7 +229,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
     if (cloneData) {
       setDetalles((cloneData.detalles || []).map((d: DetalleSalidaAlmacenDTO) => calcularFila(d)));
       setSelectedConcepto(cloneData.concepto || null);
-      setConceptoSearchText(toTitleCase(cloneData.concepto?.nombre || ''));
+      setConceptoSearchText(`${cloneData.concepto?.codigo || ''} - ${toTitleCase(cloneData.concepto?.nombre || '')}`);
       setSelectedEntidad(cloneData.suplidor || cloneData.entidad || null);
       setSelectedAlmacen(cloneData.almacen || null);
 
@@ -279,7 +279,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
         setPageTitleOverride(`Editar - ${res.documento?.codigo || 'SAP'}-${res.noDocumento || ''}`);
         setDetalles((res.detalles || []).map((d: DetalleSalidaAlmacenDTO) => calcularFila(d)));
         setSelectedConcepto(res.concepto || null);
-        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
         setSelectedEntidad(res.suplidor || res.entidad || null);
         setSelectedAlmacen(res.almacen || null);
 
@@ -369,7 +369,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
         setPageTitleOverride(`Editar - ${res.documento?.codigo || 'SAP'}-${res.noDocumento || ''}`);
         setDetalles(res.detalles || []);
         setSelectedConcepto(res.concepto || null);
-        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
         setSelectedEntidad(res.suplidor || res.entidad || null);
         setSelectedAlmacen(res.almacen || null);
 
@@ -536,7 +536,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
   // ===== Handlers de concepto =====
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
-    setConceptoSearchText(toTitleCase(concepto.nombre));
+    setConceptoSearchText(`${concepto.codigo || ''} - ${toTitleCase(concepto.nombre)}`);
     setEditingField(null);
     form.setFieldsValue({ concepto: concepto.codigo });
 
@@ -609,7 +609,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
         setPageTitleOverride(`Editar - ${res.documento?.codigo || 'SAP'}-${res.noDocumento || ''}`);
         setDetalles((res.detalles || []).map((d: DetalleSalidaAlmacenDTO) => calcularFila(d)));
         setSelectedConcepto(res.concepto || null);
-        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
         setSelectedEntidad(res.suplidor || res.entidad || null);
         setSelectedAlmacen(res.almacen || null);
 
@@ -1118,7 +1118,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
 
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
-    <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+    <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
@@ -1132,18 +1132,16 @@ const SalidaAlmacenFormulario: React.FC = () => {
             </Form.Item>
           </Col>
           <Col xs={24} sm={12} lg={15}>
-            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
-                  <Input
-                    placeholder=" "
-                    value={conceptoSearchText}
-                    readOnly
-                    onClick={handleConceptoSearchClick}
-                  />
-                </FloatingField>
-              </div>
-              <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
+            <div ref={conceptoRef}>
+              <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
+                <Input
+                  placeholder=" "
+                  value={conceptoSearchText}
+                  readOnly
+                  suffix={<SearchOutlined style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />}
+                  onClick={handleConceptoSearchClick}
+                />
+              </FloatingField>
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
@@ -1321,7 +1319,8 @@ const SalidaAlmacenFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        fetchConceptos={() => salidaAlmacenApi.obtenerConceptos(sucursalActiva, 'SAP')}
+        sucursal={sucursalActiva}
+        documento="SAP"
       />
       <BuscarProductoModal
         open={productoModalOpen}
@@ -1376,6 +1375,13 @@ const SalidaAlmacenFormulario: React.FC = () => {
                           pagination={false}
                           scroll={{ x: 1300 }}
                           components={{ body: { row: SortableRow } }}
+                          locale={{
+                            emptyText: (
+                              <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Empty description="Sin registros" />
+                              </div>
+                            ),
+                          }}
                         />
                         </SortableContext>
                         <DragOverlay>
@@ -1467,6 +1473,13 @@ const SalidaAlmacenFormulario: React.FC = () => {
                       pagination={false}
                       scroll={{ x: 1300 }}
                       components={{ body: { row: SortableRow } }}
+                      locale={{
+                        emptyText: (
+                          <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Empty description="Sin registros" />
+                          </div>
+                        ),
+                      }}
                     />
                     </SortableContext>
                     <DragOverlay>
@@ -1557,3 +1570,4 @@ const SalidaAlmacenFormulario: React.FC = () => {
 
 
 export default SalidaAlmacenFormulario;
+

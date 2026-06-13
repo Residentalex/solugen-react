@@ -10,6 +10,7 @@ import { conteoApi } from '../../api/conteoApi';
 import { formatCurrency, formatDate, toTitleCase, formatNumber } from '../../utils/formats';
 import type { ConteoFisicoDTO } from '../../types/conteo';
 import ErrorDetalle from '../../components/ErrorDetalle';
+import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 
 const ConteoDetalle: React.FC = () => {
   const { documento } = useParams<{ documento: string }>();
@@ -21,6 +22,7 @@ const ConteoDetalle: React.FC = () => {
   const [data, setData] = useState<ConteoFisicoDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingError, setLoadingError] = useState(false);
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   const cargar = useCallback(async () => {
     if (!documento) return;
@@ -61,6 +63,7 @@ const ConteoDetalle: React.FC = () => {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+        <SucursalDocumentoSelector value={sucursalDestino} onChange={setSucursalDestino} />
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FConteos')}>
           Volver
         </Button>
@@ -85,6 +88,7 @@ const ConteoDetalle: React.FC = () => {
             {data.nombreSuplidor ? toTitleCase(data.nombreSuplidor) : data.codigoSuplidor || '-'}
           </Descriptions.Item>
           <Descriptions.Item label="Concepto">{data.concepto || '-'}</Descriptions.Item>
+          <Descriptions.Item label="Tipo">—</Descriptions.Item>
           <Descriptions.Item label="Cantidad">{data.cantidad.toLocaleString('es-DO')}</Descriptions.Item>
           <Descriptions.Item label="Costo">{formatCurrency(data.costo)}</Descriptions.Item>
           <Descriptions.Item label="Modo">

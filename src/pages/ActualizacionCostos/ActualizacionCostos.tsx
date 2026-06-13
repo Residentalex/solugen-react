@@ -5,6 +5,7 @@ import { SaveOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
+import PermissionGate from '../../components/PermissionGate';
 import { actualizacionCostoApi } from '../../api/actualizacionCostoApi';
 import { parametrosApi } from '../../api/parametrosApi';
 import type { DetalleActualizacionCostoDTO } from '../../types/actualizacionCosto';
@@ -316,18 +317,22 @@ const ActualizacionCostos: React.FC = () => {
             placeholder={['Desde', 'Hasta']}
             disabledDate={(current) => !!fechaCierre && current <= fechaCierre.endOf('day')}
           />
-          <Button type="primary" onClick={handleGenerar}>
-            Generar
-          </Button>
-          {data.length > 0 && (
-            <Button
-              type="primary"
-              icon={<SaveOutlined />}
-              loading={saving}
-              onClick={handleActualizar}
-            >
-              Actualizar
+          <PermissionGate accion="PROCESAR">
+            <Button type="primary" onClick={handleGenerar}>
+              Generar
             </Button>
+          </PermissionGate>
+          {data.length > 0 && (
+            <PermissionGate accion="PROCESAR">
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                loading={saving}
+                onClick={handleActualizar}
+              >
+                Actualizar
+              </Button>
+            </PermissionGate>
           )}
           <div style={{ flex: 1 }} />
           <Select

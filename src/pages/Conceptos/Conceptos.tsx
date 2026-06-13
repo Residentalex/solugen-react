@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Table, Card, Input, Tag, Button, Typography, message, Space, Alert, Empty
@@ -10,6 +11,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { conceptosApi } from '../../api/conceptosApi';
 import type { ConceptoDTO } from '../../types/entradaAlmacen';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
 
@@ -23,39 +25,38 @@ const Conceptos: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
 
-  const [data, setData] = useState<ConceptoDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingError, setLoadingError] = useState(false);
+  const [page, setPage] = useState(1);
+  const [searchText, setSearchText] = useState('');
+  const [pageSize, setPageSize] = useState(25);
 
-  const cargarDatos = useCallback(async (filtro?: string) => {
-    if (sucursalActiva === undefined) return;
-    setLoading(true);
-    try {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['conceptos', sucursalActiva, searchText],
+    queryFn: async () => {
+      if (sucursalActiva === undefined) return [];
+      const filtro = searchText || undefined;
       const result = await conceptosApi.obtenerConceptos(sucursalActiva, filtro);
-      setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar conceptos');
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
+      return result || [];
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('MConcepto');
     updateToolbar({});
-    cargarDatos();
     return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
+  }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleSearch = (value: string) => {
-    cargarDatos(value || undefined);
+    setPage(1);
+    setSearchText(value);
   };
 
-  const handleRefresh = () => {
-    setLoadingError(false);
-    cargarDatos();
-  };
+  const paginatedData = useMemo(() => {
+    if (!data) return [];
+    const start = (page - 1) * pageSize;
+    return data.slice(start, start + pageSize);
+  }, [data, page, pageSize]);
 
   const columns: ColumnsType<ConceptoDTO> = [
     {
@@ -94,14 +95,14 @@ const Conceptos: React.FC = () => {
 
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
           title="Error al cargar conceptos"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={handleRefresh}>
+            <Button size="small" onClick={() => refetch()}>
               Reintentar
             </Button>
           }
@@ -112,35 +113,27 @@ const Conceptos: React.FC = () => {
         className="paces-card-erp"
         style={{ borderRadius: 8, overflow: 'hidden' }}
       >
-        <div style={{ padding: '16px 24px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-            <Input.Search
-              placeholder="Buscar por código o nombre..."
-              allowClear
-              onSearch={handleSearch}
-              style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-            <div style={{ flex: 1 }} />
-            <PermissionGate accion="CREAR">
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MConcepto/nuevo')}>
-                Nuevo
-              </Button>
-            </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-          </div>
-        </div>
-        <Table<ConceptoDTO>
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); }}
+          onNuevo={() => navigate('/MConcepto/nuevo')}
+          onReload={() => refetch()}
+        />
+        <Table
           columns={columns}
-          dataSource={data}
+          dataSource={paginatedData}
           rowKey="codigo"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 700 }}
           size="middle"
           pagination={{
+            current: page,
+            pageSize,
+            total: data?.length || 0,
+            onChange: (p) => setPage(p),
             showSizeChanger: false,
-            showTotal: (total, range) =>
-              `${range[0]}-${range[1]} de ${total} conceptos`,
+            showTotal: (t) => `${t} registros`,
           }}
           locale={{
             emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay conceptos registrados" /></div>,

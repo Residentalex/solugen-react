@@ -5,14 +5,19 @@ import type { ConceptoDTO } from '../../types/entradaAlmacen';
 
 export interface NotaCreditoGuideProps {
   mode: 'crear' | 'editar';
+  tipo: string;
   concepto: ConceptoDTO | null;
-  sucursal: any | null;
   entidad: any | null;
+  total: number;
   detallesCount: number;
+  ncf?: string;
+  requiereNCF?: boolean;
+  tipoRef: React.RefObject<HTMLDivElement | null>;
   conceptoRef: React.RefObject<HTMLDivElement | null>;
-  sucursalRef: React.RefObject<HTMLDivElement | null>;
   entidadRef: React.RefObject<HTMLDivElement | null>;
+  montoRef: React.RefObject<HTMLDivElement | null>;
   documentosRef: React.RefObject<HTMLDivElement | null>;
+  ncfRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 interface GuideStep {
@@ -23,14 +28,19 @@ interface GuideStep {
 }
 
 export const NotaCreditoGuide: React.FC<NotaCreditoGuideProps> = ({
+  tipo,
   concepto,
-  sucursal,
   entidad,
+  total,
   detallesCount,
+  ncf,
+  requiereNCF,
+  tipoRef,
   conceptoRef,
-  sucursalRef,
   entidadRef,
+  montoRef,
   documentosRef,
+  ncfRef,
 }) => {
   const [open, setOpen] = useState(false);
   const dismissedStepRef = useRef<string | null>(null);
@@ -39,38 +49,52 @@ export const NotaCreditoGuide: React.FC<NotaCreditoGuideProps> = ({
   const getCurrentStep = useCallback((): GuideStep | null => {
     const steps: GuideStep[] = [
       {
+        key: 'tipo',
+        title: 'Tipo de Documento',
+        description: 'Debe elegir un tipo de Documento para poder continuar. Los tipos determinan ciertas acciones del documento, por ejemplo si este documento se visualizará en los estados de cuentas, un reporte en específico, etc.',
+        target: () => tipoRef.current,
+      },
+      {
         key: 'concepto',
-        title: 'Paso 1: Concepto',
-        description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento.',
+        title: 'Concepto',
+        description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento, por ejemplo qué documento se va a generar, el almacén por defecto, o si va a generar asientos o no, etc.',
         target: () => conceptoRef.current,
       },
       {
-        key: 'sucursal',
-        title: 'Paso 2: Sucursal',
-        description: 'Seleccione la sucursal a la que pertenece la nota de crédito.',
-        target: () => sucursalRef.current,
-      },
-      {
         key: 'entidad',
-        title: 'Paso 3: Entidad',
-        description: 'Seleccione la entidad (suplidor o cliente) asociada a la nota de crédito.',
+        title: 'Entidad',
+        description: 'Debe elegir una entidad para poder continuar.',
         target: () => entidadRef.current,
       },
       {
+        key: 'monto',
+        title: 'Monto',
+        description: 'Digite el Monto para poder continuar.',
+        target: () => montoRef.current,
+      },
+      {
         key: 'documentos',
-        title: 'Paso 4: Documentos',
-        description: 'Agregue los documentos asociados a la nota de crédito.',
+        title: 'Documentos',
+        description: 'Seleccione Documentos para acreditar.',
         target: () => documentosRef.current,
+      },
+      {
+        key: 'ncf',
+        title: 'NCF',
+        description: 'Debe digitar un NCF.',
+        target: () => ncfRef?.current || null,
       },
     ];
 
-    if (!concepto) return steps[0];
-    if (!sucursal) return steps[1];
+    if (!tipo) return steps[0];
+    if (!concepto) return steps[1];
     if (!entidad) return steps[2];
-    if (detallesCount === 0) return steps[3];
+    if (total === 0) return steps[3];
+    if (detallesCount === 0) return steps[4];
+    if (requiereNCF && !ncf) return steps[5];
 
     return null;
-  }, [concepto, sucursal, entidad, detallesCount, conceptoRef, sucursalRef, entidadRef, documentosRef]);
+  }, [tipo, concepto, entidad, total, detallesCount, ncf, requiereNCF, tipoRef, conceptoRef, entidadRef, montoRef, documentosRef, ncfRef]);
 
   currentStepRef.current = getCurrentStep();
 

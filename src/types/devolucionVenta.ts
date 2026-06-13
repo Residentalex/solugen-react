@@ -92,6 +92,7 @@ export interface DevolucionVentaDTO {
   detalles: DetalleDevolucionVentaDTO[];
   asientos: AsientoContableDTO[];
   logs: LogDTO[];
+  transaccionesAsociadas?: any[];
 }
 
 // ===== DTO completo para Devolucion Venta (FDEV) usado en formulario =====

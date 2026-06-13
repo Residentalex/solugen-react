@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, DatePicker, Typography, Modal, Dropdown, Alert, Skeleton, Tooltip, Drawer, Descriptions,
+  Avatar, Card, Table, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
+  message, Form, Input, InputNumber, DatePicker, Typography, Modal, Dropdown, Alert, Skeleton, Drawer, Descriptions,
 } from 'antd';
 import {
   SaveOutlined,
@@ -18,11 +18,23 @@ import {
   DatabaseOutlined,
   IdcardOutlined,
   CalendarOutlined,
+  BarChartOutlined,
+  EyeOutlined,
+  ShopOutlined,
+  UploadOutlined,
+  SwapOutlined,
+  ReloadOutlined,
+  FileTextOutlined,
+  ExportOutlined,
+  RollbackOutlined,
+  UndoOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { generadorOrcApi } from '../../api/generadorOrcApi';
+import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { productoApi } from '../../api/productoApi';
 import { parametrosApi } from '../../api/parametrosApi';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
@@ -34,7 +46,7 @@ import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
-import FormularioToolbar from '../../components/FormularioToolbar';
+import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
@@ -249,6 +261,32 @@ const GeneradorORCFormulario: React.FC = () => {
   // Análisis / monitor
   const [analisisOpen, setAnalisisOpen] = useState(false);
   const [analisisDetalle, setAnalisisDetalle] = useState<DetalleGeneradorDTO | null>(null);
+  const [analisisData, setAnalisisData] = useState<{
+    codigo: string;
+    nombre: string;
+    fecha: string;
+    documento: string;
+    cantidad: number;
+    ventas: number;
+    salidas: number;
+    devCompra: number;
+    devVenta: number;
+    ultimaVenta: string | null;
+    tiempoVenta: string | null;
+  } | null>(null);
+  const [analisisLoading, setAnalisisLoading] = useState(false);
+  const [analisisError, setAnalisisError] = useState(false);
+
+  useEffect(() => {
+    if (!analisisOpen || !analisisDetalle) return;
+    setAnalisisLoading(true);
+    setAnalisisError(false);
+    setAnalisisData(null);
+    entradaAlmacenApi.obtenerUltimaEntrada(sucursalActiva, analisisDetalle.codigo)
+      .then((data) => setAnalisisData(data))
+      .catch(() => setAnalisisError(true))
+      .finally(() => setAnalisisLoading(false));
+  }, [analisisOpen, analisisDetalle, sucursalActiva]);
 
   const editValuesRef = useRef<Record<string, number>>({});
   const navigationConfirmedRef = useFormularioNavigation();
@@ -732,6 +770,19 @@ const GeneradorORCFormulario: React.FC = () => {
             record.cantidades?.[suc] !== prev.cantidades?.[suc],
         },
         {
+          title: 'Exist.',
+          key: `${suc}_exist`,
+          width: 75,
+          align: 'right' as const,
+          responsive: ['sm', 'md', 'lg'] as any,
+          onCell: () => ({ style: { verticalAlign: 'top' } }),
+          render: (_: any, record: DetalleGeneradorDTO) => (
+            <span className="gorc-cell-readonly">{record.existencias?.[suc] ?? 0}</span>
+          ),
+          shouldCellUpdate: (record: DetalleGeneradorDTO, prev: DetalleGeneradorDTO) =>
+            record.existencias?.[suc] !== prev.existencias?.[suc],
+        },
+        {
           title: 'Bonif.',
           key: `${suc}_bonif`,
           width: 75,
@@ -765,19 +816,6 @@ const GeneradorORCFormulario: React.FC = () => {
             record.cantidadesBonificadas?.[suc] !== prev.cantidadesBonificadas?.[suc],
         },
         {
-          title: 'Exist.',
-          key: `${suc}_exist`,
-          width: 75,
-          align: 'right' as const,
-          responsive: ['sm', 'md', 'lg'] as any,
-          onCell: () => ({ style: { verticalAlign: 'top' } }),
-          render: (_: any, record: DetalleGeneradorDTO) => (
-            <span className="gorc-cell-readonly">{record.existencias?.[suc] ?? 0}</span>
-          ),
-          shouldCellUpdate: (record: DetalleGeneradorDTO, prev: DetalleGeneradorDTO) =>
-            record.existencias?.[suc] !== prev.existencias?.[suc],
-        },
-        {
           title: 'Conteo',
           key: `${suc}_conteo`,
           width: 75,
@@ -794,85 +832,76 @@ const GeneradorORCFormulario: React.FC = () => {
     });
 
     return [
-      // Columna de código (fija izquierda)
+      // Columna Artículo (unifica código + producto + referencia, fija izquierda)
       {
-        title: 'Código',
-        key: 'codigo',
-        width: 90,
+        title: 'Artículo',
+        key: 'articulo',
+        width: 350,
         fixed: 'left' as const,
-        ellipsis: true,
         onCell: () => ({ style: { verticalAlign: 'top' } }),
         render: (_: any, record: DetalleGeneradorDTO) => (
-          <Text style={{ fontSize: 12 }}>{record.codigo}</Text>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 500, fontSize: 12 }}>{toTitleCase(record.producto || '')}</div>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+                <span>{record.codigo}</span>
+                {record.codigo && record.referencia && <span>{' | '}</span>}
+                {record.referencia && <span>{record.referencia}</span>}
+              </div>
+            </div>
+            <EyeOutlined
+              style={{ cursor: 'pointer', marginTop: 2, color: 'var(--paces-primary)', fontSize: 14, flexShrink: 0 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setAnalisisDetalle(record);
+                setAnalisisOpen(true);
+              }}
+            />
+          </div>
         ),
       },
-      // Grupo Información
+      // Medida
       {
-        title: 'Información',
-        className: 'gorc-band-info',
-        children: [
-          {
-            title: 'Producto',
-            key: 'producto',
-            width: 200,
-            ellipsis: true,
-            onCell: () => ({ style: { verticalAlign: 'top' } }),
-            render: (_: any, record: DetalleGeneradorDTO) => (
-              <Tooltip title={record.producto}>
-                <Text style={{ fontSize: 12 }}>{toTitleCase(record.producto || '')}</Text>
-              </Tooltip>
-            ),
-          },
-          {
-            title: 'Referencia',
-            key: 'referencia',
-            width: 110,
-            ellipsis: true,
-            onCell: () => ({ style: { verticalAlign: 'top' } }),
-            render: (_: any, record: DetalleGeneradorDTO) => (
-              <Text style={{ fontSize: 12 }} className="paces-text-secondary">{record.referencia || '-'}</Text>
-            ),
-          },
-          {
-            title: 'Medida',
-            key: 'medida',
-            width: 100,
-            onCell: () => ({ style: { verticalAlign: 'top' } }),
-            render: (_: any, record: DetalleGeneradorDTO) => (
-              <Text style={{ fontSize: 12 }}>{record.medida?.nombre || '-'}</Text>
-            ),
-          },
-          {
-            title: 'Costo',
-            key: 'costo',
-            width: 90,
-            align: 'right' as const,
-            onCell: () => ({ style: { verticalAlign: 'top' } }),
-            render: (_: any, record: DetalleGeneradorDTO) => (
-              <Text style={{ fontSize: 12 }}>{formatCurrency(record.costo || 0)}</Text>
-            ),
-          },
-          {
-            title: 'Margen %',
-            key: 'margen',
-            width: 80,
-            align: 'right' as const,
-            onCell: () => ({ style: { verticalAlign: 'top' } }),
-            render: (_: any, record: DetalleGeneradorDTO) => (
-              <Text style={{ fontSize: 12 }}>{(record.margen || 0).toFixed(2)}%</Text>
-            ),
-          },
-          {
-            title: 'P. Sugerido',
-            key: 'precioSugerido',
-            width: 100,
-            align: 'right' as const,
-            onCell: () => ({ style: { verticalAlign: 'top' } }),
-            render: (_: any, record: DetalleGeneradorDTO) => (
-              <Text style={{ fontSize: 12 }}>{formatCurrency(record.precioSugerido || 0)}</Text>
-            ),
-          },
-        ],
+        title: 'Medida',
+        key: 'medida',
+        width: 100,
+        onCell: () => ({ style: { verticalAlign: 'top' } }),
+        render: (_: any, record: DetalleGeneradorDTO) => (
+          <Text style={{ fontSize: 12 }}>{record.medida?.nombre || '-'}</Text>
+        ),
+      },
+      // Costo
+      {
+        title: 'Costo',
+        key: 'costo',
+        width: 90,
+        align: 'right' as const,
+        onCell: () => ({ style: { verticalAlign: 'top' } }),
+        render: (_: any, record: DetalleGeneradorDTO) => (
+          <Text style={{ fontSize: 12 }}>{formatNumber(record.$1 || 0)}</Text>
+        ),
+      },
+      // Margen %
+      {
+        title: 'Margen %',
+        key: 'margen',
+        width: 80,
+        align: 'right' as const,
+        onCell: () => ({ style: { verticalAlign: 'top' } }),
+        render: (_: any, record: DetalleGeneradorDTO) => (
+          <Text style={{ fontSize: 12 }}>{(record.margen || 0).toFixed(2)}%</Text>
+        ),
+      },
+      // P. Sugerido
+      {
+        title: 'P. Sugerido',
+        key: 'precioSugerido',
+        width: 100,
+        align: 'right' as const,
+        onCell: () => ({ style: { verticalAlign: 'top' } }),
+        render: (_: any, record: DetalleGeneradorDTO) => (
+          <Text style={{ fontSize: 12 }}>{formatNumber(record.$1 || 0)}</Text>
+        ),
       },
       // Grupos por sucursal
       sucursalGroup('OP'),
@@ -890,7 +919,7 @@ const GeneradorORCFormulario: React.FC = () => {
             align: 'right' as const,
             onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
-              <Text style={{ fontSize: 12 }}>{formatCurrency(record.subTotal || 0)}</Text>
+              <Text style={{ fontSize: 12 }}>{formatNumber(record.$1 || 0)}</Text>
             ),
           },
           {
@@ -934,7 +963,7 @@ const GeneradorORCFormulario: React.FC = () => {
             align: 'right' as const,
             onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
-              <Text style={{ fontSize: 12 }}>{formatCurrency(record.descuento || 0)}</Text>
+              <Text style={{ fontSize: 12 }}>{formatNumber(record.$1 || 0)}</Text>
             ),
           },
           {
@@ -944,7 +973,7 @@ const GeneradorORCFormulario: React.FC = () => {
             align: 'right' as const,
             onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
-              <Text style={{ fontSize: 12 }}>{formatCurrency(record.impuestos || 0)}</Text>
+              <Text style={{ fontSize: 12 }}>{formatNumber(record.$1 || 0)}</Text>
             ),
           },
           {
@@ -955,7 +984,7 @@ const GeneradorORCFormulario: React.FC = () => {
             onCell: () => ({ style: { verticalAlign: 'top' } }),
             render: (_: any, record: DetalleGeneradorDTO) => (
               <Text strong style={{ fontSize: 12, color: 'var(--paces-primary)' }}>
-                {formatCurrency(record.total || 0)}
+                {formatNumber(record.$1 || 0)}
               </Text>
             ),
           },
@@ -1019,7 +1048,7 @@ const GeneradorORCFormulario: React.FC = () => {
 
   // ===== Encabezado =====
   const renderEncabezado = () => (
-    <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+    <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
@@ -1130,15 +1159,9 @@ const GeneradorORCFormulario: React.FC = () => {
             size="small"
             pagination={false}
             scroll={{ x: 1920, y: 'calc(100vh - 480px)' }}
-            onRow={(record) => ({
-              style: { cursor: 'pointer' },
-              onClick: () => {
-                setAnalisisDetalle(record);
-                setAnalisisOpen(true);
-              },
-            })}
+            onRow={() => ({})}
             summary={() => {
-              const COLS_ANTES_TOTALES = 1 + 6 + 4 + 4 + 4; // codigo + info(6) + op(4) + hr(4) + vh(4) = 19
+              const COLS_ANTES_TOTALES = 1 + 4 + 4 + 4 + 4; // articulo + medida/costo/margen/p.sugerido(4) + op(4) + hr(4) + vh(4) = 17
               return (
                 <Table.Summary fixed="bottom">
                   <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
@@ -1146,20 +1169,20 @@ const GeneradorORCFormulario: React.FC = () => {
                       <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={COLS_ANTES_TOTALES} align="right">
-                      <Text strong>{formatCurrency(totalesGenerales.subTotal)}</Text>
+                      <Text strong>{formatNumber(totalesGenerales.$1)}</Text>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={COLS_ANTES_TOTALES + 1} align="right">
                       <span className="paces-text-secondary">—</span>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={COLS_ANTES_TOTALES + 2} align="right">
-                      <Text>{formatCurrency(totalesGenerales.descuento)}</Text>
+                      <Text>{formatNumber(totalesGenerales.$1)}</Text>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={COLS_ANTES_TOTALES + 3} align="right">
-                      <Text>{formatCurrency(totalesGenerales.impuestos)}</Text>
+                      <Text>{formatNumber(totalesGenerales.$1)}</Text>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={COLS_ANTES_TOTALES + 4} align="right">
                       <Text strong style={{ color: 'var(--paces-primary)', fontSize: 13 }}>
-                        {formatCurrency(totalesGenerales.total)}
+                        {formatNumber(totalesGenerales.$1)}
                       </Text>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={COLS_ANTES_TOTALES + 5} />
@@ -1272,11 +1295,10 @@ const GeneradorORCFormulario: React.FC = () => {
       {/* ===== Monitor de Análisis (Drawer) ===== */}
       <Drawer
         title={
-          <span>
-            Análisis:{' '}
-            <Text strong>{analisisDetalle?.codigo}</Text>
-            {analisisDetalle?.producto ? ` — ${toTitleCase(analisisDetalle.producto)}` : ''}
-          </span>
+          <Space>
+            <BarChartOutlined style={{ color: 'var(--paces-primary)' }} />
+            <span style={{ fontWeight: 600 }}>Análisis de Producto</span>
+          </Space>
         }
         placement="right"
         width={520}
@@ -1284,82 +1306,180 @@ const GeneradorORCFormulario: React.FC = () => {
         onClose={() => setAnalisisOpen(false)}
       >
         {analisisDetalle && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Datos del producto */}
-            <Card className="paces-card" size="small" title="Producto">
-              <Descriptions column={1} size="small" styles={{ label: { fontWeight: 500 } }}>
-                <Descriptions.Item label="Código">{analisisDetalle.codigo}</Descriptions.Item>
-                <Descriptions.Item label="Producto">
-                  {toTitleCase(analisisDetalle.producto || '')}
-                </Descriptions.Item>
-                <Descriptions.Item label="Referencia">
-                  {analisisDetalle.referencia || '-'}
-                </Descriptions.Item>
-                <Descriptions.Item label="Medida">
-                  {analisisDetalle.medida?.nombre || '-'}
-                </Descriptions.Item>
-              </Descriptions>
-            </Card>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {/* SECCIÓN A — Identidad del producto */}
+            <Space align="start" size={12} style={{ marginBottom: 16, width: '100%' }}>
+              <Avatar size={40} style={{ backgroundColor: 'rgba(85,110,230,0.12)', color: 'var(--paces-primary)', fontWeight: 600, flexShrink: 0 }}>
+                {(analisisDetalle?.producto || '?')[0].toUpperCase()}
+              </Avatar>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Typography.Title level={5} style={{ margin: 0 }}>{toTitleCase(analisisDetalle?.producto || '')}</Typography.Title>
+                <Typography.Text className="paces-text-secondary" style={{ fontSize: 12 }}>
+                  Código: {analisisDetalle?.codigo}
+                  {analisisDetalle?.referencia ? <span> · Ref: {analisisDetalle.referencia}</span> : ''}
+                  {analisisDetalle?.medida?.nombre ? <span> · Medida: {analisisDetalle.medida.nombre}</span> : ''}
+                </Typography.Text>
+                <div><Tag color="blue" style={{ marginTop: 4 }}>Sucursal: {sucursalActiva}</Tag></div>
+              </div>
+            </Space>
+            <Divider style={{ margin: '0 0 16px 0' }} />
 
-            {/* Costos y precios */}
-            <Card className="paces-card" size="small" title="Costos y Precios">
-              <Descriptions column={1} size="small" styles={{ label: { fontWeight: 500 } }}>
-                <Descriptions.Item label="Costo">
-                  <Text strong>{formatCurrency(analisisDetalle.costo || 0)}</Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="Margen">
-                  {(analisisDetalle.margen || 0).toFixed(2)}%
-                </Descriptions.Item>
-                <Descriptions.Item label="Precio Sugerido">
-                  {formatCurrency(analisisDetalle.precioSugerido || 0)}
-                </Descriptions.Item>
-              </Descriptions>
-            </Card>
+            {/* SECCIÓN B — KPIs */}
+            {analisisError ? (
+              <Alert type="error" message="Error al cargar análisis" style={{ marginBottom: 16 }}
+                action={<Button size="small" onClick={() => { setAnalisisOpen(false); setTimeout(() => setAnalisisOpen(true), 100); }}><ReloadOutlined />Reintentar</Button>} />
+            ) : analisisLoading ? (
+              <Row gutter={[8, 8]} style={{ marginBottom: 16 }}>
+                {[1,2,3,4,5,6,7,8,9].map(i => <Col span={8} key={i}><Skeleton.Button active style={{ width: '100%', height: 64 }} /></Col>)}
+              </Row>
+            ) : analisisData ? (
+              <Row gutter={[8, 8]} style={{ marginBottom: 16 }}>
+                {[
+                  { title: 'Última Compra', value: analisisData.fecha, icon: <ShoppingCartOutlined />, color: '#556ee6', isDate: true },
+                  { title: 'Documento', value: analisisData.documento, icon: <FileTextOutlined />, color: '#556ee6', isDate: false, raw: true },
+                  { title: 'Cantidad', value: analisisData.cantidad, icon: <DatabaseOutlined />, color: '#556ee6', isDate: false },
+                  { title: 'Ventas', value: analisisData.ventas, icon: <ShopOutlined />, color: '#34c38f', isDate: false },
+                  { title: 'Salidas', value: analisisData.salidas, icon: <ExportOutlined />, color: '#f1b44c', isDate: false },
+                  { title: 'Dev.Compra', value: analisisData.devCompra, icon: <RollbackOutlined />, color: '#ff4d4f', isDate: false },
+                  { title: 'Dev.Venta', value: analisisData.devVenta, icon: <UndoOutlined />, color: '#ff4d4f', isDate: false },
+                  { title: 'Últ.Venta', value: analisisData.ultimaVenta, icon: <CalendarOutlined />, color: '#34c38f', isDate: true },
+                  { title: 'Tiempo', value: analisisData.tiempoVenta, icon: <ClockCircleOutlined />, color: '#8c8c8c', isDate: false, raw: true },
+                ].map((kpi, i) => (
+                  <Col span={8} key={i}>
+                    <Card className="paces-card" size="small" styles={{ body: { padding: '10px 12px' } }}
+                      style={{ borderRadius: 6, border: '1px solid #f0f0f0', height: '100%' }}>
+                      <Space size={5} style={{ marginBottom: 2 }}>
+                        <span style={{ color: kpi.color, fontSize: 14 }}>{kpi.icon}</span>
+                        <Typography.Text style={{ fontSize: 10, color: '#8c8c8c' }}>{kpi.title}</Typography.Text>
+                      </Space>
+                      <div>
+                        {kpi.isDate ? (
+                          kpi.value
+                            ? <Typography.Text strong style={{ fontSize: 13 }}>{formatDate(String(kpi.value))}</Typography.Text>
+                            : <Tag color="default" style={{ margin: 0, fontSize: 11 }}>Sin registro</Tag>
+                        ) : (
+                          <Typography.Text strong style={{ fontSize: 14 }}>
+                            {kpi.raw ? String(kpi.value ?? '-') : formatNumber(Number(kpi.value ?? 0))}
+                          </Typography.Text>
+                        )}
+                      </div>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            ) : null}
 
-            {/* Existencias por sucursal */}
-            <Card className="paces-card" size="small" title="Existencias por Sucursal">
-              <Table
-                dataSource={[...SUCURSALES]}
-                rowKey={(s) => s}
-                size="small"
-                pagination={false}
-                columns={[
-                  { title: 'Sucursal', dataIndex: 'item', key: 'sucursal', width: 80,
-                    render: (_: any, __: any, idx: number) => SUCURSALES[idx] },
-                  { title: 'Cantidad', key: 'cant', width: 90, align: 'right' as const,
-                    render: (_: any, suc: string) => formatNumber(analisisDetalle.cantidades?.[suc] ?? 0) },
-                  { title: 'Bonificación', key: 'bonif', width: 100, align: 'right' as const,
-                    render: (_: any, suc: string) => formatNumber(analisisDetalle.cantidadesBonificadas?.[suc] ?? 0) },
-                  { title: 'Existencia', key: 'exist', width: 90, align: 'right' as const,
-                    render: (_: any, suc: string) => formatNumber(analisisDetalle.existencias?.[suc] ?? 0) },
-                  { title: 'Conteo', key: 'conteo', width: 80, align: 'right' as const,
-                    render: (_: any, suc: string) => formatNumber(analisisDetalle.existenciasFisicas?.[suc] ?? 0) },
-                ]}
-              />
-            </Card>
+            {/* SECCIÓN C — Costos y Precio */}
+            <Divider orientation="left" style={{ fontSize: 12, color: '#8c8c8c' }}>Costos y Precio</Divider>
+            <div style={{ background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0', padding: '12px 0', marginBottom: 16 }}>
+              <Row gutter={0}>
+                <Col span={8} style={{ borderRight: '1px solid #f0f0f0', textAlign: 'center' }}>
+                  <Typography.Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block' }}>Costo</Typography.Text>
+                  <Typography.Text strong style={{ fontSize: 16, color: 'var(--paces-primary)' }}>
+                    {formatNumber(analisisDetalle?.costo || 0)}
+                  </Typography.Text>
+                </Col>
+                <Col span={8} style={{ borderRight: '1px solid #f0f0f0', textAlign: 'center' }}>
+                  <Typography.Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block' }}>Margen %</Typography.Text>
+                  <Typography.Text strong style={{ fontSize: 16, color: (analisisDetalle?.margen || 0) > 0 ? '#34c38f' : '#ff4d4f' }}>
+                    {(analisisDetalle?.margen || 0).toFixed(2)}%
+                  </Typography.Text>
+                </Col>
+                <Col span={8} style={{ textAlign: 'center' }}>
+                  <Typography.Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block' }}>P. Sugerido</Typography.Text>
+                  <Typography.Text strong style={{ fontSize: 16 }}>
+                    {formatNumber(analisisDetalle?.precioSugerido || 0)}
+                  </Typography.Text>
+                </Col>
+              </Row>
+            </div>
 
-            {/* Totales del detalle */}
-            <Card className="paces-card" size="small" title="Totales">
-              <Descriptions column={1} size="small" styles={{ label: { fontWeight: 500 } }}>
-                <Descriptions.Item label="SubTotal">
-                  {formatCurrency(analisisDetalle.subTotal || 0)}
-                </Descriptions.Item>
-                <Descriptions.Item label="% Descuento">
-                  {(analisisDetalle.porcentajeDescuento || 0).toFixed(2)}%
-                </Descriptions.Item>
-                <Descriptions.Item label="Descuento">
-                  {formatCurrency(analisisDetalle.descuento || 0)}
-                </Descriptions.Item>
-                <Descriptions.Item label="Impuesto">
-                  {formatCurrency(analisisDetalle.impuestos || 0)}
-                </Descriptions.Item>
-                <Descriptions.Item label="Total">
-                  <Text strong style={{ color: 'var(--paces-primary)' }}>
-                    {formatCurrency(analisisDetalle.total || 0)}
-                  </Text>
-                </Descriptions.Item>
-              </Descriptions>
-            </Card>
+            {/* SECCIÓN D — En este GORC */}
+            <Divider orientation="left" style={{ fontSize: 12, color: '#8c8c8c' }}>En este GORC</Divider>
+            <Table
+              dataSource={(() => {
+                if (!analisisDetalle) return [];
+                return [{
+                  key: 'producto',
+                  producto: analisisDetalle.producto,
+                  codigo: analisisDetalle.codigo,
+                  referencia: analisisDetalle.referencia,
+                  sucursales: SUCURSALES.reduce((acc, suc) => ({
+                    ...acc,
+                    [suc]: {
+                      cantidad: (analisisDetalle.cantidades || {})[suc] || 0,
+                      bonificacion: (analisisDetalle.cantidadesBonificadas || {})[suc] || 0,
+                      existencia: (analisisDetalle.existencias || {})[suc] || 0,
+                      conteo: (analisisDetalle.existenciasFisicas || {})[suc] || 0,
+                    }
+                  }), {} as Record<string, any>),
+                }];
+              })()}
+              rowKey="key"
+              size="small"
+              pagination={false}
+              scroll={{ x: 500 }}
+              columns={[
+                {
+                  title: 'Artículo',
+                  key: 'articulo',
+                  fixed: 'left' as const,
+                  width: 200,
+                  render: (_: any, record: any) => (
+                    <div>
+                      <div style={{ fontWeight: 500, fontSize: 12 }}>{toTitleCase(record.producto || '')}</div>
+                      <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+                        <span>{record.codigo}</span>
+                        {record.codigo && record.referencia && <span>{' | '}</span>}
+                        {record.referencia && <span>{record.referencia}</span>}
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  title: 'OP',
+                  className: 'gorc-band-op',
+                  children: [
+                    { title: 'Cant.', key: 'OP_cant', width: 60, align: 'right' as const,
+                      render: (_: any, r: any) => <span style={{ fontSize: 12 }}>{formatNumber(r.sucursales?.OP?.cantidad ?? 0)}</span> },
+                    { title: 'Bonif.', key: 'OP_bonif', width: 60, align: 'right' as const,
+                      render: (_: any, r: any) => <span style={{ fontSize: 12 }}>{formatNumber(r.sucursales?.OP?.bonificacion ?? 0)}</span> },
+                    { title: 'Exist.', key: 'OP_exist', width: 60, align: 'right' as const,
+                      render: (_: any, r: any) => <span style={{ fontSize: 12 }}>{formatNumber(r.sucursales?.OP?.existencia ?? 0)}</span> },
+                    { title: 'Conteo', key: 'OP_conteo', width: 60, align: 'right' as const,
+                      render: (_: any, r: any) => <span style={{ fontSize: 12 }}>{formatNumber(r.sucursales?.OP?.conteo ?? 0)}</span> },
+                  ],
+                },
+                {
+                  title: 'HR',
+                  className: 'gorc-band-hr',
+                  children: [
+                    { title: 'Cant.', key: 'HR_cant', width: 60, align: 'right' as const,
+                      render: (_: any, r: any) => <span style={{ fontSize: 12 }}>{formatNumber(r.sucursales?.HR?.cantidad ?? 0)}</span> },
+                    { title: 'Bonif.', key: 'HR_bonif', width: 60, align: 'right' as const,
+                      render: (_: any, r: any) => <span style={{ fontSize: 12 }}>{formatNumber(r.sucursales?.HR?.bonificacion ?? 0)}</span> },
+                    { title: 'Exist.', key: 'HR_exist', width: 60, align: 'right' as const,
+                      render: (_: any, r: any) => <span style={{ fontSize: 12 }}>{formatNumber(r.sucursales?.HR?.existencia ?? 0)}</span> },
+                    { title: 'Conteo', key: 'HR_conteo', width: 60, align: 'right' as const,
+                      render: (_: any, r: any) => <span style={{ fontSize: 12 }}>{formatNumber(r.sucursales?.HR?.conteo ?? 0)}</span> },
+                  ],
+                },
+                {
+                  title: 'VH',
+                  className: 'gorc-band-vh',
+                  children: [
+                    { title: 'Cant.', key: 'VH_cant', width: 60, align: 'right' as const,
+                      render: (_: any, r: any) => <span style={{ fontSize: 12 }}>{formatNumber(r.sucursales?.VH?.cantidad ?? 0)}</span> },
+                    { title: 'Bonif.', key: 'VH_bonif', width: 60, align: 'right' as const,
+                      render: (_: any, r: any) => <span style={{ fontSize: 12 }}>{formatNumber(r.sucursales?.VH?.bonificacion ?? 0)}</span> },
+                    { title: 'Exist.', key: 'VH_exist', width: 60, align: 'right' as const,
+                      render: (_: any, r: any) => <span style={{ fontSize: 12 }}>{formatNumber(r.sucursales?.VH?.existencia ?? 0)}</span> },
+                    { title: 'Conteo', key: 'VH_conteo', width: 60, align: 'right' as const,
+                      render: (_: any, r: any) => <span style={{ fontSize: 12 }}>{formatNumber(r.sucursales?.VH?.conteo ?? 0)}</span> },
+                  ],
+                },
+              ]}
+            />
           </div>
         )}
       </Drawer>
@@ -1368,3 +1488,4 @@ const GeneradorORCFormulario: React.FC = () => {
 };
 
 export default GeneradorORCFormulario;
+

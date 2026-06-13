@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Typography, Descriptions, Alert
+  Card, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Typography, Descriptions, Alert, Table
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -10,9 +10,11 @@ import {
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { conceptosApi } from '../../api/conceptosApi';
+import { tipoApi } from '../../api/tipoApi';
 import PermissionGate from '../../components/PermissionGate';
 import { toTitleCase } from '../../utils/formats';
 import type { ConceptoDTO } from '../../types/entradaAlmacen';
+import type { TipoDocumentoDTO } from '../../types/transaccion';
 
 const { Text } = Typography;
 
@@ -36,6 +38,8 @@ const ConceptoDetalle: React.FC = () => {
   const [data, setData] = useState<ConceptoDTO | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
+  const [tiposMap, setTiposMap] = useState<Record<string, string>>({});
+  const [tiposDocMap, setTiposDocMap] = useState<Record<string, string>>({});
 
   const screens = Grid.useBreakpoint();
   const isLarge = screens.xxl === true;
@@ -59,8 +63,18 @@ const ConceptoDetalle: React.FC = () => {
 
   useEffect(() => {
     setActiveModule('MConcepto');
+    tipoApi.obtenerTodo(sucursalActiva).then((tipos) => {
+      const map: Record<string, string> = {};
+      const docMap: Record<string, string> = {};
+      tipos.forEach((t: TipoDocumentoDTO) => {
+        map[t.codigo] = t.nombre;
+        if (t.documento) docMap[`${t.documento}-${t.codigo}`] = t.nombre;
+      });
+      setTiposMap(map);
+      setTiposDocMap(docMap);
+    }).catch(() => {});
     return () => setPageTitleOverride('');
-  }, [setActiveModule, setPageTitleOverride]);
+  }, [setActiveModule, setPageTitleOverride, sucursalActiva]);
 
   useEffect(() => {
     if (!codigo) return;
@@ -240,46 +254,45 @@ const ConceptoDetalle: React.FC = () => {
                   key: 'entidad',
                   label: 'Entidad',
                   children: (
-                    <Descriptions bordered size="small" column={1}
-                      styles={{ content: { background: 'transparent' } }}
-                    >
-                      <Descriptions.Item label="Entidades">
-                        {data.entidades && data.entidades.length > 0 ? (
-                          <Space wrap size={4}>
-                            {data.entidades.map((e: any) => (
-                              <Tag key={e.codigo} color="blue" style={{ fontSize: 12 }}>
-                                {e.nombre || e.codigo}
-                              </Tag>
-                            ))}
-                          </Space>
-                        ) : (
-                          <Text type="secondary">Ninguna</Text>
-                        )}
-                      </Descriptions.Item>
-                    </Descriptions>
+                    data.entidades && data.entidades.length > 0 ? (
+                      <Table
+                        dataSource={data.entidades}
+                        rowKey="codigo"
+                        size="small"
+                        pagination={false}
+                        columns={[
+                          { title: 'Código', dataIndex: 'codigo', width: 120 },
+                          { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
+                          { title: 'Tipo', dataIndex: 'tipo', width: 160, render: (v: string) => v ? <Tag>{v}{tiposMap[v] ? ` - ${toTitleCase(tiposMap[v])}` : ''}</Tag> : '-' },
+                        ]}
+                      />
+                    ) : (
+                      <Text type="secondary">Ninguna</Text>
+                    )
                   ),
                 },
                 {
                   key: 'documentos',
                   label: 'Documentos',
                   children: (
-                    <Descriptions bordered size="small" column={1}
-                      styles={{ content: { background: 'transparent' } }}
-                    >
-                      <Descriptions.Item label="Documentos">
-                        {data.documentos && data.documentos.length > 0 ? (
-                          <Space wrap size={4}>
-                            {data.documentos.map((d: any) => (
-                              <Tag key={d.codigo} color="geekblue" style={{ fontSize: 12 }}>
-                                {d.nombre || d.codigo}
-                              </Tag>
-                            ))}
-                          </Space>
-                        ) : (
-                          <Text type="secondary">Ninguno</Text>
-                        )}
-                      </Descriptions.Item>
-                    </Descriptions>
+                    data.documentos && data.documentos.length > 0 ? (
+                      <Table
+                        dataSource={data.documentos}
+                        rowKey="codigo"
+                        size="small"
+                        pagination={false}
+                        columns={[
+                          { title: 'Código', dataIndex: 'codigo', width: 120 },
+                          { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
+                          { title: 'Tipo', dataIndex: 'tipo', width: 160, render: (v: string, record: any) => {
+                            const docKey = record?.codigo ? `${record.codigo}-${v}` : v;
+                            return v ? <Tag color="geekblue">{v}{tiposDocMap[docKey] ? ` - ${toTitleCase(tiposDocMap[docKey])}` : tiposMap[v] ? ` - ${toTitleCase(tiposMap[v])}` : ''}</Tag> : '-';
+                          }},
+                        ]}
+                      />
+                    ) : (
+                      <Text type="secondary">Ninguno</Text>
+                    )
                   ),
                 },
               ]}
@@ -439,46 +452,45 @@ const ConceptoDetalle: React.FC = () => {
                 key: 'entidad',
                 label: 'Entidad',
                 children: (
-                  <Descriptions bordered size="small" column={1}
-                    styles={{ content: { background: 'transparent' } }}
-                  >
-                    <Descriptions.Item label="Entidades">
-                      {data.entidades && data.entidades.length > 0 ? (
-                        <Space wrap size={4}>
-                          {data.entidades.map((e: any) => (
-                            <Tag key={e.codigo} color="blue" style={{ fontSize: 12 }}>
-                              {e.nombre || e.codigo}
-                            </Tag>
-                          ))}
-                        </Space>
-                      ) : (
-                        <Text type="secondary">Ninguna</Text>
-                      )}
-                    </Descriptions.Item>
-                  </Descriptions>
+                  data.entidades && data.entidades.length > 0 ? (
+                    <Table
+                      dataSource={data.entidades}
+                      rowKey="codigo"
+                      size="small"
+                      pagination={false}
+                      columns={[
+                        { title: 'Código', dataIndex: 'codigo', width: 120 },
+                        { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
+                        { title: 'Tipo', dataIndex: 'tipo', width: 160, render: (v: string) => v ? <Tag>{v}{tiposMap[v] ? ` - ${toTitleCase(tiposMap[v])}` : ''}</Tag> : '-' },
+                      ]}
+                    />
+                  ) : (
+                    <Text type="secondary">Ninguna</Text>
+                  )
                 ),
               },
               {
                 key: 'documentos',
                 label: 'Documentos',
                 children: (
-                  <Descriptions bordered size="small" column={1}
-                    styles={{ content: { background: 'transparent' } }}
-                  >
-                    <Descriptions.Item label="Documentos">
-                      {data.documentos && data.documentos.length > 0 ? (
-                        <Space wrap size={4}>
-                          {data.documentos.map((d: any) => (
-                            <Tag key={d.codigo} color="geekblue" style={{ fontSize: 12 }}>
-                              {d.nombre || d.codigo}
-                            </Tag>
-                          ))}
-                        </Space>
-                      ) : (
-                        <Text type="secondary">Ninguno</Text>
-                      )}
-                    </Descriptions.Item>
-                  </Descriptions>
+                  data.documentos && data.documentos.length > 0 ? (
+                    <Table
+                      dataSource={data.documentos}
+                      rowKey="codigo"
+                      size="small"
+                      pagination={false}
+                      columns={[
+                        { title: 'Código', dataIndex: 'codigo', width: 120 },
+                        { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
+                        { title: 'Tipo', dataIndex: 'tipo', width: 160, render: (v: string, record: any) => {
+                          const docKey = record?.codigo ? `${record.codigo}-${v}` : v;
+                          return v ? <Tag color="geekblue">{v}{tiposDocMap[docKey] ? ` - ${toTitleCase(tiposDocMap[docKey])}` : tiposMap[v] ? ` - ${toTitleCase(tiposMap[v])}` : ''}</Tag> : '-';
+                        }},
+                      ]}
+                    />
+                  ) : (
+                    <Text type="secondary">Ninguno</Text>
+                  )
                 ),
               },
             ]}

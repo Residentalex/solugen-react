@@ -9,7 +9,7 @@ interface ListadoErrorAlertProps {
 const ListadoErrorAlert: React.FC<ListadoErrorAlertProps> = ({ message, onRetry }) => {
   return (
     <Alert
-      title={message}
+      message={message}
       type="error"
       showIcon
       style={{ marginBottom: 16 }}

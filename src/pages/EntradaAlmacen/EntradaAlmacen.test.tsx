@@ -494,28 +494,7 @@ describe('EntradaAlmacen', () => {
         expect(screen.getByText('ENP001')).toBeInTheDocument();
       });
 
-      const firstRow = screen.getByText('ENP001').closest('tr');
-      await userEvent.click(firstRow);
-
-      const editButton = screen.getByRole('button', { name: /editar/i });
-      // For ENP001, estado is 1 (Aplicado) and periodo is 0, so it should NOT be editable
-      // because the condition is: !(selectedRow.periodo !== 6 && selectedRow.estado === 0)
-      // For ENP001: periodo=0 (not 6) and estado=1 (not 0) -> condition: !(true && false) = !false = true -> enabled? Let's check:
-      // periodo !== 6 -> 0 !== 6 -> true
-      // estado === 0 -> 1 === 0 -> false
-      // true && false -> false
-      // !false -> true -> so the button should be enabled? Wait, the condition in the code is:
-      // disabled={!selectedRow || !(selectedRow.periodo !== 6 && selectedRow.estado === 0)}
-      // So it's disabled if the condition inside !( ) is false.
-      // Let me re-read: disabled={!selectedRow || !(selectedRow.periodo !== 6 && selectedRow.estado === 0)}
-      // So if selectedRow exists, we look at the second part: !(selectedRow.periodo !== 6 && selectedRow.estado === 0)
-      // We want the button to be enabled when (selectedRow.periodo !== 6 && selectedRow.estado === 0) is true.
-      // So for ENP001: periodo=0 (not 6) -> true, estado=1 (not 0) -> false -> true && false = false -> !(false) = true -> disabled = true -> button disabled.
-      // For ENP002: estado=0, periodo=0 -> (true && true) = true -> !(true) = false -> disabled = false -> button enabled.
-      // So we should test with ENP002.
-
-      // Let's select ENP002 instead
-      await userEvent.clear(screen.getByText('ENP001').closest('tr')); // This doesn't work, we need to click the row for ENP002
+      // Select ENP002 (estado=0) which should be editable
       const secondRow = screen.getByText('ENP002').closest('tr');
       await userEvent.click(secondRow);
 

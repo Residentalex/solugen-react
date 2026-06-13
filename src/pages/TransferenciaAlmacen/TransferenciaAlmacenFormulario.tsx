@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Dropdown,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Dropdown, Empty,
 } from 'antd';
 import {
   SaveOutlined,
@@ -43,7 +43,7 @@ import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConc
 import { TransferenciaAlmacenGuide } from './TransferenciaAlmacenGuide';
 
 import EntidadCard from '../../components/EntidadCard';
-import FormularioToolbar from '../../components/FormularioToolbar';
+import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
@@ -661,7 +661,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       render: () => <DragHandle />,
     },
     {
-      title: 'CÃ³digo',
+      title: 'Código',
       key: 'codigo',
       width: 120,
       fixed: 'left' as const,
@@ -678,7 +678,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       ),
     },
     {
-      title: 'ArtÃ­culo',
+      title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
@@ -791,28 +791,28 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
 
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
-    <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+    <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           {/* Fila 1: Concepto */}
           <Col xs={24} sm={12} lg={9}>
-            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required>
-                  <Input
-                    placeholder=" "
-                    value={selectedConcepto ? toTitleCase(selectedConcepto.nombre) : conceptoSearchText}
-                    readOnly
-                    onClick={handleConceptoSearchClick}
-                  />
-                </FloatingField>
-              </div>
-              <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
-              {selectedConcepto && (
-                <Button icon={<ClearOutlined />} onClick={handleConceptoClear} />
-              )}
+            <div ref={conceptoRef}>
+              <FloatingField label="Concepto" required>
+                <Input
+                  placeholder=" "
+                  value={selectedConcepto ? `${selectedConcepto.codigo || ''} - ${toTitleCase(selectedConcepto.nombre)}` : conceptoSearchText}
+                  readOnly
+                  suffix={
+                    <Space size={4}>
+                      <SearchOutlined onClick={handleConceptoSearchClick} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                      {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
+                    </Space>
+                  }
+                  onClick={handleConceptoSearchClick}
+                />
+              </FloatingField>
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
@@ -1050,7 +1050,8 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        fetchConceptos={() => transferenciaAlmacenApi.obtenerConceptos(sucursalActiva, 'FTRP')}
+        sucursal={sucursalActiva}
+        documento="TRP"
       />
       <BuscarProductoModal
         open={productoModalOpen}
@@ -1105,6 +1106,13 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                             pagination={false}
                             scroll={{ x: 800 }}
                             components={{ body: { row: SortableRow } }}
+                            locale={{
+                              emptyText: (
+                                <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Empty description="Sin registros" />
+                                </div>
+                              ),
+                            }}
                           />
                         </SortableContext>
                         <DragOverlay>
@@ -1186,16 +1194,23 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={({ active }) => setActiveId(active.id as number)} onDragEnd={handleDragEnd}>
                        <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                          <Table
-                           dataSource={detallesFiltrados}
-                            columns={detalleColumns}
-                            rowKey="id"
-                            size="small"
-                            pagination={false}
-                             scroll={{ x: 800 }}
-                             components={{ body: { row: SortableRow } }}
-                           />
-                         </SortableContext>
-                         <DragOverlay>
+                            dataSource={detallesFiltrados}
+                             columns={detalleColumns}
+                             rowKey="id"
+                             size="small"
+                             pagination={false}
+                              scroll={{ x: 800 }}
+                              components={{ body: { row: SortableRow } }}
+                              locale={{
+                                emptyText: (
+                                  <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Empty description="Sin registros" />
+                                  </div>
+                                ),
+                              }}
+                            />
+                          </SortableContext>
+                          <DragOverlay>
                            {activeId ? (
                              <div style={{ padding: '8px 12px', background: '#fafafa', border: '1px solid #d9d9d9', borderRadius: 4, opacity: 0.8 }}>
                                Arrastrando...
@@ -1261,3 +1276,4 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
 };
 
 export default TransferenciaAlmacenFormulario;
+

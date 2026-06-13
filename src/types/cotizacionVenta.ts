@@ -37,6 +37,7 @@ export interface CotizacionVentaDetalleDTO {
   periodo: number;
   modo?: string;
   creadoPor?: { nombre: string };
+  usuario?: { nombre: string };
   almacen?: AlmacenDTO;
   detalles: any[];
   asientos: AsientoContableDTO[];

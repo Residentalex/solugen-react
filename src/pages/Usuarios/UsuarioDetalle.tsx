@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Descriptions, Tag, Spin, Button, Space, message, Modal, Alert, Tabs, Typography, Table } from 'antd';
-import { ArrowLeftOutlined, KeyOutlined, StopOutlined, CheckCircleOutlined, EditOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, KeyOutlined, StopOutlined, CheckCircleOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
 import { usuarioApi } from '../../api/usuarioApi';
@@ -254,6 +254,9 @@ const UsuarioDetalle: React.FC = () => {
           <Descriptions.Item label="Estado"><EstadoTag activo={data!.activo} /></Descriptions.Item>
           <Descriptions.Item label="Cambiar clave"><CambiarClaveTag debe={data!.debeCambiarClave} /></Descriptions.Item>
           <Descriptions.Item label="Vigencia">{data!.diasVigencia} días</Descriptions.Item>
+          <Descriptions.Item label="Clave no expira">
+            <Tag color={data!.claveNoExpira ? 'green' : 'default'}>{data!.claveNoExpira ? 'Sí' : 'No'}</Tag>
+          </Descriptions.Item>
           <Descriptions.Item label="Último inicio">{formatFecha(data!.ultimoLogin)}</Descriptions.Item>
         </Descriptions>
       </Card>
@@ -333,9 +336,15 @@ const UsuarioDetalle: React.FC = () => {
         />
       )}
 
-      <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate('/MUsuario')} style={{ padding: 0, marginBottom: 16, fontSize: 14 }}>
-        Volver a usuarios
-      </Button>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+        <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate('/MUsuario')} style={{ padding: 0, fontSize: 14 }}>
+          Volver a usuarios
+        </Button>
+        <div style={{ flex: 1 }} />
+        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MUsuario/nuevo')}>
+          Nuevo
+        </Button>
+      </div>
 
       {/* Header */}
       <Card style={{ borderRadius: 8, marginBottom: 16 }}>

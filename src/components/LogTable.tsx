@@ -1,5 +1,6 @@
 import React from 'react';
-import { Table } from 'antd';
+import { Table, Tag, Tooltip, Empty } from 'antd';
+import { HistoryOutlined } from '@ant-design/icons';
 import { formatDate, toTitleCase } from '../utils/formats';
 
 // Mapa de acciones (0-indexed, usado en todo el sistema)
@@ -14,6 +15,12 @@ export const ACCION_MAP: Record<number, string> = {
   7: 'Revisar',
   8: 'Reversar',
   9: 'Escanear',
+};
+
+export const ACCION_TAG_COLOR_MAP: Record<number, string> = {
+  0: 'success', 1: 'processing', 2: 'error', 3: 'success',
+  4: 'warning', 5: 'processing', 6: 'error', 7: 'cyan',
+  8: 'orange', 9: 'default',
 };
 
 interface LogEntry {
@@ -36,87 +43,111 @@ interface LogTableProps {
 const LogTable: React.FC<LogTableProps> = ({ dataSource, loading, scroll }) => {
   const columns = [
     {
-      title: 'Fecha',
+      title: 'Fecha / Hora',
       dataIndex: 'fecha',
       key: 'fecha',
       width: 160,
-      render: (v: string) => formatDate(v),
+      render: (v: string) => {
+        if (!v) return '-';
+        const d = new Date(v);
+        if (isNaN(d.getTime())) return '-';
+        const h = d.getHours();
+        const m = String(d.getMinutes()).padStart(2, '0');
+        const s = String(d.getSeconds()).padStart(2, '0');
+        const ampm = h >= 12 ? 'p. m.' : 'a. m.';
+        const h12 = h % 12 || 12;
+        const hora = `${h12}:${m}:${s} ${ampm}`;
+        return (
+          <div>
+            <div style={{ fontSize: 13 }}>{formatDate(v)}</div>
+            <div className="paces-text-secondary" style={{ fontSize: 11 }}>{hora}</div>
+          </div>
+        );
+      },
     },
     {
       title: 'Usuario',
       dataIndex: 'usuario',
       key: 'usuario',
-      width: 200,
-      render: (v: any) =>
-        v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : '-',
+      width: 240,
+      render: (v: any) => {
+        const nombre = v?.nombre ? toTitleCase(v.nombre) : v?.nombreUsuario ? toTitleCase(v.nombreUsuario) : null;
+        const inicial = nombre ? nombre.charAt(0).toUpperCase() : '?';
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div className="paces-avatar-initials" style={{ background: 'var(--paces-hover-bg)', color: 'var(--paces-primary)', width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600 }}>
+              {inicial}
+            </div>
+            <span style={{ fontSize: 13 }}>{nombre || '-'}</span>
+          </div>
+        );
+      },
     },
     {
       title: 'Acción',
       dataIndex: 'accion',
       key: 'accion',
-      width: 120,
-      render: (v: number) => ACCION_MAP[v] || `Acción ${v}`,
+      width: 130,
+      render: (v: number) => (
+        <Tag color={ACCION_TAG_COLOR_MAP[v] ?? 'default'} style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>
+          {ACCION_MAP[v] || `Acción ${v}`}
+        </Tag>
+      ),
     },
     {
       title: 'Origen',
-      dataIndex: 'estacion',
-      key: 'estacion',
-      width: 280,
-      render: (v: string) => {
-        if (!v) return '-';
-        // Ya viene formateado como "desde PC-NAME Version 1.0.0" o "WEB v1.0.0"
-        return v;
-      },
-    },
-    {
-      title: 'Motivos',
-      key: 'motivos',
-      ellipsis: true,
+      key: 'origen',
       render: (_: any, record: LogEntry) => {
-        // Extraer version desde estacion: "WEB v1.0.0.0" o "desde PC-NAME Version 1.0.0.0"
+        const esWeb = record.estacion?.toUpperCase().includes('WEB') ?? false;
+        const canal = esWeb ? 'WEB' : 'Desktop';
+        const canalColor = esWeb ? 'geekblue' : 'purple';
         const versionMatch = record.estacion?.match(/v?(\d+\.\d+\.\d+(?:\.\d+)?)/);
         const version = versionMatch ? `v${versionMatch[1]}` : '';
-
-        // Accion en texto legible
-        const accionTexto = ACCION_MAP[record.accion] || `Acción ${record.accion}`;
-
-        // Hora desde la fecha
-        let hora = '';
-        try {
-          if (record.fecha) {
-            const d = new Date(record.fecha);
-            if (!isNaN(d.getTime())) {
-              const h = d.getHours();
-              const m = String(d.getMinutes()).padStart(2, '0');
-              const s = String(d.getSeconds()).padStart(2, '0');
-              const ampm = h >= 12 ? 'p. m.' : 'a. m.';
-              const h12 = h % 12 || 12;
-              hora = `${h12}:${m}:${s} ${ampm}`;
-            }
-          }
-        } catch {}
-
-        const partes = [version, accionTexto].filter(Boolean).join(' | ');
-
-        if (!partes) return '-';
-
-        let resultado = partes;
-        if (hora) resultado += ` a las ${hora}`;
-
-        return resultado;
+        let nombreEstacion = '';
+        if (!esWeb && record.estacion) {
+          const match = record.estacion.match(/desde\s+(.+?)\s+[Vv]ersion/i);
+          if (match) nombreEstacion = match[1].trim();
+          else if (record.estacion) nombreEstacion = record.estacion.replace(/v?\d+\.\d+\.\d+(?:\.\d+)?/g, '').trim();
+        }
+        return (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: record.descripcion ? 4 : 0 }}>
+              <Tooltip title={version ? `Versión ${version}` : undefined}>
+                <Tag color={canalColor} style={{ fontSize: 10, lineHeight: '16px', padding: '0 5px', cursor: version ? 'help' : 'default' }}>
+                  {canal}
+                </Tag>
+              </Tooltip>
+              {nombreEstacion && (
+                <span className="paces-text-secondary" style={{ fontSize: 12 }}>{nombreEstacion}</span>
+              )}
+            </div>
+            {record.descripcion && (
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.4 }}>{record.descripcion}</div>
+            )}
+          </div>
+        );
       },
     },
   ];
 
+  // Modo tabla
   return (
     <Table
       dataSource={dataSource || []}
       columns={columns}
-      rowKey={(record) => record.id || record.logid || Math.random().toString()}
+      rowKey={(record) => String(record.id ?? record.logid ?? `${record.fecha}-${record.accion}-${record.usuario?.nombreUsuario ?? ''}`)}
       size="small"
       pagination={false}
       loading={loading}
       scroll={{ x: scroll?.x || 900 }}
+      locale={{
+        emptyText: (
+          <div style={{ padding: '24px 0', textAlign: 'center' }}>
+            <HistoryOutlined style={{ fontSize: 28, color: 'var(--paces-text-secondary)', marginBottom: 8, display: 'block' }} />
+            <div className="paces-text-secondary" style={{ fontSize: 13 }}>Sin registros de historial</div>
+          </div>
+        ),
+      }}
     />
   );
 };

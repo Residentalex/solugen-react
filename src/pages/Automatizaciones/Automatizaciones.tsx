@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Card,
   Table,
@@ -38,14 +39,16 @@ import {
   CopyOutlined,
   InfoCircleOutlined,
 } from '@ant-design/icons';
+import PermissionGate from '../../components/PermissionGate';
 import { hangfireApi } from '../../api/hangfireApi';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import type { JobHangfire, JobTemplate } from '../../types/hangfire';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text, Title } = Typography;
 
-// ── Constantes ──
+// â”€â”€ Constantes â”€â”€
 
 const MODULO_MAP: Record<string, { label: string; color: string }> = {
   Inventario: { label: 'Inventario', color: 'blue' },
@@ -75,7 +78,7 @@ interface TemplateFormState {
   cron: string;
 }
 
-// ── Helpers ──
+// â”€â”€ Helpers â”€â”€
 
 function formatFecha(val: string | null): string {
   if (!val) return '-';
@@ -111,25 +114,25 @@ function detectarFrecuencia(cron: string): { tipo: FrecuenciaTipo; valor: number
 
 function describirCron(cron: string): string {
   const parts = cron.trim().split(/\s+/);
-  if (parts.length !== 5) return 'Expresión personalizada';
+  if (parts.length !== 5) return 'ExpresiÃ³n personalizada';
 
   const [min, hour, dom, month, dow] = parts;
 
   // Cada X horas
   if (min === '0' && hour.startsWith('*/')) {
     const h = hour.replace('*/', '');
-    return `Cada ${h} horas, todos los días`;
+    return `Cada ${h} horas, todos los dÃ­as`;
   }
   // Cada X minutos
   if (hour === '*' && min.startsWith('*/')) {
     const m = min.replace('*/', '');
     return `Cada ${m} minutos`;
   }
-  // Una hora específica cada día
+  // Una hora especÃ­fica cada dÃ­a
   if (min === '0' && hour !== '*' && !hour.includes('/') && dom === '*' && month === '*' && dow === '*') {
-    return `A las ${hour.padStart(2, '0')}:00, todos los días`;
+    return `A las ${hour.padStart(2, '0')}:00, todos los dÃ­as`;
   }
-  return 'Expresión personalizada';
+  return 'ExpresiÃ³n personalizada';
 }
 
 function buildInitialFormState(template: JobTemplate): TemplateFormState {
@@ -144,7 +147,7 @@ function buildInitialFormState(template: JobTemplate): TemplateFormState {
   };
 }
 
-// ── Componente principal ──
+// â”€â”€ Componente principal â”€â”€
 
 const Automatizaciones: React.FC = () => {
   const setActiveModule = useUIStore((s) => s.setActiveModule);
@@ -152,22 +155,43 @@ const Automatizaciones: React.FC = () => {
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
 
-  // ── Jobs state ──
+  // â”€â”€ Jobs state â”€â”€
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [jobs, setJobs] = useState<JobHangfire[]>([]);
-  const [resumen, setResumen] = useState<{ total: number; fallidos: number; exitosos: number }>({
+  const [resumenInfo, setResumen] = useState<{ total: number; fallidos: number; exitosos: number }>({
     total: 0,
     fallidos: 0,
     exitosos: 0,
   });
-  const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [filtroModulo, setFiltroModulo] = useState<string | undefined>(undefined);
   const [kpiActiveCell, setKpiActiveCell] = useState<'total' | 'exitosos' | 'fallidos' | 'activos' | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [loadingError, setLoadingError] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const { data: jobsQuery, isLoading, isError, refetch } = useQuery({
+    queryKey: ['automatizacionesJobs'],
+    queryFn: async () => {
+      const data = await hangfireApi.obtenerJobs();
+      return {
+        jobs: data.jobs || [],
+        resumen: {
+          total: data.total ?? data.jobs?.length ?? 0,
+          fallidos: data.fallidos ?? 0,
+          exitosos: data.exitosos ?? 0,
+        },
+      };
+    },
+    placeholderData: (prev) => prev,
+  });
+
+  const jobs = jobsQuery?.jobs || [];
+  const resumen = jobsQuery?.resumen || { total: 0, fallidos: 0, exitosos: 0 };
+  useEffect(() => {
+    if (jobsQuery?.resumen) {
+      setResumen(jobsQuery.resumen);
+    }
+  }, [jobsQuery?.resumen]);
   const [errorModal, setErrorModal] = useState<{ visible: boolean; job: JobHangfire | null }>({
     visible: false,
     job: null,
@@ -177,7 +201,7 @@ const Automatizaciones: React.FC = () => {
     job: null,
   });
 
-  // ── Templates state ──
+  // â”€â”€ Templates state â”€â”€
   const [templates, setTemplates] = useState<JobTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -188,10 +212,10 @@ const Automatizaciones: React.FC = () => {
   const [templateFiltroModulo, setTemplateFiltroModulo] = useState<string | undefined>(undefined);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // ── UI state ──
+  // â”€â”€ UI state â”€â”€
   const [activeTab, setActiveTab] = useState('jobs');
 
-  // ── Sucursales ──
+  // â”€â”€ Sucursales â”€â”€
   const sucursalOptions = useMemo(() => {
     // Mapa de nombre mostrado a nombre del enum (sin espacios)
     const nombreAEnum: Record<string, string> = {
@@ -210,7 +234,7 @@ const Automatizaciones: React.FC = () => {
     return SUCURSALES_FIJAS.map((s) => ({ value: s, label: s }));
   }, [sucursalesPermitidas]);
 
-  // ── Computed ──
+  // â”€â”€ Computed â”€â”€
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.tipoJobId === selectedTemplateId) || null,
     [templates, selectedTemplateId],
@@ -230,25 +254,8 @@ const Automatizaciones: React.FC = () => {
 
   const jobsActivos = useMemo(() => jobs.filter((j) => j.activo).length, [jobs]);
 
-  // ── Cargar jobs ──
-  const cargarDatos = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await hangfireApi.obtenerJobs();
-      setJobs(data.jobs || []);
-      setResumen({
-        total: data.total ?? data.jobs?.length ?? 0,
-        fallidos: data.fallidos ?? 0,
-        exitosos: data.exitosos ?? 0,
-      });
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
-  // ── Cargar templates ──
+  // â”€â”€ Cargar templates â”€â”€
   const cargarTemplates = useCallback(async () => {
     setTemplatesLoading(true);
     try {
@@ -261,23 +268,23 @@ const Automatizaciones: React.FC = () => {
     }
   }, []);
 
-  // ── Inicializar ──
+  // â”€â”€ Inicializar â”€â”€
   useEffect(() => {
     setActiveModule('MAutomatizacion');
     updateToolbar({});
-    cargarDatos();
+    refetch();
     cargarTemplates();
     return () => {
       resetToolbar();
     };
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos, cargarTemplates]);
+  }, [setActiveModule, updateToolbar, resetToolbar, cargarTemplates]);
 
-  // ── Auto-refresh (solo en tab jobs y sin modal abierto) ──
+  // â”€â”€ Auto-refresh (solo en tab jobs y sin modal abierto) â”€â”€
   useEffect(() => {
     if (autoRefresh && activeTab === 'jobs') {
       intervalRef.current = setInterval(() => {
         if (!errorModal.visible) {
-          cargarDatos();
+          refetch();
         }
       }, 30000);
     }
@@ -287,24 +294,24 @@ const Automatizaciones: React.FC = () => {
         intervalRef.current = null;
       }
     };
-  }, [autoRefresh, activeTab, errorModal.visible, cargarDatos]);
+  }, [autoRefresh, activeTab, errorModal.visible]);
 
-  // ── Auto-seleccionar primer template al entrar al tab registrar ──
+  // â”€â”€ Auto-seleccionar primer template al entrar al tab registrar â”€â”€
   useEffect(() => {
     if (activeTab === 'registrar' && templates.length > 0 && !selectedTemplateId) {
       handleSelectTemplate(templates[0].tipoJobId);
     }
   }, [activeTab, templates, selectedTemplateId]);
 
-  // ── Handlers jobs ──
+  // â”€â”€ Handlers jobs â”€â”€
 
   const handleSearch = (value: string) => {
     setSearchText(value);
   };
 
   const handleRefresh = () => {
-    setLoadingError(false);
-    cargarDatos();
+    refetch();
+    refetch();
   };
 
   const handleReRegistrarTodos = () => {
@@ -324,7 +331,7 @@ const Automatizaciones: React.FC = () => {
           } else {
             message.success(`${result.procesados} jobs re-registrados correctamente`);
           }
-          cargarDatos();
+          refetch();
         } catch (err: any) {
           message.error(err?.response?.data?.errorMessage || 'Error al re-registrar jobs');
         }
@@ -334,7 +341,7 @@ const Automatizaciones: React.FC = () => {
 
   const handleTrigger = (job: JobHangfire) => {
     Modal.confirm({
-      title: 'Ejecutar automatización',
+      title: 'Ejecutar automatizaciÃ³n',
       content: `¿Está seguro de ejecutar "${job.nombre}" manualmente?`,
       okText: 'Ejecutar',
       cancelText: 'Cancelar',
@@ -342,7 +349,7 @@ const Automatizaciones: React.FC = () => {
         try {
           await hangfireApi.triggerJob(job.id);
           message.success(`Job "${job.nombre}" disparado correctamente`);
-          cargarDatos();
+          refetch();
         } catch (err: any) {
           message.error(err?.response?.data?.errorMessage || 'Error al ejecutar job');
         }
@@ -361,7 +368,7 @@ const Automatizaciones: React.FC = () => {
         try {
           await hangfireApi.eliminarJob(job.id);
           message.success(`Job "${job.nombre}" eliminado`);
-          cargarDatos();
+          refetch();
         } catch (err: any) {
           message.error(err?.response?.data?.errorMessage || 'Error al eliminar job');
         }
@@ -379,7 +386,7 @@ const Automatizaciones: React.FC = () => {
     setDetalleJobModal({ visible: true, job });
   };
 
-  // ── Handlers KPI ──
+  // â”€â”€ Handlers KPI â”€â”€
 
   const handleKpiClick = (cell: 'total' | 'exitosos' | 'fallidos' | 'activos') => {
     if (kpiActiveCell === cell) {
@@ -398,7 +405,7 @@ const Automatizaciones: React.FC = () => {
     }
   };
 
-  // ── Handlers templates ──
+  // â”€â”€ Handlers templates â”€â”€
 
   const handleSelectTemplate = (tipoJobId: string) => {
     if (isFormDirty) {
@@ -492,7 +499,7 @@ const Automatizaciones: React.FC = () => {
         message: 'Job registrado correctamente',
         description: (
           <span>
-            <Text strong>{selectedTemplate.nombre}</Text> ya está activo
+            <Text strong>{selectedTemplate.nombre}</Text> ya estÃ¡ activo
           </span>
         ),
         duration: 4.5,
@@ -514,7 +521,7 @@ const Automatizaciones: React.FC = () => {
       const initForm = buildInitialFormState(selectedTemplate);
       setTemplateForm(initForm);
       setInitialFormData(initForm);
-      cargarDatos();
+      refetch();
     } catch (err: any) {
       setFormError(err?.response?.data?.errorMessage || `Error al registrar job "${selectedTemplate.nombre}"`);
     } finally {
@@ -534,7 +541,7 @@ const Automatizaciones: React.FC = () => {
     setTemplateSearchText(value);
   };
 
-  // ── Verificar si form es valido para habilitar boton ──
+  // â”€â”€ Verificar si form es valido para habilitar boton â”€â”€
   const isFormValid = useMemo(() => {
     if (!selectedTemplate || !templateForm) return false;
     for (const p of selectedTemplate.parametros) {
@@ -548,7 +555,7 @@ const Automatizaciones: React.FC = () => {
     return true;
   }, [selectedTemplate, templateForm]);
 
-  // ── Filtros de jobs ──
+  // â”€â”€ Filtros de jobs â”€â”€
   const modulosDisponibles = useMemo(() => {
     const modulos = new Set<string>();
     jobs.forEach((j) => {
@@ -579,7 +586,7 @@ const Automatizaciones: React.FC = () => {
     return result;
   }, [jobs, kpiActiveCell, filtroModulo, searchText]);
 
-  // ── Templates modulos y filtro ──
+  // â”€â”€ Templates modulos y filtro â”€â”€
   const modulosTemplates = useMemo(() => {
     const modulos = new Set<string>();
     templates.forEach((t) => {
@@ -604,7 +611,7 @@ const Automatizaciones: React.FC = () => {
     return result;
   }, [templates, templateFiltroModulo, templateSearchText]);
 
-  // ── Columnas de la tabla ──
+  // â”€â”€ Columnas de la tabla â”€â”€
   const columns: ColumnsType<JobHangfire> = [
     {
       title: 'Nombre',
@@ -627,7 +634,7 @@ const Automatizaciones: React.FC = () => {
       ),
     },
     {
-      title: 'Módulo',
+      title: 'MÃ³dulo',
       dataIndex: 'modulo',
       key: 'modulo',
       width: 140,
@@ -650,7 +657,7 @@ const Automatizaciones: React.FC = () => {
         sucursal ? <Tag color="default">{sucursal}</Tag> : <Text className="paces-text-secondary">-</Text>,
     },
     {
-      title: 'Último Estado',
+      title: 'Ãšltimo Estado',
       dataIndex: 'ultimoEstado',
       key: 'ultimoEstado',
       width: 150,
@@ -665,7 +672,7 @@ const Automatizaciones: React.FC = () => {
       },
     },
     {
-      title: 'Última Ejecución',
+      title: 'Ãšltima EjecuciÃ³n',
       dataIndex: 'ultimaEjecucion',
       key: 'ultimaEjecucion',
       width: 160,
@@ -674,7 +681,7 @@ const Automatizaciones: React.FC = () => {
       ),
     },
     {
-      title: 'Próxima Ejecución',
+      title: 'PrÃ³xima EjecuciÃ³n',
       dataIndex: 'proximaEjecucion',
       key: 'proximaEjecucion',
       width: 160,
@@ -683,7 +690,7 @@ const Automatizaciones: React.FC = () => {
       ),
     },
     {
-      title: 'Duración',
+      title: 'DuraciÃ³n',
       dataIndex: 'duracionSegundos',
       key: 'duracionSegundos',
       width: 90,
@@ -698,7 +705,7 @@ const Automatizaciones: React.FC = () => {
       key: 'cron',
       width: 110,
       render: (cron: string) => (
-        <Tooltip title={`Expresión Cron: ${cron}`}>
+        <Tooltip title={`ExpresiÃ³n Cron: ${cron}`}>
           <Space size={4}>
             <ClockCircleOutlined style={{ fontSize: 12, color: 'var(--paces-text-secondary)' }} />
             <Text code className="paces-text-secondary" style={{ fontSize: 10 }}>
@@ -753,7 +760,7 @@ const Automatizaciones: React.FC = () => {
     },
   ];
 
-  // ── Render: Cabecera de pagina ──
+  // â”€â”€ Render: Cabecera de pagina â”€â”€
   const renderPageHeader = () => (
     <div
       style={{
@@ -766,11 +773,13 @@ const Automatizaciones: React.FC = () => {
       }}
     >
       <Space>
-        <Tooltip title="Re-registrar todos los jobs para incluir notificaciones automáticas">
-          <Button icon={<SyncOutlined />} onClick={handleReRegistrarTodos}>
-            Re-registrar Jobs
-          </Button>
-        </Tooltip>
+        <PermissionGate accion="CREAR">
+          <Tooltip title="Re-registrar todos los jobs para incluir notificaciones automÃ¡ticas">
+            <Button icon={<SyncOutlined />} onClick={handleReRegistrarTodos}>
+              Re-registrar Jobs
+            </Button>
+          </Tooltip>
+        </PermissionGate>
         <Tooltip title="Ir a Hangfire Dashboard">
           <Button icon={<SyncOutlined />} onClick={() => window.open('/hangfire', '_blank')}>
             Hangfire Dashboard
@@ -780,13 +789,13 @@ const Automatizaciones: React.FC = () => {
     </div>
   );
 
-  // ── Render: KPI Strip ──
+  // â”€â”€ Render: KPI Strip â”€â”€
   const renderKpiStrip = () => {
     const cells = [
       {
         key: 'total' as const,
         icon: <SyncOutlined />,
-        value: resumen.total,
+        value: resumenInfo.total,
         label: 'jobs',
         color: 'var(--paces-primary)',
         bgColor: 'rgba(85,110,230,0.08)',
@@ -794,16 +803,16 @@ const Automatizaciones: React.FC = () => {
       {
         key: 'exitosos' as const,
         icon: <CheckCircleOutlined />,
-        value: resumen.exitosos,
-        label: 'últimas ejecuciones',
+        value: resumenInfo.exitosos,
+        label: 'Ãºltimas ejecuciones',
         color: '#34c38f',
         bgColor: 'rgba(52,195,143,0.08)',
       },
       {
         key: 'fallidos' as const,
         icon: <AlertOutlined />,
-        value: resumen.fallidos,
-        label: 'últimas ejecuciones',
+        value: resumenInfo.fallidos,
+        label: 'Ãºltimas ejecuciones',
         color: '#f46a6a',
         bgColor: 'rgba(244,106,106,0.08)',
       },
@@ -883,53 +892,27 @@ const Automatizaciones: React.FC = () => {
     );
   };
 
-  // ── Render: Toolbar de tabla ──
+  // â”€â”€ Render: Toolbar de tabla â”€â”€
   const renderTableToolbar = () => (
-    <div style={{ padding: '16px 24px 0' }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          marginBottom: 16,
-          flexWrap: 'wrap',
-        }}
-      >
-        <Input.Search
-          placeholder="Buscar..."
-          allowClear
-          onSearch={handleSearch}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              (e.target as HTMLInputElement).blur();
-              handleSearch('');
-            }
-          }}
-          style={{ width: 320 }}
-          prefix={<SearchOutlined className="paces-text-icon" />}
-        />
+    <CatalogoListadoToolbar
+      onSearch={handleSearch}
+      pageSize={pageSize}
+      onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
+      onReload={handleRefresh}
+      filtros={
         <Select
           style={{ width: 160 }}
-          placeholder="Todos los módulos"
+          placeholder="Todos los mÃ³dulos"
           allowClear
           value={filtroModulo}
           onChange={(val) => setFiltroModulo(val)}
           options={modulosDisponibles.map((m) => ({ value: m, label: m }))}
         />
-        <Select
-          style={{ width: 65 }}
-          value={pageSize}
-          onChange={(v) => { setPageSize(v); setPage(1); }}
-          options={[
-            { value: 25, label: '25' },
-            { value: 50, label: '50' },
-            { value: 100, label: '100' },
-          ]}
-        />
-        <div style={{ flex: 1 }} />
+      }
+      acciones={
         <Space size={8}>
           <Text className="paces-text-secondary" style={{ fontSize: 13 }}>
-            Auto · 30s
+            Auto Â· 30s
           </Text>
           <Switch
             size="small"
@@ -937,26 +920,24 @@ const Automatizaciones: React.FC = () => {
             onChange={(checked) => setAutoRefresh(checked)}
           />
         </Space>
-        <Tooltip title="Recargar">
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-        </Tooltip>
-      </div>
-    </div>
-  );
+      }
+    />)
 
-  // ── Render: Tabla de jobs ──
+  // â”€â”€ Render: Tabla de jobs â”€â”€
   const renderJobsTable = () => {
-    const noJobsAtAll = jobs.length === 0 && !loading;
-    const noResults = filteredJobs.length === 0 && jobs.length > 0 && !loading;
+    const noJobsAtAll = jobs.length === 0 && !isLoading;
+    const noResults = filteredJobs.length === 0 && jobs.length > 0 && !isLoading;
 
     const emptyText = noJobsAtAll ? (
       <Empty
         description="No hay jobs registrados"
         style={{ padding: '40px 0' }}
       >
-        <Button type="primary" onClick={() => setActiveTab('registrar')}>
-          Registrar primer job
-        </Button>
+        <PermissionGate accion="CREAR">
+          <Button type="primary" onClick={() => setActiveTab('registrar')}>
+            Registrar primer job
+          </Button>
+        </PermissionGate>
       </Empty>
     ) : noResults ? (
       <Empty
@@ -987,7 +968,7 @@ const Automatizaciones: React.FC = () => {
           columns={columns}
           dataSource={filteredJobs}
           rowKey="id"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 1400 }}
           size="small"
           locale={{ emptyText }}
@@ -1015,7 +996,7 @@ const Automatizaciones: React.FC = () => {
     );
   };
 
-  // ── Render: Modal de detalle de job ──
+  // â”€â”€ Render: Modal de detalle de job â”€â”€
   const renderDetalleJobModal = () => (
     <Modal
       open={detalleJobModal.visible}
@@ -1038,18 +1019,18 @@ const Automatizaciones: React.FC = () => {
       {detalleJobModal.job && (
         <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
           <Descriptions.Item label="Nombre">{detalleJobModal.job.nombre}</Descriptions.Item>
-          <Descriptions.Item label="Módulo">{detalleJobModal.job.modulo || '-'}</Descriptions.Item>
+          <Descriptions.Item label="MÃ³dulo">{detalleJobModal.job.modulo || '-'}</Descriptions.Item>
           <Descriptions.Item label="Sucursal">{detalleJobModal.job.sucursal || '-'}</Descriptions.Item>
           <Descriptions.Item label="Cron">
             <Text code>{detalleJobModal.job.cron}</Text>
           </Descriptions.Item>
-          <Descriptions.Item label="Último Estado">
+          <Descriptions.Item label="Ãšltimo Estado">
             <Badge status={ESTADO_BADGE[detalleJobModal.job.ultimoEstado]?.status || 'default'} />
             {ESTADO_BADGE[detalleJobModal.job.ultimoEstado]?.text || detalleJobModal.job.ultimoEstado}
           </Descriptions.Item>
-          <Descriptions.Item label="Última Ejecución">{formatFecha(detalleJobModal.job.ultimaEjecucion)}</Descriptions.Item>
-          <Descriptions.Item label="Próxima Ejecución">{formatFecha(detalleJobModal.job.proximaEjecucion)}</Descriptions.Item>
-          <Descriptions.Item label="Duración">{formatDuracion(detalleJobModal.job.duracionSegundos)}</Descriptions.Item>
+          <Descriptions.Item label="Ãšltima EjecuciÃ³n">{formatFecha(detalleJobModal.job.ultimaEjecucion)}</Descriptions.Item>
+          <Descriptions.Item label="PrÃ³xima EjecuciÃ³n">{formatFecha(detalleJobModal.job.proximaEjecucion)}</Descriptions.Item>
+          <Descriptions.Item label="DuraciÃ³n">{formatDuracion(detalleJobModal.job.duracionSegundos)}</Descriptions.Item>
           <Descriptions.Item label="Activo">
             <Switch size="small" checked={detalleJobModal.job.activo} disabled />
           </Descriptions.Item>
@@ -1077,7 +1058,7 @@ const Automatizaciones: React.FC = () => {
     </Modal>
   );
 
-  // ── Render: Modal de error mejorado ──
+  // â”€â”€ Render: Modal de error mejorado â”€â”€
   const renderErrorModal = () => (
     <Modal
       open={errorModal.visible}
@@ -1106,13 +1087,13 @@ const Automatizaciones: React.FC = () => {
         <Row gutter={[24, 8]}>
           <Col span={12}>
             <Text className="paces-text-secondary" style={{ fontSize: 12, display: 'block' }}>
-              Última ejecución
+              Ãšltima ejecuciÃ³n
             </Text>
             <Text>{formatFecha(errorModal.job?.ultimaEjecucion || null)}</Text>
           </Col>
           <Col span={12}>
             <Text className="paces-text-secondary" style={{ fontSize: 12, display: 'block' }}>
-              Duración
+              DuraciÃ³n
             </Text>
             <Text>{formatDuracion(errorModal.job?.duracionSegundos || null)}</Text>
           </Col>
@@ -1138,7 +1119,7 @@ const Automatizaciones: React.FC = () => {
     </Modal>
   );
 
-  // ── Render: Template List (columna izquierda) ──
+  // â”€â”€ Render: Template List (columna izquierda) â”€â”€
   const renderTemplateList = () => {
     return (
       <Card
@@ -1175,7 +1156,7 @@ const Automatizaciones: React.FC = () => {
           />
           <Select
             style={{ width: '100%' }}
-            placeholder="Filtrar por módulo"
+            placeholder="Filtrar por mÃ³dulo"
             allowClear
             value={templateFiltroModulo}
             onChange={(val) => setTemplateFiltroModulo(val)}
@@ -1287,7 +1268,7 @@ const Automatizaciones: React.FC = () => {
     );
   };
 
-  // ── Render: Template Detail (columna derecha) ──
+  // â”€â”€ Render: Template Detail (columna derecha) â”€â”€
   const renderTemplateDetail = () => {
     if (!selectedTemplate || !templateForm) {
       return (
@@ -1320,7 +1301,7 @@ const Automatizaciones: React.FC = () => {
         style={{ borderRadius: 8, height: '100%' }}
         styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' } }}
       >
-        {/* ── Zona A: Header compacto + descripción ── */}
+        {/* â”€â”€ Zona A: Header compacto + descripciÃ³n â”€â”€ */}
         <div
           style={{
             padding: '12px 24px',
@@ -1379,7 +1360,7 @@ const Automatizaciones: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Scrollable content ── */}
+        {/* â”€â”€ Scrollable content â”€â”€ */}
         <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
           {/* Error inline */}
           {formError && (
@@ -1391,10 +1372,10 @@ const Automatizaciones: React.FC = () => {
             />
           )}
 
-          {/* ── Zona B: ¿Donde se ejecuta? ── */}
+          {/* â”€â”€ Zona B: Â¿Donde se ejecuta? â”€â”€ */}
           <div style={{ marginBottom: 20 }}>
             <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
-              1. ¿Donde se ejecuta?
+              1. Â¿Donde se ejecuta?
             </Text>
             <Row gutter={16}>
               {selectedTemplate.parametros.map((param) => {
@@ -1449,10 +1430,10 @@ const Automatizaciones: React.FC = () => {
             </Row>
           </div>
 
-          {/* ── Zona C: ¿Con que frecuencia? ── */}
+          {/* â”€â”€ Zona C: Â¿Con que frecuencia? â”€â”€ */}
           <div>
             <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
-              2. ¿Con que frecuencia?
+              2. Â¿Con que frecuencia?
             </Text>
             <Segmented
               value={templateForm.frecuenciaTipo}
@@ -1512,7 +1493,7 @@ const Automatizaciones: React.FC = () => {
                     onClick={() => window.open('https://crontab.guru', '_blank')}
                     disabled={submitting}
                   >
-                    ¿Ayuda?
+                    Â¿Ayuda?
                   </Button>
                 </Tooltip>
               </div>
@@ -1548,7 +1529,7 @@ const Automatizaciones: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Zona D: Footer sticky ── */}
+        {/* â”€â”€ Zona D: Footer sticky â”€â”€ */}
         <div
           style={{
             position: 'sticky',
@@ -1563,23 +1544,25 @@ const Automatizaciones: React.FC = () => {
             <Button disabled={!isFormDirty} onClick={handleCancelForm}>
               Restablecer
             </Button>
-            <Tooltip title={formInvalidTooltip}>
-              <Button
-                type="primary"
-                disabled={!isFormValid}
-                loading={submitting}
-                onClick={handleRegistrar}
-              >
-                Registrar automatización
-              </Button>
-            </Tooltip>
+            <PermissionGate accion="CREAR">
+              <Tooltip title={formInvalidTooltip}>
+                <Button
+                  type="primary"
+                  disabled={!isFormValid}
+                  loading={submitting}
+                  onClick={handleRegistrar}
+                >
+                  Registrar automatizaciÃ³n
+                </Button>
+              </Tooltip>
+            </PermissionGate>
           </div>
         </div>
       </Card>
     );
   };
 
-  // ── Render: Contenido del tab Jobs ──
+  // â”€â”€ Render: Contenido del tab Jobs â”€â”€
   const renderJobsTab = () => (
     <>
       {renderKpiStrip()}
@@ -1589,7 +1572,7 @@ const Automatizaciones: React.FC = () => {
     </>
   );
 
-  // ── Render: Contenido del tab Registrar ──
+  // â”€â”€ Render: Contenido del tab Registrar â”€â”€
   const renderRegistrarTab = () => {
     if (templatesLoading && templates.length === 0) {
       return (
@@ -1623,10 +1606,10 @@ const Automatizaciones: React.FC = () => {
     );
   };
 
-  // ── Render principal ──
+  // â”€â”€ Render principal â”€â”€
   // Memoizar tabs para evitar re-render completo al escribir en el formulario
   const jobsContent = useMemo(() => renderJobsTab(), [
-    jobs, resumen, loading, searchText, filtroModulo,
+    jobs, resumenInfo, isLoading, searchText, filtroModulo,
     kpiActiveCell, autoRefresh, filteredJobs, columns, errorModal
   ]);
 
@@ -1638,7 +1621,7 @@ const Automatizaciones: React.FC = () => {
 
   return (
     <div>
-      {loadingError && (
+      {isError && (
         <Alert
           message="Error al cargar automatizaciones"
           type="error"
@@ -1664,7 +1647,7 @@ const Automatizaciones: React.FC = () => {
               <span style={{ fontSize: 14, fontWeight: 600 }}>
                 Jobs Registrados{' '}
                 <Badge
-                  count={resumen.total}
+                  count={resumenInfo.total}
                   size="small"
                   style={{ backgroundColor: 'var(--paces-primary)' }}
                 />
@@ -1694,3 +1677,8 @@ const Automatizaciones: React.FC = () => {
 };
 
 export default Automatizaciones;
+
+
+
+
+

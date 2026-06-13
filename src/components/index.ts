@@ -19,3 +19,5 @@ export type { NotaSeguimientoItem, NotasSeguimientoCardProps } from './NotasSegu
 export { default as BuscarTipoModal } from './BuscarTipoModal/BuscarTipoModal';
 export { default as BuscarDocumentoModal } from './BuscarDocumentoModal/BuscarDocumentoModal';
 export { default as BuscarDevolucionModal } from './BuscarDevolucionModal/BuscarDevolucionModal';
+export { default as CampoTipo } from './CampoTipo/CampoTipo';
+export type { CampoTipoProps } from './CampoTipo/CampoTipo';

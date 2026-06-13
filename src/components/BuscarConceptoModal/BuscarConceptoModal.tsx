@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Modal, Input, Table, Empty, message } from 'antd';
 import type { ConceptoDTO } from '../../types/entradaAlmacen';
+import { conceptosApi } from '../../api/conceptosApi';
 import { toTitleCase } from '../../utils/formats';
 
 interface BuscarConceptoModalProps {
@@ -9,6 +10,11 @@ interface BuscarConceptoModalProps {
   onSelect: (concepto: ConceptoDTO) => void;
   fetchConceptos: () => Promise<ConceptoDTO[]>;
   title?: string;
+  /** Si se proveen, se usa el endpoint con filtro por tipo en lugar de fetchConceptos */
+  sucursal?: number;
+  documento?: string;
+  tipo?: string;
+  tipoEntidad?: string;
 }
 
 const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({
@@ -17,18 +23,28 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({
   onSelect,
   fetchConceptos,
   title = 'Buscar Concepto',
+  sucursal,
+  documento,
+  tipo,
+  tipoEntidad,
 }) => {
   const [conceptos, setConceptos] = useState<ConceptoDTO[]>([]);
   const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
-    if (open) {
-      setSearchText('');
+    if (!open) return;
+    setSearchText('');
+
+    if (sucursal != null && documento && tipo) {
+      conceptosApi.obtenerConceptosPorDocumentoTipo(sucursal, documento, tipo, tipoEntidad)
+        .then((res) => setConceptos(res || []))
+        .catch(() => message.error('Error al cargar conceptos'));
+    } else {
       fetchConceptos()
         .then((res) => setConceptos(res || []))
         .catch(() => message.error('Error al cargar conceptos'));
     }
-  }, [open, fetchConceptos]);
+  }, [open, fetchConceptos, sucursal, documento, tipo, tipoEntidad]);
 
   const conceptosFiltrados = useMemo(() => {
     if (!searchText) return conceptos;
@@ -41,13 +57,14 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({
   }, [conceptos, searchText]);
 
   const columnas = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
     {
-      title: 'Nombre',
-      dataIndex: 'nombre',
-      key: 'nombre',
-      ellipsis: true,
-      render: (v: string) => toTitleCase(v),
+      title: 'Concepto',
+      key: 'concepto',
+      render: (_: any, record: any) => (
+        <span>
+          <strong>{record.codigo}</strong> - {toTitleCase(record.nombre || '')}
+        </span>
+      ),
     },
   ];
 

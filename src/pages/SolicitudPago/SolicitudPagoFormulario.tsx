@@ -13,8 +13,10 @@ import {
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
 import { conceptosApi } from '../../api/conceptosApi';
+import CampoTipo from '../../components/CampoTipo/CampoTipo';
 import type { SolicitudPagoDTO, SolicitudPagoCrearDTO, SolicitudPagoActualizarDTO } from '../../types/solicitudPago';
 import type { ConceptoDTO, EntidadDTO } from '../../types/entradaAlmacen';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
@@ -23,6 +25,7 @@ import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConc
 import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber } from '../../utils/formats';
 
 const { TextArea } = Input;
@@ -35,10 +38,12 @@ const SolicitudPagoFormulario: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const screens = Grid.useBreakpoint();
   const { message } = App.useApp();
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
+  const { screenCode, documentCode } = useScreenConfig('FSPA');
   const [form] = Form.useForm();
   const navigationConfirmedRef = useRef(false);
 
@@ -47,6 +52,7 @@ const SolicitudPagoFormulario: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<SolicitudPagoDTO | null>(null);
+  const [tipoValue, setTipoValue] = useState<string>('');
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
   const [selectedEntidad, setSelectedEntidad] = useState<EntidadDTO | null>(null);
   const [entidadesCache, setEntidadesCache] = useState<EntidadDTO[]>([]);
@@ -54,6 +60,7 @@ const SolicitudPagoFormulario: React.FC = () => {
   // Concepto modal
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
   const [conceptoSearchText, setConceptoSearchText] = useState('');
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   // ===== Watchers =====
   const subTotalValue = Form.useWatch('subTotal', form) ?? 0;
@@ -76,7 +83,7 @@ const SolicitudPagoFormulario: React.FC = () => {
 
   // ===== Carga inicial =====
   useEffect(() => {
-    setActiveModule('FSPA');
+    setActiveModule(screenCode);
     const pageTitle = mode === 'crear'
       ? 'Nueva Solicitud de Pago'
       : 'Editar Solicitud de Pago';
@@ -132,12 +139,16 @@ const SolicitudPagoFormulario: React.FC = () => {
         const concepto = typeof conceptoRaw === 'object' && conceptoRaw !== null ? conceptoRaw as ConceptoDTO : null;
         if (concepto) {
           setSelectedConcepto(concepto);
-          setConceptoSearchText(concepto.nombre || '');
+          setConceptoSearchText(`${concepto.codigo || ''} - ${concepto.nombre || ''}`);
           // Cargar entidades según concepto
           if (concepto.codigo) {
             cargarEntidades(concepto.codigo);
           }
         }
+
+        // Tipo
+        const tipoRaw = resAny.tipo;
+        setTipoValue(tipoRaw?.codigo || resAny.codigoTipo || '');
 
         // Entidad
         const entidadRaw = resAny.entidad;
@@ -151,6 +162,7 @@ const SolicitudPagoFormulario: React.FC = () => {
 
         form.setFieldsValue({
           fechaDocumento: fechaDoc,
+          tipo: tipoRaw?.codigo || resAny.codigoTipo || '',
           concepto: concepto?.codigo || (typeof res.concepto === 'string' ? res.concepto : ''),
           entidad: entidad?.codigo || '',
           cuentaBancaria: res.cuentaBancaria || '',
@@ -278,8 +290,9 @@ const SolicitudPagoFormulario: React.FC = () => {
       ? toISOFormat(values.fechaDocumento.toDate())
       : toISOFormat(new Date());
 
-    const dto: SolicitudPagoCrearDTO = {
+    const dto: SolicitudPagoCrearDTO & { codigoTipo?: string } = {
       fechaDocumento: fechaDoc,
+      codigoTipo: tipoValue || '',
       conceptoCodigo: selectedConcepto?.codigo || '',
       entidadId: selectedEntidad?.codigo || selectedEntidad?.identificacion || '',
       cuentaBancaria: values.cuentaBancaria || '',
@@ -352,8 +365,10 @@ const SolicitudPagoFormulario: React.FC = () => {
         const conceptoH = typeof conceptoRaw === 'object' && conceptoRaw !== null ? conceptoRaw as ConceptoDTO : null;
         if (conceptoH) {
           setSelectedConcepto(conceptoH);
-          setConceptoSearchText(conceptoH.nombre || '');
+          setConceptoSearchText(`${conceptoH.codigo || ''} - ${conceptoH.nombre || ''}`);
         }
+        const tipoRaw = resAny.tipo;
+        setTipoValue(tipoRaw?.codigo || resAny.codigoTipo || '');
         const entidadRaw = resAny.entidad;
         const entidadH = typeof entidadRaw === 'object' && entidadRaw !== null ? entidadRaw as EntidadDTO : null;
         if (entidadH) {
@@ -362,6 +377,7 @@ const SolicitudPagoFormulario: React.FC = () => {
         const fechaDoc = res.fecha ? dayjs(res.fecha) : null;
         form.setFieldsValue({
           fechaDocumento: fechaDoc,
+          tipo: tipoRaw?.codigo || resAny.codigoTipo || '',
           concepto: conceptoH?.codigo || '',
           entidad: entidadH?.codigo || '',
           cuentaBancaria: res.cuentaBancaria || '',
@@ -404,42 +420,62 @@ const SolicitudPagoFormulario: React.FC = () => {
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
             <Row gutter={[16, 24]}>
-              {/* Fila 1: Fecha + Concepto + Entidad */}
+              {/* Fila 1: Tipo + Fecha + Concepto + Entidad */}
+              <Col xs={24} sm={12} lg={6}>
+                <Form.Item name="tipo" style={{ marginBottom: 0 }}>
+                  <CampoTipo
+                    tipoDocumento="SP"
+                    sucursal={sucursalActiva}
+                    value={tipoValue}
+                    onChange={(val) => setTipoValue(val || '')}
+                  />
+                </Form.Item>
+              </Col>
+
               <Col xs={24} sm={12} lg={6}>
                 <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
                   <FloatingField label="Fecha" required>
-                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format="YYYY-MM-DD"
+                      disabledDate={(current) => {
+                        if (!current) return false;
+                        if ((data as any)?.documento?.fechaPermitida === 'MenorIgualFechaDia') {
+                          if (current.isAfter(dayjs(), 'day')) return true;
+                        }
+                        const cierre = fechasCierre?.[sucursalActiva];
+                        if (cierre && current.isBefore(dayjs(cierre).startOf('day'), 'day')) return true;
+                        const cierreInv = fechasCierreInv?.[sucursalActiva];
+                        if (cierreInv && current.isBefore(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                        return false;
+                      }}
+                    />
                   </FloatingField>
                 </Form.Item>
               </Col>
 
-              <Col xs={24} sm={12} lg={9}>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-                  <div style={{ flex: 1 }}>
-                    <FloatingField label="Concepto" required>
-                      <Input
-                        placeholder=" "
-                        value={
-                          selectedConcepto
-                            ? toTitleCase(selectedConcepto.nombre)
-                            : conceptoSearchText
-                        }
-                        readOnly
-                        onClick={() => setConceptoModalOpen(true)}
-                      />
-                    </FloatingField>
-                  </div>
-                  <Button
-                    icon={<SearchOutlined />}
-                    onClick={() => setConceptoModalOpen(true)}
-                  />
+              <Col xs={24} sm={12} lg={6}>
+                <div>
+                  <FloatingField label="Concepto" required>
+                    <Input
+                      placeholder=" "
+                      value={
+                        selectedConcepto
+                          ? toTitleCase(selectedConcepto.nombre)
+                          : conceptoSearchText
+                      }
+                      readOnly
+                      suffix={<SearchOutlined style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />}
+                      onClick={() => setConceptoModalOpen(true)}
+                    />
+                  </FloatingField>
                 </div>
                 <Form.Item name="concepto" hidden>
                   <Input />
                 </Form.Item>
               </Col>
 
-              <Col xs={24} sm={12} lg={9}>
+              <Col xs={24} sm={12} lg={6}>
                 <Form.Item name="entidad" required style={{ marginBottom: 0 }}>
                   <FloatingField label="Entidad" required>
                     <Select
@@ -580,6 +616,7 @@ const SolicitudPagoFormulario: React.FC = () => {
   return (
     <div>
       <FormularioToolbar
+        mode={mode}
         saving={saving}
         estado={estado}
         periodo={periodo}
@@ -605,9 +642,8 @@ const SolicitudPagoFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        fetchConceptos={() =>
-          conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'SPA')
-        }
+        sucursal={sucursalActiva}
+        documento={documentCode}
       />
 
       {isLarge ? (

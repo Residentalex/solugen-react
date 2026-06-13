@@ -171,6 +171,7 @@ const CuentaContableDetalle: React.FC = () => {
           >
             <Descriptions column={1} bordered size="small">
               <Descriptions.Item label="Nombre">{item.nombre}</Descriptions.Item>
+              <Descriptions.Item label="Tipo">—</Descriptions.Item>
               <Descriptions.Item label="Tipo Cuenta">{item.tipoCuenta?.nombre || '-'}</Descriptions.Item>
               <Descriptions.Item label="Grupo">{item.grupo?.nombre || '-'}</Descriptions.Item>
               <Descriptions.Item label="Moneda">{item.moneda?.codigo || '-'}</Descriptions.Item>

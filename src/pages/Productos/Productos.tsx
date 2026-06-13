@@ -1,22 +1,18 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Input, Tag, Button, Card, Select, Typography, Tooltip, Alert } from 'antd';
+import { useQuery } from '@tanstack/react-query';
+import { Table, Input, Tag, Button, Card, Select, Typography, Tooltip, Alert, Empty } from 'antd';
 import { ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { productoApi } from '../../api/productoApi';
+import PermissionGate from '../../components/PermissionGate';
+import { toTitleCase, formatCurrency } from '../../utils/formats';
 import type { ProductoListaDTO } from '../../types/productos';
-
-function formatCurrency(n: number): string {
-  return n.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
-
-function toTitleCase(str: string): string {
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 const Productos: React.FC = () => {
   const navigate = useNavigate();
@@ -25,49 +21,40 @@ const Productos: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
 
-  const [data, setData] = useState<ProductoListaDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingError, setLoadingError] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [filtroActivo, setFiltroActivo] = useState<string>('todos');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [total, setTotal] = useState(0);
 
   const usuario = useAuthStore((s: any) => s.usuario);
   const pantallaActual = usuario?.pantallas.find((p: any) => p.codigo === 'MProducto');
   const puedeEditar = pantallaActual?.acciones.includes('EDITAR') ?? false;
 
-  const cargarDatos = useCallback(async (
-    busqueda?: string,
-    soloActivos?: boolean,
-    pagina?: number,
-    tamano?: number
-  ) => {
-    if (sucursalActiva === undefined) return;
-    setLoading(true);
-    try {
-      const currentPage = pagina ?? page;
-      const currentSize = tamano ?? pageSize;
-      const salto = (currentPage - 1) * currentSize;
+  const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
+
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['productos', sucursalActiva, page, pageSize, searchText, filtroActivo],
+    queryFn: async () => {
+      if (sucursalActiva === undefined) return { data: [], total: 0 };
+      const salto = (page - 1) * pageSize;
 
       let resultados: ProductoListaDTO[];
       let totalCount: number;
 
-      if (busqueda && busqueda.length > 2) {
+      if (searchText && searchText.length > 2) {
         resultados = await productoApi.filtrar(sucursalActiva, {
-          cantidad: currentSize,
+          cantidad: pageSize,
           salto,
-          codigo: busqueda,
-          referencia: busqueda,
-          sku: busqueda,
-          familia: busqueda,
+          codigo: searchText,
+          referencia: searchText,
+          sku: searchText,
+          familia: searchText,
           activo: soloActivos,
         });
-        totalCount = await productoApi.obtenerTotal(sucursalActiva, { codigo: busqueda, activo: soloActivos });
+        totalCount = await productoApi.obtenerTotal(sucursalActiva, { codigo: searchText, activo: soloActivos });
       } else {
-        const params: { filas?: number; salto?: number; codigo?: string; activo?: boolean } = {
-          filas: currentSize,
+        const params: { cantidad?: number; salto?: number; codigo?: string; activo?: boolean } = {
+          cantidad: pageSize,
           salto,
         };
         if (soloActivos !== undefined) params.activo = soloActivos;
@@ -75,52 +62,32 @@ const Productos: React.FC = () => {
         totalCount = await productoApi.obtenerTotal(sucursalActiva, { activo: soloActivos });
       }
 
-      setData((resultados || []).sort((a, b) => b.codigo.localeCompare(a.codigo)));
-      setTotal(totalCount ?? 0);
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva, page, pageSize]);
+      return {
+        data: (resultados || []).sort((a, b) => b.codigo.localeCompare(a.codigo)),
+        total: totalCount ?? 0,
+      };
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('MProducto');
     updateToolbar({});
-    cargarDatos(undefined, undefined, 1, pageSize);
     return () => resetToolbar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setActiveModule, updateToolbar, resetToolbar, sucursalActiva]);
-
-  // Recargar cuando cambian filtroActivo, page o pageSize (no searchText, eso va por onSearch)
-  useEffect(() => {
-    const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
-    cargarDatos(searchText.trim() || undefined, soloActivos, page, pageSize);
-  }, [filtroActivo, page, pageSize]);
+  }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
-    const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
-    cargarDatos(value.trim() || undefined, soloActivos, 1, pageSize);
-  };
-
-  const handleReload = () => {
-    setLoadingError(false);
-    const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
-    cargarDatos(searchText.trim() || undefined, soloActivos, page, pageSize);
   };
 
   const handlePageChange = (newPage: number, newPageSize: number) => {
     if (newPageSize !== pageSize) {
       setPageSize(newPageSize);
       setPage(1);
-      const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
-      cargarDatos(searchText.trim() || undefined, soloActivos, 1, newPageSize);
     } else {
       setPage(newPage);
-      const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
-      cargarDatos(searchText.trim() || undefined, soloActivos, newPage, pageSize);
     }
   };
 
@@ -204,68 +171,53 @@ const Productos: React.FC = () => {
 
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
           message="Error al cargar productos"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={handleReload}>
+            <Button size="small" onClick={() => refetch()}>
               Reintentar
             </Button>
           }
         />
       )}
       <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
-      <div style={{ padding: '16px 24px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-          <Input.Search
-            placeholder="Buscar por código o nombre..."
-            allowClear
-            onSearch={handleSearch}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                (e.target as HTMLInputElement).blur();
-                handleSearch('');
+      <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
+          onReload={() => refetch()}
+          filtros={
+            <Select
+              value={filtroActivo}
+              onChange={(val) => { setFiltroActivo(val); setPage(1); }}
+              style={{ width: 130 }}
+              size="middle"
+              options={
+                [
+                  { value: "todos", label: "Todos" },
+                  { value: "activos", label: "Solo activos" },
+                  { value: "inactivos", label: "Solo inactivos" },
+                ]
               }
-            }}
-            style={{ width: 400 }}
-            prefix={<SearchOutlined className="paces-text-icon" />}
-          />
-          <Select
-            value={filtroActivo}
-            onChange={(val) => { setFiltroActivo(val); setPage(1); }}
-            style={{ width: 130 }}
-            size="middle"
-            options={[
-              { value: 'todos', label: 'Todos' },
-              { value: 'activos', label: 'Solo activos' },
-              { value: 'inactivos', label: 'Solo inactivos' },
-            ]}
-          />
-          <Select
-            style={{ width: 65 }}
-            value={pageSize}
-            onChange={(v) => { setPageSize(v); setPage(1); }}
-            options={[
-              { value: 25, label: '25' },
-              { value: 50, label: '50' },
-              { value: 100, label: '100' },
-            ]}
-          />
-          <div style={{ flex: 1 }} />
-          <Button icon={<ReloadOutlined />} onClick={handleReload} />
-          <Tooltip title="Importar desde Excel">
-            <Button icon={<UploadOutlined />} onClick={() => navigate('/MProducto/importar')} />
-          </Tooltip>
-        </div>
-      </div>
+            />
+          }
+          acciones={
+            <PermissionGate permisoEspecial="pe_importar">
+              <Tooltip title="Importar desde Excel">
+                <Button icon={<UploadOutlined />} onClick={() => navigate("/MProducto/importar")} />
+              </Tooltip>
+            </PermissionGate>
+          }
+        />
       <Table<ProductoListaDTO>
         columns={columns}
-        dataSource={data}
+        dataSource={data?.data || []}
         rowKey="codigo"
-        loading={loading}
+        loading={isLoading}
         scroll={{ x: 1240 }}
         size="middle"
         rowClassName="paces-row-hover"
@@ -273,10 +225,15 @@ const Productos: React.FC = () => {
         onRow={() => ({
           style: { cursor: 'default' },
         })}
+        locale={{
+          emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Empty description="No hay productos registrados" />
+          </div>,
+        }}
         pagination={{
           current: page,
           pageSize: pageSize,
-          total: total,
+          total: data?.total || 0,
           onChange: handlePageChange,
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,

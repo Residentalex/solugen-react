@@ -81,7 +81,7 @@ function formatFechaOutput(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
-  return `${y}${m}${day}000000`;
+  return `${y}-${m}-${day}T00:00:00`;
 }
 
 function formatDateLegible(val: string): string {

@@ -11,6 +11,7 @@ import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { TransaccionVistaDTO } from '../../types/transaccion';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 
 const { Text } = Typography;
 
@@ -22,6 +23,7 @@ const NotaCredito: React.FC<NotaCreditoProps> = ({ tipoEntidad }) => {
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const codigoPantalla = tipoEntidad === 'SUP' ? 'FNCSUP' : 'FNCCLI';
+  const { screenCode, documentCode } = useScreenConfig(codigoPantalla);
   const entidadLabel = tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente';
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<TransaccionVistaDTO>({

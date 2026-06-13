@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Dropdown,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Dropdown, Empty,
 } from 'antd';
 import {
   SaveOutlined,
@@ -37,7 +37,7 @@ import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
-import FormularioToolbar from '../../components/FormularioToolbar';
+import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
@@ -729,7 +729,7 @@ const DevolucionVentaFormulario: React.FC = () => {
   // ===== Grid de detalles editable =====
   const detalleColumns = [
     {
-      title: 'CÃ³digo',
+      title: 'Código',
       key: 'codigo',
       width: 120,
       fixed: 'left' as const,
@@ -746,7 +746,7 @@ const DevolucionVentaFormulario: React.FC = () => {
       ),
     },
     {
-      title: 'ArtÃ­culo',
+      title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
@@ -970,28 +970,28 @@ const DevolucionVentaFormulario: React.FC = () => {
 
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
-    <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+    <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           {/* Fila 1: Concepto */}
           <Col xs={24} sm={12} lg={8}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required>
-                  <Input
-                    placeholder=" "
-                    value={selectedConcepto ? toTitleCase(selectedConcepto.nombre) : conceptoSearchText}
-                    readOnly
-                    onClick={handleConceptoSearchClick}
-                  />
-                </FloatingField>
-              </div>
-              <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
-              {selectedConcepto && (
-                <Button icon={<ClearOutlined />} onClick={handleConceptoClear} />
-              )}
+            <div>
+              <FloatingField label="Concepto" required>
+                <Input
+                  placeholder=" "
+                  value={selectedConcepto ? `${selectedConcepto.codigo || ''} - ${toTitleCase(selectedConcepto.nombre)}` : conceptoSearchText}
+                  readOnly
+                  suffix={
+                    <Space size={4}>
+                      <SearchOutlined onClick={handleConceptoSearchClick} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                      {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
+                    </Space>
+                  }
+                  onClick={handleConceptoSearchClick}
+                />
+              </FloatingField>
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
@@ -1059,21 +1059,21 @@ const DevolucionVentaFormulario: React.FC = () => {
 
           {/* Factura Origen */}
           <Col xs={24} sm={12} lg={16}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Factura Origen">
-                  <Input
-                    placeholder=" "
-                    value={selectedFactura ? `${selectedFactura.documento} - ${toTitleCase(selectedFactura.entidad || '')}` : ''}
-                    readOnly
-                    onClick={() => setFacturaModalOpen(true)}
-                  />
-                </FloatingField>
-              </div>
-              <Button icon={<SearchOutlined />} onClick={() => setFacturaModalOpen(true)} />
-              {selectedFactura && (
-                <Button icon={<ClearOutlined />} onClick={handleFacturaClear} />
-              )}
+            <div>
+              <FloatingField label="Factura Origen">
+                <Input
+                  placeholder=" "
+                  value={selectedFactura ? `${selectedFactura.documento} - ${toTitleCase(selectedFactura.entidad || '')}` : ''}
+                  readOnly
+                  suffix={
+                    <Space size={4}>
+                      <SearchOutlined onClick={() => setFacturaModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                      {selectedFactura && <ClearOutlined onClick={handleFacturaClear} style={{ cursor: 'pointer' }} />}
+                    </Space>
+                  }
+                  onClick={() => setFacturaModalOpen(true)}
+                />
+              </FloatingField>
             </div>
             <Form.Item name="factura" hidden><Input /></Form.Item>
           </Col>
@@ -1187,7 +1187,8 @@ const DevolucionVentaFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        fetchConceptos={() => devolucionVentaApi.obtenerConceptos(sucursalActiva, 'DEV')}
+        sucursal={sucursalActiva}
+        documento="DEV"
       />
 
       <BuscarProductoModal
@@ -1257,6 +1258,13 @@ const DevolucionVentaFormulario: React.FC = () => {
                         size="small"
                         pagination={false}
                         scroll={{ x: 1200 }}
+                        locale={{
+                          emptyText: (
+                            <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Empty description="Sin registros" />
+                            </div>
+                          ),
+                        }}
                       />
                     </>
                   ),
@@ -1358,6 +1366,13 @@ const DevolucionVentaFormulario: React.FC = () => {
                       size="small"
                       pagination={false}
                       scroll={{ x: 1200 }}
+                      locale={{
+                        emptyText: (
+                          <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Empty description="Sin registros" />
+                          </div>
+                        ),
+                      }}
                     />
                   </>
                 ),
@@ -1411,3 +1426,4 @@ const DevolucionVentaFormulario: React.FC = () => {
 };
 
 export default DevolucionVentaFormulario;
+

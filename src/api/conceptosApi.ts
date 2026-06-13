@@ -69,6 +69,22 @@ export const conceptosApi = {
     return data;
   },
 
+  obtenerConceptosPorDocumentoTipo: async (
+    sucursal: number,
+    documento: string,
+    tipo?: string,
+    tipoEntidad?: string
+  ): Promise<ConceptoDTO[]> => {
+    const params: Record<string, string> = { documento };
+    if (tipo) params.tipo = tipo;
+    if (tipoEntidad) params.tipoEntidad = tipoEntidad;
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(
+      `${CONCEPTOS_BASE}/${sucursal}/documentoporTipo`,
+      { params }
+    );
+    return data.data;
+  },
+
   obtenerConceptosPorSucursalDestino: async (sucursal: number, codSucDest: string): Promise<ConceptoDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(
       `${CONCEPTOS_BASE}/${sucursal}/porSucursalDestino/${codSucDest}`

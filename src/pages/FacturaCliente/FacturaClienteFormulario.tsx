@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Popover,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Popover, Empty,
 } from 'antd';
 import {
   SaveOutlined,
@@ -36,7 +36,7 @@ import LogTable from '../../components/LogTable';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
-import FormularioToolbar from '../../components/FormularioToolbar';
+import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import ImpuestosFacturaEditables from '../../components/ImpuestosFacturaEditables';
@@ -1028,7 +1028,7 @@ const FacturaClienteFormulario: React.FC = () => {
 
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
-    <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+    <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
@@ -1054,7 +1054,7 @@ const FacturaClienteFormulario: React.FC = () => {
                         >
                           {tiposCache.map((tc) => (
                             <Select.Option key={tc.codigo} value={tc.codigo}>
-                              {toTitleCase(tc.nombre)}
+                              {tc.codigo} - {toTitleCase(tc.nombre)}
                             </Select.Option>
                           ))}
                         </Select>
@@ -1064,21 +1064,21 @@ const FacturaClienteFormulario: React.FC = () => {
                 </div>
               </Col>
               <Col xs={24} sm={12} lg={15}>
-                <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-                  <div style={{ flex: 1 }}>
-                    <FloatingField label="Concepto" required>
-                      <Input
-                        placeholder=" "
-                        value={selectedConcepto ? toTitleCase(selectedConcepto.nombre) : conceptoSearchText}
-                        readOnly
-                        onClick={handleConceptoSearchClick}
-                      />
-                    </FloatingField>
-                  </div>
-                  <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
-                  {selectedConcepto && (
-                    <Button icon={<ClearOutlined />} onClick={handleConceptoClear} />
-                  )}
+                <div ref={conceptoRef}>
+                  <FloatingField label="Concepto" required>
+                    <Input
+                      placeholder=" "
+                      value={selectedConcepto ? `${selectedConcepto.codigo || ''} - ${toTitleCase(selectedConcepto.nombre)}` : conceptoSearchText}
+                      readOnly
+                      suffix={
+                        <Space size={4}>
+                          <SearchOutlined onClick={handleConceptoSearchClick} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                          {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
+                        </Space>
+                      }
+                      onClick={handleConceptoSearchClick}
+                    />
+                  </FloatingField>
                 </div>
                 <Form.Item name="concepto" hidden><Input /></Form.Item>
               </Col>
@@ -1400,7 +1400,10 @@ const FacturaClienteFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        fetchConceptos={() => facturaClienteApi.obtenerConceptos(sucursalActiva, 'FFAC')}
+        sucursal={sucursalActiva}
+        documento="FFAC"
+        tipo={selectedTipo?.codigo}
+        tipoEntidad="CLI"
       />
       <BuscarProductoModal
         open={productoModalOpen}
@@ -1459,6 +1462,13 @@ const FacturaClienteFormulario: React.FC = () => {
                           pagination={false}
                           scroll={{ x: 1300 }}
                           components={{ body: { row: SortableRow } }}
+                          locale={{
+                            emptyText: (
+                              <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Empty description="Sin registros" />
+                              </div>
+                            ),
+                          }}
                         />
                         </SortableContext>
                         <DragOverlay>
@@ -1560,6 +1570,13 @@ const FacturaClienteFormulario: React.FC = () => {
                         pagination={false}
                         scroll={{ x: 1300 }}
                         components={{ body: { row: SortableRow } }}
+                        locale={{
+                          emptyText: (
+                            <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Empty description="Sin registros" />
+                            </div>
+                          ),
+                        }}
                       />
                       </SortableContext>
                       <DragOverlay>
@@ -1573,12 +1590,12 @@ const FacturaClienteFormulario: React.FC = () => {
                         ) : null}
                       </DragOverlay>
                     </DndContext>
-                  </>
-                ),
-              },
-              {
-                key: 'impuestos',
-                label: `Impuestos (${impuestosFactura.length})`,
+                    </>
+                  ),
+                },
+                {
+                  key: 'impuestos',
+                  label: `Impuestos (${impuestosFactura.length})`,
                 children: (
                   <ImpuestosFacturaEditables
                     impuestos={impuestosFactura}
@@ -1779,3 +1796,4 @@ const FacturaClienteGuide: React.FC<FacturaClienteGuideProps> = ({
 };
 
 export default FacturaClienteFormulario;
+

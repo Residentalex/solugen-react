@@ -13,7 +13,8 @@ export const distribucionBalanceApi = {
     hasta?: string,
     cantidad?: number,
     salto?: number,
-    estado?: number
+    estado?: number,
+    documentCode = TIPO_DOC
   ): Promise<TransaccionVistaDTO[]> => {
     const params: Record<string, string | number> = { TipoEntidad: tipoEntidad };
     if (desde) params.desde = desde;
@@ -23,7 +24,7 @@ export const distribucionBalanceApi = {
     if (estado !== undefined) params.estado = estado;
 
     const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO[]>>(
-      `${BASE}/${sucursal}/tipo/${TIPO_DOC}`, { params }
+      `${BASE}/${sucursal}/tipo/${documentCode}`, { params }
     );
     return data.data;
   },
@@ -31,7 +32,8 @@ export const distribucionBalanceApi = {
   filtrar: async (
     sucursal: number,
     tipoEntidad: string,
-    filtro: FiltroTransaccion
+    filtro: FiltroTransaccion,
+    documentCode = TIPO_DOC
   ): Promise<TransaccionVistaDTO[]> => {
     const params: Record<string, string | number> = { tipoEntidad };
     if (filtro.cantidad) params.cantidad = filtro.cantidad;
@@ -44,7 +46,7 @@ export const distribucionBalanceApi = {
     if (filtro.entidad) params.entidad = filtro.entidad;
 
     const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO[]>>(
-      `${BASE}/${sucursal}/tipo/${TIPO_DOC}/filtrar`, { params }
+      `${BASE}/${sucursal}/tipo/${documentCode}/filtrar`, { params }
     );
     return data.data;
   },
@@ -74,8 +76,10 @@ export const distribucionBalanceApi = {
     return data.data;
   },
 
-  desaplicar: async (sucursal: number, documento: string): Promise<TransaccionVistaDTO> => {
-    const { data } = await apiClient.put<ApiResponse<TransaccionVistaDTO>>(`${BASE}/desaplicar?sucursal=${sucursal}&documento=${documento}`);
+  desaplicar: async (origen: number, documento: string, destino?: number): Promise<TransaccionVistaDTO> => {
+    const params: Record<string, string | number> = { origen, documento };
+    if (destino !== undefined) params.destino = destino;
+    const { data } = await apiClient.put<ApiResponse<TransaccionVistaDTO>>(`${BASE}/desaplicar`, null, { params });
     return data.data;
   },
 

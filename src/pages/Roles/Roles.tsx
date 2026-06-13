@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Tag, Button, Spin, message, Empty, Grid, Tooltip, Avatar, Alert, Modal, Descriptions, Typography } from 'antd';
-import { PlusOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { Card, Row, Col, Tag, Button, Spin, message, Empty, Grid, Tooltip, Avatar, Alert, Modal, Descriptions, Typography, Input, Space } from 'antd';
+import { PlusOutlined, EditOutlined, EyeOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
 import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
@@ -25,6 +25,7 @@ const Roles: React.FC = () => {
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [detalleItem, setDetalleItem] = useState<RolFullDTO | null>(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [searchText, setSearchText] = useState('');
 
   const cargarRoles = useCallback(async () => {
     setLoading(true);
@@ -67,6 +68,16 @@ const Roles: React.FC = () => {
   const isSmall = !screens.md;
   const cardSpan = isSmall ? 24 : screens.xl ? 8 : screens.lg ? 12 : 12;
 
+  const rolesFiltrados = searchText
+    ? roles.filter((r) => {
+        const q = searchText.toLowerCase();
+        return (
+          (r.nombre || '').toLowerCase().includes(q) ||
+          (r.descripcion || '').toLowerCase().includes(q)
+        );
+      })
+    : roles;
+
   return (
     <>
       {loadingError && (
@@ -84,19 +95,38 @@ const Roles: React.FC = () => {
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Administrar Roles</h4>
-        <PermissionGate accion="CREAR">
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MROL/nuevo')}>
-            Nuevo Rol
-          </Button>
-        </PermissionGate>
+        <Space>
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+          <PermissionGate accion="CREAR">
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MROL/nuevo')}>
+              Nuevo Rol
+            </Button>
+          </PermissionGate>
+        </Space>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <Input.Search
+          placeholder="Buscar roles..."
+          allowClear
+          style={{ flex: 1, minWidth: 200, maxWidth: 400 }}
+          prefix={<SearchOutlined className="paces-text-icon" />}
+          onSearch={(value) => setSearchText(value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              (e.target as HTMLInputElement).blur();
+              setSearchText('');
+            }
+          }}
+        />
       </div>
 
       <Spin spinning={loading}>
-        {roles.length === 0 && !loading ? (
-          <Empty description="No hay roles registrados" />
+        {rolesFiltrados.length === 0 && !loading ? (
+          <Empty description={searchText ? 'No hay roles que coincidan con la búsqueda' : 'No hay roles registrados'} />
         ) : (
           <Row gutter={[16, 16]}>
-            {roles.map((rol) => (
+            {rolesFiltrados.map((rol) => (
               <Col key={rol.id} span={cardSpan}>
                 <Card
                   hoverable
@@ -209,6 +239,14 @@ const Roles: React.FC = () => {
                           ))}
                         </div>
                       </div>
+                      {/* Permisos especiales */}
+                      {pp.permisosEspeciales && pp.permisosEspeciales.length > 0 && (
+                        <div style={{ display: 'flex', gap: 4, marginTop: 8, marginLeft: 8 }}>
+                          {pp.permisosEspeciales.map((pe) => (
+                            <Tag key={pe} color="green" style={{ fontSize: 10 }}>{pe}</Tag>
+                          ))}
+                        </div>
+                      )}
                     </Card>
                   ))}
                 </div>

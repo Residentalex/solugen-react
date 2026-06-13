@@ -10,10 +10,12 @@ import {
   ExclamationCircleOutlined, RedoOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
+import PermissionGate from '../../components/PermissionGate';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { transaccionApi } from '../../api/transaccionApi';
@@ -37,6 +39,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+  const { screenCode, documentCode } = useScreenConfig('FRDE');
 
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -54,13 +57,14 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const [pagosAsociados, setPagosAsociados] = useState<any[]>([]);
   const [operacionTitulo, setOperacionTitulo] = useState('');
   const [recalculando, setRecalculando] = useState(false);
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   const { message: messageApi } = App.useApp();
   const operacion = useAplicar();
   const screens = Grid.useBreakpoint();
 
   useEffect(() => {
-    setActiveModule('FRDE');
+    setActiveModule(screenCode);
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
@@ -363,7 +367,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
         onImprimir={async () => {
           setImprimiendo(true);
           try {
-            const res = await apiClient.get(`/reportes/contabilidad/facturaSuplidor/${data.codigoSucursal ? obtenerNombreEnumSucursal(data.codigoSucursal) : sucursalActiva}/${id}`, {
+            const res = await apiClient.post('/reportes/contabilidad/factura-suplidor', data, {
               responseType: 'blob',
             });
             const blobUrl = URL.createObjectURL(res.data);
@@ -392,14 +396,16 @@ const FacturaSuplidorDetalle: React.FC = () => {
         onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
         extraButtons={
-          <Button
-            icon={<RedoOutlined />}
-            onClick={handleRecalcular}
-            loading={recalculando}
-            disabled={data.estado !== 1}
-          >
-            Recalcular
-          </Button>
+          <PermissionGate accion="EDITAR">
+            <Button
+              icon={<RedoOutlined />}
+              onClick={handleRecalcular}
+              loading={recalculando}
+              disabled={data.estado !== 1}
+            >
+              Recalcular
+            </Button>
+          </PermissionGate>
         }
       />
 
@@ -437,7 +443,10 @@ const FacturaSuplidorDetalle: React.FC = () => {
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Tipo">
+                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                </Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
 
@@ -481,7 +490,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
 
           <Col xxl={6}>
             <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={false}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
@@ -525,7 +534,10 @@ const FacturaSuplidorDetalle: React.FC = () => {
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Tipo">
+                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                </Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
 
@@ -566,7 +578,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
           />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} nota={data.nota} alignRight={true}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={true}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}

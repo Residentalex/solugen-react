@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography } from 'antd';
+import { Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
@@ -10,14 +10,17 @@ import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { TransaccionVistaDTO } from '../../types/transaccion';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
+import { useAuthStore } from '../../stores/authStore';
 
 const { Text } = Typography;
 
 const FacturaSuplidor: React.FC = () => {
   const navigate = useNavigate();
+  const { screenCode, documentCode } = useScreenConfig('FRDE');
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<TransaccionVistaDTO>({
-    modulo: 'FRDE',
+    modulo: screenCode,
     fetchVista: (sucursal, desde, hasta, filas, salto, estado) =>
       facturaSuplidorApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado),
     fetchFiltrar: (sucursal, params) =>
@@ -26,6 +29,26 @@ const FacturaSuplidor: React.FC = () => {
     tituloReporte: 'FS',
     tituloError: 'Error al cargar facturas de suplidor',
   });
+
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+
+  const handleClonar = async () => {
+    if (!state.selectedRow) return;
+    try {
+      const data = await facturaSuplidorApi.obtenerPorId(sucursalActiva, state.selectedRow.id);
+      const cloneData = {
+        ...data,
+        id: 0,
+        noDocumento: '',
+        estado: 0,
+        asientos: [],
+        logs: [],
+      };
+      navigate('/FRDE/nuevo', { state: { cloneData } });
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al obtener datos para clonar');
+    }
+  };
 
   const columns: ColumnsType<TransaccionVistaDTO> = [
     {
@@ -120,6 +143,9 @@ const FacturaSuplidor: React.FC = () => {
         showEditar: true,
         editarDisabled: !puedeEditar,
         onEditar: () => navigate(`/FRDE/${state.selectedRow!.id}/editar`),
+        showClonar: true,
+        clonarDisabled: !state.selectedRow,
+        onClonar: handleClonar,
         showImprimir: true,
         imprimirDisabled: !state.selectedRow,
         onImprimir: actions.handleImprimir,

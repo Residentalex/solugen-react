@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Popover,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Popover, Empty,
 } from 'antd';
 import {
   SaveOutlined,
@@ -34,7 +34,7 @@ import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConc
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
-import FormularioToolbar from '../../components/FormularioToolbar';
+import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
@@ -628,7 +628,7 @@ const ReciboIngresoFormulario: React.FC = () => {
 
   // ===== Encabezado =====
   const renderEncabezado = () => (
-    <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+    <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
@@ -646,7 +646,7 @@ const ReciboIngresoFormulario: React.FC = () => {
                   >
                     {tiposCache.map((tc) => (
                       <Select.Option key={tc.codigo} value={tc.codigo}>
-                        {toTitleCase(tc.nombre)}
+                        {tc.codigo} - {toTitleCase(tc.nombre)}
                       </Select.Option>
                     ))}
                   </Select>
@@ -655,21 +655,21 @@ const ReciboIngresoFormulario: React.FC = () => {
             </div>
           </Col>
           <Col xs={24} sm={12} lg={15}>
-            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required>
-                  <Input
-                    placeholder=" "
-                    value={selectedConcepto ? toTitleCase(selectedConcepto.nombre) : conceptoSearchText}
-                    readOnly
-                    onClick={() => setConceptoModalOpen(true)}
-                  />
-                </FloatingField>
-              </div>
-              <Button icon={<SearchOutlined />} onClick={() => setConceptoModalOpen(true)} />
-              {selectedConcepto && (
-                <Button icon={<ClearOutlined />} onClick={handleConceptoClear} />
-              )}
+            <div ref={conceptoRef}>
+              <FloatingField label="Concepto" required>
+                <Input
+                  placeholder=" "
+                  value={selectedConcepto ? `${selectedConcepto.codigo || ''} - ${toTitleCase(selectedConcepto.nombre)}` : conceptoSearchText}
+                  readOnly
+                  suffix={
+                    <Space size={4}>
+                      <SearchOutlined onClick={() => setConceptoModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                      {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
+                    </Space>
+                  }
+                  onClick={() => setConceptoModalOpen(true)}
+                />
+              </FloatingField>
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
@@ -903,6 +903,13 @@ const ReciboIngresoFormulario: React.FC = () => {
           size="small"
           pagination={false}
           scroll={{ x: 1200 }}
+          locale={{
+            emptyText: (
+              <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Empty description="Sin registros" />
+              </div>
+            ),
+          }}
         />
       </div>
     ),
@@ -1064,7 +1071,9 @@ const ReciboIngresoFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        fetchConceptos={() => conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'RI')}
+        sucursal={sucursalActiva}
+        documento="RI"
+        tipo={selectedTipo?.codigo}
       />
 
       {isLarge ? (
@@ -1259,3 +1268,4 @@ const ReciboIngresoGuide: React.FC<ReciboIngresoGuideProps> = ({
 };
 
 export default ReciboIngresoFormulario;
+

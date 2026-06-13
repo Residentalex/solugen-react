@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography } from 'antd';
+import { Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { facturaClienteApi } from '../../api/facturaClienteApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
@@ -10,14 +10,17 @@ import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { FacturaVistaDTO } from '../../types/facturacion';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
+import { useAuthStore } from '../../stores/authStore';
 
 const { Text } = Typography;
 
 const FacturaCliente: React.FC = () => {
   const navigate = useNavigate();
+  const { screenCode, documentCode } = useScreenConfig('FFAC');
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<FacturaVistaDTO>({
-    modulo: 'FFAC',
+    modulo: screenCode,
     fetchVista: (sucursal, desde, hasta, filas, salto, estado) =>
       facturaClienteApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado),
     fetchFiltrar: (sucursal, params) =>
@@ -26,6 +29,26 @@ const FacturaCliente: React.FC = () => {
     tituloReporte: 'FC',
     tituloError: 'Error al cargar facturas de cliente',
   });
+
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+
+  const handleClonar = async () => {
+    if (!state.selectedRow) return;
+    try {
+      const data = await facturaClienteApi.obtenerPorId(sucursalActiva, state.selectedRow.id);
+      const cloneData = {
+        ...data,
+        id: 0,
+        noDocumento: '',
+        estado: 0,
+        asientos: [],
+        logs: [],
+      };
+      navigate('/FFAC/nuevo', { state: { cloneData } });
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al obtener datos para clonar');
+    }
+  };
 
   const columns: ColumnsType<FacturaVistaDTO> = [
     {
@@ -127,6 +150,9 @@ const FacturaCliente: React.FC = () => {
         showEditar: true,
         editarDisabled: !puedeEditar,
         onEditar: () => navigate(`/FFAC/${state.selectedRow!.id}/editar`),
+        showClonar: true,
+        clonarDisabled: !state.selectedRow,
+        onClonar: handleClonar,
         showImprimir: true,
         imprimirDisabled: !state.selectedRow,
         onImprimir: actions.handleImprimir,

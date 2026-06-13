@@ -165,6 +165,11 @@ const BuscarPlantillaModal: React.FC<BuscarPlantillaModalProps> = ({
         rowKey="id"
         loading={loading}
         size="small"
+        locale={{
+          emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Empty description="No hay plantillas disponibles" />
+          </div>,
+        }}
         pagination={{ pageSize: 10, showSizeChanger: false }}
         scroll={{ y: 400 }}
         onRow={(record) => ({
@@ -512,7 +517,7 @@ const MovimientoPorPlantilla: React.FC = () => {
                 setSearchText('');
               }
             }}
-            style={{ width: 400 }}
+            style={{ flex: 1, minWidth: 200, maxWidth: 400 }}
           />
         </div>
         {filteredData.length === 0 && !loading ? (

@@ -1,17 +1,15 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Card, Table, Input, Select, Button, Modal, Descriptions, Typography, Empty } from 'antd';
-import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
+import { Alert, Card, Table, Button, Modal, Descriptions, Typography, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { almacenApi } from '../../api/almacenApi';
 import PermissionGate from '../../components/PermissionGate';
+import { toTitleCase } from '../../utils/formats';
 import type { AlmacenDTO } from '../../types/entradaAlmacen';
-
-function toTitleCase(str: string): string {
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 const { Text } = Typography;
 
@@ -22,46 +20,33 @@ const Almacenes: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
 
-  const [data, setData] = useState<AlmacenDTO[]>([]);
-  const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [detalleItem, setDetalleItem] = useState<AlmacenDTO | null>(null);
-  const [loadingError, setLoadingError] = useState(false);
 
-  const cargarDatos = useCallback(async () => {
-    if (sucursalActiva === undefined) return;
-    setLoading(true);
-    try {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['almacenes', sucursalActiva],
+    queryFn: async () => {
+      if (sucursalActiva === undefined) return [];
       const result = await almacenApi.obtenerListado(sucursalActiva);
-      setData(result || []);
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
+      return result || [];
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('MAlmacen');
     updateToolbar({});
-    cargarDatos();
     return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
+  }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
   };
-
-  const handleRefresh = useCallback(() => {
-    setLoadingError(false);
-    setSearchText('');
-    setPage(1);
-    cargarDatos();
-  }, [cargarDatos]);
 
   const abrirDetalle = (item: AlmacenDTO) => {
     setDetalleItem(item);
@@ -69,9 +54,10 @@ const Almacenes: React.FC = () => {
   };
 
   const filteredData = useMemo(() => {
-    if (!searchText.trim()) return data;
+    const list = data || [];
+    if (!searchText.trim()) return list;
     const text = searchText.trim().toLowerCase();
-    return data.filter(
+    return list.filter(
       (item) =>
         item.codigo?.toLowerCase().includes(text) ||
         item.nombre?.toLowerCase().includes(text)
@@ -84,6 +70,7 @@ const Almacenes: React.FC = () => {
       dataIndex: 'codigo',
       key: 'codigo',
       width: 120,
+      fixed: 'left',
       render: (val: string, record: AlmacenDTO) => (
         <Text strong className="paces-doc-link" style={{ fontFamily: 'monospace', cursor: 'pointer' }} onClick={() => abrirDetalle(record)}>
           {val || '-'}
@@ -107,14 +94,14 @@ const Almacenes: React.FC = () => {
 
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
           message="Error al cargar almacenes"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={handleRefresh}>
+            <Button size="small" onClick={() => refetch()}>
               Reintentar
             </Button>
           }
@@ -125,46 +112,18 @@ const Almacenes: React.FC = () => {
         style={{ borderRadius: 8, overflow: 'hidden' }}
         styles={{ body: { padding: 0 } }}
       >
-        <div style={{ padding: '16px 24px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-            <Input.Search
-              placeholder="Buscar por código o nombre..."
-              allowClear
-              onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-            style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-            <Select
-              style={{ width: 65 }}
-              value={pageSize}
-              onChange={(v) => { setPageSize(v); setPage(1); }}
-              options={[
-                { value: 25, label: '25' },
-                { value: 50, label: '50' },
-                { value: 100, label: '100' },
-              ]}
-            />
-            <div style={{ flex: 1 }} />
-            <PermissionGate accion="CREAR">
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MAlmacen/nuevo')}>
-                Nuevo
-              </Button>
-            </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-          </div>
-        </div>
-
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
+          onNuevo={() => navigate('/MAlmacen/nuevo')}
+          onReload={() => refetch()}
+        />
         <Table<AlmacenDTO>
           columns={columns}
           dataSource={filteredData}
           rowKey="codigo"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 500 }}
           size="middle"
           rowClassName="paces-row-hover"

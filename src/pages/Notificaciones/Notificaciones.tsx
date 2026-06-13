@@ -6,6 +6,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
+import PermissionGate from '../../components/PermissionGate';
 import { useNotificacionesStore } from '../../stores/notificacionesStore';
 import { notificacionesApi } from '../../api/notificacionesApi';
 import { ticketApi } from '../../api/ticketApi';
@@ -292,9 +293,11 @@ const Notificaciones: React.FC = () => {
           <Button onClick={() => navigate('/notificaciones/personalizadas')}>
             SQL Personalizadas
           </Button>
-          <Button type="primary" icon={<SendOutlined />} onClick={() => setModalVisible(true)}>
-            Enviar Notificación
-          </Button>
+          <PermissionGate permisoEspecial="pe_NOTIFICACION">
+            <Button type="primary" icon={<SendOutlined />} onClick={() => setModalVisible(true)}>
+              Enviar Notificación
+            </Button>
+          </PermissionGate>
         </div>
       </div>
 
@@ -303,59 +306,52 @@ const Notificaciones: React.FC = () => {
         {[
           {
             icon: <BellOutlined />,
-            color: '#556ee6',
-            bg: 'rgba(85, 110, 230, 0.1)',
+            cssClass: 'paces-stat-card--primary',
+            iconBg: 'rgba(85, 110, 230, 0.1)',
+            iconColor: 'var(--paces-primary)',
             value: pendientes.length,
             label: 'Pendientes',
-            borderColor: '#556ee6',
             change: `${pendientes.length} sin leer`,
-            changeColor: '#556ee6',
           },
           {
             icon: <WarningOutlined />,
-            color: '#f1b44c',
-            bg: 'rgba(241, 180, 76, 0.1)',
+            cssClass: 'paces-stat-card--warning',
+            iconBg: 'rgba(241, 180, 76, 0.1)',
+            iconColor: '#f0b345',
             value: pendientes.filter((n) => n.tipo === 'Alerta' || n.tipo === 'Advertencia').length,
             label: 'Alertas',
-            borderColor: '#f1b44c',
             change: 'requieren atención',
-            changeColor: '#f1b44c',
           },
           {
             icon: <CloseCircleOutlined />,
-            color: '#f46a6a',
-            bg: 'rgba(244, 106, 106, 0.1)',
+            cssClass: 'paces-stat-card--danger',
+            iconBg: 'rgba(244, 106, 106, 0.1)',
+            iconColor: '#f46a6a',
             value: pendientes.filter((n) => n.tipo === 'Error').length,
             label: 'Errores',
-            borderColor: '#f46a6a',
             change: 'últimos 7 días',
-            changeColor: '#f46a6a',
           },
           {
             icon: <ClockCircleOutlined />,
-            color: '#34c38f',
-            bg: 'rgba(52, 195, 143, 0.1)',
+            cssClass: 'paces-stat-card--success',
+            iconBg: 'rgba(52, 195, 143, 0.1)',
+            iconColor: '#34c38f',
             value: pendientes.length + enviadas.length,
             label: 'Total',
-            borderColor: '#34c38f',
             change: 'recibidas',
-            changeColor: '#34c38f',
           },
         ].map((s, i) => (
           <Col xs={24} sm={12} lg={6} key={i}>
             <div
-              className="paces-stat-card"
-              style={{ borderLeftColor: s.borderColor }}
+              className={`paces-stat-card ${s.cssClass}`}
             >
-              <div className="paces-stat-icon" style={{ background: s.bg, color: s.color }}>
+              <div className="paces-stat-icon" style={{ background: s.iconBg, color: s.iconColor }}>
                 {s.icon}
               </div>
               <div>
                 <div className="paces-stat-value">{s.value}</div>
                 <p className="paces-stat-label">{s.label}</p>
-                <div className="paces-stat-change" style={{ color: s.changeColor }}>
-                  {s.change}
-                </div>
+                <div className="paces-stat-change">{s.change}</div>
               </div>
             </div>
           </Col>
@@ -391,7 +387,7 @@ const Notificaciones: React.FC = () => {
                   handleSearch('');
                 }
               }}
-              style={{ width: 400 }}
+              style={{ flex: 1, minWidth: 200, maxWidth: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
             <Select
@@ -438,8 +434,8 @@ const Notificaciones: React.FC = () => {
         {selectedRowKeys.length > 0 && tabActiva === 'pendientes' && (
           <div
             style={{
-              background: '#e6f7ff',
-              border: '1px solid #91d5ff',
+              background: 'var(--paces-hover-bg)',
+              border: '1px solid var(--paces-border)',
               borderRadius: 6,
               padding: '8px 16px',
               margin: '0 24px 12px',
@@ -527,9 +523,11 @@ const Notificaciones: React.FC = () => {
                     emptyText: (
                       <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Empty description="No has enviado notificaciones">
-                          <Button type="primary" onClick={() => setModalVisible(true)}>
-                            Enviar primera notificación
-                          </Button>
+                          <PermissionGate permisoEspecial="pe_NOTIFICACION">
+                            <Button type="primary" onClick={() => setModalVisible(true)}>
+                              Enviar primera notificación
+                            </Button>
+                          </PermissionGate>
                         </Empty>
                       </div>
                     ),

@@ -111,7 +111,7 @@ export const devolucionVentaApi = {
   },
 
   obtenerFacturaPOS: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.get<ApiResponse<any>>(`/FPV/${sucursal}/${id}`);
+    const { data } = await apiClient.get<ApiResponse<any>>(`/PV/${sucursal}/${id}`);
     return data.data;
   },
 

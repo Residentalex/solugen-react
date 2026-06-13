@@ -58,6 +58,7 @@ export interface TipoDTO {
 export interface EntradaReferenciaDTO {
   id: number;
   noDocumento: string;
+  documento?: { codigo: string; nombre: string };
   suplidor?: SuplidorDTO;
   detalles?: any[];
 }

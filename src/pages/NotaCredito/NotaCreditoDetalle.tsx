@@ -1,14 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Tooltip, Modal, Alert, App
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Tooltip, Modal, Alert, App, QRCode, Input, Typography
 } from 'antd';
 import {
   LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
   FileTextOutlined, FileSearchOutlined, ReloadOutlined,
+  SendOutlined, CheckCircleOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
+import PermissionGate from '../../components/PermissionGate';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
@@ -24,10 +26,12 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import type { NotaCreditoFullDTO, DetalleMovimientoDTO } from '../../types/notaCredito';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 
 interface NotaCreditoDetalleProps {
   tipoEntidad: 'SUP' | 'CLI';
@@ -41,7 +45,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
   const { message } = App.useApp();
 
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<NotaCreditoFullDTO | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -54,9 +58,15 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
   const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionDTO[]>([]);
   const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
+  const [estadoDGII, setEstadoDGII] = useState<any>(null);
+  const [enviandoDGII, setEnviandoDGII] = useState(false);
   const screens = Grid.useBreakpoint();
 
+  const [detalleSearch, setDetalleSearch] = useState('');
+
   const codigoPantalla = tipoEntidad === 'SUP' ? 'FNCSUP' : 'FNCCLI';
+  const { screenCode, documentCode } = useScreenConfig(codigoPantalla);
   const rutaBase = tipoEntidad === 'SUP' ? 'NCSUP' : 'NCCLI';
 
   const operacion = useAplicar();
@@ -72,17 +82,27 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
     setLoading(true);
     setLoadingError(false);
     notaCreditoApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
+      .then((res: NotaCreditoFullDTO) => {
         if (!res) {
           message.error('Documento no encontrado en la sucursal seleccionada.');
           setLoadingError(true);
           return;
         }
         setData(res);
-        setPageTitleOverride(`${(res as any).documento.codigo}-${(res as any).noDocumento}`);
-        notaCreditoApi.verificarScan(sucursalActiva, parseInt(id))
-          .then((scanRes) => setTieneScan(scanRes.existe))
-          .catch(() => setTieneScan(false));
+        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        const promises: Promise<any>[] = [
+          notaCreditoApi.verificarScan(sucursalActiva, parseInt(id))
+            .then((scanRes) => setTieneScan(scanRes.existe))
+            .catch(() => setTieneScan(false)),
+        ];
+        if (res.tipo?.envioDGII) {
+          promises.push(
+            apiClient.get(`/EnvioDGII/${sucursalActiva}/${res.id}`)
+              .then(({ data: resp }: any) => { setEstadoDGII(resp?.data || null); })
+              .catch(() => { setEstadoDGII(null); })
+          );
+        }
+        Promise.all(promises).catch(() => {});
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
@@ -106,21 +126,31 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
     if (!id) return;
     setLoadingError(false);
     notaCreditoApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
+      .then((res: NotaCreditoFullDTO) => {
         if (!res) {
           message.error('Documento no encontrado en la sucursal seleccionada.');
           setLoadingError(true);
           return;
         }
         setData(res);
-        setPageTitleOverride(`${(res as any).documento.codigo}-${(res as any).noDocumento}`);
-        notaCreditoApi.verificarScan(sucursalActiva, parseInt(id))
-          .then((scanRes) => setTieneScan(scanRes.existe))
-          .catch(() => setTieneScan(false));
-        // Cargar documentos relacionados desde DOCUMENTOS_RELACION
-        documentoRelacionApi.obtenerPorTransaccion(parseInt(id))
-          .then(rel => setDocumentosRelacionados(rel || []))
-          .catch(() => setDocumentosRelacionados([]));
+        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        const promises: Promise<any>[] = [
+          notaCreditoApi.verificarScan(sucursalActiva, parseInt(id))
+            .then((scanRes) => setTieneScan(scanRes.existe))
+            .catch(() => setTieneScan(false)),
+          // Cargar documentos relacionados desde DOCUMENTOS_RELACION
+          documentoRelacionApi.obtenerPorTransaccion(parseInt(id))
+            .then(rel => setDocumentosRelacionados(rel || []))
+            .catch(() => setDocumentosRelacionados([])),
+        ];
+        if (res.tipo?.envioDGII) {
+          promises.push(
+            apiClient.get(`/EnvioDGII/${sucursalActiva}/${res.id}`)
+              .then(({ data: resp }: any) => { setEstadoDGII(resp?.data || null); })
+              .catch(() => { setEstadoDGII(null); })
+          );
+        }
+        Promise.all(promises).catch(() => {});
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al recargar';
@@ -146,9 +176,24 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
 
   const handleAplicar = () => {
     if (!id) return;
+    // Validar scanner
     if (tieneScan === false) {
       message.warning('Debe escanear la factura antes de aplicar.');
       return;
+    }
+    // Validar DGII si el tipo lo requiere
+    if (data?.tipo?.envioDGII && !estadoDGII?.codigoQR) {
+      message.error('Debe enviar el documento a la DGII antes de aplicar.');
+      return;
+    }
+    // Validar FechaPermitida (si aplica)
+    if (data?.documento?.fechaPermitida === 'MenorIgualFechaDia') {
+      const hoy = new Date();
+      const fechaDoc = new Date(data.fechaDocumento);
+      if (fechaDoc > hoy) {
+        message.error('La fecha del documento no puede ser mayor a la fecha del día.');
+        return;
+      }
     }
     setOperacionTitulo(`Aplicando ${rutaBase}-${data?.noDocumento || id}`);
     operacion.ejecutar(
@@ -160,7 +205,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
   const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
     if (!data || !id) return;
     try {
-      const payload = { ...(data as any), motivo: dataAnular.motivo, fechaAnulacion: dataAnular.fecha };
+      const payload = { ...data, motivo: dataAnular.motivo, fechaAnulacion: dataAnular.fecha };
       await notaCreditoApi.anular(sucursalActiva, payload);
       message.success('Documento anulado exitosamente');
       setModalAnularOpen(false);
@@ -247,6 +292,25 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
     }
   };
 
+  const handleEnviarDGII = async () => {
+    if (!id || !data) return;
+    setEnviandoDGII(true);
+    try {
+      await apiClient.put(`/EnvioDGII/${sucursalActiva}/MarcarEnviado`, null, {
+        params: { transaccionID: parseInt(id) }
+      });
+      message.success('Documento enviado a la DGII exitosamente');
+      const { data: resp } = await apiClient.get(`/EnvioDGII/${sucursalActiva}/${id}`);
+      setEstadoDGII(resp?.data || null);
+      handleRefresh();
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al enviar a la DGII';
+      message.error(msg);
+    } finally {
+      setEnviandoDGII(false);
+    }
+  };
+
   function extraerMensajeError(err: any, fallback: string): string {
     const data = err?.response?.data;
     if (!data) return fallback;
@@ -262,6 +326,113 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
     }
     return fallback;
   }
+
+  const detallesFiltrados = detalleSearch
+    ? (data?.detallesMovimiento || []).filter((d: DetalleMovimientoDTO) => {
+        const q = detalleSearch.toLowerCase();
+        return (
+          (d.codigo || '').toLowerCase().includes(q) ||
+          (d.articulo || '').toLowerCase().includes(q) ||
+          (d.referencia || '').toLowerCase().includes(q)
+        );
+      })
+    : (data?.detallesMovimiento || []);
+
+  const detalleColumns = [
+    {
+      title: 'Código',
+      key: 'codigo',
+      width: 120,
+      fixed: 'left' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: DetalleMovimientoDTO) => (
+        <div style={{ fontSize: 13 }}>
+          <div>{record.codigo || '-'}</div>
+          {record.referencia && (
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+              {record.referencia}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: 'Artículo',
+      key: 'articulo',
+      ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: DetalleMovimientoDTO) => (
+        <div style={{ fontSize: 13 }}>
+          <div>{toTitleCase(record.articulo || '')}</div>
+          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Cantidad',
+      dataIndex: 'cantidad',
+      key: 'cantidad',
+      width: 110,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: DetalleMovimientoDTO) => (
+        <div>
+          <div>{formatNumber(record.cantidad || 0)}</div>
+        </div>
+      ),
+    },
+    {
+      title: 'Precio',
+      dataIndex: 'precio',
+      key: 'precio',
+      width: 130,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
+      render: (_: any, record: DetalleMovimientoDTO) => <div>{formatNumber(record.precio || 0)}</div>,
+    },
+    {
+      title: 'SubTotal',
+      dataIndex: 'subTotal',
+      key: 'subTotal',
+      width: 120,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
+      render: (_: any, record: DetalleMovimientoDTO) => <div>{formatNumber(record.subTotal || 0)}</div>,
+    },
+    {
+      title: 'Impuestos',
+      dataIndex: 'impuestos',
+      key: 'impuestos',
+      width: 140,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
+      render: (_: any, record: DetalleMovimientoDTO) => <div>{formatNumber(record.impuestos || 0)}</div>,
+    },
+    {
+      title: 'Descuento',
+      dataIndex: 'descuento',
+      key: 'descuento',
+      width: 120,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
+      render: (_: any, record: DetalleMovimientoDTO) => <div>{formatNumber(record.descuento || 0)}</div>,
+    },
+    {
+      title: 'Total',
+      dataIndex: 'total',
+      key: 'total',
+      width: 120,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: DetalleMovimientoDTO) => <Typography.Text strong>{formatNumber(record.total || 0)}</Typography.Text>,
+    },
+  ];
 
   if (loading || (!data && !loadingError)) {
     return (
@@ -311,7 +482,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
         onImprimir={async () => {
           setImprimiendo(true);
           try {
-            const res = await apiClient.get(`/reportes/contabilidad/nota-credito/${data.codigoSucursal ? obtenerNombreEnumSucursal(data.codigoSucursal) : sucursalActiva}/${id}`, {
+            const res = await apiClient.post('/reportes/contabilidad/nota-credito', data, {
               responseType: 'blob',
             });
             const blobUrl = URL.createObjectURL(res.data);
@@ -333,7 +504,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
           }
         }}
         onEditar={() => navigate(`/${codigoPantalla}/${id}/editar`)}
-        confirmActions={false}
+        confirmActions={true}
         onAplicar={handleAplicar}
         onAnular={async () => setModalAnularOpen(true)}
         onPostear={handlePostear}
@@ -341,13 +512,15 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
         onDesaplicar={async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
         extraButtons={id ? (
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={handleRecalcular}
-            loading={recalculando}
-          >
-            Recalcular
-          </Button>
+          <PermissionGate accion="EDITAR">
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={handleRecalcular}
+              loading={recalculando}
+            >
+              Recalcular
+            </Button>
+          </PermissionGate>
         ) : undefined}
       />
 
@@ -385,7 +558,10 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Tipo">
+                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                </Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
@@ -403,6 +579,24 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                       documentos={data?.transaccionesAsociadas || []}
                       readOnly={true}
                     />
+                  ),
+                },
+                {
+                  key: 'detalles',
+                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data?.detallesMovimiento?.length || 0}` : ''})`,
+                  children: (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                        <Input.Search
+                          placeholder="Buscar detalle..."
+                          allowClear
+                          style={{ maxWidth: 250 }}
+                          onSearch={(value) => setDetalleSearch(value)}
+                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                        />
+                      </div>
+                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                    </>
                   ),
                 },
                 {
@@ -430,6 +624,11 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
             />
+            {estadoDGII?.codigoQR && (
+              <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                <QRCode value={estadoDGII.codigoQR} size={140} />
+              </div>
+            )}
             <DocumentosRelacionadosCard
               documentos={documentosRelacionados}
               currentId={data?.id}
@@ -468,10 +667,13 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+              <Descriptions.Item label="Tipo">
+                {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
           </Card>
 
@@ -487,6 +689,24 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                     documentos={data?.transaccionesAsociadas || []}
                     readOnly={true}
                   />
+                ),
+              },
+              {
+                key: 'detalles',
+                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data?.detallesMovimiento?.length || 0}` : ''})`,
+                children: (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                      <Input.Search
+                        placeholder="Buscar detalle..."
+                        allowClear
+                        style={{ maxWidth: 250 }}
+                        onSearch={(value) => setDetalleSearch(value)}
+                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                      />
+                    </div>
+                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                  </>
                 ),
               },
               {
@@ -512,6 +732,11 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
             />
+            {estadoDGII?.codigoQR && (
+              <div style={{ textAlign: 'center' }}>
+                <QRCode value={estadoDGII.codigoQR} size={140} />
+              </div>
+            )}
 
           <DocumentosRelacionadosCard
             documentos={documentosRelacionados}

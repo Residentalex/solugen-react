@@ -130,6 +130,7 @@ const DistribucionBalance: React.FC<DistribucionBalanceProps> = ({ tipoEntidad }
         showEditar: true,
         editarDisabled: !puedeEditar,
         onEditar: () => navigate(`/${codigoPantalla}/${state.selectedRow!.id}/editar`),
+        showClonar: false,
         showImprimir: true,
         imprimirDisabled: !state.selectedRow,
         onImprimir: actions.handleImprimir,

@@ -5,7 +5,7 @@ import { HolderOutlined } from '@ant-design/icons';
 
 export const DragListenersContext = React.createContext<any>(null);
 
-export const SortableRow: React.FC<any> = ({ children, ...rest }) => {
+export const SortableRow: React.FC<any> = React.memo(({ children, ...rest }) => {
   const recordId = rest['data-row-key'];
   if (!recordId) return <tr {...rest}>{children}</tr>;
 
@@ -21,7 +21,7 @@ export const SortableRow: React.FC<any> = ({ children, ...rest }) => {
       </tr>
     </DragListenersContext.Provider>
   );
-};
+});
 
 export const DragHandle: React.FC = () => {
   const listeners = React.useContext(DragListenersContext);

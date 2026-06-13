@@ -1,27 +1,17 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Table, Card, Input, Button, Typography, Space, Alert } from 'antd';
+import { Table, Card, Button, Typography, Space, Alert, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { proveedorApi } from '../../api/proveedorApi';
 import PermissionGate from '../../components/PermissionGate';
+import { toTitleCase } from '../../utils/formats';
 import type { SuplidorDTO } from '../../types/entradaAlmacen';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
-
-const FILAS_POR_PAGINA = 25;
-
-function toTitleCase(str: string): string {
-  if (!str) return str;
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function getInitials(name: string): string {
-  if (!name) return '?';
-  return name.charAt(0).toUpperCase();
-}
 
 const Proveedores: React.FC = () => {
   const navigate = useNavigate();
@@ -30,50 +20,38 @@ const Proveedores: React.FC = () => {
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
 
-  const [data, setData] = useState<SuplidorDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingError, setLoadingError] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize] = useState(FILAS_POR_PAGINA);
   const [searchText, setSearchText] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [total, setTotal] = useState(0);
 
-  const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
-    setLoading(true);
-    try {
-      let resultados: SuplidorDTO[];
-      if (busqueda.length > 2) {
-        resultados = await proveedorApi.filtrar(sucursalActiva, busqueda, busqueda);
-      } else {
-        resultados = await proveedorApi.obtenerListado(sucursalActiva, filas, (pagina - 1) * filas);
-      }
-      setData(resultados);
-      setTotal(resultados.length < filas ? (pagina - 1) * filas + resultados.length : pagina * filas + 1);
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    cargarDatos(page, pageSize, searchText);
-  }, [page, pageSize, searchText, cargarDatos]);
-
-  useEffect(() => {
+  React.useEffect(() => {
     setActiveModule('MSUP');
     updateToolbar({});
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['proveedores', sucursalActiva, page, pageSize, searchText],
+    queryFn: async () => {
+      const salto = (page - 1) * pageSize;
+      let resultados: SuplidorDTO[];
+      if (searchText.length > 2) {
+        resultados = await proveedorApi.filtrar(sucursalActiva, searchText, searchText);
+      } else {
+        resultados = await proveedorApi.obtenerListado(sucursalActiva, pageSize, salto);
+      }
+      const totalCount = resultados.length < pageSize ? (page - 1) * pageSize + resultados.length : page * pageSize + 1;
+      setTotal(totalCount);
+      return resultados || [];
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
+
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
-  };
-
-  const handleRefresh = () => {
-    setLoadingError(false);
-    cargarDatos(page, pageSize, searchText);
   };
 
   const handleTableChange = (pagination: any) => {
@@ -100,7 +78,7 @@ const Proveedores: React.FC = () => {
       width: 300,
       render: (name: string) => (
         <Space>
-          <div className="paces-avatar-initials">{getInitials(name)}</div>
+          <div className="paces-avatar-initials">{(name || '?').charAt(0).toUpperCase()}</div>
           <Text>{toTitleCase(name || '')}</Text>
         </Space>
       ),
@@ -139,14 +117,14 @@ const Proveedores: React.FC = () => {
 
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
           message="Error al cargar proveedores"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={handleRefresh}>
+            <Button size="small" onClick={() => refetch()}>
               Reintentar
             </Button>
           }
@@ -157,49 +135,37 @@ const Proveedores: React.FC = () => {
         style={{ borderRadius: 8, overflow: 'hidden' }}
         styles={{ body: { padding: 0 } }}
       >
-      <div style={{ padding: '16px 24px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-          <Input.Search
-            placeholder="Buscar por código o nombre..."
-            allowClear
-            onSearch={handleSearch}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                (e.target as HTMLInputElement).blur();
-                handleSearch('');
-              }
-            }}
-            style={{ width: 400 }}
-            prefix={<SearchOutlined className="paces-text-icon" />}
-          />
-          <div style={{ flex: 1 }} />
-          <PermissionGate accion="CREAR">
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MProveedor/nuevo')}>
-              Nuevo
-            </Button>
-          </PermissionGate>
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-        </div>
-      </div>
-      <Table<SuplidorDTO>
-        columns={columns}
-        dataSource={data}
-        rowKey="codigo"
-        loading={loading}
-        scroll={{ x: 1100 }}
-        size="middle"
-        rowClassName="paces-row-hover"
-        onChange={handleTableChange}
-        pagination={{
-          current: page,
-          pageSize,
-          total,
-          showSizeChanger: false,
-          showTotal: (t) => `${t} registros`,
-        }}
-        className="paces-border-top paces-list-table"
-      />
-    </Card>
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
+          onNuevo={() => navigate('/MProveedor/nuevo')}
+          onReload={() => refetch()}
+        />
+        <Table<SuplidorDTO>
+          columns={columns}
+          dataSource={data || []}
+          rowKey="codigo"
+          loading={isLoading}
+          scroll={{ x: 1100 }}
+          size="middle"
+          rowClassName="paces-row-hover"
+          onChange={handleTableChange}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: false,
+            showTotal: (t) => `${t} registros`,
+          }}
+          locale={{
+            emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Empty description="No hay proveedores registrados" />
+            </div>,
+          }}
+          className="paces-border-top paces-list-table"
+        />
+      </Card>
     </>
   );
 };

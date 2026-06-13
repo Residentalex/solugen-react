@@ -23,6 +23,7 @@ export interface TipoNCSelectDTO {
   idExterno: number;
   codigo: string;
   nombre: string;
+  envioDGII?: boolean;
 }
 
 export interface TransaccionAsociadaDTO {
@@ -42,7 +43,7 @@ export interface DetalleMovimientoDTO {
   id: number;
   codigo: string;
   articulo: string;
-  familia?: string;
+  familia?: { nombre: string };
   tipo?: string;
   cantidad: number;
   udm?: string;
@@ -97,16 +98,24 @@ export interface NotaCreditoFullDTO {
   retenciones: number;
 
   tipo?: TipoNCSelectDTO | null;
+  codigoTipo?: string;
   concepto?: ConceptoDTO | null;
   entidad?: EntidadDTO | null;
+  codigoEntidad?: string;
   moneda?: MonedaDTO | null;
   documento: DocumentoDTO;
+  codigoSucursal?: string;
   tipoEntidad: string;
+  sucursal?: number;
 
   transaccionesAsociadas: TransaccionAsociadaDTO[];
   detallesMovimiento: DetalleMovimientoDTO[];
+  detalles?: DetalleMovimientoDTO[];
   devoluciones: DevolucionDTO[];
   impuestosFactura: ImpuestoFacturaDTO[];
   asientos: AsientoContableDTO[];
   logs: LogDTO[];
+  revisado?: boolean;
+  bienes?: number;
+  servicios?: number;
 }

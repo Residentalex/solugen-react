@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
-import type { PantallaDTO, ModuloDTO } from '../types/auth';
+import type { PantallaDTO, PantallaEntidadDTO, EntidadDocumentoDTO, ModuloDTO } from '../types/auth';
 import type { AccionDTO } from '../types/administracion';
 
 const BASE = '/Pantalla';
@@ -34,5 +34,23 @@ export const pantallaApi = {
   obtenerAcciones: async (sucursal: number): Promise<AccionDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<AccionDTO[]>>(`${BASE}/${sucursal}/acciones`);
     return data.data;
+  },
+
+  obtenerEntidadesCatalogo: async (sucursal: number): Promise<EntidadDocumentoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<EntidadDocumentoDTO[]>>(`${BASE}/${sucursal}/entidades-catalogo`);
+    return data.data;
+  },
+
+  obtenerPantallasConEntidades: async (sucursal: number): Promise<PantallaDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<PantallaDTO[]>>(`${BASE}/${sucursal}/con-entidades`);
+    return data.data;
+  },
+
+  asociarEntidades: async (sucursal: number, pantallaId: number, entidades: PantallaEntidadDTO[]): Promise<void> => {
+    await apiClient.put(`${BASE}/${sucursal}/asociar-entidades`, { pantallaId, entidades });
+  },
+
+  eliminarEntidades: async (sucursal: number, pantallaId: number): Promise<void> => {
+    await apiClient.delete(`${BASE}/${sucursal}/${pantallaId}/entidades`);
   },
 };

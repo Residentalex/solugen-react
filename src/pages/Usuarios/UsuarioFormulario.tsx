@@ -1,12 +1,14 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Row, Col, Button, Form, Input, InputNumber, Switch, Select, Spin, message, Tabs, Tag, Space, Typography, Alert, Table, Modal } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined, SearchOutlined, CloseOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, SearchOutlined, CloseOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
 import { usuarioApi } from '../../api/usuarioApi';
 import { empleadoApi, type EmpleadoDTO } from '../../api/empleadoApi';
 import { rolApi } from '../../api/rolApi';
+import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import PermissionGate from '../../components/PermissionGate';
 
 import type { UsuarioDTO } from '../../types/administracion';
 import type { RolDTO, PantallaDTO, UsuarioSucursalRolDTO } from '../../types/auth';
@@ -104,6 +106,8 @@ const UsuarioFormulario: React.FC = () => {
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
 
+  const navigationConfirmedRef = useFormularioNavigation();
+
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -126,7 +130,7 @@ const UsuarioFormulario: React.FC = () => {
     cargarEmpleados();
     cargarRolesDisponibles();
     if (id) cargarUsuario(parseInt(id));
-    else form.setFieldsValue({ activo: true, diasVigencia: 30 });
+    else form.setFieldsValue({ activo: true, claveNoExpira: false, diasVigencia: 30 });
     return () => resetToolbar();
   }, [id]);
 
@@ -149,6 +153,7 @@ const UsuarioFormulario: React.FC = () => {
         nombre: res.nombre,
         nombreUsuario: res.nombreUsuario,
         activo: res.activo,
+        claveNoExpira: res.claveNoExpira,
         diasVigencia: res.diasVigencia,
         empleadoID: res.empleadoID,
       });
@@ -268,29 +273,31 @@ const UsuarioFormulario: React.FC = () => {
           nombre: values.nombre,
           nombreUsuario: values.nombreUsuario,
           activo: values.activo,
+          claveNoExpira: values.claveNoExpira ?? false,
           diasVigencia: values.diasVigencia,
           empleadoID: values.empleadoID || data.empleadoID,
           sucursalesRoles: sucursalesRolesEdit,
         };
         await usuarioApi.actualizar(SUCURSAL_SEGURIDAD, payload);
         message.success('Usuario actualizado correctamente');
+        navigationConfirmedRef.current = true;
         navigate(`/MUsuario/${data.id}`);
       } else {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         const pass = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-        const rolesPayload = sucursalesRolesEdit.flatMap(sr =>
-          sr.roles.map(r => ({ sucursal: sr.sucursal, rolID: r.id }))
-        );
-        const creado = await usuarioApi.crear(SUCURSAL_SEGURIDAD, { ...values, contrasena: pass, debeCambiarClave: true, roles: rolesPayload });
+        const creado = await usuarioApi.crear(SUCURSAL_SEGURIDAD, { ...values, contrasena: pass, debeCambiarClave: true, claveNoExpira: values.claveNoExpira ?? false, sucursalesRoles: sucursalesRolesEdit });
         Modal.success({
           title: 'Usuario creado',
           content: (
             <div>
               <p>Usuario creado correctamente.</p>
-              <p><strong>Contraseña temporal:</strong> <code style={{ fontSize: 16 }}>{creado.contrasena || '(generada)'}</code></p>
+              <p><strong>Contraseña temporal:</strong> <code style={{ fontSize: 16 }}>{pass}</code></p>
             </div>
           ),
-          onOk: () => navigate('/MUsuario'),
+          onOk: () => {
+            navigationConfirmedRef.current = true;
+            navigate('/MUsuario');
+          },
         });
       }
     } catch (err: any) {
@@ -301,9 +308,20 @@ const UsuarioFormulario: React.FC = () => {
     }
   };
 
-  const volver = () => {
-    if (esEditar && data) navigate(`/MUsuario/${data.id}`);
-    else navigate('/MUsuario');
+  const handleCancelar = () => {
+    Modal.confirm({
+      title: 'Cancelar',
+      icon: <ExclamationCircleOutlined />,
+      content: '¿Está seguro que desea cancelar los cambios realizados?',
+      okText: 'Si, cancelar',
+      cancelText: 'No, continuar editando',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        navigationConfirmedRef.current = true;
+        if (esEditar && data) navigate(`/MUsuario/${data.id}`);
+        else navigate('/MUsuario');
+      },
+    });
   };
 
   if (esEditar && loading) {
@@ -339,8 +357,10 @@ const UsuarioFormulario: React.FC = () => {
               </div>
             </div>
             <Space>
-              <Button type="primary" icon={<SaveOutlined />} onClick={guardar} loading={guardando}>Guardar</Button>
-              <Button icon={<CloseOutlined />} onClick={volver} disabled={guardando}>Cancelar</Button>
+              <PermissionGate accion={esEditar ? 'EDITAR' : 'CREAR'}>
+                <Button type="primary" icon={<SaveOutlined />} onClick={guardar} loading={guardando}>Guardar</Button>
+              </PermissionGate>
+              <Button icon={<CloseOutlined />} onClick={handleCancelar} disabled={guardando}>Cancelar</Button>
             </Space>
           </div>
         </Card>
@@ -348,8 +368,10 @@ const UsuarioFormulario: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 8 }}>
           <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Nuevo Usuario</h4>
           <Space>
-            <Button type="primary" icon={<SaveOutlined />} onClick={guardar} loading={guardando}>Guardar</Button>
-            <Button icon={<ArrowLeftOutlined />} onClick={volver}>Volver</Button>
+            <PermissionGate accion="CREAR">
+              <Button type="primary" icon={<SaveOutlined />} onClick={guardar} loading={guardando}>Guardar</Button>
+            </PermissionGate>
+            <Button icon={<ArrowLeftOutlined />} onClick={handleCancelar}>Volver</Button>
           </Space>
         </div>
       )}
@@ -373,24 +395,26 @@ const UsuarioFormulario: React.FC = () => {
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-                      <div style={{ flex: 1 }}>
-                        <Form.Item label="Empleado" style={{ marginBottom: 0 }}>
-                          <Input placeholder=" " value={empleadoLabel} readOnly />
-                        </Form.Item>
-                      </div>
-                      <Button icon={<SearchOutlined />} onClick={() => setBuscarEmpleadoOpen(true)} style={{ marginBottom: 0 }} />
+                    <div>
+                      <Form.Item label="Empleado" style={{ marginBottom: 0 }}>
+                        <Input placeholder=" " value={empleadoLabel} readOnly suffix={<SearchOutlined />} onClick={() => setBuscarEmpleadoOpen(true)} />
+                      </Form.Item>
                     </div>
                     <Form.Item name="empleadoID" hidden>
                       <Input />
                     </Form.Item>
                   </Col>
-                  <Col xs={12} sm={8} lg={4}>
+                  <Col xs={12} sm={8} lg={3}>
                     <Form.Item name="diasVigencia" label="Vigencia (días)" rules={[{ required: true, message: 'Obligatorio' }]}>
                       <InputNumber min={1} max={365} style={{ width: '100%' }} />
                     </Form.Item>
                   </Col>
-                  <Col xs={12} sm={4} lg={4}>
+                  <Col xs={12} sm={4} lg={3}>
+                    <Form.Item name="claveNoExpira" label="Clave no expira" valuePropName="checked">
+                      <Switch checkedChildren="Sí" unCheckedChildren="No" />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={12} sm={4} lg={3}>
                     <Form.Item name="activo" label="Activo" valuePropName="checked">
                       <Switch checkedChildren="Sí" unCheckedChildren="No" />
                     </Form.Item>

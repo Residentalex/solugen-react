@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Card,
   Table,
@@ -11,6 +12,7 @@ import {
   message,
   Empty,
   Typography,
+  Alert,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -19,6 +21,8 @@ import { useAuthStore } from '../../stores/authStore';
 import { monedaApi } from '../../api/monedaApi';
 import type { MonedaDTO } from '../../types/contabilidad';
 import PermissionGate from '../../components/PermissionGate';
+import { toTitleCase } from '../../utils/formats';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
 
@@ -26,14 +30,14 @@ const Monedas: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
-  const sucursalActiva = useAuthStore((s: any) => s.usuario?.sucursalActiva);
+  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
   const usuario = useAuthStore((s: any) => s.usuario);
   const pantallaActual = usuario?.pantallas.find((p: any) => p.codigo === 'MMoneda');
   const puedeEditar = pantallaActual?.acciones.includes('EDITAR') ?? false;
   const puedeCrear = pantallaActual?.acciones.includes('CREAR') ?? false;
 
-  const [data, setData] = useState<MonedaDTO[]>([]);
-  const [loading, setLoading] = useState(false);
+
+  const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(25);
   const [modalVisible, setModalVisible] = useState(false);
@@ -41,39 +45,44 @@ const Monedas: React.FC = () => {
   const [guardando, setGuardando] = useState(false);
   const [form] = Form.useForm();
 
-  const cargarDatos = useCallback(async () => {
-    if (sucursalActiva === undefined) return;
-    setLoading(true);
-    try {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['monedas', sucursalActiva],
+    queryFn: async () => {
+      if (sucursalActiva === undefined) return [];
       const result = await monedaApi.obtenerListado(sucursalActiva);
-      setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar monedas');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
+      return result || [];
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('MMoneda');
     updateToolbar({});
-    cargarDatos();
     return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
+  }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleSearch = (value: string) => {
+    setPage(1);
     setSearchText(value);
   };
 
   const filteredData = useMemo(() => {
-    if (!searchText) return data;
+    const list = data || [];
+    if (!searchText) return list;
     const lower = searchText.toLowerCase();
-    return data.filter(
+    return list.filter(
       (item) =>
         item.codigo.toLowerCase().includes(lower) ||
         item.nombre.toLowerCase().includes(lower)
     );
   }, [data, searchText]);
+
+  const paginatedData = useMemo(() => {
+    if (!filteredData) return [];
+    const start = (page - 1) * pageSize;
+    return filteredData.slice(start, start + pageSize);
+  }, [filteredData, page, pageSize]);
 
   const abrirNuevo = () => {
     if (!puedeCrear) return;
@@ -114,7 +123,7 @@ const Monedas: React.FC = () => {
         message.success('Moneda creada correctamente');
       }
       setModalVisible(false);
-      cargarDatos();
+      refetch();
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar moneda');
@@ -122,9 +131,6 @@ const Monedas: React.FC = () => {
       setGuardando(false);
     }
   };
-
-  const toTitleCase = (str: string): string =>
-    str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
   const columns: ColumnsType<MonedaDTO> = [
     {
@@ -173,53 +179,42 @@ const Monedas: React.FC = () => {
 
   return (
     <>
+      {isError && (
+        <Alert
+          message="Error al cargar monedas"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={() => refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
-        <div style={{ padding: '16px 24px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-            <Input.Search
-              placeholder="Buscar por código o nombre..."
-              allowClear
-              onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-            style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-            <Select
-              style={{ width: 65 }}
-              value={pageSize}
-              onChange={(v) => { setPageSize(v); }}
-              options={[
-                { value: 25, label: '25' },
-                { value: 50, label: '50' },
-                { value: 100, label: '100' },
-              ]}
-            />
-            <div style={{ flex: 1 }} />
-            <PermissionGate accion="CREAR">
-              <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-                Nuevo
-              </Button>
-            </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={() => cargarDatos()} />
-          </div>
-        </div>
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); }}
+          onNuevo={abrirNuevo}
+          onReload={() => refetch()}
+        />
         <Table<MonedaDTO>
           columns={columns}
-          dataSource={filteredData}
+          dataSource={paginatedData}
           rowKey="id"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 700 }}
           size="middle"
           rowClassName="paces-row-hover"
           className="paces-border-top paces-list-table"
           pagination={{
-            showSizeChanger: false,
+            current: page,
             pageSize,
+            total: filteredData?.length || 0,
+            onChange: (p) => setPage(p),
+            showSizeChanger: false,
             showTotal: (t) => `${t} registros`,
           }}
           locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay monedas registradas" /></div> }}

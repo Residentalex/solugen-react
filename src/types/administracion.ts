@@ -24,6 +24,7 @@ export interface UsuarioDTO {
   contrasena?: string;
   activo: boolean;
   debeCambiarClave: boolean;
+  claveNoExpira: boolean;
   diasVigencia: number;
   empleadoID?: string;
   ultimoLogin?: string;
@@ -39,9 +40,10 @@ export interface CrearUsuarioRequest {
   contrasena?: string;
   activo: boolean;
   debeCambiarClave?: boolean;
+  claveNoExpira?: boolean;
   diasVigencia: number;
   empleadoID?: string;
-  roles: { sucursal: number; rolID: number }[];
+  sucursalesRoles: UsuarioSucursalRolDTO[];
 }
 
 export interface CambiarEstadoRequest {

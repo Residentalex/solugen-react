@@ -7,7 +7,20 @@ const SUCURSAL_ID_A_ENUM: Record<string, string> = {
   '0000000010': 'Consolidado',
 };
 
+const SUCURSAL_ID_A_NOMBRE: Record<string, string> = {
+  '0000000001': 'Orense Plaza',
+  '0000000002': 'Hiper Romana',
+  '0000000003': 'Orense Villa Hermosa',
+  '0000000004': 'El Ofertazo',
+  '0000000010': 'Consolidado',
+};
+
 export function obtenerNombreEnumSucursal(codigoSucursal: string | undefined | null): string {
   if (!codigoSucursal) return 'Consolidado';
   return SUCURSAL_ID_A_ENUM[codigoSucursal] || 'Consolidado';
+}
+
+export function obtenerNombreSucursal(codigoSucursal: string | undefined | null): string {
+  if (!codigoSucursal) return 'Consolidado';
+  return SUCURSAL_ID_A_NOMBRE[codigoSucursal] || 'Consolidado';
 }

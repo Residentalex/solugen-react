@@ -4,23 +4,29 @@ import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Tooltip, Typography, Modal, Alert, App, QRCode
 } from 'antd';
 import {
-  LockFilled,
-  IdcardOutlined,
-  PhoneOutlined,
-  EnvironmentOutlined,
-  FileTextOutlined,
-  FileSearchOutlined,
-  SendOutlined,
+  ArrowLeftOutlined,
   CheckCircleOutlined,
+  CloseCircleOutlined,
+  EditOutlined,
+  EnvironmentOutlined,
   ExclamationCircleOutlined,
+  FileSearchOutlined,
+  FileTextOutlined,
+  IdcardOutlined,
+  LockFilled,
+  PhoneOutlined,
+  PrinterOutlined,
+  RedoOutlined,
+  SendOutlined,
 } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
-import DetalleToolbar from '../../components/DetalleToolbar';
+
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { facturaClienteApi } from '../../api/facturaClienteApi';
-import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
+import { obtenerNombreSucursal } from '../../utils/sucursalEnumMapper';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import { useAplicar } from '../../hooks/useAplicar';
@@ -36,10 +42,10 @@ import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosC
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import DetalleToolbar from '../../components/DetalleToolbar';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import CobrosMinimal from '../../components/CobrosCard/CobrosMinimal';
 import NotasSeguimientoCard from '../../components/NotasSeguimientoCard';
-
 const { Text } = Typography;
 
 const FacturaClienteDetalle: React.FC = () => {
@@ -49,6 +55,7 @@ const FacturaClienteDetalle: React.FC = () => {
 
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+  const { screenCode, documentCode } = useScreenConfig('FFAC');
 
   const [data, setData] = useState<FacturaClienteDTO | null>(null);
   const [loading, setLoading] = useState(false);
@@ -70,47 +77,9 @@ const FacturaClienteDetalle: React.FC = () => {
   const [operacionTitulo, setOperacionTitulo] = useState('');
   const [estadoDGII, setEstadoDGII] = useState<any>(null);
   const [enviandoDGII, setEnviandoDGII] = useState(false);
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   const handleRefresh = useCallback(() => {
-    if (!id) return;
-    setLoadingError(false);
-    facturaClienteApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        if (!res) {
-          message.error('Documento no encontrado en la sucursal seleccionada.');
-          setLoadingError(true);
-          return;
-        }
-        setData(res);
-        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
-        // Cargar documentos relacionados desde DOCUMENTOS_RELACION
-        documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva)
-          .then(rel => setDocumentosRelacionados(rel || []))
-          .catch(() => setDocumentosRelacionados([]));
-        // Cargar pagos asociados
-        transaccionApi.obtenerAsociadasInventario(sucursalActiva, parseInt(id))
-          .then((transacciones) => setPagosAsociados(transacciones || []))
-          .catch(() => setPagosAsociados([]));
-        // Cargar estado DGII
-        if (res.tipo?.envioDGII) {
-          apiClient.get(`/EnvioDGII/${sucursalActiva}/${res.id}`)
-            .then(({ data }: any) => setEstadoDGII(data?.data || null))
-            .catch(() => setEstadoDGII(null));
-        }
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg);
-        setLoadingError(true);
-      })
-  }, [id, sucursalActiva, setPageTitleOverride]);
-
-  useEffect(() => {
-    setActiveModule('FFAC');
-    return () => setPageTitleOverride('');
-  }, [setActiveModule, setPageTitleOverride]);
-
-  useEffect(() => {
     if (!id) return;
     setLoading(true);
     setLoadingError(false);
@@ -123,39 +92,41 @@ const FacturaClienteDetalle: React.FC = () => {
         }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
-        // Verificar si tiene factura escaneada
-        facturaClienteApi.verificarScan(sucursalActiva, parseInt(id))
-          .then((scanRes) => setTieneScan(scanRes.existe))
-          .catch(() => setTieneScan(false));
-        // Cargar estado DGII
+
+        // Parallelizar llamadas secundarias
+        const promises: Promise<any>[] = [
+          transaccionApi.obtenerAsociadasInventario(sucursalActiva, parseInt(id))
+            .then((transacciones) => { setPagosAsociados(transacciones || []); }),
+          documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva)
+            .then(rel => { setDocumentosRelacionados(rel || []); }),
+        ];
+
         if (res.tipo?.envioDGII) {
-          apiClient.get(`/EnvioDGII/${sucursalActiva}/${res.id}`)
-            .then(({ data }: any) => setEstadoDGII(data?.data || null))
-            .catch(() => setEstadoDGII(null));
+          promises.push(
+            apiClient.get(`/EnvioDGII/${sucursalActiva}/${res.id}`)
+              .then(({ data }: any) => { setEstadoDGII(data?.data || null); })
+              .catch(() => { setEstadoDGII(null); })
+          );
         }
-        // Cargar pagos asociados
-        transaccionApi.obtenerAsociadasInventario(sucursalActiva, parseInt(id))
-          .then((transacciones) => setPagosAsociados(transacciones || []))
-          .catch(() => setPagosAsociados([]));
+
+        Promise.all(promises).catch(() => {});
       })
       .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
         message.error(msg);
         setLoadingError(true);
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
-  // Cargar documentos relacionados desde DOCUMENTOS_RELACION
   useEffect(() => {
-    if (!data?.id) return;
-    documentoRelacionApi.obtenerPorTransaccion(data.id, sucursalActiva)
-      .then(rel => setDocumentosRelacionados(rel || []))
-      .catch(() => {
-        setDocumentosRelacionados([]);
-        message.warning('No se pudieron cargar los documentos relacionados');
-      });
-  }, [data?.id, sucursalActiva]);
+    setActiveModule(screenCode);
+    return () => setPageTitleOverride('');
+  }, [setActiveModule, setPageTitleOverride]);
+
+  useEffect(() => {
+    handleRefresh();
+  }, [handleRefresh]);
 
   if (loading || (!data && !loadingError)) {
     return (
@@ -359,7 +330,7 @@ const FacturaClienteDetalle: React.FC = () => {
     if (!id || !data) return;
     setSaving(true);
     try {
-      const origen = obtenerNombreEnumSucursal(data.codigoSucursal || String(sucursalActiva));
+      const origen = obtenerNombreSucursal(data.codigoSucursal || String(sucursalActiva));
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
       await facturaClienteApi.desaplicar(origen, documento);
       message.success('Documento desaplicado exitosamente');
@@ -547,49 +518,20 @@ const FacturaClienteDetalle: React.FC = () => {
         />
       )}
       <DetalleToolbar
-        modulo="FFAC"
+        modulo={screenCode}
         estado={data.estado}
         periodo={data.periodo}
         revisado={data.revisado}
         saving={saving}
         imprimiendo={imprimiendo}
-        operacionLoading={operacion?.loading}
+        operacionLoading={operacion.loading}
         onVolver={() => navigate('/FFAC')}
-        extraButtons={
-          <PermissionGate codigoPantalla="FFAC" accion="APLICAR">
-            {data?.tipo?.envioDGII && (
-              <Space>
-                <Button
-                  icon={<SendOutlined />}
-                  onClick={handleEnviarDGII}
-                  loading={enviandoDGII}
-                  disabled={data.estado !== 1}
-                  size="small"
-                >
-                  Enviar DGII
-                </Button>
-                <Button
-                  icon={<FileTextOutlined />}
-                  onClick={handleReasignarNCF}
-                  disabled={data.estado !== 1}
-                  size="small"
-                >
-                  Reasignar NCF
-                </Button>
-                {estadoDGII?.codigoQR && (
-                  <Tag color="success" icon={<CheckCircleOutlined />}>DGII OK</Tag>
-                )}
-              </Space>
-            )}
-          </PermissionGate>
-        }
         onImprimir={async () => {
           setImprimiendo(true);
           try {
             const res = await apiClient.post('/reportes/contabilidad/factura-cliente', data, {
               responseType: 'blob',
             });
-
             const blobUrl = URL.createObjectURL(res.data);
             const iframe = document.createElement('iframe');
             iframe.style.display = 'none';
@@ -616,6 +558,15 @@ const FacturaClienteDetalle: React.FC = () => {
         onRevisado={handleRevisado}
         onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
+        extraButtons={data?.tipo?.envioDGII ? (
+          <Space>
+            <PermissionGate codigoPantalla="FFAC" accion="APLICAR">
+              <Button icon={<SendOutlined />} size="small" onClick={handleEnviarDGII} loading={enviandoDGII} disabled={data.estado !== 1}>Enviar DGII</Button>
+              <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF} disabled={data.estado !== 1}>Reasignar NCF</Button>
+            </PermissionGate>
+            {estadoDGII?.codigoQR && <Tag color="success" icon={<CheckCircleOutlined />}>DGII OK</Tag>}
+          </Space>
+        ) : undefined}
       />
 
       {isLarge ? (
@@ -652,9 +603,13 @@ const FacturaClienteDetalle: React.FC = () => {
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Tipo">
+                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Sucursal">{obtenerNombreSucursal(data.codigoSucursal)}</Descriptions.Item>
+                <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Almacen" span={3}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
@@ -721,13 +676,12 @@ const FacturaClienteDetalle: React.FC = () => {
 
           <Col xxl={6}>
             <EntidadCard entidad={data.entidad} fallbackTitulo="Cliente" />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
-            >
-              <CobrosMinimal cobrosArray={data?.cobros} loading={loading} />
-            </TotalesCard>
+            />
+            <CobrosMinimal cobrosArray={data?.cobros} loading={loading} />
             {estadoDGII?.codigoQR && (
               <div style={{ textAlign: 'center', marginBottom: 16 }}>
                 <QRCode value={estadoDGII.codigoQR} size={140} />
@@ -771,13 +725,19 @@ const FacturaClienteDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+              <Descriptions.Item label="Tipo">
+                {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Sucursal">{obtenerNombreSucursal(data.codigoSucursal)}</Descriptions.Item>
+              <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
+
+            <EntidadCard entidad={data.entidad} fallbackTitulo="Cliente" />
 
           <Tabs
             defaultActiveKey="detalles"
@@ -839,13 +799,12 @@ const FacturaClienteDetalle: React.FC = () => {
           />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
-            >
-              <CobrosMinimal cobrosArray={data?.cobros} loading={loading} />
-            </TotalesCard>
+            />
+            <CobrosMinimal cobrosArray={data?.cobros} loading={loading} />
             {estadoDGII?.codigoQR && (
               <div style={{ textAlign: 'center' }}>
                 <QRCode value={estadoDGII.codigoQR} size={140} />
@@ -853,10 +812,6 @@ const FacturaClienteDetalle: React.FC = () => {
             )}
           </div>
 
-          <DocumentosRelacionadosCard
-            documentos={documentosRelacionados}
-            currentId={data?.id}
-          />
         </div>
       )}
 

@@ -397,6 +397,87 @@ body.theme-basic-devexpress {
   --paces-table-cell-font-size: 9px;
 }
 
+/* ============================================================
+   TEMA: light-spa (Soft Luxury Spa)
+   ============================================================ */
+body.theme-light-spa {
+  --paces-bg-layout:          #F2EDE7;
+  --paces-bg-container:       #FFFFFF;
+  --paces-bg-elevated:        #FFFFFF;
+  --paces-text:               #2F2A27;
+  --paces-text-secondary:     #7B746E;
+  --paces-text-heading:       #1E1A17;
+  --paces-border:             #E8DFD7;
+  --paces-border-secondary:   #F2EDE7;
+  --paces-primary:            #BC6D4D;
+  --paces-primary-hover:      #A95E42;
+  --paces-primary-active:     #8F4F38;
+  --paces-primary-shadow:     0 2px 8px rgba(188,109,77,0.22);
+  --paces-sidebar-bg:         #EDE4DA;
+  --paces-sidebar-border:     #DDD0C3;
+  --paces-topbar-bg:          #FFFFFF;
+  --paces-topbar-border:      #E8DFD7;
+  --paces-topbar-search-bg:   #F8F5F1;
+  --paces-hover-bg:           rgba(188,109,77,0.10);
+  --paces-selected-bg:        rgba(188,109,77,0.12);
+  --paces-scrollbar-thumb:    #C5B5A6;
+  --paces-scrollbar-thumb-hover: #A89888;
+  --paces-menu-item-hover-color:    #BC6D4D;
+  --paces-menu-item-selected-color: #BC6D4D;
+  --paces-logo-border:        #E8DFD7;
+  --paces-shadow-sm:          0 1px 4px rgba(47,42,39,0.06);
+  --paces-card-border:        #EDE4DA;
+  --paces-login-card-bg:      #FFFFFF;
+  --paces-login-card-border:  rgba(188,109,77,0.08);
+  --paces-table-header-font-size: 10px;
+  --paces-table-cell-font-size:   9px;
+}
+
+/* Avatar initials */
+body.theme-light-spa .paces-avatar-initials {
+  background: #BC6D4D;
+  color: #FFFFFF;
+}
+
+/* Logo box */
+body.theme-light-spa .genesis-logo-box {
+  background: linear-gradient(135deg, #BC6D4D, #D4956E);
+  box-shadow: 0 3px 8px rgba(188,109,77,0.28);
+}
+
+/* Tags semánticos pastel desaturados */
+body.theme-light-spa .ant-tag-success {
+  background: #DCE8DD !important;
+  color: #5E7A60 !important;
+  border-color: #C8D9C9 !important;
+}
+body.theme-light-spa .ant-tag-warning {
+  background: #F1E4C9 !important;
+  color: #A67C2E !important;
+  border-color: #E8D5B0 !important;
+}
+body.theme-light-spa .ant-tag-error {
+  background: #F2D6D6 !important;
+  color: #B86161 !important;
+  border-color: #E8C4C4 !important;
+}
+body.theme-light-spa .ant-tag-processing {
+  background: rgba(188,109,77,0.10) !important;
+  color: #BC6D4D !important;
+  border-color: rgba(188,109,77,0.25) !important;
+}
+
+/* Login page overrides */
+body.theme-light-spa .paces-login-bg {
+  background:
+    radial-gradient(600px 600px at 10% 20%, rgba(188,109,77,0.06) 0%, transparent 100%),
+    radial-gradient(800px 800px at 90% 80%, rgba(188,109,77,0.04) 0%, transparent 100%),
+    var(--paces-bg-layout);
+}
+body.theme-light-spa .paces-login-brand {
+  background: linear-gradient(135deg, #3D2B1F 0%, #5C3D2E 50%, #3D2B1F 100%);
+}
+
 /* liga - hibrido neutral entre dark y light */
 body.theme-liga {
   --paces-bg-layout: #e8e5df;

@@ -8,12 +8,14 @@ import {
   ReloadOutlined, LockOutlined, CheckCircleOutlined,
   ExclamationCircleOutlined, CloseCircleOutlined,
   CalendarOutlined, SafetyOutlined, ShoppingCartOutlined,
-  SearchOutlined, DollarOutlined,
+  SearchOutlined, DollarOutlined, EyeOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import PermissionGate from '../../components/PermissionGate';
 import { cierreInventarioApi } from '../../api/cierreInventarioApi';
 import CierreReaperturaModal from './CierreReaperturaModal';
+import ExistenciasNegativasModal from './ExistenciasNegativasModal';
 
 const { Text } = Typography;
 
@@ -75,6 +77,7 @@ interface ValidacionItem {
   estado: 'success' | 'error' | 'pending' | 'skipped';
   count?: number;
   mensaje?: string;
+  datosDetalle?: any[];
 }
 
 // ===== Componente principal =====
@@ -94,6 +97,8 @@ const CierreInventario: React.FC = () => {
   const [validaciones, setValidaciones] = useState<ValidacionItem[]>([]);
   const [reaperturaModalOpen, setReaperturaModalOpen] = useState(false);
   const [cierreCompletado, setCierreCompletado] = useState(false);
+  const [existenciasModalOpen, setExistenciasModalOpen] = useState(false);
+  const [existenciasNegativasData, setExistenciasNegativasData] = useState<any[]>([]);
 
   // ===== Valores derivados =====
   const cierresRestantes = calcularCierresRestantes(fechaCierre);
@@ -147,6 +152,7 @@ const CierreInventario: React.FC = () => {
       { key: 'sinClasificacion', label: 'Productos sin clasificación', estado: 'pending' },
       { key: 'sinAlmacen', label: 'Movimientos sin almacén', estado: 'pending' },
       { key: 'costosSinIntegridad', label: 'Costos sin integridad', estado: 'pending' },
+      { key: 'existenciasNegativas', label: 'Productos con existencia negativa', estado: 'pending' },
     ];
 
     if (!validar) {
@@ -156,21 +162,58 @@ const CierreInventario: React.FC = () => {
     setCierreCompletado(false);
 
     try {
-      // Si validar está activo, simulamos las verificaciones
+      // Si validar está activo, ejecutar verificaciones
       if (validar) {
-        // Marcar cada validación como OK (en el frontend simulamos que pasa;
-        // si el backend rechaza, se marcará error)
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        setValidaciones((prev) =>
-          prev.map((v) => ({ ...v, estado: 'success' as const, mensaje: 'OK' }))
-        );
+        // Validar existencias negativas via API
+        let validationFailed = false;
+        try {
+          const negativas = await cierreInventarioApi.obtenerExistenciasNegativas(sucursal);
+          if (negativas.length > 0) {
+            setExistenciasNegativasData(negativas);
+            setValidaciones((prev) =>
+              prev.map((v) =>
+                v.key === 'existenciasNegativas'
+                    ? {
+                        ...v,
+                        estado: 'error' as const,
+                        mensaje: `${negativas.length} producto(s)`,
+                        count: negativas.length,
+                        datosDetalle: negativas,
+                      }
+                    : { ...v, estado: 'success' as const, mensaje: 'OK' }
+              )
+            );
+            validationFailed = true;
+          } else {
+            setValidaciones((prev) =>
+              prev.map((v) => ({ ...v, estado: 'success' as const, mensaje: 'OK' }))
+            );
+          }
+        } catch (err: any) {
+          // Error de conexión o del endpoint
+          const errorMsg = err?.message || 'Error al validar';
+          setValidaciones((prev) =>
+            prev.map((v) =>
+              v.key === 'existenciasNegativas'
+                  ? { ...v, estado: 'error' as const, mensaje: errorMsg }
+                  : { ...v, estado: 'success' as const, mensaje: 'OK' }
+            )
+          );
+          validationFailed = true;
+        }
+
+        if (validationFailed) {
+          message.error('Corrija los errores de validación antes de generar el cierre.');
+          setGenerando(false);
+          return;
+        }
       }
 
-      // Llamar a generar cierre
+      // Llamar a generar cierre (backend hace todo internamente)
       const fechaFormatted = formatDateISO(proximoCierre);
-      const idCierre = await cierreInventarioApi.generarCierre(sucursal, fechaFormatted);
+      const resultado = await cierreInventarioApi.generarCierre(sucursal, fechaFormatted);
 
-      message.success(`Cierre generado exitosamente (ID: ${idCierre}) al ${formatDateDisplay(proximoCierre.toISOString())}`);
+      message.success(`Cierre generado exitosamente al ${formatDateDisplay(proximoCierre.toISOString())}`);
 
       // Recargar fecha de cierre
       await cargarDatos();
@@ -258,8 +301,24 @@ const CierreInventario: React.FC = () => {
               {v.estado === 'success' && (
                 <Tag color="success" style={{ margin: 0, borderRadius: 4 }}>OK</Tag>
               )}
-              {v.estado === 'error' && v.mensaje && (
+              {v.estado === 'error' && v.mensaje && !v.datosDetalle && (
                 <Text type="danger" style={{ fontSize: 12 }}>{v.mensaje}</Text>
+              )}
+              {v.estado === 'error' && v.datosDetalle && (
+                <>
+                  <Tag color="error" style={{ margin: 0, borderRadius: 4 }}>
+                    {v.count ?? v.datosDetalle.length} producto{(v.count ?? v.datosDetalle.length) !== 1 ? 's' : ''}
+                  </Tag>
+                  <Button
+                    type="link"
+                    size="small"
+                    icon={<EyeOutlined />}
+                    onClick={() => setExistenciasModalOpen(true)}
+                    style={{ padding: '0 4px', fontSize: 12 }}
+                  >
+                    Ver detalle
+                  </Button>
+                </>
               )}
               {v.estado === 'skipped' && (
                 <Tag color="warning" style={{ margin: 0, borderRadius: 4 }}>Omitido</Tag>
@@ -497,27 +556,29 @@ const CierreInventario: React.FC = () => {
             </Card>
 
             {/* Botón Generar Cierre */}
-            <Button
-              type="primary"
-              size="large"
-              block
-              icon={!generando ? <LockOutlined /> : undefined}
-              loading={generando}
-              disabled={!hayCierresPendientes || generando}
-              onClick={handleGenerarCierre}
-              style={{
-                height: 48,
-                fontSize: 16,
-                fontWeight: 600,
-                backgroundColor: '#556ee6',
-                borderColor: '#556ee6',
-                opacity: !hayCierresPendientes ? 0.65 : 1,
-              }}
-            >
-              {generando
-                ? 'Generando Cierre...'
-                : `Generar Cierre al ${proximoCierreStr}`}
-            </Button>
+            <PermissionGate accion="PROCESAR">
+              <Button
+                type="primary"
+                size="large"
+                block
+                icon={!generando ? <LockOutlined /> : undefined}
+                loading={generando}
+                disabled={!hayCierresPendientes || generando}
+                onClick={handleGenerarCierre}
+                style={{
+                  height: 48,
+                  fontSize: 16,
+                  fontWeight: 600,
+                  backgroundColor: '#556ee6',
+                  borderColor: '#556ee6',
+                  opacity: !hayCierresPendientes ? 0.65 : 1,
+                }}
+              >
+                {generando
+                  ? 'Generando Cierre...'
+                  : `Generar Cierre al ${proximoCierreStr}`}
+              </Button>
+            </PermissionGate>
 
             {!hayCierresPendientes && fechaCierre && (
               <Alert
@@ -589,20 +650,22 @@ const CierreInventario: React.FC = () => {
             </Card>
 
             {/* Botón Reaperturar */}
-            <Button
-              block
-              style={{
-                borderColor: '#4a7db5',
-                color: '#4a7db5',
-                height: 40,
-                fontSize: 14,
-                fontWeight: 500,
-              }}
-              onClick={() => setReaperturaModalOpen(true)}
-              disabled={generando}
-            >
-              <LockOutlined /> Reaperturar
-            </Button>
+            <PermissionGate accion="PROCESAR">
+              <Button
+                block
+                style={{
+                  borderColor: '#4a7db5',
+                  color: '#4a7db5',
+                  height: 40,
+                  fontSize: 14,
+                  fontWeight: 500,
+                }}
+                onClick={() => setReaperturaModalOpen(true)}
+                disabled={generando}
+              >
+                <LockOutlined /> Reaperturar
+              </Button>
+            </PermissionGate>
 
             <Text
               type="secondary"
@@ -712,6 +775,13 @@ const CierreInventario: React.FC = () => {
         fechaCierreActual={fechaCierre}
         onClose={() => setReaperturaModalOpen(false)}
         onSuccess={handleReaperturaSuccess}
+      />
+
+      {/* Modal de existencias negativas */}
+      <ExistenciasNegativasModal
+        open={existenciasModalOpen}
+        onClose={() => setExistenciasModalOpen(false)}
+        datos={existenciasNegativasData}
       />
     </div>
   );

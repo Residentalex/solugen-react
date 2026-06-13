@@ -11,6 +11,7 @@ import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats'
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { MovimientoVistaDTO } from '../../types/devolucionCompra';
 import { useAuthStore } from '../../stores/authStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 
 const { Text } = Typography;
 
@@ -18,9 +19,10 @@ const DevolucionCompra: React.FC = () => {
   const navigate = useNavigate();
 
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const { screenCode, documentCode } = useScreenConfig();
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<MovimientoVistaDTO>({
-    modulo: 'FDVC',
+    modulo: screenCode,
     fetchVista: (sucursal, desde, hasta, filas, salto, estado) =>
       devolucionCompraApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado),
     fetchFiltrar: (sucursal, params) =>
@@ -81,13 +83,6 @@ const DevolucionCompra: React.FC = () => {
       render: (concepto: string) => <Text>{toTitleCase(concepto) || ''}</Text>,
     },
     {
-      title: 'Orden Compra',
-      dataIndex: 'ordenCompra',
-      key: 'ordenCompra',
-      width: 140,
-      render: (oc: string) => <Text>{oc || ''}</Text>,
-    },
-    {
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
@@ -117,7 +112,7 @@ const DevolucionCompra: React.FC = () => {
       total={state.total}
       page={state.page}
       pageSize={state.pageSize}
-      scrollX={1350}
+      scrollX={1210}
       selectedRowId={state.selectedRow?.id}
       loadingError={state.loadingError}
       errorMessage="Error al cargar devoluciones de compra"

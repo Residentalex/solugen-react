@@ -11,6 +11,7 @@ import {
   message,
   Modal,
   Spin,
+  Empty,
 } from 'antd';
 import { Pie, Column, Bar } from '@ant-design/charts';
 import {
@@ -25,6 +26,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
+import PermissionGate from '../../components/PermissionGate';
 import { dgiiApi } from '../../api/dgiiApi';
 import type { ResumenTipoNcfDTO, ResumenTipoNcfSucursalDTO, EnvioDGIIDTO } from '../../types/facturacion';
 
@@ -634,18 +636,24 @@ const CFacturasElectronicas: React.FC = () => {
             </span>
             <span style={{ fontSize: 13 }} className="paces-text-light">seleccionado(s)</span>
             <div style={{ flex: 1 }} />
-            <Button type="primary" size="small" icon={<SendOutlined />}
-              onClick={() => handleEnviar(selectedRowKeys)}>
-              Enviar
-            </Button>
-            <Button size="small" icon={<SwapOutlined />}
-              onClick={() => handleReasignar(selectedRowKeys)}>
-              Reasignar
-            </Button>
-            <Button size="small" icon={<CheckOutlined />}
-              onClick={() => handleMarcarEnviado(selectedRowKeys)}>
-              Marcar como Enviado
-            </Button>
+            <PermissionGate permisoEspecial="pe_reenviar_DGII">
+              <Button type="primary" size="small" icon={<SendOutlined />}
+                onClick={() => handleEnviar(selectedRowKeys)}>
+                Enviar
+              </Button>
+            </PermissionGate>
+            <PermissionGate permisoEspecial="pe_preasignar_ncf">
+              <Button size="small" icon={<SwapOutlined />}
+                onClick={() => handleReasignar(selectedRowKeys)}>
+                Reasignar
+              </Button>
+            </PermissionGate>
+            <PermissionGate permisoEspecial="pe_marcar_enviado">
+              <Button size="small" icon={<CheckOutlined />}
+                onClick={() => handleMarcarEnviado(selectedRowKeys)}>
+                Marcar como Enviado
+              </Button>
+            </PermissionGate>
           </div>
         )}
         <Table<EnvioDGIIDTO>
@@ -658,6 +666,11 @@ const CFacturasElectronicas: React.FC = () => {
           dataSource={dataTabla}
           rowKey="id"
           loading={cargandoTabla}
+          locale={{
+            emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Empty description="No hay comprobantes registrados" />
+            </div>,
+          }}
           scroll={{ x: 900 }}
           size="small"
           pagination={{

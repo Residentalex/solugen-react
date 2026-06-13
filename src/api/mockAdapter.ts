@@ -60,8 +60,8 @@ function crearUsuarioMock(): AuthUsuarioSesionDTO {
     ],
     pantallas,
     permisosEspeciales: [
-      { id: 1, codigo: 'PUEDE_ANULAR', valor: true },
-      { id: 2, codigo: 'PUEDE_POSTEAR', valor: true },
+      { id: 1, codigo: 'PUEDE_ANULAR', nombre: 'Puede anular sin autorización', activo: true, valor: true },
+      { id: 2, codigo: 'PUEDE_POSTEAR', nombre: 'Puede postear documentos', activo: true, valor: true },
     ],
   };
 }
@@ -73,6 +73,7 @@ function crearSesionMock(): AuthSesionDTO {
     accessTokenExpiraEn: new Date(Date.now() + 3600000).toISOString(),
     refreshTokenExpiraEn: new Date(Date.now() + 86400000).toISOString(),
     sucursalActiva: 0,
+    sucursalContable: 4,
     sucursalesPermitidas: SUCURSALES,
     usuario: crearUsuarioMock(),
   };

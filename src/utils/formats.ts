@@ -35,6 +35,13 @@ export function formatDateRaw(val: string): string {
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+export function formatDateTime(iso?: string): string {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 export function formatCurrency(n: number): string {
   return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
 }
@@ -70,6 +77,11 @@ export function getColorMonograma(diasCredito: number | undefined): string {
   if (diasCredito < 15) return '#E05252';
   if (diasCredito < 30) return '#4A8FD4';
   return '#2BA88C';
+}
+
+export function truncateEmpaque(val: string, maxLen = 12): string {
+  if (!val || val.length <= maxLen) return val || '';
+  return `...${val.slice(-maxLen)}`;
 }
 
 export function toISOFormat(d: Date): string {

@@ -118,10 +118,13 @@ const Sidebar: React.FC = () => {
 
       const children: MenuProps['items'] = [];
 
-      const sortedGrupos = Array.from(grupos.entries()).sort(([, aItems], [, bItems]) => {
-        const minA = Math.min(...aItems.map((p) => p.orden ?? 999));
-        const minB = Math.min(...bItems.map((p) => p.orden ?? 999));
-        return minA - minB;
+      const ORDEN_GRUPOS = ['Maestros', 'Operaciones', 'Consultas', 'Reportes'];
+      const sortedGrupos = Array.from(grupos.entries()).sort(([aNombre], [bNombre]) => {
+        const idxA = ORDEN_GRUPOS.findIndex(g => g.toLowerCase() === aNombre.toLowerCase());
+        const idxB = ORDEN_GRUPOS.findIndex(g => g.toLowerCase() === bNombre.toLowerCase());
+        const prioA = idxA >= 0 ? idxA : 999;
+        const prioB = idxB >= 0 ? idxB : 999;
+        return prioA - prioB;
       });
 
 const makeKey = (codigo: string) => `${moduloNombre}__${codigo}`;
@@ -191,12 +194,11 @@ const makeKey = (codigo: string) => `${moduloNombre}__${codigo}`;
   const handleMenuClick = ({ key }: { key: string }) => {
     if (key.startsWith('_grupo_') || key.startsWith('submenu_')) return;
     const codigo = key.includes('__') ? key.split('__')[1] : key;
-    const codigoUpper = codigo.toUpperCase();
-    setActiveModule(codigoUpper);
+    setActiveModule(codigo);
     if (codigo === 'dashboard') {
       navigate('/');
     } else {
-      navigate(`/${codigoUpper}`);
+      navigate(`/${codigo}`);
     }
   };
 

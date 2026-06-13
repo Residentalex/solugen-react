@@ -10,14 +10,16 @@ import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { FacturaVistaDTO } from '../../types/facturacion';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 
 const { Text } = Typography;
 
 const DevolucionVenta: React.FC = () => {
   const navigate = useNavigate();
+  const { screenCode, documentCode } = useScreenConfig();
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<FacturaVistaDTO>({
-    modulo: 'FDEV',
+    modulo: screenCode,
     fetchVista: (sucursal, desde, hasta, filas, salto, estado) =>
       devolucionVentaApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado),
     fetchFiltrar: (sucursal, params) =>
@@ -134,6 +136,7 @@ const DevolucionVenta: React.FC = () => {
         showEditar: true,
         editarDisabled: !puedeEditar,
         onEditar: () => navigate(`/FDEV/${state.selectedRow!.id}/editar`),
+        showClonar: false,
         showImprimir: true,
         imprimirDisabled: !state.selectedRow,
         onImprimir: actions.handleImprimir,

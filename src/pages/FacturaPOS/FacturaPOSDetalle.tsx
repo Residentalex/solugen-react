@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Tooltip, Typography, QRCode
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, message, Tooltip, Typography, QRCode, Badge
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -13,8 +13,12 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
+import { devolucionVentaApi } from '../../api/devolucionVentaApi';
+import { transaccionApi } from '../../api/transaccionApi';
+
 import type { FacturaPOSDTO } from '../../types/facturaPOS';
 import PermissionGate from '../../components/PermissionGate';
 import LogTable from '../../components/LogTable';
@@ -22,8 +26,14 @@ import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import CobrosMinimal from '../../components/CobrosCard/CobrosMinimal';
+import ErrorDetalle from '../../components/ErrorDetalle';
+import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 
 const { Text } = Typography;
+
+function formatCurrency(n: number): string {
+  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
+}
 
 function formatNumber(n: number): string {
   return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -47,41 +57,68 @@ const FacturaPOSDetalle: React.FC = () => {
 
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+  const { screenCode, documentCode } = useScreenConfig();
 
   const [data, setData] = useState<FacturaPOSDTO | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadingError, setLoadingError] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [detalleSearch, setDetalleSearch] = useState('');
+  const [devolucionesPV, setDevolucionesPV] = useState<any[]>([]);
+  const [dtransasocDevueltos, setDtransasocDevueltos] = useState<Set<number>>(new Set());
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
   const screens = Grid.useBreakpoint();
 
   useEffect(() => {
-    setActiveModule('FPV');
+    setActiveModule(screenCode);
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
-  useEffect(() => {
+  const handleRefresh = React.useCallback(() => {
     if (!id) return;
     setLoading(true);
-    setError(null);
+    setLoadingError(false);
     facturaPOSApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         if (!res) {
-          const msg = 'Documento no encontrado en la sucursal seleccionada.';
-          setError(msg);
-          message.error(msg);
+          message.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
           return;
         }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        // Cargar devoluciones vinculadas via DTRANSIDASOC
+        transaccionApi.obtenerDevolucionesPorPV(sucursalActiva, res.id)
+          .then((devs) => {
+            setDevolucionesPV(devs);
+            if (devs.length > 0) {
+          Promise.all(
+            devs.map((d: any) =>
+              devolucionVentaApi.obtenerPorId(sucursalActiva, d.id)
+                .then((dev: any) => (dev.detalles || []).map((det: any) => Number(det.idAsociado)))
+                .catch(() => [] as number[])
+            )
+          ).then((results) => {
+                const set = new Set<number>();
+                for (const ids of results) ids.forEach((id: number) => set.add(id));
+                setDtransasocDevueltos(set);
+              });
+            }
+          })
+          .catch((err: any) => console.error('Error cargando devoluciones PV:', err));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.ErrorMessage || 'Error al cargar el documento';
-        setError(msg);
         message.error(msg);
+        setLoadingError(true);
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  useEffect(() => {
+    handleRefresh();
+  }, [handleRefresh]);
 
   if (loading) {
     return (
@@ -92,16 +129,8 @@ const FacturaPOSDetalle: React.FC = () => {
     );
   }
 
-  if (error) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <div style={{ fontSize: 18, color: '#ff4d4f', marginBottom: 16 }}>Error</div>
-        <div style={{ marginBottom: 24 }} className="paces-text-secondary">{error}</div>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FPV')}>
-          Volver
-        </Button>
-      </div>
-    );
+  if (loadingError && !data) {
+    return <ErrorDetalle rutaVolver="/FPV" onRecargar={handleRefresh} />;
   }
 
   if (!data) {
@@ -112,6 +141,17 @@ const FacturaPOSDetalle: React.FC = () => {
 
   const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
+
+  const detallesFiltrados = detalleSearch
+    ? (data.detalles || []).filter((d) => {
+        const q = detalleSearch.toLowerCase();
+        return (
+          (d.codigo || '').toLowerCase().includes(q) ||
+          (d.articulo || '').toLowerCase().includes(q) ||
+          (d.referencia || '').toLowerCase().includes(q)
+        );
+      })
+    : (data.detalles || []);
 
   const detalleColumns = [
     {
@@ -155,18 +195,29 @@ const FacturaPOSDetalle: React.FC = () => {
       width: 120,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: any) => (
-        <div>
-          <div>{formatNumber(record.cantidad || 0)}</div>
-          {record.medida?.nombre && (
-            <Tooltip title={record.medida.nombre}>
-              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {record.medida.nombre}
-              </div>
-            </Tooltip>
-          )}
-        </div>
-      ),
+      render: (_: any, record: any) => {
+        const devuelto = dtransasocDevueltos.has(record.id);
+        return (
+          <div>
+            <div>
+              {devuelto ? (
+                <span style={{ textDecoration: 'line-through', color: '#ff4d4f' }}>
+                  {formatNumber(record.cantidad || 0)}
+                </span>
+              ) : (
+                <span>{formatNumber(record.cantidad || 0)}</span>
+              )}
+            </div>
+            {record.medida?.nombre && (
+              <Tooltip title={record.medida.nombre}>
+                <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {record.medida.nombre}
+                </div>
+              </Tooltip>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: 'Precio',
@@ -330,6 +381,7 @@ const FacturaPOSDetalle: React.FC = () => {
     <div>
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+        <SucursalDocumentoSelector value={sucursalDestino} onChange={setSucursalDestino} />
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FPV')}>
           Volver
         </Button>
@@ -413,13 +465,27 @@ const FacturaPOSDetalle: React.FC = () => {
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Tipo">—</Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Hora">{data.fechaDocumento ? new Date(data.fechaDocumento).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Almacen" span={2}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Cajero">{data.cajero ? toTitleCase(data.cajero) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Punto de Venta">{data.caja || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Turno">{data.turno || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Turno">
+                  {data.turno ? (
+                    data.turno.includes('(Local)') ? (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <span>{data.turno.replace(' (Local)', '')}</span>
+                        <Tag style={{ background: '#d9d9d9', borderColor: '#d9d9d9', color: '#595959', marginRight: 0 }}>Local</Tag>
+                      </div>
+                    ) : data.turno
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+                      <Tag style={{ background: '#d9d9d9', borderColor: '#d9d9d9', color: '#595959', marginRight: 0 }}>Local</Tag>
+                    </div>
+                  )}
+                </Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
@@ -432,7 +498,18 @@ const FacturaPOSDetalle: React.FC = () => {
                   key: 'detalles',
                   label: `Detalles (${data.detalles?.length || 0})`,
                   children: (
-                    <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                        <Input.Search
+                          placeholder="Buscar detalle..."
+                          allowClear
+                          style={{ maxWidth: 250 }}
+                          onSearch={(value) => setDetalleSearch(value)}
+                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                        />
+                      </div>
+                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                    </>
                   ),
                 },
                 {
@@ -442,19 +519,112 @@ const FacturaPOSDetalle: React.FC = () => {
                     <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
+                {
+                  key: 'impuestos',
+                  label: `Impuestos (${data.impuestosFactura?.length || 0})`,
+                  children: (
+                    <Table
+                      dataSource={data.impuestosFactura || []}
+                      rowKey={(r: any) => r.id || r.impuesto?.codigo || Math.random()}
+                      size="small"
+                      pagination={false}
+                      scroll={{ x: 500 }}
+                      columns={[
+                        { title: 'Impuesto', key: 'nombre', render: (_: any, r: any) => r.impuesto?.nombre || '-' },
+                        { title: 'Porcentaje', key: 'porcentaje', width: 110, align: 'right' as const, render: (_: any, r: any) => r.impuesto?.porcentaje != null ? `${r.impuesto.porcentaje}%` : '-' },
+                        { title: 'Monto', key: 'monto', width: 130, align: 'right' as const, render: (_: any, r: any) => <Text strong>{formatCurrency(r.monto || 0)}</Text> },
+                        { title: 'Tipo', key: 'tipo', width: 110, render: (_: any, r: any) => r.tipo || '-' },
+                      ]}
+                    />
+                  ),
+                },
+                ...(devolucionesPV.length > 0 ? [{
+                  key: 'devoluciones',
+                  label: (
+                    <span>
+                      Devoluciones
+                      <Badge count={devolucionesPV.length}
+                        style={{ marginLeft: 6, backgroundColor: '#556ee6' }} />
+                    </span>
+                  ),
+                  children: (
+                    <Table
+                      dataSource={devolucionesPV}
+                      rowKey="id"
+                      size="small"
+                      pagination={false}
+                      scroll={{ x: 600 }}
+                      columns={[
+                        { title: 'Documento', key: 'documento', width: 160,
+                          render: (_: any, rec: any) => (
+                            <a className="paces-doc-link"
+                              onClick={() => navigate(`/FDEV/${rec.id}`)}
+                              style={{ cursor: 'pointer' }}>
+                              {rec.documento || `DEV-${rec.noDocumento}`}
+                            </a>
+                          ),
+                        },
+                        { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110,
+                          render: (v: string) => formatDate(v),
+                        },
+                        { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 150,
+                          render: (v: string) => v || '-',
+                        },
+                      ]}
+                    />
+                  ),
+                }] : []),
+                ...(data.transaccionesAsociadas?.length ? [{
+                  key: 'relacionados',
+                  label: (
+                    <span>
+                      Documentos Relacionados
+                      <Badge count={data.transaccionesAsociadas!.length}
+                        style={{ marginLeft: 6, backgroundColor: '#556ee6' }} />
+                    </span>
+                  ),
+                  children: (
+                    <Table
+                      dataSource={data.transaccionesAsociadas!}
+                      rowKey="id"
+                      size="small"
+                      pagination={false}
+                      scroll={{ x: 600 }}
+                      columns={[
+                        { title: 'Documento', key: 'documento', width: 160,
+                          render: (_: any, rec: any) => (
+                            <a className="paces-doc-link"
+                              onClick={() => navigate(`/FDEV/${rec.transaccionAsociadaID}`)}
+                              style={{ cursor: 'pointer' }}>
+                              {rec.documento || 'DEV'}
+                            </a>
+                          ),
+                        },
+                        { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110,
+                          render: (v: string) => formatDate(v),
+                        },
+                        { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 150,
+                          render: (v: string) => v || '-',
+                        },
+                        { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const,
+                          render: (v: number) => <Text strong>{formatCurrency(v || 0)}</Text>,
+                        },
+                      ]}
+                    />
+                  ),
+                }] : []),
               ]}
             />
           </Col>
 
           <Col xxl={6}>
             <EntidadCard entidad={data.cliente} entidadSecundaria={data.entidad} fallbackTitulo="Cliente" />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
-            >
-              <CobrosMinimal cobrosPOS={data.cobros?.[0]} loading={loading} />
-            </TotalesCard>
+            />
+            <CobrosMinimal cobrosPOS={data.cobros?.[0]} loading={loading} />
             {data?.envioDGII?.codigoQR && (
               <div style={{ textAlign: 'center', marginBottom: 16 }}>
                 <QRCode value={data.envioDGII.codigoQR} size={140} />
@@ -483,14 +653,28 @@ const FacturaPOSDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Hora">{data.fechaDocumento ? new Date(data.fechaDocumento).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+              <Descriptions.Item label="Tipo">—</Descriptions.Item>
+              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Hora">{data.fechaDocumento ? new Date(data.fechaDocumento).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Cajero">{data.cajero ? toTitleCase(data.cajero) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Punto de Venta">{data.caja || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Turno">{data.turno || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Turno">
+                  {data.turno ? (
+                    data.turno.includes('(Local)') ? (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <span>{data.turno.replace(' (Local)', '')}</span>
+                        <Tag style={{ background: '#d9d9d9', borderColor: '#d9d9d9', color: '#595959', marginRight: 0 }}>Local</Tag>
+                      </div>
+                    ) : data.turno
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+                      <Tag style={{ background: '#d9d9d9', borderColor: '#d9d9d9', color: '#595959', marginRight: 0 }}>Local</Tag>
+                    </div>
+                  )}
+                </Descriptions.Item>
                 <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
@@ -505,7 +689,18 @@ const FacturaPOSDetalle: React.FC = () => {
                 key: 'detalles',
                 label: `Detalles (${data.detalles?.length || 0})`,
                 children: (
-                  <Table dataSource={data.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                      <Input.Search
+                        placeholder="Buscar detalle..."
+                        allowClear
+                        style={{ maxWidth: 250 }}
+                        onSearch={(value) => setDetalleSearch(value)}
+                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                      />
+                    </div>
+                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                  </>
                 ),
               },
               {
@@ -515,17 +710,110 @@ const FacturaPOSDetalle: React.FC = () => {
                   <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                 ),
               },
+              {
+                key: 'impuestos',
+                label: `Impuestos (${data.impuestosFactura?.length || 0})`,
+                children: (
+                  <Table
+                    dataSource={data.impuestosFactura || []}
+                    rowKey={(r: any) => r.id || r.impuesto?.codigo || Math.random()}
+                    size="small"
+                    pagination={false}
+                    scroll={{ x: 500 }}
+                    columns={[
+                      { title: 'Impuesto', key: 'nombre', render: (_: any, r: any) => r.impuesto?.nombre || '-' },
+                      { title: 'Porcentaje', key: 'porcentaje', width: 110, align: 'right' as const, render: (_: any, r: any) => r.impuesto?.porcentaje != null ? `${r.impuesto.porcentaje}%` : '-' },
+                      { title: 'Monto', key: 'monto', width: 130, align: 'right' as const, render: (_: any, r: any) => <Text strong>{formatCurrency(r.monto || 0)}</Text> },
+                      { title: 'Tipo', key: 'tipo', width: 110, render: (_: any, r: any) => r.tipo || '-' },
+                    ]}
+                  />
+                ),
+              },
+              ...(devolucionesPV.length > 0 ? [{
+                key: 'devoluciones',
+                label: (
+                  <span>
+                    Devoluciones
+                    <Badge count={devolucionesPV.length}
+                      style={{ marginLeft: 6, backgroundColor: '#556ee6' }} />
+                  </span>
+                ),
+                children: (
+                  <Table
+                    dataSource={devolucionesPV}
+                    rowKey="id"
+                    size="small"
+                    pagination={false}
+                    scroll={{ x: 600 }}
+                    columns={[
+                      { title: 'Documento', key: 'documento', width: 160,
+                        render: (_: any, rec: any) => (
+                          <a className="paces-doc-link"
+                            onClick={() => navigate(`/FDEV/${rec.id}`)}
+                            style={{ cursor: 'pointer' }}>
+                            {rec.documento || `DEV-${rec.noDocumento}`}
+                          </a>
+                        ),
+                      },
+                      { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110,
+                        render: (v: string) => formatDate(v),
+                      },
+                      { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 150,
+                        render: (v: string) => v || '-',
+                      },
+                    ]}
+                  />
+                ),
+              }] : []),
+              ...(data.transaccionesAsociadas?.length ? [{
+                key: 'relacionados',
+                label: (
+                  <span>
+                    Documentos Relacionados
+                    <Badge count={data.transaccionesAsociadas!.length}
+                      style={{ marginLeft: 6, backgroundColor: '#556ee6' }} />
+                  </span>
+                ),
+                children: (
+                  <Table
+                    dataSource={data.transaccionesAsociadas!}
+                    rowKey="id"
+                    size="small"
+                    pagination={false}
+                    scroll={{ x: 600 }}
+                    columns={[
+                      { title: 'Documento', key: 'documento', width: 160,
+                        render: (_: any, rec: any) => (
+                          <a className="paces-doc-link"
+                            onClick={() => navigate(`/FDEV/${rec.transaccionAsociadaID}`)}
+                            style={{ cursor: 'pointer' }}>
+                            {rec.documento || 'DEV'}
+                          </a>
+                        ),
+                      },
+                      { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110,
+                        render: (v: string) => formatDate(v),
+                      },
+                      { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 150,
+                        render: (v: string) => v || '-',
+                      },
+                      { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const,
+                        render: (v: number) => <Text strong>{formatCurrency(v || 0)}</Text>,
+                      },
+                    ]}
+                  />
+                ),
+              }] : []),
             ]}
           />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
-            >
-              <CobrosMinimal cobrosPOS={data.cobros?.[0]} loading={loading} />
-            </TotalesCard>
+            />
+            <CobrosMinimal cobrosPOS={data.cobros?.[0]} loading={loading} />
             {data?.envioDGII?.codigoQR && (
               <div style={{ textAlign: 'center' }}>
                 <QRCode value={data.envioDGII.codigoQR} size={140} />

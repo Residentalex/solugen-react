@@ -40,6 +40,7 @@ const GeneradorORC: React.FC = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [loadingError, setLoadingError] = useState(false);
   const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
+  const [selectedRow, setSelectedRow] = useState<GeneradorOrdenCompraDTO | null>(null);
 
   const rangoDefault = useMemo(() => ({
     desde: '20000101000000',
@@ -164,9 +165,10 @@ const GeneradorORC: React.FC = () => {
       errorMessage="Error al cargar generadores ORC"
       onRefresh={handleRefresh}
       onPageChange={setPage}
-      onRowClick={(record) => navigate(`/MGeneradorORC/${record.idExterno}`)}
+      onRowClick={(record) => setSelectedRow(record)}
       pdfPreview={null}
       onPdfClose={() => {}}
+      selectedRowId={selectedRow?.idExterno}
       toolbarProps={{
         showFiltros: true,
         filtros,
@@ -177,6 +179,11 @@ const GeneradorORC: React.FC = () => {
         onSearch: handleSearch,
         pageSize,
         onPageSizeChange: (v) => { setPageSize(v); setPage(1); },
+        showCrear: true,
+        onCrear: () => navigate('/FGORC/nuevo'),
+        showEditar: true,
+        editarDisabled: !selectedRow,
+        onEditar: () => selectedRow && navigate(`/FGORC/${selectedRow.idExterno}/editar`),
         onRefresh: handleRefresh,
       }}
     />

@@ -13,9 +13,12 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { generadorOrcApi } from '../../api/generadorOrcApi';
 import type { GeneradorOrdenCompraDTO, DetalleGeneradorDTO } from '../../types/generadorOrc';
 import { ErrorDetalle } from '../../components';
+import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
+import PermissionGate from '../../components/PermissionGate';
 
 const { Text } = Typography;
 
@@ -66,11 +69,13 @@ const GeneradorORCDetalle: React.FC = () => {
 
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+  const { screenCode, documentCode } = useScreenConfig();
 
   const [data, setData] = useState<GeneradorOrdenCompraDTO | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   const detallesFiltrados = useMemo(() => {
     const d = (data?.detalles || []).map((item) => calcularFilaGORC(item));
@@ -103,7 +108,7 @@ const GeneradorORCDetalle: React.FC = () => {
   const screens = Grid.useBreakpoint();
 
   useEffect(() => {
-    setActiveModule('FGORC');
+    setActiveModule(screenCode);
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
@@ -305,10 +310,16 @@ const GeneradorORCDetalle: React.FC = () => {
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+        <SucursalDocumentoSelector value={sucursalDestino} onChange={setSucursalDestino} />
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FGORC')}>
           Volver
         </Button>
         <div style={{ flex: 1 }} />
+        <PermissionGate accion="EDITAR">
+          <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FGORC/${id}/editar`)}>
+            Editar
+          </Button>
+        </PermissionGate>
       </div>
 
       {isLarge ? (
@@ -324,6 +335,7 @@ const GeneradorORCDetalle: React.FC = () => {
                 <Descriptions.Item label="Número:">
                   {data.numero || '-'}
                 </Descriptions.Item>
+                <Descriptions.Item label="Tipo:">—</Descriptions.Item>
                 <Descriptions.Item label="Fecha:">
                   {formatDate(data.fecha)}
                 </Descriptions.Item>
@@ -402,6 +414,7 @@ const GeneradorORCDetalle: React.FC = () => {
               <Descriptions.Item label="Número:">
                 {data.numero || '-'}
               </Descriptions.Item>
+              <Descriptions.Item label="Tipo:">—</Descriptions.Item>
               <Descriptions.Item label="Fecha:">
                 {formatDate(data.fecha)}
               </Descriptions.Item>

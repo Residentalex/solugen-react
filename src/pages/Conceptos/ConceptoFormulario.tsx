@@ -12,13 +12,67 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { conceptosApi } from '../../api/conceptosApi';
 import { documentosApi } from '../../api/documentosApi';
+import { cuentaContableApi } from '../../api/cuentaContableApi';
+import { entidadApi } from '../../api/entidadApi';
+import { tipoApi } from '../../api/tipoApi';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { toTitleCase, extraerMensajeError } from '../../utils/formats';
-import type { ConceptoDTO, CompaniaDTO, AlmacenDTO } from '../../types/entradaAlmacen';
+import PermissionGate from '../../components/PermissionGate';
+import type { ConceptoDTO, CompaniaDTO, AlmacenDTO, TipoEntidadDTO } from '../../types/entradaAlmacen';
+import type { CuentaContableDTO } from '../../types/contabilidad';
 import type { DocumentoDTO } from '../../types/documento';
+import type { TipoDocumentoDTO } from '../../types/transaccion';
 
 const { Text } = Typography;
+
+// ===== Modal inline para buscar cuenta contable =====
+interface BuscarCuentaInlineModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSelect: (cta: CuentaContableDTO) => void;
+  cuentas: CuentaContableDTO[];
+}
+
+const BuscarCuentaInlineModal: React.FC<BuscarCuentaInlineModalProps> = ({ open, onClose, onSelect, cuentas }) => {
+  const [filtered, setFiltered] = useState<CuentaContableDTO[]>(cuentas);
+
+  useEffect(() => { setFiltered(cuentas); }, [cuentas, open]);
+
+  const handleSearch = (val: string) => {
+    if (!val) { setFiltered(cuentas); return; }
+    const f = val.toLowerCase();
+    setFiltered(cuentas.filter(c => c.noCuenta.toLowerCase().includes(f) || c.nombre.toLowerCase().includes(f)));
+  };
+
+  const columnas = [
+    { title: 'No. Cuenta', dataIndex: 'noCuenta', key: 'noCuenta', width: 140 },
+    { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true },
+  ];
+
+  return (
+    <Modal title="Buscar Cuenta Contable" open={open} onCancel={onClose} footer={null} width={600} destroyOnClose>
+      <Input.Search
+        placeholder="Buscar por número o nombre..."
+        allowClear
+        onSearch={handleSearch}
+        style={{ marginBottom: 16 }}
+      />
+      <Table
+        dataSource={filtered}
+        columns={columnas}
+        rowKey="noCuenta"
+        size="small"
+        pagination={{ pageSize: 10, showSizeChanger: false }}
+        onRow={(record) => ({
+          onClick: () => { onSelect(record); },
+          style: { cursor: 'pointer' },
+        })}
+        locale={{ emptyText: <Empty description="No hay cuentas contables" /> }}
+      />
+    </Modal>
+  );
+};
 
 // ===== Modal inline para buscar documentos (catálogo) =====
 interface BuscarDocumentoInlineModalProps {
@@ -101,11 +155,28 @@ const ConceptoFormulario: React.FC = () => {
   const [almacenes, setAlmacenes] = useState<AlmacenDTO[]>([]);
   const [sucursales, setSucursales] = useState<CompaniaDTO[]>([]);
   const [documentos, setDocumentos] = useState<DocumentoDTO[]>([]);
+  const [tiposMap, setTiposMap] = useState<Record<string, string>>({});
+  const [tiposDocMap, setTiposDocMap] = useState<Record<string, string>>({});
 
   // Modales
   const [docModalOpen, setDocModalOpen] = useState(false);
   const [conceptoDestinoModalOpen, setConceptoDestinoModalOpen] = useState(false);
   const [conceptoReplicaModalOpen, setConceptoReplicaModalOpen] = useState(false);
+  const [cuentaContableText, setCuentaContableText] = useState('');
+  const [cuentaModalOpen, setCuentaModalOpen] = useState(false);
+  const [cuentasCache, setCuentasCache] = useState<CuentaContableDTO[]>([]);
+
+  // Entidades y Documentos del concepto
+  const [entidades, setEntidades] = useState<TipoEntidadDTO[]>([]);
+  const [documentosForm, setDocumentosForm] = useState<DocumentoDTO[]>([]);
+
+  // Modal buscar entidad (inline)
+  const [entidadBuscarText, setEntidadBuscarText] = useState('');
+  const [entidadResultados, setEntidadResultados] = useState<any[]>([]);
+  const [entidadBuscarModalOpen, setEntidadBuscarModalOpen] = useState(false);
+
+  // Modal agregar documento al concepto
+  const [agregarDocModalOpen, setAgregarDocModalOpen] = useState(false);
 
   // Textos de display
   const [docAGenerarText, setDocAGenerarText] = useState('');
@@ -132,6 +203,17 @@ const ConceptoFormulario: React.FC = () => {
     conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenes).catch(() => {});
     conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursales).catch(() => {});
     documentosApi.obtenerDocumentos(sucursalActiva).then(setDocumentos).catch(() => {});
+    cuentaContableApi.obtenerListadoPaginado(sucursalActiva, 0, 99999).then(r => setCuentasCache(r.data)).catch(() => {});
+    tipoApi.obtenerTodo(sucursalActiva).then((tipos) => {
+      const map: Record<string, string> = {};
+      const docMap: Record<string, string> = {};
+      tipos.forEach((t: TipoDocumentoDTO) => {
+        map[t.codigo] = t.nombre;
+        if (t.documento) docMap[`${t.documento}-${t.codigo}`] = t.nombre;
+      });
+      setTiposMap(map);
+      setTiposDocMap(docMap);
+    }).catch(() => {});
 
     return () => {
       resetToolbar();
@@ -149,6 +231,8 @@ const ConceptoFormulario: React.FC = () => {
       .then((res) => {
         setData(res);
         setPageTitleOverride(`Editar - ${res.codigo}`);
+        setEntidades(res.entidades || []);
+        setDocumentosForm(res.documentos || []);
 
         // Poblar display texts
         const docGenEncontrado = documentos.find(d => d.codigo === res.docAGenerar);
@@ -165,6 +249,9 @@ const ConceptoFormulario: React.FC = () => {
         }
 
         // Poblar formulario
+        if (res.cuentaContable) {
+          setCuentaContableText(`${res.cuentaContable.noCuenta} - ${res.cuentaContable.nombre}`);
+        }
         form.setFieldsValue({
           codigo: res.codigo,
           nombre: res.nombre,
@@ -180,6 +267,7 @@ const ConceptoFormulario: React.FC = () => {
           sucDest: res.sucursalDestino?.codigo,
           conceptoDestino: res.conceptoDestino,
           conceptoReplica: res.conceptoReplica,
+          cuentaContable: res.cuentaContable?.noCuenta,
         });
       })
       .catch((err: any) => {
@@ -248,6 +336,9 @@ const ConceptoFormulario: React.FC = () => {
           ? sucursales.find(s => s.codigo === values.sucursalReplica) as any
           : undefined,
         tipoIngreso: values.tipoIngreso,
+        cuentaContable: values.cuentaContable
+          ? cuentasCache.find(c => c.noCuenta === values.cuentaContable)
+          : undefined,
         almacen: values.codAlm
           ? almacenes.find(a => a.codigo === values.codAlm)
           : undefined,
@@ -256,6 +347,8 @@ const ConceptoFormulario: React.FC = () => {
           : undefined,
         conceptoDestino: values.conceptoDestino,
         conceptoReplica: values.conceptoReplica,
+        entidades: entidades,
+        documentos: documentosForm,
       };
 
       if (mode === 'crear') {
@@ -318,6 +411,17 @@ const ConceptoFormulario: React.FC = () => {
   const handleDocumentoSelect = (doc: DocumentoDTO) => {
     setDocAGenerarText(`${doc.codigo} - ${toTitleCase(doc.nombre || '')}`);
     form.setFieldsValue({ docAGenerar: doc.codigo });
+  };
+
+  const handleCuentaContableSelect = (cta: CuentaContableDTO) => {
+    setCuentaContableText(`${cta.noCuenta} - ${cta.nombre}`);
+    form.setFieldsValue({ cuentaContable: cta.noCuenta });
+    setCuentaModalOpen(false);
+  };
+
+  const handleCuentaContableClear = () => {
+    setCuentaContableText('');
+    form.setFieldsValue({ cuentaContable: undefined });
   };
 
   const handleConceptoDestinoSelect = (concepto: ConceptoDTO) => {
@@ -399,6 +503,52 @@ const ConceptoFormulario: React.FC = () => {
     }
   };
 
+  // ===== Handlers para Entidades y Documentos =====
+  const handleAgregarEntidad = (ent: any) => {
+    if (entidades.find(e => e.codigo === ent.codigo)) {
+      message.warning('La entidad ya está agregada');
+      return;
+    }
+    setEntidades(prev => [...prev, { codigo: ent.codigo, nombre: ent.nombre || ent.descripcion || '', tipo: '' }]);
+    setEntidadBuscarModalOpen(false);
+    setEntidadBuscarText('');
+    setEntidadResultados([]);
+  };
+
+  const handleQuitarEntidad = (codigo: string) => {
+    setEntidades(prev => prev.filter(e => e.codigo !== codigo));
+  };
+
+  const handleEntidadTipoChange = (codigo: string, tipo: string) => {
+    setEntidades(prev => prev.map(e => e.codigo === codigo ? { ...e, tipo } : e));
+  };
+
+  const handleAgregarDocumentoForm = (doc: DocumentoDTO) => {
+    if (documentosForm.find(d => d.codigo === doc.codigo)) {
+      message.warning('El documento ya está agregado');
+      return;
+    }
+    setDocumentosForm(prev => [...prev, { codigo: doc.codigo, nombre: doc.nombre || '', tipo: '' }]);
+  };
+
+  const handleQuitarDocumentoForm = (codigo: string) => {
+    setDocumentosForm(prev => prev.filter(d => d.codigo !== codigo));
+  };
+
+  const handleDocumentoTipoChange = (codigo: string, tipo: string) => {
+    setDocumentosForm(prev => prev.map(d => d.codigo === codigo ? { ...d, tipo } : d));
+  };
+
+  const handleBuscarEntidad = async () => {
+    if (!entidadBuscarText) return;
+    try {
+      const resultados = await entidadApi.buscar(sucursalActiva, entidadBuscarText, 20);
+      setEntidadResultados(resultados);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al buscar entidades');
+    }
+  };
+
   return (
     <div>
       {/* Toolbar inline */}
@@ -408,17 +558,18 @@ const ConceptoFormulario: React.FC = () => {
           {mode === 'editar' && data && (
             <Tag color={data.activo ? 'green' : 'default'}>{data.activo ? 'Activo' : 'Inactivo'}</Tag>
           )}
-          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-            Guardar
-          </Button>
+          <PermissionGate accion={mode === 'editar' ? 'EDITAR' : 'CREAR'}>
+            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
+              Guardar
+            </Button>
+          </PermissionGate>
           <Button icon={<CloseOutlined />} onClick={handleCancelar}>
             Cancelar
           </Button>
         </Space>
       </div>
 
-      {isLarge ? (
-        /* === DESKTOP LAYOUT (≥ xxl) === */
+      {isLarge ? (<>
         <Row gutter={16}>
           <Col xxl={18}>
             {/* Datos Generales */}
@@ -501,12 +652,13 @@ const ConceptoFormulario: React.FC = () => {
                                       placeholder="Buscar documento..."
                                       value={docAGenerarText}
                                       readOnly
+                                      suffix={<SearchOutlined />}
+                                      onClick={() => setDocModalOpen(true)}
                                     />
                                   </div>
                                   {docAGenerarText && (
                                     <Button icon={<CloseOutlined />} onClick={handleLimpiarDocAGenerar} />
                                   )}
-                                  <Button icon={<SearchOutlined />} onClick={() => setDocModalOpen(true)} />
                                 </div>
                                 <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Genera otro documento al aplicar</Text>
                               </div>
@@ -534,19 +686,14 @@ const ConceptoFormulario: React.FC = () => {
                               </Form.Item>
                               <div>
                                 <Text type="secondary" style={{ fontSize: 11 }}>Concepto destino</Text>
-                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-                                  <div style={{ flex: 1 }}>
-                                    <Input
-                                      placeholder="Buscar concepto destino..."
-                                      value={conceptoDestinoText}
-                                      readOnly
-                                      disabled={!sucDestValue}
-                                    />
-                                  </div>
-                                  <Button
-                                    icon={<SearchOutlined />}
-                                    onClick={handleBuscarConceptoDestino}
+                                <div>
+                                  <Input
+                                    placeholder="Buscar concepto destino..."
+                                    value={conceptoDestinoText}
+                                    readOnly
                                     disabled={!sucDestValue}
+                                    suffix={<SearchOutlined />}
+                                    onClick={() => sucDestValue && handleBuscarConceptoDestino()}
                                   />
                                 </div>
                                 <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Obligatorio si la sucursal destino es diferente</Text>
@@ -593,19 +740,14 @@ const ConceptoFormulario: React.FC = () => {
                               </Form.Item>
                               <div>
                                 <Text type="secondary" style={{ fontSize: 11 }}>Concepto réplica</Text>
-                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-                                  <div style={{ flex: 1 }}>
-                                    <Input
-                                      placeholder="Buscar concepto réplica..."
-                                      value={conceptoReplicaText}
-                                      readOnly
-                                      disabled={!replicarValue}
-                                    />
-                                  </div>
-                                  <Button
-                                    icon={<SearchOutlined />}
-                                    onClick={handleBuscarConceptoReplica}
+                                <div>
+                                  <Input
+                                    placeholder="Buscar concepto réplica..."
+                                    value={conceptoReplicaText}
+                                    readOnly
                                     disabled={!replicarValue}
+                                    suffix={<SearchOutlined />}
+                                    onClick={() => replicarValue && handleBuscarConceptoReplica()}
                                   />
                                 </div>
                                 <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Concepto que usará en la sucursal réplica</Text>
@@ -638,8 +780,163 @@ const ConceptoFormulario: React.FC = () => {
                               />
                             </Form.Item>
                           </Col>
-                        </Row>
-                      </Form>
+                            <Col xs={24} sm={12} lg={8}>
+                              <Form.Item name="cuentaContable" hidden>
+                                <Input />
+                              </Form.Item>
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Cuenta Contable</Text>
+                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+                                  <div style={{ flex: 1 }}>
+                                    <Input
+                                      placeholder="Buscar cuenta contable..."
+                                      value={cuentaContableText}
+                                      readOnly
+                                      suffix={<SearchOutlined />}
+                                      onClick={() => setCuentaModalOpen(true)}
+                                    />
+                                  </div>
+                                  {cuentaContableText && (
+                                    <Button icon={<CloseOutlined />} onClick={handleCuentaContableClear} />
+                                  )}
+                                </div>
+                              </div>
+                            </Col>
+                          </Row>
+                        </Form>
+                      </div>
+                  ),
+                },
+                {
+                  key: 'entidad',
+                  label: 'Entidad',
+                  children: (
+                    <div style={{ paddingTop: 16 }}>
+                      <Button
+                        type="dashed"
+                        icon={<SearchOutlined />}
+                        onClick={() => setEntidadBuscarModalOpen(true)}
+                        style={{ marginBottom: 16 }}
+                      >
+                        Agregar Entidad
+                      </Button>
+                      {entidades.length > 0 ? (
+                        <Table
+                          dataSource={entidades}
+                          rowKey="codigo"
+                          size="small"
+                          pagination={false}
+                          columns={[
+                            { title: 'Código', dataIndex: 'codigo', width: 120 },
+                            { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
+                            {
+                              title: 'Tipo',
+                              dataIndex: 'tipo',
+                              width: 200,
+                              render: (v: string, _: any, idx: number) => (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <Input
+                                    size="small"
+                                    value={v}
+                                    onChange={(e) => {
+                                      const newEntidades = [...entidades];
+                                      newEntidades[idx] = { ...newEntidades[idx], tipo: e.target.value };
+                                      setEntidades(newEntidades);
+                                    }}
+                                    placeholder="Tipo"
+                                    style={{ width: 60 }}
+                                  />
+                                  {v && tiposMap[v] && (
+                                    <Tag style={{ margin: 0 }}>{v} - {toTitleCase(tiposMap[v])}</Tag>
+                                  )}
+                                </div>
+                              ),
+                            },
+                            {
+                              title: 'Acci�n',
+                              width: 80,
+                              render: (_: any, record: any) => (
+                                <Button
+                                  size="small"
+                                  danger
+                                  icon={<CloseOutlined />}
+                                  onClick={() => handleQuitarEntidad(record.codigo)}
+                                />
+                              ),
+                            },
+                          ]}
+                        />
+                      ) : (
+                        <Text type="secondary">No hay entidades agregadas</Text>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'documentos',
+                  label: 'Documentos',
+                  children: (
+                    <div style={{ paddingTop: 16 }}>
+                      <Button
+                        type="dashed"
+                        icon={<SearchOutlined />}
+                        onClick={() => setAgregarDocModalOpen(true)}
+                        style={{ marginBottom: 16 }}
+                      >
+                        Agregar Documento
+                      </Button>
+                      {documentosForm.length > 0 ? (
+                        <Table
+                          dataSource={documentosForm}
+                          rowKey="codigo"
+                          size="small"
+                          pagination={false}
+                          columns={[
+                            { title: 'C�digo', dataIndex: 'codigo', width: 120 },
+                            { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
+                            {
+                              title: 'Tipo',
+                              dataIndex: 'tipo',
+                              width: 200,
+                              render: (v: string, record: any, idx: number) => {
+                                const docKey = record?.codigo ? `${record.codigo}-${v}` : v;
+                                const docNombre = tiposDocMap[docKey] || tiposMap[v];
+                                return (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <Input
+                                    size="small"
+                                    value={v}
+                                    onChange={(e) => {
+                                      const newDocs = [...documentosForm];
+                                      newDocs[idx] = { ...newDocs[idx], tipo: e.target.value };
+                                      setDocumentosForm(newDocs);
+                                    }}
+                                    placeholder="Tipo"
+                                    style={{ width: 60 }}
+                                  />
+                                  {v && docNombre && (
+                                    <Tag color="geekblue" style={{ margin: 0 }}>{v} - {toTitleCase(docNombre)}</Tag>
+                                  )}
+                                </div>
+                              );},
+                            },
+                            {
+                              title: 'Acción',
+                              width: 80,
+                              render: (_: any, record: any) => (
+                                <Button
+                                  size="small"
+                                  danger
+                                  icon={<CloseOutlined />}
+                                  onClick={() => handleQuitarEntidad(record.codigo)}
+                                />
+                              ),
+                            },
+                          ]}
+                        />
+                      ) : (
+                        <Text type="secondary">No hay entidades agregadas</Text>
+                      )}
                     </div>
                   ),
                 },
@@ -693,7 +990,7 @@ const ConceptoFormulario: React.FC = () => {
             </Card>
           </Col>
         </Row>
-      ) : (
+        </>) : (
         /* === COMPACT/MOBILE LAYOUT (< xxl) === */
         <div>
           <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
@@ -774,12 +1071,13 @@ const ConceptoFormulario: React.FC = () => {
                                       placeholder="Buscar documento..."
                                       value={docAGenerarText}
                                       readOnly
+                                      suffix={<SearchOutlined />}
+                                      onClick={() => setDocModalOpen(true)}
                                     />
                                   </div>
                                   {docAGenerarText && (
                                     <Button icon={<CloseOutlined />} onClick={handleLimpiarDocAGenerar} />
                                   )}
-                                  <Button icon={<SearchOutlined />} onClick={() => setDocModalOpen(true)} />
                                 </div>
                                 <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Genera otro documento al aplicar</Text>
                               </div>
@@ -807,19 +1105,14 @@ const ConceptoFormulario: React.FC = () => {
                               </Form.Item>
                               <div>
                                 <Text type="secondary" style={{ fontSize: 11 }}>Concepto destino</Text>
-                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-                                  <div style={{ flex: 1 }}>
-                                    <Input
-                                      placeholder="Buscar concepto destino..."
-                                      value={conceptoDestinoText}
-                                      readOnly
-                                      disabled={!sucDestValue}
-                                    />
-                                  </div>
-                                  <Button
-                                    icon={<SearchOutlined />}
-                                    onClick={handleBuscarConceptoDestino}
+                                <div>
+                                  <Input
+                                    placeholder="Buscar concepto destino..."
+                                    value={conceptoDestinoText}
+                                    readOnly
                                     disabled={!sucDestValue}
+                                    suffix={<SearchOutlined />}
+                                    onClick={() => sucDestValue && handleBuscarConceptoDestino()}
                                   />
                                 </div>
                                 <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Obligatorio si la sucursal destino es diferente</Text>
@@ -866,19 +1159,14 @@ const ConceptoFormulario: React.FC = () => {
                               </Form.Item>
                               <div>
                                 <Text type="secondary" style={{ fontSize: 11 }}>Concepto réplica</Text>
-                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-                                  <div style={{ flex: 1 }}>
-                                    <Input
-                                      placeholder="Buscar concepto réplica..."
-                                      value={conceptoReplicaText}
-                                      readOnly
-                                      disabled={!replicarValue}
-                                    />
-                                  </div>
-                                  <Button
-                                    icon={<SearchOutlined />}
-                                    onClick={handleBuscarConceptoReplica}
+                                <div>
+                                  <Input
+                                    placeholder="Buscar concepto réplica..."
+                                    value={conceptoReplicaText}
+                                    readOnly
                                     disabled={!replicarValue}
+                                    suffix={<SearchOutlined />}
+                                    onClick={() => replicarValue && handleBuscarConceptoReplica()}
                                   />
                                 </div>
                                 <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Concepto que usará en la sucursal réplica</Text>
@@ -911,8 +1199,161 @@ const ConceptoFormulario: React.FC = () => {
                               />
                             </Form.Item>
                           </Col>
-                        </Row>
-                      </Form>
+                            <Col xs={24}>
+                              <Form.Item name="cuentaContable" hidden>
+                                <Input />
+                              </Form.Item>
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Cuenta Contable</Text>
+                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
+                                  <div style={{ flex: 1 }}>
+                                    <Input
+                                      placeholder="Buscar cuenta contable..."
+                                      value={cuentaContableText}
+                                      readOnly
+                                      suffix={<SearchOutlined />}
+                                      onClick={() => setCuentaModalOpen(true)}
+                                    />
+                                  </div>
+                                  {cuentaContableText && (
+                                    <Button icon={<CloseOutlined />} onClick={handleCuentaContableClear} />
+                                  )}
+                                </div>
+                              </div>
+                            </Col>
+                          </Row>
+                        </Form>
+                      </div>
+                  ),
+                },
+                {
+                  key: 'entidad',
+                  label: 'Entidad',
+                  children: (
+                    <div style={{ paddingTop: 16 }}>
+                      <Button
+                        type="dashed"
+                        icon={<SearchOutlined />}
+                        onClick={() => setEntidadBuscarModalOpen(true)}
+                        style={{ marginBottom: 16 }}
+                      >
+                        Agregar Entidad
+                      </Button>
+                      {entidades.length > 0 ? (
+                        <Table
+                          dataSource={entidades}
+                          rowKey="codigo"
+                          size="small"
+                          pagination={false}
+                          columns={[
+                            { title: 'Código', dataIndex: 'codigo', width: 120 },
+                            { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
+                            {
+                              title: 'Tipo',
+                              dataIndex: 'tipo',
+                              render: (v: string, _: any, idx: number) => (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                                  <Input
+                                    size="small"
+                                    value={v}
+                                    onChange={(e) => {
+                                      const newEntidades = [...entidades];
+                                      newEntidades[idx] = { ...newEntidades[idx], tipo: e.target.value };
+                                      setEntidades(newEntidades);
+                                    }}
+                                    placeholder="Tipo"
+                                    style={{ width: 60 }}
+                                  />
+                                  {v && tiposMap[v] && (
+                                    <Tag style={{ margin: 0 }}>{v} - {toTitleCase(tiposMap[v])}</Tag>
+                                  )}
+                                </div>
+                              ),
+                            },
+                            {
+                              title: 'Acci�n',
+                              width: 80,
+                              render: (_: any, record: any) => (
+                                <Button
+                                  size="small"
+                                  danger
+                                  icon={<CloseOutlined />}
+                                  onClick={() => handleQuitarEntidad(record.codigo)}
+                                />
+                              ),
+                            },
+                          ]}
+                        />
+                      ) : (
+                        <Text type="secondary">No hay entidades agregadas</Text>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'documentos',
+                  label: 'Documentos',
+                  children: (
+                    <div style={{ paddingTop: 16 }}>
+                      <Button
+                        type="dashed"
+                        icon={<SearchOutlined />}
+                        onClick={() => setAgregarDocModalOpen(true)}
+                        style={{ marginBottom: 16 }}
+                      >
+                        Agregar Documento
+                      </Button>
+                      {documentosForm.length > 0 ? (
+                        <Table
+                          dataSource={documentosForm}
+                          rowKey="codigo"
+                          size="small"
+                          pagination={false}
+                          columns={[
+                            { title: 'C�digo', dataIndex: 'codigo', width: 120 },
+                            { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
+                            {
+                              title: 'Tipo',
+                              dataIndex: 'tipo',
+                              render: (v: string, record: any, idx: number) => {
+                                const docKey = record?.codigo ? `${record.codigo}-${v}` : v;
+                                const docNombre = tiposDocMap[docKey] || tiposMap[v];
+                                return (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                                  <Input
+                                    size="small"
+                                    value={v}
+                                    onChange={(e) => {
+                                      const newDocs = [...documentosForm];
+                                      newDocs[idx] = { ...newDocs[idx], tipo: e.target.value };
+                                      setDocumentosForm(newDocs);
+                                    }}
+                                    placeholder="Tipo"
+                                    style={{ width: 60 }}
+                                  />
+                                  {v && docNombre && (
+                                    <Tag color="geekblue" style={{ margin: 0 }}>{v} - {toTitleCase(docNombre)}</Tag>
+                                  )}
+                                </div>
+                              );},
+                            },
+                            {
+                              title: 'Acción',
+                              width: 80,
+                              render: (_: any, record: any) => (
+                                <Button
+                                  size="small"
+                                  danger
+                                  icon={<CloseOutlined />}
+                                  onClick={() => handleQuitarEntidad(record.codigo)}
+                                />
+                              ),
+                            },
+                          ]}
+                        />
+                      ) : (
+                        <Text type="secondary">No hay entidades agregadas</Text>
+                      )}
                     </div>
                   ),
                 },
@@ -967,13 +1408,67 @@ const ConceptoFormulario: React.FC = () => {
         </div>
       )}
 
-      {/* Modal Buscar Documento */}
+      {/* Modal Buscar Cuenta Contable */}
+      <BuscarCuentaInlineModal
+        open={cuentaModalOpen}
+        onClose={() => setCuentaModalOpen(false)}
+        onSelect={handleCuentaContableSelect}
+        cuentas={cuentasCache}
+      />
+
+      {/* Modal Buscar Documento (doc a generar) */}
       <BuscarDocumentoInlineModal
         open={docModalOpen}
         onClose={() => setDocModalOpen(false)}
         onSelect={handleDocumentoSelect}
         documentos={documentos}
       />
+
+      {/* Modal Agregar Documento al concepto */}
+      <BuscarDocumentoInlineModal
+        open={agregarDocModalOpen}
+        onClose={() => setAgregarDocModalOpen(false)}
+        onSelect={handleAgregarDocumentoForm}
+        documentos={documentos}
+      />
+
+      {/* Modal Buscar Entidad */}
+      <Modal
+        title="Buscar Entidad"
+        open={entidadBuscarModalOpen}
+        onCancel={() => { setEntidadBuscarModalOpen(false); setEntidadBuscarText(''); setEntidadResultados([]); }}
+        footer={null}
+        width={600}
+        destroyOnClose
+      >
+        <Input.Search
+          placeholder="Buscar por código o nombre..."
+          allowClear
+          value={entidadBuscarText}
+          onChange={(e) => setEntidadBuscarText(e.target.value)}
+          onSearch={handleBuscarEntidad}
+          style={{ marginBottom: 16 }}
+        />
+        {entidadResultados.length > 0 ? (
+          <Table
+            dataSource={entidadResultados}
+            rowKey="codigo"
+            size="small"
+            pagination={false}
+            columns={[
+              { title: 'Código', dataIndex: 'codigo', width: 120 },
+              { title: 'Nombre', dataIndex: 'nombre', ellipsis: true, render: (v: string) => toTitleCase(v) },
+            ]}
+            onRow={(record) => ({
+              onClick: () => handleAgregarEntidad(record),
+              style: { cursor: 'pointer' },
+            })}
+            locale={{ emptyText: <Empty description="No hay resultados" /> }}
+          />
+        ) : (
+          entidadBuscarText && <Empty description="No se encontraron entidades" />
+        )}
+      </Modal>
 
       {/* Modal Buscar Concepto Destino */}
       <BuscarConceptoModal

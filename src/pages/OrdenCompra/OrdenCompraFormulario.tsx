@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Spin, Button, Space, Row, Col, Divider,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Empty,
 } from 'antd';
 import {
   SaveOutlined,
@@ -15,6 +15,8 @@ import {
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useCompanyStore } from '../../stores/companyStore';
+import CampoTipo from '../../components/CampoTipo/CampoTipo';
 import { Sucursal } from '../../types/auth';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
 import { conceptosApi } from '../../api/conceptosApi';
@@ -22,6 +24,10 @@ import { proveedorApi } from '../../api/proveedorApi';
 import { apiClient } from '../../api/client';
 import type { SuplidorDTO, ConceptoDTO } from '../../types/entradaAlmacen';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
+import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
+import PermissionGate from '../../components/PermissionGate';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -120,9 +126,12 @@ const OrdenCompraFormulario: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
+  const { screenCode, documentCode } = useScreenConfig('FORC');
   const destino = Sucursal.Compra;
+  const navigationConfirmedRef = useFormularioNavigation();
 
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
@@ -134,10 +143,11 @@ const OrdenCompraFormulario: React.FC = () => {
   const [selectedSuplidor, setSelectedSuplidor] = useState<SuplidorDTO | null>(null);
   const [suplidoresCache, setSuplidoresCache] = useState<SuplidorDTO[]>([]);
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
   const [form] = Form.useForm();
 
   useEffect(() => {
-    setActiveModule('FORC');
+    setActiveModule(screenCode);
     const pageTitle = mode === 'crear' ? 'Nueva Orden de Compra' : 'Editar Orden de Compra';
     setPageTitleOverride(pageTitle);
     if (mode === 'crear') {
@@ -173,7 +183,7 @@ const OrdenCompraFormulario: React.FC = () => {
         }));
         setDetalles(detallesMap);
         setSelectedConcepto(res.concepto || null);
-        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
         setSelectedSuplidor(res.suplidor || null);
 
         form.setFieldsValue({
@@ -190,6 +200,7 @@ const OrdenCompraFormulario: React.FC = () => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar la orden';
         message.error(msg);
         setLoadingError(true);
+        navigationConfirmedRef.current = true;
         navigate('/FORC');
       })
       .finally(() => setLoading(false));
@@ -211,6 +222,7 @@ const OrdenCompraFormulario: React.FC = () => {
       cancelText: 'No, continuar editando',
       okButtonProps: { danger: true },
       onOk: () => {
+        navigationConfirmedRef.current = true;
         if (mode === 'crear') {
           navigate('/FORC');
         } else if (id) {
@@ -281,10 +293,12 @@ const OrdenCompraFormulario: React.FC = () => {
       if (mode === 'crear') {
         const { data: result } = await apiClient.post(`/ORC/${sucursalActiva}?destino=${destino}`, dto);
         message.success('Orden de compra creada exitosamente');
+        navigationConfirmedRef.current = true;
         navigate(`/FORC/${result.data?.id || result.id}`);
       } else {
         await apiClient.put(`/ORC/${sucursalActiva}`, dto);
         message.success('Orden de compra actualizada exitosamente');
+        navigationConfirmedRef.current = true;
         navigate(`/FORC/${id}`);
       }
     } catch (err: any) {
@@ -321,7 +335,7 @@ const OrdenCompraFormulario: React.FC = () => {
 
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
-    setConceptoSearchText(toTitleCase(concepto.nombre));
+    setConceptoSearchText(`${concepto.codigo || ''} - ${toTitleCase(concepto.nombre)}`);
     form.setFieldsValue({ conceptoNombre: concepto.nombre });
 
     // === ConfigurarMoneda ===
@@ -446,11 +460,14 @@ const OrdenCompraFormulario: React.FC = () => {
 
   const renderToolbar = () => (
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+      <SucursalDocumentoSelector value={sucursalDestino} onChange={setSucursalDestino} />
       <div style={{ flex: 1 }} />
       <Space wrap>
-        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-          Guardar
-        </Button>
+        <PermissionGate accion={mode === 'editar' ? 'EDITAR' : 'CREAR'}>
+          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
+            Guardar
+          </Button>
+        </PermissionGate>
         <Button icon={<CloseOutlined />} onClick={handleCancelar}>
           Cancelar
         </Button>
@@ -485,7 +502,7 @@ const OrdenCompraFormulario: React.FC = () => {
         }));
         setDetalles(detallesMap);
         setSelectedConcepto(res.concepto || null);
-        setConceptoSearchText(toTitleCase(res.concepto?.nombre || ''));
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
         setSelectedSuplidor(res.suplidor || null);
 
         form.setFieldsValue({
@@ -529,22 +546,39 @@ const OrdenCompraFormulario: React.FC = () => {
           <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
             <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
               <Row gutter={[16, 24]}>
-                <Col xs={24} sm={12} lg={8}>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-                    <div style={{ flex: 1 }}>
-                      <Form.Item name="conceptoNombre" style={{ marginBottom: 0 }}>
-                        <Input placeholder=" " value={conceptoSearchText} readOnly />
-                      </Form.Item>
-                      <div className="paces-text-secondary" style={{ fontSize: 11, marginTop: 2 }}>Concepto</div>
-                    </div>
-                    <Button icon={<SearchOutlined />} onClick={() => setConceptoModalOpen(true)} />
+                <Col xs={24} sm={12} lg={6}>
+                  <Form.Item name="tipo" style={{ marginBottom: 0 }}>
+                    <CampoTipo tipoDocumento="ORC" sucursal={sucursalActiva} disabled />
+                  </Form.Item>
+                </Col>
+
+                <Col xs={24} sm={12} lg={6}>
+                  <div>
+                    <Form.Item name="conceptoNombre" style={{ marginBottom: 0 }}>
+                      <Input placeholder=" " value={conceptoSearchText} readOnly suffix={<SearchOutlined />} onClick={() => setConceptoModalOpen(true)} />
+                    </Form.Item>
+                    <div className="paces-text-secondary" style={{ fontSize: 11, marginTop: 2 }}>Concepto</div>
                   </div>
                   <Form.Item name="concepto" hidden><Input /></Form.Item>
                 </Col>
 
-                <Col xs={24} sm={12} lg={8}>
+                <Col xs={24} sm={12} lg={6}>
                   <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }} label="Fecha Documento">
-                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format="YYYY-MM-DD"
+                      disabledDate={(current) => {
+                        if (!current) return false;
+                        if (data?.documento?.fechaPermitida === 'MenorIgualFechaDia') {
+                          if (current.isAfter(dayjs(), 'day')) return true;
+                        }
+                        const cierre = fechasCierre?.[sucursalActiva];
+                        if (cierre && current.isBefore(dayjs(cierre).startOf('day'), 'day')) return true;
+                        const cierreInv = fechasCierreInv?.[sucursalActiva];
+                        if (cierreInv && current.isBefore(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                        return false;
+                      }}
+                    />
                   </Form.Item>
                 </Col>
 
@@ -602,7 +636,15 @@ const OrdenCompraFormulario: React.FC = () => {
                   <Button type="dashed" icon={<PlusOutlined />} onClick={handleAgregarFila} style={{ marginBottom: 8, width: '100%' }}>
                     Agregar Fila
                   </Button>
-                  <Table dataSource={detalles} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} />
+                  <Table dataSource={detalles} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }}
+                    locale={{
+                      emptyText: (
+                        <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Empty description="Sin registros" />
+                        </div>
+                      ),
+                    }}
+                  />
                 </>
               ),
             }]}
@@ -614,7 +656,8 @@ const OrdenCompraFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        fetchConceptos={() => conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'ORC')}
+        sucursal={sucursalActiva}
+        documento={documentCode}
       />
     </div>
   );

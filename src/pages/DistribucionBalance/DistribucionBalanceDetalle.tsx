@@ -46,6 +46,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
   const [creditosSearch, setCreditosSearch] = useState('');
   const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
   const screens = Grid.useBreakpoint();
 
   const codigoPantalla = tipoEntidad === 'SUP' ? 'FDBASUP' : 'FDBACLI';
@@ -196,7 +197,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
     try {
       const origen = obtenerNombreEnumSucursal(data.codigoSucursal || String(sucursalActiva));
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
-      await distribucionBalanceApi.desaplicar(sucursalActiva, documento);
+      await distribucionBalanceApi.desaplicar(sucursalActiva, documento, sucursalActiva);
       message.success('Documento desaplicado exitosamente');
       setModalDesaplicarOpen(false);
       const res = await distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id));
@@ -300,7 +301,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
         onImprimir={async () => {
           setImprimiendo(true);
           try {
-            const res = await apiClient.get(`/reportes/contabilidad/distribucionBalance/${data.codigoSucursal ? obtenerNombreEnumSucursal(data.codigoSucursal) : sucursalActiva}/${id}`, {
+            const res = await apiClient.get(`/reportes/contabilidad/distribucionBalance/${sucursalActiva}/${id}`, {
               responseType: 'blob',
             });
             const blobUrl = URL.createObjectURL(res.data);
@@ -363,7 +364,10 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Tipo">
+                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                </Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
 
@@ -437,7 +441,10 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Tipo">
+                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                </Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
 

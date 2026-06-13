@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Input, Select, Tag, Button, message, Space, Card, Typography, Alert } from 'antd';
+import { useQuery } from '@tanstack/react-query';
+import { Table, Input, Select, Tag, Button, message, Space, Card, Typography, Alert, Empty } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
 import EntidadImagen from '../../components/EntidadImagen';
@@ -7,15 +8,11 @@ import { useNavigate, Link } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { Sucursal } from '../../types/auth';
 import { useUIStore } from '../../stores/uiStore';
+import { formatDateTime } from '../../utils/formats';
 import { usuarioApi } from '../../api/usuarioApi';
 
 import type { UsuarioDTO } from '../../types/administracion';
-
-function formatFecha(iso?: string): string {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  return d.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 function letraInicial(nombre: string): string {
   return (nombre || '?').charAt(0).toUpperCase();
@@ -31,40 +28,32 @@ const Usuarios: React.FC = () => {
 
   const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
 
-  const [data, setData] = useState<UsuarioDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [_searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [loadingError, setLoadingError] = useState(false);
 
-  const cargarDatos = useCallback(async (busqueda?: string) => {
-    setLoading(true);
-    try {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['usuarios', searchText],
+    queryFn: async () => {
       let result: UsuarioDTO[];
-      if (busqueda) {
-        result = await usuarioApi.filtrar(SUCURSAL_SEGURIDAD, busqueda, busqueda);
+      if (searchText) {
+        result = await usuarioApi.filtrar(SUCURSAL_SEGURIDAD, searchText, searchText);
       } else {
         result = await usuarioApi.obtenerListado(SUCURSAL_SEGURIDAD);
       }
-      setData(result || []);
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return result || [];
+    },
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('MUsuario');
     updateToolbar({});
-    cargarDatos();
     return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
+  }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
-    cargarDatos(value.trim() || undefined);
   };
 
   const abrirNuevo = () => {
@@ -100,13 +89,21 @@ const Usuarios: React.FC = () => {
       title: 'Roles',
       key: 'roles',
       width: 200,
-      render: (_, record) => (
-        <Space wrap size={4}>
-          {(record.roles || []).map((r) => (
-            <Tag key={r.id} color="blue" style={{ fontSize: 11 }}>{r.nombre}</Tag>
-          ))}
-        </Space>
-      ),
+      render: (_, record) => {
+        const roles = record.roles || [];
+        const mostrar = roles.slice(0, 3);
+        const restantes = roles.length - 3;
+        return (
+          <Space wrap size={4}>
+            {mostrar.map((r) => (
+              <Tag key={r.id} color="blue" style={{ fontSize: 11 }}>{r.nombre}</Tag>
+            ))}
+            {restantes > 0 && (
+              <Tag color="default" style={{ fontSize: 11 }}>+{restantes}</Tag>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: 'Sucursales',
@@ -126,7 +123,7 @@ const Usuarios: React.FC = () => {
       key: 'ultimoLogin',
       width: 170,
       render: (val: string) => (
-        <Text type="secondary">{formatFecha(val)}</Text>
+        <Text type="secondary">{formatDateTime(val)}</Text>
       ),
     },
     {
@@ -143,69 +140,41 @@ const Usuarios: React.FC = () => {
 
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
-          title="Error al cargar usuarios"
+          message="Error al cargar usuarios"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={() => { setLoadingError(false); setSearchText(''); cargarDatos(); }}>
+            <Button size="small" onClick={() => { setSearchText(''); refetch(); }}>
               Reintentar
             </Button>
           }
         />
       )}
       <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
-        <div style={{ padding: '16px 24px 0' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: 16,
-            flexWrap: 'wrap',
-          }}>
-            <Input.Search
-              placeholder="Buscar por usuario o nombre..."
-              allowClear
-              onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-              style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-            <Select
-              style={{ width: 65 }}
-              value={pageSize}
-              onChange={(v) => { setPageSize(v); setPage(1); }}
-              options={[
-                { value: 25, label: '25' },
-                { value: 50, label: '50' },
-                { value: 100, label: '100' },
-              ]}
-            />
-            <div style={{ flex: 1 }} />
-            <PermissionGate accion="CREAR">
-              <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-                Nuevo Usuario
-              </Button>
-            </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={() => { setLoadingError(false); setSearchText(''); cargarDatos(); }} />
-          </div>
-        </div>
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
+          onNuevo={abrirNuevo}
+          onReload={() => { setSearchText(""); refetch(); }}
+        />
         <Table<UsuarioDTO>
           columns={columns}
-          dataSource={data}
+          dataSource={data || []}
           rowKey="id"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 920 }}
           size="middle"
           rowClassName="paces-row-hover"
           className="paces-border-top paces-list-table"
+          locale={{
+            emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Empty description="No hay usuarios registrados" />
+            </div>,
+          }}
           pagination={{
             current: page,
             pageSize,

@@ -16,11 +16,11 @@ export const cuentaContableApi = {
 
   obtenerListadoPaginado: async (
     sucursal: number,
-    skip = 0,
-    take = 25,
+    cantidad = 25,
+    salto = 0,
     filtro = ''
   ): Promise<{ data: CuentaContableDTO[]; total: number }> => {
-    const params = new URLSearchParams({ skip: String(skip), take: String(take), filtro });
+    const params = new URLSearchParams({ cantidad: String(cantidad), salto: String(salto), filtro });
     const { data } = await apiClient.get<ApiResponse<CuentaContableDTO[]> & { total: number }>(
       `${BASE}/${sucursal}?${params}`
     );
@@ -35,11 +35,11 @@ export const cuentaContableApi = {
   obtenerMovimientos: async (
     sucursal: number,
     noCuenta: string,
-    skip = 0,
-    take = 25,
+    cantidad = 25,
+    salto = 0,
     fechaCierre?: string
   ): Promise<{ data: MovimientoCuentaDTO[]; total: number }> => {
-    let url = `${BASE}/${sucursal}/${noCuenta}/movimientos?skip=${skip}&take=${take}`;
+    let url = `${BASE}/${sucursal}/${noCuenta}/movimientos?cantidad=${cantidad}&salto=${salto}`;
     if (fechaCierre) {
       url += `&fechaCierre=${fechaCierre}`;
     }

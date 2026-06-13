@@ -47,7 +47,12 @@ export const generadorOrcApi = {
   },
 
   obtenerDatosAnteriores: async (sucursal: number, codigos: string[]): Promise<DetalleGeneradorDTO[]> => {
-    const { data } = await apiClient.post<ApiResponse<DetalleGeneradorDTO[]>>(`${BASE}/${sucursal}/datos-anteriores`, codigos);
+    const { data } = await apiClient.post<ApiResponse<DetalleGeneradorDTO[]>>(`${BASE}/${sucursal}/datosAnterioresORC`, codigos);
     return data.data;
+  },
+
+  obtenerExistencias: async (sucursal: number, codigos: string[], fecha: string): Promise<{ codigo: string; cantidad: number; almacen: string }[]> => {
+    const { data } = await apiClient.post<ApiResponse<{ codigo: string; cantidad: number; almacen: string }[]>>(`/Existencia/${sucursal}/obtenerDatos`, codigos, { params: { fecha } });
+    return data.data ?? [];
   },
 };

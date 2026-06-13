@@ -33,11 +33,12 @@ import ErrorDetalle from '../../components/ErrorDetalle';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useAplicar } from '../../hooks/useAplicar';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
-import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { formatCurrency, formatNumber, toTitleCase, formatDate, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
@@ -74,6 +75,7 @@ const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
 const [vencimientoPendientes, setVencimientoPendientes] = useState<{ id: number; codigo: string; articulo: string }[]>([]);
 const [vencimientoModalOpen, setVencimientoModalOpen] = useState(false);
 const [vencimientoFechas, setVencimientoFechas] = useState<Record<number, dayjs.Dayjs>>({});
+const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   const { message, modal } = App.useApp();
 
@@ -187,10 +189,12 @@ const [vencimientoFechas, setVencimientoFechas] = useState<Record<number, dayjs.
       })
     : (data?.detalles || []);
 
+  const { screenCode } = useScreenConfig('FENP');
+
   useEffect(() => {
-    setActiveModule('FENP');
+    setActiveModule(screenCode);
     return () => setPageTitleOverride('');
-  }, [setActiveModule, setPageTitleOverride]);
+  }, [setActiveModule, setPageTitleOverride, screenCode]);
 
   useEffect(() => {
     if (!id) return;
@@ -553,10 +557,20 @@ const [vencimientoFechas, setVencimientoFechas] = useState<Record<number, dayjs.
   const handleAplicar = async () => {
     if (!id) return;
 
-    // Verificación temprana del scanner (solo obligatorio si tiene Orden de Compra)
-    if (tieneScan === false && data?.ordenCompra?.noDocumento) {
-      message.warning('Debe escanear la factura antes de aplicar.');
-      return;
+    // Verificación del scanner en tiempo real (solo obligatorio si tiene Orden de Compra)
+    if (data?.ordenCompra?.noDocumento) {
+      try {
+        const scanActual = await entradaAlmacenApi.verificarScan(sucursalActiva, parseInt(id!));
+        setTieneScan(scanActual.existe);
+        if (!scanActual.existe) {
+          message.warning('Debe escanear la factura antes de aplicar.');
+          return;
+        }
+      } catch (err: any) {
+        const msg = extraerMensajeError(err, 'Error al verificar factura escaneada. Intente nuevamente.');
+        message.warning(msg);
+        return;
+      }
     }
 
     // Si el usuario tiene permiso DESAPLICAR y hay detalles con aumento configurado,
@@ -744,7 +758,7 @@ const [vencimientoFechas, setVencimientoFechas] = useState<Record<number, dayjs.
         />
       )}
       <DetalleToolbar
-        modulo="FENP"
+        modulo={screenCode}
         estado={data.estado}
         periodo={data.periodo}
         revisado={data.revisado}
@@ -831,8 +845,9 @@ const [vencimientoFechas, setVencimientoFechas] = useState<Record<number, dayjs.
                   {data.ordenCompra?.noDocumento || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Concepto:">
-                  {toTitleCase(data.concepto?.nombre || '-')}
+                  {data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : toTitleCase(data.concepto?.nombre || '-')}
                 </Descriptions.Item>
+                <Descriptions.Item label="Tipo:">—</Descriptions.Item>
                 <Descriptions.Item label="NCF:">
                   {data.ncf || '-'}
                 </Descriptions.Item>
@@ -1027,8 +1042,9 @@ const [vencimientoFechas, setVencimientoFechas] = useState<Record<number, dayjs.
                   {data.ordenCompra?.noDocumento || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Concepto:">
-                  {toTitleCase(data.concepto?.nombre || '-')}
+                  {data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : toTitleCase(data.concepto?.nombre || '-')}
                 </Descriptions.Item>
+                <Descriptions.Item label="Tipo:">—</Descriptions.Item>
                 <Descriptions.Item label="NCF:">
                   {data.ncf || '-'}
                 </Descriptions.Item>

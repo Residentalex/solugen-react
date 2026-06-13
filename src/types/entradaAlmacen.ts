@@ -45,6 +45,7 @@ export interface TipoEntidadDTO {
   codigo: string;
   origenCuenta?: number;
   idExterno?: string;
+  tipo?: string;
 }
 
 export interface ConceptoDTO {

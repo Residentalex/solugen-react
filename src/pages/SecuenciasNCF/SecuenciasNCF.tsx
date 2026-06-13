@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Table, message, Card, Button, Tooltip, Space, Tag, Modal,
   Descriptions, Typography, Progress, Select, Input, Empty, Grid, Divider,
@@ -13,6 +14,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { ncfApi } from '../../api/ncfApi';
 import type { SecuenciaNCFListDTO } from '../../types/contabilidad';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const formatearFecha = (fecha?: string): string => {
   if (!fecha) return '-';
@@ -49,8 +51,6 @@ const SecuenciasNCF: React.FC = () => {
   };
 
   // Estados
-  const [data, setData] = useState<SecuenciaNCFListDTO[]>([]);
-  const [loading, setLoading] = useState(false);
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [detalleItem, setDetalleItem] = useState<SecuenciaNCFListDTO | null>(null);
   const [searchText, setSearchText] = useState('');
@@ -64,25 +64,22 @@ const SecuenciasNCF: React.FC = () => {
   const modalWidth = screens.lg ? 600 : '92vw';
 
   // Carga de datos
-  const cargarDatos = useCallback(async () => {
-    if (sucursalActiva === undefined) return;
-    setLoading(true);
-    try {
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['secuenciasNCF', sucursalActiva],
+    queryFn: async () => {
+      if (sucursalActiva === undefined) return [];
       const result = await ncfApi.obtenerListado(sucursalActiva);
-      setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar secuencias NCF');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
+      return result || [];
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('MSecuenciaNCF');
     updateToolbar({});
-    cargarDatos();
     return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
+  }, [setActiveModule, updateToolbar, resetToolbar]);
 
   // Handlers
   const handleSearch = useCallback((value: string) => {
@@ -90,32 +87,27 @@ const SecuenciasNCF: React.FC = () => {
     setPagina(1);
   }, []);
 
-  const handleRefresh = useCallback(() => {
-    cargarDatos();
-    setPagina(1);
-  }, [cargarDatos]);
-
   // Resumen
   const totalActivas = useMemo(
-    () => data.filter((s) => s.activo).length,
+    () => (data || []).filter((s) => s.activo).length,
     [data],
   );
 
   const vencidas = useMemo(
-    () => data.filter((s) => s.fechaVencimiento && new Date(s.fechaVencimiento) < new Date()).length,
+    () => (data || []).filter((s) => s.fechaVencimiento && new Date(s.fechaVencimiento) < new Date()).length,
     [data],
   );
 
   const enAlerta = useMemo(
-    () => data.filter((s) => s.activo && (s.cantidad - s.usado) <= s.minimo).length,
+    () => (data || []).filter((s) => s.activo && (s.cantidad - s.usado) <= s.minimo).length,
     [data],
   );
 
   // Filtrado local
   const filteredData = useMemo(() => {
-    let result = [...data];
+    let result = [...(data || [])];
 
-    // Búsqueda por texto
+    // BÃºsqueda por texto
     if (searchText) {
       const q = searchText.toLowerCase();
       result = result.filter(
@@ -202,7 +194,7 @@ const SecuenciasNCF: React.FC = () => {
       width: 200,
       render: (_: unknown, record: SecuenciaNCFListDTO) => (
         <Text style={{ fontFamily: 'monospace', fontSize: 11 }}>
-          {record.secuenciaInicial} → {record.secuenciaFinal}
+          {record.secuenciaInicial} â†' {record.secuenciaFinal}
         </Text>
       ),
     },
@@ -219,7 +211,7 @@ const SecuenciasNCF: React.FC = () => {
         return (
           <div>
             <Tooltip
-              title={`${usado.toLocaleString('es-DO')} de ${cantidad.toLocaleString('es-DO')} usados (${pct}%). Disponible: ${disponible.toLocaleString('es-DO')}. Mínimo configurado: ${(record.minimo ?? 0).toLocaleString('es-DO')}.`}
+              title={`${usado.toLocaleString('es-DO')} de ${cantidad.toLocaleString('es-DO')} usados (${pct}%). Disponible: ${disponible.toLocaleString('es-DO')}. MÃ­nimo configurado: ${(record.minimo ?? 0).toLocaleString('es-DO')}.`}
             >
               <Progress percent={pct} size="small" showInfo={false} strokeColor={color} />
             </Tooltip>
@@ -256,9 +248,9 @@ const SecuenciasNCF: React.FC = () => {
       key: 'fechaVencimiento',
       width: 150,
       render: (val?: string) => {
-        if (!val) return <Text type="secondary">—</Text>;
+        if (!val) return <Text type="secondary">â€”</Text>;
         const dias = getDiasRestantes(val);
-        if (dias === null) return <Text type="secondary">—</Text>;
+        if (dias === null) return <Text type="secondary">â€”</Text>;
 
         if (dias < 0) {
           return (
@@ -277,7 +269,7 @@ const SecuenciasNCF: React.FC = () => {
               <ClockCircleOutlined style={{ color: '#f1b44c' }} />
               <Text>{formatearFecha(val)}</Text>
               <Tag color="warning" style={{ marginLeft: 4 }}>
-                Vence en {dias} día{dias !== 1 ? 's' : ''}
+                Vence en {dias} dÃ­a{dias !== 1 ? 's' : ''}
               </Tag>
             </Space>
           );
@@ -287,7 +279,7 @@ const SecuenciasNCF: React.FC = () => {
             <Space>
               <Text>{formatearFecha(val)}</Text>
               <Text type="secondary" style={{ fontSize: 11 }}>
-                en {dias} día{dias !== 1 ? 's' : ''}
+                en {dias} dÃ­a{dias !== 1 ? 's' : ''}
               </Text>
             </Space>
           );
@@ -345,79 +337,50 @@ const SecuenciasNCF: React.FC = () => {
 
       <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
         {/* Barra de búsqueda y filtros */}
-        <div style={{ padding: '16px 24px 0' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: 16,
-              flexWrap: 'wrap',
-            }}
-          >
-            <Input.Search
-              placeholder="Buscar tipo de comprobante, NCF, código..."
-              allowClear
-              onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); setPagina(1); }}
+          onReload={() => refetch()}
+          filtros={
+            <>
+              <Select
+                style={{ width: 160 }}
+                value={filtroEstado}
+                onChange={(value) => { setFiltroEstado(value); setPagina(1); }}
+                options={
+                  [
+                    { value: "todas", label: "Todas" },
+                    { value: "activas", label: "Activas" },
+                    { value: "inactivas", label: "Inactivas" },
+                    { value: "alerta", label: "En alerta" },
+                    { value: "vencidas", label: "Vencidas" },
+                  ]
                 }
-              }}
-              style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-            <Select
-              style={{ width: 160 }}
-              value={filtroEstado}
-              onChange={(value) => {
-                setFiltroEstado(value);
-                setPagina(1);
-              }}
-              options={[
-                { value: 'todas', label: 'Todas' },
-                { value: 'activas', label: 'Activas' },
-                { value: 'inactivas', label: 'Inactivas' },
-                { value: 'alerta', label: 'En alerta' },
-                { value: 'vencidas', label: 'Vencidas' },
-              ]}
-            />
-            <Select
-              style={{ width: 180 }}
-              value={filtroVencimiento}
-              onChange={(value) => {
-                setFiltroVencimiento(value);
-                setPagina(1);
-              }}
-              options={[
-                { value: 'todas', label: 'Todas' },
-                { value: '30', label: 'Vence en 30 días' },
-                { value: '90', label: 'Vence en 90 días' },
-                { value: 'vencida', label: 'Vencida' },
-              ]}
-            />
-            <Select
-              style={{ width: 65 }}
-              value={pageSize}
-              onChange={(v) => { setPageSize(v); setPagina(1); }}
-              options={[
-                { value: 25, label: '25' },
-                { value: 50, label: '50' },
-                { value: 100, label: '100' },
-              ]}
-            />
-            <div style={{ flex: 1 }} />
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-          </div>
-        </div>
+              />
+              <Select
+                style={{ width: 180 }}
+                value={filtroVencimiento}
+                onChange={(value) => { setFiltroVencimiento(value); setPagina(1); }}
+                options={
+                  [
+                    { value: "todas", label: "Todas" },
+                    { value: "30", label: "Vence en 30 dÃ­as" },
+                    { value: "90", label: "Vence en 90 dÃ­as" },
+                    { value: "vencida", label: "Vencida" },
+                  ]
+                }
+              />
+            </>
+          }
+        />
 
         {/* Tabla */}
         <Table<SecuenciaNCFListDTO>
           columns={columns}
           dataSource={filteredData}
           rowKey="idExterno"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 1200 }}
           size="middle"
           onRow={(record) => ({
@@ -443,7 +406,7 @@ const SecuenciasNCF: React.FC = () => {
           locale={{
             emptyText: (
               <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {data.length === 0 ? (
+                {(data || []).length === 0 ? (
                   <Empty description="No hay secuencias NCF registradas" />
                 ) : (
                   <Empty description="No se encontraron secuencias para los filtros aplicados">
@@ -494,7 +457,7 @@ const SecuenciasNCF: React.FC = () => {
               </Text>
             </div>
 
-            {/* Sección Consumo */}
+            {/* SecciÃ³n Consumo */}
             <Divider>
               Consumo
             </Divider>
@@ -526,7 +489,7 @@ const SecuenciasNCF: React.FC = () => {
                     <Descriptions.Item label="Cantidad total">
                       {cantidad.toLocaleString('es-DO')}
                     </Descriptions.Item>
-                    <Descriptions.Item label="Mínimo">
+                    <Descriptions.Item label="MÃ­nimo">
                       <Space>
                         <span>{minimo.toLocaleString('es-DO')}</span>
                         {disponible > minimo ? (
@@ -541,7 +504,7 @@ const SecuenciasNCF: React.FC = () => {
               );
             })()}
 
-            {/* Sección Rango */}
+            {/* SecciÃ³n Rango */}
             <Divider>
               Rango de secuencia
             </Divider>
@@ -552,12 +515,12 @@ const SecuenciasNCF: React.FC = () => {
               <Descriptions.Item label="Final">
                 <Text style={{ fontFamily: 'monospace' }}>{detalleItem.secuenciaFinal}</Text>
               </Descriptions.Item>
-              <Descriptions.Item label="Dígitos">
+              <Descriptions.Item label="DÃ­gitos">
                 <Text style={{ fontFamily: 'monospace' }}>{detalleItem.digitos}</Text>
               </Descriptions.Item>
             </Descriptions>
 
-            {/* Sección Vigencia */}
+            {/* SecciÃ³n Vigencia */}
             <Divider>
               Vigencia
             </Divider>
@@ -573,14 +536,14 @@ const SecuenciasNCF: React.FC = () => {
                       if (dias <= 30)
                         return (
                           <Tag color="warning">
-                            Vence en {dias} día{dias !== 1 ? 's' : ''}
+                            Vence en {dias} dÃ­a{dias !== 1 ? 's' : ''}
                           </Tag>
                         );
                       return null;
                     })()}
                   </Space>
                 ) : (
-                  <Text type="secondary">—</Text>
+                  <Text type="secondary">â€”</Text>
                 )}
               </Descriptions.Item>
             </Descriptions>
@@ -600,11 +563,11 @@ const SecuenciasNCF: React.FC = () => {
         }
       >
         <p>
-          La funcionalidad de registro de secuencias NCF está en desarrollo.
+          La funcionalidad de registro de secuencias NCF estÃ¡ en desarrollo.
         </p>
         <p>
-          Mientras tanto, las secuencias se gestionan desde el módulo Desktop o
-          mediante importación desde DGII.
+          Mientras tanto, las secuencias se gestionan desde el mÃ³dulo Desktop o
+          mediante importaciÃ³n desde DGII.
         </p>
       </Modal>
     </>

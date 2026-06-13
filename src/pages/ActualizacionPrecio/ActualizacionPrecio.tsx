@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+﻿import React, { useEffect, useState, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Table, Input, Select, Tag, Button, Card, Typography, Modal, Descriptions, DatePicker, Alert, Empty } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -6,6 +7,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { actualizacionPrecioApi } from '../../api/actualizacionPrecioApi';
 import type { ActualizacionPrecioDTO } from '../../types/actualizacionPrecio';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -50,14 +52,9 @@ const ActualizacionPrecio: React.FC = () => {
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
 
-  const [data, setData] = useState<ActualizacionPrecioDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingError, setLoadingError] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
-  const [total, setTotal] = useState(0);
-  const [fechaTrigger, setFechaTrigger] = useState(0);
   const [detalleItem, setDetalleItem] = useState<ActualizacionPrecioDTO | null>(null);
   const [detalleOpen, setDetalleOpen] = useState(false);
 
@@ -65,56 +62,45 @@ const ActualizacionPrecio: React.FC = () => {
     desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
     hasta: formatDateParam(new Date()),
   });
+  const [dateTrigger, setDateTrigger] = useState(0);
 
-  const cargarDatos = useCallback(
-    async (pagina: number, filas: number, busqueda: string) => {
-      setLoading(true);
-      try {
-        const { desde, hasta } = dateParamsRef.current;
-        let resultados: ActualizacionPrecioDTO[];
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['actualizacionPrecio', sucursalActiva, page, pageSize, searchText, dateTrigger],
+    queryFn: async () => {
+      const { desde, hasta } = dateParamsRef.current;
+      let resultados: ActualizacionPrecioDTO[];
 
-        if (busqueda.length > 2) {
-          resultados = await actualizacionPrecioApi.filtrar(sucursalActiva, {
-            cantidad: filas,
-            salto: (pagina - 1) * filas,
-            desde,
-            hasta,
-            documento: busqueda,
-          });
-        } else {
-          resultados = await actualizacionPrecioApi.obtenerResumido(
-            sucursalActiva,
-            desde,
-            hasta,
-            filas,
-            (pagina - 1) * filas
-          );
-        }
-
-        setData(resultados);
-        setTotal(
-          resultados.length < filas
-            ? (pagina - 1) * filas + resultados.length
-            : pagina * filas + 1
+      if (searchText.length > 2) {
+        resultados = await actualizacionPrecioApi.filtrar(sucursalActiva, {
+          cantidad: pageSize,
+          salto: (page - 1) * pageSize,
+          desde,
+          hasta,
+          documento: searchText,
+        });
+      } else {
+        resultados = await actualizacionPrecioApi.obtenerResumido(
+          sucursalActiva,
+          desde,
+          hasta,
+          pageSize,
+          (page - 1) * pageSize
         );
-      } catch {
-        setLoadingError(true);
-      } finally {
-        setLoading(false);
       }
-    },
-    [sucursalActiva]
-  );
 
-  useEffect(() => {
-    cargarDatos(page, pageSize, searchText);
-  }, [page, pageSize, searchText, fechaTrigger, cargarDatos]);
+      const total = resultados.length < pageSize
+        ? (page - 1) * pageSize + resultados.length
+        : page * pageSize + 1;
+      return { datos: resultados, total };
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('FActPrecio');
     updateToolbar({});
     return () => resetToolbar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleSearch = (value: string) => {
@@ -123,8 +109,7 @@ const ActualizacionPrecio: React.FC = () => {
   };
 
   const handleRefresh = () => {
-    setLoadingError(false);
-    setFechaTrigger((n) => n + 1);
+    setDateTrigger((n) => n + 1);
   };
 
   const handleDateChange = (dates: any) => {
@@ -139,7 +124,7 @@ const ActualizacionPrecio: React.FC = () => {
       };
     }
     setPage(1);
-    setFechaTrigger((n) => n + 1);
+    setDateTrigger((n) => n + 1);
   };
 
   const columns: ColumnsType<ActualizacionPrecioDTO> = [
@@ -210,14 +195,14 @@ const ActualizacionPrecio: React.FC = () => {
       key: 'autorizado',
       width: 100,
       render: (val: boolean) => (
-        <Tag color="blue">{val ? 'Sí' : 'No'}</Tag>
+        <Tag color="blue">{val ? 'SÃ­' : 'No'}</Tag>
       ),
     },
   ];
 
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
           message="Error al cargar actualizaciones de precio"
           type="error"
@@ -231,50 +216,29 @@ const ActualizacionPrecio: React.FC = () => {
         />
       )}
       <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
-        <div style={{ padding: '16px 24px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
+          onReload={handleRefresh}
+          filtros={
             <RangePicker
               style={{ width: 220 }}
               format="YYYY-MM-DD"
               onChange={handleDateChange}
-              placeholder={['Desde', 'Hasta']}
+              placeholder={["Desde", "Hasta"]}
             />
-            <Input.Search
-              placeholder="Buscar documento..."
-              allowClear
-              onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-              style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-            <Select
-              style={{ width: 65 }}
-              value={pageSize}
-              onChange={(v) => { setPageSize(v); setPage(1); }}
-              options={[
-                { value: 25, label: '25' },
-                { value: 50, label: '50' },
-                { value: 100, label: '100' },
-              ]}
-            />
-            <div style={{ flex: 1 }} />
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-          </div>
-        </div>
+          }
+        />
         <Table<ActualizacionPrecioDTO>
           columns={columns}
-          dataSource={data}
+          dataSource={data?.datos || []}
           rowKey="documento"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 1200 }}
           size="middle"
           locale={{
-            emptyText: loading ? ' ' : <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No se encontraron actualizaciones de precio" /></div>,
+            emptyText: isLoading ? ' ' : <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No se encontraron actualizaciones de precio" /></div>,
           }}
           onRow={() => ({
             style: { cursor: 'default' },
@@ -282,7 +246,7 @@ const ActualizacionPrecio: React.FC = () => {
           pagination={{
             current: page,
             pageSize: pageSize,
-            total: total,
+            total: data?.total || 0,
             onChange: (newPage, newPageSize) => {
               if (newPageSize !== pageSize) {
                 setPageSize(newPageSize);
@@ -298,7 +262,7 @@ const ActualizacionPrecio: React.FC = () => {
       </Card>
 
       <Modal
-        title={`Actualización: ${detalleItem?.documento || ''}`}
+        title={`ActualizaciÃ³n: ${detalleItem?.documento || ''}`}
         open={detalleOpen}
         onCancel={() => setDetalleOpen(false)}
         footer={null}
@@ -317,7 +281,7 @@ const ActualizacionPrecio: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label="Ajuste">{detalleItem.ajuste}</Descriptions.Item>
             <Descriptions.Item label="Redondear">
-              {detalleItem.redondear ? 'Sí' : 'No'}
+              {detalleItem.redondear ? 'SÃ­' : 'No'}
             </Descriptions.Item>
             <Descriptions.Item label="Estado">
               <Tag
@@ -329,7 +293,7 @@ const ActualizacionPrecio: React.FC = () => {
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="Autorizado">
-              <Tag color="blue">{detalleItem.autorizado ? 'Sí' : 'No'}</Tag>
+              <Tag color="blue">{detalleItem.autorizado ? 'SÃ­' : 'No'}</Tag>
             </Descriptions.Item>
           </Descriptions>
         )}

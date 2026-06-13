@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Table, Input, Tag, Button, message, Card, Modal, Form, Switch, Typography, Select, Alert, Row, Col } from 'antd';
+import { Table, Input, Tag, Button, message, Card, Modal, Form, Switch, Typography, Select, Alert, Row, Col, Empty } from 'antd';
 import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -10,6 +11,7 @@ import { monedaApi } from '../../api/monedaApi';
 import PermissionGate from '../../components/PermissionGate';
 import type { CuentaContableDTO, TipoCuentaDTO, GrupoCuentaContableDTO, MonedaDTO } from '../../types/contabilidad';
 import { OrigenCuenta } from '../../types/contabilidad';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const ORIGEN_LABEL: Record<number, string> = {
   [OrigenCuenta.Debito]: 'Débito',
@@ -37,13 +39,9 @@ const CuentasContables: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
 
-  const [data, setData] = useState<CuentaContableDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [total, setTotal] = useState(0);
   const [filtro, setFiltro] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [loadingError, setLoadingError] = useState(false);
   const [selectedRow, setSelectedRow] = useState<CuentaContableDTO | null>(null);
 
   // Estados para crear/editar
@@ -56,6 +54,58 @@ const CuentasContables: React.FC = () => {
   const [tipos, setTipos] = useState<TipoCuentaDTO[]>([]);
   const [grupos, setGrupos] = useState<GrupoCuentaContableDTO[]>([]);
   const [monedas, setMonedas] = useState<MonedaDTO[]>([]);
+
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['cuentasContables', sucursalActiva, page, pageSize, filtro],
+    queryFn: async () => {
+      if (sucursalActiva === undefined) return { data: [], total: 0 };
+      const salto = (page - 1) * pageSize;
+      const result = await cuentaContableApi.obtenerListadoPaginado(sucursalActiva, pageSize, salto, filtro);
+      setSelectedRow((actual) =>
+        actual ? result.data.find((item) => item.noCuenta === actual.noCuenta) ?? null : null
+      );
+      return result;
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
+
+  useEffect(() => {
+    setActiveModule('MCuentaContable');
+    updateToolbar({});
+    return () => resetToolbar();
+  }, [setActiveModule, updateToolbar, resetToolbar]);
+
+  // Cargar opciones de catálogo cuando se abre el modal
+  useEffect(() => {
+    if (!modalVisible || sucursalActiva === undefined) return;
+    cuentaContableApi.obtenerTipos(sucursalActiva)
+      .then(setTipos)
+      .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar tipos de cuenta'));
+    cuentaContableApi.obtenerGrupos(sucursalActiva)
+      .then(setGrupos)
+      .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar grupos'));
+    monedaApi.obtenerListado(sucursalActiva)
+      .then(setMonedas)
+      .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar monedas'));
+  }, [modalVisible, sucursalActiva]);
+
+  // Manejar navegación desde detalle (Editar)
+  useEffect(() => {
+    const noCuentaEditar = (location.state as any)?.editarNoCuenta;
+    if (noCuentaEditar && sucursalActiva !== undefined) {
+      const encontrada = (data?.data || []).find(c => c.noCuenta === noCuentaEditar);
+      if (encontrada) {
+        abrirEdicion(encontrada);
+      } else {
+        cuentaContableApi.obtenerPorId(sucursalActiva, noCuentaEditar)
+          .then(cta => abrirEdicion(cta))
+          .catch(() => message.error('Error al cargar cuenta para editar'));
+      }
+      window.history.replaceState({}, document.title);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   const abrirNuevo = () => {
     setEditando(null);
@@ -94,7 +144,7 @@ const CuentasContables: React.FC = () => {
         message.success('Cuenta contable creada correctamente');
       }
       setModalVisible(false);
-      cargarDatos(page, pageSize, filtro);
+      refetch();
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar cuenta contable');
@@ -102,62 +152,6 @@ const CuentasContables: React.FC = () => {
       setGuardando(false);
     }
   };
-
-  const cargarDatos = useCallback(async (pag: number, size: number, texto: string) => {
-    if (sucursalActiva === undefined) return;
-    setLoading(true);
-    try {
-      const skip = (pag - 1) * size;
-      const result = await cuentaContableApi.obtenerListadoPaginado(sucursalActiva, skip, size, texto);
-      setData(result.data);
-      setTotal(result.total);
-      setSelectedRow((actual) =>
-        actual ? result.data.find((item) => item.noCuenta === actual.noCuenta) ?? null : null
-      );
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    setActiveModule('MCuentaContable');
-    updateToolbar({});
-    cargarDatos(page, pageSize, filtro);
-    return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos, page, pageSize, filtro]);
-
-  // Cargar opciones de catálogo cuando se abre el modal
-  useEffect(() => {
-    if (!modalVisible || sucursalActiva === undefined) return;
-    cuentaContableApi.obtenerTipos(sucursalActiva)
-      .then(setTipos)
-      .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar tipos de cuenta'));
-    cuentaContableApi.obtenerGrupos(sucursalActiva)
-      .then(setGrupos)
-      .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar grupos'));
-    monedaApi.obtenerListado(sucursalActiva)
-      .then(setMonedas)
-      .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar monedas'));
-  }, [modalVisible, sucursalActiva]);
-
-  // Manejar navegación desde detalle (Editar)
-  useEffect(() => {
-    const noCuentaEditar = (location.state as any)?.editarNoCuenta;
-    if (noCuentaEditar && sucursalActiva !== undefined) {
-      const encontrada = data.find(c => c.noCuenta === noCuentaEditar);
-      if (encontrada) {
-        abrirEdicion(encontrada);
-      } else {
-        cuentaContableApi.obtenerPorId(sucursalActiva, noCuentaEditar)
-          .then(cta => abrirEdicion(cta))
-          .catch(() => message.error('Error al cargar cuenta para editar'));
-      }
-      window.history.replaceState({}, document.title);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state]);
 
   const handleSearch = (value: string) => {
     setFiltro(value);
@@ -225,23 +219,16 @@ const CuentasContables: React.FC = () => {
 
   ];
 
-  const handleRefresh = useCallback(() => {
-    setLoadingError(false);
-    setFiltro('');
-    setPage(1);
-    cargarDatos(1, pageSize, '');
-  }, [cargarDatos, pageSize]);
-
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
           title="Error al cargar cuentas contables"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={handleRefresh}>
+            <Button size="small" onClick={() => refetch()}>
               Reintentar
             </Button>
           }
@@ -252,56 +239,34 @@ const CuentasContables: React.FC = () => {
       style={{ borderRadius: 8, overflow: 'hidden' }}
       styles={{ body: { padding: 0 } }}
     >
-      <div style={{ padding: '16px 24px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <Input.Search
-            placeholder="Buscar por número o nombre..."
-            allowClear
-            onSearch={handleSearch}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                (e.target as HTMLInputElement).blur();
-                handleSearch('');
-              }
-            }}
-            style={{ width: 400 }}
-            prefix={<SearchOutlined className="paces-text-icon" />}
-          />
-          <Select
-            style={{ width: 65 }}
-            value={pageSize}
-            onChange={(v) => { setPageSize(v); setPage(1); }}
-            options={[
-              { value: 25, label: '25' },
-              { value: 50, label: '50' },
-              { value: 100, label: '100' },
-            ]}
-          />
-          <div style={{ flex: 1 }} />
-          <PermissionGate accion="CREAR">
-            <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-              Nuevo
-            </Button>
-          </PermissionGate>
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-        </div>
-      </div>
+      <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
+          onNuevo={abrirNuevo}
+          onReload={() => refetch()}
+        />
 
       <Table<CuentaContableDTO>
         columns={columns}
-        dataSource={data}
+        dataSource={data?.data || []}
         rowKey="noCuenta"
-        loading={loading}
+        loading={isLoading}
         scroll={{ x: 1100 }}
         size="middle"
         rowClassName={(record) =>
           selectedRow?.noCuenta === record.noCuenta ? 'paces-row-selected' : 'paces-row-hover'
         }
         className="paces-border-top paces-list-table"
-        pagination={{
+          locale={{
+            emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Empty description="No hay cuentas contables registradas" />
+            </div>,
+          }}
+          pagination={{
           current: page,
           pageSize,
-          total,
+          total: data?.total || 0,
           showSizeChanger: false,
           showTotal: (t) => `${t} registros`,
         }}

@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Table, message, Card, Button, Modal, Form, Input, InputNumber, Select, Typography } from 'antd';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Table, message, Card, Button, Modal, Form, Input, InputNumber, Select, Typography, Alert, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
@@ -13,6 +14,10 @@ import {
   BaseCalculoImpuesto,
 } from '../../types/contabilidad';
 import PermissionGate from '../../components/PermissionGate';
+import { toTitleCase } from '../../utils/formats';
+import BuscarCuentaContableModal from '../../components/BuscarCuentaContableModal/BuscarCuentaContableModal';
+import { cuentaContableApi } from '../../api/cuentaContableApi';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const TIPO_IMPUESTO_LABEL: Record<string, { label: string; color: string }> = {
   I: { label: 'Impuesto', color: 'blue' },
@@ -29,10 +34,6 @@ const AMBITO_LABEL: Record<number, string> = {
 
 const { Text } = Typography;
 
-function toTitleCase(str: string): string {
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 const Impuestos: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
@@ -43,8 +44,7 @@ const Impuestos: React.FC = () => {
   const puedeEditar = pantallaActual?.acciones.includes('EDITAR') ?? false;
   const puedeCrear = pantallaActual?.acciones.includes('CREAR') ?? false;
 
-  const [data, setData] = useState<ImpuestoDTO[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(25);
 
@@ -52,22 +52,46 @@ const Impuestos: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<ImpuestoDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [cuentaModalOpen, setCuentaModalOpen] = useState(false);
   const [form] = Form.useForm();
 
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['impuestos', sucursalActiva],
+    queryFn: async () => {
+      if (sucursalActiva === undefined) return [];
+      const result = await impuestoApi.obtenerListado(sucursalActiva);
+      return result || [];
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
+
+  useEffect(() => {
+    setActiveModule('MImpuesto');
+    updateToolbar({});
+    return () => resetToolbar();
+  }, [setActiveModule, updateToolbar, resetToolbar]);
+
   const handleSearch = (value: string) => {
+    setPage(1);
     setSearchText(value);
   };
 
   const filteredData = useMemo(() => {
-    if (!searchText) return data;
+    const list = data || [];
+    if (!searchText) return list;
     const lower = searchText.toLowerCase();
-    return data.filter(
+    return list.filter(
       (item) =>
         item.codigo.toLowerCase().includes(lower) ||
         item.nombre.toLowerCase().includes(lower)
     );
   }, [data, searchText]);
-
+  const paginatedData = useMemo(() => {
+    if (!filteredData) return [];
+    const start = (page - 1) * pageSize;
+    return filteredData.slice(start, start + pageSize);
+  }, [filteredData, page, pageSize]);
   const abrirNuevo = () => {
     if (!puedeCrear) return;
     setEditando(null);
@@ -77,6 +101,8 @@ const Impuestos: React.FC = () => {
       ambito: AmbitoImpuesto.Ninguno,
       metodoCalculo: MetodoCalculoImpuesto.Porcentaje,
       baseCalculo: BaseCalculoImpuesto.Indefinido,
+      noCuenta: '',
+      cuentaContable: '',
     });
     setModalVisible(true);
   };
@@ -84,14 +110,16 @@ const Impuestos: React.FC = () => {
   const abrirEditar = (item: ImpuestoDTO) => {
     if (!puedeEditar) return;
     setEditando(item);
+    const TIPO_MAP_REVERSE: Record<number, string> = { 0: 'I', 1: 'L', 2: 'V', 3: 'R' };
     form.setFieldsValue({
       codigo: item.codigo,
       nombre: item.nombre,
       porcentaje: item.porcentaje,
-      tipo: item.tipo,
+      tipo: TIPO_MAP_REVERSE[item.tipo as unknown as number] ?? item.tipo,
       ambito: item.ambito,
       metodoCalculo: item.metodoCalculo,
       baseCalculo: item.baseCalculo,
+      noCuenta: item.noCuenta,
       cuentaContable: item.cuentaContable,
       indicadorDGII: item.indicadorDGII,
     });
@@ -103,15 +131,18 @@ const Impuestos: React.FC = () => {
       const values = await form.validateFields();
       if (sucursalActiva === undefined) return;
       setGuardando(true);
+      // Convertir tipo de string a numero (I=0, L=1, V=2, R=3)
+      const TIPO_MAP: Record<string, number> = { I: 0, L: 1, V: 2, R: 3 };
+      const payload = { ...values, tipo: TIPO_MAP[values.tipo] ?? values.tipo };
       if (editando) {
-        await impuestoApi.actualizar(sucursalActiva, editando.codigo, values);
+        await impuestoApi.actualizar(sucursalActiva, editando.codigo, payload);
         message.success('Impuesto actualizado correctamente');
       } else {
-        await impuestoApi.crear(sucursalActiva, values);
+        await impuestoApi.crear(sucursalActiva, payload);
         message.success('Impuesto creado correctamente');
       }
       setModalVisible(false);
-      cargarDatos();
+      refetch();
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar impuesto');
@@ -119,26 +150,6 @@ const Impuestos: React.FC = () => {
       setGuardando(false);
     }
   };
-
-  const cargarDatos = useCallback(async () => {
-    if (sucursalActiva === undefined) return;
-    setLoading(true);
-    try {
-      const result = await impuestoApi.obtenerListado(sucursalActiva);
-      setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar impuestos');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    setActiveModule('MImpuesto');
-    updateToolbar({});
-    cargarDatos();
-    return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
 
   const columns: ColumnsType<ImpuestoDTO> = [
     {
@@ -181,7 +192,11 @@ const Impuestos: React.FC = () => {
       dataIndex: 'tipo',
       key: 'tipo',
       width: 120,
-      render: (tipo: TipoImpuesto) => <Text>{TIPO_IMPUESTO_LABEL[tipo]?.label || tipo}</Text>,
+      render: (tipo: number) => {
+        const TIPO_NUM_MAP: Record<number, string> = { 0: 'I', 1: 'L', 2: 'V', 3: 'R' };
+        const key = TIPO_NUM_MAP[tipo] ?? tipo;
+        return <Text>{TIPO_IMPUESTO_LABEL[key]?.label || key}</Text>;
+      },
     },
     {
       title: 'Ámbito',
@@ -202,53 +217,47 @@ const Impuestos: React.FC = () => {
 
   return (
     <>
+      {isError && (
+        <Alert
+          message="Error al cargar impuestos"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={() => refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
-        <div style={{ padding: '16px 24px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-            <Input.Search
-              placeholder="Buscar por código o nombre..."
-              allowClear
-              onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-            style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-            <Select
-              style={{ width: 65 }}
-              value={pageSize}
-              onChange={(v) => { setPageSize(v); }}
-              options={[
-                { value: 25, label: '25' },
-                { value: 50, label: '50' },
-                { value: 100, label: '100' },
-              ]}
-            />
-            <div style={{ flex: 1 }} />
-            <PermissionGate accion="CREAR">
-              <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-                Nuevo
-              </Button>
-            </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={() => cargarDatos()} />
-          </div>
-        </div>
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); }}
+          onNuevo={abrirNuevo}
+          onReload={() => refetch()}
+        />
         <Table<ImpuestoDTO>
           columns={columns}
-          dataSource={filteredData}
+          dataSource={paginatedData}
           rowKey="idExterno"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 1100 }}
           size="middle"
           rowClassName="paces-row-hover"
           className="paces-border-top paces-list-table"
+          locale={{
+            emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Empty description="No hay impuestos registrados" />
+            </div>,
+          }}
           pagination={{
-            showSizeChanger: false,
+            current: page,
             pageSize,
+            total: filteredData?.length || 0,
+            onChange: (p) => setPage(p),
+            showSizeChanger: false,
             showTotal: (t) => `${t} registros`,
           }}
         />
@@ -335,11 +344,14 @@ const Impuestos: React.FC = () => {
               <Select.Option value={BaseCalculoImpuesto.MontoTotal}>Monto Total</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item
-            name="cuentaContable"
-            label="No. Cuenta Contable"
-          >
-            <Input placeholder="Ej. 2.01.01" maxLength={20} />
+          <Form.Item name="noCuenta" label="No. Cuenta Contable">
+            <Input
+              placeholder=" "
+              readOnly
+              value={form.getFieldValue('cuentaContable') || form.getFieldValue('noCuenta') || ''}
+              onClick={() => setCuentaModalOpen(true)}
+              suffix={<SearchOutlined style={{ cursor: 'pointer' }} onClick={() => setCuentaModalOpen(true)} />}
+            />
           </Form.Item>
           <Form.Item
             name="indicadorDGII"
@@ -348,6 +360,14 @@ const Impuestos: React.FC = () => {
             <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
           </Form.Item>
         </Form>
+        <BuscarCuentaContableModal
+          open={cuentaModalOpen}
+          onClose={() => setCuentaModalOpen(false)}
+          onSelect={(cuenta) => {
+            form.setFieldsValue({ noCuenta: cuenta.noCuenta, cuentaContable: `${cuenta.noCuenta} - ${cuenta.nombre}` });
+          }}
+          sucursal={sucursalActiva}
+        />
       </Modal>
     </>
   );

@@ -24,6 +24,7 @@ import {
   LogoutOutlined,
   UserOutlined,
   SettingOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 
 function toTitleCase(str?: string | null): string {
@@ -61,6 +62,7 @@ const pageTitles: Record<string, string> = {
   FDVC: 'Devolución de Compra',
   FTRP: 'Transferencia de Almacén',
   FDEV: 'Devolución de Venta',
+  RDEV: 'Reporte Devoluciones Venta',
   FPV: 'Facturas POS',
   FFAC: 'Factura Cliente',
   FRDE: 'Factura Proveedor',
@@ -137,6 +139,7 @@ const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isDetailPage = /^\/[A-Za-z]+\/\d+$/.test(location.pathname);
+  const isFormPage = /^\/[A-Za-z]+\/(nuevo|\d+\/editar)$/.test(location.pathname);
   const { data, loading, error, fetchInitialConfig } = useCompanyStore();
   const sidebarCollapsed = useUIStore((s: any) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((s: any) => s.setSidebarCollapsed);
@@ -175,9 +178,21 @@ const MainLayout: React.FC = () => {
     let activo = true;
 
     const cargarNotificaciones = async () => {
-      useNotificacionesStore.getState().cargarPendientes();
+      try {
+        await useNotificacionesStore.getState().cargarPendientes();
+      } catch {
+        // Si falla la carga inicial, no bloquear la conexión SignalR
+      }
       if (activo) {
         await useNotificacionesStore.getState().conectarSignalR();
+        // Recargar después de conectar SignalR para asegurar datos frescos
+        if (activo) {
+          try {
+            await useNotificacionesStore.getState().cargarPendientes();
+          } catch {
+            // Silencioso
+          }
+        }
       }
     };
 
@@ -194,6 +209,7 @@ const MainLayout: React.FC = () => {
     if (!isAuthenticated) return;
 
     useChatStore.getState().conectarSignalR();
+    useChatStore.getState().cargarConversaciones();
 
     return () => {
       useChatStore.getState().desconectarSignalR();
@@ -326,7 +342,7 @@ const MainLayout: React.FC = () => {
               <Select
                 value={sucursalActiva}
                 onChange={(val) => setSucursalActiva(val)}
-                disabled={isDetailPage}
+                disabled={isDetailPage || isFormPage}
                 size="small"
                 className="paces-sucursal-select"
                 options={sucursalesFiltradas.map((s: AuthSucursalPermitidaDTO) => ({

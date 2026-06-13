@@ -7,7 +7,7 @@ const BASE = '/Cliente';
 export const clienteApi = {
   obtenerListado: async (
     sucursal: number,
-    params?: { filas?: number; salto?: number; codigo?: string; activo?: boolean }
+    params?: { cantidad?: number; salto?: number; codigo?: string; activo?: boolean }
   ): Promise<ClienteDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<ClienteDTO[]>>(`${BASE}/${sucursal}`, { params });
     return data.data;
@@ -17,7 +17,7 @@ export const clienteApi = {
     sucursal: number,
     params?: { codigo?: string; activo?: boolean }
   ): Promise<number> => {
-    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/${sucursal}/total`, { params });
+    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/total/${sucursal}`, { params });
     return data.data;
   },
 

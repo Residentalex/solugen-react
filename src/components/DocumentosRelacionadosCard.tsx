@@ -11,6 +11,7 @@ const RUTA_MAP: Record<string, string> = {
   NDSUP: 'FNDSUP', NDCLI: 'FNDCLI',
   DEV: 'FDEV', DVC: 'FDVC', DBA: 'FDBASUP',
   RI: 'FRI',
+  COT: 'FCotizacion',
 };
 
 interface DocumentosRelacionadosCardProps {

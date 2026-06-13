@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography } from 'antd';
+import { Typography, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
@@ -10,14 +10,16 @@ import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { FacturaVistaDTO } from '../../types/facturacion';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 
 const { Text } = Typography;
 
 const FacturaPOS: React.FC = () => {
   const navigate = useNavigate();
+  const { screenCode, documentCode } = useScreenConfig();
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<FacturaVistaDTO>({
-    modulo: 'FPV',
+    modulo: screenCode,
     fetchVista: (sucursal, desde, hasta, filas, salto, estado) =>
       facturaPOSApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado),
     fetchFiltrar: (sucursal, params) =>
@@ -101,6 +103,17 @@ const FacturaPOS: React.FC = () => {
     },
   ];
 
+  const customEmptyText = state.searchText ? (
+    <div style={{ padding: '20px 0' }}>
+      <Alert
+        type="info"
+        showIcon
+        message="Búsqueda limitada"
+        description={`La búsqueda en Factura POS solo considera los últimos 30 días. Si la factura "${state.searchText}" es más antigua, use el botón "Filtros" para expandir el rango de fechas manualmente.`}
+      />
+    </div>
+  ) : undefined;
+
   return (
     <DocumentListadoLayout<FacturaVistaDTO>
       columns={columns}
@@ -119,6 +132,7 @@ const FacturaPOS: React.FC = () => {
       onPageChange={actions.goToPage}
       pdfPreview={state.pdfPreview}
       onPdfClose={actions.handlePdfClose}
+      emptyText={customEmptyText}
       toolbarProps={{
         showFiltros: true,
         filtros: state.filtros,

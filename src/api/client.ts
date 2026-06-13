@@ -25,7 +25,9 @@ apiClient.interceptors.request.use((config) => {
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       if (payload.exp * 1000 < Date.now()) {
-        // Token expirado → no tiene sentido intentar el request
+        // Token expirado → guardar sucursal activa antes de logout
+        const sucursalActual = useAuthStore.getState().sucursalActiva;
+        sessionStorage.setItem('ultimaSucursalActiva', String(sucursalActual));
         useAuthStore.getState().logout();
         sessionStorage.setItem('returnUrl', window.location.pathname + window.location.search);
         window.location.href = '/login';
@@ -59,6 +61,8 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !isLoginRequest) {
       // Ya se intentó refrescar y sigue dando 401 → forzar redirect
       if (originalRequest._retry) {
+        const sucursalActual = useAuthStore.getState().sucursalActiva;
+        sessionStorage.setItem('ultimaSucursalActiva', String(sucursalActual));
         useAuthStore.getState().logout();
         sessionStorage.setItem('returnUrl', window.location.pathname + window.location.search);
         window.location.href = '/login';
@@ -90,12 +94,15 @@ apiClient.interceptors.response.use(
           refreshToken: sesion.refreshToken,
           usuario: sesion.usuario,
           sucursalActiva: sesion.sucursalActiva,
+          sucursalContable: sesion.sucursalContable,
           sucursalesPermitidas: sesion.sucursalesPermitidas,
         });
 
         originalRequest.headers.Authorization = `Bearer ${sesion.accessToken}`;
         return apiClient(originalRequest);
       } catch {
+        const sucursalActual = useAuthStore.getState().sucursalActiva;
+        sessionStorage.setItem('ultimaSucursalActiva', String(sucursalActual));
         useAuthStore.getState().logout();
         sessionStorage.setItem('returnUrl', window.location.pathname + window.location.search);
         window.location.href = '/login';

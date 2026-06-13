@@ -11,6 +11,7 @@ import {
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
@@ -50,6 +51,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+  const { screenCode, documentCode } = useScreenConfig();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
@@ -65,11 +67,12 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   const [operacionTitulo, setOperacionTitulo] = useState('');
   const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   const { message: messageApi } = App.useApp();
 
   useEffect(() => {
-    setActiveModule('FTRP');
+    setActiveModule(screenCode);
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
@@ -335,11 +338,12 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       </div>
     } style={{ marginBottom: 16 }}>
       <Descriptions bordered size="small" column={columnCount} styles={{ content: { background: 'transparent' } }}>
+        <Descriptions.Item label="Tipo:">—</Descriptions.Item>
         <Descriptions.Item label="Concepto:">
-          {data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}
+          {data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}
         </Descriptions.Item>
-        <Descriptions.Item label="NCF:">
-          {data.ncf || '-'}
+        <Descriptions.Item label="Referencia:">
+          {data.referencia || '-'}
         </Descriptions.Item>
         <Descriptions.Item label="Fecha Doc.:">
           {formatDate(data.fechaDocumento)}
@@ -347,13 +351,10 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         <Descriptions.Item label="Almacén Origen:">
           {data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}
         </Descriptions.Item>
-        <Descriptions.Item label="Almacén Destino:" span={columnCount === 3 ? 2 : 1}>
+        <Descriptions.Item label="Almacén Destino:">
           {data.almacenDestino?.nombre ? toTitleCase(data.almacenDestino.nombre) : '-'}
         </Descriptions.Item>
-        <Descriptions.Item label="Referencia:">
-          {data.referencia || '-'}
-        </Descriptions.Item>
-        <Descriptions.Item label="Nota:" span={columnCount === 3 ? 3 : 1}>
+        <Descriptions.Item label="Nota:" span={columnCount}>
           <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
         </Descriptions.Item>
       </Descriptions>

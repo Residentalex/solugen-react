@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Table, Tag, Button, Card, Input, message, Empty, Modal, Select, Form, Alert, Typography } from 'antd';
 import { ReloadOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -11,6 +12,7 @@ import PermissionGate from '../../components/PermissionGate';
 import type { TicketDTO } from '../../types/ticket';
 import type { CrearTicketRequest } from '../../types/ticket';
 import type { UsuarioDTO } from '../../types/administracion';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { TextArea } = Input;
 
@@ -41,8 +43,6 @@ const Tickets: React.FC = () => {
   const usuarioID = useAuthStore((s) => s.usuario?.id);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
 
-  const [tickets, setTickets] = useState<TicketDTO[]>([]);
-  const [loading, setLoading] = useState(false);
   const [ticketModalID, setTicketModalID] = useState<number | null>(null);
   const [searchText, setSearchText] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
@@ -50,32 +50,28 @@ const Tickets: React.FC = () => {
   const [crearModal, setCrearModal] = useState(false);
   const [creando, setCreando] = useState(false);
   const [form] = Form.useForm();
-  const [loadingError, setLoadingError] = useState(false);
   const [usuarios, setUsuarios] = useState<UsuarioDTO[]>([]);
+
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['tickets', sucursal, usuarioID, pageSize],
+    queryFn: async () => {
+      if (!sucursal || !usuarioID) return [];
+      const result = await ticketApi.obtenerPendientes(sucursal, usuarioID, pageSize);
+      return result;
+    },
+    enabled: !!sucursal && !!usuarioID,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('MTicket');
   }, [setActiveModule]);
 
-  const cargarTickets = useCallback(async () => {
-    if (!sucursal || !usuarioID) return;
-    setLoading(true);
-    try {
-      const data = await ticketApi.obtenerPendientes(sucursal, usuarioID, pageSize);
-      setTickets(data);
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursal, usuarioID]);
-
   useEffect(() => {
-    cargarTickets();
     if (sucursal) {
       usuarioApi.obtenerListado(sucursal).then(setUsuarios).catch(() => {});
     }
-  }, [cargarTickets, sucursal]);
+  }, [sucursal]);
 
   const handleCrear = useCallback(async () => {
     if (!sucursal || !usuarioID) return;
@@ -94,16 +90,16 @@ const Tickets: React.FC = () => {
       message.success('Ticket creado correctamente');
       setCrearModal(false);
       form.resetFields();
-      cargarTickets();
+      refetch();
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al crear ticket');
     } finally {
       setCreando(false);
     }
-  }, [sucursal, usuarioID, form, cargarTickets]);
+  }, [sucursal, usuarioID, form, refetch]);
 
-  const filtered = tickets.filter((t) => {
+  const filtered = (data || []).filter((t) => {
     const matchTexto = !searchText || 
       t.titulo.toLowerCase().includes(searchText.toLowerCase()) ||
       t.mensaje?.toLowerCase().includes(searchText.toLowerCase());
@@ -164,73 +160,48 @@ const Tickets: React.FC = () => {
 
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
-          title="Error al cargar tickets"
+          message="Error al cargar tickets"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={() => { setLoadingError(false); cargarTickets(); }}>
+            <Button size="small" onClick={() => refetch()}>
               Reintentar
             </Button>
           }
         />
       )}
-      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
-        <div style={{ padding: '16px 24px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-            <Input.Search
-              placeholder="Buscar ticket..."
-              allowClear
-              onSearch={(val) => setSearchText(val)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  setSearchText('');
-                }
-              }}
-              style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
+      <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
+        <CatalogoListadoToolbar
+          onSearch={(val) => setSearchText(val)}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); }}
+          onNuevo={() => setCrearModal(true)}
+          onReload={() => refetch()}
+          filtros={
             <Select
               placeholder="Estado"
               style={{ width: 140 }}
               allowClear
               value={filtroEstado || undefined}
-              onChange={(val) => setFiltroEstado(val || '')}
-              onClear={() => setFiltroEstado('')}
+              onChange={(val) => setFiltroEstado(val || "")}
+              onClear={() => setFiltroEstado("")}
               options={[
-                { value: 'Abierto', label: 'Abierto' },
-                { value: 'EnProceso', label: 'En Proceso' },
-                { value: 'Resuelto', label: 'Resuelto' },
-                { value: 'Cerrado', label: 'Cerrado' },
+                { value: "Abierto", label: "Abierto" },
+                { value: "EnProceso", label: "En Proceso" },
+                { value: "Resuelto", label: "Resuelto" },
+                { value: "Cerrado", label: "Cerrado" },
               ]}
             />
-            <Select
-              style={{ width: 65 }}
-              value={pageSize}
-              onChange={(v) => { setPageSize(v); }}
-              options={[
-                { value: 25, label: '25' },
-                { value: 50, label: '50' },
-                { value: 100, label: '100' },
-              ]}
-            />
-            <div style={{ flex: 1 }} />
-            <PermissionGate accion="CREAR">
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setCrearModal(true)}>
-                Nuevo
-              </Button>
-            </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={() => { setLoadingError(false); cargarTickets(); }} />
-          </div>
-        </div>
+          }
+        />
         <Table<TicketDTO>
           columns={columns}
           dataSource={filtered}
           rowKey="id"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 750 }}
           size="middle"
           locale={{
@@ -290,7 +261,7 @@ const Tickets: React.FC = () => {
         ticketID={ticketModalID ?? 0}
         onClose={() => {
           setTicketModalID(null);
-          cargarTickets();
+          refetch();
         }}
       />
     </>

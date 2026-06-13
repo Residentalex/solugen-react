@@ -1,10 +1,13 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Table, Card, Input, Tag, Space, Button, Typography, Popconfirm, message, Empty } from 'antd';
+﻿import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { Table, Card, Tag, Space, Button, Typography, Popconfirm, message, Empty, Modal, Alert, Input } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, SearchOutlined, ReloadOutlined, StopOutlined, KeyOutlined } from '@ant-design/icons';
+import { StopOutlined, KeyOutlined, CopyOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiTokenApi, type AuthApiTokenListadoDTO } from '../../api/apiTokenApi';
+import PermissionGate from '../../components/PermissionGate';
 import ApiTokenCrearModal from './ApiTokenCrearModal';
 
 const { Text } = Typography;
@@ -14,36 +17,27 @@ const ApiTokens: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const usuario = useAuthStore((s) => s.usuario);
 
-  const [data, setData] = useState<AuthApiTokenListadoDTO[]>([]);
-  const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [revokingId, setRevokingId] = useState<number | null>(null);
+  const [renovarModal, setRenovarModal] = useState<{ open: boolean; token: string; nombre: string }>({ open: false, token: '', nombre: '' });
 
-  const cargarDatos = useCallback(async () => {
-    setLoading(true);
-    try {
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['apiTokens'],
+    queryFn: async () => {
       const result = await apiTokenApi.listar();
-      setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar tokens');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return result || [];
+    },
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('MApiToken');
-    cargarDatos();
     return () => resetToolbar();
-  }, [setActiveModule, resetToolbar, cargarDatos]);
+  }, [setActiveModule, resetToolbar]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
-  };
-
-  const handleRefresh = () => {
-    cargarDatos();
   };
 
   const handleRevocar = async (id: number) => {
@@ -51,7 +45,7 @@ const ApiTokens: React.FC = () => {
     try {
       await apiTokenApi.revocar(id);
       message.success('Token revocado correctamente');
-      cargarDatos();
+      refetch();
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al revocar token');
     } finally {
@@ -60,13 +54,25 @@ const ApiTokens: React.FC = () => {
   };
 
   const handleTokenCreated = () => {
-    cargarDatos();
+    refetch();
+  };
+
+  const handleRenovar = async (id: number, nombre: string) => {
+    try {
+      const result = await apiTokenApi.renovar(id);
+      setRenovarModal({ open: true, token: result.token, nombre });
+      message.success('Token renovado correctamente');
+      refetch();
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al renovar token');
+    }
   };
 
   const filteredData = useMemo(() => {
-    if (!searchText) return data;
+    const list = data || [];
+    if (!searchText) return list;
     const lower = searchText.toLowerCase();
-    return data.filter(
+    return list.filter(
       (item) =>
         item.nombre.toLowerCase().includes(lower) ||
         item.nombreUsuario?.toLowerCase().includes(lower)
@@ -107,7 +113,7 @@ const ApiTokens: React.FC = () => {
       render: (val: string) => <Text>{formatFecha(val)}</Text>,
     },
     {
-      title: 'Último uso',
+      title: 'Ãšltimo uso',
       dataIndex: 'ultimoUso',
       key: 'ultimoUso',
       width: 180,
@@ -154,7 +160,9 @@ const ApiTokens: React.FC = () => {
             </Button>
           </Popconfirm>
         ) : (
-          <Text type="secondary">—</Text>
+          <Button type="text" size="small" icon={<KeyOutlined />} onClick={() => handleRenovar(record.id, record.nombre)}>
+            Renovar
+          </Button>
         ),
     },
   ];
@@ -166,33 +174,19 @@ const ApiTokens: React.FC = () => {
         style={{ borderRadius: 8, overflow: 'hidden' }}
         styles={{ body: { padding: 0 } }}
       >
-        <div style={{ padding: '16px 24px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-            <Input.Search
-              placeholder="Buscar por nombre..."
-              allowClear
-              onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-              style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-            <div style={{ flex: 1 }} />
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
-              Nuevo token
-            </Button>
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-          </div>
-        </div>
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={25}
+          onPageSizeChange={(v) => {}}
+          ocultarPageSize
+          onNuevo={() => setModalOpen(true)}
+          onReload={() => refetch()}
+        />
         <Table<AuthApiTokenListadoDTO>
           columns={columns}
           dataSource={filteredData}
           rowKey="id"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 850 }}
           size="middle"
           rowClassName="paces-row-hover"
@@ -211,6 +205,39 @@ const ApiTokens: React.FC = () => {
         onClose={() => setModalOpen(false)}
         onCreated={handleTokenCreated}
       />
+
+      <Modal
+        title={`Token renovado: ${renovarModal.nombre}`}
+        open={renovarModal.open}
+        onCancel={() => setRenovarModal({ open: false, token: '', nombre: '' })}
+        footer={
+          <Space>
+            <Button onClick={() => {
+              navigator.clipboard.writeText(renovarModal.token);
+              message.success('Token copiado al portapapeles');
+            }} icon={<CopyOutlined />}>
+              Copiar
+            </Button>
+            <Button type="primary" onClick={() => setRenovarModal({ open: false, token: '', nombre: '' })}>
+              Cerrar
+            </Button>
+          </Space>
+        }
+        width={600}
+      >
+        <Alert
+          message="Guarde este token en un lugar seguro. No podrÃ¡ volver a verlo."
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+        <Input.TextArea
+          rows={3}
+          value={renovarModal.token}
+          readOnly
+          style={{ fontFamily: 'monospace', fontSize: 13 }}
+        />
+      </Modal>
     </>
   );
 };

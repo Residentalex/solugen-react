@@ -39,6 +39,8 @@ const RUTAS_DEFAULT: Record<string, string> = {
   ENP:  '/FENP',
   DVC:  '/FDVC',
   SAP:  '/FSAP',
+  DEV:  '/FDEV',
+  PV:   '/FPV',
 };
 
 const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({

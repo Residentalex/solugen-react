@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
-import { Table, Card, Input, Button, Typography, Alert, Space } from 'antd';
+import { Table, Card, Input, Button, Typography, Alert, Space, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -8,6 +9,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { plantillaSuplidorApi } from '../../api/plantillaSuplidorApi';
 import PermissionGate from '../../components/PermissionGate';
 import type { PlantillaSuplidorDTO } from '../../types/plantillaSuplidor';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
 
@@ -32,19 +34,14 @@ const PlantillaSuplidor: React.FC = () => {
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setNuevoCallback = useUIStore((s) => s.setNuevoCallback);
 
-  const [data, setData] = useState<PlantillaSuplidorDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
   const [searchText, setSearchText] = useState('');
   const [selectedRow, setSelectedRow] = useState<PlantillaSuplidorDTO | null>(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [loadingError, setLoadingError] = useState(false);
 
-  const cargarDatos = useCallback(async () => {
-    setLoading(true);
-    try {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['plantillaSuplidor', sucursalActiva, searchText],
+    queryFn: async () => {
       const resultados = await plantillaSuplidorApi.obtenerTodo(sucursalActiva);
 
       let filtrados = resultados;
@@ -58,18 +55,11 @@ const PlantillaSuplidor: React.FC = () => {
         );
       }
 
-      setData(filtrados);
-      setTotal(filtrados.length);
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva, searchText]);
-
-  useEffect(() => {
-    cargarDatos();
-  }, [page, pageSize, refreshTrigger, cargarDatos]);
+      return filtrados;
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('mplantillasup');
@@ -83,11 +73,6 @@ const PlantillaSuplidor: React.FC = () => {
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
-  };
-
-  const handleRefresh = () => {
-    setLoadingError(false);
-    setRefreshTrigger((n) => n + 1);
   };
 
   const handleTableChange = (pagination: any) => {
@@ -129,18 +114,21 @@ const PlantillaSuplidor: React.FC = () => {
     },
   ];
 
-  const paginatedData = data.slice((page - 1) * pageSize, page * pageSize);
+  const paginatedData = useMemo(() => {
+    const list = data || [];
+    return list.slice((page - 1) * pageSize, page * pageSize);
+  }, [data, page, pageSize]);
 
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
           message="Error al cargar plantillas de suplidores"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={handleRefresh}>
+            <Button size="small" onClick={() => refetch()}>
               Reintentar
             </Button>
           }
@@ -151,44 +139,20 @@ const PlantillaSuplidor: React.FC = () => {
         className="paces-card-erp"
         style={{ borderRadius: 8, overflow: 'hidden' }}
       >
-        <div style={{ padding: '16px 24px 0' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: 16,
-              flexWrap: 'wrap',
-            }}
-          >
-            <Input.Search
-              placeholder="Buscar por número, suplidor..."
-              allowClear
-              onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-              style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-            <div style={{ flex: 1 }} />
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-            <PermissionGate accion="CREAR">
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/mplantillasup/nuevo')}>
-                Nuevo
-              </Button>
-            </PermissionGate>
-          </div>
-        </div>
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={25}
+          onPageSizeChange={(v) => {}}
+          ocultarPageSize
+          onNuevo={() => navigate('/mplantillasup/nuevo')}
+          onReload={() => refetch()}
+        />
 
         <Table<PlantillaSuplidorDTO>
           columns={columns}
           dataSource={paginatedData}
           rowKey="id"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 600 }}
           size="middle"
           rowClassName={(record) =>
@@ -202,9 +166,14 @@ const PlantillaSuplidor: React.FC = () => {
           pagination={{
             current: page,
             pageSize,
-            total,
+            total: (data || []).length,
             showSizeChanger: false,
             showTotal: (t) => `${t} registros`,
+          }}
+          locale={{
+            emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Empty description="No hay plantillas de suplidor registradas" />
+            </div>,
           }}
           className="paces-border-top paces-list-table"
         />

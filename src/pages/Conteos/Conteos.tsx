@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+﻿import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Table,
@@ -17,6 +18,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { conteoApi } from '../../api/conteoApi';
 import type { ConteoFisicoDTO } from '../../types/conteo';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -83,23 +85,18 @@ const Conteos: React.FC = () => {
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
 
-  const [data, setData] = useState<ConteoFisicoDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(FILAS_POR_PAGINA);
-  const [fechaTrigger, setFechaTrigger] = useState(0);
-  const [loadingError, setLoadingError] = useState(false);
 
   const dateParamsRef = useRef({
     desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
     hasta: formatDateParam(new Date()),
   });
+  const [dateTrigger, setDateTrigger] = useState(0);
 
-  const cargarDatos = useCallback(async () => {
-    setLoading(true);
-    setLoadingError(false);
-    try {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['conteos', sucursalActiva, page, pageSize, dateTrigger],
+    queryFn: async () => {
       const { desde, hasta } = dateParamsRef.current;
       const resultados = await conteoApi.obtenerListado(sucursalActiva, {
         desde,
@@ -107,27 +104,18 @@ const Conteos: React.FC = () => {
         cantidad: pageSize,
         salto: (page - 1) * pageSize,
       });
-      setData(resultados);
-      setTotal(
-        resultados.length < pageSize
-          ? (page - 1) * pageSize + resultados.length
-          : page * pageSize + 1
-      );
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva, page, pageSize]);
-
-  useEffect(() => {
-    cargarDatos();
-  }, [cargarDatos, fechaTrigger]);
+      const total = resultados.length < pageSize
+        ? (page - 1) * pageSize + resultados.length
+        : page * pageSize + 1;
+      return { datos: resultados || [], total };
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('FConteos');
     updateToolbar({});
-
     return () => {
       resetToolbar();
     };
@@ -135,7 +123,7 @@ const Conteos: React.FC = () => {
 
   const handleRefresh = () => {
     setPage(1);
-    setFechaTrigger((n) => n + 1);
+    setDateTrigger((n) => n + 1);
   };
 
   const handleDateChange = (dates: any) => {
@@ -150,7 +138,7 @@ const Conteos: React.FC = () => {
       };
     }
     setPage(1);
-    setFechaTrigger((n) => n + 1);
+    setDateTrigger((n) => n + 1);
   };
 
   const handleTableChange = (pagination: any) => {
@@ -237,7 +225,7 @@ const Conteos: React.FC = () => {
 
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
           message="Error al cargar conteos"
           type="error"
@@ -255,44 +243,27 @@ const Conteos: React.FC = () => {
         className="paces-card-erp"
         style={{ borderRadius: 8, overflow: 'hidden' }}
       >
-        <div style={{ padding: '16px 24px 0' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: 16,
-              flexWrap: 'wrap',
-            }}
-          >
+        <CatalogoListadoToolbar
+          onSearch={() => {}}
+          pageSize={25}
+          onPageSizeChange={(v) => {}}
+          ocultarPageSize
+          onReload={handleRefresh}
+          filtros={
             <RangePicker
               style={{ width: 180 }}
               format="YYYY-MM-DD"
               onChange={handleDateChange}
-              placeholder={['Desde', 'Hasta']}
+              placeholder={["Desde", "Hasta"]}
             />
-            <Input.Search
-              placeholder="Buscar..."
-              allowClear
-              onSearch={() => {}}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                }
-              }}
-              style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-            <div style={{ flex: 1 }} />
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
-          </div>
-        </div>
+          }
+        />
 
         <Table<ConteoFisicoDTO>
           columns={columns}
-          dataSource={data}
+          dataSource={data?.datos || []}
           rowKey="documento"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 1200 }}
           size="middle"
           locale={{
@@ -310,7 +281,7 @@ const Conteos: React.FC = () => {
           pagination={{
             current: page,
             pageSize,
-            total,
+            total: data?.total || 0,
             showSizeChanger: false,
             showTotal: (t) => `${t} registros`,
           }}

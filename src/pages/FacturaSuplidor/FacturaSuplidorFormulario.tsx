@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Popover,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Popover, Empty,
 } from 'antd';
 import {
   SaveOutlined,
@@ -27,6 +27,8 @@ import { useUIStore } from '../../stores/uiStore';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { productoApi } from '../../api/productoApi';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
+import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import { BuscarEntradaModal } from '../../components/BuscarEntradaModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type {
@@ -43,7 +45,7 @@ import ImpuestosFacturaEditables from '../../components/ImpuestosFacturaEditable
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
-import FormularioToolbar from '../../components/FormularioToolbar';
+import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
@@ -52,7 +54,7 @@ import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 const { Text } = Typography;
 const { TextArea } = Input;
 
-// ===== CÃ¡lculo de fila FRDE =====
+// ===== Cálculo de fila FRDE =====
 function calcularFila(fila: DetalleFacturaSuplidorDTO): DetalleFacturaSuplidorDTO {
   const cantidad = fila.cantidad || 0;
   const costo = fila.costo || 0;
@@ -102,101 +104,6 @@ const esNcfValido = (ncf: string): boolean => {
   return false; // no empieza con B ni E
 };
 
-// ===== Componente BuscarEntradaModal (para seleccionar ENP referencia) =====
-interface BuscarEntradaModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (entrada: any) => void;
-}
-
-const BuscarEntradaModal: React.FC<BuscarEntradaModalProps> = ({ open, onClose, onSelect }) => {
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const [resultados, setResultados] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const buscar = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await facturaSuplidorApi.obtenerEntradasAlmacen(sucursalActiva, { cantidad: 50 });
-      setResultados(res || []);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al buscar entradas de almacÃ©n');
-      message.error(msg);
-      setResultados([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
-
-  useEffect(() => {
-    if (open) buscar();
-  }, [open, buscar]);
-
-  const columnas = [
-    {
-      title: 'Documento',
-      dataIndex: 'documento',
-      key: 'documento',
-      width: 150,
-      render: (v: string) => <span className="paces-text-primary">{v}</span>,
-    },
-    {
-      title: 'Fecha',
-      dataIndex: 'fecha',
-      key: 'fecha',
-      width: 110,
-      render: (v: string) => formatDate(v),
-    },
-    {
-      title: 'Suplidor',
-      dataIndex: 'entidad',
-      key: 'entidad',
-      ellipsis: true,
-      render: (v: string) => toTitleCase(v || ''),
-    },
-    {
-      title: 'Total',
-      dataIndex: 'total',
-      key: 'total',
-      width: 130,
-      align: 'right' as const,
-      render: (v: number) => formatCurrency(v || 0),
-    },
-  ];
-
-  return (
-    <Modal
-      title="Buscar Entrada de AlmacÃ©n"
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={800}
-      destroyOnHidden
-    >
-      <Input.Search
-        placeholder="Buscar..."
-        allowClear
-        onSearch={() => buscar()}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={resultados}
-        columns={columnas}
-        rowKey="id"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        scroll={{ y: 400 }}
-        onRow={(record) => ({
-          onClick: () => { onSelect(record); onClose(); },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
-};
-
-
 
 // ===== Componente principal =====
 const FacturaSuplidorFormulario: React.FC = () => {
@@ -218,9 +125,10 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const [detalles, setDetalles] = useState<DetalleFacturaSuplidorDTO[]>([]);
   const [suplidoresCache, setSuplidoresCache] = useState<SuplidorDTO[]>([]);
   const [tiposCache, setTiposCache] = useState<TipoDTO[]>([]);
-  const [conceptosCache, setConceptosCache] = useState<ConceptoDTO[]>([]);
   const [selectedTipo, setSelectedTipo] = useState<TipoDTO | null>(null);
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
+  const [conceptoSearchText, setConceptoSearchText] = useState('');
+  const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
   const [selectedEntidad, setSelectedEntidad] = useState<SuplidorDTO | null>(null);
   const [selectedEntrada, setSelectedEntrada] = useState<any>(null);
   const [conceptoInfo, setConceptoInfo] = useState<string>('');
@@ -247,7 +155,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   );
 
-  // ===== Detalles filtrados por bÃºsqueda =====
+  // ===== Detalles filtrados por búsqueda =====
   const detallesFiltrados = detalleSearch
     ? detalles.filter((d) => {
         const q = detalleSearch.toLowerCase();
@@ -259,7 +167,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       })
     : detalles;
 
-  // ===== Estado para campos rÃ¡pidos (NCF, Referencia, Tasa) =====
+  // ===== Estado para campos rápidos (NCF, Referencia, Tasa) =====
   const [editingField, setEditingField] = useState<string | null>(null);
   const editingOriginalValue = useRef<string | number>('');
   const editingValueRef = useRef<string | number>('');
@@ -344,7 +252,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
     const pageTitle = mode === 'crear' ? 'Nueva Factura de Suplidor' : 'Editar Factura de Suplidor';
     setPageTitleOverride(pageTitle);
 
-    // Cargar catÃ¡logos iniciales
+    // Cargar catálogos iniciales
     facturaSuplidorApi.obtenerTipos(sucursalActiva).then(setTiposCache).catch(() => {});
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
 
@@ -384,6 +292,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
         setImpuestosFactura(res.impuestosFactura || []);
         setSelectedTipo(res.tipo || null);
         setSelectedConcepto(res.concepto || null);
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
         setSelectedEntidad(res.suplidor || res.entidad || null);
         setSelectedEntrada(res.entradaAlmacen || null);
 
@@ -403,13 +312,6 @@ const FacturaSuplidorFormulario: React.FC = () => {
           tasa: res.tasa || 1,
           nota: res.nota || '',
         });
-
-        // Cargar conceptos filtrados por tipo si existe
-        if (res.tipo?.idExterno) {
-          facturaSuplidorApi.obtenerConceptos(sucursalActiva, res.tipo.idExterno)
-            .then(setConceptosCache)
-            .catch(() => {});
-        }
 
         // Cargar suplidores
         facturaSuplidorApi.obtenerSuplidores(sucursalActiva)
@@ -435,8 +337,8 @@ const FacturaSuplidorFormulario: React.FC = () => {
     Modal.confirm({
       title: 'Cancelar',
       icon: <ExclamationCircleOutlined />,
-      content: 'Â¿EstÃ¡ seguro que desea cancelar los cambios realizados?',
-      okText: 'SÃ­, cancelar',
+      content: '¿Está seguro que desea cancelar los cambios realizados?',
+      okText: 'Sí, cancelar',
       cancelText: 'No, continuar editando',
       okButtonProps: { danger: true },
       onOk: () => {
@@ -476,9 +378,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
                 });
 
                 if (res.tipo?.idExterno) {
-                  facturaSuplidorApi.obtenerConceptos(sucursalActiva, res.tipo.idExterno)
-                    .then(setConceptosCache)
-                    .catch(() => {});
+                  setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
                 }
                 facturaSuplidorApi.obtenerSuplidores(sucursalActiva)
                   .then(setSuplidoresCache)
@@ -496,7 +396,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
     });
   };
 
-  // ===== ValidaciÃ³n del formulario =====
+  // ===== Validación del formulario =====
   const validarFormulario = (): string | null => {
     const values = form.getFieldsValue();
     if (!selectedTipo) return 'Debe seleccionar un Tipo de Documento.';
@@ -664,21 +564,15 @@ const FacturaSuplidorFormulario: React.FC = () => {
     const tipo = tiposCache.find((t) => t.codigo === tipoCodigo) || null;
     setSelectedTipo(tipo);
     setSelectedConcepto(null);
-    setConceptosCache([]);
+    setConceptoSearchText('');
     setConceptoInfo('');
     form.setFieldsValue({ concepto: '' });
-
-    if (tipo) {
-      facturaSuplidorApi.obtenerConceptos(sucursalActiva, tipo.idExterno)
-        .then((conceptos) => setConceptosCache(conceptos))
-        .catch(() => {});
-    }
   };
 
   const handleTipoClear = () => {
     setSelectedTipo(null);
     setSelectedConcepto(null);
-    setConceptosCache([]);
+    setConceptoSearchText('');
     setConceptoInfo('');
     form.setFieldsValue({ tipo: '', concepto: '' });
   };
@@ -686,6 +580,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
   // ===== Handlers de Concepto =====
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
+    setConceptoSearchText(`${concepto.codigo || ''} - ${toTitleCase(concepto.nombre)}`);
     setEditingField(null);
     form.setFieldsValue({ concepto: concepto.codigo });
 
@@ -725,6 +620,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
 
   const handleConceptoClear = () => {
     setSelectedConcepto(null);
+    setConceptoSearchText('');
     setSuplidoresCache([]);
     form.setFieldsValue({ concepto: '', suplidor: undefined });
   };
@@ -734,10 +630,10 @@ const FacturaSuplidorFormulario: React.FC = () => {
     if (detalles.length > 0) {
       const shouldReplace = await new Promise<boolean>((resolve) => {
         Modal.confirm({
-          title: 'Â¿Desea Borrar todos los registros?',
+          title: '¿Desea Borrar todos los registros?',
           icon: <ExclamationCircleOutlined />,
-          content: 'Ya existen detalles en el documento. Â¿Desea borrarlos y cargar los de la entrada seleccionada?',
-          okText: 'SÃ­, borrar y cargar',
+          content: 'Ya existen detalles en el documento. ¿Desea borrarlos y cargar los de la entrada seleccionada?',
+          okText: 'Sí, borrar y cargar',
           cancelText: 'No, mantener',
           onOk: () => resolve(true),
           onCancel: () => resolve(false),
@@ -768,10 +664,10 @@ const FacturaSuplidorFormulario: React.FC = () => {
       }
     } else {
       Modal.confirm({
-        title: 'Â¿Desea Cargar todos los registros?',
+        title: '¿Desea Cargar todos los registros?',
         icon: <ExclamationCircleOutlined />,
-        content: 'Â¿Desea cargar los productos de la entrada seleccionada?',
-        okText: 'SÃ­, cargar',
+        content: '¿Desea cargar los productos de la entrada seleccionada?',
+        okText: 'Sí, cargar',
         cancelText: 'No',
         onOk: async () => {
           try {
@@ -818,8 +714,8 @@ const FacturaSuplidorFormulario: React.FC = () => {
     Modal.confirm({
       title: 'Eliminar detalle',
       icon: <ExclamationCircleOutlined />,
-      content: 'Â¿EstÃ¡ seguro de eliminar este detalle?',
-      okText: 'SÃ­',
+      content: '¿Está seguro de eliminar este detalle?',
+      okText: 'Sí',
       cancelText: 'No',
       okButtonProps: { danger: true },
       onOk: () => {
@@ -934,7 +830,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
 
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
-    <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+    <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
@@ -968,32 +864,22 @@ const FacturaSuplidorFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={8}>
             <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
               <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required>
-                  <Select
-                    allowClear
-                    showSearch
-                    optionFilterProp="children"
+                <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
+                  <Input
                     placeholder=" "
-                    value={selectedConcepto?.codigo || undefined}
+                    value={conceptoSearchText}
+                    readOnly
                     disabled={!selectedTipo}
-                    onChange={(val) => {
-                      const conc = conceptosCache.find((c) => c.codigo === val);
-                      if (conc) handleConceptoSelect(conc);
-                      else handleConceptoClear();
-                    }}
-                    notFoundContent={!selectedTipo ? 'Seleccione un tipo primero' : 'Sin conceptos disponibles'}
-                  >
-                    {conceptosCache.map((c) => (
-                      <Select.Option key={c.codigo} value={c.codigo}>
-                        {toTitleCase(c.nombre)}
-                      </Select.Option>
-                    ))}
-                  </Select>
+                    suffix={
+                      <Space size={4}>
+                        <SearchOutlined onClick={() => setConceptoModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                        {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
+                      </Space>
+                    }
+                    onClick={() => setConceptoModalOpen(true)}
+                  />
                 </FloatingField>
               </div>
-              {selectedConcepto && (
-                <Button icon={<ClearOutlined />} onClick={handleConceptoClear} />
-              )}
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
@@ -1055,27 +941,27 @@ const FacturaSuplidorFormulario: React.FC = () => {
             </Form.Item>
           </Col>
 
-          {/* Fila 3: Entrada Referencia + DÃ­as CrÃ©dito */}
+          {/* Fila 3: Entrada Referencia + Días Crédito */}
           <Col xs={24} sm={12} lg={8}>
-            <FloatingField label="Entrada AlmacÃ©n de Referencia">
-              <Space.Compact style={{ width: '100%' }}>
-                <Input
-                  placeholder=" "
-                  value={selectedEntrada?.documento || ''}
-                  readOnly
-                  onClick={() => setEntradaModalOpen(true)}
-                />
-                <Button icon={<SearchOutlined />} onClick={() => setEntradaModalOpen(true)} />
-                {selectedEntrada && (
-                  <Button icon={<ClearOutlined />} onClick={handleEntradaClear} />
-                )}
-              </Space.Compact>
+            <FloatingField label="Entrada Almacén de Referencia">
+              <Input
+                placeholder=" "
+                value={selectedEntrada?.documento || ''}
+                readOnly
+                suffix={
+                  <Space size={4}>
+                    <SearchOutlined onClick={() => setEntradaModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                    {selectedEntrada && <ClearOutlined onClick={handleEntradaClear} style={{ cursor: 'pointer' }} />}
+                  </Space>
+                }
+                onClick={() => setEntradaModalOpen(true)}
+              />
             </FloatingField>
           </Col>
 
           <Col xs={24} sm={12} lg={8}>
             <Form.Item name="diasCredito" style={{ marginBottom: 0 }}>
-              <FloatingField label="DÃ­as CrÃ©dito">
+              <FloatingField label="Días Crédito">
                 <InputNumber style={{ width: '100%' }} min={0} precision={0} placeholder=" " />
               </FloatingField>
             </Form.Item>
@@ -1105,7 +991,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
             </Form.Item>
           </Col>
 
-          {/* Fila 4: Botones rÃ¡pidos para campos opcionales */}
+          {/* Fila 4: Botones rápidos para campos opcionales */}
           <Col xs={24}>
             <div style={{ marginBottom: 16 }}>
               <Space size={[8, 8]} wrap>
@@ -1192,7 +1078,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
                 )}
               </Space>
             </div>
-            {/* Hidden form items para campos rÃ¡pidos */}
+            {/* Hidden form items para campos rápidos */}
             <Form.Item name="ncf" hidden><Input /></Form.Item>
             <Form.Item name="referencia" hidden><Input /></Form.Item>
             <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
@@ -1237,7 +1123,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       render: () => <DragHandle />,
     },
     {
-      title: 'CÃ³digo',
+      title: 'Código',
       key: 'codigo',
       width: 120,
       fixed: 'left' as const,
@@ -1254,7 +1140,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       ),
     },
     {
-      title: 'ArtÃ­culo',
+      title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
@@ -1492,6 +1378,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
         setAsientosLocales(res.asientos || []);
         setImpuestosFactura(res.impuestosFactura || []);
         setSelectedTipo(res.tipo || null); setSelectedConcepto(res.concepto || null);
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
         setSelectedEntidad(res.suplidor || res.entidad || null);
         setSelectedEntrada(res.entradaAlmacen || null);
         const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
@@ -1531,6 +1418,15 @@ const FacturaSuplidorFormulario: React.FC = () => {
         />
       )}
 
+      <BuscarConceptoModal
+        open={conceptoModalOpen}
+        onClose={() => setConceptoModalOpen(false)}
+        onSelect={handleConceptoSelect}
+        sucursal={sucursalActiva}
+        documento="RDE"
+        tipo={selectedTipo?.codigo}
+        tipoEntidad="SUP"
+      />
       <BuscarProductoModal
         open={productoModalOpen}
         onClose={() => setProductoModalOpen(false)}
@@ -1541,6 +1437,8 @@ const FacturaSuplidorFormulario: React.FC = () => {
         open={entradaModalOpen}
         onClose={() => setEntradaModalOpen(false)}
         onSelect={handleEntradaSelect}
+        entidad={selectedEntidad?.codigo}
+        onBuscar={facturaSuplidorApi.obtenerEntradasAlmacen}
       />
 
       {isLarge ? (
@@ -1593,6 +1491,13 @@ const FacturaSuplidorFormulario: React.FC = () => {
                           pagination={false}
                           scroll={{ x: 1300 }}
                           components={{ body: { row: SortableRow } }}
+                          locale={{
+                            emptyText: (
+                              <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Empty description="Sin registros" />
+                              </div>
+                            ),
+                          }}
                         />
                         </SortableContext>
                         <DragOverlay>
@@ -1941,3 +1846,4 @@ const FacturaSuplidorGuide: React.FC<FacturaSuplidorGuideProps> = ({
 };
 
 export default FacturaSuplidorFormulario;
+

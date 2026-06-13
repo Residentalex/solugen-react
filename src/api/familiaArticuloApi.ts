@@ -11,7 +11,7 @@ export const familiaArticuloApi = {
   },
 
   obtener: async (sucursal: number, codigo: string): Promise<FamiliaArticuloDTO> => {
-    const { data } = await apiClient.get<FamiliaArticuloDTO>(`${BASE}/${sucursal}/${codigo}`);
-    return data;
+    const { data } = await apiClient.get<ApiResponse<FamiliaArticuloDTO>>(`${BASE}/${sucursal}/${codigo}`);
+    return data.data;
   },
 };

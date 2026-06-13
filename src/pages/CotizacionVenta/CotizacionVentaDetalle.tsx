@@ -11,6 +11,7 @@ import {
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { cotizacionVentaApi } from '../../api/cotizacionVentaApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
@@ -34,6 +35,7 @@ const CotizacionVentaDetalle: React.FC = () => {
 
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+  const { screenCode, documentCode } = useScreenConfig('FCotizacion');
 
   const [data, setData] = useState<CotizacionVentaDetalleDTO | null>(null);
   const [loading, setLoading] = useState(false);
@@ -52,9 +54,10 @@ const CotizacionVentaDetalle: React.FC = () => {
 
   const { message } = App.useApp();
   const screens = Grid.useBreakpoint();
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   useEffect(() => {
-    setActiveModule('FCotizacion');
+    setActiveModule(screenCode);
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
@@ -444,11 +447,7 @@ const CotizacionVentaDetalle: React.FC = () => {
         onImprimir={async () => {
           setImprimiendo(true);
           try {
-            const codigoSucursalVal = (data as any).codigoSucursal;
-            const sucursalParam = codigoSucursalVal
-              ? obtenerNombreEnumSucursal(codigoSucursalVal)
-              : sucursalActiva;
-            const res = await apiClient.get(`/reportes/facturacion/cotizacionVenta/${sucursalParam}/${id}`, {
+            const res = await apiClient.post('/reportes/facturacion/cotizacion-venta', data, {
               responseType: 'blob',
             });
             const blobUrl = URL.createObjectURL(res.data);
@@ -512,18 +511,19 @@ const CotizacionVentaDetalle: React.FC = () => {
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Tipo">—</Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                {data.almacen && (
+
                   <Descriptions.Item label="Almacen" span={1}>
-                    {data.almacen.nombre ? toTitleCase(data.almacen.nombre) : '-'}
+                    {data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}
                   </Descriptions.Item>
-                )}
+
                 <Descriptions.Item label="Creado Por" span={1}>
-                  {data.creadoPor?.nombre ? toTitleCase(data.creadoPor.nombre) : '-'}
+                  {data.usuario?.nombre || data.creadoPor || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+                  {data.nota ? <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota}</span> : '-'}
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -582,7 +582,6 @@ const CotizacionVentaDetalle: React.FC = () => {
             <DocumentosRelacionadosCard
               documentos={documentosRelacionados}
               currentId={data?.id}
-              rutaMap={{ COT: 'FCotizacion' }}
             />
           </Col>
         </Row>
@@ -618,23 +617,24 @@ const CotizacionVentaDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                {data.almacen && (
+              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+              <Descriptions.Item label="Tipo">—</Descriptions.Item>
+              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
+
                   <Descriptions.Item label="Almacen">
-                    {data.almacen.nombre ? toTitleCase(data.almacen.nombre) : '-'}
+                    {data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}
                   </Descriptions.Item>
-                )}
+
                 <Descriptions.Item label="Creado Por">
-                  {data.creadoPor?.nombre ? toTitleCase(data.creadoPor.nombre) : '-'}
+                  {data.usuario?.nombre || data.creadoPor || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
-          </Card>
+            </Card>
 
-          <Tabs
-            defaultActiveKey="detalles"
+            <Tabs
+              defaultActiveKey="detalles"
             type="card"
             items={[
               {
@@ -686,7 +686,6 @@ const CotizacionVentaDetalle: React.FC = () => {
           <DocumentosRelacionadosCard
             documentos={documentosRelacionados}
             currentId={data?.id}
-            rutaMap={{ COT: 'FCotizacion' }}
           />
           </div>
         </div>

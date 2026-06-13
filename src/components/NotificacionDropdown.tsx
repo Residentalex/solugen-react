@@ -79,6 +79,13 @@ const NotificacionDropdown: React.FC = () => {
     cargarPendientes();
   }, [cargarPendientes]);
 
+  // Recargar cuando se conecte SignalR (para asegurar datos frescos)
+  useEffect(() => {
+    if (conectado) {
+      cargarPendientes();
+    }
+  }, [conectado, cargarPendientes]);
+
   // Polling cada 30s cuando no hay SignalR
   useEffect(() => {
     if (!conectado) {

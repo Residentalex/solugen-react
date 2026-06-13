@@ -162,6 +162,10 @@ const SummarySidebar: React.FC<SummarySidebarProps> = ({ cuenta }) => {
           <Tag color={esUSD ? 'green' : 'blue'} style={{ margin: 0 }}>{monedaInfo.label}</Tag>
         </div>
         <div className="summary-detail-row">
+          <span className="summary-detail-label">Tipo</span>
+          <span className="summary-detail-value">—</span>
+        </div>
+        <div className="summary-detail-row">
           <span className="summary-detail-label">Estado</span>
           <Tag color={cuenta.activo ? 'success' : 'error'} style={{ margin: 0 }}>
             {cuenta.activo ? 'Activo' : 'Inactivo'}
@@ -204,6 +208,7 @@ const CompactSummary: React.FC<CompactSummaryProps> = ({ cuenta }) => {
               <Text>{cuenta.cuentaContable || '—'}</Text>
             </span>
             <Tag color={monedaInfo.color}>{monedaInfo.label}</Tag>
+            <span><Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Tipo</Text><Text>—</Text></span>
             <Tag color={cuenta.activo ? 'success' : 'error'}>
               {cuenta.activo ? 'Activo' : 'Inactivo'}
             </Tag>

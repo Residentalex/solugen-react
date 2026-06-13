@@ -5,13 +5,13 @@ import type { ApiResponse } from '../types/auth';
 const BASE = '/Producto';
 
 export const productoApi = {
-  /** Obtener listado paginado - backend devuelve array directo, no ApiResponse */
+  /** Obtener listado paginado */
   obtenerListado: async (
     sucursal: number,
-    params?: { filas?: number; salto?: number; codigo?: string; activo?: boolean }
+    params?: { cantidad?: number; salto?: number; codigo?: string; activo?: boolean }
   ): Promise<ProductoListaDTO[]> => {
-    const { data } = await apiClient.get<ProductoListaDTO[]>(`${BASE}/${sucursal}`, { params });
-    return data; // data es el array directamente
+    const { data } = await apiClient.get<ApiResponse<ProductoListaDTO[]>>(`${BASE}/${sucursal}`, { params });
+    return data.data;
   },
 
   /** Obtener total de productos (con filtros opcionales) */
@@ -19,18 +19,18 @@ export const productoApi = {
     sucursal: number,
     params?: { codigo?: string; activo?: boolean }
   ): Promise<number> => {
-    const { data } = await apiClient.get<number>(`${BASE}/total/${sucursal}`, { params });
-    return data;
+    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/total/${sucursal}`, { params });
+    return data.data;
   },
 
   filtrar: async (sucursal: number, filtro: FiltroProducto): Promise<ProductoListaDTO[]> => {
-    const { data } = await apiClient.get<ProductoListaDTO[]>(`${BASE}/${sucursal}/filtrar`, { params: filtro });
-    return data;
+    const { data } = await apiClient.get<ApiResponse<ProductoListaDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params: filtro });
+    return data.data;
   },
 
   obtenerPorCodigo: async (sucursal: number, codigo: string): Promise<ProductoListaDTO> => {
-    const { data } = await apiClient.get<ProductoListaDTO>(`${BASE}/${sucursal}/${codigo}`);
-    return data;
+    const { data } = await apiClient.get<ApiResponse<ProductoListaDTO>>(`${BASE}/${sucursal}/${codigo}`);
+    return data.data;
   },
 
   obtenerDetalle: async (
@@ -38,8 +38,8 @@ export const productoApi = {
     codigo: string,
     signal?: AbortSignal
   ): Promise<ProductoDTO> => {
-    const { data } = await apiClient.get<ProductoDTO>(`${BASE}/${sucursal}/${codigo}`, { signal });
-    return data;
+    const { data } = await apiClient.get<ApiResponse<ProductoDTO>>(`${BASE}/${sucursal}/${codigo}`, { signal });
+    return data.data;
   },
 
   /** Obtener códigos de productos con vencimiento */
@@ -92,6 +92,20 @@ export const productoApi = {
     const { data } = await apiClient.get<ApiResponse<ProductoDTO[]>>(
       `${BASE}/${sucursal}/suplidor/${codigoSuplidor}`,
       { signal }
+    );
+    return data.data;
+  },
+
+  /** Obtener productos por lista de códigos */
+  obtenerPorListaCodigos: async (
+    sucursal: number,
+    codigos: string[],
+    datosExtra?: boolean
+  ): Promise<ProductoDTO[]> => {
+    const { data } = await apiClient.put<ApiResponse<ProductoDTO[]>>(
+      `${BASE}/codigos/${sucursal}`,
+      codigos,
+      { params: datosExtra !== undefined ? { datosExtra } : {} }
     );
     return data.data;
   },

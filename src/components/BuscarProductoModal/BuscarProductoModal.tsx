@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Modal, Input, Table, message } from 'antd';
 import { productoApi } from '../../api/productoApi';
 import { useAuthStore } from '../../stores/authStore';
@@ -23,6 +23,7 @@ interface BuscarProductoModalProps {
   onClose: () => void;
   onSelect: (producto: ProductoSeleccionado) => void;
   mode: BuscarProductoMode;
+  codigosPermitidos?: string[];
 }
 
 // ===== Helpers locales =====
@@ -35,7 +36,7 @@ function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose, onSelect, mode }) => {
+const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose, onSelect, mode, codigosPermitidos }) => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const [productos, setProductos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,6 +44,11 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const pageSize = 10;
+
+  const productosFiltrados = useMemo(() => {
+    if (!codigosPermitidos || codigosPermitidos.length === 0) return productos;
+    return productos.filter((p) => codigosPermitidos.includes(p.codigo));
+  }, [productos, codigosPermitidos]);
 
    const cargar = useCallback(async (filtro?: string, pagina?: number) => {
      const pageActual = pagina ?? page;
@@ -122,19 +128,22 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
         }}
         style={{ marginBottom: 16 }}
       />
+      {codigosPermitidos && productosFiltrados.length === 0 && productos.length > 0 && (
+        <div style={{ textAlign: 'center', padding: 24, color: 'var(--paces-text-secondary)' }}>
+          No se encontraron productos en los códigos permitidos. Intente con otro criterio de búsqueda.
+        </div>
+      )}
       <Table
-        dataSource={productos}
+        dataSource={productosFiltrados}
         columns={columnas}
         rowKey="codigo"
         loading={loading}
         size="small"
-        pagination={{
-          current: page,
-          pageSize,
-          total,
-          showSizeChanger: false,
-          onChange: (p) => cargar(search, p),
-        }}
+        pagination={
+          codigosPermitidos
+            ? { current: 1, pageSize: productosFiltrados.length, total: productosFiltrados.length, hideOnSinglePage: true, showSizeChanger: false }
+            : { current: page, pageSize, total, showSizeChanger: false, onChange: (p) => cargar(search, p) }
+        }
         onRow={(record) => ({
           onDoubleClick: async () => {
             try {

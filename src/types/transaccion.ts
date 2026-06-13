@@ -70,6 +70,10 @@ export interface TransaccionDTO {
   documento?: TransaccionDocumentoDTO;
   entidad?: TransaccionEntidadDTO;
   asientos?: TransaccionAsientoDTO[];
+  logs?: any[];
+  transaccionesAsociadas?: any[];
+  cobros?: any[];
+  sucursal?: { codigo?: string; nombre?: string } | null;
 }
 
 export interface TransaccionConceptoDTO {
@@ -106,4 +110,5 @@ export interface ResultadoPosteoDTO {
 export interface TipoDocumentoDTO {
   codigo: string;
   nombre: string;
+  documento?: string;
 }

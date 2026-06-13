@@ -9,6 +9,7 @@ import {
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard/TransaccionesAsociadasCard';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
@@ -55,6 +56,7 @@ const SolicitudPagoDetalle: React.FC = () => {
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
+  const { screenCode, documentCode } = useScreenConfig();
   const { message } = App.useApp();
   const screens = Grid.useBreakpoint();
 
@@ -64,10 +66,11 @@ const SolicitudPagoDetalle: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const operacion = useAplicar();
   const [operacionTitulo, setOperacionTitulo] = useState('');
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   // Módulo activo
   useEffect(() => {
-    setActiveModule('FSPA');
+    setActiveModule(screenCode);
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
@@ -271,6 +274,9 @@ const SolicitudPagoDetalle: React.FC = () => {
                 <Descriptions.Item label="Documento">{strVal(data.documento)}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(data.fecha)}</Descriptions.Item>
                 <Descriptions.Item label="Concepto">{strVal(data.concepto)}</Descriptions.Item>
+                <Descriptions.Item label="Tipo">
+                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                </Descriptions.Item>
                 <Descriptions.Item label="Entidad">{strVal(data.entidad)}</Descriptions.Item>
                 <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Cuenta Bancaria">{data.cuentaBancaria || '-'}</Descriptions.Item>
@@ -356,6 +362,9 @@ const SolicitudPagoDetalle: React.FC = () => {
               <Descriptions.Item label="Documento">{strVal(data.documento)}</Descriptions.Item>
               <Descriptions.Item label="Fecha">{formatDate(data.fecha)}</Descriptions.Item>
               <Descriptions.Item label="Concepto">{strVal(data.concepto)}</Descriptions.Item>
+              <Descriptions.Item label="Tipo">
+                {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+              </Descriptions.Item>
               <Descriptions.Item label="Entidad">{strVal(data.entidad)}</Descriptions.Item>
               <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
               <Descriptions.Item label="Cuenta Bancaria">{data.cuentaBancaria || '-'}</Descriptions.Item>

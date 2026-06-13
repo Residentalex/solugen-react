@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Spin, Button, Space, Row, Col, Grid,
-  message, Form, Input, DatePicker, Typography, Modal, Alert, Select,
+  message, Form, Input, DatePicker, Typography, Modal, Alert, Select, Empty,
 } from 'antd';
 import {
   SaveOutlined, CloseOutlined, DeleteOutlined, PlusOutlined, ExclamationCircleOutlined,
@@ -13,6 +13,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { plantillaSuplidorApi } from '../../api/plantillaSuplidorApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { Sucursal } from '../../types/auth';
+import PermissionGate from '../../components/PermissionGate';
 import type { PlantillaSuplidorDTO, DetallePlantillaSuplidorDTO } from '../../types/plantillaSuplidor';
 
 const { Text } = Typography;
@@ -371,9 +372,11 @@ const PlantillaSuplidorFormulario: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
         <div style={{ flex: 1 }} />
         <Space wrap>
-          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-            Guardar
-          </Button>
+          <PermissionGate accion={id ? 'EDITAR' : 'CREAR'}>
+            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
+              Guardar
+            </Button>
+          </PermissionGate>
           <Button icon={<CloseOutlined />} onClick={handleCancelar}>
             Cancelar
           </Button>
@@ -462,6 +465,13 @@ const PlantillaSuplidorFormulario: React.FC = () => {
                 size="small"
                 pagination={false}
                 scroll={{ x: 650 }}
+                locale={{
+                  emptyText: (
+                    <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Empty description="Sin registros" />
+                    </div>
+                  ),
+                }}
               />
             </Card>
           </Col>
@@ -561,6 +571,13 @@ const PlantillaSuplidorFormulario: React.FC = () => {
               size="small"
               pagination={false}
               scroll={{ x: 650 }}
+              locale={{
+                emptyText: (
+                  <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Empty description="Sin registros" />
+                  </div>
+                ),
+              }}
             />
           </Card>
         </div>

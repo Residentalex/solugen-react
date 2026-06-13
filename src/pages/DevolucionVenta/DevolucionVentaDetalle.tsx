@@ -11,10 +11,17 @@ import {
   FileTextOutlined,
   FileSearchOutlined,
   RollbackOutlined,
+  ArrowRightOutlined,
+  CalendarOutlined,
+  TagOutlined,
+  UserOutlined,
+  DollarOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { devolucionVentaApi } from '../../api/devolucionVentaApi';
 import type { DevolucionVentaDTO, AsientoContableDTO } from '../../types/devolucionVenta';
@@ -28,6 +35,7 @@ import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
+import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
@@ -57,6 +65,7 @@ const DevolucionVentaDetalle: React.FC = () => {
 
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+  const { screenCode, documentCode } = useScreenConfig();
 
   const [data, setData] = useState<DevolucionVentaDTO | null>(null);
   const [loading, setLoading] = useState(false);
@@ -74,11 +83,12 @@ const DevolucionVentaDetalle: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const operacion = useAplicar();
   const [operacionTitulo, setOperacionTitulo] = useState('');
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   const screens = Grid.useBreakpoint();
 
   useEffect(() => {
-    setActiveModule('FDEV');
+    setActiveModule(screenCode);
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
@@ -174,6 +184,16 @@ const DevolucionVentaDetalle: React.FC = () => {
     }
   };
 
+  // ===== Permisos para pantallas relacionadas =====
+  const tienePermisoFPV = React.useMemo(() => {
+    const usuario = useAuthStore.getState().usuario;
+    if (!usuario) return false;
+    const pantalla = usuario.pantallas.find(
+      (p) => p.codigo?.toUpperCase() === 'FPV'
+    );
+    return pantalla?.acciones.includes('VISUALIZAR') ?? false;
+  }, []);
+
   if (loading || (!data && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
@@ -183,7 +203,7 @@ const DevolucionVentaDetalle: React.FC = () => {
     );
   }
 
-  if (loadingError && !data) { return <ErrorDetalle rutaVolver="/FDV" onRecargar={handleRefresh} />; }
+  if (loadingError && !data) { return <ErrorDetalle rutaVolver="/FDEV" onRecargar={handleRefresh} />; }
   if (!data) return null;
 
   const isLarge = screens.xxl === true;
@@ -202,16 +222,6 @@ const DevolucionVentaDetalle: React.FC = () => {
         );
       })
     : (data?.detalles || []);
-
-  // ===== Permisos para pantallas relacionadas =====
-  const tienePermisoFPV = React.useMemo(() => {
-    const usuario = useAuthStore.getState().usuario;
-    if (!usuario) return false;
-    const pantalla = usuario.pantallas.find(
-      (p) => p.codigo?.toUpperCase() === 'FPV'
-    );
-    return pantalla?.acciones.includes('VISUALIZAR') ?? false;
-  }, []);
 
   const detalleColumns = [
     {
@@ -254,27 +264,18 @@ const DevolucionVentaDetalle: React.FC = () => {
       width: 120,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: any) => {
-        const facturaDetalle = data?.factura?.detalles?.find((fd: any) => fd.codigo === record.codigo);
-        const cantidadOriginal = facturaDetalle?.cantidad || 0;
-        return (
-          <div>
-            {cantidadOriginal > 0 && (
-              <div style={{ fontSize: 11, textDecoration: 'line-through', color: '#999', lineHeight: 1.4 }}>
-                {formatNumber(cantidadOriginal)}
+      render: (_: any, record: any) => (
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{formatNumber(record.cantidad || 0)}</div>
+          {record.medida?.nombre && (
+            <Tooltip title={record.medida.nombre}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {record.medida.nombre}
               </div>
-            )}
-            <div style={{ fontSize: 14, fontWeight: 600 }}>{formatNumber(record.cantidad || 0)}</div>
-            {record.medida?.nombre && (
-              <Tooltip title={record.medida.nombre}>
-                <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {record.medida.nombre}
-                </div>
-              </Tooltip>
-            )}
-          </div>
-        );
-      },
+            </Tooltip>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Precio',
@@ -554,10 +555,10 @@ const DevolucionVentaDetalle: React.FC = () => {
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Tipo">—</Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Almacen" span={2}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Factura Asociada">{data.factura?.noDocumento || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Almacen" span={3}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
@@ -598,38 +599,97 @@ const DevolucionVentaDetalle: React.FC = () => {
                     <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
+                {
+                  key: 'consumo',
+                  label: `Consumido en (${data.transaccionesAsociadas?.length || 0})`,
+                  children: (
+                    <TransaccionesAsociadasCard documentos={data.transaccionesAsociadas || []}
+                      onDocumentoClick={(doc) => {
+                        const docStr = doc.documento || '';
+                        const tipo = (docStr.split('-')[0] || '').toUpperCase();
+                        const rutas: Record<string, string> = { PV: '/FPV', DEV: '/FDEV', NC: '/FNC', ND: '/FND' };
+                        const ruta = rutas[tipo];
+                        if (ruta && doc.id) navigate(`${ruta}/${doc.id}`);
+                      }}
+                    />
+                  ),
+                },
               ]}
             />
           </Col>
 
           <Col xxl={6}>
-            <EntidadCard entidad={data.entidad} fallbackTitulo="Cliente" />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false}
+            <EntidadCard entidad={data.cliente} entidadSecundaria={data.entidad} fallbackTitulo="Cliente" />
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
             />
             {facturaData && (
-              <Card title={<span style={{ fontSize: 16, fontWeight: 600 }}>Factura Asociada</span>} className="paces-card" style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13 }}>
-                  {tienePermisoFPV ? (
-                    <a style={{ cursor: 'pointer' }} onClick={() => navigate(`/FPV/${facturaData.id}`)}>
-                      <FileTextOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-                      {facturaData.documento.codigo}-{facturaData.noDocumento}
-                    </a>
-                  ) : (
-                    <span className="paces-text-secondary">
-                      <FileTextOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-                      {facturaData.documento.codigo}-{facturaData.noDocumento}
-                    </span>
+              <Card
+                title={
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 16, fontWeight: 600 }}>Factura Asociada</span>
+                    {facturaData.documento?.codigo && (
+                      <Tag color="blue" style={{ marginLeft: 8, fontWeight: 400 }}>
+                        {facturaData.documento.codigo === 'PV' ? 'Punto de Venta' : facturaData.documento.codigo}
+                      </Tag>
+                    )}
+                  </div>
+                }
+                className="paces-card"
+                style={{ marginBottom: 16 }}
+              >
+                <div
+                  onClick={tienePermisoFPV ? () => navigate(`/FPV/${facturaData.id}`) : undefined}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    background: 'rgba(85, 110, 230, 0.06)', borderRadius: 6,
+                    padding: '10px 12px', marginBottom: 12,
+                    cursor: tienePermisoFPV ? 'pointer' : 'default',
+                    transition: 'background 0.15s ease',
+                  }}
+                  onMouseEnter={tienePermisoFPV ? (e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(85, 110, 230, 0.12)'; } : undefined}
+                  onMouseLeave={tienePermisoFPV ? (e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(85, 110, 230, 0.06)'; } : undefined}
+                >
+                  <FileTextOutlined style={{ color: '#556ee6', fontSize: 16, flexShrink: 0 }} />
+                  <span style={{ fontSize: 14, fontWeight: 600, color: tienePermisoFPV ? '#556ee6' : '#262626', flex: 1 }}>
+                    {facturaData.documento?.codigo}-{facturaData.noDocumento}
+                  </span>
+                  {facturaData.turno && <Tag style={{ background: '#d9d9d9', borderColor: '#d9d9d9', color: '#595959', marginRight: 4, flexShrink: 0 }}>Turno {facturaData.turno}</Tag>}
+                  {tienePermisoFPV && <ArrowRightOutlined style={{ color: '#556ee6', fontSize: 12 }} />}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 13 }}>
+                    <CalendarOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+                    {formatDate(facturaData.fechaDocumento)}
+                  </div>
+                  {facturaData.ncf && (
+                    <div style={{ fontSize: 13 }}>
+                      <TagOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+                      {facturaData.ncf}
+                    </div>
+                  )}
+                  {facturaData.cliente?.nombre && (
+                    <div style={{ fontSize: 13 }}>
+                      <UserOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+                      {toTitleCase(facturaData.cliente.nombre)}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 13 }}>
+                    <DollarOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+                    <span style={{ fontWeight: 600, color: '#262626' }}>{formatCurrency(facturaData.total)}</span>
+                  </div>
+                  {facturaData.cajero && (
+                    <div style={{ fontSize: 13, color: '#595959' }}>
+                      <TeamOutlined style={{ color: '#8c8c8c', marginRight: 8 }} />
+                      {facturaData.cajero}
+                    </div>
                   )}
                 </div>
               </Card>
             )}
-            <DocumentosRelacionadosCard
-              documentos={documentosRelacionados}
-              currentId={data?.id}
-            />
+
           </Col>
         </Row>
       ) : (
@@ -664,17 +724,17 @@ const DevolucionVentaDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Factura Asociada">{data.factura?.noDocumento || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+              <Descriptions.Item label="Tipo">—</Descriptions.Item>
+              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
-          </Card>
+            </Card>
 
-          <Tabs
-            defaultActiveKey="detalles"
+            <Tabs
+              defaultActiveKey="detalles"
             type="card"
             items={[
               {
@@ -709,29 +769,91 @@ const DevolucionVentaDetalle: React.FC = () => {
                   <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                 ),
               },
+              {
+                key: 'consumo',
+                label: `Consumido en (${data.transaccionesAsociadas?.length || 0})`,
+                children: (
+                  <TransaccionesAsociadasCard documentos={data.transaccionesAsociadas || []}
+                    onDocumentoClick={(doc) => {
+                      const docStr = doc.documento || '';
+                      const tipo = (docStr.split('-')[0] || '').toUpperCase();
+                      const rutas: Record<string, string> = { PV: '/FPV', DEV: '/FDEV', NC: '/FNC', ND: '/FND' };
+                      const ruta = rutas[tipo];
+                      if (ruta && doc.id) navigate(`${ruta}/${doc.id}`);
+                    }}
+                  />
+                ),
+              },
             ]}
           />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
             />
 
           {facturaData && (
-            <Card title={<span style={{ fontSize: 16, fontWeight: 600 }}>Factura Asociada</span>} className="paces-card" style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 13 }}>
-                {tienePermisoFPV ? (
-                  <a style={{ cursor: 'pointer' }} onClick={() => navigate(`/FPV/${facturaData.id}`)}>
-                    <FileTextOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-                    {facturaData.documento.codigo}-{facturaData.noDocumento}
-                  </a>
-                ) : (
-                  <span className="paces-text-secondary">
-                    <FileTextOutlined style={{ color: '#556ee6', marginRight: 8 }} />
-                    {facturaData.documento.codigo}-{facturaData.noDocumento}
-                  </span>
+            <Card
+              title={
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 16, fontWeight: 600 }}>Factura Asociada</span>
+                  {facturaData.documento?.codigo && (
+                    <Tag color="blue" style={{ marginLeft: 8, fontWeight: 400 }}>
+                      {facturaData.documento.codigo === 'PV' ? 'Punto de Venta' : facturaData.documento.codigo}
+                    </Tag>
+                  )}
+                </div>
+              }
+              className="paces-card"
+              style={{ marginBottom: 16 }}
+            >
+              <div
+                onClick={tienePermisoFPV ? () => navigate(`/FPV/${facturaData.id}`) : undefined}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'rgba(85, 110, 230, 0.06)', borderRadius: 6,
+                  padding: '10px 12px', marginBottom: 12,
+                  cursor: tienePermisoFPV ? 'pointer' : 'default',
+                  transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={tienePermisoFPV ? (e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(85, 110, 230, 0.12)'; } : undefined}
+                onMouseLeave={tienePermisoFPV ? (e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(85, 110, 230, 0.06)'; } : undefined}
+              >
+                <FileTextOutlined style={{ color: '#556ee6', fontSize: 16, flexShrink: 0 }} />
+                <span style={{ fontSize: 14, fontWeight: 600, color: tienePermisoFPV ? '#556ee6' : '#262626', flex: 1 }}>
+                  {facturaData.documento?.codigo}-{facturaData.noDocumento}
+                </span>
+                {facturaData.turno && <Tag style={{ background: '#d9d9d9', borderColor: '#d9d9d9', color: '#595959', marginRight: 4, flexShrink: 0 }}>Turno {facturaData.turno}</Tag>}
+                {tienePermisoFPV && <ArrowRightOutlined style={{ color: '#556ee6', fontSize: 12 }} />}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 13 }}>
+                  <CalendarOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+                  {formatDate(facturaData.fechaDocumento)}
+                </div>
+                {facturaData.ncf && (
+                  <div style={{ fontSize: 13 }}>
+                    <TagOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+                    {facturaData.ncf}
+                  </div>
+                )}
+                {facturaData.cliente?.nombre && (
+                  <div style={{ fontSize: 13 }}>
+                    <UserOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+                    {toTitleCase(facturaData.cliente.nombre)}
+                  </div>
+                )}
+                <div style={{ fontSize: 13 }}>
+                  <DollarOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+                  <span style={{ fontWeight: 600, color: '#262626' }}>{formatCurrency(facturaData.total)}</span>
+                </div>
+                {facturaData.cajero && (
+                  <div style={{ fontSize: 13, color: '#595959' }}>
+                    <TeamOutlined style={{ color: '#8c8c8c', marginRight: 8 }} />
+                    {facturaData.cajero}
+                  </div>
                 )}
               </div>
             </Card>

@@ -14,6 +14,7 @@ import {
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
@@ -54,6 +55,7 @@ const OrdenCompraDetalle: React.FC = () => {
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
+  const { screenCode, documentCode } = useScreenConfig();
   const screens = Grid.useBreakpoint();
 
   const [data, setData] = useState<any>(null);
@@ -71,6 +73,7 @@ const OrdenCompraDetalle: React.FC = () => {
   const [operacionTitulo, setOperacionTitulo] = useState('');
 
   const { message } = App.useApp();
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   // ===== Carga de documentos relacionados =====
   useEffect(() => {
@@ -212,7 +215,7 @@ const OrdenCompraDetalle: React.FC = () => {
   // ===== Efectos de ciclo de vida =====
 
   useEffect(() => {
-    setActiveModule('FORC');
+    setActiveModule(screenCode);
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
@@ -462,10 +465,14 @@ const OrdenCompraDetalle: React.FC = () => {
             } style={{ marginBottom: 16 }}>
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Documento">
-                  {data.noDocumento || '-'}
+
                 </Descriptions.Item>
                 <Descriptions.Item label="Concepto">
-                  {data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}
+
+                </Descriptions.Item>
+                <Descriptions.Item label="Tipo">—</Descriptions.Item>
+                <Descriptions.Item label="Concepto">
+                  {data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="NCF">
                   {data.ncf || '-'}
@@ -529,7 +536,7 @@ const OrdenCompraDetalle: React.FC = () => {
 
           <Col xxl={6}>
             <EntidadCard entidad={data.suplidor} fallbackTitulo="Suplidor" />
-            <TotalesCard subTotal={data.subTotal || 0} descuento={data.descuento || 0} impuestos={data.impuestos || 0} total={data.total || 0} nota={data.nota || ''} alignRight={false}
+            <TotalesCard subTotal={data.subTotal || 0} descuento={data.descuento || 0} impuestos={data.impuestos || 0} total={data.total || 0} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
@@ -569,7 +576,8 @@ const OrdenCompraDetalle: React.FC = () => {
           } style={{ marginBottom: 16 }}>
             <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
               <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+              <Descriptions.Item label="Tipo">—</Descriptions.Item>
               <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
               <Descriptions.Item label="Suplidor">{data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : '-'}</Descriptions.Item>
               <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
@@ -613,7 +621,7 @@ const OrdenCompraDetalle: React.FC = () => {
           />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal || 0} descuento={data.descuento || 0} impuestos={data.impuestos || 0} total={data.total || 0} nota={data.nota || ''} alignRight={true}
+            <TotalesCard subTotal={data.subTotal || 0} descuento={data.descuento || 0} impuestos={data.impuestos || 0} total={data.total || 0} alignRight={true}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}

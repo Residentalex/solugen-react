@@ -10,14 +10,16 @@ import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { TransaccionBancariaVistaDTO } from '../../types/transaccion';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 
 const { Text } = Typography;
 
 const SolicitudPago: React.FC = () => {
   const navigate = useNavigate();
+  const { screenCode, documentCode } = useScreenConfig();
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<TransaccionBancariaVistaDTO>({
-    modulo: 'FSPA',
+    modulo: screenCode,
     fetchVista: (sucursal, desde, hasta, filas, salto, estado) =>
       solicitudPagoApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado),
     fetchFiltrar: (sucursal, params) =>
@@ -129,6 +131,8 @@ const SolicitudPago: React.FC = () => {
         onPageSizeChange: actions.handlePageSizeChange,
         showCrear: true,
         onCrear: () => navigate('/FSPA/nuevo'),
+        showClonar: false,
+        showImprimir: false,
         showEditar: true,
         editarDisabled: !puedeEditar,
         onEditar: () => navigate(`/FSPA/${state.selectedRow!.id}/editar`),

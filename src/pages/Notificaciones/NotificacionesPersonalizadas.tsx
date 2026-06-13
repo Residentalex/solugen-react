@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Table, Card, Button, Tag, Tooltip, message, Input, Select, Alert, Space, Popconfirm,
+  Table, Card, Button, Tag, Tooltip, message, Input, Select, Alert, Space, Popconfirm, Empty,
 } from 'antd';
 import {
   SearchOutlined, ReloadOutlined, PlusOutlined, EditOutlined,
   PlayCircleOutlined, PoweroffOutlined, DeleteOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import PermissionGate from '../../components/PermissionGate';
 import { notificacionesApi } from '../../api/notificacionesApi';
 import type { NotificacionSQLConfig } from '../../types/notificaciones';
 import NotificacionSQLFormulario from './NotificacionSQLFormulario';
@@ -241,9 +242,11 @@ const NotificacionesPersonalizadas: React.FC = () => {
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Notificaciones Personalizadas SQL</h4>
-        <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-          Nueva configuración SQL
-        </Button>
+        <PermissionGate permisoEspecial="pe_NOTIFICACIONESPECIAL">
+          <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
+            Nueva configuración SQL
+          </Button>
+        </PermissionGate>
       </div>
 
       {loadingError && (
@@ -267,7 +270,7 @@ const NotificacionesPersonalizadas: React.FC = () => {
               placeholder="Buscar por nombre o tipo..."
               allowClear
               onSearch={handleSearch}
-              style={{ width: 400 }}
+              style={{ flex: 1, minWidth: 200, maxWidth: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
             <Select
@@ -295,6 +298,11 @@ const NotificacionesPersonalizadas: React.FC = () => {
           loading={loading}
           scroll={{ x: 950 }}
           size="middle"
+          locale={{
+            emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Empty description="No hay notificaciones personalizadas registradas" />
+            </div>,
+          }}
           pagination={{
             current: pagina,
             pageSize,

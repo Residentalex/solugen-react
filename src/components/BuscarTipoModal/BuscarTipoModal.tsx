@@ -9,9 +9,11 @@ interface BuscarTipoModalProps {
   onClose: () => void;
   onSelect: (tipo: { codigo: string; nombre: string }) => void;
   tipoDocumento: string;
+  /** Filtro opcional por tipo de entidad (SUP/CLI) - disponible cuando el endpoint lo soporte */
+  tipoEntidad?: string;
 }
 
-const BuscarTipoModal: React.FC<BuscarTipoModalProps> = ({ open, onClose, onSelect, tipoDocumento }) => {
+const BuscarTipoModal: React.FC<BuscarTipoModalProps> = ({ open, onClose, onSelect, tipoDocumento, tipoEntidad: _tipoEntidad }) => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const [tipos, setTipos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);

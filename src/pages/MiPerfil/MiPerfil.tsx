@@ -56,6 +56,7 @@ const MiPerfil: React.FC = () => {
         refreshToken: sesion.refreshToken,
         usuario: sesion.usuario,
         sucursalActiva: sesion.sucursalActiva,
+        sucursalContable: sesion.sucursalContable,
         sucursalesPermitidas: sesion.sucursalesPermitidas,
       });
       message.success('Permisos recargados correctamente');

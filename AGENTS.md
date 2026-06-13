@@ -11,6 +11,7 @@ Aplica a `solugen-react/`. Leer junto con `D:\Desarrollo\AGENTS.md`.
 - UI: estilo Skote-like, Ant Design + CSS plano, color primario `#556ee6`.
 - No agregar Bootstrap, Tailwind, styled-components ni otras librerias CSS.
 - Sidebar desde `usuario.pantallas`, agrupado por modulo.
+- Orden de grupos en el sidebar: Maestro → Operaciones → Consultas → Reportes. Definido como constante `ORDEN_GRUPOS` en `Sidebar.tsx`. Cualquier grupo nuevo que no esté en esa lista se coloca al final automáticamente.
 - En formularios de edicion con toolbar contextual que cambia segun el estado del documento, usar toolbar inline (dentro del componente) en lugar del toolbar global, para evitar duplicacion de botones Guardar/Cancelar.
 - Modulos/pantallas vienen de `AUTH_MODULO` y `AUTH_PANTALLA`.
 - Si el backend espera fecha string, enviar `yyyyMMddHHmmss`.

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Table, Typography } from 'antd';
+import { Card, Table, Typography, Empty } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import ListadoErrorAlert from '../components/ListadoErrorAlert';
 import DocumentListadoToolbar from '../components/DocumentListadoToolbar';
@@ -55,6 +55,7 @@ interface DocumentListadoLayoutProps<T> {
   };
 
   extraFooter?: React.ReactNode;
+  emptyText?: React.ReactNode;
 }
 
 function DocumentListadoLayout<T extends { id?: number | string }>(
@@ -68,6 +69,7 @@ function DocumentListadoLayout<T extends { id?: number | string }>(
     pdfPreview, onPdfClose,
     toolbarProps,
     extraFooter,
+    emptyText,
   } = props;
 
   const handleTableChange = (pagination: TablePaginationConfig) => {
@@ -115,6 +117,7 @@ function DocumentListadoLayout<T extends { id?: number | string }>(
             showTotal: (t) => `${t} registros`,
           }}
           className="paces-border-top paces-list-table"
+          locale={emptyText ? { emptyText } : undefined}
         />
 
         {extraFooter && (

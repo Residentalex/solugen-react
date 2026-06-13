@@ -8,6 +8,7 @@ import {
   SearchOutlined, ReloadOutlined, PrinterOutlined, DownloadOutlined, CloseOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { antiguedadSaldosApi } from '../../api/antiguedadSaldosApi';
@@ -379,7 +380,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     return { total, m0_30, m31_60, m61_90, m91_120, mMas120 };
   }, [detallado, agingData, resumenData]);
 
-  /* ───── Exportar CSV ───── */
+  /* ───── Exportar Excel ───── */
 
   const exportarCSV = () => {
     const items = detallado ? agingData : resumenData;
@@ -388,61 +389,59 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       return;
     }
 
-    const filas: string[][] = [];
+    const workbook = XLSX.utils.book_new();
+    let headersParaExportar: string[];
+    let excelData: Record<string, any>[];
 
     if (detallado) {
-      filas.push(['Documento', 'NCF', 'Fecha', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días']);
-      for (const item of agingData) {
-        filas.push([
-          item.noDocumento || '',
-          item.ncf || '',
-          formatDate(item.fechaDocumento),
-          String(item.total ?? 0),
-          String(item.monto0_30 ?? 0),
-          String(item.monto31_60 ?? 0),
-          String(item.monto61_90 ?? 0),
-          String(item.monto91_120 ?? 0),
-          String(item.montoMas120 ?? 0),
-        ]);
-      }
+      headersParaExportar = ['Documento', 'NCF', 'Fecha', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
+      excelData = agingData.map((item) => ({
+        [headersParaExportar[0]]: item.noDocumento || '',
+        [headersParaExportar[1]]: item.ncf || '',
+        [headersParaExportar[2]]: formatDate(item.fechaDocumento),
+        [headersParaExportar[3]]: item.total ?? 0,
+        [headersParaExportar[4]]: item.monto0_30 ?? 0,
+        [headersParaExportar[5]]: item.monto31_60 ?? 0,
+        [headersParaExportar[6]]: item.monto61_90 ?? 0,
+        [headersParaExportar[7]]: item.monto91_120 ?? 0,
+        [headersParaExportar[8]]: item.montoMas120 ?? 0,
+      }));
+      excelData.push({
+        [headersParaExportar[0]]: 'Totales',
+        [headersParaExportar[3]]: summaryTotals.total,
+        [headersParaExportar[4]]: summaryTotals.m0_30,
+        [headersParaExportar[5]]: summaryTotals.m31_60,
+        [headersParaExportar[6]]: summaryTotals.m61_90,
+        [headersParaExportar[7]]: summaryTotals.m91_120,
+        [headersParaExportar[8]]: summaryTotals.mMas120,
+      });
     } else {
-      filas.push([entidadLabel, 'Código', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días']);
-      for (const item of resumenData) {
-        filas.push([
-          item.nombreEntidad,
-          item.codigoEntidad,
-          String(item.total),
-          String(item.monto0_30),
-          String(item.monto31_60),
-          String(item.monto61_90),
-          String(item.monto91_120),
-          String(item.montoMas120),
-        ]);
-      }
+      headersParaExportar = [entidadLabel, 'Código', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
+      excelData = resumenData.map((item) => ({
+        [headersParaExportar[0]]: item.nombreEntidad,
+        [headersParaExportar[1]]: item.codigoEntidad,
+        [headersParaExportar[2]]: item.total,
+        [headersParaExportar[3]]: item.monto0_30,
+        [headersParaExportar[4]]: item.monto31_60,
+        [headersParaExportar[5]]: item.monto61_90,
+        [headersParaExportar[6]]: item.monto91_120,
+        [headersParaExportar[7]]: item.montoMas120,
+      }));
+      excelData.push({
+        [headersParaExportar[0]]: 'Totales',
+        [headersParaExportar[2]]: summaryTotals.total,
+        [headersParaExportar[3]]: summaryTotals.m0_30,
+        [headersParaExportar[4]]: summaryTotals.m31_60,
+        [headersParaExportar[5]]: summaryTotals.m61_90,
+        [headersParaExportar[6]]: summaryTotals.m91_120,
+        [headersParaExportar[7]]: summaryTotals.mMas120,
+      });
     }
 
-    // Fila de totales
-    filas.push([]);
-    filas.push([
-      'Totales',
-      '',
-      formatCurrency(summaryTotals.total),
-      formatCurrency(summaryTotals.m0_30),
-      formatCurrency(summaryTotals.m31_60),
-      formatCurrency(summaryTotals.m61_90),
-      formatCurrency(summaryTotals.m91_120),
-      formatCurrency(summaryTotals.mMas120),
-    ]);
-
-    const csvContent = filas.map((f) => f.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${titulo.replace(/\s+/g, '_')}_${dayjs().format('YYYYMMDD_HHmmss')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    worksheet['!cols'] = headersParaExportar.map(() => ({ wch: 18 }));
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Antigüedad');
+    XLSX.writeFile(workbook, `${titulo.replace(/\s+/g, '_')}_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
   };
 
   /* ───── Columnas vista detallada ───── */
@@ -774,7 +773,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                     handleSearch('');
                   }
                 }}
-                style={{ width: 400 }}
+                style={{ flex: 1, minWidth: 200, maxWidth: 400 }}
                 prefix={<SearchOutlined className="paces-text-icon" />}
               />
               <Select

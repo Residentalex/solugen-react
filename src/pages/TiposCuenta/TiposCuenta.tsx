@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Card,
   Table,
@@ -18,6 +19,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { tipoCuentaApi } from '../../api/tipoCuentaApi';
 import type { TipoCuentaDTO } from '../../types/contabilidad';
 import PermissionGate from '../../components/PermissionGate';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
 
@@ -31,8 +33,6 @@ const TiposCuenta: React.FC = () => {
   const puedeEditar = pantallaActual?.acciones.includes('EDITAR') ?? false;
   const puedeCrear = pantallaActual?.acciones.includes('CREAR') ?? false;
 
-  const [data, setData] = useState<TipoCuentaDTO[]>([]);
-  const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(25);
   const [modalVisible, setModalVisible] = useState(false);
@@ -40,34 +40,32 @@ const TiposCuenta: React.FC = () => {
   const [guardando, setGuardando] = useState(false);
   const [form] = Form.useForm();
 
-  const cargarDatos = useCallback(async () => {
-    if (sucursalActiva === undefined) return;
-    setLoading(true);
-    try {
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['tiposCuenta', sucursalActiva],
+    queryFn: async () => {
+      if (sucursalActiva === undefined) return [];
       const result = await tipoCuentaApi.obtenerListado(sucursalActiva);
-      setData(result || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar tipos de cuenta');
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
+      return result || [];
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('MTipoCuenta');
     updateToolbar({});
-    cargarDatos();
     return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
+  }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
   };
 
   const filteredData = useMemo(() => {
-    if (!searchText) return data;
+    const list = data || [];
+    if (!searchText) return list;
     const lower = searchText.toLowerCase();
-    return data.filter(
+    return list.filter(
       (item) =>
         item.idExterno.toLowerCase().includes(lower) ||
         item.nombre.toLowerCase().includes(lower)
@@ -109,7 +107,7 @@ const TiposCuenta: React.FC = () => {
         message.success('Tipo de cuenta creado correctamente');
       }
       setModalVisible(false);
-      cargarDatos();
+      refetch();
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar tipo de cuenta');
@@ -153,45 +151,18 @@ const TiposCuenta: React.FC = () => {
   return (
     <>
       <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
-        <div style={{ padding: '16px 24px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-            <Input.Search
-              placeholder="Buscar por código o nombre..."
-              allowClear
-              onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-            style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-            <Select
-              style={{ width: 65 }}
-              value={pageSize}
-              onChange={(v) => { setPageSize(v); }}
-              options={[
-                { value: 25, label: '25' },
-                { value: 50, label: '50' },
-                { value: 100, label: '100' },
-              ]}
-            />
-            <div style={{ flex: 1 }} />
-            <PermissionGate accion="CREAR">
-              <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-                Nuevo
-              </Button>
-            </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={() => cargarDatos()} />
-          </div>
-        </div>
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); }}
+          onNuevo={abrirNuevo}
+          onReload={() => refetch()}
+        />
         <Table<TipoCuentaDTO>
           columns={columns}
           dataSource={filteredData}
           rowKey="idExterno"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 500 }}
           size="middle"
           rowClassName="paces-row-hover"

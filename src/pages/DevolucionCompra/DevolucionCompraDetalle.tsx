@@ -14,6 +14,7 @@ import {
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 import { transaccionApi } from '../../api/transaccionApi';
@@ -41,6 +42,7 @@ const DevolucionCompraDetalle: React.FC = () => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+  const { screenCode, documentCode } = useScreenConfig();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
@@ -62,9 +64,10 @@ const DevolucionCompraDetalle: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const operacion = useAplicar();
   const [operacionTitulo, setOperacionTitulo] = useState('');
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   useEffect(() => {
-    setActiveModule('FDVC');
+    setActiveModule(screenCode);
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
@@ -252,15 +255,13 @@ const DevolucionCompraDetalle: React.FC = () => {
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div>{formatNumber(record.cantidad || 0)}</div>
-          {record.medida?.nombre && (
-            <Tooltip title={record.medida.nombre}>
-              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {record.medida.nombre}
-              </div>
-            </Tooltip>
-          )}
+          <Tooltip title={record.medida?.nombre || ''}>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', marginTop: 'auto', minHeight: 17, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {record.medida?.nombre || ''}
+            </div>
+          </Tooltip>
         </div>
       ),
     },
@@ -478,6 +479,24 @@ const DevolucionCompraDetalle: React.FC = () => {
           }
         />
       )}
+      {(() => {
+        const enpRel = documentosRelacionados.find(
+          r => r.origenTipoDoc === 'ENP' || r.destinoTipoDoc === 'ENP'
+        );
+        if (!enpRel) return null;
+        const esOrigen = enpRel.origenTipoDoc === 'ENP';
+        const enpId = esOrigen ? enpRel.idOrigen : enpRel.idDestino;
+        const enpDoc = esOrigen ? enpRel.origenNumDoc : enpRel.destinoNumDoc;
+        return (
+          <Card size="small" style={{ borderRadius: 8, marginBottom: 16, background: '#fafafa', cursor: 'pointer' }}
+            hoverable onClick={() => navigate(`/FENP/${enpId}`)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 600, fontSize: 13, color: '#262626' }}>Entrada Asociada</span>
+              <Tag color="blue" style={{ fontSize: 12 }}>ENP-{enpDoc}</Tag>
+            </div>
+          </Card>
+        );
+      })()}
       <DetalleToolbar
         modulo="FDVC"
         estado={data.estado}
@@ -562,12 +581,12 @@ const DevolucionCompraDetalle: React.FC = () => {
               }
               style={{ marginBottom: 16 }}
             >
-              <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Entrada">{data.documentoReferencia || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
+              <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
+                <Descriptions.Item label="Tipo">{data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}</Descriptions.Item>
+                <Descriptions.Item label="Concepto" span={2}>{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Nota" span={2}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+                <Descriptions.Item label="Almacen" span={2}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -589,7 +608,7 @@ const DevolucionCompraDetalle: React.FC = () => {
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
-                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+<Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
                     </>
                   ),
                 },
@@ -613,7 +632,7 @@ const DevolucionCompraDetalle: React.FC = () => {
 
           <Col xxl={6}>
             <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={false}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}
@@ -666,11 +685,11 @@ const DevolucionCompraDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Entrada">{data.documentoReferencia || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+              <Descriptions.Item label="Tipo">{data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}</Descriptions.Item>
+              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -714,7 +733,7 @@ const DevolucionCompraDetalle: React.FC = () => {
             />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} nota={data.nota} alignRight={true}
+            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
               monedaSimbolo={data.moneda?.simbolo || 'RD$'}
               monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
               tasa={data.tasa ?? 1}

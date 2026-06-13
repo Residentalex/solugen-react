@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Table, Card, Input, Select, Button, Modal, Form, InputNumber, message, Typography, Alert } from 'antd';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Table, Card, Input, Select, Button, Modal, Form, InputNumber, message, Typography, Alert, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -7,13 +8,10 @@ import { useUIStore } from '../../stores/uiStore';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import type { UnidadMedidaDTO } from '../../types/productos';
 import PermissionGate from '../../components/PermissionGate';
+import { toTitleCase } from '../../utils/formats';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
-
-function toTitleCase(str: string): string {
-  if (!str) return str;
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 const UnidadesMedida: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
@@ -24,48 +22,51 @@ const UnidadesMedida: React.FC = () => {
   const pantallaActual = usuario?.pantallas.find((p: any) => p.codigo === 'MMedida');
   const puedeCrear = pantallaActual?.acciones.includes('CREAR') ?? false;
 
-  const [data, setData] = useState<UnidadMedidaDTO[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(25);
-  const [loadingError, setLoadingError] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [form] = Form.useForm();
 
-  const cargarDatos = useCallback(async () => {
-    if (sucursalActiva === undefined) return;
-    setLoading(true);
-    try {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['unidadesMedida', sucursalActiva],
+    queryFn: async () => {
+      if (sucursalActiva === undefined) return [];
       const result = await unidadMedidaApi.obtenerListado(sucursalActiva);
-      setData(result || []);
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
+      return result || [];
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('MUnidadMedida');
     updateToolbar({});
-    cargarDatos();
     return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
+  }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleSearch = (value: string) => {
+    setPage(1);
     setSearchText(value);
   };
 
   const filteredData = useMemo(() => {
-    if (!searchText) return data;
+    const list = data || [];
+    if (!searchText) return list;
     const lower = searchText.toLowerCase();
-    return data.filter(
+    return list.filter(
       (item) =>
         item.codigo?.toLowerCase().includes(lower) ||
         item.nombre?.toLowerCase().includes(lower)
     );
   }, [data, searchText]);
+
+  const paginatedData = useMemo(() => {
+    if (!filteredData) return [];
+    const start = (page - 1) * pageSize;
+    return filteredData.slice(start, start + pageSize);
+  }, [filteredData, page, pageSize]);
 
   const abrirNuevo = () => {
     if (!puedeCrear) return;
@@ -88,7 +89,7 @@ const UnidadesMedida: React.FC = () => {
       await unidadMedidaApi.crear(sucursalActiva, payload);
       message.success('Unidad de medida creada correctamente');
       setModalVisible(false);
-      cargarDatos();
+      refetch();
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar unidad de medida');
@@ -132,14 +133,14 @@ const UnidadesMedida: React.FC = () => {
 
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
           title="Error al cargar unidades de medida"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={() => { setLoadingError(false); cargarDatos(); }}>
+            <Button size="small" onClick={() => refetch()}>
               Reintentar
             </Button>
           }
@@ -150,52 +151,33 @@ const UnidadesMedida: React.FC = () => {
         style={{ borderRadius: 8, overflow: 'hidden' }}
         styles={{ body: { padding: 0 } }}
       >
-        <div style={{ padding: '16px 24px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-            <Input.Search
-              placeholder="Buscar por código o nombre..."
-              allowClear
-              onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-              style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-            <Select
-              style={{ width: 65 }}
-              value={pageSize}
-              onChange={(v) => { setPageSize(v); }}
-              options={[
-                { value: 25, label: '25' },
-                { value: 50, label: '50' },
-                { value: 100, label: '100' },
-              ]}
-            />
-            <div style={{ flex: 1 }} />
-            <PermissionGate accion="CREAR">
-              <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
-                Nuevo
-              </Button>
-            </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={() => { setLoadingError(false); cargarDatos(); }} />
-          </div>
-        </div>
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); }}
+          onNuevo={abrirNuevo}
+          onReload={() => refetch()}
+        />
         <Table<UnidadMedidaDTO>
           columns={columns}
-          dataSource={filteredData}
+          dataSource={paginatedData}
           rowKey={(r) => r.codigo || r.nombre || ''}
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 700 }}
           size="middle"
           rowClassName="paces-row-hover"
           className="paces-border-top paces-list-table"
+          locale={{
+            emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Empty description="No hay unidades de medida registradas" />
+            </div>,
+          }}
           pagination={{
-            showSizeChanger: false,
+            current: page,
             pageSize,
+            total: filteredData?.length || 0,
+            onChange: (p) => setPage(p),
+            showSizeChanger: false,
             showTotal: (t) => `${t} registros`,
           }}
         />

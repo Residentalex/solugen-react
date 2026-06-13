@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Alert, Table, Card, Input, Select, Button, Modal, Descriptions, Typography, Tag, Divider, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -6,10 +7,11 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { ofertaApi } from '../../api/ofertaApi';
 import type { OfertaDTO, DetalleOfertaDTO } from '../../types/oferta';
+import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
 
-/* ───────── helpers ───────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function toTitleCase(str: string): string {
   if (!str) return str;
@@ -44,7 +46,7 @@ function getVigencia(item: OfertaDTO): { text: string; color: string } {
   return { text: 'Vigente', color: 'green' };
 }
 
-/* ───────── componente ───────── */
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€ componente â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 const Ofertas: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
@@ -52,38 +54,27 @@ const Ofertas: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
 
-  const [data, setData] = useState<OfertaDTO[]>([]);
-  const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(25);
-  const [loadingError, setLoadingError] = useState(false);
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [detalleItem, setDetalleItem] = useState<OfertaDTO | null>(null);
 
-  /* ───────── carga ───────── */
-
-  const cargarDatos = useCallback(async () => {
-    if (sucursalActiva === undefined) return;
-    setLoading(true);
-    setLoadingError(false);
-    try {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['ofertas', sucursalActiva],
+    queryFn: async () => {
+      if (sucursalActiva === undefined) return [];
       const result = await ofertaApi.obtenerListado(sucursalActiva);
-      setData(result || []);
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva]);
+      return result || [];
+    },
+    enabled: sucursalActiva !== undefined,
+    placeholderData: (prev) => prev,
+  });
 
   useEffect(() => {
     setActiveModule('FOfertas');
     updateToolbar({});
-    cargarDatos();
     return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarDatos]);
-
-  /* ───────── handlers ───────── */
+  }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -94,28 +85,23 @@ const Ofertas: React.FC = () => {
     setDetalleVisible(true);
   };
 
-  const handleRefresh = useCallback(() => {
-    setSearchText('');
-    setLoadingError(false);
-    cargarDatos();
-  }, [cargarDatos]);
-
-  /* ───────── filtro local ───────── */
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€ filtro local â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   const filteredData = useMemo(() => {
-    const list = searchText
-      ? data.filter((item) => {
+    const list = data || [];
+    const result = searchText
+      ? list.filter((item) => {
           const lower = searchText.toLowerCase();
           return (
             item.codigo?.toLowerCase().includes(lower) ||
             item.nombre?.toLowerCase().includes(lower)
           );
         })
-      : [...data];
-    return list.sort((a, b) => b.fechaFinal.localeCompare(a.fechaFinal));
+      : [...list];
+    return result.sort((a, b) => b.fechaFinal.localeCompare(a.fechaFinal));
   }, [data, searchText]);
 
-  /* ───────── columnas ───────── */
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€ columnas â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   const columns: ColumnsType<OfertaDTO> = [
     {
@@ -175,18 +161,18 @@ const Ofertas: React.FC = () => {
     },
   ];
 
-  /* ───────── render ───────── */
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€ render â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
   return (
     <>
-      {loadingError && (
+      {isError && (
         <Alert
           message="Error al cargar ofertas"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={handleRefresh}>
+            <Button size="small" onClick={() => refetch()}>
               Reintentar
             </Button>
           }
@@ -198,7 +184,6 @@ const Ofertas: React.FC = () => {
         style={{ borderRadius: 8, overflow: 'hidden' }}
         styles={{ body: { padding: 0 } }}
       >
-        <div style={{ padding: '16px 24px 0' }}>
           <div
             style={{
               display: 'flex',
@@ -208,39 +193,19 @@ const Ofertas: React.FC = () => {
               flexWrap: 'wrap',
             }}
           >
-            <Input.Search
-              placeholder="Buscar por nombre o código..."
-              allowClear
-              onSearch={handleSearch}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  (e.target as HTMLInputElement).blur();
-                  handleSearch('');
-                }
-              }}
-              style={{ width: 400 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
-            />
-            <Select
-              style={{ width: 65 }}
-              value={pageSize}
-              onChange={(v) => { setPageSize(v); }}
-              options={[
-                { value: 25, label: '25' },
-                { value: 50, label: '50' },
-                { value: 100, label: '100' },
-              ]}
-            />
-            <div style={{ flex: 1 }} />
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+        <CatalogoListadoToolbar
+          onSearch={handleSearch}
+          pageSize={pageSize}
+          onPageSizeChange={(v) => { setPageSize(v); }}
+          onReload={() => refetch()}
+        />
           </div>
-        </div>
 
         <Table<OfertaDTO>
           columns={columns}
           dataSource={filteredData}
           rowKey="codigo"
-          loading={loading}
+          loading={isLoading}
           scroll={{ x: 1040 }}
           size="middle"
           rowClassName="paces-row-hover"
@@ -262,7 +227,7 @@ const Ofertas: React.FC = () => {
         />
       </Card>
 
-      {/* ── Modal detalle ── */}
+      {/* â”€â”€ Modal detalle â”€â”€ */}
       <Modal
         title={`Oferta: ${detalleItem?.nombre || ''}`}
         open={detalleVisible}
@@ -288,7 +253,7 @@ const Ofertas: React.FC = () => {
                   {getVigencia(detalleItem).text}
                 </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Aplica Crédito">
+              <Descriptions.Item label="Aplica CrÃ©dito">
                 {detalleItem.aplicaClienteCredito ? 'Sí' : 'No'}
               </Descriptions.Item>
             </Descriptions>

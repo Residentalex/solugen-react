@@ -42,6 +42,7 @@ export interface EventoDTO {
 export interface CompaniaDTO {
   id: number;
   nombre: string;
+  prefijo?: string;
 }
 
 export interface FamiliaArticuloDTO {

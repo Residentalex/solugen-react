@@ -44,11 +44,33 @@ export const conteoApi = {
 
   obtenerUltimos: async (
     sucursal: number,
-    dias: number
+    codigoSuplidor?: string
   ): Promise<ConteoFisicoDTO[]> => {
+    const params: Record<string, string> = {};
+    if (codigoSuplidor) params.codigoSuplidor = codigoSuplidor;
     const { data } = await apiClient.get<ApiResponse<ConteoFisicoDTO[]>>(
       `${BASE}/${sucursal}/ultimos`,
-      { params: { dias } }
+      { params }
+    );
+    return data.data;
+  },
+
+  obtenerUltimosConteosPorLista: async (
+    sucursal: number,
+    fecha: string,
+    codigos: string[]
+  ): Promise<ConteoFisicoDTO[]> => {
+    const { data } = await apiClient.post<ApiResponse<ConteoFisicoDTO[]>>(
+      `${BASE}/${sucursal}/ultimosPorLista`,
+      codigos,
+      { params: { fecha } }
+    );
+    return data.data;
+  },
+
+  obtenerPorId: async (sucursal: number, id: number): Promise<ConteoFisicoDTO> => {
+    const { data } = await apiClient.get<ApiResponse<ConteoFisicoDTO>>(
+      `${BASE}/${sucursal}/${id}`
     );
     return data.data;
   },

@@ -10,11 +10,21 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { transaccionApi } from '../../api/transaccionApi';
 import type { TransaccionDTO, TransaccionAsientoDTO } from '../../types/transaccion';
 import { ErrorDetalle } from '../../components';
+import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 import AsientosContableTable from '../../components/AsientosContableTable';
+import EntidadCard from '../../components/EntidadCard';
+import TotalesCard from '../../components/TotalesCard';
+import LogTable from '../../components/LogTable';
+import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { obtenerNombreSucursal } from '../../utils/sucursalEnumMapper';
+import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
+import CobrosCard from '../../components/CobrosCard';
+import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 
 const { Text } = Typography;
 
@@ -44,15 +54,18 @@ const AsientoContableDetalle: React.FC = () => {
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
+  const { screenCode, documentCode } = useScreenConfig();
   const screens = Grid.useBreakpoint();
 
   const [data, setData] = useState<TransaccionDTO | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [documentosRelacionados, setDocumentosRelacionados] = React.useState<DocumentoRelacionDTO[]>([]);
+  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   useEffect(() => {
-    setActiveModule('FAsientoContable');
+    setActiveModule(screenCode);
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
@@ -83,6 +96,24 @@ const AsientoContableDetalle: React.FC = () => {
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
+  React.useEffect(() => {
+    if (!data?.id) return;
+    documentoRelacionApi.obtenerPorTransaccion(data.id, sucursalActiva)
+      .then(rel => setDocumentosRelacionados(rel || []))
+      .catch(() => {
+        setDocumentosRelacionados([]);
+      });
+  }, [data?.id, sucursalActiva]);
+
+  const asientosMapeados = React.useMemo(() =>
+    (data?.asientos || []).map(a => ({
+      ...a,
+      cuentaContable: {
+        noCuenta: (a as any).cuentaContable?.noCuenta || a.noCuenta || '',
+        nombre: (a as any).cuentaContable?.nombre || '',
+      },
+    })), [data?.asientos]);
+
   if (loading || (!data && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
@@ -99,13 +130,6 @@ const AsientoContableDetalle: React.FC = () => {
   const isLarge = screens.lg ?? true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
   const esCerrado = data.periodo === 6;
-
-  // Mapear TransaccionAsientoDTO al formato esperado por AsientosContableTable
-  const asientosMapeados = React.useMemo(() =>
-    (data.asientos || []).map(a => ({
-      ...a,
-      cuentaContable: { noCuenta: a.noCuenta || '', nombre: '' },
-    })), [data.asientos]);
 
   return (
     <div>
@@ -125,6 +149,7 @@ const AsientoContableDetalle: React.FC = () => {
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+        <SucursalDocumentoSelector value={sucursalDestino} onChange={setSucursalDestino} />
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FAsientoContable')}>
           Volver
         </Button>
@@ -149,9 +174,7 @@ const AsientoContableDetalle: React.FC = () => {
           <Col lg={18}>
             <Card className="paces-card" size="small" title={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 16, fontWeight: 600 }}>
-                  {data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : 'Asiento Contable'}
-                </span>
+                <span style={{ fontSize: 16, fontWeight: 600 }}>Datos Generales</span>
                 <Space>
                   {esCerrado && (
                     <Tooltip title="Período contable cerrado">
@@ -163,44 +186,27 @@ const AsientoContableDetalle: React.FC = () => {
               </div>
             } style={{ marginBottom: 16 }}>
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Documento:">
-                  {data.noDocumento || '-'}
-                </Descriptions.Item>
                 <Descriptions.Item label="Fecha:">
                   {formatDate(data.fechaDocumento)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Concepto:">
+                  {data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : toTitleCase(data.concepto?.nombre || data.codigoConcepto || '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="NCF:">
                   {data.ncf || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Entidad:">
-                  {toTitleCase(data.nombreEntidad || data.entidad?.nombre || '-')}
-                </Descriptions.Item>
-                <Descriptions.Item label="Concepto:">
-                  {toTitleCase(data.concepto?.nombre || data.codigoConcepto || '-')}
-                </Descriptions.Item>
                 <Descriptions.Item label="Referencia:">
                   {data.referencia || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Moneda:" span={1}>
-                  {data.codigoMoneda || 'DOP'}
-                  {data.tasa > 0 && data.tasa !== 1 ? ` (Tasa: ${formatNumber(data.tasa)})` : ''}
+                <Descriptions.Item label="Sucursal:">
+                  {obtenerNombreSucursal(data.codigoSucursal)}
                 </Descriptions.Item>
-                <Descriptions.Item label="SubTotal:">
-                  {formatCurrency(data.subTotal)}
+                <Descriptions.Item label="NCF Modificado:">
+                  {data.ncfModificado || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Total:">
-                  <Text strong>{formatCurrency(data.total)}</Text>
+                <Descriptions.Item label="Nota:" span={3}>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
                 </Descriptions.Item>
-                {data.ncfModificado && (
-                  <Descriptions.Item label="NCF Modificado:" span={3}>
-                    {data.ncfModificado}
-                  </Descriptions.Item>
-                )}
-                {data.nota && (
-                  <Descriptions.Item label="Nota:" span={3}>
-                    <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota}</span>
-                  </Descriptions.Item>
-                )}
               </Descriptions>
             </Card>
 
@@ -215,41 +221,45 @@ const AsientoContableDetalle: React.FC = () => {
 <AsientosContableTable asientos={asientosMapeados} scroll={{ x: 600 }} rowKey={(r) => `${r.id || ''}`} />
                   ),
                 },
+                {
+                  key: 'documentos',
+                  label: `Documentos Asociados (${data.transaccionesAsociadas?.length || 0})`,
+                  children: (
+                    <TransaccionesAsociadasCard documentos={data.transaccionesAsociadas || []} readOnly />
+                  ),
+                },
+                {
+                  key: 'historial',
+                  label: `Historial (${data.logs?.length || 0})`,
+                  children: (
+                    <LogTable dataSource={data.logs || []} scroll={{ x: 800 }} />
+                  ),
+                },
+                {
+                  key: 'cobros',
+                  label: `Cobros (${data.cobros?.length || 0})`,
+                  children: (
+                    <CobrosCard cobros={data.cobros || []} />
+                  ),
+                },
               ]}
             />
           </Col>
 
           <Col lg={6}>
-            {/* Sidebar info */}
-            <Card className="paces-card" size="small" title="Información" style={{ marginBottom: 16 }}>
-              <Descriptions column={1} size="small">
-                <Descriptions.Item label="Débitos">
-                  <Text strong style={{ color: '#34c38f' }}>{formatCurrency(data.debitos)}</Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="Créditos">
-                  <Text strong style={{ color: '#f46a6a' }}>{formatCurrency(data.creditos)}</Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="Balance">
-                  <Text strong>{formatCurrency(data.debitos - data.creditos)}</Text>
-                </Descriptions.Item>
-                {data.debitado != null && (
-                  <Descriptions.Item label="Debitado">{formatCurrency(data.debitado)}</Descriptions.Item>
-                )}
-                {data.acreditado != null && (
-                  <Descriptions.Item label="Acreditado">{formatCurrency(data.acreditado)}</Descriptions.Item>
-                )}
-              </Descriptions>
-            </Card>
-            {data.entidad && (
-              <Card className="paces-card" size="small" title="Entidad" style={{ marginBottom: 16 }}>
-                <div>
-                  <div><Text strong>{toTitleCase(data.entidad.nombre || data.nombreEntidad || '')}</Text></div>
-                  {data.entidad.codigo && (
-                    <div className="paces-text-secondary">{data.entidad.codigo}</div>
-                  )}
-                </div>
-              </Card>
-            )}
+            <EntidadCard entidad={data.entidad as any} fallbackTitulo="Entidad" />
+            <DocumentosRelacionadosCard
+              documentos={documentosRelacionados}
+              currentId={data?.id}
+            />
+            <TotalesCard
+              subTotal={data.subTotal}
+              descuento={data.descuento}
+              impuestos={data.impuestos}
+              total={data.total}
+              monedaSimbolo={data.codigoMoneda || 'DOP'}
+              tasa={data.tasa ?? 1}
+            />
           </Col>
         </Row>
       ) : (
@@ -257,9 +267,7 @@ const AsientoContableDetalle: React.FC = () => {
         <div>
           <Card className="paces-card" size="small" title={
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 16, fontWeight: 600 }}>
-                {data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : 'Asiento Contable'}
-              </span>
+              <span style={{ fontSize: 16, fontWeight: 600 }}>Datos Generales</span>
               <Space>
                 {esCerrado && (
                   <Tooltip title="Período contable cerrado">
@@ -271,27 +279,27 @@ const AsientoContableDetalle: React.FC = () => {
             </div>
           } style={{ marginBottom: 16 }}>
             <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Documento:">{data.noDocumento || '-'}</Descriptions.Item>
               <Descriptions.Item label="Fecha:">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="Concepto:">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : toTitleCase(data.concepto?.nombre || data.codigoConcepto || '-')}</Descriptions.Item>
               <Descriptions.Item label="NCF:">{data.ncf || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Entidad:">{toTitleCase(data.nombreEntidad || data.entidad?.nombre || '-')}</Descriptions.Item>
-              <Descriptions.Item label="Concepto:">{toTitleCase(data.concepto?.nombre || data.codigoConcepto || '-')}</Descriptions.Item>
               <Descriptions.Item label="Referencia:">{data.referencia || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Moneda:">{data.codigoMoneda || 'DOP'}</Descriptions.Item>
-              <Descriptions.Item label="Total:"><Text strong>{formatCurrency(data.total)}</Text></Descriptions.Item>
-              {data.nota && (
-                <Descriptions.Item label="Nota:"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota}</span></Descriptions.Item>
-              )}
+              <Descriptions.Item label="Sucursal:">{obtenerNombreSucursal(data.codigoSucursal)}</Descriptions.Item>
+              <Descriptions.Item label="NCF Modificado:">{data.ncfModificado || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Nota:"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
             </Descriptions>
           </Card>
 
-          <Card className="paces-card" size="small" title="Información" style={{ marginBottom: 16 }}>
-            <Descriptions column={1} size="small">
-              <Descriptions.Item label="Débitos"><Text strong style={{ color: '#34c38f' }}>{formatCurrency(data.debitos)}</Text></Descriptions.Item>
-              <Descriptions.Item label="Créditos"><Text strong style={{ color: '#f46a6a' }}>{formatCurrency(data.creditos)}</Text></Descriptions.Item>
-              <Descriptions.Item label="Balance"><Text strong>{formatCurrency(data.debitos - data.creditos)}</Text></Descriptions.Item>
-            </Descriptions>
-          </Card>
+          <div style={{ marginTop: 24 }}>
+            <TotalesCard
+              subTotal={data.subTotal}
+              descuento={data.descuento}
+              impuestos={data.impuestos}
+              total={data.total}
+              monedaSimbolo={data.codigoMoneda || 'DOP'}
+              tasa={data.tasa ?? 1}
+              alignRight
+            />
+          </div>
 
           <Tabs
             defaultActiveKey="asientos"
@@ -302,6 +310,27 @@ const AsientoContableDetalle: React.FC = () => {
                 label: `Asientos (${data.asientos?.length || 0})`,
                 children: (
                   <AsientosContableTable asientos={asientosMapeados} scroll={{ x: 600 }} rowKey={(r) => `${r.id || ''}`} />
+                ),
+              },
+              {
+                key: 'documentos',
+                label: `Documentos Asociados (${data.transaccionesAsociadas?.length || 0})`,
+                children: (
+                  <TransaccionesAsociadasCard documentos={data.transaccionesAsociadas || []} readOnly />
+                ),
+              },
+              {
+                key: 'historial',
+                label: `Historial (${data.logs?.length || 0})`,
+                children: (
+                  <LogTable dataSource={data.logs || []} scroll={{ x: 800 }} />
+                ),
+              },
+              {
+                key: 'cobros',
+                label: `Cobros (${data.cobros?.length || 0})`,
+                children: (
+                  <CobrosCard cobros={data.cobros || []} />
                 ),
               },
             ]}

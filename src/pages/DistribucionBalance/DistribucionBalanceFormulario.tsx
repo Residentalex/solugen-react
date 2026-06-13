@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Modal, Alert,
+  message, Form, Input, InputNumber, Select, DatePicker, Modal, Alert, Empty,
 } from 'antd';
 import {
   SaveOutlined,
@@ -37,7 +37,7 @@ import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConc
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
-import FormularioToolbar from '../../components/FormularioToolbar';
+import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
@@ -592,7 +592,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
 
   // ===== Encabezado =====
   const renderEncabezado = () => (
-    <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
+    <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
@@ -612,7 +612,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
                 >
                   {tiposCache.map((t) => (
                     <Select.Option key={t.codigo} value={t.codigo}>
-                      {t.nombre || t.codigo}
+                      {t.codigo} - {toTitleCase(t.nombre)}
                     </Select.Option>
                   ))}
                 </Select>
@@ -621,21 +621,21 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
           </Col>
 
           <Col xs={24} sm={12} lg={15}>
-            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required>
-                  <Input
-                    placeholder=" "
-                    value={selectedConcepto ? toTitleCase(selectedConcepto.nombre) : conceptoSearchText}
-                    readOnly
-                    onClick={handleConceptoSearchClick}
-                  />
-                </FloatingField>
-              </div>
-              <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
-              {selectedConcepto && (
-                <Button icon={<ClearOutlined />} onClick={handleConceptoClear} />
-              )}
+            <div ref={conceptoRef}>
+              <FloatingField label="Concepto" required>
+                <Input
+                  placeholder=" "
+                  value={selectedConcepto ? `${selectedConcepto.codigo || ''} - ${toTitleCase(selectedConcepto.nombre)}` : conceptoSearchText}
+                  readOnly
+                  suffix={
+                    <Space size={4}>
+                      <SearchOutlined onClick={handleConceptoSearchClick} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                      {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
+                    </Space>
+                  }
+                  onClick={handleConceptoSearchClick}
+                />
+              </FloatingField>
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
@@ -855,6 +855,13 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
               </Table.Summary.Row>
             </Table.Summary>
           )}
+          locale={{
+            emptyText: (
+              <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Empty description="Sin registros" />
+              </div>
+            ),
+          }}
         />
       </div>
     ),
@@ -896,6 +903,13 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
               </Table.Summary.Row>
             </Table.Summary>
           )}
+          locale={{
+            emptyText: (
+              <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Empty description="Sin registros" />
+              </div>
+            ),
+          }}
         />
       </div>
     ),
@@ -949,7 +963,9 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
-        fetchConceptos={() => conceptosApi.obtenerConceptosPorDocumento(sucursalActiva, 'DBA')}
+        sucursal={sucursalActiva}
+        documento="DBA"
+        tipo={selectedTipo?.codigo}
       />
 
       {isLarge ? (
@@ -996,3 +1012,4 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
 };
 
 export default DistribucionBalanceFormulario;
+

@@ -163,6 +163,24 @@ export const transaccionApi = {
     const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/asociadas/${id}`, { params });
     return data.data || [];
   },
+
+  /** Obtener documentos que consumieron a un documento (sin filtro EXCREPSA) */
+  obtenerConsumidores: async (sucursal: number, id: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/consumidores/${id}`);
+    return data.data || [];
+  },
+
+  /** Obtener documentos que fueron consumidos por un documento (sin filtro EXCREPSA) */
+  obtenerConsumidos: async (sucursal: number, id: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/consumidos/${id}`);
+    return data.data || [];
+  },
+
+  /** Obtener devoluciones (DEV) vinculadas a un PV via DTRANSIDASOC */
+  obtenerDevolucionesPorPV: async (sucursal: number, id: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/devolucionesPV/${id}`);
+    return data.data || [];
+  },
 };
 
 export { formatDateParam };

@@ -6,7 +6,7 @@ import type { ApiResponse } from '../types/auth';
 
 const BASE = '/Transaccion';
 const TIPO_DOC = 'RDE';
-const TIPO_ENTIDAD = 'SUP';
+
 
 export const facturaSuplidorApi = {
   obtenerVista: async (
@@ -15,9 +15,11 @@ export const facturaSuplidorApi = {
     hasta?: string,
     cantidad?: number,
     salto?: number,
-    estado?: number
+    estado?: number,
+    documentCode = TIPO_DOC,
+    tipoEntidad = 'SUP'
   ): Promise<TransaccionVistaDTO[]> => {
-    const params: Record<string, string | number> = { TipoEntidad: TIPO_ENTIDAD };
+    const params: Record<string, string | number> = { TipoEntidad: tipoEntidad };
     if (desde) params.desde = desde;
     if (hasta) params.hasta = hasta;
     if (cantidad) params.cantidad = cantidad;
@@ -25,16 +27,18 @@ export const facturaSuplidorApi = {
     if (estado !== undefined) params.estado = estado;
 
     const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO[]>>(
-      `${BASE}/${sucursal}/tipo/${TIPO_DOC}`, { params }
+      `${BASE}/${sucursal}/tipo/${documentCode}`, { params }
     );
     return data.data;
   },
 
   filtrar: async (
     sucursal: number,
-    filtro: FiltroTransaccion
+    filtro: FiltroTransaccion,
+    documentCode = TIPO_DOC,
+    tipoEntidad = 'SUP'
   ): Promise<TransaccionVistaDTO[]> => {
-    const params: Record<string, string | number> = { tipoEntidad: TIPO_ENTIDAD };
+    const params: Record<string, string | number> = { tipoEntidad };
     if (filtro.cantidad) params.cantidad = filtro.cantidad;
     if (filtro.salto) params.salto = filtro.salto;
     if (filtro.desde) params.desde = filtro.desde;
@@ -45,7 +49,7 @@ export const facturaSuplidorApi = {
     if (filtro.entidad) params.entidad = filtro.entidad;
 
     const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO[]>>(
-      `${BASE}/${sucursal}/tipo/${TIPO_DOC}/filtrar`, { params }
+      `${BASE}/${sucursal}/tipo/${documentCode}/filtrar`, { params }
     );
     return data.data;
   },
@@ -87,9 +91,7 @@ export const facturaSuplidorApi = {
   },
 
   obtenerConceptos: async (sucursal: number, tipoId?: number): Promise<ConceptoDTO[]> => {
-    const params: Record<string, any> = {};
-    if (tipoId) params.tipoId = tipoId;
-    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}/documento/RDE`, { params });
+    const { data } = await apiClient.get<ApiResponse<ConceptoDTO[]>>(`/Concepto/${sucursal}/documento/RDE`);
     return data.data;
   },
 
@@ -99,7 +101,15 @@ export const facturaSuplidorApi = {
   },
 
   obtenerEntradasAlmacen: async (sucursal: number, params?: any): Promise<any[]> => {
-    const { data } = await apiClient.get<ApiResponse<any[]>>(`/ENP/${sucursal}/vista`, { params });
+    const { entidad, ...restParams } = params || {};
+    let url: string;
+    if (entidad) {
+      url = `/ENP/${sucursal}/PorSuplidor`;
+      restParams.codigoEntidad = entidad;
+    } else {
+      url = `/ENP/${sucursal}`;
+    }
+    const { data } = await apiClient.get<ApiResponse<any[]>>(url, { params: restParams });
     return data.data;
   },
 

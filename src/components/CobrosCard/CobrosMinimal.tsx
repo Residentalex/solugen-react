@@ -1,5 +1,10 @@
 import React from 'react';
-import { Skeleton } from 'antd';
+import { Card, Skeleton, Empty, Divider } from 'antd';
+import {
+  FileTextOutlined, SwapOutlined,
+  CreditCardOutlined, GiftOutlined, TagOutlined,
+  RollbackOutlined, CreditCardFilled, DollarCircleOutlined,
+} from '@ant-design/icons';
 import { formatCurrency, formatDate, toTitleCase } from '../../utils/formats';
 import type { CobroDTO } from '../../types/facturaPOS';
 
@@ -9,51 +14,23 @@ interface CobrosMinimalProps {
   loading?: boolean;
 }
 
-const MEDIOS_POS: { key: keyof CobroDTO; label: string }[] = [
-  { key: 'efectivo', label: 'Efectivo' },
-  { key: 'cheque', label: 'Cheque' },
-  { key: 'transferencia', label: 'Transferencia' },
-  { key: 'tarjetaCredito', label: 'Tarjeta Crédito' },
-  { key: 'tarjetaDebito', label: 'Tarjeta Débito' },
-  { key: 'bono', label: 'Bono' },
-  { key: 'tarjetaRegalo', label: 'Tarjeta Regalo' },
-  { key: 'notaCredito', label: 'Nota Crédito' },
+const MEDIOS_POS: { key: keyof CobroDTO; label: string; icon: React.ReactNode }[] = [
+  { key: 'efectivo', label: 'Efectivo', icon: <DollarCircleOutlined /> },
+  { key: 'cheque', label: 'Cheque', icon: <FileTextOutlined /> },
+  { key: 'transferencia', label: 'Transferencia', icon: <SwapOutlined /> },
+  { key: 'tarjetaCredito', label: 'Tarjeta Crédito', icon: <CreditCardOutlined /> },
+  { key: 'tarjetaDebito', label: 'Tarjeta Débito', icon: <CreditCardFilled /> },
+  { key: 'bono', label: 'Bono', icon: <GiftOutlined /> },
+  { key: 'tarjetaRegalo', label: 'Tarjeta Regalo', icon: <TagOutlined /> },
+  { key: 'notaCredito', label: 'Nota Crédito', icon: <RollbackOutlined /> },
 ];
 
-const sectionWrapperStyle: React.CSSProperties = {
-  paddingTop: 14,
-  borderTop: '1px dashed var(--paces-border)',
-};
-
-const sectionLabelStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 600,
-  letterSpacing: '0.06em',
-  textTransform: 'uppercase',
-  color: 'var(--paces-text-secondary)',
-  marginBottom: 10,
-};
-
-const separatorStyle: React.CSSProperties = {
-  height: 1,
-  background: 'var(--paces-border-secondary)',
-  margin: '10px 0 8px',
-};
-
-const totalRowStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'baseline',
-  fontSize: 13,
-  fontWeight: 600,
-};
-
-function EstadoDot({ estado }: { estado: number | undefined }) {
+function EstadoBadge({ estado }: { estado: number | undefined }) {
   if (estado === undefined) return null;
   const color = estado === 1 ? '#52c41a' : estado === 0 ? '#faad14' : '#ff4d4f';
-  const label = estado === 1 ? 'Aplicado' : estado === 0 ? 'Pendiente' : 'Anulado';
+  const label = estado === 1 ? 'Pagado' : estado === 0 ? 'Pendiente' : 'Anulado';
   return (
-    <span style={{ fontSize: 11, color: 'var(--paces-text-secondary)' }}>
+    <span style={{ fontSize: 11, color }}>
       <span style={{
         display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
         background: color, marginRight: 4, verticalAlign: 'middle',
@@ -64,128 +41,133 @@ function EstadoDot({ estado }: { estado: number | undefined }) {
 }
 
 const CobrosMinimal: React.FC<CobrosMinimalProps> = ({ cobrosPOS, cobrosArray, loading }) => {
-
-  if (loading) {
-    return (
-      <div style={sectionWrapperStyle}>
-        <div style={sectionLabelStyle}>Cobros</div>
+  const renderContent = () => {
+    if (loading) {
+      return (
         <Skeleton
           active
           title={false}
-          paragraph={{ rows: 2, width: ['80%', '80%'] }}
-          style={{ marginBottom: 8 }}
+          paragraph={{ rows: 3, width: ['90%', '90%', '60%'] }}
         />
-        <div style={separatorStyle} />
-        <Skeleton active title={{ width: '60%' }} paragraph={false} />
-      </div>
-    );
-  }
-
-  if (cobrosPOS) {
-    const medios = MEDIOS_POS.filter((m) => (cobrosPOS[m.key] || 0) > 0);
-
-    if (medios.length === 0) {
-      return (
-        <div style={sectionWrapperStyle}>
-          <div style={sectionLabelStyle}>Cobros</div>
-          <div style={{ fontSize: 12, color: 'var(--paces-text-secondary)', fontStyle: 'italic' }}>
-            Sin cobros registrados
-          </div>
-        </div>
       );
     }
 
-    const totalCobrado = medios.reduce((sum, m) => sum + (cobrosPOS[m.key] || 0), 0);
+    if (cobrosPOS) {
+      const medios = MEDIOS_POS.filter((m) => (cobrosPOS[m.key] || 0) > 0);
 
-    return (
-      <div style={sectionWrapperStyle}>
-        <div style={sectionLabelStyle}>Cobros</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {medios.map((m) => (
-            <div key={m.key} style={{
-              display: 'flex', justifyContent: 'space-between',
-              alignItems: 'baseline', fontSize: 13,
-            }}>
-              <span style={{ color: 'var(--paces-text-secondary)' }}>{m.label}</span>
-              <span style={{ fontWeight: 500, color: 'var(--paces-text)' }}>
-                {formatCurrency(cobrosPOS[m.key] || 0)}
-              </span>
-            </div>
-          ))}
-        </div>
-        <div style={separatorStyle} />
-        <div style={totalRowStyle}>
-          <span style={{ color: 'var(--paces-text)' }}>Total cobrado</span>
-          <span style={{ color: 'var(--paces-primary)', fontWeight: 700 }}>
-            {formatCurrency(totalCobrado)}
-          </span>
-        </div>
-      </div>
-    );
-  }
+      if (medios.length === 0) {
+        return (
+          <Empty
+            image={<CreditCardOutlined style={{ fontSize: 28, color: '#bfbfbf' }} />}
+            imageStyle={{ height: 36 }}
+            description={<span style={{ fontSize: 12, color: 'var(--paces-text-secondary)' }}>Sin cobros registrados</span>}
+          />
+        );
+      }
 
-  if (cobrosArray !== undefined) {
-    if (cobrosArray.length === 0) {
+      const totalCobrado = medios.reduce((sum, m) => sum + (cobrosPOS[m.key] || 0), 0);
+
       return (
-        <div style={sectionWrapperStyle}>
-          <div style={sectionLabelStyle}>Cobros</div>
-          <div style={{ fontSize: 12, color: 'var(--paces-text-secondary)', fontStyle: 'italic' }}>
-            Sin cobros registrados
-          </div>
-        </div>
-      );
-    }
-
-    const totalCobrado = cobrosArray.reduce((sum: number, c: any) => sum + (c.monto || 0), 0);
-
-    return (
-      <div style={sectionWrapperStyle}>
-        <div style={sectionLabelStyle}>Cobros</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {cobrosArray.map((c: any, i: number) => (
-            <div key={c.id || i}>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'auto 1fr auto',
-                gap: '0 8px',
-                alignItems: 'baseline',
-                fontSize: 13,
-              }}>
-                <span style={{
-                  color: 'var(--paces-text-secondary)', fontSize: 12, whiteSpace: 'nowrap',
-                }}>
-                  {c.fecha ? formatDate(c.fecha) : '—'}
-                </span>
-                <span style={{
-                  color: 'var(--paces-text)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>
-                  {toTitleCase(c.medioCobro || '')}
-                </span>
-                <span style={{ fontWeight: 500, color: 'var(--paces-text)', whiteSpace: 'nowrap' }}>
-                  {formatCurrency(c.monto || 0)}
-                </span>
-              </div>
-              {c.estado !== undefined && (
-                <div style={{ paddingLeft: 0, marginTop: 2 }}>
-                  <EstadoDot estado={c.estado} />
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {medios.map((m) => (
+              <div
+                key={m.key}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '6px 10px', borderRadius: 6,
+                  background: 'var(--paces-bg-secondary)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 14, color: 'var(--paces-text-secondary)' }}>{m.icon}</span>
+                  <span style={{ fontSize: 13, color: 'var(--paces-text-secondary)' }}>{m.label}</span>
                 </div>
-              )}
-            </div>
-          ))}
-        </div>
-        <div style={separatorStyle} />
-        <div style={totalRowStyle}>
-          <span style={{ color: 'var(--paces-text)' }}>Total cobrado</span>
-          <span style={{ color: 'var(--paces-primary)', fontWeight: 700 }}>
-            {formatCurrency(totalCobrado)}
-          </span>
-        </div>
-      </div>
-    );
-  }
+                <span style={{ fontSize: 13, fontWeight: 500 }}>{formatCurrency(cobrosPOS[m.key] || 0)}</span>
+              </div>
+            ))}
+          </div>
+          <Divider style={{ margin: '10px 0' }} />
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '8px 0',
+          }}>
+            <span style={{ fontSize: 12, color: 'var(--paces-text-secondary)' }}>Total cobrado</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{formatCurrency(totalCobrado)}</span>
+          </div>
+        </>
+      );
+    }
 
-  return null;
+    if (cobrosArray !== undefined) {
+      if (cobrosArray.length === 0) {
+        return (
+          <Empty
+            image={<CreditCardOutlined style={{ fontSize: 28, color: '#bfbfbf' }} />}
+            imageStyle={{ height: 36 }}
+            description={<span style={{ fontSize: 12, color: 'var(--paces-text-secondary)' }}>Sin cobros registrados</span>}
+          />
+        );
+      }
+
+      const totalCobrado = cobrosArray.reduce((sum: number, c: any) => sum + (c.monto || 0), 0);
+
+      return (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {cobrosArray.map((c: any, i: number) => (
+              <div key={c.id || i} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '6px 10px', borderRadius: 6,
+                background: 'var(--paces-bg-secondary)',
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div style={{ fontSize: 12, color: 'var(--paces-text-secondary)' }}>
+                    {c.fecha ? formatDate(c.fecha) : '—'}
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--paces-text-secondary)' }}>
+                    {toTitleCase(c.medioCobro || '')}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{formatCurrency(c.monto || 0)}</span>
+                  {c.estado !== undefined && <EstadoBadge estado={c.estado} />}
+                </div>
+              </div>
+            ))}
+          </div>
+          <Divider style={{ margin: '10px 0' }} />
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '8px 0',
+          }}>
+            <span style={{ fontSize: 12, color: 'var(--paces-text-secondary)' }}>Total cobrado</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{formatCurrency(totalCobrado)}</span>
+          </div>
+        </>
+      );
+    }
+
+    return null;
+  };
+
+  return (
+    <Card
+      className="paces-card"
+      size="small"
+      title={
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span><CreditCardOutlined style={{ color: '#556ee6', marginRight: 8 }} />Cobros</span>
+          {cobrosPOS && (
+            <EstadoBadge estado={(cobrosPOS as any).estado ?? ((cobrosPOS as any).pago != null && (cobrosPOS as any).pago > 0 ? 1 : undefined)} />
+          )}
+        </div>
+      }
+      style={{ marginBottom: 16 }}
+    >
+      {renderContent()}
+    </Card>
+  );
 };
 
 export default CobrosMinimal;

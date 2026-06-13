@@ -10,7 +10,13 @@ import { THEMES, getIsDarkFromTheme } from './themes'
 function getThemeConfig(themeName: ThemeName) {
   const t = THEMES[themeName];
   const isDark = t.isDark;
-  const shadows = isDark
+  const isSpa = themeName === 'light-spa';
+  const shadows = isSpa
+    ? {
+        boxShadow: '0 1px 3px 0 rgba(47,42,39,0.05)',
+        boxShadowSecondary: '0 4px 16px 0 rgba(47,42,39,0.07)',
+      }
+    : isDark
     ? {
         boxShadow: '0 1px 3px 0 rgba(0,0,0,0.2), 0 1px 2px 0 rgba(0,0,0,0.15)',
         boxShadowSecondary: '0 4px 16px 0 rgba(0,0,0,0.3)',
@@ -39,6 +45,11 @@ function getThemeConfig(themeName: ThemeName) {
     controlHeightLG: 40,
     controlHeightSM: 28,
     ...shadows,
+    ...(isSpa ? {
+      borderRadius: 8,
+      borderRadiusLG: 12,
+      fontFamily: "'Inter', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+    } : {}),
   };
 
   const baseComponents = {
@@ -63,7 +74,7 @@ function getThemeConfig(themeName: ThemeName) {
       primaryShadow: t.primaryShadow,
     },
     Table: {
-      headerBg: isDark ? t.bgElevated : '#f8f9fc',
+      headerBg: isSpa ? '#F6F1EB' : (isDark ? t.bgElevated : '#f8f9fc'),
       headerColor: t.text,
       rowHoverBg: t.hoverBg,
       borderColor: t.border,

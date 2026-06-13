@@ -39,6 +39,14 @@ export interface ModuloDTO {
   orden: number;
 }
 
+export interface PantallaEntidadDTO {
+  id: number;
+  entidadCodigo: string;
+  entidadDescripcion?: string;
+  tipoEntidad?: string;
+  orden: number;
+}
+
 export interface PantallaDTO {
   id: number;
   nombre: string;
@@ -52,12 +60,50 @@ export interface PantallaDTO {
   grupo?: string;
   modulos: ModuloDTO[];
   acciones: string[];
+  permisosEspeciales?: string[];
+  accionesPorSucursal?: Record<number, string[]>;
   sucursalesAutorizadas?: AuthSucursalPermitidaDTO[];
+  entidades?: PantallaEntidadDTO[];
+}
+
+export interface PantallaConEntidadesDTO extends PantallaDTO {
+  entidades: PantallaEntidadDTO[];
+}
+
+export interface EntidadDocumentoDTO {
+  entdocId: number;
+  codigo: string;
+  descripcion: string;
 }
 
 export interface AuthPermisoEspecialDTO {
   id: number;
   codigo: string;
+  nombre?: string;
+  activo: boolean;
+  valor: boolean;
+}
+
+export interface PermisoEspecialRequestDTO {
+  id: number;
+  codigo: string;
+  nombre?: string;
+  activo: boolean;
+}
+
+export interface PermisoEspecialConAsignacionDTO {
+  id: number;
+  codigo: string;
+  nombre?: string;
+  activo: boolean;
+  asignado: boolean;
+}
+
+export interface PermisoEspecialConRolDTO {
+  id: number;
+  codigo: string;
+  nombre?: string;
+  activo: boolean;
   valor: boolean;
 }
 
@@ -89,6 +135,7 @@ export interface AuthSesionDTO {
   accessTokenExpiraEn: string;
   refreshTokenExpiraEn: string;
   sucursalActiva: Sucursal;
+  sucursalContable: Sucursal;
   sucursalesPermitidas: AuthSucursalPermitidaDTO[];
   usuario: AuthUsuarioSesionDTO;
 }

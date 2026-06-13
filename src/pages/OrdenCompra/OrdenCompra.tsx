@@ -10,6 +10,7 @@ import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDoc
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { Sucursal } from '../../types/auth';
 import type { OrdenCompraVistaDTO } from '../../types/entradaAlmacen';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 
 const { Text } = Typography;
 
@@ -17,9 +18,10 @@ const destino = Sucursal.Compra;
 
 const OrdenCompra: React.FC = () => {
   const navigate = useNavigate();
+  const { screenCode, documentCode } = useScreenConfig();
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<OrdenCompraVistaDTO>({
-    modulo: 'FORC',
+    modulo: screenCode,
     fetchVista: (sucursal, desde, hasta, filas, salto, estado) =>
       ordenCompraApi.obtenerResumido(sucursal, destino, {
         desde,
@@ -128,6 +130,8 @@ const OrdenCompra: React.FC = () => {
         onPageSizeChange: actions.handlePageSizeChange,
         showCrear: true,
         onCrear: () => navigate('/FORC/nuevo'),
+        showClonar: false,
+        showImprimir: false,
         showEditar: true,
         editarDisabled: !puedeEditar,
         onEditar: () => navigate(`/FORC/${state.selectedRow!.id}/editar`),
