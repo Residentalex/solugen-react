@@ -37,6 +37,7 @@ import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
@@ -89,6 +90,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   const screens = Grid.useBreakpoint();
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
+  const { screenCode, documentCode } = useScreenConfig('FRI');
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -187,7 +189,7 @@ const ReciboIngresoFormulario: React.FC = () => {
 
   // ===== Cargar catálogos al montar =====
   useEffect(() => {
-    setActiveModule('FRI');
+    setActiveModule(screenCode);
     const pageTitle = mode === 'crear'
       ? 'Nuevo Recibo de Ingreso'
       : 'Editar Recibo de Ingreso';
@@ -383,7 +385,7 @@ const ReciboIngresoFormulario: React.FC = () => {
       impuestos: base.impuestos || 0,
       retenciones: Math.round(retenciones * 100) / 100,
       tipoDocumento: 'RI',
-      documento: base.documento || { codigo: 'RI' },
+      documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       entidad: entidadSel || { nombre: '', codigo: '', identificacion: '' },
       moneda: base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },

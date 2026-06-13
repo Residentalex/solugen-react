@@ -47,6 +47,7 @@ import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
@@ -102,6 +103,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
   const screens = Grid.useBreakpoint();
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
+  const { screenCode, documentCode } = useScreenConfig('FTRP');
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -203,7 +205,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
 
   // ===== Cargar datos de apoyo al montar =====
   useEffect(() => {
-    setActiveModule('FTRP');
+    setActiveModule(screenCode);
     const pageTitle = mode === 'crear' ? 'Nueva Transferencia de Almacén' : 'Editar Transferencia de Almacén';
     setPageTitleOverride(pageTitle);
 
@@ -436,7 +438,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       subTotal: Math.round(totalSub * 100) / 100,
       total: Math.round(total * 100) / 100,
       tasa: values.tasa || 1,
-      documento: base.documento || { codigo: 'FTRP' },
+      documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       moneda: base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
       almacen: selectedAlmacen || { nombre: '', codigo: '' },

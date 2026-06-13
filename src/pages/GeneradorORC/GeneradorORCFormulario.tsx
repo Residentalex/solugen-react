@@ -49,6 +49,7 @@ import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
@@ -300,6 +301,7 @@ const GeneradorORCFormulario: React.FC = () => {
   const screens = Grid.useBreakpoint();
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
+  const { screenCode, documentCode } = useScreenConfig('FGORC');
   const isLarge = screens.xxl === true;
 
   // ===== Estados =====
@@ -379,7 +381,7 @@ const GeneradorORCFormulario: React.FC = () => {
 
   // ===== Carga inicial y título =====
   useEffect(() => {
-    setActiveModule('FGORC');
+    setActiveModule(screenCode);
     const pageTitle = mode === 'crear' ? 'Nuevo Generador ORC' : 'Editar Generador ORC';
     setPageTitleOverride(pageTitle);
 

@@ -48,6 +48,7 @@ import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
@@ -116,6 +117,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const screens = Grid.useBreakpoint();
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
+  const { screenCode, documentCode } = useScreenConfig('FRDE');
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -248,7 +250,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
 
   // ===== Cargar datos de apoyo al montar =====
   useEffect(() => {
-    setActiveModule('FRDE');
+    setActiveModule(screenCode);
     const pageTitle = mode === 'crear' ? 'Nueva Factura de Suplidor' : 'Editar Factura de Suplidor';
     setPageTitleOverride(pageTitle);
 
@@ -491,7 +493,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       total: Math.round(total * 100) / 100,
       tasa: values.tasa || 1,
       diasCredito: values.diasCredito || 0,
-      documento: base.documento || { codigo: 'RDE' },
+      documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       moneda: base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
       suplidor: entidadSel || { nombre: '', codigo: '', identificacion: '' },

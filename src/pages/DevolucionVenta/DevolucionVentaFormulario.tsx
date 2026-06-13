@@ -40,6 +40,7 @@ import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
@@ -173,6 +174,7 @@ const DevolucionVentaFormulario: React.FC = () => {
   const screens = Grid.useBreakpoint();
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
+  const { screenCode, documentCode } = useScreenConfig('FDEV');
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -209,7 +211,7 @@ const DevolucionVentaFormulario: React.FC = () => {
 
   // ===== Cargar datos de apoyo al montar =====
   useEffect(() => {
-    setActiveModule('FDEV');
+    setActiveModule(screenCode);
     const pageTitle = mode === 'crear' ? 'Nueva Devolución de Venta' : 'Editar Devolución de Venta';
     setPageTitleOverride(pageTitle);
 
@@ -427,7 +429,7 @@ const DevolucionVentaFormulario: React.FC = () => {
       impuestos: Math.round(totalImp * 100) / 100,
       total: Math.round(total * 100) / 100,
       tasa: values.tasa || 1,
-      documento: base.documento || { codigo: 'DEV' },
+      documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       moneda: base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
       almacen: selectedAlmacen || { nombre: '', codigo: '' },

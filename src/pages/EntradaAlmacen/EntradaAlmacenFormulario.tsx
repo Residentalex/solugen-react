@@ -48,6 +48,7 @@ import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import type {
@@ -146,6 +147,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const screens = Grid.useBreakpoint();
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
+  const { screenCode, documentCode } = useScreenConfig('FENP');
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -281,7 +283,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
   // ===== Cargar datos de apoyo al montar =====
   useEffect(() => {
-    setActiveModule('FENP');
+    setActiveModule(screenCode);
     const pageTitle = mode === 'crear' ? 'Nuevo Entrada de Almacén' : '';
     setPageTitleOverride(pageTitle);
 
@@ -583,7 +585,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       retenciones: base.retenciones || 0,
       total: Math.round(total * 100) / 100,
       tasa: values.tasa || 1,
-      documento: base.documento || { codigo: 'ENP' },
+      documento: base.documento || { codigo: documentCode },
       entidad: entidadSel
         ? { nombre: entidadSel.nombre, codigo: entidadSel.codigo, identificacion: entidadSel.identificacion || '', telefono: entidadSel.telefono, direccion: entidadSel.direccion }
         : { nombre: '', codigo: '', identificacion: '' },

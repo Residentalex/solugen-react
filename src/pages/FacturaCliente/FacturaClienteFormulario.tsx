@@ -42,6 +42,7 @@ import AsientosContableEditables from '../../components/AsientosContableEditable
 import ImpuestosFacturaEditables from '../../components/ImpuestosFacturaEditables';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
@@ -115,6 +116,7 @@ const FacturaClienteFormulario: React.FC = () => {
   const screens = Grid.useBreakpoint();
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
+  const { screenCode, documentCode } = useScreenConfig('FFAC');
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -251,7 +253,7 @@ const FacturaClienteFormulario: React.FC = () => {
 
   // ===== Cargar datos de apoyo al montar =====
   useEffect(() => {
-    setActiveModule('FFAC');
+    setActiveModule(screenCode);
     const pageTitle = mode === 'crear' ? 'Nueva Factura de Cliente' : 'Editar Factura de Cliente';
     setPageTitleOverride(pageTitle);
 
@@ -554,7 +556,7 @@ const FacturaClienteFormulario: React.FC = () => {
       descuento: Math.round(totalDesc * 100) / 100,
       impuestos: Math.round(totalImp * 100) / 100,
       total: Math.round(total * 100) / 100,
-      documento: base.documento || { codigo: 'FFAC' },
+      documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       moneda: base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
       almacen: selectedAlmacen || { nombre: '', codigo: '' },
