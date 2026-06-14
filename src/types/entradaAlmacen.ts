@@ -15,6 +15,9 @@ export interface MovimientoVistaDTO {
   periodo: number;
   codigoSucursal: string;
   fechaEntrega?: string;
+  creadoPor?: string;
+  identificacion?: string | null;
+  revisado?: boolean;
 }
 
 export interface FiltroENP {

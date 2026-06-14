@@ -119,7 +119,7 @@ const EntradaAlmacen: React.FC = () => {
       key: 'estado',
       width: 130,
       render: (estado: number, record: MovimientoVistaDTO) => (
-        <EstadoColumnCell estado={estado} periodo={record.periodo} />
+        <EstadoColumnCell estado={estado} periodo={record.periodo} revisado={record.revisado} />
       ),
     },
   ];
