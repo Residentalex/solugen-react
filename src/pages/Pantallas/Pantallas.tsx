@@ -57,7 +57,7 @@ const Pantallas: React.FC = () => {
           grupo: filtroGrupo,
         }),
       ]);
-      return { datos: resultados || [], total: totalCount ?? 0 };
+      return { datos: resultados.datos || [], total: totalCount ?? 0 };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -161,14 +161,6 @@ const Pantallas: React.FC = () => {
       render: (val: string) => <Text>{val || '-'}</Text>,
     },
     {
-      title: 'Ruta',
-      dataIndex: 'ruta',
-      key: 'ruta',
-      width: 200,
-      ellipsis: true,
-      render: (val: string) => <Text>{val || '-'}</Text>,
-    },
-    {
       title: 'Activo',
       dataIndex: 'activo',
       key: 'activo',
@@ -242,7 +234,7 @@ const Pantallas: React.FC = () => {
             dataSource={data?.datos || []}
             rowKey="id"
             loading={isLoading}
-            scroll={{ x: 1200 }}
+            scroll={{ x: 1000 }}
             size="middle"
             rowClassName="paces-row-hover"
             className="paces-border-top paces-list-table"

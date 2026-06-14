@@ -18,6 +18,18 @@ interface BuscarDocumentoModalProps {
 const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   open, onClose, onSelect, tipoEntidad, codEntidad, origen, esDocumentoInventario, montoTotal
 }) => {
+  const TIPO_DOC_CODES: string[] = [
+    'AID','AIC','ABN','AJA','CBI','CDC','CHK','CHN','CIE','CIT',
+    'CKO','CPF','CTT','DBA','DBI','DCA','DCN','DEC','DEP','DEV',
+    'DGA','DPN','DPR','DVC','DVN','ED','EDI','EDN','EIN','ENP',
+    'EPJ','EPN','ER','EXP','FAC','FAN','LAC','NBN','NC','NCB',
+    'NCN','ND','NDB','NDD','NDN','NDV','NOM','ORC','ORT','PAG',
+    'PRES','PV','PVC','PVN','PVS','PVT','RAC','RBN','RCM','RDE',
+    'RDN','REA','REQ','RES','RETA','RI','RIN','RSV','RTB','RUA',
+    'SAP','SCO','SDD','SPA','SPJ','SPN','SPT','TBN','TID','TRB',
+    'TRP','TUR','UBD','VD','DBN','PVComponente','Existencia'
+  ];
+
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const [documentos, setDocumentos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -51,7 +63,8 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       if (!esDocumentoInventario) params.tipoEntidad = tipoEntidad;
 
       const { data } = await apiClient.get<any>(endpoint, { params });
-      const docs = data?.data || [];
+      let docs = data?.data || [];
+      docs = docs.filter((d: any) => calcularPendiente(d) > 0);
       setDocumentos(docs);
     } catch {
       message.error('Error al cargar documentos pendientes');
@@ -95,13 +108,19 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
 
   // ===== Columnas de la tabla =====
   const columnas = [
-    { title: 'Documento', dataIndex: 'noDocumento', key: 'documento', width: 140 },
-    { title: 'Tipo', dataIndex: 'tipoDocumento', key: 'tipo_doc', width: 80 },
-    { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 140, render: (v: string) => v || '-' },
     {
       title: 'Fecha', dataIndex: 'fechaDocumento', key: 'fecha', width: 110,
       render: (v: string) => v ? formatDate(v) : '-',
     },
+    {
+      title: 'Documento', key: 'documento', width: 200,
+      render: (_: any, r: any) => {
+        const codigoTipo = r.documento?.codigo || (typeof r.tipoDocumento === 'number' ? TIPO_DOC_CODES[r.tipoDocumento] : r.tipoDocumento) || '';
+        const num = r.noDocumento || '';
+        return codigoTipo ? `${codigoTipo}-${num}` : num;
+      },
+    },
+    { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 140, render: (v: string) => v || '-' },
     {
       title: 'Total', dataIndex: 'total', key: 'total', width: 120, align: 'right' as const,
       render: (v: number) => formatNumber(v || 0),
@@ -203,7 +222,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
           </Space>
         </div>
       }
-      width={800}
+      width={1000}
       destroyOnClose
     >
       <Table

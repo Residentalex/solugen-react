@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Spin, Button, Space, message, Alert, Tabs, Table, Typography } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Button, Space, message, Alert, Tabs, Table, Typography, Grid, Row, Col } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { Sucursal } from '../../types/auth';
@@ -10,6 +10,8 @@ import { permisoEspecialApi } from '../../api/permisoEspecialApi';
 import type { PantallaDTO, PantallaEntidadDTO, PermisoEspecialConAsignacionDTO } from '../../types/auth';
 import { ErrorDetalle } from '../../components';
 import PermissionGate from '../../components/PermissionGate';
+import DetalleToolbar from '../../components/DetalleToolbar';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 const { Text } = Typography;
 
@@ -68,8 +70,11 @@ const PantallaDetalle: React.FC = () => {
     cargarPermisos();
   }, [cargarPantalla, cargarPermisos]);
 
+  const screens = Grid.useBreakpoint();
+  const isLarge = screens.xxl === true;
+
   if (loading || (!data && !loadingError)) {
-    return <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>;
+    return <LoadingSpinner mensaje="Cargando pantalla..." />;
   }
   if (loadingError && !data) {
     return <ErrorDetalle mensaje="Error al cargar la pantalla" rutaVolver="/MPantalla" />;
@@ -119,106 +124,121 @@ const PantallaDetalle: React.FC = () => {
         />
       )}
 
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-        <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate('/MPantalla')} style={{ padding: 0, fontSize: 14 }}>
-          Volver a pantallas
-        </Button>
-        <div style={{ flex: 1 }} />
-        <PermissionGate accion="CREAR">
-          <Button icon={<PlusOutlined />} onClick={() => navigate('/MPantalla/nuevo')} style={{ marginRight: 8 }}>
-            Nuevo
-          </Button>
-        </PermissionGate>
-        <PermissionGate accion="EDITAR">
-          <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/MPantalla/${data.id}/editar`)}>
-            Editar
-          </Button>
-        </PermissionGate>
-      </div>
-
-      {/* Datos Generales */}
-      <Card title="Datos Generales" style={{ borderRadius: 8, marginBottom: 16 }}>
-        <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered styles={{ label: { fontWeight: 500 } }}>
-          <Descriptions.Item label="Código">
-            <Text code>{data.codigo}</Text>
-          </Descriptions.Item>
-          <Descriptions.Item label="Nombre">{data.nombre}</Descriptions.Item>
-          <Descriptions.Item label="Ruta">{data.ruta || '-'}</Descriptions.Item>
-          <Descriptions.Item label="Grupo">{data.grupo || '-'}</Descriptions.Item>
-          <Descriptions.Item label="Tipo">{data.tipo || '-'}</Descriptions.Item>
-          <Descriptions.Item label="Orden">{data.orden}</Descriptions.Item>
-          <Descriptions.Item label="¿Es Reporte?">{data.esReporte ? 'Sí' : 'No'}</Descriptions.Item>
-          <Descriptions.Item label="Activo">
-            <Tag color={data.activo ? 'green' : 'red'}>{data.activo ? 'Activo' : 'Inactivo'}</Tag>
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
-
-      {/* Tabs */}
-      <Tabs
-        type="card"
-        defaultActiveKey="acciones"
-        items={[
-          {
-            key: 'acciones',
-            label: 'Acciones',
-            children: (
-              <Card style={{ borderRadius: 8, marginBottom: 16 }}>
-                {data.acciones && data.acciones.length > 0 ? (
-                  <Space wrap size={4}>
-                    {data.acciones.map((a) => (
-                      <Tag key={a} color="blue">{a}</Tag>
-                    ))}
-                  </Space>
-                ) : (
-                  <Text type="secondary">Sin acciones asignadas</Text>
-                )}
-              </Card>
-            ),
-          },
-          {
-            key: 'modulos',
-            label: 'Módulos',
-            children: (
-              <Card title="Módulos de la Pantalla" style={{ borderRadius: 8, marginBottom: 16 }}>
-                {modulosItems}
-              </Card>
-            ),
-          },
-          {
-            key: 'permisos',
-            label: 'Permisos Especiales',
-            children: (
-              <Card style={{ borderRadius: 8, marginBottom: 16 }}>
-                {(() => {
-                  const asignados = permisosEspeciales.filter((p) => p.asignado);
-                  return asignados.length > 0 ? (
-                    <Space wrap size={4}>
-                      {asignados.map((p) => (
-                        <Tag key={p.id} color="green">
-                          {p.nombre || p.codigo}
-                        </Tag>
-                      ))}
-                    </Space>
-                  ) : (
-                    <Text type="secondary">No hay permisos especiales asignados</Text>
-                  );
-                })()}
-              </Card>
-            ),
-          },
-          {
-            key: 'entidades',
-            label: 'Entidades',
-            children: (
-              <Card title="Entidades/Documentos Asociados" style={{ borderRadius: 8, marginBottom: 16 }}>
-                {entidadesItems}
-              </Card>
-            ),
-          },
-        ]}
+      <DetalleToolbar
+        modulo=""
+        estado={0}
+        periodo={0}
+        onVolver={() => navigate('/MPantalla')}
+        onEditar={data ? () => navigate(`/MPantalla/${data.id}/editar`) : undefined}
+        extraButtons={
+          <PermissionGate accion="CREAR">
+            <Button icon={<PlusOutlined />} onClick={() => navigate('/MPantalla/nuevo')}>
+              Nuevo
+            </Button>
+          </PermissionGate>
+        }
       />
+
+      <Row gutter={16}>
+        <Col xxl={18} xs={24}>
+          {/* Datos Generales */}
+          <Card title="Datos Generales" className="paces-card" style={{ marginBottom: 16 }}>
+            <Descriptions column={isLarge ? 3 : 1} size="small" bordered styles={{ label: { fontWeight: 500 } }}>
+              <Descriptions.Item label="Código">
+                <Text code>{data.codigo}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="Nombre">{data.nombre}</Descriptions.Item>
+              <Descriptions.Item label="Ruta">{data.ruta || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Grupo">{data.grupo || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Tipo">{data.tipo || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Orden">{data.orden}</Descriptions.Item>
+              <Descriptions.Item label="¿Es Reporte?">{data.esReporte ? 'Sí' : 'No'}</Descriptions.Item>
+              <Descriptions.Item label="Activo">
+                <Tag color={data.activo ? 'green' : 'red'}>{data.activo ? 'Activo' : 'Inactivo'}</Tag>
+              </Descriptions.Item>
+            </Descriptions>
+          </Card>
+
+          {/* Tabs */}
+          <Tabs
+            type="card"
+            defaultActiveKey="acciones"
+            items={[
+              {
+                key: 'acciones',
+                label: 'Acciones',
+                children: (
+                  <div style={{ padding: '16px 0' }}>
+                    {data.acciones && data.acciones.length > 0 ? (
+                      <Space wrap size={4}>
+                        {data.acciones.map((a) => (
+                          <Tag key={a} color="processing">{a}</Tag>
+                        ))}
+                      </Space>
+                    ) : (
+                      <Text type="secondary">Sin acciones asignadas</Text>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                key: 'modulos',
+                label: 'Módulos',
+                children: (
+                  <div style={{ padding: '16px 0' }}>
+                    {modulosItems}
+                  </div>
+                ),
+              },
+              {
+                key: 'permisos',
+                label: 'Permisos Especiales',
+                children: (
+                  <div style={{ padding: '16px 0' }}>
+                    {(() => {
+                      const asignados = permisosEspeciales.filter((p) => p.asignado);
+                      return asignados.length > 0 ? (
+                        <Space wrap size={4}>
+                          {asignados.map((p) => (
+                            <Tag key={p.id} color="green">
+                              {p.nombre || p.codigo}
+                            </Tag>
+                          ))}
+                        </Space>
+                      ) : (
+                        <Text type="secondary">No hay permisos especiales asignados</Text>
+                      );
+                    })()}
+                  </div>
+                ),
+              },
+              {
+                key: 'entidades',
+                label: 'Entidades',
+                children: (
+                  <div style={{ padding: '16px 0' }}>
+                    {entidadesItems}
+                  </div>
+                ),
+              },
+            ]}
+          />
+        </Col>
+        {isLarge && (
+          <Col xxl={6}>
+            <Card className="paces-card" title="Resumen">
+              <Descriptions column={1} size="small" bordered>
+                <Descriptions.Item label="Código">{data.codigo}</Descriptions.Item>
+                <Descriptions.Item label="Grupo">{data.grupo || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Tipo">{data.tipo || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Activo">
+                  <Tag color={data.activo ? 'green' : 'red'}>{data.activo ? 'Activo' : 'Inactivo'}</Tag>
+                </Descriptions.Item>
+              </Descriptions>
+            </Card>
+          </Col>
+        )}
+      </Row>
     </div>
   );
 };

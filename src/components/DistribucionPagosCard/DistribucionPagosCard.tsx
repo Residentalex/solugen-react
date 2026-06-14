@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, Table, Tag, Typography, Empty, Divider, Space, Skeleton } from 'antd';
 import { DollarOutlined } from '@ant-design/icons';
 import { formatCurrency, formatDate } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { Text } = Typography;
@@ -30,11 +31,12 @@ export interface DistribucionPagosCardProps {
 const DistribucionPagosCard: React.FC<DistribucionPagosCardProps> = ({
   documentos = [],
   totalDocumento,
-  monedaSimbolo = 'RD$',
+  monedaSimbolo,
   loading = false,
   onDocumentoClick,
   title = 'Distribuci\u00f3n de Pagos',
 }) => {
+  const monedaSimboloFinal = monedaSimbolo || getMonedaSucursalActiva().simbolo;
   const distribuido = documentos.reduce((acc, doc) => {
     const monto = doc.monto ?? doc.montoTotal ?? 0;
     return acc + monto;

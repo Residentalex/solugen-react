@@ -39,6 +39,10 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({
       conceptosApi.obtenerConceptosPorDocumentoTipo(sucursal, documento, tipo, tipoEntidad)
         .then((res) => setConceptos(res || []))
         .catch(() => message.error('Error al cargar conceptos'));
+    } else if (sucursal != null && documento) {
+      conceptosApi.obtenerConceptosPorDocumento(sucursal, documento)
+        .then((res) => setConceptos(res || []))
+        .catch(() => message.error('Error al cargar conceptos'));
     } else {
       fetchConceptos()
         .then((res) => setConceptos(res || []))

@@ -39,6 +39,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { Text } = Typography;
@@ -388,7 +389,7 @@ const ReciboIngresoFormulario: React.FC = () => {
       documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       entidad: entidadSel || { nombre: '', codigo: '', identificacion: '' },
-      moneda: base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+      moneda: base.moneda || getMonedaSucursalActiva(),
       codigoTipo: selectedTipo?.codigo || values.tipo || '',
       // Colecciones
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
@@ -480,10 +481,10 @@ const ReciboIngresoFormulario: React.FC = () => {
     setConceptoInfo(infoParts.join(''));
 
     // === ConfigurarMoneda ===
-    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
       moneda: monedaObj.nombre,
-      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+      tasa: monedaObj.tasa ?? 1,
     });
     // Actualizar data local para que la UI lo refleje
     setData((prev) => {
@@ -663,13 +664,17 @@ const ReciboIngresoFormulario: React.FC = () => {
                   placeholder=" "
                   value={selectedConcepto ? `${selectedConcepto.codigo || ''} - ${toTitleCase(selectedConcepto.nombre)}` : conceptoSearchText}
                   readOnly
+                  disabled={!selectedTipo}
                   suffix={
                     <Space size={4}>
-                      <SearchOutlined onClick={() => setConceptoModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                      <SearchOutlined
+                        onClick={() => selectedTipo && setConceptoModalOpen(true)}
+                        style={{ cursor: selectedTipo ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
+                      />
                       {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
                     </Space>
                   }
-                  onClick={() => setConceptoModalOpen(true)}
+                  onClick={() => selectedTipo && setConceptoModalOpen(true)}
                 />
               </FloatingField>
             </div>

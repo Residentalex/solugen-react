@@ -10,6 +10,7 @@ import { turnoApi } from '../../api/turnoApi';
 import type { TurnoDTO } from '../../types/turno';
 import type { ColumnsType } from 'antd/es/table';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { formatCurrency } from '../../utils/formats';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { RangePicker } = DatePicker;
@@ -35,10 +36,6 @@ function formatDateTime(dateStr: string): string {
   } catch {
     return dateStr;
   }
-}
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
 }
 
 function toTitleCase(str: string): string {

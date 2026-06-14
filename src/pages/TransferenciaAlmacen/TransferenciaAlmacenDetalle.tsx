@@ -366,23 +366,21 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
     <Tabs
       defaultActiveKey="detalles"
       type="card"
+      tabBarExtraContent={
+        <Input.Search
+          placeholder="Buscar detalle..."
+          allowClear
+          style={{ width: 320 }}
+          onSearch={(value) => setDetalleSearch(value)}
+          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+        />
+      }
       items={[
         {
           key: 'detalles',
           label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
           children: (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                <Input.Search
-                  placeholder="Buscar detalle..."
-                  allowClear
-                  style={{ maxWidth: 250 }}
-                  onSearch={(value) => setDetalleSearch(value)}
-                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                />
-              </div>
-              <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
-            </>
+            <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
           ),
         },
         {

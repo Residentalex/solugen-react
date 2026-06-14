@@ -45,6 +45,7 @@ import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import { NotaDebitoGuide } from './NotaDebitoGuide';
 
@@ -377,11 +378,11 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       .catch(() => {});
 
     // === ConfigurarMoneda ===
-    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
-    const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || 'RD$', codigo: monedaObj.codigo };
+    const monedaObj = concepto.moneda || getMonedaSucursalActiva();
+    const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || getMonedaSucursalActiva().simbolo, codigo: monedaObj.codigo };
     form.setFieldsValue({
       moneda: monedaObj.nombre,
-      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+      tasa: monedaObj.tasa ?? 1,
     });
     // Actualizar data local para que la UI lo refleje
     setData((prev) => {
@@ -611,7 +612,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       concepto: selectedConcepto || { codigo: '', nombre: '' },
       tipo: selectedTipo || { codigo: '', nombre: '' },
       entidad: entidadSel ? { codigo: entidadSel.codigo, nombre: entidadSel.nombre || '', identificacion: entidadSel.identificacion || '', telefono: entidadSel.telefono } : { codigo: '', nombre: '' },
-      moneda: base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+      moneda: base.moneda || getMonedaSucursalActiva(),
       sucursal: selectedSucursal ? { codigo: selectedSucursal.codigo || selectedSucursal.idExterno, nombre: selectedSucursal.nombre || '' } : undefined,
       transaccionesAsociadas: documentosRelacionados,
       devoluciones,
@@ -817,13 +818,17 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
                   placeholder=" "
                   value={selectedConcepto ? `${selectedConcepto.codigo} - ${toTitleCase(selectedConcepto.nombre)}` : ''}
                   readOnly
+                  disabled={!selectedTipo}
                   suffix={
                     <Space size={4}>
-                      <SearchOutlined onClick={() => setConceptoModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                      <SearchOutlined
+                        onClick={() => selectedTipo && setConceptoModalOpen(true)}
+                        style={{ cursor: selectedTipo ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
+                      />
                       {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
                     </Space>
                   }
-                  onClick={() => setConceptoModalOpen(true)}
+                  onClick={() => selectedTipo && setConceptoModalOpen(true)}
                 />
               </FloatingField>
             </div>

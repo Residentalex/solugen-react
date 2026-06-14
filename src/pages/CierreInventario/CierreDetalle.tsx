@@ -10,6 +10,7 @@ import {
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { cierreInventarioApi } from '../../api/cierreInventarioApi';
+import { formatCurrency } from '../../utils/formats';
 import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 
 const { Text, Title } = Typography;
@@ -27,11 +28,6 @@ function formatDateDisplay(dateStr: string): string {
   } catch {
     return dateStr;
   }
-}
-
-function formatCurrency(val: number | null | undefined): string {
-  if (val == null) return '—';
-  return `$${val.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatNumber(val: number | null | undefined): string {
@@ -163,7 +159,7 @@ const CierreDetalle: React.FC = () => {
       width: 140,
       align: 'right' as const,
       render: (val: number) => (
-        <Text style={{ fontSize: 12 }}>{formatCurrency(val)}</Text>
+        <Text style={{ fontSize: 12 }}>{formatCurrency(val ?? 0)}</Text>
       ),
     },
   ];
@@ -253,7 +249,7 @@ const CierreDetalle: React.FC = () => {
                 }
               >
                 <Text strong style={{ fontSize: 13, color: '#34c38f' }}>
-                  {formatCurrency(cierreInfo.total)}
+                  {formatCurrency(cierreInfo.total ?? 0)}
                 </Text>
               </Descriptions.Item>
               <Descriptions.Item label={<span style={{ fontSize: 12 }}>Tipo</span>}>—</Descriptions.Item>

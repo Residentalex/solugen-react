@@ -50,6 +50,7 @@ import { DragHandle, SortableRow, DragListenersContext } from '../../components/
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import type {
   EntradaAlmacenDTO, DetalleEntradaAlmacenDTO,
@@ -148,6 +149,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
   const { screenCode, documentCode } = useScreenConfig('FENP');
+  const monedaDefault = getMonedaSucursalActiva();
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -590,7 +592,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         ? { nombre: entidadSel.nombre, codigo: entidadSel.codigo, identificacion: entidadSel.identificacion || '', telefono: entidadSel.telefono, direccion: entidadSel.direccion }
         : { nombre: '', codigo: '', identificacion: '' },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
-      moneda: selectedConcepto?.moneda || base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+      moneda: selectedConcepto?.moneda || base.moneda || getMonedaSucursalActiva(),
       almacen: selectedAlmacen || { nombre: '', codigo: '' },
       suplidor: entidadSel || { nombre: '', codigo: '', identificacion: '' },
       sucursal: base.sucursal || { nombre: '', codigo: '', identificacion: '' },
@@ -714,9 +716,9 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
     // === ConfigurarMoneda ===
     // Usar la moneda del concepto si viene, sino default a Peso Dominicano
-    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     const monedaNombre = monedaObj.nombre;
-    const tasaDefault = monedaObj.codigo === 'DOP' ? 1 : (concepto.moneda?.codigo ? undefined : 1);
+    const tasaDefault = monedaObj.tasa ?? 1;
     form.setFieldsValue({
       moneda: monedaNombre,
       tasa: tasaDefault ?? 1,
@@ -1949,8 +1951,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
               impuestos={totales.impuestos}
               total={totales.total}
               hideTitle
-              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
-              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || monedaDefault.nombre}
               tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </div>

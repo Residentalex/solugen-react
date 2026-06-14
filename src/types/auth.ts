@@ -74,6 +74,7 @@ export interface EntidadDocumentoDTO {
   entdocId: number;
   codigo: string;
   descripcion: string;
+  tipo?: 'D' | 'E';
 }
 
 export interface AuthPermisoEspecialDTO {

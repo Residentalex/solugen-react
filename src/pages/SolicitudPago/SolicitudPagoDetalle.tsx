@@ -21,6 +21,7 @@ import type { AsientoContableDTO, LogDTO } from '../../types/entradaAlmacen';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 
@@ -64,6 +65,7 @@ const SolicitudPagoDetalle: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
+  const monedaDefault = getMonedaSucursalActiva();
   const operacion = useAplicar();
   const [operacionTitulo, setOperacionTitulo] = useState('');
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
@@ -336,8 +338,8 @@ const SolicitudPagoDetalle: React.FC = () => {
               total={data.total ?? 0}
               nota={data.nota || ''}
               alignRight={false}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
           </Col>
@@ -416,8 +418,8 @@ const SolicitudPagoDetalle: React.FC = () => {
               total={data.total ?? 0}
               nota={data.nota || ''}
               alignRight={true}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
           </div>

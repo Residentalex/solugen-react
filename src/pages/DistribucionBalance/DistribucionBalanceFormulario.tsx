@@ -41,6 +41,7 @@ import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import { DistribucionBalanceGuide } from './DistribucionBalanceGuide';
 
@@ -358,7 +359,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       documento: base.documento || { codigo: 'DBA' },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       entidad: entidadSel || { nombre: '', codigo: '', identificacion: '' },
-      moneda: base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+      moneda: base.moneda || getMonedaSucursalActiva(),
       codigoTipo: selectedTipo?.codigo || values.tipo || '',
       // Colecciones
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
@@ -426,13 +427,13 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     cargarEntidades(concepto.codigo);
 
     // === ConfigurarMoneda ===
-    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
       moneda: monedaObj.nombre,
-      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+      tasa: monedaObj.tasa ?? 1,
     });
     // Actualizar data local para que la UI lo refleje
-    const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || 'RD$', codigo: monedaObj.codigo };
+    const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || getMonedaSucursalActiva().simbolo, codigo: monedaObj.codigo };
     setData((prev: any) => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaFull };
@@ -627,13 +628,17 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
                   placeholder=" "
                   value={selectedConcepto ? `${selectedConcepto.codigo || ''} - ${toTitleCase(selectedConcepto.nombre)}` : conceptoSearchText}
                   readOnly
+                  disabled={!selectedTipo}
                   suffix={
                     <Space size={4}>
-                      <SearchOutlined onClick={handleConceptoSearchClick} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                      <SearchOutlined
+                        onClick={() => selectedTipo && handleConceptoSearchClick()}
+                        style={{ cursor: selectedTipo ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
+                      />
                       {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
                     </Space>
                   }
-                  onClick={handleConceptoSearchClick}
+                  onClick={() => selectedTipo && handleConceptoSearchClick()}
                 />
               </FloatingField>
             </div>

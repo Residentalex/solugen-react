@@ -1,3 +1,5 @@
+import { getMonedaSucursalActiva } from './moneda';
+
 export function toTitleCase(s: string): string {
   if (!s) return '';
   return s.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
@@ -42,8 +44,9 @@ export function formatDateTime(iso?: string): string {
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
+export function formatCurrency(n: number, currency?: string): string {
+  const c = currency || getMonedaSucursalActiva().codigo;
+  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: c, minimumFractionDigits: 2 }).format(n);
 }
 
 export function formatNumber(n: number): string {

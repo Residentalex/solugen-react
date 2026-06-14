@@ -12,6 +12,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { productoApi } from '../../api/productoApi';
 import type { ProductoDTO, ImpuestoProductoDTO } from '../../types/productos';
 import ErrorBoundary from '../../components/ErrorBoundary';
+import { formatCurrency } from '../../utils/formats';
 import { ErrorDetalle } from '../../components';
 
 const { Text } = Typography;
@@ -27,10 +28,6 @@ const AMBITO_IMPUESTO_MAP: Record<number, string> = {
   1: 'Compra',
   2: 'Ambos',
 };
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
 
 function formatNumber(n: number): string {
   return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);

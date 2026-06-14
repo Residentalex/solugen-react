@@ -42,6 +42,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { Text } = Typography;
@@ -431,7 +432,7 @@ const DevolucionVentaFormulario: React.FC = () => {
       tasa: values.tasa || 1,
       documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
-      moneda: base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+      moneda: base.moneda || getMonedaSucursalActiva(),
       almacen: selectedAlmacen || { nombre: '', codigo: '' },
       cliente: clienteSel
         ? { nombre: clienteSel.nombre, codigo: clienteSel.codigo, identificacion: clienteSel.identificacion || '' }
@@ -501,10 +502,10 @@ const DevolucionVentaFormulario: React.FC = () => {
     }
 
     // === ConfigurarMoneda ===
-    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
       moneda: monedaObj.nombre,
-      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+      tasa: monedaObj.tasa ?? 1,
     });
     // Actualizar data local para que la UI lo refleje
     setData((prev) => {

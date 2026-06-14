@@ -22,6 +22,7 @@ import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
 import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 interface DistribucionBalanceDetalleProps {
@@ -47,6 +48,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
   const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
+  const monedaDefault = getMonedaSucursalActiva();
   const screens = Grid.useBreakpoint();
 
   const codigoPantalla = tipoEntidad === 'SUP' ? 'FDBASUP' : 'FDBACLI';
@@ -413,8 +415,8 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
               <EntidadCard entidad={data.beneficiario} titulo="Beneficiario" />
             )}
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={false}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
           </Col>
@@ -485,8 +487,8 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
 
           <div style={{ marginTop: 16 }}>
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={true}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
           </div>

@@ -18,6 +18,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { conteoApi } from '../../api/conteoApi';
 import type { ConteoFisicoDTO } from '../../types/conteo';
+import { formatCurrency } from '../../utils/formats';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
@@ -53,14 +54,6 @@ function formatDate(val: string): string {
     month: '2-digit',
     year: 'numeric',
   });
-}
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', {
-    style: 'currency',
-    currency: 'DOP',
-    minimumFractionDigits: 2,
-  }).format(n);
 }
 
 function toTitleCase(str: string): string {

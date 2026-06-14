@@ -7,6 +7,7 @@ import {
   FilterOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { formatCurrency } from '../../utils/formats';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { movimientoApi } from '../../api/movimientoApi';
@@ -59,10 +60,6 @@ function formatDate(val: string): string {
   const d = parseDateRaw(val);
   if (!d) return val || '';
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
 }
 
 function formatNumber(n: number): string {

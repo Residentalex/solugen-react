@@ -125,6 +125,8 @@ import PlantillaSuplidorFormulario from './pages/PlantillaSuplidor/PlantillaSupl
 import MovimientoPorPlantilla from './pages/MovimientoPorPlantilla/MovimientoPorPlantilla';
 import DocumentacionPage from './pages/Documentacion/DocumentacionPage';
 import ApiTokens from './pages/ApiTokens/ApiTokens';
+import DocumentosAutorizados from './pages/DocumentosAutorizados/DocumentosAutorizados';
+import DocumentosAplicados from './pages/DocumentosAplicados/DocumentosAplicados';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -201,6 +203,8 @@ const App: React.FC = () => {
             <Route path="FDEV/:id/editar" element={<DevolucionVentaFormulario />} />
             <Route path="FDEV/:id" element={<DevolucionVentaDetalle />} />
             <Route path="RDEV" element={<ReporteDevolucionVenta />} />
+            <Route path="RENA" element={<DocumentosAutorizados />} />
+            <Route path="REAP" element={<DocumentosAplicados />} />
             <Route path="FCotizacion" element={<CotizacionVenta />} />
             <Route path="FCotizacion/nuevo" element={<CotizacionVentaFormulario />} />
             <Route path="FCotizacion/:id/editar" element={<CotizacionVentaFormulario />} />

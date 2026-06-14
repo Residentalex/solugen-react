@@ -1,5 +1,6 @@
 import MockAdapter from 'axios-mock-adapter';
 import { apiClient } from './client';
+import { getMonedaSucursalActiva } from '../utils/moneda';
 import type { AuthSesionDTO, AuthSucursalPermitidaDTO, AuthUsuarioSesionDTO, PantallaDTO, ModuloDTO } from '../types/auth';
 
 const SUCURSALES: AuthSucursalPermitidaDTO[] = [
@@ -469,6 +470,7 @@ function entradaDetalleMock(id: number) {
   const impuestos = detalles.reduce((s, d) => s + d.impuestos, 0);
   const total = detalles.reduce((s, d) => s + d.total, 0);
   const provNombre = proveedores[(id - 1) % proveedores.length];
+  const monedaDefault = getMonedaSucursalActiva();
 
   return {
     id,
@@ -490,7 +492,7 @@ function entradaDetalleMock(id: number) {
     tasa: 1,
     entidad: { nombre: toTitleCase(provNombre), codigo: `SUP-${String(id).padStart(3, '0')}`, identificacion: `12345678${String(id).padStart(3, '0')}`, telefono: '809-555-0101', direccion: 'Av. Principal #123, Santo Domingo' },
     concepto: { nombre: toTitleCase(conceptos[(id - 1) % conceptos.length]), codigo: `CON-${(id - 1) % conceptos.length + 1}` },
-    moneda: { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+    moneda: { nombre: monedaDefault.nombre, simbolo: monedaDefault.simbolo, codigo: monedaDefault.codigo },
     almacen: { nombre: almacenes[(id - 1) % almacenes.length], codigo: `ALM-${(id - 1) % almacenes.length + 1}` },
     suplidor: { nombre: toTitleCase(provNombre), codigo: `SUP-${String(id).padStart(3, '0')}`, telefono: '809-555-0101', direccion: 'Av. Principal #123, Santo Domingo' },
     sucursal: { nombre: 'Orense Plaza', codigo: 'SUC-001', identificacion: '123456789', telefono: '809-555-0000', direccion: 'Av. Sucursal' },
@@ -502,6 +504,7 @@ function entradaDetalleMock(id: number) {
 }
 
 function detalleGenerico(id: number, articulos: ReturnType<typeof detalleArticulos>, total: number, tipoDoc: string, nombreDoc: string) {
+  const monedaDefault = getMonedaSucursalActiva();
   return {
     id,
     fechaDocumento: generarFechaYYYYMMDD(id * 2),
@@ -522,7 +525,7 @@ function detalleGenerico(id: number, articulos: ReturnType<typeof detalleArticul
     tasa: 1,
     entidad: { nombre: toTitleCase(clientesList[id % clientesList.length]), codigo: `CLI-${String(id).padStart(3, '0')}`, identificacion: `98765432${String(id).padStart(3, '0')}`, telefono: '809-555-0202', direccion: 'Calle Secundaria #456' },
     concepto: { nombre: toTitleCase(conceptos[id % conceptos.length]), codigo: `CON-${id % conceptos.length + 1}` },
-    moneda: { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+    moneda: { nombre: monedaDefault.nombre, simbolo: monedaDefault.simbolo, codigo: monedaDefault.codigo },
     almacen: { nombre: almacenes[id % almacenes.length], codigo: `ALM-${id % almacenes.length + 1}` },
     detalles: articulos,
     asientos: asientosContables(total),

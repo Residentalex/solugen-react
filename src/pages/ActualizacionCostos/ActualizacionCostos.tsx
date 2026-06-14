@@ -5,6 +5,7 @@ import { SaveOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import PermissionGate from '../../components/PermissionGate';
 import { actualizacionCostoApi } from '../../api/actualizacionCostoApi';
 import { parametrosApi } from '../../api/parametrosApi';
@@ -30,7 +31,7 @@ function toTitleCase(str?: string | null): string {
 function formatCurrency(n: number): string {
   return new Intl.NumberFormat('es-DO', {
     style: 'currency',
-    currency: 'DOP',
+    currency: getMonedaSucursalActiva().codigo,
     minimumFractionDigits: 2,
   }).format(n);
 }

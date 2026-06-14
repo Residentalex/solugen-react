@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { transaccionApi, formatDateParam } from '../../api/transaccionApi';
 import { useUIStore } from '../../stores/uiStore';
 import type { TransaccionDTO } from '../../types/transaccion';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import type { Sucursal } from '../../types/auth';
 
 const { Text } = Typography;
@@ -109,7 +110,7 @@ const PasoNoCuadrados: React.FC<Props> = ({
       render: (v) =>
         new Intl.NumberFormat('es-DO', {
           style: 'currency',
-          currency: 'DOP',
+          currency: getMonedaSucursalActiva().codigo,
         }).format(v),
     },
     {
@@ -121,7 +122,7 @@ const PasoNoCuadrados: React.FC<Props> = ({
       render: (v) =>
         new Intl.NumberFormat('es-DO', {
           style: 'currency',
-          currency: 'DOP',
+          currency: getMonedaSucursalActiva().codigo,
         }).format(v),
     },
     {
@@ -133,7 +134,7 @@ const PasoNoCuadrados: React.FC<Props> = ({
       render: (v) =>
         new Intl.NumberFormat('es-DO', {
           style: 'currency',
-          currency: 'DOP',
+          currency: getMonedaSucursalActiva().codigo,
         }).format(v),
     },
     {
@@ -148,7 +149,7 @@ const PasoNoCuadrados: React.FC<Props> = ({
             <Badge
               count={new Intl.NumberFormat('es-DO', {
                 style: 'currency',
-                currency: 'DOP',
+                currency: getMonedaSucursalActiva().codigo,
               }).format(diff)}
               style={{ backgroundColor: '#ff4d4f', fontSize: 11 }}
               overflowCount={999999}

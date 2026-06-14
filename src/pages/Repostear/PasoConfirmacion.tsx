@@ -2,6 +2,7 @@ import React from 'react';
 import { Typography } from 'antd';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
+import { formatCurrency } from '../../utils/formats';
 import type { WizardState } from './Repostear';
 
 const { Text } = Typography;
@@ -24,13 +25,6 @@ const METODO_LABEL: Record<string, string> = {
   noCuadrados: 'No Cuadrados',
   criterio: 'Por Criterio',
 };
-
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-DO', {
-    style: 'currency',
-    currency: 'DOP',
-  }).format(value);
-}
 
 function formatFecha(fecha: string): string {
   if (!fecha || fecha.length < 8) return fecha || '-';

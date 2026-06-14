@@ -26,6 +26,7 @@ import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber } from '../../utils/formats';
 
 const { TextArea } = Input;
@@ -73,8 +74,8 @@ const SolicitudPagoFormulario: React.FC = () => {
   const isLarge = screens.xxl === true;
 
   // Moneda dinámica desde el concepto seleccionado
-  const monedaSimbolo = selectedConcepto?.moneda?.simbolo || 'RD$';
-  const monedaNombre = selectedConcepto?.moneda?.nombre || 'Peso Dominicano';
+  const monedaSimbolo = selectedConcepto?.moneda?.simbolo || getMonedaSucursalActiva().simbolo;
+  const monedaNombre = selectedConcepto?.moneda?.nombre || getMonedaSucursalActiva().nombre;
 
   // Total auto-calculado
   const totalCalculado = Math.round(
@@ -231,10 +232,10 @@ const SolicitudPagoFormulario: React.FC = () => {
     }
 
     // === ConfigurarMoneda ===
-    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
       moneda: monedaObj.nombre,
-      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+      tasa: monedaObj.tasa ?? 1,
     });
     setData((prev) => {
       if (!prev) return prev;

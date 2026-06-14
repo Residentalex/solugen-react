@@ -21,16 +21,14 @@ import TotalesCard from '../../components/TotalesCard';
 import LogTable from '../../components/LogTable';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { formatCurrency } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { obtenerNombreSucursal } from '../../utils/sucursalEnumMapper';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import CobrosCard from '../../components/CobrosCard';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 
 const { Text } = Typography;
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
 
 function formatNumber(n: number): string {
   return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -257,7 +255,7 @@ const AsientoContableDetalle: React.FC = () => {
               descuento={data.descuento}
               impuestos={data.impuestos}
               total={data.total}
-              monedaSimbolo={data.codigoMoneda || 'DOP'}
+              monedaSimbolo={data.codigoMoneda || getMonedaSucursalActiva().codigo}
               tasa={data.tasa ?? 1}
             />
           </Col>
@@ -295,7 +293,7 @@ const AsientoContableDetalle: React.FC = () => {
               descuento={data.descuento}
               impuestos={data.impuestos}
               total={data.total}
-              monedaSimbolo={data.codigoMoneda || 'DOP'}
+              monedaSimbolo={data.codigoMoneda || getMonedaSucursalActiva().codigo}
               tasa={data.tasa ?? 1}
               alignRight
             />

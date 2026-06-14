@@ -28,6 +28,7 @@ import type {
   DetalleImportarDTO,
 } from '../../types/importarInventario';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import TotalesCard from '../../components/TotalesCard';
 import { TIPO_DOC_LABELS, TIPO_DOC_ROUTES } from '../../types/importarInventario';
 import type { ConceptoDTO, AlmacenDTO, SuplidorDTO, EntradaAlmacenDTO, DetalleEntradaAlmacenDTO } from '../../types/entradaAlmacen';
@@ -188,6 +189,7 @@ const ImportarInventario: React.FC = () => {
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
   const screens = Grid.useBreakpoint();
   const isLarge = screens.lg ?? true;
+  const monedaDefault = getMonedaSucursalActiva();
 
   // ===== States =====
   const [saving, setSaving] = useState(false);
@@ -281,10 +283,10 @@ const ImportarInventario: React.FC = () => {
     form.setFieldsValue({ conceptoNombre: concepto.nombre });
 
     // === ConfigurarMoneda ===
-    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
       moneda: monedaObj.nombre,
-      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+      tasa: monedaObj.tasa ?? 1,
     });
   };
 
@@ -469,7 +471,7 @@ const ImportarInventario: React.FC = () => {
           entidad: suplidorSel
             ? { nombre: suplidorSel.nombre, codigo: suplidorSel.codigo, identificacion: suplidorSel.identificacion || '', telefono: suplidorSel.telefono, direccion: suplidorSel.direccion }
             : { nombre: '', codigo: '', identificacion: '' },
-          moneda: { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+          moneda: getMonedaSucursalActiva(),
           sucursal: null,
           ordenCompra: { id: 0, noDocumento: '' },
           detalles: detalles.map((d) => ({
@@ -510,7 +512,7 @@ const ImportarInventario: React.FC = () => {
           almacen: almacenSel || { nombre: '', codigo: '' },
           suplidor: { nombre: entidadHastaVal, codigo: '', identificacion: '' },
           entidad: { nombre: entidadHastaVal, codigo: '', identificacion: '' },
-          moneda: { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+          moneda: getMonedaSucursalActiva(),
           detalles: detalles.map((d) => ({
             id: d.id,
             codigo: d.codigo,
@@ -541,7 +543,7 @@ const ImportarInventario: React.FC = () => {
           concepto: selectedConcepto || { nombre: '', codigo: '' },
           almacen: almacenOrigenSel || { nombre: '', codigo: '' },
           almacenDestino: almacenDestinoSel || { nombre: '', codigo: '' },
-          moneda: { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+          moneda: getMonedaSucursalActiva(),
           detalles: detalles.map((d) => ({
             id: d.id,
             codigo: d.codigo,
@@ -574,7 +576,7 @@ const ImportarInventario: React.FC = () => {
             : { nombre: '', codigo: '', identificacion: '' },
           tipo: null,
           entrada: null,
-          moneda: { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+          moneda: getMonedaSucursalActiva(),
           detalles: detalles.map((d) => ({
             id: d.id,
             codigo: d.codigo,
@@ -1009,8 +1011,8 @@ const ImportarInventario: React.FC = () => {
               descuento={totales.descuento}
               impuestos={totales.impuestos}
               total={totales.total}
-              monedaSimbolo={selectedConcepto?.moneda?.simbolo || 'RD$'}
-              monedaNombre={selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={selectedConcepto?.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={selectedConcepto?.moneda?.nombre || monedaDefault.nombre}
               tasa={1}
             />
           </Col>
@@ -1062,8 +1064,8 @@ const ImportarInventario: React.FC = () => {
             descuento={totales.descuento}
             impuestos={totales.impuestos}
             total={totales.total}
-            monedaSimbolo={selectedConcepto?.moneda?.simbolo || 'RD$'}
-            monedaNombre={selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+            monedaSimbolo={selectedConcepto?.moneda?.simbolo || monedaDefault.simbolo}
+            monedaNombre={selectedConcepto?.moneda?.nombre || monedaDefault.nombre}
             tasa={1}
             alignRight
           />

@@ -14,11 +14,11 @@ export const pantallaApi = {
   filtrar: async (
     sucursal: number,
     filtro: { cantidad?: number; salto?: number; busqueda?: string; moduloId?: number; grupo?: string }
-  ): Promise<PantallaDTO[]> => {
+  ): Promise<{ datos: PantallaDTO[]; total: number }> => {
     const params: Record<string, string | number | undefined> = { ...filtro };
     const cleanParams: Record<string, string | number> = {};
     Object.entries(params).forEach(([k, v]) => { if (v !== undefined) cleanParams[k] = v; });
-    const { data } = await apiClient.get<ApiResponse<PantallaDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params: cleanParams });
+    const { data } = await apiClient.get<ApiResponse<{ datos: PantallaDTO[]; total: number }>>(`${BASE}/${sucursal}/filtrar`, { params: cleanParams });
     return data.data;
   },
 

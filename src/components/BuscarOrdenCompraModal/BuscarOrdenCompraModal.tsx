@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Modal, Input, Table, message } from 'antd';
+import { formatCurrency } from '../../utils/formats';
 import type { OrdenCompraVistaDTO } from '../../types/entradaAlmacen';
 
 function toTitleCase(str: string): string {
@@ -12,10 +13,6 @@ function formatDate(val: string): string {
   const d = new Date(val);
   if (isNaN(d.getTime())) return val;
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
 }
 
 interface BuscarOrdenCompraModalProps {

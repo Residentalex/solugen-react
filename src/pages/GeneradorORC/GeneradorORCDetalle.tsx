@@ -16,6 +16,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { generadorOrcApi } from '../../api/generadorOrcApi';
 import type { GeneradorOrdenCompraDTO, DetalleGeneradorDTO } from '../../types/generadorOrc';
+import { formatCurrency } from '../../utils/formats';
 import { ErrorDetalle } from '../../components';
 import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 import PermissionGate from '../../components/PermissionGate';
@@ -28,10 +29,6 @@ const ESTADO_MAP: Record<number, { label: string; color: string }> = {
   2: { label: 'Procesado', color: 'processing' },
   3: { label: 'Anulado', color: 'error' },
 };
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
 
 function formatNumber(n: number): string {
   return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -357,16 +354,14 @@ const GeneradorORCDetalle: React.FC = () => {
             <Card className="paces-card" size="small" title={`Productos (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`}>
               {detalles.length > 0 ? (
                 <>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                    <Input.Search
-                      placeholder="Buscar producto..."
-                      allowClear
-                      style={{ maxWidth: 250 }}
-                      prefix={<SearchOutlined className="paces-text-icon" />}
-                      onSearch={(value) => setDetalleSearch(value)}
-                      onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                    />
-                  </div>
+                  <Input.Search
+                    placeholder="Buscar producto..."
+                    allowClear
+                    style={{ width: 320 }}
+                    prefix={<SearchOutlined className="paces-text-icon" />}
+                    onSearch={(value) => setDetalleSearch(value)}
+                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                  />
                   <Table<DetalleGeneradorDTO>
                     dataSource={detallesFiltrados}
                     columns={detalleColumns}
@@ -436,16 +431,14 @@ const GeneradorORCDetalle: React.FC = () => {
           <Card className="paces-card" size="small" title={`Productos (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`} style={{ marginBottom: 16 }}>
             {detalles.length > 0 ? (
               <>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                  <Input.Search
-                    placeholder="Buscar producto..."
-                    allowClear
-                    style={{ maxWidth: 250 }}
-                    prefix={<SearchOutlined className="paces-text-icon" />}
-                    onSearch={(value) => setDetalleSearch(value)}
-                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                  />
-                </div>
+                <Input.Search
+                  placeholder="Buscar producto..."
+                  allowClear
+                  style={{ width: 320 }}
+                  prefix={<SearchOutlined className="paces-text-icon" />}
+                  onSearch={(value) => setDetalleSearch(value)}
+                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                />
                 <Table<DetalleGeneradorDTO>
                   dataSource={detallesFiltrados}
                   columns={detalleColumns}

@@ -22,6 +22,8 @@ import { transaccionApi } from '../../api/transaccionApi';
 import type { FacturaPOSDTO } from '../../types/facturaPOS';
 import PermissionGate from '../../components/PermissionGate';
 import LogTable from '../../components/LogTable';
+import { formatCurrency } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -30,10 +32,6 @@ import ErrorDetalle from '../../components/ErrorDetalle';
 import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 
 const { Text } = Typography;
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
 
 function formatNumber(n: number): string {
   return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -68,6 +66,7 @@ const FacturaPOSDetalle: React.FC = () => {
   const [devolucionesPV, setDevolucionesPV] = useState<any[]>([]);
   const [dtransasocDevueltos, setDtransasocDevueltos] = useState<Set<number>>(new Set());
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
+  const monedaDefault = getMonedaSucursalActiva();
   const screens = Grid.useBreakpoint();
 
   useEffect(() => {
@@ -493,23 +492,21 @@ const FacturaPOSDetalle: React.FC = () => {
             <Tabs
               defaultActiveKey="detalles"
               type="card"
+              tabBarExtraContent={
+                <Input.Search
+                  placeholder="Buscar detalle..."
+                  allowClear
+                  style={{ width: 320 }}
+                  onSearch={(value) => setDetalleSearch(value)}
+                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                />
+              }
               items={[
                 {
                   key: 'detalles',
                   label: `Detalles (${data.detalles?.length || 0})`,
                   children: (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                        <Input.Search
-                          placeholder="Buscar detalle..."
-                          allowClear
-                          style={{ maxWidth: 250 }}
-                          onSearch={(value) => setDetalleSearch(value)}
-                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                        />
-                      </div>
-                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-                    </>
+                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
                   ),
                 },
                 {
@@ -620,8 +617,8 @@ const FacturaPOSDetalle: React.FC = () => {
           <Col xxl={6}>
             <EntidadCard entidad={data.cliente} entidadSecundaria={data.entidad} fallbackTitulo="Cliente" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
             <CobrosMinimal cobrosPOS={data.cobros?.[0]} loading={loading} />
@@ -684,23 +681,21 @@ const FacturaPOSDetalle: React.FC = () => {
           <Tabs
             defaultActiveKey="detalles"
             type="card"
+            tabBarExtraContent={
+              <Input.Search
+                placeholder="Buscar detalle..."
+                allowClear
+                style={{ width: 320 }}
+                onSearch={(value) => setDetalleSearch(value)}
+                onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+              />
+            }
             items={[
               {
                 key: 'detalles',
                 label: `Detalles (${data.detalles?.length || 0})`,
                 children: (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                      <Input.Search
-                        placeholder="Buscar detalle..."
-                        allowClear
-                        style={{ maxWidth: 250 }}
-                        onSearch={(value) => setDetalleSearch(value)}
-                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                      />
-                    </div>
-                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-                  </>
+                  <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
                 ),
               },
               {
@@ -809,8 +804,8 @@ const FacturaPOSDetalle: React.FC = () => {
 
           <div style={{ marginTop: 24 }}>
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
             <CobrosMinimal cobrosPOS={data.cobros?.[0]} loading={loading} />

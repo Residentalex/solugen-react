@@ -13,6 +13,7 @@ import type { CuentaBancariaDTO } from '../../api/cuentaBancariaApi';
 import DocumentListadoToolbar from '../../components/DocumentListadoToolbar';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatDateRaw } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { TransaccionVistaDTO } from '../../types/transaccion';
 import './CuentaBancariaDetalle.css';
@@ -23,7 +24,8 @@ const { Text } = Typography;
 
 function formatCurrency(value: number | null | undefined, moneda?: string): string {
   if (value === null || value === undefined) return '-';
-  const symbol = moneda?.toUpperCase() === 'DOLAR' || moneda?.toUpperCase() === 'USD' ? 'US$' : 'RD$';
+  const monedaDefault = getMonedaSucursalActiva();
+  const symbol = moneda?.toUpperCase() === 'DOLAR' || moneda?.toUpperCase() === 'USD' ? 'US$' : (monedaDefault.simbolo || 'RD$');
   return `${symbol} ${value.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 

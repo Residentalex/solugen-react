@@ -18,16 +18,20 @@ import {
   Typography,
   Alert,
   Modal,
+  Table,
+  Tooltip,
+  Tabs,
+  Empty,
 } from 'antd';
-import { SaveOutlined, CloseOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { ExclamationCircleOutlined, DeleteOutlined, FileTextOutlined, TagOutlined, SearchOutlined, PlusOutlined, CheckOutlined, InboxOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { Sucursal } from '../../types/auth';
 import { pantallaApi } from '../../api/pantallaApi';
 import { permisoEspecialApi } from '../../api/permisoEspecialApi';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
-import PermissionGate from '../../components/PermissionGate';
 import type { PantallaDTO, PantallaEntidadDTO, ModuloDTO, EntidadDocumentoDTO, PermisoEspecialConAsignacionDTO } from '../../types/auth';
+import FormularioToolbar from '../../components/FormularioToolbar';
 import type { AccionDTO } from '../../types/administracion';
 
 const { Text } = Typography;
@@ -74,6 +78,11 @@ const PantallaFormulario: React.FC = () => {
   // Permisos especiales
   const [permisosEspecialesCatalogo, setPermisosEspecialesCatalogo] = useState<PermisoEspecialConAsignacionDTO[]>([]);
   const [selectedPermisosEspeciales, setSelectedPermisosEspeciales] = useState<number[]>([]);
+
+  // Estados de la sección Entidades/Documentos Asociados
+  const [tabActivo, setTabActivo] = useState<string>('documentos');
+  const [busquedaDocs, setBusquedaDocs] = useState('');
+  const [busquedaEnts, setBusquedaEnts] = useState('');
 
   const [form] = Form.useForm();
 
@@ -149,15 +158,6 @@ const PantallaFormulario: React.FC = () => {
     }
     return () => resetToolbar();
   }, [id, setActiveModule, updateToolbar, resetToolbar, cargarCatalogos, cargarPantalla, form]);
-
-  const handleEntidadesChange = (selectedCodes: string[]) => {
-    setEntidadesSeleccion((prev) =>
-      selectedCodes.map((codigo, index) => {
-        const existing = prev.find((e) => e.entidadCodigo === codigo);
-        return existing || { id: 0, entidadCodigo: codigo, tipoEntidad: undefined, orden: index };
-      }),
-    );
-  };
 
   const handleTipoEntidadChange = (index: number, value: string | undefined) => {
     setEntidadesSeleccion((prev) =>
@@ -257,26 +257,16 @@ const PantallaFormulario: React.FC = () => {
         />
       )}
 
-      {/* Toolbar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 8 }}>
-        <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-          {esEditar ? `Editar Pantalla: ${data?.codigo || ''}` : 'Nueva Pantalla'}
-        </h4>
-        <Space>
-          <PermissionGate accion={esEditar ? 'EDITAR' : 'CREAR'}>
-            <Button type="primary" icon={<SaveOutlined />} onClick={guardar} loading={guardando}>
-              Guardar
-            </Button>
-          </PermissionGate>
-          <Button icon={<CloseOutlined />} onClick={handleCancelar} disabled={guardando}>
-            Cancelar
-          </Button>
-        </Space>
-      </div>
+      <FormularioToolbar
+        saving={guardando}
+        mode={esEditar ? 'editar' : 'crear'}
+        onGuardar={guardar}
+        onCancelar={handleCancelar}
+      />
 
       {/* Datos Generales */}
       <Form form={form} layout="vertical" size="small" style={{ marginBottom: 16 }}>
-      <Card title="Datos Generales" style={{ borderRadius: 8, marginBottom: 0 }}>
+      <Card title="Datos Generales" className="paces-card" style={{ marginBottom: 16 }}>
           <Row gutter={16}>
             <Col xs={24} sm={12} lg={8}>
               <Form.Item
@@ -338,7 +328,7 @@ const PantallaFormulario: React.FC = () => {
       </Card>
 
       {/* Módulos */}
-      <Card title="Módulos" style={{ borderRadius: 8, marginBottom: 16, marginTop: 16 }}>
+      <Card title="Módulos" className="paces-card" style={{ marginBottom: 16 }}>
           <Form.Item name="modulos" label="Módulos">
             <Select
               mode="multiple"
@@ -355,9 +345,10 @@ const PantallaFormulario: React.FC = () => {
             </Select>
           </Form.Item>
         </Card>
+      </Form>
 
       {/* Acciones de la Pantalla */}
-      <Card title="Acciones de la Pantalla" style={{ borderRadius: 8, marginBottom: 16 }}>
+      <Card title="Acciones de la Pantalla" className="paces-card" style={{ marginBottom: 16 }}>
         {accionesCatalogo.length === 0 && !catalogosLoading ? (
           <Text type="secondary">No hay acciones disponibles. Consulte con su administrador.</Text>
         ) : (
@@ -368,7 +359,9 @@ const PantallaFormulario: React.FC = () => {
             <Row gutter={[16, 8]}>
               {accionesCatalogo.map((accion) => (
                 <Col xs={12} sm={8} md={6} lg={4} key={accion.codigo}>
-                  <Checkbox value={accion.codigo}>{accion.nombre}</Checkbox>
+                  <Tooltip title={`Código: ${accion.codigo}`}>
+                    <Checkbox value={accion.codigo}>{accion.nombre}</Checkbox>
+                  </Tooltip>
                 </Col>
               ))}
             </Row>
@@ -376,84 +369,275 @@ const PantallaFormulario: React.FC = () => {
         )}
       </Card>
 
-      {/* Permisos Especiales */}
-      <Card title="Permisos Especiales" style={{ borderRadius: 8, marginBottom: 16 }}>
-        {!esEditar ? (
-          <Text type="secondary">Los permisos especiales se asignan después de crear la pantalla.</Text>
-        ) : permisosEspecialesCatalogo.length === 0 ? (
-          <Text type="secondary">No hay permisos especiales disponibles.</Text>
-        ) : (
-          <Checkbox.Group
-            value={selectedPermisosEspeciales}
-            onChange={(checkedValues) => setSelectedPermisosEspeciales(checkedValues as number[])}
-          >
-            <Row gutter={[16, 8]}>
-              {permisosEspecialesCatalogo
-                .filter(p => p.activo)
-                .map((permiso) => (
-                  <Col xs={12} sm={8} md={6} lg={4} key={permiso.id}>
-                    <Checkbox value={permiso.id}>
-                      {permiso.nombre || permiso.codigo}
-                    </Checkbox>
-                  </Col>
-                ))}
-            </Row>
-          </Checkbox.Group>
-        )}
-      </Card>
+      {esEditar && (
+        <Card title="Permisos Especiales" className="paces-card" style={{ marginBottom: 16 }}>
+          {permisosEspecialesCatalogo.length === 0 ? (
+            <Text type="secondary">No hay permisos especiales disponibles.</Text>
+          ) : (
+            <Checkbox.Group
+              value={selectedPermisosEspeciales}
+              onChange={(checkedValues) => setSelectedPermisosEspeciales(checkedValues as number[])}
+            >
+              <Row gutter={[16, 8]}>
+                {permisosEspecialesCatalogo
+                  .filter(p => p.activo)
+                  .map((permiso) => (
+                    <Col xs={12} sm={8} md={6} lg={4} key={permiso.id}>
+                      <Checkbox value={permiso.id}>
+                        {permiso.nombre || permiso.codigo}
+                      </Checkbox>
+                    </Col>
+                  ))}
+              </Row>
+            </Checkbox.Group>
+          )}
+        </Card>
+      )}
+
+      {!esEditar && (
+        <Alert
+          message="Los permisos especiales se asignan después de guardar la pantalla."
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {/* Entidades/Documentos Asociados */}
-      <Card title="Entidades/Documentos Asociados" style={{ borderRadius: 8, marginBottom: 16 }}>
-        <Select
-          mode="multiple"
-          placeholder="Seleccione entidades/documentos"
-          style={{ width: '100%' }}
-          value={entidadesSeleccion.map((e) => e.entidadCodigo)}
-          onChange={handleEntidadesChange}
-          loading={catalogosLoading}
-          filterOption={(input, option) =>
-            (option?.label as string)?.toLowerCase()?.includes(input.toLowerCase()) ?? false
-          }
-          options={entidadesCatalogo.map((e) => ({
-            value: e.codigo,
-            label: `${e.codigo} - ${e.descripcion}`,
-          }))}
-        />
+      <Card title="Entidades/Documentos Asociados" className="paces-card" style={{ marginBottom: 16 }}>
+        <Row gutter={[24, 16]}>
+          {/* ZONA A — Selector */}
+          <Col xs={24} lg={10}>
+            <Tabs
+              type="line"
+              activeKey={tabActivo}
+              onChange={setTabActivo}
+              items={[
+                {
+                  key: 'documentos',
+                  label: <span><FileTextOutlined /> Documentos ({entidadesCatalogo.filter(e => e.tipo === 'D').length})</span>,
+                  children: (
+                    <div>
+                      <Input
+                        placeholder="Buscar documento..."
+                        prefix={<SearchOutlined />}
+                        allowClear
+                        size="small"
+                        style={{ marginBottom: 8 }}
+                        value={busquedaDocs}
+                        onChange={(e) => setBusquedaDocs(e.target.value)}
+                      />
+                      <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                        {entidadesCatalogo
+                          .filter(e => e.tipo === 'D')
+                          .filter(e => !busquedaDocs || e.codigo.toLowerCase().includes(busquedaDocs.toLowerCase()) || e.descripcion.toLowerCase().includes(busquedaDocs.toLowerCase()))
+                          .sort((a, b) => a.codigo.localeCompare(b.codigo))
+                          .map(e => {
+                            const yaSeleccionado = entidadesSeleccion.some(s => s.entidadCodigo === e.codigo);
+                            return (
+                              <div key={e.codigo}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', borderRadius: 4, marginBottom: 2, cursor: 'default' }}
+                                className="paces-row-hover"
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                                  <FileTextOutlined style={{ color: '#556ee6', flexShrink: 0 }} />
+                                  <div style={{ overflow: 'hidden' }}>
+                                    <Text style={{ fontSize: 13 }}>{e.codigo}</Text>
+                                    <Text type="secondary" style={{ fontSize: 12, marginLeft: 6, display: 'inline-block' }} ellipsis>{e.descripcion}</Text>
+                                  </div>
+                                </div>
+                                {yaSeleccionado ? (
+                                  <Button type="text" size="small" disabled icon={<CheckOutlined style={{ color: '#34c38f' }} />} />
+                                ) : (
+                                  <Button type="link" size="small" icon={<PlusOutlined />}
+                                    onClick={() => setEntidadesSeleccion(prev => [...prev, { id: 0, entidadCodigo: e.codigo, tipoEntidad: undefined, orden: prev.length + 1 }])}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        {entidadesCatalogo.filter(e => e.tipo === 'D').length === 0 && (
+                          <Empty description="Cargando..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                        )}
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'entidades',
+                  label: <span><TagOutlined style={{ color: '#f1734f' }} /> Entidades ({entidadesCatalogo.filter(e => e.tipo === 'E').length})</span>,
+                  children: (
+                    <div>
+                      <Input
+                        placeholder="Buscar entidad..."
+                        prefix={<SearchOutlined />}
+                        allowClear
+                        size="small"
+                        style={{ marginBottom: 8 }}
+                        value={busquedaEnts}
+                        onChange={(e) => setBusquedaEnts(e.target.value)}
+                      />
+                      <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                        {entidadesCatalogo
+                          .filter(e => e.tipo === 'E')
+                          .filter(e => !busquedaEnts || e.codigo.toLowerCase().includes(busquedaEnts.toLowerCase()) || e.descripcion.toLowerCase().includes(busquedaEnts.toLowerCase()))
+                          .sort((a, b) => a.codigo.localeCompare(b.codigo))
+                          .map(e => {
+                            const yaSeleccionado = entidadesSeleccion.some(s => s.entidadCodigo === e.codigo);
+                            return (
+                              <div key={e.codigo}
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', borderRadius: 4, marginBottom: 2, cursor: 'default' }}
+                                className="paces-row-hover"
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                                  <TagOutlined style={{ color: '#f1734f', flexShrink: 0 }} />
+                                  <div style={{ overflow: 'hidden' }}>
+                                    <Text style={{ fontSize: 13 }}>{e.codigo}</Text>
+                                    <Text type="secondary" style={{ fontSize: 12, marginLeft: 6, display: 'inline-block' }} ellipsis>{e.descripcion}</Text>
+                                  </div>
+                                </div>
+                                {yaSeleccionado ? (
+                                  <Button type="text" size="small" disabled icon={<CheckOutlined style={{ color: '#34c38f' }} />} />
+                                ) : (
+                                  <Button type="link" size="small" icon={<PlusOutlined />}
+                                    onClick={() => setEntidadesSeleccion(prev => [...prev, { id: 0, entidadCodigo: e.codigo, tipoEntidad: undefined, orden: prev.length + 1 }])}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        {entidadesCatalogo.filter(e => e.tipo === 'E').length === 0 && (
+                          <Empty description="Cargando..." image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                        )}
+                      </div>
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </Col>
 
-        {entidadesSeleccion.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            {entidadesSeleccion.map((ent, index) => (
-              <div
-                key={ent.entidadCodigo}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  marginBottom: 4,
-                  padding: '4px 0',
-                }}
-              >
-                <Tag>{ent.entidadCodigo}</Tag>
-                <Select
-                  style={{ width: 140 }}
-                  placeholder="Tipo (opcional)"
-                  allowClear
-                  value={ent.tipoEntidad}
-                  onChange={(val) => handleTipoEntidadChange(index, val)}
-                  options={[
-                    { value: 'CLI', label: 'Cliente' },
-                    { value: 'SUP', label: 'Suplidor' },
+          {/* ZONA B — Lista de seleccionados */}
+          <Col xs={24} lg={14}>
+            <Text strong style={{ fontSize: 14 }}>Asociaciones configuradas</Text>
+            <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>· {entidadesSeleccion.length} ítems</Text>
+            
+            {entidadesSeleccion.length === 0 ? (
+              <div style={{ marginTop: 16 }}>
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="Sin asociaciones configuradas"
+                />
+              </div>
+            ) : (
+              <>
+                <Table
+                  dataSource={entidadesSeleccion}
+                  rowKey="entidadCodigo"
+                  size="small"
+                  pagination={false}
+                  className="paces-list-table"
+                  style={{ marginTop: 8 }}
+                  columns={[
+                    {
+                      title: 'Código',
+                      dataIndex: 'entidadCodigo',
+                      width: 200,
+                      render: (codigo: string, record: PantallaEntidadDTO) => {
+                        const entidad = entidadesCatalogo.find(e => e.codigo === codigo);
+                        const esDocumento = entidad?.tipo === 'D';
+                        return (
+                          <span>
+                            {esDocumento ? (
+                              <FileTextOutlined style={{ color: '#556ee6', marginRight: 6 }} />
+                            ) : (
+                              <TagOutlined style={{ color: '#f1734f', marginRight: 6 }} />
+                            )}
+                            <Text code>{codigo}</Text>
+                            {entidad && <Text type="secondary" style={{ marginLeft: 6, fontSize: 12 }}>{entidad.descripcion}</Text>}
+                          </span>
+                        );
+                      },
+                    },
+                    {
+                      title: 'Entidad opcional',
+                      width: 200,
+                      render: (_: any, _record: PantallaEntidadDTO, index: number) => {
+                        const entidad = entidadesCatalogo.find(e => e.codigo === _record.entidadCodigo);
+                        const esDocumento = entidad?.tipo === 'D';
+                        return esDocumento ? (
+                          <Select
+                            size="small"
+                            style={{ width: '100%' }}
+                            placeholder="Sin entidad"
+                            allowClear
+                            showSearch
+                            optionFilterProp="label"
+                            value={_record.tipoEntidad}
+                            onChange={(val) => handleTipoEntidadChange(index, val)}
+                            options={entidadesCatalogo
+                              .filter(e => e.tipo === 'E')
+                              .map(e => ({
+                                value: e.codigo,
+                                label: `${e.codigo} · ${e.descripcion}`,
+                              }))
+                            }
+                          />
+                        ) : (
+                          <Tooltip title="Solo aplica a documentos">
+                            <Text type="secondary" style={{ fontSize: 12 }}>—</Text>
+                          </Tooltip>
+                        );
+                      },
+                    },
+                    {
+                      title: 'Orden',
+                      width: 80,
+                      render: (_: any, _record: PantallaEntidadDTO, index: number) => (
+                        <InputNumber
+                          size="small"
+                          min={0}
+                          precision={0}
+                          controls={false}
+                          style={{ width: 60 }}
+                          value={_record.orden}
+                          onChange={(val) => {
+                            const nuevos = [...entidadesSeleccion];
+                            nuevos[index] = { ...nuevos[index], orden: val ?? 0 };
+                            setEntidadesSeleccion(nuevos);
+                          }}
+                        />
+                      ),
+                    },
+                    {
+                      title: '',
+                      width: 50,
+                      render: (_: any, record: PantallaEntidadDTO) => (
+                        <Button
+                          type="text"
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          onClick={() => {
+                            setEntidadesSeleccion(prev => prev.filter(e => e.entidadCodigo !== record.entidadCodigo));
+                          }}
+                        />
+                      ),
+                    },
                   ]}
                 />
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Orden: {ent.orden}
-                </Text>
-              </div>
-            ))}
-          </div>
-        )}
+                <div style={{ marginTop: 8 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    <FileTextOutlined style={{ marginRight: 4 }} /> Documento &nbsp;
+                    <TagOutlined style={{ marginRight: 4 }} /> Entidad &nbsp;·&nbsp;
+                    La entidad opcional solo aplica a documentos
+                  </Text>
+                </div>
+              </>
+            )}
+          </Col>
+        </Row>
       </Card>
-      </Form>
     </div>
   );
 };

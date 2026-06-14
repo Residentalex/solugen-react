@@ -37,6 +37,7 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 
@@ -79,6 +80,7 @@ const DevolucionVentaDetalle: React.FC = () => {
   const [scannerLoading, setScannerLoading] = useState(false);
   const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionDTO[]>([]);
   const [facturaData, setFacturaData] = useState<any>(null);
+  const monedaDefault = getMonedaSucursalActiva();
 
   const { message: messageApi } = App.useApp();
   const operacion = useAplicar();
@@ -566,23 +568,21 @@ const DevolucionVentaDetalle: React.FC = () => {
             <Tabs
               defaultActiveKey="detalles"
               type="card"
+              tabBarExtraContent={
+                <Input.Search
+                  placeholder="Buscar detalle..."
+                  allowClear
+                  style={{ width: 320 }}
+                  onSearch={(value) => setDetalleSearch(value)}
+                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                />
+              }
               items={[
                 {
                   key: 'detalles',
                   label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                   children: (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                        <Input.Search
-                          placeholder="Buscar detalle..."
-                          allowClear
-                          style={{ maxWidth: 250 }}
-                          onSearch={(value) => setDetalleSearch(value)}
-                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                        />
-                      </div>
-                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-                    </>
+                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
                   ),
                 },
                 {
@@ -621,8 +621,8 @@ const DevolucionVentaDetalle: React.FC = () => {
           <Col xxl={6}>
             <EntidadCard entidad={data.cliente} entidadSecundaria={data.entidad} fallbackTitulo="Cliente" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
             {facturaData && (
@@ -736,23 +736,21 @@ const DevolucionVentaDetalle: React.FC = () => {
             <Tabs
               defaultActiveKey="detalles"
             type="card"
+            tabBarExtraContent={
+              <Input.Search
+                placeholder="Buscar detalle..."
+                allowClear
+                style={{ width: 320 }}
+                onSearch={(value) => setDetalleSearch(value)}
+                onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+              />
+            }
             items={[
               {
                 key: 'detalles',
                 label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                 children: (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                      <Input.Search
-                        placeholder="Buscar detalle..."
-                        allowClear
-                        style={{ maxWidth: 250 }}
-                        onSearch={(value) => setDetalleSearch(value)}
-                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                      />
-                    </div>
-                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
-                  </>
+                  <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
                 ),
               },
               {
@@ -789,8 +787,8 @@ const DevolucionVentaDetalle: React.FC = () => {
 
           <div style={{ marginTop: 24 }}>
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
 

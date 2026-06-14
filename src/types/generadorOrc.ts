@@ -54,4 +54,5 @@ export interface DetalleGeneradorDTO {
   descuento: number;
   impuestos: number;
   total: number;
+  ultimaCompraFecha?: string;
 }

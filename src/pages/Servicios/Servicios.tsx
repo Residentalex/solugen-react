@@ -7,15 +7,9 @@ import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { servicioApi } from '../../api/servicioApi';
 import type { ServicioDTO } from '../../types/servicio';
+import { formatCurrency } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', {
-    style: 'currency',
-    currency: 'DOP',
-    minimumFractionDigits: 2,
-  }).format(n);
-}
 
 const { Text } = Typography;
 
@@ -231,7 +225,7 @@ const Servicios: React.FC = () => {
             <Descriptions.Item label="Código">{detalleItem.codigo}</Descriptions.Item>
             <Descriptions.Item label="Nombre">{toTitleCase(detalleItem.nombre)}</Descriptions.Item>
             <Descriptions.Item label="Precio">{formatCurrency(detalleItem.precio)}</Descriptions.Item>
-            <Descriptions.Item label="Moneda">{detalleItem.moneda || 'DOP'}</Descriptions.Item>
+            <Descriptions.Item label="Moneda">{detalleItem.moneda || getMonedaSucursalActiva().codigo}</Descriptions.Item>
             <Descriptions.Item label="Referencia Interna">
               {detalleItem.referenciaInterna || '-'}
             </Descriptions.Item>

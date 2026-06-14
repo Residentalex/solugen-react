@@ -57,6 +57,7 @@ import { DragHandle, SortableRow, DragListenersContext } from '../../components/
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { Text } = Typography;
@@ -121,6 +122,7 @@ const DevolucionCompraFormulario: React.FC = () => {
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
   const { screenCode, documentCode } = useScreenConfig('FDVC');
+  const monedaDefault = getMonedaSucursalActiva();
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -359,7 +361,8 @@ const DevolucionCompraFormulario: React.FC = () => {
 
         setSelectedEntrada({
           id: detalleEntrada.id,
-          documento: `${detalleEntrada.documento?.codigo || 'ENP'}-${detalleEntrada.noDocumento || ''}`,
+          noDocumento: detalleEntrada.noDocumento || '',
+          documento: detalleEntrada.documento ?? { codigo: 'ENP', nombre: '' },
         });
 
         if (detalleEntrada.suplidor?.codigo) {
@@ -513,7 +516,9 @@ const DevolucionCompraFormulario: React.FC = () => {
       estado: base.estado || 0,
       periodo: base.periodo || new Date().getMonth() + 1,
       ncf: values.ncf || '',
-      referencia: selectedEntrada?.documento || values.referencia || '',
+      referencia: selectedEntrada?.documento 
+        ? `${selectedEntrada.documento.codigo || 'ENP'}-${selectedEntrada.noDocumento || ''}` 
+        : (values.referencia || ''),
       nota: values.nota || '',
       subTotal: Math.round(totalSub * 100) / 100,
       descuento: Math.round(totalDesc * 100) / 100,
@@ -523,7 +528,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       tipoDocumentoExterno: selectedTipo?.idExterno,
       documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
-      moneda: base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+      moneda: base.moneda || getMonedaSucursalActiva(),
       almacen: selectedAlmacen || { nombre: '', codigo: '' },
       suplidor: entidadSel || { nombre: '', codigo: '', identificacion: '' },
       entidad: entidadSel
@@ -613,10 +618,10 @@ const DevolucionCompraFormulario: React.FC = () => {
     }
 
     // === ConfigurarMoneda ===
-    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
       moneda: monedaObj.nombre,
-      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+      tasa: monedaObj.tasa ?? 1,
     });
     // Actualizar data local para que la UI lo refleje
     setData((prev) => {
@@ -654,7 +659,8 @@ const DevolucionCompraFormulario: React.FC = () => {
       // Auto-asignar entrada
       setSelectedEntrada({
         id: detalleEntrada.id,
-        documento: `${detalleEntrada.documento?.codigo || 'ENP'}-${detalleEntrada.noDocumento || ''}`,
+        noDocumento: detalleEntrada.noDocumento || '',
+        documento: detalleEntrada.documento ?? { codigo: 'ENP', nombre: '' },
       });
 
       // Auto-asignar suplidor desde la entrada
@@ -1026,7 +1032,9 @@ const DevolucionCompraFormulario: React.FC = () => {
             <FloatingField label="Entrada de Referencia">
               <Input
                 placeholder=" "
-                value={selectedEntrada?.documento || form.getFieldValue('referencia') || ''}
+                value={selectedEntrada?.documento 
+                  ? `${selectedEntrada.documento.codigo || 'ENP'}-${selectedEntrada.noDocumento || ''}` 
+                  : (form.getFieldValue('referencia') || '')}
                 readOnly
                 suffix={
                   <Space size={4}>
@@ -1047,8 +1055,14 @@ const DevolucionCompraFormulario: React.FC = () => {
                   placeholder=" "
                   value={conceptoSearchText}
                   readOnly
-                  suffix={<SearchOutlined style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />}
-                  onClick={handleConceptoSearchClick}
+                  disabled={!selectedTipo}
+                  suffix={
+                    <SearchOutlined
+                      onClick={() => selectedTipo && handleConceptoSearchClick()}
+                      style={{ cursor: selectedTipo ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
+                    />
+                  }
+                  onClick={() => selectedTipo && handleConceptoSearchClick()}
                 />
               </FloatingField>
             </div>
@@ -1180,8 +1194,8 @@ const DevolucionCompraFormulario: React.FC = () => {
               impuestos={totales.impuestos}
               total={totales.total}
               hideTitle
-              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
-              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || monedaDefault.nombre}
               tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </div>

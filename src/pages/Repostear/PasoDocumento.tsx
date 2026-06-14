@@ -4,6 +4,7 @@ import { SearchOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { transaccionApi } from '../../api/transaccionApi';
 import { useUIStore } from '../../stores/uiStore';
 import type { TransaccionDTO } from '../../types/transaccion';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import type { Sucursal } from '../../types/auth';
 
 const { Text } = Typography;
@@ -160,19 +161,19 @@ const PasoDocumento: React.FC<Props> = ({
             <Descriptions.Item label="Total">
               {new Intl.NumberFormat('es-DO', {
                 style: 'currency',
-                currency: 'DOP',
+                currency: getMonedaSucursalActiva().codigo,
               }).format(transaccion.total)}
             </Descriptions.Item>
             <Descriptions.Item label="Débitos">
               {new Intl.NumberFormat('es-DO', {
                 style: 'currency',
-                currency: 'DOP',
+                currency: getMonedaSucursalActiva().codigo,
               }).format(transaccion.debitos)}
             </Descriptions.Item>
             <Descriptions.Item label="Créditos">
               {new Intl.NumberFormat('es-DO', {
                 style: 'currency',
-                currency: 'DOP',
+                currency: getMonedaSucursalActiva().codigo,
               }).format(transaccion.creditos)}
             </Descriptions.Item>
             <Descriptions.Item label="Referencia">

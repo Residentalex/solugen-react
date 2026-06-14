@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, Tag, Typography, Button, Tooltip, Space, App } from 'antd';
 import { CopyOutlined, FileTextOutlined } from '@ant-design/icons';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import type { CuentaBancariaDTO } from '../../api/cuentaBancariaApi';
 
 const { Text } = Typography;
@@ -48,13 +49,15 @@ function toTitleCase(str: string): string {
 
 function formatBalance(value: number | undefined, moneda: string | undefined): string {
   if (value === undefined || value === null) return '';
-  const symbol = moneda?.toUpperCase() === 'DOLAR' ? 'US$' : 'RD$';
+  const monedaDefault = getMonedaSucursalActiva();
+  const symbol = moneda?.toUpperCase() === 'DOLAR' ? 'US$' : (monedaDefault.simbolo || 'RD$');
   return `${symbol} ${value.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function getMonedaInfo(moneda: string | undefined): { label: string; color: string } {
   if (moneda?.toUpperCase() === 'DOLAR') return { label: 'USD', color: '#10b981' };
-  return { label: 'DOP', color: '#556ee6' };
+  const monedaDefault = getMonedaSucursalActiva();
+  return { label: monedaDefault.codigo || 'DOP', color: '#556ee6' };
 }
 
 /* ===== Component ===== */

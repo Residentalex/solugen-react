@@ -36,7 +36,9 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { productoApi } from '../../api/productoApi';
 
 const { Text } = Typography;
 
@@ -80,6 +82,10 @@ const SalidaAlmacenDetalle: React.FC = () => {
   const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
+  const [vencimientoPendientes, setVencimientoPendientes] = useState<{ id: number; codigo: string; articulo: string }[]>([]);
+  const [vencimientoModalOpen, setVencimientoModalOpen] = useState(false);
+  const [vencimientoFechas, setVencimientoFechas] = useState<Record<number, dayjs.Dayjs>>({});
+  const monedaDefault = getMonedaSucursalActiva();
 
   const { message } = App.useApp();
   const operacion = useAplicar();
@@ -92,6 +98,10 @@ const SalidaAlmacenDetalle: React.FC = () => {
       .then((res) => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        // Recargar documentos relacionados
+        documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva)
+          .then(rel => setDocumentosRelacionados(rel || []))
+          .catch(() => message.warning('No se pudieron cargar los documentos relacionados'));
         salidaAlmacenApi.verificarScan(sucursalActiva, parseInt(id))
           .then((scanRes) => setTieneScan(scanRes.existe))
           .catch(() => setTieneScan(false));
@@ -137,13 +147,13 @@ const SalidaAlmacenDetalle: React.FC = () => {
   // Cargar documentos relacionados desde DOCUMENTOS_RELACION
   React.useEffect(() => {
     if (!data?.id) return;
-    documentoRelacionApi.obtenerPorTransaccion(data.id)
+    documentoRelacionApi.obtenerPorTransaccion(data.id, sucursalActiva)
       .then(rel => setDocumentosRelacionados(rel || []))
       .catch(() => {
         setDocumentosRelacionados([]);
         message.warning('No se pudieron cargar los documentos relacionados');
       });
-  }, [data?.id]);
+  }, [data?.id, sucursalActiva]);
 
   const handleVerScanner = async () => {
     if (!id) return;
@@ -358,7 +368,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
   // asientoColumns reemplazado por AsientosContableTable compartido
 
   // ===== Handlers de acciones de estado =====
-  const handleAplicar = () => {
+  const handleAplicar = async () => {
     if (!id) return;
 
     // Verificación temprana del scanner (solo obligatorio si no genera documento derivado)
@@ -367,6 +377,54 @@ const SalidaAlmacenDetalle: React.FC = () => {
       return;
     }
 
+    // ===== Validar fechas de vencimiento (solo si el concepto tiene sucursalDestino) =====
+    if (data?.concepto?.sucursalDestino && data.detalles?.length) {
+      try {
+        const codigos = data.detalles.map((d) => d.codigo).filter(Boolean) as string[];
+        const codigosConVencimiento = await productoApi.obtenerProductosVencimiento(sucursalActiva, codigos);
+
+        if (codigosConVencimiento.length > 0) {
+          // Filtrar detalles que tienen vencimiento pero no tienen fecha
+          const pendientes = data.detalles
+            .filter((d) => codigosConVencimiento.includes(d.codigo) && !d.fechaVencimiento)
+            .map((d) => ({ id: d.id, codigo: d.codigo, articulo: d.articulo }));
+
+          if (pendientes.length > 0) {
+            setVencimientoPendientes(pendientes);
+            setVencimientoFechas({});
+            setVencimientoModalOpen(true);
+            return; // Esperar a que el usuario complete las fechas
+          }
+        }
+      } catch (err: any) {
+        const msg = err?.response?.data?.errorMessage || 'Error al validar fechas de vencimiento';
+        message.warning(msg);
+        // No bloquear la aplicación si falla la consulta de vencimiento
+      }
+    }
+
+    setOperacionTitulo(`Aplicando SAP-${data?.noDocumento || id}`);
+    operacion.ejecutar(`/SAP/${sucursalActiva}/aplicar/${id}`, handleRefresh);
+  };
+
+  const handleVencimientoConfirm = () => {
+    // Actualizar las fechas en los detalles
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        detalles: prev.detalles.map((d) => {
+          const fecha = vencimientoFechas[d.id];
+          if (!fecha) return d;
+          return { ...d, fechaVencimiento: fecha.format('YYYY-MM-DD') };
+        }),
+      };
+    });
+    setVencimientoModalOpen(false);
+    setVencimientoPendientes([]);
+    setVencimientoFechas({});
+
+    // Continuar con la aplicación
     setOperacionTitulo(`Aplicando SAP-${data?.noDocumento || id}`);
     operacion.ejecutar(`/SAP/${sucursalActiva}/aplicar/${id}`, handleRefresh);
   };
@@ -563,13 +621,13 @@ const SalidaAlmacenDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Fecha Doc.:">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Tipo:">—</Descriptions.Item>
                 <Descriptions.Item label="Concepto:">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
                 <Descriptions.Item label="Referencia:">{data.referencia || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Fecha Entrega:">{data.fechaRecibo ? formatDate(data.fechaRecibo) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha Doc.:">{formatDate(data.fechaDocumento)}</Descriptions.Item>
                 <Descriptions.Item label="Entidad:" span={2}>{data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : (data.entidad?.nombre ? toTitleCase(data.entidad.nombre) : '-')}</Descriptions.Item>
-                <Descriptions.Item label="Tipo:">—</Descriptions.Item>
-                <Descriptions.Item label="Almacén:" span={3}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha Entrega:">{data.fechaRecibo ? formatDate(data.fechaRecibo) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Almacén:" span={2}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Nota:" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
@@ -577,23 +635,21 @@ const SalidaAlmacenDetalle: React.FC = () => {
             <Tabs
               defaultActiveKey="detalles"
               type="card"
+              tabBarExtraContent={
+                <Input.Search
+                  placeholder="Buscar detalle..."
+                  allowClear
+                  style={{ width: 320 }}
+                  onSearch={(value) => setDetalleSearch(value)}
+                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                />
+              }
               items={[
                 {
                   key: 'detalles',
                   label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                   children: (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                        <Input.Search
-                          placeholder="Buscar detalle..."
-                          allowClear
-                          style={{ maxWidth: 250 }}
-                          onSearch={(value) => setDetalleSearch(value)}
-                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                        />
-                      </div>
-                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
-                    </>
+                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
                   ),
                 },
                 {
@@ -617,8 +673,8 @@ const SalidaAlmacenDetalle: React.FC = () => {
           <Col xxl={6}>
             <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
             <DocumentosRelacionadosCard
@@ -662,12 +718,12 @@ const SalidaAlmacenDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Fecha Doc.:">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="Tipo:">—</Descriptions.Item>
               <Descriptions.Item label="Concepto:">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
               <Descriptions.Item label="Referencia:">{data.referencia || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Fecha Entrega:">{data.fechaRecibo ? formatDate(data.fechaRecibo) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Fecha Doc.:">{formatDate(data.fechaDocumento)}</Descriptions.Item>
               <Descriptions.Item label="Entidad:">{data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : (data.entidad?.nombre ? toTitleCase(data.entidad.nombre) : '-')}</Descriptions.Item>
-              <Descriptions.Item label="Tipo:">—</Descriptions.Item>
+              <Descriptions.Item label="Fecha Entrega:">{data.fechaRecibo ? formatDate(data.fechaRecibo) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Almacén:">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Nota:"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
@@ -676,23 +732,21 @@ const SalidaAlmacenDetalle: React.FC = () => {
             <Tabs
               defaultActiveKey="detalles"
               type="card"
+              tabBarExtraContent={
+                <Input.Search
+                  placeholder="Buscar detalle..."
+                  allowClear
+                  style={{ width: 320 }}
+                  onSearch={(value) => setDetalleSearch(value)}
+                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                />
+              }
               items={[
                 {
                   key: 'detalles',
                   label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                   children: (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                        <Input.Search
-                          placeholder="Buscar detalle..."
-                          allowClear
-                          style={{ maxWidth: 250 }}
-                          onSearch={(value) => setDetalleSearch(value)}
-                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                        />
-                      </div>
-                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
-                    </>
+                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
                   ),
                 },
                 {
@@ -714,8 +768,8 @@ const SalidaAlmacenDetalle: React.FC = () => {
 
           <div style={{ marginTop: 24 }}>
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
 
@@ -783,6 +837,54 @@ const SalidaAlmacenDetalle: React.FC = () => {
             <Spin />
           </div>
         )}
+      </Modal>
+
+      {/* Modal de Fechas de Vencimiento Requeridas */}
+      <Modal
+        title="Fechas de Vencimiento Requeridas"
+        open={vencimientoModalOpen}
+        onCancel={() => { setVencimientoModalOpen(false); setVencimientoPendientes([]); setVencimientoFechas({}); }}
+        width={520}
+        destroyOnClose
+        maskClosable={false}
+        footer={
+          <Space>
+            <Button onClick={() => { setVencimientoModalOpen(false); setVencimientoPendientes([]); setVencimientoFechas({}); }}>
+              Cancelar
+            </Button>
+            <Button
+              type="primary"
+              disabled={vencimientoPendientes.some((p) => !vencimientoFechas[p.id])}
+              onClick={handleVencimientoConfirm}
+            >
+              Aplicar
+            </Button>
+          </Space>
+        }
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Text>Los siguientes productos requieren fecha de vencimiento:</Text>
+        </div>
+        {vencimientoPendientes.map((p) => (
+          <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 500, fontSize: 13 }}>{p.codigo}</div>
+              <div className="paces-text-secondary" style={{ fontSize: 12 }}>{p.articulo}</div>
+            </div>
+            <DatePicker
+              style={{ width: 160 }}
+              format="YYYY-MM-DD"
+              value={vencimientoFechas[p.id] || null}
+              onChange={(date) => {
+                setVencimientoFechas((prev) => ({
+                  ...prev,
+                  [p.id]: date || undefined as any,
+                }));
+              }}
+              disabledDate={(current) => current && current.isBefore(dayjs(), 'day')}
+            />
+          </div>
+        ))}
       </Modal>
 
       {/* Modal de Progreso para Aplicar/Postear */}

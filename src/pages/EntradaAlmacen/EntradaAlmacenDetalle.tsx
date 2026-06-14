@@ -39,6 +39,7 @@ import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, extraerMensajeError } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
@@ -72,6 +73,7 @@ const [facturaData, setFacturaData] = useState<any>(null);
 const [documentosRelacionados, setDocumentosRelacionados] = React.useState<DocumentoRelacionDTO[]>([]);
 const [modalAnularOpen, setModalAnularOpen] = useState(false);
 const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
+const monedaDefault = getMonedaSucursalActiva();
 const [vencimientoPendientes, setVencimientoPendientes] = useState<{ id: number; codigo: string; articulo: string }[]>([]);
 const [vencimientoModalOpen, setVencimientoModalOpen] = useState(false);
 const [vencimientoFechas, setVencimientoFechas] = useState<Record<number, dayjs.Dayjs>>({});
@@ -848,23 +850,23 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                   {data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : toTitleCase(data.concepto?.nombre || '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="Tipo:">—</Descriptions.Item>
-                <Descriptions.Item label="NCF:">
-                  {data.ncf || '-'}
-                </Descriptions.Item>
                 <Descriptions.Item label="Fecha Doc.:">
                   {formatDate(data.fechaDocumento)}
                 </Descriptions.Item>
                 <Descriptions.Item label="Suplidor:">
                   {toTitleCase(data.suplidor?.nombre || data.entidad?.nombre || '-')}
                 </Descriptions.Item>
-                <Descriptions.Item label="Referencia:">
-                  {data.referencia || '-'}
+                <Descriptions.Item label="NCF:">
+                  {data.ncf || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Fecha Recibo:">
                   {data.fechaEntrega ? formatDate(data.fechaEntrega) : '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Almacén:" span={2}>
+                <Descriptions.Item label="Almacén:">
                   {toTitleCase(data.almacen?.nombre || '-')}
+                </Descriptions.Item>
+                <Descriptions.Item label="Referencia:">
+                  {data.referencia || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:" span={3}>
                   <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
@@ -875,43 +877,33 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
             <Tabs
               defaultActiveKey="detalles"
               type="card"
+              tabBarExtraContent={
+                <Input.Search
+                  placeholder="Buscar detalle..."
+                  allowClear
+                  style={{ width: 320 }}
+                  onSearch={(value) => setDetalleSearch(value)}
+                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                />
+              }
               items={[
                 {
                   key: 'detalles',
                   label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                   children: (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                        <Input.Search
-                          placeholder="Buscar detalle..."
-                          allowClear
-                          style={{ maxWidth: 250 }}
-                          onSearch={(value) => setDetalleSearch(value)}
-                          onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                        />
-                      </div>
-                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
-                    </>
+                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
                   ),
                 },
-                {
+                ...(devolucionesData.length > 0 ? [{
                   key: 'devoluciones',
                   label: (
                     <span>
                       Devoluciones
-                      {devolucionesData.length > 0 && (
-                        <Badge count={devolucionesData.length}
-                          style={{ marginLeft: 6, backgroundColor: '#556ee6' }} />
-                      )}
+                      <Badge count={devolucionesData.length}
+                        style={{ marginLeft: 6, backgroundColor: '#556ee6' }} />
                     </span>
                   ),
-                  children: devolucionesData.length === 0 ? (
-                    <Empty
-                      image={<RollbackOutlined style={{ fontSize: 32, color: '#bfbfbf' }} />}
-                      imageStyle={{ height: 40 }}
-                      description="Sin devoluciones registradas"
-                    />
-                  ) : (
+                  children: (
                     <Table
                       dataSource={devolucionesData}
                       rowKey="id"
@@ -973,7 +965,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                       ]}
                     />
                   ),
-                },
+                }] : []),
                 {
                   key: 'asientos',
                   label: `Asientos (${data.asientos?.length || 0})`,
@@ -995,8 +987,8 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
           <Col xxl={6}>
             <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
             <DocumentosRelacionadosCard
@@ -1072,23 +1064,21 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
           <Tabs
             defaultActiveKey="detalles"
             type="card"
+            tabBarExtraContent={
+              <Input.Search
+                placeholder="Buscar detalle..."
+                allowClear
+                style={{ width: 320 }}
+                onSearch={(value) => setDetalleSearch(value)}
+                onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+              />
+            }
             items={[
               {
                 key: 'detalles',
                 label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                 children: (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-                      <Input.Search
-                        placeholder="Buscar detalle..."
-                        allowClear
-                        style={{ maxWidth: 250 }}
-                        onSearch={(value) => setDetalleSearch(value)}
-                        onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                      />
-                    </div>
-                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
-                  </>
+                  <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
                 ),
               },
               {
@@ -1190,8 +1180,8 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
 
           <div style={{ marginTop: 24 }}>
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
           <DocumentosRelacionadosCard

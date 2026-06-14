@@ -173,7 +173,9 @@ const ConceptoDetalle: React.FC = () => {
                   {data.sucursalDestino?.codigo ? toTitleCase(data.sucursalDestino.nombre || '') || data.sucursalDestino.codigo : '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Concepto Destino">
-                  {data.conceptoDestino || '-'}
+                  {data.conceptoDestino && data.conceptoDestinoNombre
+                    ? `${data.conceptoDestino}-${toTitleCase(data.conceptoDestinoNombre)}`
+                    : data.conceptoDestino || '-'}
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -206,7 +208,9 @@ const ConceptoDetalle: React.FC = () => {
                         {data.sucursalDestino?.codigo ? toTitleCase(data.sucursalDestino.nombre || '') || data.sucursalDestino.codigo : '-'}
                       </Descriptions.Item>
                       <Descriptions.Item label="Concepto Destino">
-                        {data.conceptoDestino || '-'}
+                        {data.conceptoDestino && data.conceptoDestinoNombre
+                          ? `${data.conceptoDestino}-${toTitleCase(data.conceptoDestinoNombre)}`
+                          : data.conceptoDestino || '-'}
                       </Descriptions.Item>
                       <Descriptions.Item label="Replicar">
                         <Tag color={data.replicar ? 'blue' : 'default'}>
@@ -217,7 +221,9 @@ const ConceptoDetalle: React.FC = () => {
                         {data.sucursalReplica?.codigo ? toTitleCase(data.sucursalReplica.nombre || '') || data.sucursalReplica.codigo : '-'}
                       </Descriptions.Item>
                       <Descriptions.Item label="Concepto Réplica">
-                        {data.conceptoReplica || '-'}
+                        {data.conceptoReplica && data.conceptoReplicaNombre
+                          ? `${data.conceptoReplica}-${toTitleCase(data.conceptoReplicaNombre)}`
+                          : data.conceptoReplica || '-'}
                       </Descriptions.Item>
                     </Descriptions>
                   ),
@@ -380,7 +386,9 @@ const ConceptoDetalle: React.FC = () => {
                 {data.sucursalDestino?.codigo ? toTitleCase(data.sucursalDestino.nombre || '') || data.sucursalDestino.codigo : '-'}
               </Descriptions.Item>
               <Descriptions.Item label="Concepto Destino">
-                {data.conceptoDestino || '-'}
+                {data.conceptoDestino && data.conceptoDestinoNombre
+                  ? `${data.conceptoDestino}-${toTitleCase(data.conceptoDestinoNombre)}`
+                  : data.conceptoDestino || '-'}
               </Descriptions.Item>
             </Descriptions>
           </Card>
@@ -408,7 +416,9 @@ const ConceptoDetalle: React.FC = () => {
                       {data.sucursalDestino?.codigo ? toTitleCase(data.sucursalDestino.nombre || '') || data.sucursalDestino.codigo : '-'}
                     </Descriptions.Item>
                     <Descriptions.Item label="Concepto Destino">
-                      {data.conceptoDestino || '-'}
+                      {data.conceptoDestino && data.conceptoDestinoNombre
+                        ? `${data.conceptoDestino}-${toTitleCase(data.conceptoDestinoNombre)}`
+                        : data.conceptoDestino || '-'}
                     </Descriptions.Item>
                     <Descriptions.Item label="Replicar">
                       <Tag color={data.replicar ? 'blue' : 'default'}>{data.replicar ? 'Sí' : 'No'}</Tag>
@@ -417,7 +427,9 @@ const ConceptoDetalle: React.FC = () => {
                       {data.sucursalReplica?.codigo ? toTitleCase(data.sucursalReplica.nombre || '') || data.sucursalReplica.codigo : '-'}
                     </Descriptions.Item>
                     <Descriptions.Item label="Concepto Réplica">
-                      {data.conceptoReplica || '-'}
+                      {data.conceptoReplica && data.conceptoReplicaNombre
+                        ? `${data.conceptoReplica}-${toTitleCase(data.conceptoReplicaNombre)}`
+                        : data.conceptoReplica || '-'}
                     </Descriptions.Item>
                   </Descriptions>
                 ),

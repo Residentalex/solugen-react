@@ -67,7 +67,9 @@ export interface ConceptoDTO {
   tipoIngreso?: number;
   sucursalDestino?: CompaniaDTO;
   conceptoDestino?: string;
+  conceptoDestinoNombre?: string;
   conceptoReplica?: string;
+  conceptoReplicaNombre?: string;
   entidades?: TipoEntidadDTO[];
   documentos?: DocumentoDTO[];
 }
@@ -94,6 +96,13 @@ export interface CompaniaDTO extends EntidadDTO {
   telefono?: string;
   prefijo?: string;
   sucursal?: number;
+  parametro?: {
+    moneda?: {
+      simbolo: string;
+      nombre: string;
+      codigo: string;
+    };
+  };
 }
 
 export interface SuplidorDTO {

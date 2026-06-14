@@ -29,6 +29,7 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
@@ -57,6 +58,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const [pagosAsociados, setPagosAsociados] = useState<any[]>([]);
   const [operacionTitulo, setOperacionTitulo] = useState('');
   const [recalculando, setRecalculando] = useState(false);
+  const monedaDefault = getMonedaSucursalActiva();
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   const { message: messageApi } = App.useApp();
@@ -491,8 +493,8 @@ const FacturaSuplidorDetalle: React.FC = () => {
           <Col xxl={6}>
             <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={false}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
             <DocumentosRelacionadosCard
@@ -579,8 +581,8 @@ const FacturaSuplidorDetalle: React.FC = () => {
 
           <div style={{ marginTop: 24 }}>
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={true}
-              monedaSimbolo={data.moneda?.simbolo || 'RD$'}
-              monedaNombre={data.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
             />
           </div>

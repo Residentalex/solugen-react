@@ -29,6 +29,13 @@ export const conteoApi = {
     return data.data;
   },
 
+  obtenerPorPlantilla: async (sucursal: number, plantillaId: string): Promise<ConteoFisicoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<ConteoFisicoDTO[]>>(
+      `${BASE}/${sucursal}/plantilla-conteo/${plantillaId}`
+    );
+    return data.data;
+  },
+
   obtenerPlantillas: async (sucursal: number, codsup?: string): Promise<PlantillaConteoFisicoDTO[]> => {
     const { data } = await apiClient.get<PlantillaConteoFisicoDTO[]>(
       `${BASE}/plantilla/${sucursal}`,

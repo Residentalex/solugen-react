@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { Modal, Input, Table, message } from 'antd';
+import { formatCurrency } from '../../utils/formats';
 import { productoApi } from '../../api/productoApi';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -27,10 +28,6 @@ interface BuscarProductoModalProps {
 }
 
 // ===== Helpers locales =====
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
-
 function toTitleCase(str: string): string {
   if (!str) return str;
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());

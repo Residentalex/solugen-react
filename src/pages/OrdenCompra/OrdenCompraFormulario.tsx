@@ -25,16 +25,14 @@ import { apiClient } from '../../api/client';
 import type { SuplidorDTO, ConceptoDTO } from '../../types/entradaAlmacen';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { formatCurrency } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 import PermissionGate from '../../components/PermissionGate';
 
 const { Text } = Typography;
 const { TextArea } = Input;
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
 
 function formatNumber(n: number): string {
   return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
@@ -274,7 +272,7 @@ const OrdenCompraFormulario: React.FC = () => {
       concepto: selectedConcepto ? { codigo: selectedConcepto.codigo, nombre: selectedConcepto.nombre } : { codigo: '', nombre: '' },
       suplidor: selectedSuplidor ? { codigo: selectedSuplidor.codigo, nombre: selectedSuplidor.nombre, identificacion: selectedSuplidor.identificacion || '' } : { codigo: '', nombre: '', identificacion: '' },
       entidad: selectedSuplidor ? { codigo: selectedSuplidor.codigo, nombre: selectedSuplidor.nombre, identificacion: selectedSuplidor.identificacion || '' } : { codigo: '', nombre: '', identificacion: '' },
-      moneda: base.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' },
+      moneda: base.moneda || getMonedaSucursalActiva(),
       detalles: detalles.map(calcularFila),
       asientos: base.asientos || [],
       logs: base.logs || [],
@@ -339,13 +337,13 @@ const OrdenCompraFormulario: React.FC = () => {
     form.setFieldsValue({ conceptoNombre: concepto.nombre });
 
     // === ConfigurarMoneda ===
-    const monedaObj = concepto.moneda || { nombre: 'Peso Dominicano', simbolo: 'RD$', codigo: 'DOP' };
+    const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
       moneda: monedaObj.nombre,
-      tasa: monedaObj.codigo === 'DOP' ? 1 : 1,
+      tasa: monedaObj.tasa ?? 1,
     });
     // Actualizar data local para que la UI lo refleje
-    const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || 'RD$', codigo: monedaObj.codigo };
+    const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || getMonedaSucursalActiva().simbolo, codigo: monedaObj.codigo };
     setData((prev: any) => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaFull };

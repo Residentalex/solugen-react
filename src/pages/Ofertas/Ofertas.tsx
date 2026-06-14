@@ -6,6 +6,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { ofertaApi } from '../../api/ofertaApi';
 import type { OfertaDTO, DetalleOfertaDTO } from '../../types/oferta';
+import { formatCurrency } from '../../utils/formats';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
@@ -28,13 +29,6 @@ function formatDate(dateStr: string): string {
   } catch {
     return dateStr;
   }
-}
-
-function formatCurrency(val: number): string {
-  return new Intl.NumberFormat('es-DO', {
-    style: 'currency',
-    currency: 'DOP',
-  }).format(val ?? 0);
 }
 
 function getVigencia(item: OfertaDTO): { text: string; color: string } {

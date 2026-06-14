@@ -107,9 +107,30 @@ export const entradaAlmacenApi = {
     return data;
   },
 
-  obtenerUltimaEntrada: async (sucursal: number, codigo: string): Promise<{ codigo: string; nombre: string; fecha: string; documento: string; cantidad: number; ventas: number; salidas: number; devCompra: number; devVenta: number; ultimaVenta: string | null; tiempoVenta: string | null } | null> => {
-    const { data } = await apiClient.get<ApiResponse<{ codigo: string; nombre: string; fecha: string; documento: string; cantidad: number; ventas: number; salidas: number; devCompra: number; devVenta: number; ultimaVenta: string | null; tiempoVenta: string | null }>>(
-      `${BASE}/${sucursal}/ultima-entrada/${encodeURIComponent(codigo)}`
+  obtenerUltimaEntrada: async (sucursal: number, codigo: string, sucursalId?: number): Promise<{
+    codigo: string;
+    nombre: string;
+    fecha: string;
+    documento: string;
+    cantidad: number;
+    ventasOP: number;
+    ventasHR: number;
+    ventasVH: number;
+  } | null> => {
+    const params: Record<string, number> = {};
+    if (sucursalId !== undefined) params.sucursalId = sucursalId;
+    const { data } = await apiClient.get<ApiResponse<{
+      codigo: string;
+      nombre: string;
+      fecha: string;
+      documento: string;
+      cantidad: number;
+      ventasOP: number;
+      ventasHR: number;
+      ventasVH: number;
+    }>>(
+      `${BASE}/${sucursal}/ultima-entrada/${encodeURIComponent(codigo)}`,
+      { params }
     );
     return data.data ?? null;
   },
@@ -119,5 +140,86 @@ export const entradaAlmacenApi = {
       `${BASE}/${sucursal}/movimientos-producto/${encodeURIComponent(codigo)}`
     );
     return data.data ?? { ultimaCompra: null, ventas: [] };
+  },
+
+  obtenerUltimasEntradasPorSucursal: async (sucursal: number, codigo: string): Promise<Array<{
+    sucursal: number;
+    sucursalNombre: string;
+    codigo: string;
+    nombre: string;
+    fecha: string;
+    documento: string;
+    cantidad: number;
+  }> | null> => {
+    const { data } = await apiClient.get<ApiResponse<Array<{
+      sucursal: number;
+      sucursalNombre: string;
+      codigo: string;
+      nombre: string;
+      fecha: string;
+      documento: string;
+      cantidad: number;
+    }>>>(
+      `${BASE}/${sucursal}/ultimas-entradas-producto/${encodeURIComponent(codigo)}`
+    );
+    return data.data ?? null;
+  },
+
+  obtenerVentasPosteriores: async (sucursal: number, codigo: string, fechaDesde: string, sucursalVentas: number): Promise<number> => {
+    const { data } = await apiClient.get<ApiResponse<number>>(
+      `${BASE}/${sucursal}/ventas-posteriores/${encodeURIComponent(codigo)}`,
+      { params: { fechaDesde, sucursalVentas } }
+    );
+    return data.data ?? 0;
+  },
+
+  obtenerResumenMovimientosPosteriores: async (
+    sucursal: number,
+    codigo: string,
+    fechaDesde: string,
+    sucursalMov: number
+  ): Promise<{
+    ventas: number;
+    salidas: number;
+    devolucionesCompra: number;
+    devolucionesVenta: number;
+  } | null> => {
+    const { data } = await apiClient.get<ApiResponse<{
+      ventas: number;
+      salidas: number;
+      devolucionesCompra: number;
+      devolucionesVenta: number;
+    }>>(
+      `${BASE}/${sucursal}/resumen-movimientos-posteriores/${encodeURIComponent(codigo)}`,
+      { params: { fechaDesde, sucursalMov } }
+    );
+    return data.data ?? null;
+  },
+
+  obtenerDetalleMovimientosPosteriores: async (
+    sucursal: number,
+    codigo: string,
+    fechaDesde: string,
+    sucursalMov: number
+  ): Promise<Array<{
+    transacid: number;
+    tipoDocumento: string;
+    fecha: string;
+    documento: string;
+    cantidad: number;
+    descripcion: string;
+  }> | null> => {
+    const { data } = await apiClient.get<ApiResponse<Array<{
+      transacid: number;
+      tipoDocumento: string;
+      fecha: string;
+      documento: string;
+      cantidad: number;
+      descripcion: string;
+    }>>>(
+      `${BASE}/${sucursal}/detalle-movimientos-posteriores/${encodeURIComponent(codigo)}`,
+      { params: { fechaDesde, sucursalMov } }
+    );
+    return data.data ?? null;
   },
 };

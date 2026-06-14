@@ -14,7 +14,8 @@ import { useUIStore } from '../../stores/uiStore';
 import { antiguedadSaldosApi } from '../../api/antiguedadSaldosApi';
 import { proveedorApi } from '../../api/proveedorApi';
 import { clienteApi } from '../../api/clienteApi';
-import { toTitleCase } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
+import { toTitleCase, formatCurrency } from '../../utils/formats';
 import type { TransaccionBalanceDTO, ResumenAgingDTO, CategoriaEntidadDTO } from '../../types/antiguedadSaldos';
 import type { SuplidorDTO } from '../../types/entradaAlmacen';
 import type { ClienteDTO } from '../../types/facturacion';
@@ -22,11 +23,6 @@ import type { ClienteDTO } from '../../types/facturacion';
 const { Text } = Typography;
 
 /* ───── Helpers de formato ───── */
-
-function formatCurrency(n: number): string {
-  if (n == null) return 'RD$0.00';
-  return new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(n);
-}
 
 function formatDate(val: string): string {
   if (!val) return '';
@@ -330,7 +326,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     for (const item of filteredData) {
       const key = item.entidad?.codigo || item.codigoEntidad || '';
       const nombre = item.entidad?.nombre || item.nombreEntidad || '';
-      const moneda = item.moneda?.nombre || 'DOP';
+      const moneda = item.moneda?.nombre || getMonedaSucursalActiva().codigo;
       const aging = calcAging(item);
       const existente = map.get(key);
       if (existente) {
@@ -484,7 +480,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       key: 'monto0_30',
       width: 120,
       align: 'right',
-      render: (val: number) => <Text>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
       title: '31-60 días',
@@ -492,7 +488,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       key: 'monto31_60',
       width: 120,
       align: 'right',
-      render: (val: number) => <Text>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
       title: '61-90 días',
@@ -500,7 +496,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       key: 'monto61_90',
       width: 120,
       align: 'right',
-      render: (val: number) => <Text>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
       title: '91-120 días',
@@ -508,7 +504,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       key: 'monto91_120',
       width: 120,
       align: 'right',
-      render: (val: number) => <Text>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
       title: 'Más 120 días',
@@ -516,7 +512,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       key: 'montoMas120',
       width: 120,
       align: 'right',
-      render: (val: number) => <Text>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
   ];
 
@@ -537,7 +533,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       key: 'total',
       width: 140,
       align: 'right',
-      render: (val: number) => <Text strong className="paces-text-total">{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text strong className="paces-text-total">{formatCurrency(val ?? 0)}</Text>,
     },
     {
       title: '0-30 días',
@@ -545,7 +541,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       key: 'monto0_30',
       width: 120,
       align: 'right',
-      render: (val: number) => <Text>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
       title: '31-60 días',
@@ -553,7 +549,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       key: 'monto31_60',
       width: 120,
       align: 'right',
-      render: (val: number) => <Text>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
       title: '61-90 días',
@@ -561,7 +557,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       key: 'monto61_90',
       width: 120,
       align: 'right',
-      render: (val: number) => <Text>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
       title: '91-120 días',
@@ -569,7 +565,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       key: 'monto91_120',
       width: 120,
       align: 'right',
-      render: (val: number) => <Text>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
       title: 'Más 120 días',
@@ -577,7 +573,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       key: 'montoMas120',
       width: 120,
       align: 'right',
-      render: (val: number) => <Text>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
   ];
 

@@ -240,12 +240,28 @@ const ConceptoFormulario: React.FC = () => {
           ? `${docGenEncontrado.codigo} - ${toTitleCase(docGenEncontrado.nombre || '')}`
           : (res.docAGenerar || ''));
 
-        if (res.sucursalDestino?.codigo) {
-          setConceptoDestinoText(res.conceptoDestino || '');
+        if (res.sucursalDestino?.codigo && res.conceptoDestino) {
+          const encontrada = res.sucursalDestino;
+          const sucDestSucursal = (encontrada as any)?.sucursal ?? (encontrada as any)?.id ?? sucursalActiva;
+          conceptosApi.obtenerConcepto(sucDestSucursal, res.conceptoDestino)
+            .then(cd => {
+              setConceptoDestinoText(`${cd.codigo}-${toTitleCase(cd.nombre || '')}`);
+            })
+            .catch(() => {
+              setConceptoDestinoText(res.conceptoDestino || '');
+            });
         }
 
         if (res.sucursalReplica?.codigo && res.conceptoReplica) {
-          setConceptoReplicaText(res.conceptoReplica);
+          const encontrada = res.sucursalReplica;
+          const sucReplicaSucursal = (encontrada as any)?.sucursal ?? (encontrada as any)?.id ?? sucursalActiva;
+          conceptosApi.obtenerConcepto(sucReplicaSucursal, res.conceptoReplica)
+            .then(cr => {
+              setConceptoReplicaText(`${cr.codigo}-${toTitleCase(cr.nombre || '')}`);
+            })
+            .catch(() => {
+              setConceptoReplicaText(res.conceptoReplica || '');
+            });
         }
 
         // Poblar formulario
@@ -425,7 +441,7 @@ const ConceptoFormulario: React.FC = () => {
   };
 
   const handleConceptoDestinoSelect = (concepto: ConceptoDTO) => {
-    setConceptoDestinoText(`${concepto.codigo} - ${toTitleCase(concepto.nombre)}`);
+    setConceptoDestinoText(`${concepto.codigo}-${toTitleCase(concepto.nombre)}`);
     form.setFieldsValue({ conceptoDestino: concepto.codigo });
   };
 
@@ -443,7 +459,7 @@ const ConceptoFormulario: React.FC = () => {
   };
 
   const handleConceptoReplicaSelect = (concepto: ConceptoDTO) => {
-    setConceptoReplicaText(`${concepto.codigo} - ${toTitleCase(concepto.nombre)}`);
+    setConceptoReplicaText(`${concepto.codigo}-${toTitleCase(concepto.nombre)}`);
     form.setFieldsValue({ conceptoReplica: concepto.codigo });
   };
 

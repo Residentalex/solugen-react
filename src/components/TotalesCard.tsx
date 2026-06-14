@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, Divider } from 'antd';
-import { formatCurrency, formatNumber, toTitleCase } from '../utils/formats';
+import { formatNumber, toTitleCase } from '../utils/formats';
+import { getMonedaSucursalActiva } from '../utils/moneda';
 
 interface TotalesCardProps {
   subTotal: number;
@@ -21,8 +22,13 @@ const TotalesCard: React.FC<TotalesCardProps> = ({
   subTotal, descuento, impuestos, total, retenciones, nota,
   alignRight = false, monedaSimbolo, monedaNombre, tasa, hideTitle = false,
   children,
-}) => (
-  <Card
+}) => {
+  const monedaDefault = getMonedaSucursalActiva();
+  const simboloFinal = monedaSimbolo || monedaDefault.simbolo;
+  const nombreFinal = monedaNombre || monedaDefault.nombre;
+
+  return (
+    <Card
     title={hideTitle ? null : <span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
     className="paces-card"
     style={{ marginBottom: 16 }}
@@ -31,7 +37,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({
       {monedaSimbolo && tasa !== undefined && (
         <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>
           {!alignRight && <span className="paces-text-secondary">Moneda</span>}
-          <span>{toTitleCase(monedaNombre || 'Peso Dominicano')} ({monedaSimbolo || 'RD$'} {formatNumber(tasa ?? 1)})</span>
+          <span>{toTitleCase(nombreFinal)} ({simboloFinal} {formatNumber(tasa ?? 1)})</span>
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
@@ -58,7 +64,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({
 
     <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
       {!alignRight && <span>Total</span>}
-      <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(total)}</span>
+      <span style={{ color: 'var(--paces-primary)' }}>{simboloFinal} {formatNumber(total)}</span>
     </div>
 
     {nota && (
@@ -75,6 +81,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({
 
     {children}
   </Card>
-);
+  );
+};
 
 export default TotalesCard;
