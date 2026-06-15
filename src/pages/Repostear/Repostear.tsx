@@ -208,7 +208,7 @@ const Repostear: React.FC = () => {
               onEntidadChange={(v) => updateWizard({ entidadCodigo: v })}
               onConceptoChange={(v) => updateWizard({ conceptoCodigo: v })}
               onCuentaBancariaChange={(v) => updateWizard({ cuentaBancaria: v })}
-              tiposPermitidos={['ENP', 'DEV', 'FAC']}
+               tiposPermitidos={['ENP', 'DEV', 'FAC', 'SAP', 'DVC']}
             />
           );
         }

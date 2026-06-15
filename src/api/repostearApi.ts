@@ -15,6 +15,8 @@ const RUTAS: Record<string, string> = {
   ENP: '/ENP',
   DEV: '/DEV',
   FAC: '/FAC',
+  SAP: '/SAP',
+  DVC: '/DVC',
 };
 
 export const repostearApi = {
