@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Button, Form, Input, Switch, Checkbox, Spin, message, Grid, Collapse, Alert, Modal } from 'antd';
+import { Card, Row, Col, Button, Form, Input, InputNumber, Switch, Checkbox, Spin, message, Grid, Collapse, Alert, Modal } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
+import { useAuthStore } from '../../stores/authStore';
 import { Sucursal } from '../../types/auth';
 import { rolApi } from '../../api/rolApi';
 import type { RolFullDTO } from '../../types/administracion';
@@ -13,8 +14,6 @@ import type { PermisoEspecialConRolDTO } from '../../types/auth';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import PermissionGate from '../../components/PermissionGate';
 
-const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
-
 const RolFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -22,6 +21,7 @@ const RolFormulario: React.FC = () => {
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const screens = Grid.useBreakpoint();
+  const securitySucursal = useAuthStore((s) => s.securitySucursal);
 
   const navigationConfirmedRef = useFormularioNavigation();
 
@@ -92,12 +92,12 @@ const RolFormulario: React.FC = () => {
     setLoading(true);
     try {
       const [pantallas] = await Promise.all([
-        rolApi.obtenerPantallasDisponibles(SUCURSAL_SEGURIDAD),
+        rolApi.obtenerPantallasDisponibles(securitySucursal),
       ]);
       setPantallasDisponibles(pantallas || []);
 
       if (id) {
-        const rol = await rolApi.obtenerPorId(SUCURSAL_SEGURIDAD, parseInt(id));
+        const rol = await rolApi.obtenerPorId(securitySucursal, parseInt(id));
         setRolData(rol);
         form.setFieldsValue({
           nombre: rol.nombre,
@@ -114,7 +114,7 @@ const RolFormulario: React.FC = () => {
 
         setCargandoPermisosEspeciales(true);
         try {
-          const result = await permisoEspecialApi.obtenerPorRol(SUCURSAL_SEGURIDAD, parseInt(id));
+          const result = await permisoEspecialApi.obtenerPorRol(securitySucursal, parseInt(id));
           setPermisosEspeciales(result || []);
         } catch {
           // no crítico, los permisos especiales se cargan aparte
@@ -125,7 +125,7 @@ const RolFormulario: React.FC = () => {
         form.setFieldsValue({ activo: true });
 
         try {
-          const catalogo = await permisoEspecialApi.obtenerListado(SUCURSAL_SEGURIDAD);
+          const catalogo = await permisoEspecialApi.obtenerListado(securitySucursal);
           setPermisosEspeciales(
             (catalogo || []).filter(p => p.activo).map(p => ({
               id: p.id,
@@ -168,9 +168,9 @@ const RolFormulario: React.FC = () => {
     }));
   };
 
-  const handleTogglePermisoEspecial = (permisoId: number, checked: boolean) => {
+  const handleTogglePermisoEspecial = (permisoId: number, checked: boolean, valorNumerico?: number) => {
     setPermisosEspeciales((prev) =>
-      prev.map((p) => (p.id === permisoId ? { ...p, valor: checked } : p))
+      prev.map((p) => (p.id === permisoId ? { ...p, valor: checked, valorNumerico: valorNumerico ?? p.valorNumerico } : p))
     );
   };
 
@@ -194,20 +194,24 @@ const RolFormulario: React.FC = () => {
       };
       let rolId = rolData?.id || 0;
       if (id) {
-        await rolApi.actualizar(SUCURSAL_SEGURIDAD, payload as any);
+        await rolApi.actualizar(securitySucursal, payload as any);
         message.success('Rol actualizado correctamente');
       } else {
-        const creado = await rolApi.crear(SUCURSAL_SEGURIDAD, payload as any);
+        const creado = await rolApi.crear(securitySucursal, payload as any);
         rolId = creado.id;
         message.success('Rol creado correctamente');
       }
 
       try {
         const payloadPermisos = permisosEspeciales
-          .filter(p => p.valor)
-          .map(p => ({ permisoId: p.id, valor: p.valor }));
+          .filter(p => p.valor || (p.valorNumerico ?? 0) > 0)
+          .map(p => ({
+            permisoId: p.id,
+            valor: p.valor,
+            valorNumerico: p.tipoValor === 'NUMERICO' ? p.valorNumerico : undefined,
+          }));
         if (payloadPermisos.length > 0) {
-          await permisoEspecialApi.asignarARol(SUCURSAL_SEGURIDAD, rolId, payloadPermisos);
+          await permisoEspecialApi.asignarARol(securitySucursal, rolId, payloadPermisos);
         }
       } catch {
         // no crítico, el rol ya se guardó
@@ -435,6 +439,7 @@ const RolFormulario: React.FC = () => {
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4, marginLeft: 24, width: '100%' }}>
                                   {pp.permisosEspeciales.map((peCodigo) => {
                                     const permiso = permisosEspeciales.find(p => p.codigo === peCodigo);
+                                    const esNumerico = permiso?.tipoValor === 'NUMERICO';
                                     const checked = permiso?.valor ?? false;
                                     return (
                                       <div key={peCodigo}
@@ -443,17 +448,35 @@ const RolFormulario: React.FC = () => {
                                           borderRadius: 4, fontSize: 11,
                                           background: checked ? 'var(--paces-selected-bg)' : 'transparent',
                                           border: checked ? '1px solid var(--paces-primary)' : '1px solid var(--paces-border)',
+                                          gap: 4,
                                         }}
                                       >
-                                        <Checkbox
-                                          checked={checked}
-                                          onChange={(e) => {
-                                            if (permiso) handleTogglePermisoEspecial(permiso.id, e.target.checked);
-                                          }}
-                                          style={{ fontSize: 11, marginRight: 0 }}
-                                        >
-                                          <span style={{ fontSize: 11 }}>{permiso?.nombre || peCodigo}</span>
-                                        </Checkbox>
+                                        {esNumerico ? (
+                                          <>
+                                            <span style={{ fontSize: 11, marginRight: 2 }}>{permiso?.nombre || peCodigo}:</span>
+                                            <InputNumber
+                                              min={0}
+                                              step={0.01}
+                                              size="small"
+                                              style={{ width: 90 }}
+                                              value={permiso?.valorNumerico}
+                                              onChange={(val) => {
+                                                if (permiso) handleTogglePermisoEspecial(permiso.id, true, val ?? 0);
+                                              }}
+                                              placeholder="Tope"
+                                            />
+                                          </>
+                                        ) : (
+                                          <Checkbox
+                                            checked={checked}
+                                            onChange={(e) => {
+                                              if (permiso) handleTogglePermisoEspecial(permiso.id, e.target.checked);
+                                            }}
+                                            style={{ fontSize: 11, marginRight: 0 }}
+                                          >
+                                            <span style={{ fontSize: 11 }}>{permiso?.nombre || peCodigo}</span>
+                                          </Checkbox>
+                                        )}
                                       </div>
                                     );
                                   })}

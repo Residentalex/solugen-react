@@ -3,6 +3,7 @@ import { Typography, message, Select, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { horarioEmpleadoApi } from '../../api/horarioEmpleadoApi';
 import type { HorarioEmpleadoDTO } from '../../types/horarioEmpleado';
@@ -18,6 +19,11 @@ const HorarioEmpleado: React.FC = () => {
   const sucursal = useAuthStore((s) => s.sucursalActiva);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
+  const sucursalesData = useCompanyStore((s) => s.data.sucursales);
+  const opcionesSucursales = (sucursalesData || []).map((s: any) => ({
+    value: s.sucursal,
+    label: s.nombre,
+  }));
 
   const [data, setData] = useState<HorarioEmpleadoDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,14 +173,7 @@ const HorarioEmpleado: React.FC = () => {
               value={sucursalFiltro}
               onChange={(value) => setSucursalFiltro(value)}
               style={{ width: 200 }}
-              options={[
-                { value: Sucursal.OrensePlaza, label: 'Orense Plaza' },
-                { value: Sucursal.HiperRomana, label: 'Hiper Romana' },
-                { value: Sucursal.OrenseVillaHermosa, label: 'Orense Villa Hermosa' },
-                { value: Sucursal.ElOfertazo, label: 'El Ofertazo' },
-                { value: Sucursal.Consolidado, label: 'Consolidado' },
-                { value: Sucursal.Compra, label: 'Compra' },
-              ]}
+              options={opcionesSucursales}
             />
             <DatePicker.RangePicker
               value={[fechaInicio, fechaFin]}

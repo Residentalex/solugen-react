@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import { Modal, Table, message } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
 import { apiClient } from '../../api/client';
@@ -35,7 +35,7 @@ const BuscarTipoModal: React.FC<BuscarTipoModalProps> = ({ open, onClose, onSele
   }, [open, cargar]);
 
   const columnas = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
+    { title: 'CÃ³digo', dataIndex: 'codigo', key: 'codigo', width: 120 },
     {
       title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
       render: (v: string) => toTitleCase(v),
@@ -43,7 +43,7 @@ const BuscarTipoModal: React.FC<BuscarTipoModalProps> = ({ open, onClose, onSele
   ];
 
   return (
-    <Modal title="Buscar Tipo" open={open} onCancel={onClose} footer={null} width={600} destroyOnClose>
+    <Modal title="Buscar Tipo" open={open} onCancel={onClose} footer={null} width={600} destroyOnHidden>
       <Table
         dataSource={tipos}
         columns={columnas}

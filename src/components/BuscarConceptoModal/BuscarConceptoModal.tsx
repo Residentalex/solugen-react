@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Modal, Input, Table, Empty, message } from 'antd';
 import type { ConceptoDTO } from '../../types/entradaAlmacen';
 import { conceptosApi } from '../../api/conceptosApi';
@@ -30,22 +30,35 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({
 }) => {
   const [conceptos, setConceptos] = useState<ConceptoDTO[]>([]);
   const [searchText, setSearchText] = useState('');
+  const searchRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+        searchRef.current?.focus?.();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     setSearchText('');
 
+    const filterActivos = (items: ConceptoDTO[]) =>
+      (items || []).filter((c) => c.activo !== false);
+
     if (sucursal != null && documento && tipo) {
       conceptosApi.obtenerConceptosPorDocumentoTipo(sucursal, documento, tipo, tipoEntidad)
-        .then((res) => setConceptos(res || []))
+        .then((res) => setConceptos(filterActivos(res)))
         .catch(() => message.error('Error al cargar conceptos'));
     } else if (sucursal != null && documento) {
       conceptosApi.obtenerConceptosPorDocumento(sucursal, documento)
-        .then((res) => setConceptos(res || []))
+        .then((res) => setConceptos(filterActivos(res)))
         .catch(() => message.error('Error al cargar conceptos'));
     } else {
       fetchConceptos()
-        .then((res) => setConceptos(res || []))
+        .then((res) => setConceptos(filterActivos(res)))
         .catch(() => message.error('Error al cargar conceptos'));
     }
   }, [open, fetchConceptos, sucursal, documento, tipo, tipoEntidad]);
@@ -79,10 +92,11 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({
       onCancel={onClose}
       footer={null}
       width={600}
-      destroyOnClose
+      destroyOnHidden
     >
       <Input.Search
-        placeholder="Buscar por código o nombre..."
+        ref={searchRef}
+        placeholder="Buscar por cÃ³digo o nombre..."
         allowClear
         onSearch={(val) => setSearchText(val || '')}
         onChange={(e) => {

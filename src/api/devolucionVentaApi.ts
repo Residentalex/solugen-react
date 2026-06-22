@@ -15,7 +15,7 @@ export const devolucionVentaApi = {
     cantidad?: number,
     salto?: number,
     estado?: number
-  ): Promise<FacturaVistaDTO[]> => {
+  ): Promise<{ data: FacturaVistaDTO[]; total: number }> => {
     const params: Record<string, string | number> = {};
     if (desde) params.desde = desde;
     if (hasta) params.hasta = hasta;
@@ -24,13 +24,13 @@ export const devolucionVentaApi = {
     if (estado !== undefined) params.estado = estado;
 
     const { data } = await apiClient.get<ApiResponse<FacturaVistaDTO[]>>(`${BASE}/${sucursal}`, { params });
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   filtrar: async (
     sucursal: number,
     filtro: FiltroFacturacion
-  ): Promise<FacturaVistaDTO[]> => {
+  ): Promise<{ data: FacturaVistaDTO[]; total: number }> => {
     const params: Record<string, string | number> = {};
     if (filtro.cantidad) params.cantidad = filtro.cantidad;
     if (filtro.salto) params.salto = filtro.salto;
@@ -45,7 +45,7 @@ export const devolucionVentaApi = {
     if (filtro.almacen) params.almacen = filtro.almacen;
 
     const { data } = await apiClient.get<ApiResponse<FacturaVistaDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params });
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   obtenerPorId: async (sucursal: number, id: number): Promise<DevolucionVentaDTO> => {
@@ -101,7 +101,7 @@ export const devolucionVentaApi = {
   },
 
   obtenerClientes: async (sucursal: number): Promise<ClienteDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<ClienteDTO[]>>(`/Cliente/${sucursal}`);
+    const { data } = await apiClient.get<ApiResponse<ClienteDTO[]>>(`/Cliente/${sucursal}/activos`);
     return data.data;
   },
 

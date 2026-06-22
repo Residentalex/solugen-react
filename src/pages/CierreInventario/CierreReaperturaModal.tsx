@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Modal, DatePicker, Typography, message, Space, Button } from 'antd';
 import { LockOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -8,7 +8,7 @@ const { Text } = Typography;
 
 // ===== Helpers =====
 function formatDateDisplay(dateStr: string): string {
-  if (!dateStr) return '—';
+  if (!dateStr) return 'â€”';
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
@@ -74,10 +74,10 @@ const CierreReaperturaModal: React.FC<CierreReaperturaModalProps> = ({
         : formatDateISO(new Date());
 
       await cierreInventarioApi.reaperturar(sucursal, fechaNuevaStr, fechaAnterior);
-      message.success('Período reaperturado exitosamente');
+      message.success('PerÃ­odo reaperturado exitosamente');
       onSuccess();
     } catch (err: any) {
-      const msg = err?.response?.data?.errorMessage || 'Error al reaperturar período';
+      const msg = err?.response?.data?.errorMessage || 'Error al reaperturar perÃ­odo';
       setError(msg);
       message.error(msg);
     } finally {
@@ -97,7 +97,7 @@ const CierreReaperturaModal: React.FC<CierreReaperturaModalProps> = ({
       onCancel={onClose}
       footer={null}
       width={420}
-      destroyOnClose
+      destroyOnHidden
       centered
     >
       <div style={{ padding: '8px 0' }}>
@@ -151,7 +151,7 @@ const CierreReaperturaModal: React.FC<CierreReaperturaModalProps> = ({
           type="secondary"
           style={{ fontSize: 11, display: 'block', marginTop: 8, marginBottom: 16 }}
         >
-          La reapertura permitirá modificar documentos en el período seleccionado.
+          La reapertura permitirÃ¡ modificar documentos en el perÃ­odo seleccionado.
         </Text>
 
         {/* Acciones */}

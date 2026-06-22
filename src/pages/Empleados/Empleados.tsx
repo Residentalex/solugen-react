@@ -72,6 +72,10 @@ const Empleados: React.FC = () => {
     cargar(page, pageSize, searchText);
   }, [cargar, page, pageSize, searchText]);
 
+  const handleNuevo = useCallback(() => {
+    navigate('/MEMP/nuevo');
+  }, [navigate]);
+
   const columns: ColumnsType<EmpleadoDTO> = [
     {
       title: 'Empleado',
@@ -172,6 +176,8 @@ const Empleados: React.FC = () => {
         pageSize,
         onPageSizeChange: (v) => { setPageSize(v); setPage(1); },
         onRefresh: handleRefresh,
+        showCrear: true,
+        onCrear: handleNuevo,
         extraLeft: (
           <Popover title="Filtros" trigger="click" placement="bottomLeft" content={contentFiltros}>
             <Button icon={<FilterOutlined />}>Filtros</Button>

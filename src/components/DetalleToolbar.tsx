@@ -17,6 +17,7 @@ interface DetalleToolbarProps {
   operacionLoading?: boolean;
   onVolver: () => void;
   onImprimir?: () => Promise<void>;
+  onImprimirTicket?: () => Promise<void>;
   onEditar?: () => void;
   onAplicar?: () => void;
   onAnular?: () => Promise<void>;
@@ -45,7 +46,7 @@ function accionConfirm(titulo: string, onOk: () => void): void {
 const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
   modulo, estado, periodo, revisado,
   saving, imprimiendo, operacionLoading,
-  onVolver, onImprimir, onEditar, onAplicar, onAnular,
+  onVolver, onImprimir, onImprimirTicket, onEditar, onAplicar, onAnular,
   onPostear, onRevisado, onDesaplicar, onReversar,
   showImprimir = true, confirmActions = true,
   extraButtons,
@@ -64,21 +65,29 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
       <div style={{ flex: 1 }} />
       <Space>
         {showImprimir && onImprimir && (
-          <PermissionGate accion="IMPRIMIR">
+          <PermissionGate codigoPantalla={modulo} accion="IMPRIMIR">
             <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={onImprimir} />
+          </PermissionGate>
+        )}
+
+        {onImprimirTicket && (
+          <PermissionGate codigoPantalla={modulo} accion="IMPRIMIR">
+            <Button icon={<PrinterOutlined />} onClick={onImprimirTicket}>
+              Ticket
+            </Button>
           </PermissionGate>
         )}
 
         {extraButtons}
 
         {estado === 0 && periodo !== 6 && revisado !== true && onEditar && (
-          <PermissionGate accion="EDITAR">
+          <PermissionGate codigoPantalla={modulo} accion="EDITAR">
             <Button type="primary" icon={<EditOutlined />} onClick={onEditar}>Editar</Button>
           </PermissionGate>
         )}
 
         {estado === 0 && periodo !== 6 && onAplicar && (
-          <PermissionGate accion="APLICAR">
+          <PermissionGate codigoPantalla={modulo} accion="APLICAR">
             <Button
               style={{ background: '#389e0d', borderColor: '#389e0d', color: '#fff' }}
               icon={<CheckCircleOutlined />}
@@ -90,8 +99,8 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
           </PermissionGate>
         )}
 
-        {revisado !== true && estado !== 3 && onAnular && (
-          <PermissionGate accion="ANULAR">
+        {revisado !== true && estado !== 3 && periodo !== 6 && onAnular && (
+          <PermissionGate codigoPantalla={modulo} accion="ANULAR">
             <Button
               danger
               icon={<CloseCircleOutlined />}
@@ -103,8 +112,8 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
           </PermissionGate>
         )}
 
-        {estado === 1 && revisado !== true && onPostear && (
-          <PermissionGate accion="POSTEAR">
+        {(estado === 1 || estado === 3) && revisado !== true && periodo !== 6 && onPostear && (
+          <PermissionGate codigoPantalla={modulo} accion="POSTEAR">
             <Button
               icon={<CheckCircleOutlined />}
               disabled={operacionLoading}
@@ -115,8 +124,8 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
           </PermissionGate>
         )}
 
-        {estado === 1 && revisado !== true && onRevisado && (
-          <PermissionGate accion="AUTORIZAR">
+        {estado === 1 && revisado !== true && periodo !== 6 && onRevisado && (
+          <PermissionGate codigoPantalla={modulo} accion="AUTORIZAR">
             <Button
               icon={<CheckCircleOutlined />}
               loading={saving}
@@ -127,8 +136,8 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
           </PermissionGate>
         )}
 
-        {estado === 1 && revisado !== true && onDesaplicar && (
-          <PermissionGate accion="DESAPLICAR">
+        {estado === 1 && revisado !== true && periodo !== 6 && onDesaplicar && (
+          <PermissionGate codigoPantalla={modulo} accion="DESAPLICAR">
             <Button
               icon={<RedoOutlined />}
               loading={saving}
@@ -139,8 +148,8 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
           </PermissionGate>
         )}
 
-        {estado === 1 && revisado === true && onReversar && (
-          <PermissionGate accion="REVERSAR">
+        {estado === 1 && revisado === true && periodo !== 6 && onReversar && (
+          <PermissionGate codigoPantalla={modulo} accion="REVERSAR">
             <Button
               danger
               icon={<RedoOutlined />}

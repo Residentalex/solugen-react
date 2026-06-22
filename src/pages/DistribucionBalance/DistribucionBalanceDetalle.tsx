@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Input, Tooltip, Typography, Empty
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Input, Tooltip, Typography, Empty, Alert, Switch
 } from 'antd';
 import {
   ArrowLeftOutlined, LockFilled, ReloadOutlined
@@ -12,6 +12,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { distribucionBalanceApi } from '../../api/distribucionBalanceApi';
 import { transaccionApi } from '../../api/transaccionApi';
+import PermissionGate from '../../components/PermissionGate';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
@@ -48,6 +49,8 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
   const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
+  const [mostrandoReverso, setMostrandoReverso] = useState(false);
+  const [reversoData, setReversoData] = useState<any>(null);
   const monedaDefault = getMonedaSucursalActiva();
   const screens = Grid.useBreakpoint();
 
@@ -73,6 +76,15 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
         setData(res);
         const data = res as any;
         setPageTitleOverride(`${data.documento.codigo}-${data.noDocumento}`);
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        if (res.estado === 3 && (res as any).reversoID) {
+          distribucionBalanceApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
 
         // Cargar transacciones asociadas (débitos/créditos)
         transaccionApi.obtenerAsociadas(sucursalActiva, parseInt(id), 'Debito', true)
@@ -86,6 +98,17 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  // Actualizar el título del header al alternar entre Original/Reverso
+  useEffect(() => {
+    if (mostrandoReverso && reversoData) {
+      const doc = reversoData as any;
+      setPageTitleOverride(`${doc.documento?.codigo || 'DBA'}-${doc.noDocumento || ''}`);
+    } else if (data) {
+      const doc = data as any;
+      setPageTitleOverride(`${doc.documento?.codigo || 'DBA'}-${doc.noDocumento || ''}`);
+    }
+  }, [mostrandoReverso, reversoData, data, setPageTitleOverride]);
 
   const debitos = (asociadas || []).filter(
     (t: any) => t.origenCuenta === 0
@@ -137,9 +160,10 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
     return null;
   }
 
+  const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const isLarge = screens.xxl === true;
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = data.periodo === 6;
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[documentoActivo.estado] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = documentoActivo.periodo === 6;
 
   // ===== Columnas para Débitos y Créditos =====
   const asociadasColumnsDebito = [
@@ -187,6 +211,12 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
       setModalAnularOpen(false);
       const res = await distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
+      if (res.estado === 3 && (res as any).reversoID) {
+        const revRes = await distribucionBalanceApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        setReversoData(revRes);
+      } else {
+        setReversoData(null);
+      }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
       message.error(msg);
@@ -267,6 +297,12 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
       message.success('Documento reversado exitosamente');
       const res = await distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
+      if (res.estado === 3 && (res as any).reversoID) {
+        const revRes = await distribucionBalanceApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        setReversoData(revRes);
+      } else {
+        setReversoData(null);
+      }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al reversar');
       message.error(msg);
@@ -295,8 +331,8 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
     <div>
       <DetalleToolbar
         modulo={codigoPantalla}
-        estado={data.estado}
-        periodo={data.periodo}
+        estado={documentoActivo.estado}
+        periodo={documentoActivo.periodo}
         saving={saving}
         imprimiendo={imprimiendo}
         onVolver={() => navigate(`/${codigoPantalla}`)}
@@ -333,15 +369,38 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
         onReversar={handleReversar}
         confirmActions={false}
         extraButtons={
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={handleRecalcular}
-            loading={recalculando}
-          >
-            Recalcular
-          </Button>
+          <>
+            {data?.estado === 3 && reversoData && (
+              <Switch
+                checked={mostrandoReverso}
+                checkedChildren="Reverso"
+                unCheckedChildren="Original"
+                onChange={(checked) => setMostrandoReverso(checked)}
+                style={{ marginLeft: 8 }}
+              />
+            )}
+            <PermissionGate permisoEspecial="pe_recalcular">
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={handleRecalcular}
+                loading={recalculando}
+              >
+                Recalcular
+              </Button>
+            </PermissionGate>
+          </>
         }
       />
+
+      {mostrandoReverso && (
+        <Alert
+          message="Viendo documento de Reverso"
+          description="Este documento es el reverso generado al anular el documento original."
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {isLarge ? (
         <Row gutter={16}>
@@ -364,16 +423,16 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
                 <Descriptions.Item label="Tipo">
-                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                  {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
 
-                <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Tasa">{documentoActivo.tasa ? formatNumber(documentoActivo.tasa) : '-'}</Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -393,16 +452,16 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
                 },
                 {
                   key: 'asientos',
-                  label: `Asientos (${data.asientos?.length || 0})`,
+                  label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                    <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
                   ),
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${data.logs?.length || 0})`,
+                  label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
-                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
+                    <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
@@ -410,14 +469,14 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
           </Col>
 
           <Col xxl={6}>
-            <EntidadCard entidad={data.entidad} titulo={tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente'} />
-            {data.beneficiario && (
-              <EntidadCard entidad={data.beneficiario} titulo="Beneficiario" />
+            <EntidadCard entidad={documentoActivo.entidad} titulo={tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente'} />
+            {documentoActivo.beneficiario && (
+              <EntidadCard entidad={documentoActivo.beneficiario} titulo="Beneficiario" />
             )}
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={false}
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
-              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
-              tasa={data.tasa ?? 1}
+            <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones} total={documentoActivo.total} alignRight={false}
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
+              tasa={documentoActivo.tasa ?? 1}
             />
           </Col>
         </Row>
@@ -441,16 +500,16 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
                 <Descriptions.Item label="Tipo">
-                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                  {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
 
-                <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Tasa">{documentoActivo.tasa ? formatNumber(documentoActivo.tasa) : '-'}</Descriptions.Item>
               </Descriptions>
           </Card>
 
@@ -470,26 +529,26 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
               },
               {
                 key: 'asientos',
-                label: `Asientos (${data.asientos?.length || 0})`,
+                label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                 children: (
-                  <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                  <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
                 ),
               },
               {
                 key: 'historial',
-                label: `Historial (${data.logs?.length || 0})`,
+                label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
-                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
+                    <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
           />
 
           <div style={{ marginTop: 16 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={true}
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
-              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
-              tasa={data.tasa ?? 1}
+            <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones} total={documentoActivo.total} alignRight={true}
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
+              tasa={documentoActivo.tasa ?? 1}
             />
           </div>
         </div>

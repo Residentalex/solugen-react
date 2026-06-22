@@ -242,7 +242,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const cargarEntidades = async (conceptoCodigo?: string) => {
     try {
       // Cargar desde el endpoint de entidades
-      const res = await conceptosApi.obtenerEntidades(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo);
+      const res = await conceptosApi.obtenerEntidades(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo, true);
       setEntidadesCache(res || []);
     } catch {
       // Fallback
@@ -592,6 +592,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const estadoInfo = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Borrador', color: 'default' };
 
   // ===== Encabezado =====
+  const documentoTieneTipos = tiposCache.length > 0;
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
@@ -628,17 +629,17 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
                   placeholder=" "
                   value={selectedConcepto ? `${selectedConcepto.codigo || ''} - ${toTitleCase(selectedConcepto.nombre)}` : conceptoSearchText}
                   readOnly
-                  disabled={!selectedTipo}
+                  disabled={documentoTieneTipos && !selectedTipo}
                   suffix={
                     <Space size={4}>
                       <SearchOutlined
-                        onClick={() => selectedTipo && handleConceptoSearchClick()}
-                        style={{ cursor: selectedTipo ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
+                        onClick={() => (!documentoTieneTipos || selectedTipo) && handleConceptoSearchClick()}
+                        style={{ cursor: (!documentoTieneTipos || selectedTipo) ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
                       />
                       {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
                     </Space>
                   }
-                  onClick={() => selectedTipo && handleConceptoSearchClick()}
+                  onClick={() => (!documentoTieneTipos || selectedTipo) && handleConceptoSearchClick()}
                 />
               </FloatingField>
             </div>

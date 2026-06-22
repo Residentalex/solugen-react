@@ -83,6 +83,8 @@ export interface AuthPermisoEspecialDTO {
   nombre?: string;
   activo: boolean;
   valor: boolean;
+  tipoValor?: string;      // 'BOOLEANO' | 'NUMERICO'
+  valorNumerico?: number;  // valor numerico (tope maximo o fijo)
 }
 
 export interface PermisoEspecialRequestDTO {
@@ -90,6 +92,7 @@ export interface PermisoEspecialRequestDTO {
   codigo: string;
   nombre?: string;
   activo: boolean;
+  tipoValor?: string;
 }
 
 export interface PermisoEspecialConAsignacionDTO {
@@ -98,6 +101,7 @@ export interface PermisoEspecialConAsignacionDTO {
   nombre?: string;
   activo: boolean;
   asignado: boolean;
+  tipoValor?: string;
 }
 
 export interface PermisoEspecialConRolDTO {
@@ -106,6 +110,8 @@ export interface PermisoEspecialConRolDTO {
   nombre?: string;
   activo: boolean;
   valor: boolean;
+  tipoValor?: string;
+  valorNumerico?: number;
 }
 
 export interface AuthUsuarioSesionDTO {
@@ -145,4 +151,5 @@ export interface ApiResponse<T> {
   isSuccess: boolean;
   data: T;
   errorMessage: string;
+  total?: number;
 }

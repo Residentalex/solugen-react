@@ -7,11 +7,13 @@ export default defineConfig({
   plugins: [react()],
   build: {
     rollupOptions: {
-      output: {
-        // @ts-ignore
-        pure: ['/@__PURE__/']
-      }
-    }
+      treeshake: {
+        moduleSideEffects: (id) => {
+          if (id.includes('antd') || id.includes('@ant-design')) return true;
+          return undefined;
+        },
+      },
+    },
   },
   test: {
     globals: true,

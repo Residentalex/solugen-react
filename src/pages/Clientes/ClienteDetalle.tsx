@@ -1,16 +1,30 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Spin, Button, message, Form, Input, Select, Switch, Row, Col, Typography,
-  Tabs, Descriptions, InputNumber, Tag, Alert,
+  Card, message, Form, Input, Select, Switch, Row, Col, Typography,
+  Tabs, Descriptions, InputNumber, Tag, Grid, Divider, DatePicker,
+  Button, Modal, Table,
 } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined, EditOutlined } from '@ant-design/icons';
+import { CopyOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { apiClient } from '../../api/client';
 import { clienteApi } from '../../api/clienteApi';
-import type { ClienteDTO } from '../../types/facturacion';
+import { proveedorApi } from '../../api/proveedorApi';
+import { empleadoApi } from '../../api/empleadoApi';
+import type { ClienteDTO, CategoriaEntidadDTO, TipoComprobanteNCFDTO } from '../../types/facturacion';
+import type { CuentaContableDTO, MonedaDTO } from '../../types/contabilidad';
 import ErrorBoundary from '../../components/ErrorBoundary';
-import { ErrorDetalle } from '../../components';
+import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
+import { formatCurrency, toISOFormat } from '../../utils/formats';
+import PersonasAutorizadasTab from './components/PersonasAutorizadasTab';
+import GruposProductosTab from './components/GruposProductosTab';
+import CuentasBancariasTab from './components/CuentasBancariasTab';
+import LugaresTrabajoTab from './components/LugaresTrabajoTab';
+import MovimientosTab from './components/MovimientosTab';
+import FacturacionTab from './components/FacturacionTab';
+import ContactosTab from './components/ContactosTab';
 
 const { Text } = Typography;
 
@@ -21,11 +35,16 @@ const SEXO_LABEL: Record<number, string> = {
 };
 
 const ESTADO_CIVIL_LABEL: Record<number, string> = {
-  0: 'Soltero(a)',
-  1: 'Casado(a)',
+  0: 'Casado(a)',
+  1: 'Soltero(a)',
   2: 'Divorciado(a)',
   3: 'Viudo(a)',
-  4: 'Unión Libre',
+};
+
+const TIPO_IDENTIFICACION_LABEL: Record<number, string> = {
+  0: 'RNC',
+  1: 'Cédula',
+  2: 'Pasaporte',
 };
 
 const ClienteDetalle: React.FC = () => {
@@ -43,6 +62,30 @@ const ClienteDetalle: React.FC = () => {
   const [guardando, setGuardando] = useState(false);
   const [editando, setEditando] = useState(false);
   const [form] = Form.useForm();
+  const screens = Grid.useBreakpoint();
+  const isLarge = screens.xxl === true;
+
+  // Estados para catálogos
+  const [tiposNCF, setTiposNCF] = useState<TipoComprobanteNCFDTO[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaEntidadDTO[]>([]);
+  const [cuentasContables, setCuentasContables] = useState<CuentaContableDTO[]>([]);
+  const [monedas, setMonedas] = useState<MonedaDTO[]>([]);
+
+  // Estados de "loaded" para catálogos bajo demanda
+  const [categoriasLoaded, setCategoriasLoaded] = useState(false);
+  const [tiposNCFLoaded, setTiposNCFLoaded] = useState(false);
+  const [cuentasContablesLoaded, setCuentasContablesLoaded] = useState(false);
+  const [monedasLoaded, setMonedasLoaded] = useState(false);
+
+  // Estados para modal clonar
+  const [modalVisible, setModalVisible] = useState(false);
+  const [tiposEntidad, setTiposEntidad] = useState<any[]>([]);
+  const [tipoSeleccionado, setTipoSeleccionado] = useState<string | null>(null);
+  const [entidades, setEntidades] = useState<any[]>([]);
+  const [cargandoEntidades, setCargandoEntidades] = useState(false);
+  const [selectedEntity, setSelectedEntity] = useState<any | null>(null);
+  const [clonando, setClonando] = useState(false);
+  const [searchTexto, setSearchTexto] = useState('');
 
   useEffect(() => {
     setActiveModule('MCliente');
@@ -53,7 +96,7 @@ const ClienteDetalle: React.FC = () => {
     if (esNuevo) {
       setPageTitleOverride('Nuevo Cliente');
       setEditando(true);
-      form.setFieldsValue({ activo: true, tipoIdentificacion: 'RNC' });
+      form.setFieldsValue({ activo: true, tipoIdentificacion: 0 });
       return;
     }
     if (!codigo) return;
@@ -83,7 +126,7 @@ const ClienteDetalle: React.FC = () => {
           direccion: res.direccion,
           sexo: res.sexo,
           estadoCivil: res.estadoCivil,
-          fechaNacimiento: res.fechaNacimiento,
+          fechaNacimiento: res.fechaNacimiento ? dayjs(res.fechaNacimiento) : null,
           nota: res.nota,
           activo: res.activo,
           limiteCredito: res.limiteCredito,
@@ -92,6 +135,31 @@ const ClienteDetalle: React.FC = () => {
           exentoImpuesto: res.exentoImpuesto,
           margen: res.margen,
           porcientoDescuento: res.porcientoDescuento,
+          // Nuevos campos
+          sector: res.sector,
+          ciudad: res.ciudad,
+          zona: res.zona,
+          nombreComercial: res.nombreComercial,
+          contacto: res.contacto,
+          telefonoContacto: res.telefonoContacto,
+          fax: res.fax,
+          fechaIngreso: res.fechaIngreso ? dayjs(res.fechaIngreso) : null,
+          codigoVendedor: res.codigoVendedor,
+          vendedorNombre: res.vendedorNombre,
+          codigoListaPrecio: res.codigoListaPrecio,
+          listaPrecioNombre: res.listaPrecioNombre,
+          perfil: res.perfil,
+          comision: res.comision,
+          facebook: res.facebook,
+          twitter: res.twitter,
+          codigoMoneda: res.codigoMoneda,
+          balance: res.balance,
+          fechaUltimoPago: res.fechaUltimoPago,
+          montoUltimoPago: res.montoUltimoPago,
+          documentoUltimoPago: res.documentoUltimoPago,
+          categoria: res.categoria?.codigo,
+          tipoNcf: res.tipoNcf?.codigo,
+          cuentaContable: res.cuentaContable?.noCuenta,
         });
       })
       .catch((err: any) => {
@@ -106,21 +174,93 @@ const ClienteDetalle: React.FC = () => {
     return () => abortController.abort();
   }, [codigo, sucursalActiva, setPageTitleOverride, esNuevo, form]);
 
+  // Bloqueo de navegación con cambios sin guardar
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (editando && form.isFieldsTouched()) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [editando, form]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (editando && form.isFieldsTouched()) {
+        const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
+        if (!leave) {
+          window.history.pushState(null, '', window.location.pathname);
+        }
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [editando, form]);
+
+  const handleVolver = useCallback(() => {
+    if (editando && form.isFieldsTouched()) {
+      Modal.confirm({
+        title: '¿Salir sin guardar?',
+        content: 'Los cambios no guardados se perderán.',
+        okText: 'Salir',
+        cancelText: 'Cancelar',
+        onOk: () => navigate('/MCliente'),
+      });
+    } else {
+      navigate('/MCliente');
+    }
+  }, [editando, form, navigate]);
+
   // Permisos
   const usuario = useAuthStore((s: any) => s.usuario);
   const pantallaActual = usuario?.pantallas.find((p: any) => p.codigo === 'MCliente');
   const puedeEditar = pantallaActual?.acciones.includes('EDITAR') ?? false;
   const puedeCrear = pantallaActual?.acciones.includes('CREAR') ?? false;
 
+  // Funciones de carga bajo demanda para catálogos
+  const cargarCategorias = () => {
+    if (categoriasLoaded) return;
+    apiClient.get(`/categoriaentidad/${sucursalActiva}/tipo/CLI`)
+      .then((res) => setCategorias(res.data?.data || []))
+      .catch((err) => message.error(err?.response?.data?.errorMessage || 'Error al cargar categorías'))
+      .finally(() => setCategoriasLoaded(true));
+  };
+
+  const cargarTiposNCF = () => {
+    if (tiposNCFLoaded) return;
+    apiClient.get(`/TipoNCF/${sucursalActiva}`)
+      .then((res) => setTiposNCF(res.data?.data || []))
+      .catch((err) => message.error(err?.response?.data?.errorMessage || 'Error al cargar tipos NCF'))
+      .finally(() => setTiposNCFLoaded(true));
+  };
+
+  const cargarCuentasContables = () => {
+    if (cuentasContablesLoaded) return;
+    apiClient.get(`/CuentaContable/${sucursalActiva}/Auxiliares`)
+      .then((res) => setCuentasContables(res.data?.data || []))
+      .catch((err) => message.error(err?.response?.data?.errorMessage || 'Error al cargar cuentas contables'))
+      .finally(() => setCuentasContablesLoaded(true));
+  };
+
+  const cargarMonedas = () => {
+    if (monedasLoaded) return;
+    apiClient.get(`/Moneda/${sucursalActiva}`)
+      .then((res) => setMonedas(res.data?.data || []))
+      .catch((err) => message.error(err?.response?.data?.errorMessage || 'Error al cargar monedas'))
+      .finally(() => setMonedasLoaded(true));
+  };
+
   const handleGuardar = async () => {
     try {
       const values = await form.validateFields();
       setGuardando(true);
-      const payload: ClienteDTO = {
+      const payload = {
         codigo: values.codigo,
         nombre: values.nombre,
-        tipoIdentificacion: values.tipoIdentificacion || 'RNC',
-        identificacion: values.identificacion || '',
+        tipoIdentificacion: values.tipoIdentificacion ?? 0,
+        identificacion: (values.identificacion || '').replace(/-/g, ''),
         correoElectronico: values.correoElectronico || '',
         telefono: values.telefono || '',
         telefonoAdicional: values.telefonoAdicional || '',
@@ -129,22 +269,47 @@ const ClienteDetalle: React.FC = () => {
         activo: values.activo ?? true,
         sexo: values.sexo,
         estadoCivil: values.estadoCivil,
-        fechaNacimiento: values.fechaNacimiento || undefined,
+        fechaNacimiento: values.fechaNacimiento ? toISOFormat(dayjs(values.fechaNacimiento).toDate()) : null,
         limiteCredito: values.limiteCredito ?? 0,
         diasCredito: values.diasCredito ?? 0,
         creditoSuspendido: values.creditoSuspendido ?? false,
         exentoImpuesto: values.exentoImpuesto ?? false,
         margen: values.margen ?? 0,
         porcientoDescuento: values.porcientoDescuento ?? 0,
-      };
+        // Nuevos campos
+        sector: values.sector || '',
+        ciudad: values.ciudad || '',
+        zona: values.zona || '',
+        nombreComercial: values.nombreComercial || '',
+        contacto: values.contacto || '',
+        telefonoContacto: values.telefonoContacto || '',
+        fax: values.fax || '',
+        fechaIngreso: values.fechaIngreso ? toISOFormat(dayjs(values.fechaIngreso).toDate()) : null,
+        codigoVendedor: values.codigoVendedor || '',
+        vendedorNombre: values.vendedorNombre || '',
+        codigoListaPrecio: values.codigoListaPrecio || '',
+        listaPrecioNombre: values.listaPrecioNombre || '',
+        perfil: values.perfil || '',
+        comision: values.comision ?? 0,
+        facebook: values.facebook || '',
+        twitter: values.twitter || '',
+        codigoMoneda: values.codigoMoneda || '',
+      } as ClienteDTO;
+
+      // Mapear selects de catálogo que el backend espera como objetos anidados
+      if (values.categoria) (payload as any).categoria = { codigo: values.categoria, descripcion: '' };
+      if (values.tipoNcf) (payload as any).tipoNcf = { codigo: values.tipoNcf, nombre: '' };
+      if (values.cuentaContable) (payload as any).cuentaContable = { noCuenta: values.cuentaContable, nombre: '' };
+
       if (!esNuevo && data) {
         await clienteApi.actualizar(sucursalActiva, { ...data, ...payload });
         message.success('Cliente actualizado correctamente');
+        navigate('/MCliente');
       } else {
-        await clienteApi.crear(sucursalActiva, payload);
+        const creado = await clienteApi.crear(sucursalActiva, payload);
         message.success('Cliente creado correctamente');
+        navigate(`/MCliente/${creado.codigo}`);
       }
-      navigate('/MCliente');
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar cliente');
@@ -153,56 +318,178 @@ const ClienteDetalle: React.FC = () => {
     }
   };
 
-  if (!esNuevo && (loading || (!data && !loadingError))) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando cliente...</div>
-      </div>
-    );
-  }
-  if (!esNuevo && loadingError && !data) {
-    return <ErrorDetalle mensaje="Error al cargar el documento" rutaVolver="/MCliente" />;
-  }
+  const abrirModalClonar = useCallback(async () => {
+    setModalVisible(true);
+    setTipoSeleccionado(null);
+    setEntidades([]);
+    setSelectedEntity(null);
+    setSearchTexto('');
+    try {
+      const { data } = await apiClient.get(`/TipoEntidad/${sucursalActiva}/exportables`);
+      setTiposEntidad(data?.data || []);
+    } catch {
+      message.error('Error al cargar tipos de entidad');
+    }
+  }, [sucursalActiva]);
+
+  useEffect(() => {
+    if (!tipoSeleccionado) {
+      setEntidades([]);
+      setSelectedEntity(null);
+      return;
+    }
+    setCargandoEntidades(true);
+    setSelectedEntity(null);
+
+    const carga = searchTexto.trim()
+      ? apiClient.get(`/Entidades/${sucursalActiva}/filtrar`, {
+          params: { tipo: tipoSeleccionado, entidad: searchTexto.trim() }
+        })
+      : apiClient.get(`/Entidades/${sucursalActiva}`, {
+          params: { tipo: tipoSeleccionado, activo: true, cantidad: 100 }
+        });
+
+    carga
+      .then((res) => setEntidades(res.data?.data || []))
+      .catch(() => message.error('Error al cargar entidades'))
+      .finally(() => setCargandoEntidades(false));
+  }, [tipoSeleccionado, sucursalActiva, searchTexto]);
+
+  const handleClonar = useCallback(async () => {
+    if (!selectedEntity) return;
+    setClonando(true);
+    try {
+      // 1. Obtener datos base de la entidad
+      const { data: resp } = await apiClient.get(`/Entidades/${sucursalActiva}/${selectedEntity.codigo}`, {
+        params: { tipo: tipoSeleccionado }
+      });
+      const entidad = resp?.data;
+      if (!entidad) {
+        message.error('No se pudo obtener los datos de la entidad');
+        return;
+      }
+
+      // 2. Obtener datos específicos según tipo de entidad
+      let datosEspecificos: Record<string, any> = {};
+      try {
+        if (tipoSeleccionado === 'CLI') {
+          const cli = await clienteApi.obtenerPorCodigo(sucursalActiva, selectedEntity.codigo);
+          if (cli) datosEspecificos = cli as any;
+        } else if (tipoSeleccionado === 'SUP') {
+          const sup = await proveedorApi.obtenerPorCodigo(sucursalActiva, selectedEntity.codigo);
+          if (sup) datosEspecificos = sup as any;
+        } else if (tipoSeleccionado === 'EMP') {
+          const emp = await empleadoApi.obtenerPorCodigo(sucursalActiva, selectedEntity.codigo);
+          if (emp) datosEspecificos = emp as any;
+        }
+      } catch {
+        // Si falla la carga específica, solo usar datos base
+      }
+
+      // 3. Fusionar: datos específicos tienen prioridad
+      const fusion = { ...entidad, ...datosEspecificos };
+
+      form.setFieldsValue({
+        nombre: fusion.nombre,
+        tipoIdentificacion: fusion.tipoIdentificacion ?? 0,
+        identificacion: fusion.identificacion || '',
+        telefono: fusion.telefono || '',
+        telefonoAdicional: fusion.telefonoAdicional || '',
+        correoElectronico: fusion.correoElectronico || '',
+        direccion: fusion.direccion || '',
+        sexo: fusion.sexo,
+        estadoCivil: fusion.estadoCivil,
+        fechaNacimiento: fusion.fechaNacimiento ? dayjs(fusion.fechaNacimiento) : null,
+        nota: fusion.nota || '',
+        activo: fusion.activo ?? true,
+        sector: fusion.sector || '',
+        ciudad: fusion.ciudad || '',
+        zona: fusion.zona || '',
+        contacto: fusion.contacto || '',
+        telefonoContacto: fusion.telefonoContacto || '',
+        fax: fusion.fax || '',
+        nombreComercial: fusion.nombreComercial || '',
+        categoria: fusion.categoria?.codigo,
+        cuentaContable: fusion.cuentaContable?.noCuenta,
+      });
+      message.success(`Datos clonados desde ${fusion.nombre}`);
+      setModalVisible(false);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al clonar entidad');
+    } finally {
+      setClonando(false);
+    }
+  }, [selectedEntity, sucursalActiva, tipoSeleccionado, form]);
+
+  // Nota: loading, loadingError, dataDisponible se manejan via DetalleCatalogoLayout
 
   const esSoloLectura = !esNuevo && !editando;
 
   const tabItems = [
     {
-      key: 'laborales',
-      label: 'Datos Laborales',
-      children: (
+      key: 'contactos',
+      label: 'Contactos',
+      children: !esNuevo && codigo ? (
+        <ContactosTab codigoCliente={codigo} />
+      ) : (
         <div style={{ padding: 16, textAlign: 'center' }} className="paces-text-secondary">
-          <Text type="secondary">Información laboral del cliente (próximamente)</Text>
+          <Text type="secondary">Guarde el cliente primero para gestionar contactos</Text>
+        </div>
+      ),
+    },
+    {
+      key: 'personas',
+      label: 'Personas Autorizadas',
+      children: !esNuevo && codigo ? (
+        <PersonasAutorizadasTab codigoCliente={codigo} sucursal={sucursalActiva} />
+      ) : (
+        <div style={{ padding: 16, textAlign: 'center' }} className="paces-text-secondary">
+          <Text type="secondary">Guarde el cliente primero para gestionar personas autorizadas</Text>
+        </div>
+      ),
+    },
+    {
+      key: 'grupos',
+      label: 'Grupos de Productos',
+      children: !esNuevo && codigo ? (
+        <GruposProductosTab codigoCliente={codigo} sucursal={sucursalActiva} />
+      ) : (
+        <div style={{ padding: 16, textAlign: 'center' }} className="paces-text-secondary">
+          <Text type="secondary">Guarde el cliente primero para gestionar grupos de productos</Text>
+        </div>
+      ),
+    },
+    {
+      key: 'bancos',
+      label: 'Cuentas Bancarias',
+      children: !esNuevo && codigo ? (
+        <CuentasBancariasTab codigoCliente={codigo} sucursal={sucursalActiva} />
+      ) : (
+        <div style={{ padding: 16, textAlign: 'center' }} className="paces-text-secondary">
+          <Text type="secondary">Guarde el cliente primero para gestionar cuentas bancarias</Text>
+        </div>
+      ),
+    },
+    {
+      key: 'lugares',
+      label: 'Lugares de Trabajo',
+      children: !esNuevo && codigo ? (
+        <LugaresTrabajoTab codigoCliente={codigo} sucursal={sucursalActiva} data={data} />
+      ) : (
+        <div style={{ padding: 16, textAlign: 'center' }} className="paces-text-secondary">
+          <Text type="secondary">Guarde el cliente primero para ver lugares de trabajo</Text>
         </div>
       ),
     },
     {
       key: 'movimientos',
       label: 'Movimientos',
-      children: (
-        <div style={{ padding: 16, textAlign: 'center' }} className="paces-text-secondary">
-          <Text type="secondary">Últimas transacciones del cliente (próximamente)</Text>
-        </div>
-      ),
+      children: <MovimientosTab />,
     },
     {
       key: 'facturacion',
       label: 'Facturación',
-      children: (
-        <div style={{ padding: 16, textAlign: 'center' }} className="paces-text-secondary">
-          <Text type="secondary">Historial de facturación (próximamente)</Text>
-        </div>
-      ),
-    },
-    {
-      key: 'autorizadas',
-      label: 'Personas Autorizadas',
-      children: (
-        <div style={{ padding: 16, textAlign: 'center' }} className="paces-text-secondary">
-          <Text type="secondary">Personas autorizadas para realizar transacciones (próximamente)</Text>
-        </div>
-      ),
+      children: <FacturacionTab />,
     },
   ];
 
@@ -225,10 +512,22 @@ const ClienteDetalle: React.FC = () => {
           codigo: res.codigo, nombre: res.nombre, tipoIdentificacion: res.tipoIdentificacion,
           identificacion: res.identificacion, telefono: res.telefono, telefonoAdicional: res.telefonoAdicional,
           correoElectronico: res.correoElectronico, direccion: res.direccion, sexo: res.sexo,
-          estadoCivil: res.estadoCivil, fechaNacimiento: res.fechaNacimiento, nota: res.nota,
+          estadoCivil: res.estadoCivil, fechaNacimiento: res.fechaNacimiento ? dayjs(res.fechaNacimiento) : null, nota: res.nota,
           activo: res.activo, limiteCredito: res.limiteCredito, diasCredito: res.diasCredito,
           creditoSuspendido: res.creditoSuspendido, exentoImpuesto: res.exentoImpuesto,
           margen: res.margen, porcientoDescuento: res.porcientoDescuento,
+          // Nuevos campos
+          sector: res.sector, ciudad: res.ciudad, zona: res.zona,
+          nombreComercial: res.nombreComercial, contacto: res.contacto,
+          telefonoContacto: res.telefonoContacto,           fax: res.fax, fechaIngreso: res.fechaIngreso ? dayjs(res.fechaIngreso) : null,
+          codigoVendedor: res.codigoVendedor, vendedorNombre: res.vendedorNombre,
+          codigoListaPrecio: res.codigoListaPrecio, listaPrecioNombre: res.listaPrecioNombre,
+          perfil: res.perfil, comision: res.comision,
+          facebook: res.facebook, twitter: res.twitter, codigoMoneda: res.codigoMoneda,
+          balance: res.balance, fechaUltimoPago: res.fechaUltimoPago,
+          montoUltimoPago: res.montoUltimoPago, documentoUltimoPago: res.documentoUltimoPago,
+          categoria: res.categoria?.codigo,
+          tipoNcf: res.tipoNcf?.codigo, cuentaContable: res.cuentaContable?.noCuenta,
         });
       })
       .catch((err: any) => {
@@ -241,263 +540,449 @@ const ClienteDetalle: React.FC = () => {
       });
   };
 
-  return (
-    <div>
-      {loadingError && (
-        <Alert
-          message="Error al cargar detalle de cliente"
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          action={
-            <Button size="small" onClick={handleRefresh}>
-              Reintentar
-            </Button>
-          }
-        />
-      )}
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/MCliente')}>
-          Volver
-        </Button>
-        <div style={{ flex: 1 }} />
-        {esNuevo ? (
-          puedeCrear && (
-            <Button type="primary" icon={<SaveOutlined />} onClick={handleGuardar} loading={guardando}>
-              Guardar
-            </Button>
-          )
-        ) : editando ? (
-          puedeEditar && (
-            <Button type="primary" icon={<SaveOutlined />} onClick={handleGuardar} loading={guardando}>
-              Guardar
-            </Button>
-          )
-        ) : (
-          puedeEditar && (
-            <Button type="primary" icon={<EditOutlined />} onClick={() => setEditando(true)}>
-              Editar
-            </Button>
+  // ===== Componentes auxiliares render =====
+
+  const renderCampo = (nombre: string, children: React.ReactNode, span?: number) => (
+    <Descriptions.Item label={nombre} {...(span ? { span } : {})}>
+      {children}
+    </Descriptions.Item>
+  );
+
+  const renderReadonlyText = (valor: string | number | null | undefined, formato?: (v: any) => string) => (
+    <Text>{valor != null && valor !== '' ? (formato ? formato(valor) : String(valor)) : '-'}</Text>
+  );
+
+  const renderReadonlyMoneda = (valor: number | null | undefined) => (
+    <Text style={{ fontFamily: 'monospace' }}>{valor != null ? formatCurrency(valor) : '-'}</Text>
+  );
+
+  const renderReadonlyTag = (activo: boolean | null | undefined) => (
+    <Tag color={activo ? 'green' : 'default'}>{activo ? 'Sí' : 'No'}</Tag>
+  );
+
+  // ===== Card: Datos Generales =====
+  const renderDatosGenerales = () => (
+    <Card title="Datos Generales" className="paces-card" style={{ marginBottom: 16 }}>
+      <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
+        {renderCampo('Código',
+          esSoloLectura ? (
+            <Text style={{ fontFamily: 'monospace' }}>{data?.codigo}</Text>
+          ) : esNuevo ? (
+            <Form.Item name="codigo" noStyle>
+              <Input disabled placeholder="Autogenerado" />
+            </Form.Item>
+          ) : (
+            <Form.Item name="codigo" noStyle rules={[{ required: true, message: 'Obligatorio' }]}>
+              <Input placeholder="Código" maxLength={20} />
+            </Form.Item>
           )
         )}
+        {renderCampo('Nombre / Razón Social',
+          esSoloLectura ? (
+            <Text>{data?.nombre}</Text>
+          ) : (
+            <Form.Item name="nombre" noStyle rules={[{ required: true, message: 'Obligatorio' }]}>
+              <Input placeholder="Nombre del cliente" maxLength={100} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Tipo Identificación',
+          esSoloLectura ? (
+            <Text>{TIPO_IDENTIFICACION_LABEL[data?.tipoIdentificacion ?? -1] || data?.tipoIdentificacion || '-'}</Text>
+          ) : (
+            <Form.Item name="tipoIdentificacion" noStyle initialValue={0}>
+              <Select style={{ width: '100%' }}
+                options={[
+                  { value: 0, label: 'RNC' },
+                  { value: 1, label: 'Cédula' },
+                  { value: 2, label: 'Pasaporte' },
+                ]}
+              />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Identificación',
+          esSoloLectura ? (
+            <Text>{data?.identificacion}</Text>
+          ) : (
+            <Form.Item name="identificacion" noStyle rules={[{ required: true, message: 'Obligatorio' }]}>
+              <Input placeholder="Número de ID" maxLength={20} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Sexo',
+          esSoloLectura ? (
+            <Text>{SEXO_LABEL[data?.sexo ?? -1] || '-'}</Text>
+          ) : (
+            <Form.Item name="sexo" noStyle>
+              <Select style={{ width: '100%' }} allowClear placeholder="Seleccione sexo"
+                options={[
+                  { value: 0, label: 'Masculino' },
+                  { value: 1, label: 'Femenino' },
+                ]}
+              />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Estado Civil',
+          esSoloLectura ? (
+            <Text>{ESTADO_CIVIL_LABEL[data?.estadoCivil ?? -1] || '-'}</Text>
+          ) : (
+            <Form.Item name="estadoCivil" noStyle>
+              <Select style={{ width: '100%' }} allowClear placeholder="Seleccione estado civil"
+                options={[
+                  { value: 0, label: 'Casado(a)' },
+                  { value: 1, label: 'Soltero(a)' },
+                  { value: 2, label: 'Divorciado(a)' },
+                  { value: 3, label: 'Viudo(a)' },
+                ]}
+              />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Fecha Nacimiento',
+          esSoloLectura ? (
+            <Text>{data?.fechaNacimiento || '-'}</Text>
+          ) : (
+            <Form.Item name="fechaNacimiento" noStyle>
+              <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Fecha Ingreso',
+          esSoloLectura ? (
+            <Text>{data?.fechaIngreso || '-'}</Text>
+          ) : (
+            <Form.Item name="fechaIngreso" noStyle>
+              <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Nombre Comercial',
+          esSoloLectura ? (
+            <Text>{data?.nombreComercial || '-'}</Text>
+          ) : (
+            <Form.Item name="nombreComercial" noStyle>
+              <Input placeholder="Nombre comercial" maxLength={100} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Activo',
+          esSoloLectura ? (
+            <Tag color={data?.activo ? 'green' : 'default'}>{data?.activo ? 'Activo' : 'Inactivo'}</Tag>
+          ) : (
+            <Form.Item name="activo" noStyle valuePropName="checked" initialValue={true}>
+              <Switch checkedChildren="Sí" unCheckedChildren="No" />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Categoría',
+          esSoloLectura ? (
+            <Text>{data?.categoria?.nombre || '-'}</Text>
+          ) : (
+            <Form.Item name="categoria" noStyle rules={[{ required: true, message: 'Obligatorio' }]}>
+              <Select style={{ width: '100%' }} allowClear placeholder="Seleccione categoría"
+                onDropdownVisibleChange={(open) => open && cargarCategorias()}
+                onChange={(val) => {
+                  // Auto-poblar cuenta contable desde la categoría seleccionada
+                  if (val) {
+                    const cat = categorias.find((c) => c.codigo === val);
+                    if (cat?.numeroCuenta) {
+                      form.setFieldsValue({ cuentaContable: cat.numeroCuenta });
+                    }
+                  } else {
+                    form.setFieldsValue({ cuentaContable: undefined });
+                  }
+                }}
+                options={categorias.map(c => ({ value: c.codigo, label: `${c.codigo} - ${c.nombre}` }))} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Tipo NCF',
+          esSoloLectura ? (
+            <Text>{data?.tipoNcf?.nombre || '-'}</Text>
+          ) : (
+            <Form.Item name="tipoNcf" noStyle rules={[{ required: true, message: 'Obligatorio' }]}>
+              <Select style={{ width: '100%' }} allowClear placeholder="Seleccione tipo NCF"
+                onDropdownVisibleChange={(open) => open && cargarTiposNCF()}
+                options={tiposNCF.map(t => ({ value: t.codigo, label: `${t.codigo} - ${t.nombre}` }))} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Cuenta Contable',
+          esSoloLectura ? (
+            <Text>{data?.cuentaContable?.noCuenta ? `${data.cuentaContable.noCuenta} - ${data.cuentaContable.nombre}` : '-'}</Text>
+          ) : (
+            <Form.Item name="cuentaContable" noStyle>
+              <Select style={{ width: '100%' }} allowClear showSearch disabled placeholder="Seleccione cuenta contable"
+                optionFilterProp="label"
+                onDropdownVisibleChange={(open) => open && cargarCuentasContables()}
+                options={cuentasContables.map(c => ({ value: c.noCuenta, label: `${c.noCuenta} - ${c.nombre}` }))} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Nota',
+          esSoloLectura ? (
+            <div style={{ whiteSpace: 'pre-wrap' }}>{data?.nota || '-'}</div>
+          ) : (
+            <Form.Item name="nota" noStyle>
+              <Input.TextArea placeholder="Notas del cliente" rows={2} maxLength={500} />
+            </Form.Item>
+          ),
+          2 // span 2 columnas
+        )}
+      </Descriptions>
+    </Card>
+  );
+
+  // ===== Card: Comercial / Financiero =====
+  const renderComercialFinanciero = () => (
+    <Card title="Comercial / Financiero" className="paces-card" style={{ marginBottom: 16 }}>
+      <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
+        {renderCampo('Vendedor',
+          esSoloLectura ? (
+            <Text>{data?.vendedorNombre || '-'}</Text>
+          ) : (
+            <Form.Item name="vendedorNombre" noStyle>
+              <Select style={{ width: '100%' }} allowClear showSearch placeholder="Busque vendedor"
+                optionFilterProp="children" options={[]} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Lista de Precios',
+          esSoloLectura ? (
+            <Text>{data?.listaPrecioNombre || '-'}</Text>
+          ) : (
+            <Form.Item name="listaPrecioNombre" noStyle>
+              <Select style={{ width: '100%' }} allowClear placeholder="Seleccione lista" options={[]} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Perfil',
+          esSoloLectura ? (
+            <Text>{data?.perfil || '-'}</Text>
+          ) : (
+            <Form.Item name="perfil" noStyle>
+              <Select style={{ width: '100%' }} allowClear placeholder="Seleccione perfil" options={[]} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Comisión %',
+          esSoloLectura ? (
+            <Text>{data?.comision != null ? `${data.comision.toFixed(2)}%` : '-'}</Text>
+          ) : (
+            <Form.Item name="comision" noStyle initialValue={0}>
+              <InputNumber min={0} max={100} step={0.01} style={{ width: '100%' }} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Moneda',
+          esSoloLectura ? (
+            <Text>{data?.codigoMoneda || '-'}</Text>
+          ) : (
+            <Form.Item name="codigoMoneda" noStyle>
+              <Select style={{ width: '100%' }} allowClear placeholder="Seleccione moneda"
+                onDropdownVisibleChange={(open) => open && cargarMonedas()}
+                options={monedas.map(m => ({ value: m.codigo, label: `${m.codigo} - ${m.nombre}` }))} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Límite Crédito',
+          esSoloLectura ? (
+            renderReadonlyMoneda(data?.limiteCredito)
+          ) : (
+            <Form.Item name="limiteCredito" noStyle initialValue={0}>
+              <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Días Crédito',
+          esSoloLectura ? (
+            renderReadonlyText(data?.diasCredito)
+          ) : (
+            <Form.Item name="diasCredito" noStyle initialValue={0}>
+              <InputNumber min={0} style={{ width: '100%' }} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('% Descuento',
+          esSoloLectura ? (
+            renderReadonlyText(data?.porcientoDescuento, (v: number) => `${v.toFixed(2)}%`)
+          ) : (
+            <Form.Item name="porcientoDescuento" noStyle initialValue={0}>
+              <InputNumber min={0} max={100} step={0.01} style={{ width: '100%' }} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Margen',
+          esSoloLectura ? (
+            renderReadonlyText(data?.margen)
+          ) : (
+            <Form.Item name="margen" noStyle initialValue={0}>
+              <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Crédito Suspendido',
+          esSoloLectura ? (
+            renderReadonlyTag(data?.creditoSuspendido)
+          ) : (
+            <Form.Item name="creditoSuspendido" noStyle valuePropName="checked">
+              <Switch checkedChildren="Sí" unCheckedChildren="No" />
+            </Form.Item>
+          )
+        )}
+        {renderCampo('Exento Impuesto',
+          esSoloLectura ? (
+            renderReadonlyTag(data?.exentoImpuesto)
+          ) : (
+            <Form.Item name="exentoImpuesto" noStyle valuePropName="checked">
+              <Switch checkedChildren="Sí" unCheckedChildren="No" />
+            </Form.Item>
+          )
+        )}
+      </Descriptions>
+    </Card>
+  );
+
+  // ===== Sidebar (solo desktop) =====
+  const renderSidebar = () => (
+    <Card title="Resumen Financiero" className="paces-card" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Balance Actual</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--paces-primary)' }}>
+            {formatCurrency(data?.balance ?? 0)}
+          </div>
+        </div>
+        <Divider style={{ margin: '4px 0' }} />
+        <div>
+          <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Fecha Último Pago</div>
+          <div style={{ fontSize: 14, fontWeight: 500 }}>{data?.fechaUltimoPago || '-'}</div>
+        </div>
+        <div>
+          <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Monto Último Pago</div>
+          <div style={{ fontSize: 14, fontWeight: 500 }}>{data?.montoUltimoPago != null ? formatCurrency(data.montoUltimoPago) : '-'}</div>
+        </div>
+        <div>
+          <div className="paces-text-secondary" style={{ fontSize: 12, marginBottom: 2 }}>Documento Último Pago</div>
+          <div style={{ fontSize: 14, fontWeight: 500 }}>{data?.documentoUltimoPago || '-'}</div>
+        </div>
       </div>
+    </Card>
+  );
 
-      <Form form={form} layout="vertical">
+  // ===== Render Principal =====
+  const renderFormulario = () => (
+    <Form form={form} layout="vertical" size="small">
+      {isLarge ? (
         <Row gutter={16}>
-          <Col xs={24} lg={8}>
-            {/* Datos Generales */}
-            <Card title="Datos Generales" className="paces-card" style={{ marginBottom: 16 }}>
-              <Descriptions bordered size="small" column={1}>
-                <Descriptions.Item label="Código">
-                  {esSoloLectura ? (
-                    <Text style={{ fontFamily: 'monospace' }}>{data?.codigo}</Text>
-                  ) : (
-                    <Form.Item name="codigo" noStyle rules={[{ required: true, message: 'Obligatorio' }]}>
-                      <Input placeholder="Código" maxLength={20} />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Nombre">
-                  {esSoloLectura ? (
-                    <Text>{data?.nombre}</Text>
-                  ) : (
-                    <Form.Item name="nombre" noStyle rules={[{ required: true, message: 'Obligatorio' }]}>
-                      <Input placeholder="Nombre del cliente" maxLength={100} />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Tipo Identificación">
-                  {esSoloLectura ? (
-                    <Text>{data?.tipoIdentificacion}</Text>
-                  ) : (
-                    <Form.Item name="tipoIdentificacion" noStyle initialValue="RNC">
-                      <Select style={{ width: '100%' }}
-                        options={[
-                          { value: 'RNC', label: 'RNC' },
-                          { value: 'CEDULA', label: 'Cédula' },
-                          { value: 'PASAPORTE', label: 'Pasaporte' },
-                        ]}
-                      />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Identificación">
-                  {esSoloLectura ? (
-                    <Text>{data?.identificacion}</Text>
-                  ) : (
-                    <Form.Item name="identificacion" noStyle>
-                      <Input placeholder="Número de ID" maxLength={20} />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Teléfono">
-                  {esSoloLectura ? (
-                    <Text>{data?.telefono}</Text>
-                  ) : (
-                    <Form.Item name="telefono" noStyle>
-                      <Input placeholder="Teléfono" maxLength={20} />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Teléfono Adicional">
-                  {esSoloLectura ? (
-                    <Text>{data?.telefonoAdicional}</Text>
-                  ) : (
-                    <Form.Item name="telefonoAdicional" noStyle>
-                      <Input placeholder="Teléfono adicional" maxLength={20} />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Email">
-                  {esSoloLectura ? (
-                    <Text>{data?.correoElectronico}</Text>
-                  ) : (
-                    <Form.Item name="correoElectronico" noStyle>
-                      <Input placeholder="correo@ejemplo.com" maxLength={80} />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Dirección">
-                  {esSoloLectura ? (
-                    <Text>{data?.direccion}</Text>
-                  ) : (
-                    <Form.Item name="direccion" noStyle>
-                      <Input.TextArea placeholder="Dirección del cliente" rows={2} maxLength={200} />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Sexo">
-                  {esSoloLectura ? (
-                    <Text>{SEXO_LABEL[data?.sexo ?? -1] || '-'}</Text>
-                  ) : (
-                    <Form.Item name="sexo" noStyle>
-                      <Select style={{ width: '100%' }} allowClear placeholder="Seleccione sexo"
-                        options={[
-                          { value: 0, label: 'Masculino' },
-                          { value: 1, label: 'Femenino' },
-                        ]}
-                      />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Estado Civil">
-                  {esSoloLectura ? (
-                    <Text>{ESTADO_CIVIL_LABEL[data?.estadoCivil ?? -1] || '-'}</Text>
-                  ) : (
-                    <Form.Item name="estadoCivil" noStyle>
-                      <Select style={{ width: '100%' }} allowClear placeholder="Seleccione estado civil"
-                        options={[
-                          { value: 0, label: 'Soltero(a)' },
-                          { value: 1, label: 'Casado(a)' },
-                          { value: 2, label: 'Divorciado(a)' },
-                          { value: 3, label: 'Viudo(a)' },
-                          { value: 4, label: 'Unión Libre' },
-                        ]}
-                      />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Fecha Nacimiento">
-                  {esSoloLectura ? (
-                    <Text>{data?.fechaNacimiento}</Text>
-                  ) : (
-                    <Form.Item name="fechaNacimiento" noStyle>
-                      <Input placeholder="YYYY-MM-DD" maxLength={10} />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Nota">
-                  {esSoloLectura ? (
-                    <Text>{data?.nota}</Text>
-                  ) : (
-                    <Form.Item name="nota" noStyle>
-                      <Input.TextArea placeholder="Notas del cliente" rows={2} maxLength={500} />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Activo">
-                  {esSoloLectura ? (
-                    <Tag color={data?.activo ? 'green' : 'default'}>{data?.activo ? 'Activo' : 'Inactivo'}</Tag>
-                  ) : (
-                    <Form.Item name="activo" noStyle valuePropName="checked" initialValue={true}>
-                      <Switch checkedChildren="Sí" unCheckedChildren="No" />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-              </Descriptions>
-            </Card>
-
-            {/* Datos Financieros */}
-            <Card title="Datos Financieros" className="paces-card">
-              <Descriptions bordered size="small" column={1}>
-                <Descriptions.Item label="Límite Crédito">
-                  {esSoloLectura ? (
-                    <Text>{typeof data?.limiteCredito === 'number' ? data.limiteCredito.toLocaleString('es-DO', { minimumFractionDigits: 2 }) : '0.00'}</Text>
-                  ) : (
-                    <Form.Item name="limiteCredito" noStyle initialValue={0}>
-                      <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Días Crédito">
-                  {esSoloLectura ? (
-                    <Text>{data?.diasCredito ?? 0}</Text>
-                  ) : (
-                    <Form.Item name="diasCredito" noStyle initialValue={0}>
-                      <InputNumber min={0} style={{ width: '100%' }} />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="% Descuento">
-                  {esSoloLectura ? (
-                    <Text>{typeof data?.porcientoDescuento === 'number' ? data.porcientoDescuento.toLocaleString('es-DO', { minimumFractionDigits: 2 }) : '0.00'}</Text>
-                  ) : (
-                    <Form.Item name="porcientoDescuento" noStyle initialValue={0}>
-                      <InputNumber min={0} max={100} step={0.01} style={{ width: '100%' }} />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Margen">
-                  {esSoloLectura ? (
-                    <Text>{typeof data?.margen === 'number' ? data.margen.toLocaleString('es-DO', { minimumFractionDigits: 2 }) : '0.00'}</Text>
-                  ) : (
-                    <Form.Item name="margen" noStyle initialValue={0}>
-                      <InputNumber min={0} step={0.01} style={{ width: '100%' }} />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Crédito Suspendido">
-                  {esSoloLectura ? (
-                    <Text>{data?.creditoSuspendido ? 'Sí' : 'No'}</Text>
-                  ) : (
-                    <Form.Item name="creditoSuspendido" noStyle valuePropName="checked">
-                      <Switch checkedChildren="Sí" unCheckedChildren="No" />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Exento Impuesto">
-                  {esSoloLectura ? (
-                    <Text>{data?.exentoImpuesto ? 'Sí' : 'No'}</Text>
-                  ) : (
-                    <Form.Item name="exentoImpuesto" noStyle valuePropName="checked">
-                      <Switch checkedChildren="Sí" unCheckedChildren="No" />
-                    </Form.Item>
-                  )}
-                </Descriptions.Item>
-              </Descriptions>
+          <Col xxl={18}>
+            {renderDatosGenerales()}
+            {renderComercialFinanciero()}
+            <Card className="paces-card" styles={{ body: { padding: 0 } }}>
+              <Tabs defaultActiveKey="personas" type="card" style={{ borderRadius: 8, padding: '0 16px' }} items={tabItems} />
             </Card>
           </Col>
-
-          <Col xs={24} lg={16}>
-            {/* Tabs laterales */}
-            <Card className="paces-card">
-              <Tabs defaultActiveKey="laborales" type="card" items={tabItems} />
-            </Card>
+          <Col xxl={6}>
+            {renderSidebar()}
           </Col>
         </Row>
-      </Form>
-    </div>
+      ) : (
+        <div>
+          {renderDatosGenerales()}
+          {renderComercialFinanciero()}
+          <Card className="paces-card" styles={{ body: { padding: 0 } }}>
+            <Tabs defaultActiveKey="personas" type="card" style={{ borderRadius: 8, padding: '0 16px' }} items={tabItems} />
+          </Card>
+        </div>
+      )}
+    </Form>
+  );
+
+  return (
+    <>
+      <DetalleCatalogoLayout
+        rutaVolver="/MCliente"
+        onVolver={handleVolver}
+        loading={loading}
+        mensajeLoading="Cargando cliente..."
+        loadingError={loadingError}
+        mensajeError="Error al cargar detalle de cliente"
+        onRecargar={handleRefresh}
+        dataDisponible={esNuevo || !!data}
+        modo={esNuevo ? 'crear' : 'editar'}
+        onEditar={(!esNuevo && !editando && puedeEditar) ? () => { setEditando(true); cargarCategorias(); cargarTiposNCF(); cargarCuentasContables(); cargarMonedas(); } : undefined}
+        onGuardar={(esNuevo || editando) ? handleGuardar : undefined}
+        guardando={guardando}
+        extraActions={esNuevo ? (
+          <Button icon={<CopyOutlined />} onClick={abrirModalClonar}>
+            Clonar desde otra entidad
+          </Button>
+        ) : undefined}
+      >
+        {renderFormulario()}
+      </DetalleCatalogoLayout>
+
+      <Modal
+        title="Clonar desde otra entidad"
+        open={modalVisible}
+        onCancel={() => setModalVisible(false)}
+        width={800}
+        footer={[
+          <Button key="cancel" onClick={() => setModalVisible(false)}>Cancelar</Button>,
+          <Button key="clone" type="primary" icon={<CopyOutlined />}
+            disabled={!selectedEntity}
+            loading={clonando}
+            onClick={handleClonar}>Clonar</Button>,
+        ]}
+      >
+        <Row gutter={16}>
+          <Col span={8}>
+            <Typography.Text strong>Tipo de Entidad</Typography.Text>
+            <Table
+              dataSource={tiposEntidad}
+              columns={[{ title: 'Código', dataIndex: 'codigo', width: 80 }, { title: 'Descripción', dataIndex: 'descripcion' }]}
+              rowKey="codigo"
+              size="small"
+              pagination={false}
+              scroll={{ y: 400 }}
+              onRow={(record) => ({
+                onClick: () => setTipoSeleccionado(record.codigo),
+                style: { cursor: 'pointer', background: tipoSeleccionado === record.codigo ? '#e6f7ff' : undefined }
+              })}
+            />
+          </Col>
+          <Col span={16}>
+            <Typography.Text strong>Entidades</Typography.Text>
+            <Input.Search
+              placeholder="Buscar entidad..."
+              allowClear
+              onSearch={(value) => setSearchTexto(value)}
+              onClear={() => setSearchTexto('')}
+              style={{ marginBottom: 8 }}
+            />
+            <Table
+              dataSource={entidades}
+              loading={cargandoEntidades}
+              columns={[
+                { title: 'Código', dataIndex: 'codigo', width: 80 },
+                { title: 'Nombre', dataIndex: 'nombre' },
+                { title: 'Identificación', dataIndex: 'identificacion', width: 130 },
+              ]}
+              rowKey="codigo"
+              size="small"
+              pagination={false}
+              scroll={{ y: 400 }}
+              onRow={(record) => ({
+                onClick: () => setSelectedEntity(record),
+                style: { cursor: 'pointer', background: selectedEntity?.codigo === record.codigo ? '#e6f7ff' : undefined }
+              })}
+            />
+          </Col>
+        </Row>
+      </Modal>
+    </>
   );
 };
 

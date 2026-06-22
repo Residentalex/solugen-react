@@ -1,16 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Tag, Spin, Button, Grid, message, Alert,
+  Card, Descriptions, Tag, Grid, message,
 } from 'antd';
 import {
-  ArrowLeftOutlined, IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
+  IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { proveedorApi } from '../../api/proveedorApi';
 import type { SuplidorDTO } from '../../types/entradaAlmacen';
-import { ErrorDetalle } from '../../components';
+import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
 
 function toTitleCase(str: string): string {
   if (!str) return str;
@@ -72,42 +72,20 @@ const ProveedorDetalle: React.FC = () => {
       .finally(() => setLoading(false));
   }, [codigo, sucursalActiva, setPageTitleOverride]);
 
-  if (loading || (!data && !loadingError)) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando proveedor...</div>
-      </div>
-    );
-  }
-  if (loadingError && !data) {
-    return <ErrorDetalle mensaje="Error al cargar el documento" rutaVolver="/MProveedor" />;
-  }
   if (!data) return null;
 
   const isLarge = screens.lg ?? true;
 
   return (
-    <div>
-      {loadingError && (
-        <Alert
-          message="Error al cargar detalle de proveedor"
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          action={
-            <Button size="small" onClick={handleRefresh}>
-              Reintentar
-            </Button>
-          }
-        />
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/MProveedor')}>
-          Volver
-        </Button>
-      </div>
-
+    <DetalleCatalogoLayout
+      rutaVolver="/MProveedor"
+      loading={loading}
+      mensajeLoading="Cargando proveedor..."
+      loadingError={loadingError}
+      mensajeError="Error al cargar detalle de proveedor"
+      onRecargar={handleRefresh}
+      dataDisponible={!!data}
+    >
       <Card className="paces-card" size="small" title={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 16, fontWeight: 600 }}>Datos del Proveedor</span>
@@ -148,7 +126,7 @@ const ProveedorDetalle: React.FC = () => {
           )}
         </Descriptions>
       </Card>
-    </div>
+    </DetalleCatalogoLayout>
   );
 };
 

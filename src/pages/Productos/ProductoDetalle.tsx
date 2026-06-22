@@ -1,19 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Row, Col, Typography, message, Alert
+  Card, Descriptions, Table, Tabs, Tag, Row, Col, Typography, message,
 } from 'antd';
-import {
-  ArrowLeftOutlined,
-  EditOutlined,
-} from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { productoApi } from '../../api/productoApi';
 import type { ProductoDTO, ImpuestoProductoDTO } from '../../types/productos';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import { formatCurrency } from '../../utils/formats';
-import { ErrorDetalle } from '../../components';
+import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
 
 const { Text } = Typography;
 
@@ -113,17 +109,6 @@ const ProductoDetalle: React.FC = () => {
       });
   };
 
-  if (loading || (!data && !loadingError)) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando producto...</div>
-      </div>
-    );
-  }
-  if (loadingError && !data) {
-    return <ErrorDetalle mensaje="Error al cargar el producto" rutaVolver="/MProducto" />;
-  }
   if (!data) return null;
 
   const impuestoColumns = [
@@ -205,31 +190,16 @@ const ProductoDetalle: React.FC = () => {
   ];
 
   return (
-    <div>
-      {loadingError && (
-        <Alert
-          message="Error al cargar detalle de producto"
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          action={
-            <Button size="small" onClick={handleRefresh}>
-              Reintentar
-            </Button>
-          }
-        />
-      )}
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/MProducto')}>
-          Volver
-        </Button>
-        <div style={{ flex: 1 }} />
-        <Button type="primary" icon={<EditOutlined />} onClick={() => navigate('/MProducto')}>
-          Editar
-        </Button>
-      </div>
-
+    <DetalleCatalogoLayout
+      rutaVolver="/MProducto"
+      loading={loading}
+      mensajeLoading="Cargando producto..."
+      loadingError={loadingError}
+      mensajeError="Error al cargar detalle de producto"
+      onRecargar={handleRefresh}
+      dataDisponible={!!data}
+      onEditar={() => navigate('/MProducto')}
+    >
       <Row gutter={16}>
         {/* Columna izquierda - Datos Generales + Configuración */}
         <Col xs={24} lg={8}>
@@ -317,7 +287,7 @@ const ProductoDetalle: React.FC = () => {
           </Card>
         </Col>
       </Row>
-    </div>
+    </DetalleCatalogoLayout>
   );
 };
 

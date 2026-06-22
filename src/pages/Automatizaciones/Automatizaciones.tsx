@@ -43,6 +43,7 @@ import PermissionGate from '../../components/PermissionGate';
 import { hangfireApi } from '../../api/hangfireApi';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import type { JobHangfire, JobTemplate } from '../../types/hangfire';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
@@ -64,8 +65,6 @@ const ESTADO_BADGE: Record<string, { status: 'success' | 'error' | 'processing' 
   Ejecutando: { status: 'processing', text: 'Ejecutando' },
   NuncaEjecutado: { status: 'default', text: 'Nunca ejecutado' },
 };
-
-const SUCURSALES_FIJAS = ['ElOfertazo', 'HiperRomana', 'OrensePlaza', 'OrenseVillaHermosa'];
 
 type FrecuenciaTipo = 'hours' | 'minutes' | 'custom';
 
@@ -154,6 +153,7 @@ const Automatizaciones: React.FC = () => {
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
+  const sucursalesData = useCompanyStore((s) => s.data.sucursales);
 
   // â”€â”€ Jobs state â”€â”€
   const [page, setPage] = useState(1);
@@ -231,8 +231,10 @@ const Automatizaciones: React.FC = () => {
         label: s.nombre,
       }));
     }
-    return SUCURSALES_FIJAS.map((s) => ({ value: s, label: s }));
-  }, [sucursalesPermitidas]);
+    return (sucursalesData || [])
+      .filter((s: any) => s.sucursal >= 0 && s.sucursal <= 3)
+      .map((s: any) => ({ value: s.nombre, label: s.nombre }));
+  }, [sucursalesPermitidas, sucursalesData]);
 
   // â”€â”€ Computed â”€â”€
   const selectedTemplate = useMemo(

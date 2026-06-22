@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Modal, Input, Table, message } from 'antd';
 import { formatCurrency } from '../../utils/formats';
 import { productoApi } from '../../api/productoApi';
@@ -41,6 +41,16 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const pageSize = 10;
+  const searchRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+        searchRef.current?.focus?.();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   const productosFiltrados = useMemo(() => {
     if (!codigosPermitidos || codigosPermitidos.length === 0) return productos;
@@ -117,6 +127,7 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
       destroyOnHidden
     >
       <Input.Search
+        ref={searchRef}
         placeholder="Buscar por código o nombre..."
         allowClear
         onSearch={(val) => {

@@ -24,4 +24,13 @@ export const documentosReporteApi = {
     );
     return data;
   },
+
+  imprimirReporteConDatos: async (sucursal: number, titulo: string, items: any[]): Promise<Blob> => {
+    const { data } = await apiClient.post<Blob>(
+      `/reportes/inventario/imprimir-por-datos/${sucursal}`,
+      { titulo, items },
+      { responseType: 'blob' }
+    );
+    return data;
+  },
 };

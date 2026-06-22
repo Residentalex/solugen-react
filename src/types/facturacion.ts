@@ -1,4 +1,28 @@
 // Basado en EntidadDTO.cs + ClienteDTO.cs del backend
+
+// --- DTOs anidados para Cliente ---
+export interface TipoEntidadDTO {
+  codigo: string;
+  nombre: string;
+  idExterno?: string;
+}
+
+export interface CategoriaEntidadDTO {
+  id: number;
+  codigo: string;
+  nombre: string;
+  idExterno?: string;
+  numeroCuenta?: string;
+}
+
+export interface TipoComprobanteNCFDTO {
+  id: number;
+  codigo: string;
+  nombre: string;
+  activo: boolean;
+  idExterno?: string;
+}
+
 export interface ClienteDTO {
   // De EntidadDTO
   codigo: string;
@@ -21,13 +45,42 @@ export interface ClienteDTO {
   activo: boolean;
   idExterno?: string;
 
-  // De ClienteDTO extra
+  // De EntidadDTO - nuevos campos
+  sector?: string;
+  ciudad?: string;
+  zona?: string;
+  nombreComercial?: string;
+  contacto?: string;
+  telefonoContacto?: string;
+  fax?: string;
+  fechaIngreso?: string;   // DateTime? del backend
+  tipoEntidad?: TipoEntidadDTO;
+  categoria?: CategoriaEntidadDTO;
+  cuentaContable?: import('./contabilidad').CuentaContableDTO;
+
+  // De ClienteDTO extra - existentes
   limiteCredito: number;
   diasCredito: number;
   creditoSuspendido: boolean;
   exentoImpuesto: boolean;
   margen: number;
   porcientoDescuento: number;
+
+  // De ClienteDTO extra - nuevos campos
+  tipoNcf?: TipoComprobanteNCFDTO;
+  codigoVendedor?: string;
+  vendedorNombre?: string;
+  codigoListaPrecio?: string;
+  listaPrecioNombre?: string;
+  perfil?: string;
+  balance?: number;
+  comision?: number;
+  fechaUltimoPago?: string;
+  montoUltimoPago?: number;
+  documentoUltimoPago?: string;
+  facebook?: string;
+  twitter?: string;
+  codigoMoneda?: string;
 }
 
 // Basado en PuntoVentaDTO.cs
@@ -94,6 +147,43 @@ export interface ResumenTipoNcfSucursalDTO {
   cantidad: number;
 }
 
+// --- DTOs para tabs de ClienteDetalle (Fase 2) ---
+
+export interface PersonaAutorizadaDTO {
+  id?: string;
+  codigoCliente?: string;
+  codigo?: string;
+  nombre: string;
+  cedula?: string;
+  telefono?: string;
+  fax?: string;
+  email?: string;
+  direccion?: string;
+  noContrato?: string;
+  creditoFiscal?: boolean;
+}
+
+export interface GrupoProductoClienteDTO {
+  id?: string;
+  codigoCliente?: string;
+  codigoGrupo?: string;
+  nombreGrupo?: string;
+  porcentajeDescuento?: number;
+}
+
+export interface CuentaBancariaClienteDTO {
+  id?: string;
+  codigo?: string;
+  nombre?: string;
+  codigoBanco?: string;
+  cuentaBancaria?: string;
+  tipoCuenta?: string;
+  codigoMoneda?: string;
+  inactiva?: boolean;
+  porDefecto?: boolean;
+  numeroCuentaContable?: string;
+}
+
 export interface EnvioDGIIDTO {
   id?: number;
   ncf?: string;
@@ -106,4 +196,48 @@ export interface EnvioDGIIDTO {
   mensaje?: string;
   archivo?: string;
   codigoQR?: string;
+  fecha?: string;          // c.fecha del SQL
+  documento?: string;      // c.documento del SQL
+  cliente?: string;        // c.nombre AS cliente del SQL
+  respuestaDGII?: string;  // n.respDGII del SQL - mensaje de error
+}
+
+// --- DTOs para ContactosTab (Teléfonos, Emails, Contactos, Direcciones múltiples) ---
+
+export interface EntidadTelefonoDTO {
+  id: number;
+  codigoEntidad: string;
+  tipo: string;
+  numero: string;
+  extension: string;
+  principal: boolean;
+}
+
+export interface EntidadEmailDTO {
+  id: number;
+  codigoEntidad: string;
+  tipo: string;
+  email: string;
+  principal: boolean;
+}
+
+export interface EntidadContactoDTO {
+  id: number;
+  codigoEntidad: string;
+  nombre: string;
+  cargo: string;
+  telefono: string;
+  email: string;
+  principal: boolean;
+}
+
+export interface EntidadDireccionDTO {
+  id: number;
+  codigoEntidad: string;
+  tipo: string;
+  direccion: string;
+  ciudad: string;
+  provincia: string;
+  sector: string;
+  principal: boolean;
 }

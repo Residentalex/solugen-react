@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import { Modal, Table, Button, Space, message } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
 import { apiClient } from '../../api/client';
@@ -48,11 +48,12 @@ const BuscarDevolucionModal: React.FC<BuscarDevolucionModalProps> = ({ open, onC
     const selected = selectedRowKeys.map((key) => {
       const dev = devoluciones.find((d) => d.id === key);
       return {
-        id: dev?.id,
+        transaccionAsociadaID: dev?.id,
         documento: dev?.documento,
         fecha: dev?.fecha,
-        monto: dev?.total || 0,
-        montoAsignado: 0,
+        montoOriginal: dev?.total || 0,
+        monto: 0,
+        esDocumentoInventario: true,
       };
     });
     onSelect(selected);
@@ -73,7 +74,7 @@ const BuscarDevolucionModal: React.FC<BuscarDevolucionModalProps> = ({ open, onC
         </Space>
       }
       width={700}
-      destroyOnClose
+      destroyOnHidden
     >
       <Table
         dataSource={devoluciones}

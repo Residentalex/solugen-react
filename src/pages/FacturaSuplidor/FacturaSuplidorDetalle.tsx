@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Tooltip, Modal, Alert, App
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Tooltip, Modal, Alert, App, Switch
 } from 'antd';
 import {
   LockFilled,
@@ -60,6 +60,8 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const [recalculando, setRecalculando] = useState(false);
   const monedaDefault = getMonedaSucursalActiva();
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
+  const [mostrandoReverso, setMostrandoReverso] = useState(false);
+  const [reversoData, setReversoData] = useState<any>(null);
 
   const { message: messageApi } = App.useApp();
   const operacion = useAplicar();
@@ -84,6 +86,15 @@ const FacturaSuplidorDetalle: React.FC = () => {
         setData(res);
         const data = res as any;
         setPageTitleOverride(`${data.documento.codigo}-${data.noDocumento}`);
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        if (res.estado === 3 && (res as any).reversoID) {
+          facturaSuplidorApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
         // Verificar scan
         facturaSuplidorApi.verificarScan(sucursalActiva, parseInt(id))
           .then((scanRes) => setTieneScan(scanRes.existe))
@@ -118,6 +129,15 @@ const FacturaSuplidorDetalle: React.FC = () => {
         setData(res);
         const data = res as any;
         setPageTitleOverride(`${data.documento.codigo}-${data.noDocumento}`);
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        if (res.estado === 3 && (res as any).reversoID) {
+          facturaSuplidorApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
         // Verificar scan
         facturaSuplidorApi.verificarScan(sucursalActiva, parseInt(id))
           .then((scanRes) => setTieneScan(scanRes.existe))
@@ -138,6 +158,17 @@ const FacturaSuplidorDetalle: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride, messageApi]);
+
+  // Actualizar el título del header al alternar entre Original/Reverso
+  useEffect(() => {
+    if (mostrandoReverso && reversoData) {
+      const doc = reversoData as any;
+      setPageTitleOverride(`${doc.documento?.codigo || 'RDE'}-${doc.noDocumento || ''}`);
+    } else if (data) {
+      const doc = data as any;
+      setPageTitleOverride(`${doc.documento?.codigo || 'RDE'}-${doc.noDocumento || ''}`);
+    }
+  }, [mostrandoReverso, reversoData, data, setPageTitleOverride]);
 
   const handleVerScanner = async () => {
     if (!id) return;
@@ -193,7 +224,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
       messageApi.info('El concepto no genera asientos contables.');
       return;
     }
-    if (data.estado !== 1) {
+    if (data.estado !== 1 && data.estado !== 3) {
       messageApi.info('Debe aplicar el documento antes de postear.');
       return;
     }
@@ -335,9 +366,10 @@ const FacturaSuplidorDetalle: React.FC = () => {
     return null;
   }
 
+  const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const isLarge = screens.xxl === true;
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = data.periodo === 6;
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[documentoActivo.estado] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = documentoActivo.periodo === 6;
   const tienePagos = pagosAsociados.length > 0;
 
   // asientoColumns reemplazado por AsientosContableTable compartido
@@ -359,9 +391,9 @@ const FacturaSuplidorDetalle: React.FC = () => {
       )}
       <DetalleToolbar
         modulo="FRDE"
-        estado={data.estado}
-        periodo={data.periodo}
-        revisado={data.revisado}
+        estado={documentoActivo.estado}
+        periodo={documentoActivo.periodo}
+        revisado={documentoActivo.revisado}
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
@@ -398,18 +430,39 @@ const FacturaSuplidorDetalle: React.FC = () => {
         onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
         extraButtons={
-          <PermissionGate accion="EDITAR">
-            <Button
-              icon={<RedoOutlined />}
-              onClick={handleRecalcular}
-              loading={recalculando}
-              disabled={data.estado !== 1}
-            >
-              Recalcular
-            </Button>
-          </PermissionGate>
+          <>
+            {data?.estado === 3 && reversoData && (
+              <Switch
+                checked={mostrandoReverso}
+                checkedChildren="Reverso"
+                unCheckedChildren="Original"
+                onChange={(checked) => setMostrandoReverso(checked)}
+                style={{ marginLeft: 8 }}
+              />
+            )}
+            <PermissionGate permisoEspecial="pe_recalcular">
+              <Button
+                icon={<RedoOutlined />}
+                onClick={handleRecalcular}
+                loading={recalculando}
+                disabled={data.estado !== 1}
+              >
+                Recalcular
+              </Button>
+            </PermissionGate>
+          </>
         }
       />
+
+      {mostrandoReverso && (
+        <Alert
+          message="Viendo documento de Reverso"
+          description="Este documento es el reverso generado al anular el documento original."
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {isLarge ? (
         <Row gutter={16}>
@@ -443,18 +496,18 @@ const FacturaSuplidorDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
                 <Descriptions.Item label="Tipo">
-                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                  {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
 
-                <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Vencimiento">{data.fechaVencimiento ? formatDate(data.fechaVencimiento) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Tipo Compra">{data.tipoCompra === 'C' ? 'Contado' : data.tipoCompra === 'D' ? 'Crédito' : data.tipoCompra || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Tasa">{documentoActivo.tasa ? formatNumber(documentoActivo.tasa) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Vencimiento">{documentoActivo.fechaVencimiento ? formatDate(documentoActivo.fechaVencimiento) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Tipo Compra">{documentoActivo.tipoCompra === 'C' ? 'Contado' : documentoActivo.tipoCompra === 'D' ? 'Crédito' : documentoActivo.tipoCompra || '-'}</Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -464,26 +517,46 @@ const FacturaSuplidorDetalle: React.FC = () => {
               items={[
                 {
                   key: 'documentos',
-                  label: `Documentos (${data?.transaccionesAsociadas?.length || 0})`,
+                  label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <TransaccionesAsociadasCard
-                      documentos={data?.transaccionesAsociadas || []}
+                      documentos={documentoActivo?.transaccionesAsociadas || []}
                       readOnly={false}
                     />
                   ),
                 },
                 {
                   key: 'asientos',
-                  label: `Asientos (${data.asientos?.length || 0})`,
+                  label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                    <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                  ),
+                },
+                {
+                  key: 'impuestos',
+                  label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
+                  children: (
+                    <Table
+                      dataSource={documentoActivo.impuestosFactura || []}
+                      rowKey={(r: any) => r.transactionID + (r.impuesto?.idExterno || '')}
+                      size="small"
+                      pagination={false}
+                      scroll={{ x: 600 }}
+                      columns={[
+                        { title: 'Impuesto / Retención', key: 'nombre', render: (_: any, r: any) => r.impuesto?.nombre || '-' },
+                        { title: 'Porcentaje', key: 'porcentaje', width: 100, align: 'right' as const, render: (_: any, r: any) => r.impuesto?.porcentaje != null ? `${r.impuesto.porcentaje}%` : '-' },
+                        { title: 'No. Cuenta', key: 'cuenta', width: 150, render: (_: any, r: any) => r.impuesto?.noCuenta || '-' },
+                        { title: 'Monto', key: 'monto', width: 140, align: 'right' as const, render: (_: any, r: any) => formatCurrency(r.monto || 0) },
+                        { title: 'Tipo', key: 'tipo', width: 120, render: (_: any, r: any) => r.tipo || (r.impuesto?.tipo === 1 ? 'Impuesto' : r.impuesto?.tipo === 2 ? 'Retención' : '-') },
+                      ]}
+                    />
                   ),
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${data.logs?.length || 0})`,
+                  label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
-                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
+                    <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
@@ -491,11 +564,11 @@ const FacturaSuplidorDetalle: React.FC = () => {
           </Col>
 
           <Col xxl={6}>
-            <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={false}
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
-              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
-              tasa={data.tasa ?? 1}
+            <EntidadCard entidad={documentoActivo.suplidor} entidadSecundaria={documentoActivo.entidad} fallbackTitulo="Suplidor" />
+            <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones} total={documentoActivo.total} alignRight={false}
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
+              tasa={documentoActivo.tasa ?? 1}
             />
             <DocumentosRelacionadosCard
               documentos={documentosRelacionados}
@@ -534,17 +607,17 @@ const FacturaSuplidorDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
                 <Descriptions.Item label="Tipo">
-                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                  {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
 
-                <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Vencimiento">{data.fechaVencimiento ? formatDate(data.fechaVencimiento) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Tasa">{documentoActivo.tasa ? formatNumber(documentoActivo.tasa) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Vencimiento">{documentoActivo.fechaVencimiento ? formatDate(documentoActivo.fechaVencimiento) : '-'}</Descriptions.Item>
               </Descriptions>
           </Card>
 
@@ -554,36 +627,56 @@ const FacturaSuplidorDetalle: React.FC = () => {
             items={[
               {
                 key: 'documentos',
-                label: `Documentos (${data?.transaccionesAsociadas?.length || 0})`,
+                label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                 children: (
                   <TransaccionesAsociadasCard
-                    documentos={data?.transaccionesAsociadas || []}
+                    documentos={documentoActivo?.transaccionesAsociadas || []}
                     readOnly={false}
                   />
                 ),
               },
               {
                 key: 'asientos',
-                label: `Asientos (${data.asientos?.length || 0})`,
+                label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                 children: (
-                  <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                  <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                ),
+              },
+              {
+                key: 'impuestos',
+                label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
+                children: (
+                  <Table
+                    dataSource={documentoActivo.impuestosFactura || []}
+                    rowKey={(r: any) => r.transactionID + (r.impuesto?.idExterno || '')}
+                    size="small"
+                    pagination={false}
+                    scroll={{ x: 600 }}
+                    columns={[
+                      { title: 'Impuesto / Retención', key: 'nombre', render: (_: any, r: any) => r.impuesto?.nombre || '-' },
+                      { title: 'Porcentaje', key: 'porcentaje', width: 100, align: 'right' as const, render: (_: any, r: any) => r.impuesto?.porcentaje != null ? `${r.impuesto.porcentaje}%` : '-' },
+                      { title: 'No. Cuenta', key: 'cuenta', width: 150, render: (_: any, r: any) => r.impuesto?.noCuenta || '-' },
+                      { title: 'Monto', key: 'monto', width: 140, align: 'right' as const, render: (_: any, r: any) => formatCurrency(r.monto || 0) },
+                      { title: 'Tipo', key: 'tipo', width: 120, render: (_: any, r: any) => r.tipo || (r.impuesto?.tipo === 1 ? 'Impuesto' : r.impuesto?.tipo === 2 ? 'Retención' : '-') },
+                    ]}
+                  />
                 ),
               },
               {
                 key: 'historial',
-                label: `Historial (${data.logs?.length || 0})`,
+                label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
-                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
+                    <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
           />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} retenciones={data.retenciones} total={data.total} alignRight={true}
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
-              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
-              tasa={data.tasa ?? 1}
+            <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones} total={documentoActivo.total} alignRight={true}
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
+              tasa={documentoActivo.tasa ?? 1}
             />
           </div>
 

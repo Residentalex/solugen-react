@@ -403,6 +403,7 @@ const DevolucionCompraFormulario: React.FC = () => {
           cantidad: d.cantidad || 0,
           devuelto: d.devuelto || 0,
           costo: d.costo || 0,
+          porcentajeDescuento: d.porcentajeDescuento || 0,
           familia: d.familia,
           medida: d.medida,
           impuesto: d.impuesto,
@@ -509,34 +510,59 @@ const DevolucionCompraFormulario: React.FC = () => {
     const totalImp = detalles.reduce((s, d) => s + (d.impuestos || 0), 0);
     const total = detalles.reduce((s, d) => s + (d.total || 0), 0);
 
+    // Saneamiento de campos largos para evitar "string right truncation" en Firebird
+    const nota = (values.nota || '').slice(0, 1500);
+    const ncf = (values.ncf || '').slice(0, 19);
+    const referencia = (selectedEntrada?.documento
+      ? `${selectedEntrada.documento.codigo || 'ENP'}-${selectedEntrada.noDocumento || ''}`
+      : (values.referencia || '')).slice(0, 50);
+    const nombreEntidad = (entidadSel?.nombre || '').slice(0, 60);
+    const identificacionEntidad = (entidadSel?.identificacion || '').slice(0, 15);
+
+    // Sanea los detalles (DTRANSAC): COD_PRO=VARCHAR(10), DESCRIPCION=VARCHAR(120), REFERENCIA=VARCHAR(50)
+    const detallesSeguros = detalles.map((d) => ({
+      ...calcularFila(d),
+      codigo: (d.codigo || '').slice(0, 10),
+      articulo: (d.articulo || '').slice(0, 120),
+      referencia: (d.referencia || '').slice(0, 50),
+      medida: d.medida ? {
+        ...d.medida,
+        idExterno: typeof d.medida.idExterno === 'number'
+          ? d.medida.idExterno
+          : (String(d.medida.idExterno || '')).slice(0, 10),
+      } : undefined,
+      familia: (d.familia && /^\d+$/.test(String(d.familia.idExterno || '')))
+        ? d.familia
+        : undefined,
+    }));
+
     return {
       id: base.id || 0,
       fechaDocumento: fechaDoc,
       noDocumento: base.noDocumento || '',
       estado: base.estado || 0,
       periodo: base.periodo || new Date().getMonth() + 1,
-      ncf: values.ncf || '',
-      referencia: selectedEntrada?.documento 
-        ? `${selectedEntrada.documento.codigo || 'ENP'}-${selectedEntrada.noDocumento || ''}` 
-        : (values.referencia || ''),
-      nota: values.nota || '',
+      ncf,
+      referencia,
+      nota,
       subTotal: Math.round(totalSub * 100) / 100,
       descuento: Math.round(totalDesc * 100) / 100,
       impuestos: Math.round(totalImp * 100) / 100,
       total: Math.round(total * 100) / 100,
       tasa: values.tasa || 1,
+      tipoDocumento: base.tipoDocumento ?? 24,
       tipoDocumentoExterno: selectedTipo?.idExterno,
       documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       moneda: base.moneda || getMonedaSucursalActiva(),
       almacen: selectedAlmacen || { nombre: '', codigo: '' },
-      suplidor: entidadSel || { nombre: '', codigo: '', identificacion: '' },
+      suplidor: entidadSel ? { ...entidadSel, nombre: nombreEntidad, identificacion: identificacionEntidad } : { nombre: '', codigo: '', identificacion: '' },
       entidad: entidadSel
-        ? { nombre: entidadSel.nombre, codigo: entidadSel.codigo, identificacion: entidadSel.identificacion || '', telefono: entidadSel.telefono, direccion: entidadSel.direccion }
+        ? { nombre: nombreEntidad, codigo: entidadSel.codigo, identificacion: identificacionEntidad, telefono: entidadSel.telefono, direccion: entidadSel.direccion }
         : { nombre: '', codigo: '', identificacion: '' },
       tipo: selectedTipo || null,
       entrada: selectedEntrada || null,
-      detalles: detalles.map((d) => calcularFila(d)),
+      detalles: detallesSeguros,
       asientos: base.asientos || [],
       logs: base.logs || [],
     };
@@ -708,6 +734,7 @@ const DevolucionCompraFormulario: React.FC = () => {
             cantidad: d.cantidad || 0,
             devuelto: d.devuelto || 0,
             costo: d.costo || 0,
+            porcentajeDescuento: d.porcentajeDescuento || 0,
             familia: d.familia,
             medida: d.medida,
             impuesto: d.impuesto,
@@ -733,6 +760,7 @@ const DevolucionCompraFormulario: React.FC = () => {
               cantidad: d.cantidad || 0,
               devuelto: d.devuelto || 0,
               costo: d.costo || 0,
+              porcentajeDescuento: d.porcentajeDescuento || 0,
               familia: d.familia,
               medida: d.medida,
               impuesto: d.impuesto,
@@ -796,7 +824,13 @@ const DevolucionCompraFormulario: React.FC = () => {
     setDetalles((prev) =>
       prev.map((d) => {
         if (d.id !== idFila) return d;
-        const updated = { ...d, [field]: value };
+        let updated = { ...d, [field]: value };
+        // Si el campo es 'descuento' (modo pesos), calcular porcentaje equivalente
+        if (field === 'descuento') {
+          const subTotal = (updated.cantidad || 0) * (updated.costo || 0);
+          const pctDesc = subTotal > 0 ? (Number(value) / subTotal) * 100 : 0;
+          updated.porcentajeDescuento = Math.round(pctDesc * 100) / 100;
+        }
         return calcularFila(updated);
       })
     );
@@ -941,6 +975,43 @@ const DevolucionCompraFormulario: React.FC = () => {
     total: detalles.reduce((s, d) => s + (d.total || 0), 0),
   };
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setData(res);
+        setDetalles(res.detalles || []);
+        setSelectedTipo(res.tipo || null);
+        setSelectedConcepto(res.concepto || null);
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
+        setSelectedEntidad(res.suplidor || res.entidad || null);
+        setSelectedAlmacen(res.almacen || null);
+        setSelectedEntrada(res.entrada || null);
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          tipo: res.tipo?.codigo || '',
+          concepto: res.concepto?.codigo || '',
+          suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
+          almacen: res.almacen?.codigo || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          ncf: res.ncf || '',
+          referencia: res.referencia || '',
+          moneda: res.moneda?.nombre || '',
+          tasa: res.tasa || 1,
+          nota: res.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = extraerMensajeError(err, 'Error al recargar');
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   // ===== Columnas de la tabla de asientos =====
   function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
   function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
@@ -969,6 +1040,7 @@ const DevolucionCompraFormulario: React.FC = () => {
   const estadoInfo = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Borrador', color: 'default' };
 
   // ===== Encabezado del formulario =====
+  const documentoTieneTipos = tiposCache.length > 0;
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
@@ -1055,14 +1127,14 @@ const DevolucionCompraFormulario: React.FC = () => {
                   placeholder=" "
                   value={conceptoSearchText}
                   readOnly
-                  disabled={!selectedTipo}
+                  disabled={documentoTieneTipos && !selectedTipo}
                   suffix={
                     <SearchOutlined
-                      onClick={() => selectedTipo && handleConceptoSearchClick()}
-                      style={{ cursor: selectedTipo ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
+                      onClick={() => (!documentoTieneTipos || selectedTipo) && handleConceptoSearchClick()}
+                      style={{ cursor: (!documentoTieneTipos || selectedTipo) ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
                     />
                   }
-                  onClick={() => selectedTipo && handleConceptoSearchClick()}
+                  onClick={() => (!documentoTieneTipos || selectedTipo) && handleConceptoSearchClick()}
                 />
               </FloatingField>
             </div>
@@ -1506,43 +1578,6 @@ const DevolucionCompraFormulario: React.FC = () => {
       },
     },
   ];
-
-  const handleRefresh = useCallback(() => {
-    if (mode === 'crear') return;
-    if (!id) return;
-    setLoadingError(false);
-    setLoading(true);
-    devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        setData(res);
-        setDetalles(res.detalles || []);
-        setSelectedTipo(res.tipo || null);
-        setSelectedConcepto(res.concepto || null);
-        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
-        setSelectedEntidad(res.suplidor || res.entidad || null);
-        setSelectedAlmacen(res.almacen || null);
-        setSelectedEntrada(res.entrada || null);
-        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
-        form.setFieldsValue({
-          tipo: res.tipo?.codigo || '',
-          concepto: res.concepto?.codigo || '',
-          suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
-          almacen: res.almacen?.codigo || '',
-          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          ncf: res.ncf || '',
-          referencia: res.referencia || '',
-          moneda: res.moneda?.nombre || '',
-          tasa: res.tasa || 1,
-          nota: res.nota || '',
-        });
-      })
-      .catch((err: any) => {
-        const msg = extraerMensajeError(err, 'Error al recargar');
-        message.error(msg);
-        setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form, mode]);
 
   return (
     <div>

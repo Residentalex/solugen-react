@@ -26,6 +26,14 @@ export interface SalidaAlmacenDTO {
   nota: string;
   total: number;
   documento: DocumentoDTO;
+  // === CAMPOS PARA TRANSFERENCIA ENTRE SUCURSALES (RSAPENP) ===
+  tipoDocumento?: number;
+  nombreEntidad?: string;
+  codigoAlmacenOrigen?: string;
+  codigoAlmacenDestino?: string;
+  creadoPor?: { id: number; nombre: string; nombreUsuario: string };
+  concepto?: { codigo: string; nombre: string } | null;
+  suplidor?: { nombre: string; codigo: string } | null;
 }
 
 // ===== DTO completo para Salida Almacén (SAP) =====

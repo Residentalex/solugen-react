@@ -64,6 +64,7 @@ export function useAplicar() {
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(hubUrl)
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+      .configureLogging(signalR.LogLevel.Warning)
       .build();
 
     connection.onreconnecting(() => {

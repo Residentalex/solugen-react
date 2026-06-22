@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import { Modal, Table, Button, Space, message, InputNumber } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
 import { apiClient } from '../../api/client';
@@ -13,10 +13,18 @@ interface BuscarDocumentoModalProps {
   origen?: number;  // 0=Debito, 1=Credito (viene del padre, como el escritorio)
   esDocumentoInventario?: boolean;
   montoTotal?: number;
+  /** IDs de documentos ya asociados, se pre-seleccionan al abrir el modal */
+  documentosIniciales?: number[];
+  /** Texto del documento a excluir (ej: "RI-000123") */
+  documentoEnviado?: string;
+  /** Si false, el monto se asigna automaticamente y el InputNumber es readonly */
+  puedeAsignar?: boolean;
 }
 
 const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
-  open, onClose, onSelect, tipoEntidad, codEntidad, origen, esDocumentoInventario, montoTotal
+  open, onClose, onSelect, tipoEntidad, codEntidad, origen,
+  esDocumentoInventario, montoTotal,
+  documentosIniciales, documentoEnviado, puedeAsignar = true,
 }) => {
   const TIPO_DOC_CODES: string[] = [
     'AID','AIC','ABN','AJA','CBI','CDC','CHK','CHN','CIE','CIT',
@@ -38,7 +46,16 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   const [montoADistribuir, setMontoADistribuir] = useState(0);
   const [distribuido, setDistribuido] = useState(0);
 
-  // ===== Cálculo de pendiente (misma lógica que desktop VTransaccionesPendientes) =====
+  // ===== Helper: construir codigo completo del documento =====
+  const obtenerCodigoCompleto = useCallback((doc: any): string => {
+    const codigoTipo = doc?.documento?.codigo
+      || (typeof doc?.tipoDocumento === 'number' ? TIPO_DOC_CODES[doc.tipoDocumento] : doc?.tipoDocumento)
+      || '';
+    const num = doc?.noDocumento || '';
+    return codigoTipo ? `${codigoTipo}-${num}` : num;
+  }, []);
+
+  // ===== CÃ¡lculo de pendiente (misma lÃ³gica que desktop VTransaccionesPendientes) =====
   // Para SUP: pendiente = total - (origen Credito ? creditos : debitos)
   // Para CLI: pendiente = total - (origen Credito ? debitos : creditos)
   // origen viene de las props (como el escritorio con vTransacciones.origen)
@@ -51,8 +68,8 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   }, [tipoEntidad, origen]);
 
   // ===== Cargar documentos pendientes =====
-  const cargar = useCallback(async () => {
-    if (!codEntidad) { setDocumentos([]); return; }
+  const cargar = useCallback(async (): Promise<any[]> => {
+    if (!codEntidad) { setDocumentos([]); return []; }
     setLoading(true);
     try {
       const endpoint = esDocumentoInventario
@@ -64,27 +81,109 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
 
       const { data } = await apiClient.get<any>(endpoint, { params });
       let docs = data?.data || [];
+
+      // Filtrar solo documentos con pendiente > 0
       docs = docs.filter((d: any) => calcularPendiente(d) > 0);
+
+      // ===== Filtrar por origenCuenta opuesto (igual que VTransaccionesPendientes del escritorio) =====
+      // Si recibimos origen, mostrar SOLO documentos con OrigenCuenta opuesto al del RI
+      if (origen !== undefined) {
+        docs = docs.filter((d: any) => {
+          const docOrigen = d.documento?.origenCuenta ?? d.origenCuenta;
+          if (docOrigen === undefined) return true;
+          return docOrigen !== origen;
+        });
+      }
+
+      // ===== Filtrar documentoEnviado =====
+      if (documentoEnviado) {
+        docs = docs.filter((d: any) => obtenerCodigoCompleto(d) !== documentoEnviado);
+      }
+
       setDocumentos(docs);
+      return docs;
     } catch {
       message.error('Error al cargar documentos pendientes');
+      return [];
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva, tipoEntidad, codEntidad, esDocumentoInventario]);
+  }, [sucursalActiva, tipoEntidad, codEntidad, esDocumentoInventario, documentoEnviado, obtenerCodigoCompleto, calcularPendiente]);
 
-  // ===== Resetear estados al abrir =====
+  // ===== Pre-seleccionar filas y precargar montos al abrir el modal =====
   useEffect(() => {
     if (open) {
-      cargar();
       setSelectedRowKeys([]);
       setMontoADistribuir(montoTotal || 0);
       setDistribuido(0);
       setMontosPorFila({});
-    }
-  }, [open, cargar, montoTotal]);
 
-  // ===== Asignar montos automáticamente =====
+      cargar().then((docs) => {
+        // Una vez cargados los documentos, establecer selecciÃ³n inicial y montos
+        if (documentosIniciales && documentosIniciales.length > 0) {
+          setSelectedRowKeys(documentosIniciales);
+          // Precargar montos respetando montoADistribuir
+          const montosIniciales: Record<string, number> = {};
+          let restante = montoTotal || 0;
+          (documentosIniciales || []).forEach((id) => {
+            const doc = docs.find((d: any) => d.id === id);
+            if (!doc) return;
+            const pendiente = calcularPendiente(doc);
+            if (pendiente <= 0 || restante <= 0) {
+              montosIniciales[String(id)] = 0;
+              return;
+            }
+            const asignar = Math.min(pendiente, restante);
+            montosIniciales[String(id)] = asignar;
+            restante -= asignar;
+          });
+          setMontosPorFila(montosIniciales);
+        }
+      });
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ===== Asignar montos automÃ¡ticamente al seleccionar/deseleccionar filas =====
+  const handleSelectionChange = (keys: React.Key[]) => {
+    // Detectar filas agregadas y removidas
+    const prevKeys = selectedRowKeys;
+    const added = keys.filter((k) => !prevKeys.includes(k));
+    const removed = prevKeys.filter((k) => !keys.includes(k));
+
+    setMontosPorFila((prev) => {
+      const nuevos = { ...prev };
+      // Filas removidas â†’ monto 0 (el disponible se recalcularÃ¡ automÃ¡ticamente con la suma)
+      removed.forEach((key) => {
+        nuevos[String(key)] = 0;
+      });
+      // Filas agregadas â†’ asignar pendiente limitado por el disponible restante
+      added.forEach((key) => {
+        const doc = documentos.find((d) => d.id === key);
+        if (!doc) return;
+        const pendiente = calcularPendiente(doc);
+        // Calcular cuÃ¡nto estÃ¡ ya asignado en TODAS las filas (incluyendo las ya existentes en 'nuevos')
+        const yaAsignado = Object.values(nuevos).reduce((s, v) => s + v, 0);
+        const disponible = montoADistribuir - yaAsignado;
+        if (pendiente <= 0 || disponible <= 0.01) {
+          nuevos[String(key)] = 0;
+          return;
+        }
+        nuevos[String(key)] = Math.min(pendiente, disponible);
+      });
+      return nuevos;
+    });
+
+    // Sincronizar state distribuido con el total calculado
+    const totalNuevo = keys.reduce<number>((s, id) => {
+      const doc = documentos.find((d) => d.id === id);
+      const p = doc ? calcularPendiente(doc) : 0;
+      return s + Math.min(p, Math.max(0, montoADistribuir - s));
+    }, 0);
+    setDistribuido(totalNuevo);
+    setSelectedRowKeys(keys);
+  };
+
+  // ===== Asignar montos automÃ¡ticamente =====
   const handleAsignar = () => {
     if (montoADistribuir <= 0) return;
     let restante = montoADistribuir;
@@ -145,6 +244,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       align: 'right' as const,
       render: (_: any, record: any) => {
         const pendiente = calcularPendiente(record);
+        const estaSeleccionado = selectedRowKeys.includes(record.id);
         return (
           <InputNumber
             size="small"
@@ -154,7 +254,8 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
             step={0.01}
             precision={2}
             controls={false}
-            value={montosPorFila[String(record.id)] ?? pendiente}
+            disabled={!puedeAsignar || !estaSeleccionado}
+            value={montosPorFila[String(record.id)] ?? (estaSeleccionado ? pendiente : 0)}
             onChange={(val) => {
               setMontosPorFila(prev => ({ ...prev, [String(record.id)]: val || 0 }));
             }}
@@ -164,7 +265,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     },
   ];
 
-  // ===== Confirmar selección =====
+  // ===== Confirmar selecciÃ³n =====
   const handleConfirm = () => {
     const selected = selectedRowKeys.map((key) => {
       const doc = documentos.find((d) => d.id === key);
@@ -210,7 +311,11 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
               onChange={(val) => setMontoADistribuir(val || 0)}
             />
             <span style={{ marginLeft: 16, color: '#888' }}>
-              Distribuido: {formatNumber(totalDistribuido)}
+              Distribuido: {formatNumber(totalDistribuido)} |{' '}
+              Disponible:{' '}
+              <span style={{ color: (montoADistribuir - totalDistribuido) < 0 ? '#ff4d4f' : '#52c41a' }}>
+                {formatNumber(Math.max(0, montoADistribuir - totalDistribuido))}
+              </span>
             </span>
           </Space>
           <Space>
@@ -223,7 +328,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
         </div>
       }
       width={1000}
-      destroyOnClose
+      destroyOnHidden
     >
       <Table
         dataSource={documentos}
@@ -234,7 +339,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
         pagination={{ pageSize: 10, showSizeChanger: false }}
         rowSelection={{
           selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys),
+          onChange: handleSelectionChange,
         }}
         scroll={{ x: 900 }}
       />

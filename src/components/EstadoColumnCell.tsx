@@ -1,17 +1,17 @@
 import React from 'react';
 import { Tag, Tooltip } from 'antd';
 import { CheckCircleFilled, LockFilled } from '@ant-design/icons';
-import { ESTADO_DOCUMENTO_MAP } from '../utils/estadoDocumento';
+import { resolveEstado } from '../utils/estadoDocumento';
 
 interface EstadoColumnCellProps {
-  estado: number;
+  estado: string | number;
   periodo?: number | string;
   revisado?: boolean;
 }
 
 const EstadoColumnCell: React.FC<EstadoColumnCellProps> = ({ estado, periodo, revisado }) => {
   const esCerrado = Number(periodo) === 6;
-  const info = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Desconocido', color: 'default' };
+  const info = resolveEstado(estado);
   return (
     <Tag color={info.color}>
       {info.label}

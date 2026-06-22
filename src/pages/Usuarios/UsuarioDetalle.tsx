@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Descriptions, Tag, Spin, Button, Space, message, Modal, Alert, Tabs, Typography, Table } from 'antd';
 import { ArrowLeftOutlined, KeyOutlined, StopOutlined, CheckCircleOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
+import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { Sucursal } from '../../types/auth';
 import { usuarioApi } from '../../api/usuarioApi';
 import { rolApi } from '../../api/rolApi';
@@ -31,9 +33,6 @@ const EstadoTag: React.FC<{ activo: boolean }> = ({ activo }) => (
 const CambiarClaveTag: React.FC<{ debe: boolean }> = ({ debe }) => (
   <Tag color={debe ? 'orange' : 'green'}>{debe ? 'Pendiente' : 'Completado'}</Tag>
 );
-
-/* ───────── constantes sucursales ───────── */
-const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
 
 /* ───────── tipo extendido para pantallas con roles de acceso ───────── */
 interface PantallaConRoles extends PantallaDTO {
@@ -96,30 +95,18 @@ function renderPantallasGrouped(pantallas: PantallaConRoles[]): React.ReactNode 
   );
 }
 
-const SUCURSALES: Sucursal[] = [
-  Sucursal.OrensePlaza,
-  Sucursal.HiperRomana,
-  Sucursal.OrenseVillaHermosa,
-  Sucursal.ElOfertazo,
-  Sucursal.Consolidado,
-  Sucursal.Compra,
-];
-
-const SUCURSAL_NOMBRES: Record<number, string> = {
-  [Sucursal.OrensePlaza]: 'Orense Plaza',
-  [Sucursal.HiperRomana]: 'Hiper Romana',
-  [Sucursal.OrenseVillaHermosa]: 'Orense Villa Hermosa',
-  [Sucursal.ElOfertazo]: 'El Ofertazo',
-  [Sucursal.Consolidado]: 'Consolidado',
-  [Sucursal.Compra]: 'Compra',
-};
-
 /* ───────── componente principal ───────── */
 const UsuarioDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
+
+  const sucursalesData = useCompanyStore((s) => s.data.sucursales);
+  const SUCURSALES: Sucursal[] = (sucursalesData || []).map((s: any) => s.sucursal as Sucursal);
+  const SUCURSAL_NOMBRES: Record<number, string> = Object.fromEntries(
+    (sucursalesData || []).map((s: any) => [s.sucursal, s.nombre])
+  );
 
   /* estados */
   const [data, setData] = useState<UsuarioDTO | null>(null);
@@ -128,6 +115,7 @@ const UsuarioDetalle: React.FC = () => {
   const [pantallasPorSucursal, setPantallasPorSucursal] = useState<Record<number, PantallaConRoles[]>>({});
   const [sucursalActivaTab, setSucursalActivaTab] = useState<Sucursal>(SUCURSALES[0]);
   const [cargandoPantallas, setCargandoPantallas] = useState(false);
+  const securitySucursal = useAuthStore((s) => s.securitySucursal);
 
   /* ─── efectos de montaje ─── */
   useEffect(() => {
@@ -141,7 +129,7 @@ const UsuarioDetalle: React.FC = () => {
     setLoading(true);
     setLoadingError(false);
     try {
-      const res = await usuarioApi.obtenerPorId(SUCURSAL_SEGURIDAD, parseInt(id));
+      const res = await usuarioApi.obtenerPorId(securitySucursal, parseInt(id));
       if (!res) {
         message.error('Usuario no encontrado en la sucursal seleccionada.');
         setLoadingError(true);
@@ -155,7 +143,7 @@ const UsuarioDetalle: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [id, setPageTitleOverride]);
+  }, [id, setPageTitleOverride, securitySucursal]);
 
   useEffect(() => {
     cargarUsuario();
@@ -171,7 +159,7 @@ const UsuarioDetalle: React.FC = () => {
       }
 
       // Obtener detalles completos de cada rol (incluye sus pantallas)
-      const promesas = rolesUsuario.map((r) => rolApi.obtenerPorId(SUCURSAL_SEGURIDAD, r.id));
+      const promesas = rolesUsuario.map((r) => rolApi.obtenerPorId(securitySucursal, r.id));
       const rolesCompletos = await Promise.all(promesas);
 
       // Unir pantallas de todos los roles y registrar qué rol da acceso
@@ -203,7 +191,7 @@ const UsuarioDetalle: React.FC = () => {
     } finally {
       setCargandoPantallas(false);
     }
-  }, []);
+  }, [securitySucursal]);
 
   /* cuando cambia la sucursal activa o los roles, recargar pantallas filtradas */
   const rolesSucursalActiva = useMemo(
@@ -220,7 +208,7 @@ const UsuarioDetalle: React.FC = () => {
   const handleResetPassword = useCallback(async () => {
     if (!data) return;
     try {
-      const nuevaClave = await usuarioApi.resetearPassword(SUCURSAL_SEGURIDAD, data.id);
+      const nuevaClave = await usuarioApi.resetearPassword(securitySucursal, data.id);
       Modal.success({
         title: 'Contraseña reseteada',
         content: `La nueva contraseña temporal es: ${nuevaClave}`,
@@ -228,18 +216,18 @@ const UsuarioDetalle: React.FC = () => {
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al resetear contraseña');
     }
-  }, [data]);
+  }, [data, securitySucursal]);
 
   const handleToggleEstado = useCallback(async () => {
     if (!data) return;
     try {
-      await usuarioApi.cambiarEstado(SUCURSAL_SEGURIDAD, data.id, !data.activo);
+      await usuarioApi.cambiarEstado(securitySucursal, data.id, !data.activo);
       message.success(`Usuario ${data.activo ? 'desactivado' : 'activado'} correctamente`);
       setData({ ...data, activo: !data.activo });
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cambiar estado');
     }
-  }, [data]);
+  }, [data, securitySucursal]);
 
   /* ─── render: Informacion General ─── */
   const renderInfoGeneral = () => {

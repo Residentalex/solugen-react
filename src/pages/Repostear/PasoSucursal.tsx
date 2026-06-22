@@ -1,9 +1,10 @@
 import React from 'react';
 import { Row, Col, Typography } from 'antd';
-import { BankOutlined, CheckCircleFilled, ShopOutlined, HomeOutlined, PieChartOutlined } from '@ant-design/icons';
+import { BankOutlined, CheckCircleFilled, ShopOutlined, HomeOutlined, PieChartOutlined, ShoppingCartOutlined } from '@ant-design/icons';
 import { Sucursal } from '../../types/auth';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useCompanyStore } from '../../stores/companyStore';
 
 const { Text } = Typography;
 
@@ -12,19 +13,38 @@ interface Props {
   onChange: (sucursal: Sucursal) => void;
 }
 
-const SUCURSALES: { value: Sucursal; label: string; icon: React.ReactNode }[] = [
-  { value: Sucursal.OrensePlaza, label: 'Orense Plaza', icon: <ShopOutlined /> },
-  { value: Sucursal.HiperRomana, label: 'Hiper Romana', icon: <BankOutlined /> },
-  { value: Sucursal.OrenseVillaHermosa, label: 'Villa Hermosa', icon: <HomeOutlined /> },
-  { value: Sucursal.Consolidado, label: 'Consolidado', icon: <PieChartOutlined /> },
-];
+const ICONOS_SUCURSAL: Record<string, React.ReactNode> = {
+  OrensePlaza: <ShopOutlined />,
+  HiperRomana: <BankOutlined />,
+  OrenseVillaHermosa: <HomeOutlined />,
+  ElOfertazo: <ShoppingCartOutlined />,
+  Consolidado: <PieChartOutlined />,
+  Compra: <PieChartOutlined />,
+};
 
 const PasoSucursal: React.FC<Props> = ({ value, onChange }) => {
   const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
   const isDarkMode = useUIStore((s) => s.isDarkMode);
   const primaryColor = useUIStore((s) => s.primaryColor);
+  const sucursalesData = useCompanyStore((s) => s.data.sucursales);
+
+  const sucursalId = (nombre: string): Sucursal | undefined =>
+    Sucursal[nombre as keyof typeof Sucursal];
+
+  const SUCURSALES: { value: Sucursal; label: string; icon: React.ReactNode }[] = (sucursalesData || [])
+    .filter((s: any) => sucursalId(s.sucursal) !== undefined)
+    .map((s: any) => ({
+      value: sucursalId(s.sucursal)!,
+      label: s.nombre,
+      icon: ICONOS_SUCURSAL[s.sucursal] || <BankOutlined />,
+    }));
+
   const sucursalesMostrar = SUCURSALES.filter((s) =>
-    sucursalesPermitidas.some((sp) => sp.sucursal === s.value)
+    sucursalesPermitidas.some((sp) =>
+      typeof sp.sucursal === 'string'
+        ? sucursalId(sp.sucursal) === s.value
+        : sp.sucursal === s.value
+    )
   );
 
   return (

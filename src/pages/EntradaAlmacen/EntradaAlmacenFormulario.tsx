@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Button, Space, Row, Col, Grid,
@@ -64,9 +64,9 @@ import AsientosContableTable from '../../components/AsientosContableTable';
 const { Text } = Typography;
 const { TextArea } = Input;
 
-// ===== Cálculo de fila =====
+// ===== CÃ¡lculo de fila =====
 
-// ===== Cálculo de fila =====
+// ===== CÃ¡lculo de fila =====
 function calcularFila(fila: DetalleEntradaAlmacenDTO): DetalleEntradaAlmacenDTO {
   const cantidad = fila.cantidad || 0;
   const costo = fila.costo || 0;
@@ -195,7 +195,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   );
 
-  // ===== Detalles filtrados por búsqueda =====
+  // ===== Detalles filtrados por bÃºsqueda =====
   const detallesFiltrados = detalleSearch
     ? detalles.filter((d) => {
         const q = detalleSearch.toLowerCase();
@@ -207,7 +207,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       })
     : detalles;
 
-  // ===== Estado para campos rápidos (NCF, Referencia, Tasa) =====
+  // ===== Estado para campos rÃ¡pidos (NCF, Referencia, Tasa) =====
   const [editingField, setEditingField] = useState<string | null>(null);
   const editingOriginalValue = useRef<string | number>('');
   const editingValueRef = useRef<string | number>('');
@@ -231,13 +231,13 @@ const EntradaAlmacenFormulario: React.FC = () => {
       const newValue = editingValueRef.current;
       form.setFieldsValue({ [field]: newValue });
 
-      // Si se cambió la tasa y hay detalles, preguntar si actualizar costos
+      // Si se cambiÃ³ la tasa y hay detalles, preguntar si actualizar costos
       if (field === 'tasa' && detalles.length > 0 && oldValue !== newValue) {
         Modal.confirm({
           title: 'Actualizar costos',
           icon: <ExclamationCircleOutlined />,
-          content: '¿Desea actualizar los costos en base a la nueva tasa?',
-          okText: 'Sí',
+          content: 'Â¿Desea actualizar los costos en base a la nueva tasa?',
+          okText: 'SÃ­',
           cancelText: 'No',
           onOk: () => {
             const tasaNueva = Number(newValue) || 1;
@@ -268,7 +268,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const refValue = Form.useWatch('referencia', form) || '';
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
-  // ===== Refs para la guía (Tour) =====
+  // ===== Refs para la guÃ­a (Tour) =====
   const conceptoRef = useRef<HTMLDivElement>(null);
   const suplidorRef = useRef<HTMLDivElement>(null);
   const ordenCompraRef = useRef<HTMLDivElement>(null);
@@ -278,7 +278,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
   const isLarge = screens.xl ?? true;
 
-  // ===== Determinar qué acciones mostrar según estado =====
+  // ===== Determinar quÃ© acciones mostrar segÃºn estado =====
   const estado = data?.estado ?? 0;
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
@@ -286,7 +286,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   // ===== Cargar datos de apoyo al montar =====
   useEffect(() => {
     setActiveModule(screenCode);
-    const pageTitle = mode === 'crear' ? 'Nuevo Entrada de Almacén' : '';
+    const pageTitle = mode === 'crear' ? 'Nuevo Entrada de AlmacÃ©n' : '';
     setPageTitleOverride(pageTitle);
 
     const cleanup = () => {
@@ -320,7 +320,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       return cleanup;
     }
 
-    // Cargar catálogos
+    // Cargar catÃ¡logos
     conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
     // Obtener fechas de cierre (contable e inventario)
     parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch(() => {});
@@ -361,6 +361,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
 		setSelectedEntidad(suplidorFinal);
 		setSelectedAlmacen(res.almacen || null);
 		setSelectedOC(res.ordenCompra?.id ? { id: res.ordenCompra.id, noDocumento: res.ordenCompra.noDocumento } as any : null);
+		setOcDetallesData(res.ordenCompra?.detalles || []);
 		setOrdenCompraNoDoc(res.ordenCompra?.noDocumento || '');
 
         // Poblar formulario
@@ -385,7 +386,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
           nota: res.nota || '',
         });
 
-        // Cargar suplidores según el concepto (desde Sucursal.Compra para que idExterno coincida)
+        // Cargar suplidores segÃºn el concepto (desde Sucursal.Compra para que idExterno coincida)
         if (res.concepto?.codigo) {
           conceptosApi.obtenerSuplidores(Sucursal.Compra)
             .then(setEntidadesCache)
@@ -441,7 +442,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     Modal.confirm({
       title: 'Cancelar',
       icon: <ExclamationCircleOutlined />,
-      content: '¿Esta seguro que desea cancelar los cambios realizados?',
+      content: 'Â¿Esta seguro que desea cancelar los cambios realizados?',
       okText: 'Si, cancelar',
       cancelText: 'No, continuar editando',
       okButtonProps: { danger: true },
@@ -468,6 +469,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 setSelectedEntidad(suplidorFinal);
                 setSelectedAlmacen(res.almacen || null);
                 setSelectedOC(res.ordenCompra?.id ? { id: res.ordenCompra.id, noDocumento: res.ordenCompra.noDocumento } as any : null);
+                setOcDetallesData(res.ordenCompra?.detalles || []);
                 setOrdenCompraNoDoc(res.ordenCompra?.noDocumento || '');
 
                 const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
@@ -475,7 +477,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 form.setFieldsValue({
                   conceptoNombre: res.concepto?.nombre || '',
                   concepto: res.concepto?.codigo || '',
- suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
+  suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
                   almacen: res.almacen?.codigo || '',
                   fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
                   fechaRecibo: res.fechaEntrega
@@ -510,12 +512,12 @@ const EntradaAlmacenFormulario: React.FC = () => {
     });
   };
 
-  // Validación del formulario
+  // ValidaciÃ³n del formulario
   const validarFormulario = (): string | null => {
     const values = form.getFieldsValue();
     if (!selectedConcepto) return 'El concepto es requerido';
     if (!values.suplidor) return 'El suplidor es requerido';
-    if (!values.almacen && !selectedAlmacen) return 'El almacén es requerido';
+    if (!values.almacen && !selectedAlmacen) return 'El almacÃ©n es requerido';
     if (detalles.length === 0) return 'Debe agregar al menos un detalle';
     if (!detalles.some((d) => (d.cantidad || 0) > 0)) return 'Debe tener al menos un detalle con cantidad > 0';
 
@@ -619,11 +621,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
       if (mode === 'crear') {
         const result = await entradaAlmacenApi.crear(sucursalActiva, dto);
         entidadGuardada = result;
-        message.success('Entrada de almacén creada exitosamente');
+        message.success('Entrada de almacÃ©n creada exitosamente');
       } else {
         await entradaAlmacenApi.actualizar(sucursalActiva, dto);
         entidadGuardada = { id: parseInt(id!), noDocumento: data?.noDocumento };
-        message.success('Entrada de almacén actualizada exitosamente');
+        message.success('Entrada de almacÃ©n actualizada exitosamente');
       }
 
       // ===== Crear DVC si hay devoluciones pendientes =====
@@ -637,7 +639,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
             periodo: new Date().getMonth() + 1,
             referencia: entidadGuardada?.noDocumento || data?.noDocumento || '',
             ncf: '',
-            nota: `Devolución generada desde ENP-${entidadGuardada?.noDocumento || data?.noDocumento}`,
+            nota: `DevoluciÃ³n generada desde ENP-${entidadGuardada?.noDocumento || data?.noDocumento}`,
             tasa: dto.tasa || 1,
             concepto: selectedConcepto || { nombre: '', codigo: '' },
             almacen: dto.almacen,
@@ -664,10 +666,10 @@ const EntradaAlmacenFormulario: React.FC = () => {
         } catch (errDVC: any) {
           const msgDVC = extraerMensajeError(errDVC, 'Error desconocido');
           message.warning(
-            `Entrada guardada, pero ocurrió un error al crear la DVC: ${msgDVC}`,
+            `Entrada guardada, pero ocurriÃ³ un error al crear la DVC: ${msgDVC}`,
             8
           );
-          // NO bloquear la navegación — la ENP ya se guardó
+          // NO bloquear la navegaciÃ³n â€” la ENP ya se guardÃ³
         }
       }
 
@@ -708,7 +710,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
     // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
     if (concepto.noImpuesto && detalles.some((d) => (d.porcentajeImpuesto || 0) > 0)) {
-      message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+      message.warning('El Concepto no acepta Impuestos, por lo que serÃ¡n eliminados.');
       setDetalles((prev) =>
         prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
       );
@@ -730,13 +732,13 @@ const EntradaAlmacenFormulario: React.FC = () => {
     });
 
     // === ConfigurarAlmacenDefecto ===
-    // No asignar automáticamente: la guía mostrará el paso de Almacén
+    // No asignar automÃ¡ticamente: la guÃ­a mostrarÃ¡ el paso de AlmacÃ©n
     // para que el usuario lo seleccione manualmente.
 
     // Habilitar Orden de Compra
-    // (tOrdenCompra.Enabled = true en desktop — en React ya está habilitado por defecto)
+    // (tOrdenCompra.Enabled = true en desktop â€” en React ya estÃ¡ habilitado por defecto)
 
-    // Mostrar guía
+    // Mostrar guÃ­a
     // (MostrarGuia ya se maneja con el componente EntradaAlmacenGuide)
   };
 
@@ -756,7 +758,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         Modal.confirm({
           title: 'Cargar orden de compra',
           icon: <ExclamationCircleOutlined />,
-          content: '¿Desea Borrar todos los registros?',
+          content: 'Â¿Desea Borrar todos los registros?',
           okText: 'Si',
           cancelText: 'No',
           onOk: () => resolve(true),
@@ -781,7 +783,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     const shouldLoad = await new Promise<boolean>((resolve) => {
       Modal.confirm({
         title: 'Cargar orden de compra',
-        content: '¿Desea Cargar todos los registros?',
+        content: 'Â¿Desea Cargar todos los registros?',
         okText: 'Si',
         cancelText: 'No',
         onOk: () => resolve(true),
@@ -908,17 +910,17 @@ const EntradaAlmacenFormulario: React.FC = () => {
   };
 
     const handleSeleccionarProducto = (producto: any) => {
-      // Si hay OC vinculada, validar que el producto pertenezca a la OC o sea comodín
+      // Si hay OC vinculada, validar que el producto pertenezca a la OC o sea comodÃ­n
       if (ocDetallesData.length > 0) {
         const existeEnOC = ocDetallesData.some((d: any) => d.codigo === producto.codigo);
         const esComodin = comodines.some((d: any) => (d.codigo || d.idExterno) === producto.codigo);
         if (!existeEnOC && !esComodin) {
-          message.warning(`El producto ${producto.codigo} no pertenece a la orden de compra ni es un producto comodín`);
+          message.warning(`El producto ${producto.codigo} no pertenece a la orden de compra ni es un producto comodÃ­n`);
           return;
         }
         const yaAgregado = detalles.some((d) => d.codigo === producto.codigo);
         if (yaAgregado) {
-          message.warning(`El producto ${producto.codigo} ya está agregado al detalle`);
+          message.warning(`El producto ${producto.codigo} ya estÃ¡ agregado al detalle`);
           return;
         }
       }
@@ -941,17 +943,17 @@ const EntradaAlmacenFormulario: React.FC = () => {
     };
 
     const handleScannerProducto = (producto: any) => {
-      // Si hay OC vinculada, validar que el producto pertenezca a la OC o sea comodín
+      // Si hay OC vinculada, validar que el producto pertenezca a la OC o sea comodÃ­n
       if (ocDetallesData.length > 0) {
         const existeEnOC = ocDetallesData.some((d: any) => d.codigo === producto.codigo);
         const esComodin = comodines.some((d: any) => (d.codigo || d.idExterno) === producto.codigo);
         if (!existeEnOC && !esComodin) {
-          message.warning(`El código ${producto.codigo} no pertenece a la orden de compra ni es un producto comodín`);
+          message.warning(`El cÃ³digo ${producto.codigo} no pertenece a la orden de compra ni es un producto comodÃ­n`);
           return;
         }
         const yaAgregado = detalles.some((d) => d.codigo === producto.codigo);
         if (yaAgregado) {
-          message.warning(`El producto ${producto.codigo} ya está agregado al detalle`);
+          message.warning(`El producto ${producto.codigo} ya estÃ¡ agregado al detalle`);
           return;
         }
       }
@@ -977,8 +979,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
     Modal.confirm({
       title: 'Eliminar detalle',
       icon: <ExclamationCircleOutlined />,
-      content: '¿Está seguro de eliminar este detalle?',
-      okText: 'Sí',
+      content: 'Â¿EstÃ¡ seguro de eliminar este detalle?',
+      okText: 'SÃ­',
       cancelText: 'No',
       okButtonProps: { danger: true },
       onOk: () => {
@@ -1014,7 +1016,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         if (ocDetalle) {
           const disponible = ((ocDetalle.cantidad + (ocDetalle.cantidadBonificable || 0)) - (ocDetalle.cantidadRecibida || 0));
           if ((Number(value)) > (disponible) && !ocDetalle.pesado) {
-            message.warning(`La cantidad disponible en la OC es ${disponible}. Se ajustará automáticamente.`);
+            message.warning(`La cantidad disponible en la OC es ${disponible}. Se ajustarÃ¡ automÃ¡ticamente.`);
             value = disponible;
           }
         }
@@ -1091,6 +1093,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         setSelectedEntidad(suplidorFinal);
         setSelectedAlmacen(res.almacen || null);
         setSelectedOC(res.ordenCompra?.id ? { id: res.ordenCompra.id, noDocumento: res.ordenCompra.noDocumento } as any : null);
+        setOcDetallesData(res.ordenCompra?.detalles || []);
         setOrdenCompraNoDoc(res.ordenCompra?.noDocumento || '');
 
         const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
@@ -1140,7 +1143,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       render: () => <DragHandle />,
     },
     {
-      title: 'Código',
+      title: 'CÃ³digo',
       key: 'codigo',
       width: 120,
       fixed: 'left' as const,
@@ -1167,7 +1170,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
               if (ocMatch && verificado) {
                 return (
-                  <Tooltip title="Coincide con OC · Verificado">
+                  <Tooltip title="Coincide con OC Â· Verificado">
                     <CheckCircleFilled style={{ color: '#34c38f', fontSize: 14 }} />
                   </Tooltip>
                 );
@@ -1186,7 +1189,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
               let motivo = 'No coincide con la OC';
               const detalleOC = ocDetallesData.find((d: DetalleOrdenCompraVistaDTO) => d.codigo === record.codigo);
               if (!detalleOC) {
-                motivo = 'Código no encontrado en la OC';
+                motivo = 'CÃ³digo no encontrado en la OC';
               } else if (record.tieneVencimiento && !record.fechaVencimiento) {
                 motivo = 'Requiere fecha de vencimiento';
               } else if (record.fechaVencimiento && new Date(record.fechaVencimiento) < new Date()) {
@@ -1214,7 +1217,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       ),
     },
     {
-      title: 'Artículo',
+      title: 'ArtÃ­culo',
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
@@ -1344,7 +1347,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
               }}
             />
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
-              {formatNumber(costoUnitario)} × {factor}
+              {formatNumber(costoUnitario)} Ã— {factor}
             </div>
           </div>
         );
@@ -1477,7 +1480,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       key: 'devolver',
       width: 50,
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
-      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      onCell: () => ({ style: { verticalAlign: 'middle', textAlign: 'center' } }),
       render: (_: any, record: any) => {
         const yaDevuelto = detallesDevolucion
           .filter((d) => d.idExterno === record.id)
@@ -1486,20 +1489,22 @@ const EntradaAlmacenFormulario: React.FC = () => {
         const tieneDevolucion = yaDevuelto > 0;
 
         return (
-          <Tooltip title={disponible <= 0 ? 'Sin cantidad disponible' : (tieneDevolucion ? 'Modificar cantidad a devolver' : 'Agregar a devolución')}>
-            <Button
-              type="text"
-              size="small"
-              icon={<RollbackOutlined />}
-              style={{ color: tieneDevolucion ? '#556ee6' : '#8c8c8c' }}
-              disabled={disponible <= 0}
-              onClick={() => {
-                setDetalleDevolucionActivo(record);
-                setCantidadDevolucionInput(0);
-                setModalDevolucionOpen(true);
-              }}
-            />
-          </Tooltip>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+            <Tooltip title={disponible <= 0 ? 'Sin cantidad disponible' : (tieneDevolucion ? 'Modificar cantidad a devolver' : 'Agregar a devoluciÃ³n')}>
+              <Button
+                type="text"
+                size="small"
+                icon={<RollbackOutlined />}
+                style={{ color: tieneDevolucion ? '#556ee6' : '#8c8c8c' }}
+                disabled={disponible <= 0}
+                onClick={() => {
+                  setDetalleDevolucionActivo(record);
+                  setCantidadDevolucionInput(0);
+                  setModalDevolucionOpen(true);
+                }}
+              />
+            </Tooltip>
+          </div>
         );
       },
     },
@@ -1560,7 +1565,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         open={modalDevolucionOpen}
         onCancel={() => { setModalDevolucionOpen(false); setDetalleDevolucionActivo(null); }}
         width={420}
-        destroyOnClose
+        destroyOnHidden
         maskClosable={false}
         footer={
           <Space>
@@ -1592,10 +1597,10 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 setDetallesDevolucion((prev) => [...prev, nuevoDetalle]);
                 setModalDevolucionOpen(false);
                 setDetalleDevolucionActivo(null);
-                message.success('Producto agregado a la lista de devolución');
+                message.success('Producto agregado a la lista de devoluciÃ³n');
               }}
             >
-              Agregar a devolución
+              Agregar a devoluciÃ³n
             </Button>
           </Space>
         }
@@ -1672,7 +1677,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
               setDetallesDevolucion((prev) => [...prev, nuevoDetalle]);
               setModalDevolucionOpen(false);
               setDetalleDevolucionActivo(null);
-              message.success('Producto agregado a la lista de devolución');
+              message.success('Producto agregado a la lista de devoluciÃ³n');
             }
           }}
           placeholder="0.00"
@@ -1758,8 +1763,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
                       Modal.confirm({
                         title: 'Cambiar Suplidor',
                         icon: <ExclamationCircleOutlined />,
-                        content: `El suplidor ${ent.nombre} requiere Orden de Compra, se borrarán los productos agregados. ¿Está seguro que desea hacerlo?`,
-                        okText: 'Sí',
+                        content: `El suplidor ${ent.nombre} requiere Orden de Compra, se borrarÃ¡n los productos agregados. Â¿EstÃ¡ seguro que desea hacerlo?`,
+                        okText: 'SÃ­',
                         cancelText: 'No',
                         onOk: () => {
                           setDetalles([]);
@@ -1770,7 +1775,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                           setAgregarFilaBloqueado(true);
                         },
                         onCancel: () => {
-                          // Revertir la selección del suplidor
+                          // Revertir la selecciÃ³n del suplidor
                           form.setFieldsValue({ suplidor: selectedEntidad?.codigo || undefined });
                         },
                       });
@@ -1795,7 +1800,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
             </Form.Item>
           </Col>
 
-          {/* Fila 3: FechaRecibo + Almacén */}
+          {/* Fila 3: FechaRecibo + AlmacÃ©n */}
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaRecibo" style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Recibo">
@@ -1805,7 +1810,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
           </Col>
           <Col xs={24} sm={12} lg={15}>
             <Form.Item name="almacen" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Almacén" required ref={almacenRef}>
+              <FloatingField label="AlmacÃ©n" required ref={almacenRef}>
                 <Select
                   allowClear
                   showSearch
@@ -1825,7 +1830,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
             </Form.Item>
           </Col>
 
-          {/* Fila 4: Campos rápidos (NCF, Referencia, Tasa) */}
+          {/* Fila 4: Campos rÃ¡pidos (NCF, Referencia, Tasa) */}
           <Col xs={24}>
             <div style={{ marginBottom: 16 }}>
               <Space size={[8, 8]} wrap>
@@ -1925,7 +1930,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 )}
               </Space>
             </div>
-            {/* Hidden form items para campos rápidos */}
+            {/* Hidden form items para campos rÃ¡pidos */}
             <Form.Item name="ncf" hidden><Input /></Form.Item>
             <Form.Item name="referencia" hidden><Input /></Form.Item>
             <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
@@ -1974,7 +1979,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
       {loadingError && (
         <Alert
-          message="Error al cargar formulario de entrada de almacén"
+          message="Error al cargar formulario de entrada de almacÃ©n"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
@@ -2043,15 +2048,15 @@ const EntradaAlmacenFormulario: React.FC = () => {
         comodines={comodines}
         addedCodes={detalles.map((d) => d.codigo)}
         sourceColumns={[
-          { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-          { title: 'Artículo', dataIndex: 'articulo', key: 'articulo', ellipsis: true },
+          { title: 'CÃ³digo', dataIndex: 'codigo', key: 'codigo', width: 120 },
+          { title: 'ArtÃ­culo', dataIndex: 'articulo', key: 'articulo', ellipsis: true },
           { title: 'Cant. OC', dataIndex: 'cantidad', key: 'cantidad', width: 90, align: 'right' as const },
           { title: 'Costo', dataIndex: 'costo', key: 'costo', width: 100, align: 'right' as const,
             render: (v: number) => formatNumber(v) },
         ]}
         comodinColumns={[
-          { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
-          { title: 'Artículo', dataIndex: 'nombre', key: 'nombre', ellipsis: true },
+          { title: 'CÃ³digo', dataIndex: 'codigo', key: 'codigo', width: 120 },
+          { title: 'ArtÃ­culo', dataIndex: 'nombre', key: 'nombre', ellipsis: true },
           { title: 'Costo', dataIndex: 'ultimoCosto', key: 'ultimoCosto', width: 100, align: 'right' as const,
             render: (v: number) => formatNumber(v || 0) },
         ]}
@@ -2190,7 +2195,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                             <span>
                               Sin productos para devolver<br />
                               <Typography.Text className="paces-text-secondary" style={{ fontSize: 12 }}>
-                                Haga clic en el ícono ↩ de un detalle para agregar productos
+                                Haga clic en el Ã­cono â†© de un detalle para agregar productos
                               </Typography.Text>
                             </span>
                           }
@@ -2201,7 +2206,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                             type="info"
                             showIcon
                             style={{ marginBottom: 12 }}
-                            message="Al guardar este documento, se creará automáticamente una Devolución de Compra (DVC) con los productos listados."
+                            message="Al guardar este documento, se crearÃ¡ automÃ¡ticamente una DevoluciÃ³n de Compra (DVC) con los productos listados."
                           />
                           <Table
                             dataSource={detallesDevolucion}
@@ -2211,7 +2216,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                             scroll={{ x: 700 }}
                             columns={[
                               {
-                                title: 'Código',
+                                title: 'CÃ³digo',
                                 key: 'codigo',
                                 width: 120,
                                 fixed: 'left',
@@ -2228,7 +2233,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                                 ),
                               },
                               {
-                                title: 'Artículo',
+                                title: 'ArtÃ­culo',
                                 key: 'articulo',
                                 ellipsis: true,
                                 onCell: () => ({ style: { verticalAlign: 'top' } }),
@@ -2408,7 +2413,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                           <span>
                             Sin productos para devolver<br />
                             <Typography.Text className="paces-text-secondary" style={{ fontSize: 12 }}>
-                              Haga clic en el ícono ↩ de un detalle para agregar productos
+                              Haga clic en el Ã­cono â†© de un detalle para agregar productos
                             </Typography.Text>
                           </span>
                         }
@@ -2419,7 +2424,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                           type="info"
                           showIcon
                           style={{ marginBottom: 12 }}
-                          message="Al guardar este documento, se creará automáticamente una Devolución de Compra (DVC) con los productos listados."
+                          message="Al guardar este documento, se crearÃ¡ automÃ¡ticamente una DevoluciÃ³n de Compra (DVC) con los productos listados."
                         />
                         <Table
                           dataSource={detallesDevolucion}
@@ -2429,7 +2434,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                           scroll={{ x: 700 }}
                           columns={[
                             {
-                              title: 'Código',
+                              title: 'CÃ³digo',
                               key: 'codigo',
                               width: 120,
                               fixed: 'left',
@@ -2446,7 +2451,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                               ),
                             },
                             {
-                              title: 'Artículo',
+                              title: 'ArtÃ­culo',
                               key: 'articulo',
                               ellipsis: true,
                               onCell: () => ({ style: { verticalAlign: 'top' } }),
@@ -2544,7 +2549,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
       {renderModalDevolucion()}
 
-      {/* Guía paso a paso (solo en modo crear o editar borrador) */}
+      {/* GuÃ­a paso a paso (solo en modo crear o editar borrador) */}
       {(mode === 'crear' || esBorrador) && (
         <EntradaAlmacenGuide
           mode={mode}

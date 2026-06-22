@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+﻿import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Modal, Input, Table, Button, Typography, Empty } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -22,6 +22,16 @@ const BuscarEmpleadoModal: React.FC<Props> = ({ open, onClose, onSelect }) => {
   const [data, setData] = useState<EmpleadoDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const searchRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+        searchRef.current?.focus?.();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   const cargar = useCallback(async (busqueda: string) => {
     if (!sucursal) return;
@@ -55,10 +65,11 @@ const BuscarEmpleadoModal: React.FC<Props> = ({ open, onClose, onSelect }) => {
       onCancel={onClose}
       footer={null}
       width={600}
-      destroyOnClose
+      destroyOnHidden
     >
       <Input.Search
-        placeholder="Buscar por nombre o código..."
+        ref={searchRef}
+        placeholder="Buscar por nombre o cÃ³digo..."
         allowClear
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -68,9 +79,9 @@ const BuscarEmpleadoModal: React.FC<Props> = ({ open, onClose, onSelect }) => {
       />
       <Table
         columns={[
-          { title: 'Código', dataIndex: 'codigo', width: 100 },
+          { title: 'CÃ³digo', dataIndex: 'codigo', width: 100 },
           { title: 'Nombre', dataIndex: 'nombre', ellipsis: true },
-          { title: 'Cédula', dataIndex: 'cedula', width: 130 },
+          { title: 'CÃ©dula', dataIndex: 'cedula', width: 130 },
         ]}
         dataSource={data}
         rowKey="codigo"

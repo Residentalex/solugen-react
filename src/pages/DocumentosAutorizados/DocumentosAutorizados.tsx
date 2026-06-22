@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, Table, Button, DatePicker, Typography, Tooltip, Empty } from 'antd';
 import { SearchOutlined, PrinterOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -10,10 +10,8 @@ import { useDocumentosReporte } from '../../hooks/useDocumentosReporte';
 import { documentosReporteApi } from '../../api/documentosReporteApi';
 import type { MovimientoVistaDTO } from '../../types/entradaAlmacen';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
-import EntidadColumnCell from '../../components/EntidadColumnCell';
-import PermissionGate from '../../components/PermissionGate';
+
 import ListadoErrorAlert from '../../components/ListadoErrorAlert';
-import PdfPreviewDrawer from '../../components/PdfPreviewDrawer';
 
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
@@ -23,12 +21,7 @@ const columnas: ColumnsType<MovimientoVistaDTO> = [
     title: 'Fecha Doc.',
     width: 120,
     render: (_, record) => (
-      <>
-        <Text>{formatDateRaw(record.fecha)}</Text>
-        {record.fechaEntrega && (
-          <div style={{ fontSize: 10, color: '#888' }}>Entrega: {formatDateRaw(record.fechaEntrega)}</div>
-        )}
-      </>
+      <Text>{formatDateRaw(record.fecha)}</Text>
     ),
   },
   {
@@ -43,13 +36,7 @@ const columnas: ColumnsType<MovimientoVistaDTO> = [
   },
   {
     title: 'Suplidor',
-    render: (_, record) => (
-      <EntidadColumnCell
-        name={record.entidad ?? ''}
-        diasCredito={record.diasCredito}
-        identificacion={record.identificacion}
-      />
-    ),
+    render: (_, record) => toTitleCase(record.entidad ?? ''),
   },
   {
     title: 'Concepto',
@@ -69,9 +56,13 @@ const columnas: ColumnsType<MovimientoVistaDTO> = [
     ),
   },
   {
-    title: 'Creado Por',
-    width: 160,
-    responsive: ['xl'],
+    title: 'Fecha Autorizado',
+    width: 130,
+    render: (_, record) => (record.fechaAccion ? formatDateRaw(record.fechaAccion) : '-'),
+  },
+  {
+    title: 'Autorizado por',
+    width: 220,
     render: (_, record) => record.creadoPor,
   },
 ];
@@ -80,10 +71,10 @@ const DocumentosAutorizados: React.FC = () => {
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
 
-  useScreenConfig('RENA');
+  useScreenConfig('RDocAutorizado');
 
   const config = useMemo(() => ({
-    modulo: 'RENA' as const,
+    modulo: 'RDocAutorizado' as const,
     fetchDatos: documentosReporteApi.obtenerAutorizados,
     reporteBlob: (sucursal: number, desde: string, hasta: string) =>
       documentosReporteApi.imprimirReporte(sucursal, 'autorizados', desde, hasta),
@@ -95,22 +86,26 @@ const DocumentosAutorizados: React.FC = () => {
     loading,
     loadingError,
     loadingPdf,
-    pdfPreview,
     fechas,
     hasQueried,
     handleConsultar,
     handleImprimir,
-    handlePdfClose,
     handleFechasChange,
     handleRefresh,
   } = useDocumentosReporte(config);
 
   useEffect(() => {
-    setActiveModule('RENA');
+    setActiveModule('RDocAutorizado');
     return () => {
       resetToolbar();
     };
   }, [setActiveModule, resetToolbar]);
+
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const tooltipTitle = selectedRowKeys.length > 0
+    ? `Imprimir seleccionados (${selectedRowKeys.length})`
+    : 'Imprimir reporte completo del período';
 
   return (
     <>
@@ -142,16 +137,14 @@ const DocumentosAutorizados: React.FC = () => {
               Consultar
             </Button>
             <div style={{ flex: 1 }} />
-            <PermissionGate accion="IMPRIMIR">
-              <Tooltip title="Imprimir reporte completo del período">
-                <Button
-                  icon={<PrinterOutlined />}
-                  loading={loadingPdf}
-                  disabled={data.length === 0}
-                  onClick={handleImprimir}
-                />
-              </Tooltip>
-            </PermissionGate>
+            <Tooltip title={tooltipTitle}>
+              <Button
+                icon={<PrinterOutlined />}
+                loading={loadingPdf}
+                disabled={data.length === 0 && selectedRowKeys.length === 0}
+                onClick={() => handleImprimir(selectedRowKeys.length > 0 ? selectedRowKeys.map(Number) : undefined)}
+              />
+            </Tooltip>
             <Button icon={<ReloadOutlined />} disabled={!hasQueried} onClick={handleRefresh} />
           </div>
         </div>
@@ -162,6 +155,11 @@ const DocumentosAutorizados: React.FC = () => {
           columns={columnas}
           dataSource={data}
           loading={loading}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys: React.Key[]) => setSelectedRowKeys(keys),
+            columnWidth: 60,
+          }}
           scroll={{ x: 1050 }}
           locale={{
             emptyText: hasQueried
@@ -192,10 +190,6 @@ const DocumentosAutorizados: React.FC = () => {
           }}
         />
       </Card>
-      <PdfPreviewDrawer
-        pdfPreview={pdfPreview}
-        onClose={handlePdfClose}
-      />
     </>
   );
 };

@@ -439,6 +439,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       subTotal: Math.round(totalSub * 100) / 100,
       total: Math.round(total * 100) / 100,
       tasa: values.tasa || 1,
+      tipoDocumento: base.tipoDocumento ?? 81,
       documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       moneda: base.moneda || getMonedaSucursalActiva(),
@@ -646,6 +647,39 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
     { title: 'Credito', key: 'credito', width: 130, align: 'right' as const,
       render: (_: any, r: AsientoContableDTO) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
   ];
+
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setData(res);
+        setDetalles((res.detalles || []).map((d: any) => ({ ...d, _costo: d.total && d.cantidad ? d.total / d.cantidad : 0 })));
+        setSelectedConcepto(res.concepto || null);
+        setSelectedAlmacen(res.almacen || null);
+        setSelectedAlmacenDestino(res.almacenDestino || null);
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          concepto: res.concepto?.codigo || '',
+          almacen: res.almacen?.codigo || '',
+          almacenDestino: res.almacenDestino?.codigo || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          ncf: res.ncf || '',
+          referencia: res.referencia || '',
+          moneda: res.moneda?.nombre || '',
+          tasa: res.tasa || 1,
+          nota: res.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
 
   // ===== Loading state =====
   if (loading) {
@@ -981,39 +1015,6 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       </Row>
     </Card>
   );
-
-  const handleRefresh = useCallback(() => {
-    if (mode === 'crear') return;
-    if (!id) return;
-    setLoadingError(false);
-    setLoading(true);
-    transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        setData(res);
-        setDetalles((res.detalles || []).map((d: any) => ({ ...d, _costo: d.total && d.cantidad ? d.total / d.cantidad : 0 })));
-        setSelectedConcepto(res.concepto || null);
-        setSelectedAlmacen(res.almacen || null);
-        setSelectedAlmacenDestino(res.almacenDestino || null);
-        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
-        form.setFieldsValue({
-          concepto: res.concepto?.codigo || '',
-          almacen: res.almacen?.codigo || '',
-          almacenDestino: res.almacenDestino?.codigo || '',
-          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          ncf: res.ncf || '',
-          referencia: res.referencia || '',
-          moneda: res.moneda?.nombre || '',
-          tasa: res.tasa || 1,
-          nota: res.nota || '',
-        });
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg);
-        setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form, mode]);
 
   // ===== Drag-and-drop handler =====
   const handleDragEnd = (event: any) => {

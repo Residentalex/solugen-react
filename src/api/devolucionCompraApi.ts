@@ -14,7 +14,7 @@ export const devolucionCompraApi = {
     cantidad?: number,
     salto?: number,
     estado?: number
-  ): Promise<MovimientoVistaDTO[]> => {
+  ): Promise<{ data: MovimientoVistaDTO[]; total: number }> => {
     const params: Record<string, string | number> = {};
     if (desde) params.desde = desde;
     if (hasta) params.hasta = hasta;
@@ -23,13 +23,13 @@ export const devolucionCompraApi = {
     if (estado !== undefined) params.estado = estado;
 
     const { data } = await apiClient.get<ApiResponse<MovimientoVistaDTO[]>>(`${BASE}/${sucursal}`, { params });
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   filtrar: async (
     sucursal: number,
     filtro: FiltroDVC
-  ): Promise<MovimientoVistaDTO[]> => {
+  ): Promise<{ data: MovimientoVistaDTO[]; total: number }> => {
     const params: Record<string, string | number> = {};
     if (filtro.cantidad) params.cantidad = filtro.cantidad;
     if (filtro.salto) params.salto = filtro.salto;
@@ -42,7 +42,7 @@ export const devolucionCompraApi = {
     if (filtro.almacen) params.almacen = filtro.almacen;
 
     const { data } = await apiClient.get<ApiResponse<MovimientoVistaDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params });
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   obtenerPorId: async (sucursal: number, id: number): Promise<DevolucionCompraFullDTO> => {
@@ -124,7 +124,7 @@ export const devolucionCompraApi = {
   },
 
   obtenerSuplidores: async (sucursal: number): Promise<SuplidorDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<SuplidorDTO[]>>(`/Proveedor/${sucursal}`);
+    const { data } = await apiClient.get<ApiResponse<SuplidorDTO[]>>(`/Proveedor/${sucursal}?activo=true`);
     return data.data;
   },
 

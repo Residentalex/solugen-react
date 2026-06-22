@@ -7,8 +7,6 @@ import { Form, Input, Button, Alert } from 'antd';
 import { UserOutlined, LockOutlined, ArrowRightOutlined } from '@ant-design/icons';
 import GenesisLogo from '../../components/GenesisLogo';
 
-const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
-
 const Login: React.FC = () => {
   const [nombreUsuario, setNombreUsuario] = useState('');
   const [contrasena, setContrasena] = useState('');
@@ -17,6 +15,7 @@ const Login: React.FC = () => {
 
   const login = useAuthStore((s) => s.login);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const securitySucursal = useAuthStore((s) => s.securitySucursal);
   const navigate = useNavigate();
 
   const loginInProgress = useRef(false);
@@ -58,7 +57,7 @@ const Login: React.FC = () => {
         contrasena,
         equipo,
         ip,
-        sucursal: SUCURSAL_SEGURIDAD,
+        sucursal: securitySucursal,
       });
 
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4003/api';

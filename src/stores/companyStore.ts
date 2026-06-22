@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { apiClient } from '../api/client';
+import { Sucursal } from '../types/auth';
 
 interface CompanyData {
   familias: any[];
@@ -13,6 +14,10 @@ interface CompanyData {
   fechasCierre: Record<number, any>;
   fechasCierreInv: Record<number, any>;
   fechasCierreFiscal: Record<number, any>;
+  securitySucursal: number;
+  unidadBase: any;
+  sucursalClientes: number;
+  sucursalProductos: number;
 }
 
 interface CompanyState {
@@ -35,6 +40,10 @@ const initialState: CompanyData = {
   fechasCierre: {},
   fechasCierreInv: {},
   fechasCierreFiscal: {},
+  securitySucursal: 4,
+  unidadBase: null,
+  sucursalClientes: Sucursal.Consolidado,
+  sucursalProductos: Sucursal.Compra,
 };
 
 export const useCompanyStore = create<CompanyState>((set) => ({
@@ -78,6 +87,10 @@ export const useCompanyStore = create<CompanyState>((set) => ({
           fechasCierre,
           fechasCierreInv,
           fechasCierreFiscal,
+          securitySucursal: config.securitySucursal ?? 4,
+          unidadBase: config.unidadBase || null,
+          sucursalClientes: config.sucursalClientes ?? Sucursal.Consolidado,
+          sucursalProductos: config.sucursalProductos ?? Sucursal.Compra,
         },
         loading: false,
       });

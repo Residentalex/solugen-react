@@ -8,9 +8,10 @@ import type { ColumnsType } from 'antd/es/table';
 import { useQuery } from '@tanstack/react-query';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { clienteApi } from '../../api/clienteApi';
 import PermissionGate from '../../components/PermissionGate';
-import { toTitleCase } from '../../utils/formats';
+import { toTitleCase, formatCurrency } from '../../utils/formats';
 import type { ClienteDTO } from '../../types/facturacion';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
@@ -21,7 +22,7 @@ const Clientes: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
-  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const sucursalClientes = useCompanyStore((s) => s.data.sucursalClientes);
   const usuario = useAuthStore((s: any) => s.usuario);
 
   const pantallaActual = usuario?.pantallas.find((p: any) => p.codigo === 'MCliente');
@@ -39,24 +40,23 @@ const Clientes: React.FC = () => {
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['clientes', sucursalActiva, page, pageSize, searchText, filtroActivo],
+    queryKey: ['clientes', sucursalClientes, page, pageSize, searchText, filtroActivo],
     queryFn: async () => {
       const salto = (page - 1) * pageSize;
       const soloActivos = filtroActivo === 'todos' ? undefined : filtroActivo === 'activos';
-      const params: { cantidad?: number; salto?: number; codigo?: string; activo?: boolean } = {
-        cantidad: pageSize, salto,
+      const params: { filas?: number; salto?: number; codigo?: string; activo?: boolean } = {
+        filas: pageSize, salto,
       };
       if (soloActivos !== undefined) params.activo = soloActivos;
       if (searchText) params.codigo = searchText;
 
       const [resultados, totalCount] = await Promise.all([
-        clienteApi.obtenerListado(sucursalActiva, params),
-        clienteApi.obtenerTotal(sucursalActiva, { codigo: searchText || undefined, activo: soloActivos }),
+        clienteApi.obtenerListado(sucursalClientes, params).catch(() => [] as ClienteDTO[]),
+        clienteApi.obtenerTotal(sucursalClientes, { codigo: searchText || undefined, activo: soloActivos }).catch(() => 0),
       ]);
       return { datos: resultados || [], total: totalCount ?? 0 };
     },
-    enabled: sucursalActiva !== undefined,
-    placeholderData: (prev) => prev,
+    enabled: sucursalClientes !== undefined,
   });
 
   const handleSearch = (value: string) => {
@@ -119,6 +119,23 @@ const Clientes: React.FC = () => {
       width: 90,
       render: (activo: boolean) => (
         <Tag color={activo ? 'green' : 'default'}>{activo ? 'Activo' : 'Inactivo'}</Tag>
+      ),
+    },
+    {
+      title: 'Vendedor',
+      dataIndex: 'vendedorNombre',
+      key: 'vendedorNombre',
+      width: 150,
+      render: (val: string) => <Text>{val || '-'}</Text>,
+    },
+    {
+      title: 'Balance',
+      dataIndex: 'balance',
+      key: 'balance',
+      width: 130,
+      align: 'right',
+      render: (val: number) => (
+        <Text style={{ fontFamily: 'monospace' }}>{val != null ? formatCurrency(val) : '-'}</Text>
       ),
     },
   ];

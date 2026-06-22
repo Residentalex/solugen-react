@@ -6,6 +6,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { productoApi } from '../../api/productoApi';
 import PermissionGate from '../../components/PermissionGate';
 import { toTitleCase, formatCurrency } from '../../utils/formats';
@@ -19,7 +20,7 @@ const Productos: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
-  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const sucursalProductos = useCompanyStore((s) => s.data.sucursalProductos);
 
   const [searchText, setSearchText] = useState('');
   const [filtroActivo, setFiltroActivo] = useState<string>('todos');
@@ -33,16 +34,16 @@ const Productos: React.FC = () => {
   const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['productos', sucursalActiva, page, pageSize, searchText, filtroActivo],
+    queryKey: ['productos', sucursalProductos, page, pageSize, searchText, filtroActivo],
     queryFn: async () => {
-      if (sucursalActiva === undefined) return { data: [], total: 0 };
+      if (sucursalProductos === undefined) return { data: [], total: 0 };
       const salto = (page - 1) * pageSize;
 
       let resultados: ProductoListaDTO[];
       let totalCount: number;
 
       if (searchText && searchText.length > 2) {
-        resultados = await productoApi.filtrar(sucursalActiva, {
+        resultados = await productoApi.filtrar(sucursalProductos, {
           cantidad: pageSize,
           salto,
           codigo: searchText,
@@ -51,15 +52,15 @@ const Productos: React.FC = () => {
           familia: searchText,
           activo: soloActivos,
         });
-        totalCount = await productoApi.obtenerTotal(sucursalActiva, { codigo: searchText, activo: soloActivos });
+        totalCount = await productoApi.obtenerTotal(sucursalProductos, { codigo: searchText, activo: soloActivos });
       } else {
         const params: { cantidad?: number; salto?: number; codigo?: string; activo?: boolean } = {
           cantidad: pageSize,
           salto,
         };
         if (soloActivos !== undefined) params.activo = soloActivos;
-        resultados = await productoApi.obtenerListado(sucursalActiva, params);
-        totalCount = await productoApi.obtenerTotal(sucursalActiva, { activo: soloActivos });
+        resultados = await productoApi.obtenerListado(sucursalProductos, params);
+        totalCount = await productoApi.obtenerTotal(sucursalProductos, { activo: soloActivos });
       }
 
       return {
@@ -67,7 +68,7 @@ const Productos: React.FC = () => {
         total: totalCount ?? 0,
       };
     },
-    enabled: sucursalActiva !== undefined,
+    enabled: sucursalProductos !== undefined,
     placeholderData: (prev) => prev,
   });
 

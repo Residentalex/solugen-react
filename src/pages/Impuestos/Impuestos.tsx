@@ -50,6 +50,7 @@ const Impuestos: React.FC = () => {
   const [editando, setEditando] = useState<ImpuestoDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [cuentaModalOpen, setCuentaModalOpen] = useState(false);
+  const [cuentaDisplay, setCuentaDisplay] = useState('');
   const [form] = Form.useForm();
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -83,36 +84,43 @@ const Impuestos: React.FC = () => {
   const abrirNuevo = () => {
     if (!puedeCrear) return;
     setEditando(null);
-    form.resetFields();
-    form.setFieldsValue({
-      tipo: 'I',
-      ambito: AmbitoImpuesto.Ninguno,
-      metodoCalculo: MetodoCalculoImpuesto.Porcentaje,
-      baseCalculo: BaseCalculoImpuesto.Indefinido,
-      noCuenta: '',
-      cuentaContable: '',
-    });
     setModalVisible(true);
   };
 
   const abrirEditar = (item: ImpuestoDTO) => {
     if (!puedeEditar) return;
     setEditando(item);
-    const TIPO_MAP_REVERSE: Record<number, string> = { 0: 'I', 1: 'L', 2: 'V', 3: 'R' };
-    form.setFieldsValue({
-      codigo: item.codigo,
-      nombre: item.nombre,
-      porcentaje: item.porcentaje,
-      tipo: TIPO_MAP_REVERSE[item.tipo as unknown as number] ?? item.tipo,
-      ambito: item.ambito,
-      metodoCalculo: item.metodoCalculo,
-      baseCalculo: item.baseCalculo,
-      noCuenta: item.noCuenta,
-      cuentaContable: item.cuentaContable,
-      indicadorDGII: item.indicadorDGII,
-    });
     setModalVisible(true);
   };
+
+  useEffect(() => {
+    if (!modalVisible) return;
+    if (editando) {
+      const TIPO_MAP_REVERSE: Record<number, string> = { 0: 'I', 1: 'L', 2: 'V', 3: 'R' };
+      form.setFieldsValue({
+        codigo: editando.codigo,
+        nombre: editando.nombre,
+        porcentaje: editando.porcentaje,
+        tipo: TIPO_MAP_REVERSE[editando.tipo as unknown as number] ?? editando.tipo,
+        ambito: editando.ambito,
+        metodoCalculo: editando.metodoCalculo,
+        baseCalculo: editando.baseCalculo,
+        noCuenta: editando.noCuenta,
+        indicadorDGII: editando.indicadorDGII,
+      });
+      setCuentaDisplay(editando.cuentaContable || '');
+    } else {
+      form.resetFields();
+      form.setFieldsValue({
+        tipo: 'I',
+        ambito: AmbitoImpuesto.Ninguno,
+        metodoCalculo: MetodoCalculoImpuesto.Porcentaje,
+        baseCalculo: BaseCalculoImpuesto.Indefinido,
+        noCuenta: '',
+      });
+      setCuentaDisplay('');
+    }
+  }, [modalVisible, editando, form]);
 
   const guardar = async () => {
     try {
@@ -336,7 +344,7 @@ const Impuestos: React.FC = () => {
             <Input
               placeholder=" "
               readOnly
-              value={form.getFieldValue('cuentaContable') || form.getFieldValue('noCuenta') || ''}
+              value={cuentaDisplay}
               onClick={() => setCuentaModalOpen(true)}
               suffix={<SearchOutlined style={{ cursor: 'pointer' }} onClick={() => setCuentaModalOpen(true)} />}
             />
@@ -352,7 +360,8 @@ const Impuestos: React.FC = () => {
           open={cuentaModalOpen}
           onClose={() => setCuentaModalOpen(false)}
           onSelect={(cuenta) => {
-            form.setFieldsValue({ noCuenta: cuenta.noCuenta, cuentaContable: `${cuenta.noCuenta} - ${cuenta.nombre}` });
+            form.setFieldsValue({ noCuenta: cuenta.noCuenta });
+            setCuentaDisplay(`${cuenta.noCuenta} - ${cuenta.nombre}`);
           }}
           sucursal={sucursalActiva}
         />

@@ -38,7 +38,7 @@ import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosC
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { resolveEstado } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 
 const { Text } = Typography;
@@ -210,7 +210,7 @@ const DevolucionVentaDetalle: React.FC = () => {
 
   const isLarge = screens.xxl === true;
 
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
+  const estadoInfo = resolveEstado(data.estado);
   const esCerrado = data.periodo === 6;
 
   // ===== Detalles filtrados por búsqueda =====

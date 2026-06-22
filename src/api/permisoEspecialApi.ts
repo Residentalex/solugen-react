@@ -38,7 +38,7 @@ export const permisoEspecialApi = {
     return data.data;
   },
 
-  asignarARol: async (sucursal: number, rolId: number, permisos: { permisoId: number; valor: boolean }[]): Promise<void> => {
+  asignarARol: async (sucursal: number, rolId: number, permisos: { permisoId: number; valor: boolean; valorNumerico?: number }[]): Promise<void> => {
     await apiClient.put(`${BASE}/${sucursal}/asignar-rol`, { rolId, permisos });
   },
 };

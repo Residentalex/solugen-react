@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+﻿import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   Card, Table, Input, Select, Button, Typography, message, Spin, DatePicker, Checkbox,
   Modal, Space, Row, Col, Empty,
@@ -22,7 +22,7 @@ import type { ClienteDTO } from '../../types/facturacion';
 
 const { Text } = Typography;
 
-/* ───── Helpers de formato ───── */
+/* â”€â”€â”€â”€â”€ Helpers de formato â”€â”€â”€â”€â”€ */
 
 function formatDate(val: string): string {
   if (!val) return '';
@@ -41,7 +41,7 @@ function formatDateParam(d: Date): string {
   return `${y}${m}${day}${hh}${mm}${ss}`;
 }
 
-/* ───── Helpers de aging ───── */
+/* â”€â”€â”€â”€â”€ Helpers de aging â”€â”€â”€â”€â”€ */
 
 interface AgingValues {
   monto0_30: number;
@@ -53,7 +53,7 @@ interface AgingValues {
 
 const FILAS_POR_PAGINA = 25;
 
-/* ───── Componente principal ───── */
+/* â”€â”€â”€â”€â”€ Componente principal â”€â”€â”€â”€â”€ */
 
 const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
@@ -63,11 +63,11 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
   const resetToolbar = useUIStore((s) => s.resetToolbar);
 
   const esCxP = tipoEntidad === 'SUP';
-  const titulo = esCxP ? 'Antigüedad de Saldos - CxP' : 'Antigüedad de Saldos - CxC';
+  const titulo = esCxP ? 'AntigÃ¼edad de Saldos - CxP' : 'AntigÃ¼edad de Saldos - CxC';
   const codigoPantalla = esCxP ? 'RAntiguedadCXP' : 'RAntiguedaCXC';
   const entidadLabel = esCxP ? 'Suplidor' : 'Cliente';
 
-  /* ───── Estados ───── */
+  /* â”€â”€â”€â”€â”€ Estados â”€â”€â”€â”€â”€ */
 
   // Filtros
   const [fechaHasta, setFechaHasta] = useState<dayjs.Dayjs>(dayjs());
@@ -81,29 +81,49 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
   const [data, setData] = useState<TransaccionBalanceDTO[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Impresión PDF
+  // ImpresiÃ³n PDF
   const [imprimiendo, setImprimiendo] = useState(false);
 
-  // Búsqueda y paginación
+  // BÃºsqueda y paginaciÃ³n
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
 
-  // Modal de búsqueda de entidad
+  // Modal de bÃºsqueda de entidad
   const [modalEntidadAbierto, setModalEntidadAbierto] = useState(false);
   const [entidades, setEntidades] = useState<(SuplidorDTO | ClienteDTO)[]>([]);
   const [entidadesOrig, setEntidadesOrig] = useState<(SuplidorDTO | ClienteDTO)[]>([]);
   const [buscandoEntidad, setBuscandoEntidad] = useState(false);
   const [_searchEntidad, setSearchEntidad] = useState('');
 
-  // Modal de búsqueda de categoría
+  // Modal de bÃºsqueda de categorÃ­a
   const [modalCategoriaAbierto, setModalCategoriaAbierto] = useState(false);
   const [categorias, setCategorias] = useState<CategoriaEntidadDTO[]>([]);
   const [categoriasOrig, setCategoriasOrig] = useState<CategoriaEntidadDTO[]>([]);
   const [buscandoCategoria, setBuscandoCategoria] = useState(false);
   const [_searchCategoria, setSearchCategoria] = useState('');
+  const entidadSearchRef = useRef<any>(null);
+  const categoriaSearchRef = useRef<any>(null);
 
-  /* ───── Cargar datos ───── */
+  useEffect(() => {
+    if (modalEntidadAbierto) {
+      const timer = setTimeout(() => {
+        entidadSearchRef.current?.focus?.();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [modalEntidadAbierto]);
+
+  useEffect(() => {
+    if (modalCategoriaAbierto) {
+      const timer = setTimeout(() => {
+        categoriaSearchRef.current?.focus?.();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [modalCategoriaAbierto]);
+
+  /* â”€â”€â”€â”€â”€ Cargar datos â”€â”€â”€â”€â”€ */
 
   const generarReporte = useCallback(async () => {
     setLoading(true);
@@ -129,7 +149,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     }
   }, [sucursalActiva, tipoEntidad, fechaHasta, codEntidad, codCategoria]);
 
-  /* ───── UI setup ───── */
+  /* â”€â”€â”€â”€â”€ UI setup â”€â”€â”€â”€â”€ */
 
   useEffect(() => {
     setActiveModule(codigoPantalla);
@@ -141,7 +161,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     };
   }, [setActiveModule, setPageTitleOverride, updateToolbar, resetToolbar, codigoPantalla, titulo]);
 
-  /* ───── Handlers ───── */
+  /* â”€â”€â”€â”€â”€ Handlers â”€â”€â”€â”€â”€ */
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -195,7 +215,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     setPage(1);
   };
 
-  /* ───── Handlers de búsqueda de entidad ───── */
+  /* â”€â”€â”€â”€â”€ Handlers de bÃºsqueda de entidad â”€â”€â”€â”€â”€ */
 
   const abrirModalEntidad = async () => {
     setModalEntidadAbierto(true);
@@ -245,7 +265,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     setNomEntidad('');
   };
 
-  /* ───── Handlers de búsqueda de categoría ───── */
+  /* â”€â”€â”€â”€â”€ Handlers de bÃºsqueda de categorÃ­a â”€â”€â”€â”€â”€ */
 
   const abrirModalCategoria = async () => {
     setModalCategoriaAbierto(true);
@@ -256,7 +276,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       setCategorias(lista || []);
       setCategoriasOrig(lista || []);
     } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar categorías');
+      message.error(err?.response?.data?.errorMessage || 'Error al cargar categorÃ­as');
     } finally {
       setBuscandoCategoria(false);
     }
@@ -287,7 +307,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     setNomCategoria('');
   };
 
-  /* ───── Procesar datos: filtro local ───── */
+  /* â”€â”€â”€â”€â”€ Procesar datos: filtro local â”€â”€â”€â”€â”€ */
 
   const filteredData = useMemo(() => {
     if (!searchText) return data;
@@ -300,7 +320,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     );
   }, [data, searchText]);
 
-  /* ───── Procesar datos: aging ───── */
+  /* â”€â”€â”€â”€â”€ Procesar datos: aging â”€â”€â”€â”€â”€ */
 
   const calcAging = useCallback(
     (item: TransaccionBalanceDTO): AgingValues => {
@@ -354,7 +374,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     return Array.from(map.values());
   }, [filteredData, calcAging]);
 
-  /* ───── Totales para summary ───── */
+  /* â”€â”€â”€â”€â”€ Totales para summary â”€â”€â”€â”€â”€ */
 
   const summaryTotals = useMemo(() => {
     const items: Array<{ total: number; monto0_30: number; monto31_60: number; monto61_90: number; monto91_120: number; montoMas120: number }> =
@@ -376,7 +396,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     return { total, m0_30, m31_60, m61_90, m91_120, mMas120 };
   }, [detallado, agingData, resumenData]);
 
-  /* ───── Exportar Excel ───── */
+  /* â”€â”€â”€â”€â”€ Exportar Excel â”€â”€â”€â”€â”€ */
 
   const exportarCSV = () => {
     const items = detallado ? agingData : resumenData;
@@ -390,7 +410,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     let excelData: Record<string, any>[];
 
     if (detallado) {
-      headersParaExportar = ['Documento', 'NCF', 'Fecha', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
+      headersParaExportar = ['Documento', 'NCF', 'Fecha', 'Total', '0-30 dÃ­as', '31-60 dÃ­as', '61-90 dÃ­as', '91-120 dÃ­as', 'MÃ¡s 120 dÃ­as'];
       excelData = agingData.map((item) => ({
         [headersParaExportar[0]]: item.noDocumento || '',
         [headersParaExportar[1]]: item.ncf || '',
@@ -412,7 +432,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
         [headersParaExportar[8]]: summaryTotals.mMas120,
       });
     } else {
-      headersParaExportar = [entidadLabel, 'Código', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
+      headersParaExportar = [entidadLabel, 'CÃ³digo', 'Total', '0-30 dÃ­as', '31-60 dÃ­as', '61-90 dÃ­as', '91-120 dÃ­as', 'MÃ¡s 120 dÃ­as'];
       excelData = resumenData.map((item) => ({
         [headersParaExportar[0]]: item.nombreEntidad,
         [headersParaExportar[1]]: item.codigoEntidad,
@@ -436,11 +456,11 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
 
     const worksheet = XLSX.utils.json_to_sheet(excelData);
     worksheet['!cols'] = headersParaExportar.map(() => ({ wch: 18 }));
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Antigüedad');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'AntigÃ¼edad');
     XLSX.writeFile(workbook, `${titulo.replace(/\s+/g, '_')}_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
   };
 
-  /* ───── Columnas vista detallada ───── */
+  /* â”€â”€â”€â”€â”€ Columnas vista detallada â”€â”€â”€â”€â”€ */
 
   type AgingRow = TransaccionBalanceDTO & AgingValues;
 
@@ -475,7 +495,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       render: (val: number) => <Text strong className="paces-text-total">{formatCurrency(val || 0)}</Text>,
     },
     {
-      title: '0-30 días',
+      title: '0-30 dÃ­as',
       dataIndex: 'monto0_30',
       key: 'monto0_30',
       width: 120,
@@ -483,7 +503,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
-      title: '31-60 días',
+      title: '31-60 dÃ­as',
       dataIndex: 'monto31_60',
       key: 'monto31_60',
       width: 120,
@@ -491,7 +511,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
-      title: '61-90 días',
+      title: '61-90 dÃ­as',
       dataIndex: 'monto61_90',
       key: 'monto61_90',
       width: 120,
@@ -499,7 +519,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
-      title: '91-120 días',
+      title: '91-120 dÃ­as',
       dataIndex: 'monto91_120',
       key: 'monto91_120',
       width: 120,
@@ -507,7 +527,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
-      title: 'Más 120 días',
+      title: 'MÃ¡s 120 dÃ­as',
       dataIndex: 'montoMas120',
       key: 'montoMas120',
       width: 120,
@@ -516,7 +536,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     },
   ];
 
-  /* ───── Columnas vista resumida ───── */
+  /* â”€â”€â”€â”€â”€ Columnas vista resumida â”€â”€â”€â”€â”€ */
 
   const columnsResumen: ColumnsType<ResumenAgingDTO> = [
     {
@@ -536,7 +556,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       render: (val: number) => <Text strong className="paces-text-total">{formatCurrency(val ?? 0)}</Text>,
     },
     {
-      title: '0-30 días',
+      title: '0-30 dÃ­as',
       dataIndex: 'monto0_30',
       key: 'monto0_30',
       width: 120,
@@ -544,7 +564,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
-      title: '31-60 días',
+      title: '31-60 dÃ­as',
       dataIndex: 'monto31_60',
       key: 'monto31_60',
       width: 120,
@@ -552,7 +572,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
-      title: '61-90 días',
+      title: '61-90 dÃ­as',
       dataIndex: 'monto61_90',
       key: 'monto61_90',
       width: 120,
@@ -560,7 +580,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
-      title: '91-120 días',
+      title: '91-120 dÃ­as',
       dataIndex: 'monto91_120',
       key: 'monto91_120',
       width: 120,
@@ -568,7 +588,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
     },
     {
-      title: 'Más 120 días',
+      title: 'MÃ¡s 120 dÃ­as',
       dataIndex: 'montoMas120',
       key: 'montoMas120',
       width: 120,
@@ -577,7 +597,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     },
   ];
 
-  /* ───── Summary row ───── */
+  /* â”€â”€â”€â”€â”€ Summary row â”€â”€â”€â”€â”€ */
 
   const renderSummaryDetallado = () => (
     <Table.Summary fixed>
@@ -635,7 +655,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     </Table.Summary>
   );
 
-  /* ───── Paginación ───── */
+  /* â”€â”€â”€â”€â”€ PaginaciÃ³n â”€â”€â”€â”€â”€ */
 
   const paginationProps = {
     current: page,
@@ -645,7 +665,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     onChange: (p: number) => setPage(p),
   };
 
-  /* ───── Render ───── */
+  /* â”€â”€â”€â”€â”€ Render â”€â”€â”€â”€â”€ */
 
   return (
     <>
@@ -662,7 +682,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
         }
       `}</style>
 
-      {/* ───── Filtros ───── */}
+      {/* â”€â”€â”€â”€â”€ Filtros â”€â”€â”€â”€â”€ */}
       <Card className="paces-card no-print" style={{ marginBottom: 16 }}>
         <div style={{ padding: '16px 24px' }}>
           <Row gutter={[16, 12]}>
@@ -698,10 +718,10 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
 
             <Col xs={24} sm={12} md={6}>
               <div style={{ marginBottom: 4 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Categoría</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>CategorÃ­a</Text>
               </div>
               <Input
-                placeholder="Buscar categoría..."
+                placeholder="Buscar categorÃ­a..."
                 value={nomCategoria}
                 readOnly
                 style={{ width: '100%' }}
@@ -714,7 +734,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                       onClick={limpiarCategoria}
                       style={{ color: '#999' }}
                     >
-                      ×
+                      Ã—
                     </Button>
                   ) : undefined
                 }
@@ -745,7 +765,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
         </div>
       </Card>
 
-      {/* ───── Resultados ───── */}
+      {/* â”€â”€â”€â”€â”€ Resultados â”€â”€â”€â”€â”€ */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: 80 }}>
           <Spin size="large" />
@@ -756,7 +776,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
           styles={{ body: { padding: 0 } }}
           style={{ borderRadius: 8, overflow: 'hidden' }}
         >
-          {/* Barra de búsqueda y acciones (no-print) */}
+          {/* Barra de bÃºsqueda y acciones (no-print) */}
           <div className="no-print" style={{ padding: '16px 24px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
               <Input.Search
@@ -822,28 +842,29 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
         </Card>
       ) : null}
 
-      {/* ───── Modal búsqueda entidad ───── */}
+      {/* â”€â”€â”€â”€â”€ Modal bÃºsqueda entidad â”€â”€â”€â”€â”€ */}
       <Modal
         title={`Buscar ${entidadLabel}`}
         open={modalEntidadAbierto}
         onCancel={() => setModalEntidadAbierto(false)}
         footer={null}
         width={600}
-        destroyOnClose
+        destroyOnHidden
       >
         <Input.Search
-          placeholder="Buscar por nombre o código..."
+          ref={entidadSearchRef}
+          placeholder="Buscar por nombre o cÃ³digo..."
           allowClear
           onSearch={buscarEntidad}
           style={{ marginBottom: 12 }}
         />
         <Table
           columns={[
-            { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
+            { title: 'CÃ³digo', dataIndex: 'codigo', key: 'codigo', width: 100 },
             { title: 'Nombre', dataIndex: 'nombre', key: 'nombre' },
             ...(esCxP
               ? [{ title: 'RNC', dataIndex: 'identificacion' as string, key: 'identificacion', width: 140 }]
-              : [{ title: 'Identificación', dataIndex: 'identificacion' as string, key: 'identificacion', width: 140 }]
+              : [{ title: 'IdentificaciÃ³n', dataIndex: 'identificacion' as string, key: 'identificacion', width: 140 }]
             ),
           ]}
           dataSource={entidades}
@@ -859,24 +880,25 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
         />
       </Modal>
 
-      {/* ───── Modal búsqueda categoría ───── */}
+      {/* â”€â”€â”€â”€â”€ Modal bÃºsqueda categorÃ­a â”€â”€â”€â”€â”€ */}
       <Modal
-        title="Buscar Categoría"
+        title="Buscar CategorÃ­a"
         open={modalCategoriaAbierto}
         onCancel={() => setModalCategoriaAbierto(false)}
         footer={null}
         width={500}
-        destroyOnClose
+        destroyOnHidden
       >
         <Input.Search
-          placeholder="Buscar por nombre o código..."
+          ref={categoriaSearchRef}
+          placeholder="Buscar por nombre o cÃ³digo..."
           allowClear
           onSearch={buscarCategoria}
           style={{ marginBottom: 12 }}
         />
         <Table
           columns={[
-            { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
+            { title: 'CÃ³digo', dataIndex: 'codigo', key: 'codigo', width: 100 },
             { title: 'Nombre', dataIndex: 'nombre', key: 'nombre' },
           ]}
           dataSource={categorias}

@@ -25,7 +25,7 @@ export const solicitudPagoApi = {
     cantidad?: number,
     salto?: number,
     estado?: number
-  ): Promise<SolicitudPagoVistaDTO[]> => {
+  ): Promise<{ data: SolicitudPagoVistaDTO[]; total: number }> => {
     const params: Record<string, string | number> = {};
     if (desde) params.desde = desde;
     if (hasta) params.hasta = hasta;
@@ -33,10 +33,10 @@ export const solicitudPagoApi = {
     if (salto) params.salto = salto;
     if (estado !== undefined) params.estado = estado;
     const { data } = await apiClient.get<ApiResponse<SolicitudPagoVistaDTO[]>>(`${BASE}/${sucursal}`, { params });
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
-  filtrar: async (sucursal: number, filtro: FiltroSolicitudPago): Promise<TransaccionBancariaVistaDTO[]> => {
+  filtrar: async (sucursal: number, filtro: FiltroSolicitudPago): Promise<{ data: TransaccionBancariaVistaDTO[]; total: number }> => {
     const params: Record<string, string | number> = {};
     if (filtro.cantidad !== undefined) params.cantidad = filtro.cantidad;
     if (filtro.salto !== undefined) params.salto = filtro.salto;
@@ -48,7 +48,7 @@ export const solicitudPagoApi = {
     if (filtro.ctaBancaria) params.ctaBancaria = filtro.ctaBancaria;
     if (filtro.concepto) params.concepto = filtro.concepto;
     const { data } = await apiClient.get<ApiResponse<TransaccionBancariaVistaDTO[]>>(`${BASE}/${sucursal}/vista/filtrar`, { params });
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   obtenerVista: async (
@@ -58,7 +58,7 @@ export const solicitudPagoApi = {
     cantidad?: number,
     salto?: number,
     estado?: number
-  ): Promise<TransaccionBancariaVistaDTO[]> => {
+  ): Promise<{ data: TransaccionBancariaVistaDTO[]; total: number }> => {
     const params: Record<string, string | number> = {};
     if (desde) params.desde = desde;
     if (hasta) params.hasta = hasta;
@@ -66,7 +66,7 @@ export const solicitudPagoApi = {
     if (salto !== undefined) params.salto = salto;
     if (estado !== undefined) params.estado = estado;
     const { data } = await apiClient.get<ApiResponse<TransaccionBancariaVistaDTO[]>>(`${BASE}/${sucursal}/vista`, { params });
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   obtenerTotal: async (

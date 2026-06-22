@@ -12,7 +12,7 @@ export const entradaAlmacenApi = {
     cantidad?: number,
     salto?: number,
     estado?: number
-  ): Promise<MovimientoVistaDTO[]> => {
+  ): Promise<{ data: MovimientoVistaDTO[]; total: number }> => {
     const params: Record<string, string | number> = {};
     if (desde) params.desde = desde;
     if (hasta) params.hasta = hasta;
@@ -21,13 +21,13 @@ export const entradaAlmacenApi = {
     if (estado !== undefined) params.estado = estado;
 
     const { data } = await apiClient.get<ApiResponse<MovimientoVistaDTO[]>>(`${BASE}/${sucursal}`, { params });
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   filtrar: async (
     sucursal: number,
     filtro: FiltroENP
-  ): Promise<MovimientoVistaDTO[]> => {
+  ): Promise<{ data: MovimientoVistaDTO[]; total: number }> => {
     const params: Record<string, string | number> = {};
     if (filtro.cantidad) params.cantidad = filtro.cantidad;
     if (filtro.salto) params.salto = filtro.salto;
@@ -41,7 +41,7 @@ export const entradaAlmacenApi = {
     if (filtro.almacen) params.almacen = filtro.almacen;
 
     const { data } = await apiClient.get<ApiResponse<MovimientoVistaDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params });
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   obtenerPorId: async (sucursal: number, id: number): Promise<EntradaAlmacenDTO> => {
@@ -194,6 +194,17 @@ export const entradaAlmacenApi = {
       { params: { fechaDesde, sucursalMov } }
     );
     return data.data ?? null;
+  },
+
+  obtenerTotalPosteable: async (
+    sucursal: number,
+    desde: string,
+    hasta: string
+  ): Promise<number> => {
+    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/total-posteable/${sucursal}`, {
+      params: { desde, hasta }
+    });
+    return data.data ?? 0;
   },
 
   obtenerDetalleMovimientosPosteriores: async (

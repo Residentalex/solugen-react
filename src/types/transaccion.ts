@@ -9,7 +9,7 @@ export interface TransaccionVistaDTO {
   ncfModificado: string;
   total: number;
   nota: string;
-  estado: number;
+  estado: string | number;
   periodo: number;
   codigoSucursal: string;
 }
@@ -61,7 +61,7 @@ export interface TransaccionDTO {
   impuestos: number;
   retenciones: number;
   total: number;
-  estado: number;
+  estado: string | number;
   periodo: number;
   debitado?: number;
   acreditado?: number;

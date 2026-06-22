@@ -97,6 +97,7 @@ export interface DevolucionCompraFullDTO {
   nota: string;
   tasa: number;
   tipoDocumentoExterno?: number;
+  tipoDocumento?: number;
 
   concepto: ConceptoDTO | null;
   almacen: AlmacenDTO | null;

@@ -17,13 +17,12 @@ export const ordenCompraApi = {
       cantidad?: number;
       salto?: number;
     }
-  ): Promise<OrdenCompraVistaDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<OrdenCompraVistaDTO[]> | OrdenCompraVistaDTO[]>(
+  ): Promise<{ data: OrdenCompraVistaDTO[]; total: number }> => {
+    const { data } = await apiClient.get<ApiResponse<OrdenCompraVistaDTO[]>>(
       `${BASE}/${sucursal}/filtrar`,
       { params: { ...params, destino } }
     );
-    if (Array.isArray(data)) return data;
-    return (data as ApiResponse<OrdenCompraVistaDTO[]>).data || [];
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   obtenerResumido: async (
@@ -37,13 +36,12 @@ export const ordenCompraApi = {
       salto?: number;
       estado?: number;
     }
-  ): Promise<OrdenCompraVistaDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<OrdenCompraVistaDTO[]> | OrdenCompraVistaDTO[]>(
+  ): Promise<{ data: OrdenCompraVistaDTO[]; total: number }> => {
+    const { data } = await apiClient.get<ApiResponse<OrdenCompraVistaDTO[]>>(
       `${BASE}/${sucursal}`,
       { params: { ...params, destino } }
     );
-    if (Array.isArray(data)) return data;
-    return (data as ApiResponse<OrdenCompraVistaDTO[]>).data || [];
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   obtenerPorId: async (sucursal: number, id: number): Promise<OrdenCompraVistaDTO> => {

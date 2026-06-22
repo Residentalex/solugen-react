@@ -4,14 +4,8 @@ import {
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { notificacionesApi } from '../../api/notificacionesApi';
+import { useCompanyStore } from '../../stores/companyStore';
 import type { NotificacionSQLConfig, NotificacionSQLRequest } from '../../types/notificaciones';
-
-const SUCURSALES_OPCIONES = [
-  { label: 'Orense Plaza', value: '0' },
-  { label: 'Hiper Romana', value: '1' },
-  { label: 'O. Villa Hermosa', value: '2' },
-  { label: 'El Ofertazo', value: '3' },
-];
 
 const TIPOS_OPCIONES = [
   { label: 'Alerta', value: 'Alerta' },
@@ -112,6 +106,11 @@ const NotificacionSQLFormulario: React.FC<NotificacionSQLFormularioProps> = ({
   const [usuarios, setUsuarios] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [sucursalesSeleccionadas, setSucursalesSeleccionadas] = useState<string[]>([]);
+
+  const sucursalesData = useCompanyStore((s) => s.data.sucursales);
+  const SUCURSALES_OPCIONES = (sucursalesData || [])
+    .filter((s: any) => s.sucursal >= 0 && s.sucursal <= 3)
+    .map((s: any) => ({ label: s.nombre, value: String(s.sucursal) }));
 
   useEffect(() => {
     if (visible) {

@@ -13,7 +13,6 @@ import {
   Spin,
   Empty,
 } from 'antd';
-import { Pie, Column, Bar } from '@ant-design/charts';
 import {
   FileDoneOutlined,
   FileSyncOutlined,
@@ -430,27 +429,42 @@ const CFacturasElectronicas: React.FC = () => {
 
   const dataTabla = vista === 'emitidos' ? emitidos : pendientes;
 
-  const columns = [
-    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => v?.split('T')[0] },
-    { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 180 },
-    { title: 'Tipo', dataIndex: 'tipoDocumento', key: 'tipoDocumento', width: 80, align: 'center' as const },
-    { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 150 },
-    { title: 'Cliente', dataIndex: 'cliente', key: 'cliente', ellipsis: true, render: (v: string) => toTitleCase(v) },
-    {
-      title: 'QR', dataIndex: 'codigoQR', key: 'codigoQR', width: 80, align: 'center' as const,
-      render: (v: string) => v ? (
-        <a href={v} target="_blank" rel="noopener noreferrer" title="Ver código QR">
-          <QrcodeOutlined className="paces-text-primary" style={{ fontSize: 18 }} />
-        </a>
-      ) : (
-        <span className="paces-text-placeholder">-</span>
-      ),
-    },
-    {
+  const columns = useMemo(() => {
+    const base: any[] = [
+      { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => v?.split('T')[0] },
+      { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 180 },
+      { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 150 },
+      { title: 'Cliente', dataIndex: 'cliente', key: 'cliente', ellipsis: true, render: (v: string) => toTitleCase(v) },
+      {
+        title: 'QR', dataIndex: 'codigoQR', key: 'codigoQR', width: 80, align: 'center' as const,
+        render: (v: string) => v ? (
+          <a href={v} target="_blank" rel="noopener noreferrer" title="Ver código QR">
+            <QrcodeOutlined className="paces-text-primary" style={{ fontSize: 18 }} />
+          </a>
+        ) : (
+          <span className="paces-text-placeholder">-</span>
+        ),
+      },
+    ];
+
+    if (vista === 'pendientes') {
+      base.splice(4, 0, {
+        title: 'Mensaje DGII', dataIndex: 'respuestaDGII', key: 'respuestaDGII', width: 350,
+        render: (v: string) => v ? (
+          <span style={{ color: '#f46a6a', fontSize: 12 }}>{v}</span>
+        ) : (
+          <span className="paces-text-placeholder">-</span>
+        ),
+      });
+    }
+
+    base.push({
       title: 'Sucursal', dataIndex: 'sucursal', key: 'sucursal', width: 140,
       render: (v: number) => SUCURSAL_NOMBRE[v] || `Sucursal ${v}`,
-    },
-  ];
+    });
+
+    return base;
+  }, [vista]);
 
   const statCardStyle = (color: string) => ({
     borderRadius: 12,
@@ -564,47 +578,6 @@ const CFacturasElectronicas: React.FC = () => {
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} lg={8}>
-          <Card
-            title="Participación por Tipo NCF"
-            style={{ borderRadius: 12 }}
-            styles={{ body: { padding: '16px 24px' } }}
-          >
-            {donutTipoData.length > 0 ? (
-              <Pie {...(donutTipoConfig as any)} />
-            ) : (
-              <div style={{ textAlign: 'center', padding: 60 }} className="paces-text-placeholder">Sin datos</div>
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card
-            title="NCF Emitidos por Sucursal"
-            style={{ borderRadius: 12 }}
-            styles={{ body: { padding: '16px 24px' } }}
-          >
-            {sucursalAgrupada.length > 0 ? (
-              <Bar {...(barSucursalConfig as any)} />
-            ) : (
-              <div style={{ textAlign: 'center', padding: 60 }} className="paces-text-placeholder">Sin datos</div>
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card
-            title="Facturado por Tipo NCF y Sucursal"
-            style={{ borderRadius: 12 }}
-            styles={{ body: { padding: '16px 24px' } }}
-          >
-            {resumenSucursal.length > 0 ? (
-              <Column {...(columnSucursalConfig as any)} />
-            ) : (
-              <div style={{ textAlign: 'center', padding: 40 }} className="paces-text-placeholder">Sin datos</div>
-            )}
-          </Card>
-        </Col>
-      </Row>
 
       <Card
         title={

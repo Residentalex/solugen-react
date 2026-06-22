@@ -21,3 +21,5 @@ export { default as BuscarDocumentoModal } from './BuscarDocumentoModal/BuscarDo
 export { default as BuscarDevolucionModal } from './BuscarDevolucionModal/BuscarDevolucionModal';
 export { default as CampoTipo } from './CampoTipo/CampoTipo';
 export type { CampoTipoProps } from './CampoTipo/CampoTipo';
+export { default as BuscarEntidadSelect } from './BuscarEntidadSelect/BuscarEntidadSelect';
+export { default as DetalleCatalogoLayout } from './DetalleCatalogoLayout';

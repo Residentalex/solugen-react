@@ -15,6 +15,7 @@ export interface MovimientoVistaDTO {
   periodo: number;
   codigoSucursal: string;
   fechaEntrega?: string;
+  fechaAccion?: string;
   creadoPor?: string;
   identificacion?: string | null;
   revisado?: boolean;
@@ -41,6 +42,7 @@ export interface EntidadDTO {
   telefono?: string;
   direccion?: string;
   requiereORC?: boolean;
+  activo?: boolean;
 }
 
 export interface TipoEntidadDTO {

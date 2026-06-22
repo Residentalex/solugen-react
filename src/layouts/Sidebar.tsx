@@ -194,11 +194,19 @@ const makeKey = (codigo: string) => `${moduloNombre}__${codigo}`;
   const handleMenuClick = ({ key }: { key: string }) => {
     if (key.startsWith('_grupo_') || key.startsWith('submenu_')) return;
     const codigo = key.includes('__') ? key.split('__')[1] : key;
+    const moduloNombre = key.includes('__') ? key.split('__')[0] : undefined;
     setActiveModule(codigo);
     if (codigo === 'dashboard') {
       navigate('/');
     } else {
-      navigate(`/${codigo}`);
+      let moduloID: number | undefined;
+      if (moduloNombre) {
+        const pantalla = usuario?.pantallas?.find((p: any) => p.codigo === codigo);
+        const modulo = pantalla?.modulos?.find((m: any) => m.nombre === moduloNombre);
+        moduloID = modulo?.id;
+      }
+      const params = moduloID ? `?modulo=${moduloID}` : '';
+      navigate(`/${codigo}${params}`);
     }
   };
 

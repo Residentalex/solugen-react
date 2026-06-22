@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Typography, Tooltip, Alert, Modal, App,
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Typography, Tooltip, Alert, Modal, App, Switch,
 } from 'antd';
 import {
   LockFilled,
@@ -32,7 +32,7 @@ import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosC
 import DistribucionPagosCard from '../../components/DistribucionPagosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { resolveEstado } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 
 const { Text } = Typography;
@@ -67,6 +67,8 @@ const DevolucionCompraDetalle: React.FC = () => {
   const operacion = useAplicar();
   const [operacionTitulo, setOperacionTitulo] = useState('');
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
+  const [mostrandoReverso, setMostrandoReverso] = useState(false);
+  const [reversoData, setReversoData] = useState<any>(null);
 
   useEffect(() => {
     setActiveModule(screenCode);
@@ -86,6 +88,15 @@ const DevolucionCompraDetalle: React.FC = () => {
         }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        if (res.estado === 3 && (res as any).reversoID) {
+          devolucionCompraApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
         // Verificar si tiene documento escaneado
         devolucionCompraApi.verificarScan(sucursalActiva, parseInt(id))
           .then((scanRes) => setTieneScan(scanRes.existe))
@@ -98,6 +109,17 @@ const DevolucionCompraDetalle: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  // Actualizar el título del header al alternar entre Original/Reverso
+  useEffect(() => {
+    if (mostrandoReverso && reversoData) {
+      const doc = reversoData as any;
+      setPageTitleOverride(`${doc.documento?.codigo || 'DVC'}-${doc.noDocumento || ''}`);
+    } else if (data) {
+      const doc = data as any;
+      setPageTitleOverride(`${doc.documento?.codigo || 'DVC'}-${doc.noDocumento || ''}`);
+    }
+  }, [mostrandoReverso, reversoData, data, setPageTitleOverride]);
 
   // Cargar documentos relacionados desde DOCUMENTOS_RELACION
   useEffect(() => {
@@ -160,6 +182,15 @@ const DevolucionCompraDetalle: React.FC = () => {
         }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        if (res.estado === 3 && (res as any).reversoID) {
+          devolucionCompraApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
         // Cargar documentos relacionados desde DOCUMENTOS_RELACION
         documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva)
           .then(rel => setDocumentosRelacionados(rel || []))
@@ -197,14 +228,15 @@ const DevolucionCompraDetalle: React.FC = () => {
   }
   if (loadingError && !data) { return <ErrorDetalle rutaVolver="/FDVC" onRecargar={handleRefresh} />; }
 
+  const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const isLarge = screens.xxl === true;
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = data.periodo === 6;
+  const estadoInfo = resolveEstado(documentoActivo.estado);
+  const esCerrado = documentoActivo.periodo === 6;
   const tienePagos = pagosAsociados.length > 0;
 
   // ===== Detalles filtrados por búsqueda =====
   const detallesFiltrados = detalleSearch
-    ? (data?.detalles || []).filter((d: any) => {
+    ? (documentoActivo?.detalles || []).filter((d: any) => {
         const q = detalleSearch.toLowerCase();
         return (
           (d.codigo || '').toLowerCase().includes(q) ||
@@ -212,7 +244,7 @@ const DevolucionCompraDetalle: React.FC = () => {
           (d.referencia || '').toLowerCase().includes(q)
         );
       })
-    : (data?.detalles || []);
+    : (documentoActivo?.detalles || []);
 
   const detalleColumns = [
     {
@@ -407,6 +439,12 @@ const DevolucionCompraDetalle: React.FC = () => {
       setModalAnularOpen(false);
       const res = await devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
+      if (res.estado === 3 && (res as any).reversoID) {
+        const revRes = await devolucionCompraApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        setReversoData(revRes);
+      } else {
+        setReversoData(null);
+      }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
       messageApi.error(msg);
@@ -422,7 +460,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       return;
     }
     // Seguridad: si no está en estado Aplicado (Validado=1), aplicar primero (como en desktop)
-    if (data.estado !== 1) {
+    if (data.estado !== 1 && data.estado !== 3) {
       messageApi.info('Debe aplicar el documento antes de postear.');
       return;
     }
@@ -458,6 +496,12 @@ const DevolucionCompraDetalle: React.FC = () => {
       messageApi.success('Documento reversado exitosamente');
       const res = await devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
+      if (res.estado === 3 && (res as any).reversoID) {
+        const revRes = await devolucionCompraApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        setReversoData(revRes);
+      } else {
+        setReversoData(null);
+      }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al reversar');
       messageApi.error(msg);
@@ -501,9 +545,9 @@ const DevolucionCompraDetalle: React.FC = () => {
       })()}
       <DetalleToolbar
         modulo="FDVC"
-        estado={data.estado}
-        periodo={data.periodo}
-        revisado={data.revisado}
+        estado={documentoActivo.estado}
+        periodo={documentoActivo.periodo}
+        revisado={documentoActivo.revisado}
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
@@ -542,11 +586,34 @@ const DevolucionCompraDetalle: React.FC = () => {
         onEditar={() => navigate(`/FDVC/${id}/editar`)}
         onAplicar={handleAplicar}
         onAnular={tienePagos ? undefined : async () => setModalAnularOpen(true)}
-        onPostear={data.concepto?.noAsientos ? undefined : handlePostear}
+        onPostear={documentoActivo.concepto?.noAsientos ? undefined : handlePostear}
         onRevisado={handleRevisar}
         onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
+        extraButtons={id ? (
+          <>
+            {data?.estado === 3 && reversoData && (
+              <Switch
+                checked={mostrandoReverso}
+                checkedChildren="Reverso"
+                unCheckedChildren="Original"
+                onChange={(checked) => setMostrandoReverso(checked)}
+                style={{ marginLeft: 8 }}
+              />
+            )}
+          </>
+        ) : undefined}
       />
+
+      {mostrandoReverso && (
+        <Alert
+          message="Viendo documento de Reverso"
+          description="Este documento es el reverso generado al anular el documento original."
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {isLarge ? (
         <Row gutter={16}>
@@ -584,11 +651,11 @@ const DevolucionCompraDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Tipo">{data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}</Descriptions.Item>
-                <Descriptions.Item label="Concepto" span={2}>{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Almacen" span={2}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+                <Descriptions.Item label="Tipo">{documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}</Descriptions.Item>
+                <Descriptions.Item label="Concepto" span={2}>{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Almacen" span={2}>{documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -607,23 +674,23 @@ const DevolucionCompraDetalle: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                   children: (
                     <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
                   ),
                 },
                 {
                   key: 'asientos',
-                  label: `Asientos (${data.asientos?.length || 0})`,
+                  label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                    <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
                   ),
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${data.logs?.length || 0})`,
+                  label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
-                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
+                    <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
@@ -631,16 +698,16 @@ const DevolucionCompraDetalle: React.FC = () => {
           </Col>
 
           <Col xxl={6}>
-            <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
-              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
-              tasa={data.tasa ?? 1}
+            <EntidadCard entidad={documentoActivo.suplidor} entidadSecundaria={documentoActivo.entidad} fallbackTitulo="Suplidor" />
+            <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} total={documentoActivo.total} alignRight={false}
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
+              tasa={documentoActivo.tasa ?? 1}
             />
             <DistribucionPagosCard
               documentos={pagosAsociados}
-              totalDocumento={data.total}
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              totalDocumento={documentoActivo.total}
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               loading={loadingPagos}
               onDocumentoClick={handleDocumentoPagoClick}
             />
@@ -685,11 +752,11 @@ const DevolucionCompraDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Tipo">{data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}</Descriptions.Item>
-              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
-              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-              <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-              <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+              <Descriptions.Item label="Tipo">{documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}</Descriptions.Item>
+              <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
+              <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="Almacen">{documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -708,38 +775,38 @@ const DevolucionCompraDetalle: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                   children: (
                     <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
                   ),
                 },
                 {
                   key: 'asientos',
-                  label: `Asientos (${data.asientos?.length || 0})`,
+                  label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                    <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
                   ),
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${data.logs?.length || 0})`,
+                  label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
-                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
+                    <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
             />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
-              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
-              tasa={data.tasa ?? 1}
+            <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} total={documentoActivo.total} alignRight={true}
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
+              tasa={documentoActivo.tasa ?? 1}
             />
             <DistribucionPagosCard
               documentos={pagosAsociados}
-              totalDocumento={data.total}
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
+              totalDocumento={documentoActivo.total}
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               loading={loadingPagos}
               onDocumentoClick={handleDocumentoPagoClick}
             />

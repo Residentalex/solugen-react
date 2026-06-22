@@ -5,7 +5,6 @@ import type { ColumnsType } from 'antd/es/table';
 import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { useDocumentoListado } from '../../hooks/useDocumentoListado';
-import EntidadColumnCell from '../../components/EntidadColumnCell';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
@@ -67,14 +66,6 @@ const TransferenciaAlmacen: React.FC = () => {
       key: 'fecha',
       width: 110,
       render: (f: string) => <Text>{formatDateRaw(f)}</Text>,
-    },
-    {
-      title: 'Entidad',
-      dataIndex: 'entidad',
-      key: 'entidad',
-      render: (name: string, record: any) => (
-        <EntidadColumnCell name={name} identificacion={record.identificacion} />
-      ),
     },
     {
       title: 'Concepto',

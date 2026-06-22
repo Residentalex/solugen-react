@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Table,
@@ -7,6 +7,7 @@ import {
   Modal,
   Form,
   Input,
+  Select,
   Switch,
   Tag,
   message,
@@ -20,6 +21,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
 import { useUIStore } from '../../stores/uiStore';
+import { useAuthStore } from '../../stores/authStore';
 import { Sucursal } from '../../types/auth';
 import type { AuthPermisoEspecialDTO } from '../../types/auth';
 import { permisoEspecialApi } from '../../api/permisoEspecialApi';
@@ -27,12 +29,11 @@ import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
 
-const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
-
 const PermisosEspeciales: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
+  const securitySucursal = useAuthStore((s) => s.securitySucursal);
 
   const [searchText, setSearchText] = useState('');
   const [selectedRow, setSelectedRow] = useState<AuthPermisoEspecialDTO | null>(null);
@@ -51,7 +52,7 @@ const PermisosEspeciales: React.FC = () => {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['permisosEspeciales'],
     queryFn: async () => {
-      const result = await permisoEspecialApi.obtenerListado(SUCURSAL_SEGURIDAD);
+      const result = await permisoEspecialApi.obtenerListado(securitySucursal);
       return result || [];
     },
     placeholderData: (prev) => prev,
@@ -92,6 +93,7 @@ const PermisosEspeciales: React.FC = () => {
       codigo: permiso.codigo,
       nombre: permiso.nombre || '',
       activo: permiso.activo,
+      tipoValor: permiso.tipoValor || 'BOOLEANO',
     });
     setModalVisible(true);
   };
@@ -101,7 +103,7 @@ const PermisosEspeciales: React.FC = () => {
     setDetalleVisible(true);
     setCargandoDetalle(true);
     try {
-      const completo = await permisoEspecialApi.obtenerPorId(SUCURSAL_SEGURIDAD, permiso.id);
+      const completo = await permisoEspecialApi.obtenerPorId(securitySucursal, permiso.id);
       setDetalleItem(completo);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar detalle del permiso');
@@ -120,13 +122,14 @@ const PermisosEspeciales: React.FC = () => {
         codigo: values.codigo,
         nombre: values.nombre || undefined,
         activo: values.activo ?? true,
+        tipoValor: values.tipoValor || 'BOOLEANO',
       };
 
       if (editando) {
-        await permisoEspecialApi.actualizar(SUCURSAL_SEGURIDAD, payload);
+        await permisoEspecialApi.actualizar(securitySucursal, payload);
         message.success('Permiso actualizado correctamente');
       } else {
-        await permisoEspecialApi.crear(SUCURSAL_SEGURIDAD, payload);
+        await permisoEspecialApi.crear(securitySucursal, payload);
         message.success('Permiso creado correctamente');
       }
 
@@ -142,7 +145,7 @@ const PermisosEspeciales: React.FC = () => {
 
   const columns: ColumnsType<AuthPermisoEspecialDTO> = [
     {
-      title: 'Código',
+      title: 'CÃ³digo',
       dataIndex: 'codigo',
       key: 'codigo',
       fixed: 'left',
@@ -241,13 +244,13 @@ const PermisosEspeciales: React.FC = () => {
         width={520}
         okText="Guardar"
         cancelText="Cancelar"
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item
             name="codigo"
-            label="Código"
-            rules={[{ required: true, message: 'El código es obligatorio' }]}
+            label="CÃ³digo"
+            rules={[{ required: true, message: 'El cÃ³digo es obligatorio' }]}
           >
             <Input placeholder="Ej. PERMISO_ESPECIAL" maxLength={50} />
           </Form.Item>
@@ -263,6 +266,13 @@ const PermisosEspeciales: React.FC = () => {
             initialValue={true}
           >
             <Switch />
+          </Form.Item>
+
+          <Form.Item name="tipoValor" label="Tipo de valor" initialValue="BOOLEANO">
+            <Select>
+              <Select.Option value="BOOLEANO">BOOLEANO</Select.Option>
+              <Select.Option value="NUMERICO">NUMÃ‰RICO</Select.Option>
+            </Select>
           </Form.Item>
         </Form>
       </Modal>
@@ -284,7 +294,7 @@ const PermisosEspeciales: React.FC = () => {
         <Spin spinning={cargandoDetalle}>
           {detalleItem && (
             <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
-              <Descriptions.Item label="Código">{detalleItem.codigo}</Descriptions.Item>
+              <Descriptions.Item label="CÃ³digo">{detalleItem.codigo}</Descriptions.Item>
               <Descriptions.Item label="Nombre">{detalleItem.nombre || '-'}</Descriptions.Item>
               <Descriptions.Item label="Activo">
                 <Tag color={detalleItem.activo ? 'green' : 'red'}>

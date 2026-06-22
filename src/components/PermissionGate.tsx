@@ -19,12 +19,18 @@ const PermissionGate: React.FC<PermissionGateProps> = ({ codigoPantalla, accion,
 
   // Si se pasa permisoEspecial, verifica contra permisosEspeciales del usuario
   if (permisoEspecial) {
-    const tienePermiso = usuario.permisosEspeciales?.some(
-      (p) => p.codigo?.toUpperCase() === permisoEspecial.toUpperCase() && p.valor === true
+    const permiso = usuario.permisosEspeciales?.find(
+      (p) => p.codigo?.toUpperCase() === permisoEspecial.toUpperCase()
     );
-    if (!tienePermiso) {
-      return null;
-    }
+    if (!permiso) return null;
+
+    // BOOLEANO: valor debe ser true
+    // NUMERICO: valorNumerico debe ser > 0
+    const activo = permiso.tipoValor === 'NUMERICO'
+      ? (permiso.valorNumerico ?? 0) > 0
+      : permiso.valor === true;
+
+    if (!activo) return null;
     return <>{children}</>;
   }
 

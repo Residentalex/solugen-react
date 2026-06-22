@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Modal, Table, Input, Alert, Tag, Typography, Empty, Button } from 'antd';
 import { WarningOutlined, SearchOutlined, DownloadOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
@@ -24,6 +24,16 @@ const ExistenciasNegativasModal: React.FC<ExistenciasNegativasModalProps> = ({
   datos,
 }) => {
   const [searchText, setSearchText] = useState('');
+  const searchRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+        searchRef.current?.focus?.();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   const datosFiltrados = useMemo(() => {
     if (!searchText) return datos;
@@ -132,7 +142,7 @@ const ExistenciasNegativasModal: React.FC<ExistenciasNegativasModalProps> = ({
       onCancel={onClose}
       footer={null}
       width={720}
-      destroyOnClose
+      destroyOnHidden
     >
       {datos.length === 0 ? (
         <Empty description="No hay productos con existencia negativa" image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -147,6 +157,7 @@ const ExistenciasNegativasModal: React.FC<ExistenciasNegativasModalProps> = ({
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <Input.Search
+              ref={searchRef}
               placeholder="Buscar por código o artículo..."
               allowClear
               style={{ flex: 1 }}
@@ -176,3 +187,4 @@ const ExistenciasNegativasModal: React.FC<ExistenciasNegativasModalProps> = ({
 };
 
 export default ExistenciasNegativasModal;
+

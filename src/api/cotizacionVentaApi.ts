@@ -12,7 +12,7 @@ export const cotizacionVentaApi = {
     cantidad?: number,
     salto?: number,
     estado?: number
-  ): Promise<CotizacionVentaDTO[]> => {
+  ): Promise<{ data: CotizacionVentaDTO[]; total: number }> => {
     const params: Record<string, string | number> = {};
     if (desde) params.desde = desde;
     if (hasta) params.hasta = hasta;
@@ -21,13 +21,13 @@ export const cotizacionVentaApi = {
     if (estado !== undefined) params.estado = estado;
 
     const { data } = await apiClient.get<ApiResponse<CotizacionVentaDTO[]>>(`${BASE}/${sucursal}`, { params });
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   filtrar: async (
     sucursal: number,
     filtro: FiltroCotizacionVenta
-  ): Promise<CotizacionVentaDTO[]> => {
+  ): Promise<{ data: CotizacionVentaDTO[]; total: number }> => {
     const params: Record<string, string | number> = {};
     if (filtro.cantidad) params.cantidad = filtro.cantidad;
     if (filtro.salto) params.salto = filtro.salto;
@@ -38,7 +38,7 @@ export const cotizacionVentaApi = {
     if (filtro.cliente) params.cliente = filtro.cliente;
 
     const { data } = await apiClient.get<ApiResponse<CotizacionVentaDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params });
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   obtenerPorId: async (sucursal: number, id: number): Promise<CotizacionVentaDTO> => {

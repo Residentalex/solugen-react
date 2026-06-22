@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Divider, Input, Typography, Tooltip, Modal, Alert, App
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Divider, Input, Typography, Tooltip, Modal, Alert, App, Switch
 } from 'antd';
 import {
   LockFilled,
@@ -24,7 +24,7 @@ import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { resolveEstado } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 
 const { Text } = Typography;
@@ -68,6 +68,8 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
+  const [mostrandoReverso, setMostrandoReverso] = useState(false);
+  const [reversoData, setReversoData] = useState<any>(null);
 
   const { message: messageApi } = App.useApp();
 
@@ -84,6 +86,15 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       .then((res) => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        if (res.estado === 3 && (res as any).reversoID) {
+          transferenciaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
         // Verificar si tiene documento escaneado
         transferenciaAlmacenApi.verificarScan(sucursalActiva, parseInt(id))
           .then((scanRes) => setTieneScan(scanRes.existe))
@@ -97,6 +108,17 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
+  // Actualizar el título del header al alternar entre Original/Reverso
+  useEffect(() => {
+    if (mostrandoReverso && reversoData) {
+      const doc = reversoData as any;
+      setPageTitleOverride(`${doc.documento?.codigo || 'TRP'}-${doc.noDocumento || ''}`);
+    } else if (data) {
+      const doc = data as any;
+      setPageTitleOverride(`${doc.documento?.codigo || 'TRP'}-${doc.noDocumento || ''}`);
+    }
+  }, [mostrandoReverso, reversoData, data, setPageTitleOverride]);
+
   const handleRefresh = useCallback(() => {
     if (!id) return;
     setLoadingError(false);
@@ -104,6 +126,15 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       .then((res) => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        if (res.estado === 3 && (res as any).reversoID) {
+          transferenciaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
         // Cargar documentos relacionados desde DOCUMENTOS_RELACION
         documentoRelacionApi.obtenerPorTransaccion(parseInt(id))
           .then(rel => setDocumentosRelacionados(rel || []))
@@ -152,12 +183,13 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
   }
   if (loadingError && !data) { return <ErrorDetalle rutaVolver="/FALM" onRecargar={handleRefresh} />; }
 
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = data.periodo === 6;
+  const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
+  const estadoInfo = resolveEstado(documentoActivo.estado);
+  const esCerrado = documentoActivo.periodo === 6;
 
   // ===== Detalles filtrados por búsqueda =====
   const detallesFiltrados = detalleSearch
-    ? (data?.detalles || []).filter((d: any) => {
+    ? (documentoActivo?.detalles || []).filter((d: any) => {
         const q = detalleSearch.toLowerCase();
         return (
           (d.codigo || '').toLowerCase().includes(q) ||
@@ -165,7 +197,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
           (d.referencia || '').toLowerCase().includes(q)
         );
       })
-    : (data?.detalles || []);
+    : (documentoActivo?.detalles || []);
 
   const detalleColumns = [
     {
@@ -262,6 +294,12 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       setModalAnularOpen(false);
       const res = await transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
+      if (res.estado === 3 && (res as any).reversoID) {
+        const revRes = await transferenciaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        setReversoData(revRes);
+      } else {
+        setReversoData(null);
+      }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
       messageApi.error(msg);
@@ -303,6 +341,12 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       messageApi.success('Documento reversado exitosamente');
       const res = await transferenciaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
+      if (res.estado === 3 && (res as any).reversoID) {
+        const revRes = await transferenciaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        setReversoData(revRes);
+      } else {
+        setReversoData(null);
+      }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al reversar');
       messageApi.error(msg);
@@ -340,22 +384,22 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       <Descriptions bordered size="small" column={columnCount} styles={{ content: { background: 'transparent' } }}>
         <Descriptions.Item label="Tipo:">—</Descriptions.Item>
         <Descriptions.Item label="Concepto:">
-          {data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}
+          {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}
         </Descriptions.Item>
         <Descriptions.Item label="Referencia:">
-          {data.referencia || '-'}
+          {documentoActivo.referencia || '-'}
         </Descriptions.Item>
         <Descriptions.Item label="Fecha Doc.:">
-          {formatDate(data.fechaDocumento)}
+          {formatDate(documentoActivo.fechaDocumento)}
         </Descriptions.Item>
         <Descriptions.Item label="Almacén Origen:">
-          {data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}
+          {documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}
         </Descriptions.Item>
         <Descriptions.Item label="Almacén Destino:">
-          {data.almacenDestino?.nombre ? toTitleCase(data.almacenDestino.nombre) : '-'}
+          {documentoActivo.almacenDestino?.nombre ? toTitleCase(documentoActivo.almacenDestino.nombre) : '-'}
         </Descriptions.Item>
         <Descriptions.Item label="Nota:" span={columnCount}>
-          <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+          <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
         </Descriptions.Item>
       </Descriptions>
     </Card>
@@ -378,23 +422,23 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       items={[
         {
           key: 'detalles',
-          label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+          label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
           children: (
             <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
           ),
         },
         {
           key: 'asientos',
-          label: `Asientos (${data.asientos?.length || 0})`,
+          label: `Asientos (${documentoActivo.asientos?.length || 0})`,
           children: (
-            <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+            <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
           ),
         },
         {
           key: 'historial',
-          label: `Historial (${data.logs?.length || 0})`,
+          label: `Historial (${documentoActivo.logs?.length || 0})`,
           children: (
-            <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
+            <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
           ),
         },
       ]}
@@ -419,9 +463,9 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
 
       <DetalleToolbar
         modulo="FTRP"
-        estado={data.estado}
-        periodo={data.periodo}
-        revisado={data.revisado}
+        estado={documentoActivo.estado}
+        periodo={documentoActivo.periodo}
+        revisado={documentoActivo.revisado}
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
@@ -429,8 +473,8 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         onImprimir={async () => {
           setImprimiendo(true);
           try {
-            const sucursalParam = data.codigoSucursal
-              ? obtenerNombreEnumSucursal(data.codigoSucursal)
+            const sucursalParam = documentoActivo.codigoSucursal
+              ? obtenerNombreEnumSucursal(documentoActivo.codigoSucursal)
               : sucursalActiva;
             const res = await apiClient.post('/reportes/inventario/transferencia', data, {
               responseType: 'blob',
@@ -461,7 +505,30 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         onRevisado={handleRevisado}
         onDesaplicar={async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
+        extraButtons={id ? (
+          <>
+            {data?.estado === 3 && reversoData && (
+              <Switch
+                checked={mostrandoReverso}
+                checkedChildren="Reverso"
+                unCheckedChildren="Original"
+                onChange={(checked) => setMostrandoReverso(checked)}
+                style={{ marginLeft: 8 }}
+              />
+            )}
+          </>
+        ) : undefined}
       />
+
+      {mostrandoReverso && (
+        <Alert
+          message="Viendo documento de Reverso"
+          description="Este documento es el reverso generado al anular el documento original."
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {/* Siempre una sola columna — no hay TotalesCard ni EntidadCard */}
       <div>

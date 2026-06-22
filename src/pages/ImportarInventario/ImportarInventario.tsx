@@ -472,7 +472,13 @@ const ImportarInventario: React.FC = () => {
             ? { nombre: suplidorSel.nombre, codigo: suplidorSel.codigo, identificacion: suplidorSel.identificacion || '', telefono: suplidorSel.telefono, direccion: suplidorSel.direccion }
             : { nombre: '', codigo: '', identificacion: '' },
           moneda: getMonedaSucursalActiva(),
-          sucursal: null,
+          sucursal: (() => {
+            const sucActual = useAuthStore.getState().sucursalesPermitidas
+              .find(s => s.sucursal === sucursalActiva);
+            return sucActual
+              ? { nombre: sucActual.nombre, codigo: String(sucActual.sucursal), identificacion: '' }
+              : { nombre: '', codigo: '', identificacion: '' };
+          })(),
           ordenCompra: { id: 0, noDocumento: '' },
           detalles: detalles.map((d) => ({
             id: d.id,

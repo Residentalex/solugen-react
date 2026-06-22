@@ -15,14 +15,13 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 
 const { Text } = Typography;
 
-const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
-
 const PantallaDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
   const sucursalActiva = useAuthStore((s: any) => s.usuario?.sucursalActiva);
+  const securitySucursal = useAuthStore((s) => s.securitySucursal);
 
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
@@ -58,7 +57,7 @@ const PantallaDetalle: React.FC = () => {
   const cargarPermisos = useCallback(async () => {
     if (!id) return;
     try {
-      const result = await permisoEspecialApi.obtenerPorPantalla(SUCURSAL_SEGURIDAD, parseInt(id));
+      const result = await permisoEspecialApi.obtenerPorPantalla(securitySucursal, parseInt(id));
       setPermisosEspeciales(result || []);
     } catch {
       // no crítico

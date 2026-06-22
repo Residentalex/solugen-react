@@ -1,20 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Typography, Descriptions, Alert, Table
+  Card, Tabs, Tag, Row, Col, Grid, Typography, Descriptions, Table
 } from 'antd';
-import {
-  ArrowLeftOutlined,
-  EditOutlined,
-} from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { conceptosApi } from '../../api/conceptosApi';
 import { tipoApi } from '../../api/tipoApi';
-import PermissionGate from '../../components/PermissionGate';
 import { toTitleCase } from '../../utils/formats';
 import type { ConceptoDTO } from '../../types/entradaAlmacen';
 import type { TipoDocumentoDTO } from '../../types/transaccion';
+import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
 
 const { Text } = Typography;
 
@@ -81,52 +77,20 @@ const ConceptoDetalle: React.FC = () => {
     cargarConcepto();
   }, [codigo, cargarConcepto]);
 
-  // Loading state
-  if (loading || (!data && !loadingError)) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando concepto...</div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (loadingError && !data) {
-    return (
-      <div>
-        <Alert
-          message="Error al cargar detalle del concepto"
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          action={
-            <Button size="small" onClick={cargarConcepto}>
-              Reintentar
-            </Button>
-          }
-        />
-      </div>
-    );
-  }
-
   if (!data) return null;
 
   return (
-    <div>
-      {/* Toolbar inline */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/MConcepto')}>
-          Volver
-        </Button>
-        <div style={{ flex: 1 }} />
-        <PermissionGate accion="EDITAR">
-          <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/MConcepto/${codigo}/editar`)}>
-            Editar
-          </Button>
-        </PermissionGate>
-      </div>
-
+    <DetalleCatalogoLayout
+      rutaVolver="/MConcepto"
+      loading={loading}
+      mensajeLoading="Cargando concepto..."
+      loadingError={loadingError}
+      mensajeError="Error al cargar detalle del concepto"
+      onRecargar={cargarConcepto}
+      dataDisponible={!!data}
+      errorSinDatos={false}
+      onEditar={() => navigate(`/MConcepto/${codigo}/editar`)}
+    >
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ xxl) === */
         <Row gutter={16}>
@@ -545,7 +509,7 @@ const ConceptoDetalle: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </DetalleCatalogoLayout>
   );
 };
 

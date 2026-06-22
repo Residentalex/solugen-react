@@ -154,7 +154,7 @@ export interface TransaccionDTO {
   debitos: number;
   creditos: number;
   tasa: number;
-  estado: number;
+  estado: string | number;
   periodo: number;
   codigoSucursal?: string;
   /** Objeto Documento del backend (config del tipo de documento) */

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Modal, Tabs, Input, Table, Button, Space } from 'antd';
 
 interface ProductosOrigenModalProps {
@@ -32,6 +32,16 @@ const ProductosOrigenModal: React.FC<ProductosOrigenModalProps> = ({
   const [comodinSearch, setComodinSearch] = useState('');
   const [selectedSource, setSelectedSource] = useState<any[]>([]);
   const [selectedComodin, setSelectedComodin] = useState<any[]>([]);
+  const sourceSearchRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+        sourceSearchRef.current?.focus?.();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -59,7 +69,7 @@ const ProductosOrigenModal: React.FC<ProductosOrigenModalProps> = ({
     });
 
   return (
-    <Modal title={title} open={open} onCancel={onClose} footer={null} width={700} destroyOnClose>
+    <Modal title={title} open={open} onCancel={onClose} footer={null} width={700} destroyOnHidden>
       <Tabs
         type="card"
         items={[
@@ -69,6 +79,7 @@ const ProductosOrigenModal: React.FC<ProductosOrigenModalProps> = ({
             children: (
               <>
                 <Input.Search
+                  ref={sourceSearchRef}
                   placeholder="Buscar producto..."
                   allowClear
                   style={{ marginBottom: 16 }}
@@ -111,7 +122,7 @@ const ProductosOrigenModal: React.FC<ProductosOrigenModalProps> = ({
             children: (
               <>
                 <Input.Search
-                  placeholder="Buscar comodín..."
+                  placeholder="Buscar comodÃ­n..."
                   allowClear
                   style={{ marginBottom: 16 }}
                   onSearch={setComodinSearch}

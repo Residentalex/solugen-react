@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Modal, Select, Typography, Divider, Input, Button, Space } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 
@@ -6,8 +6,8 @@ const { Text } = Typography;
 const { TextArea } = Input;
 
 export const MOTIVOS_DESAPLICAR = [
-  'Datos Erróneos.',
-  'Falta de Información.',
+  'Datos ErrÃ³neos.',
+  'Falta de InformaciÃ³n.',
   'Falta de un Producto.',
   'Entrada Duplicada.',
   'Otro motivo...',
@@ -77,7 +77,7 @@ const ModalDesaplicar: React.FC<ModalDesaplicarProps> = ({
       open={open}
       onCancel={handleCancel}
       width={480}
-      destroyOnClose
+      destroyOnHidden
       maskClosable={false}
       closable={!submitting}
       footer={
@@ -106,7 +106,7 @@ const ModalDesaplicar: React.FC<ModalDesaplicarProps> = ({
       <Divider style={{ margin: '12px 0' }} />
 
       <div style={{ marginBottom: 8 }}>
-        <Text>Selecciona el motivo de desaplicación:</Text>
+        <Text>Selecciona el motivo de desaplicaciÃ³n:</Text>
       </div>
 
       <Select

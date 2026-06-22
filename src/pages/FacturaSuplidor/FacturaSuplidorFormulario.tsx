@@ -655,6 +655,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
             referencia: d.referencia || '',
             cantidad: d.cantidad || 0,
             costo: d.costo || 0,
+            porcentajeDescuento: d.porcentajeDescuento || 0,
             familia: d.familia,
             medida: d.medida,
             impuesto: d.impuesto,
@@ -684,6 +685,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
               referencia: d.referencia || '',
               cantidad: d.cantidad || 0,
               costo: d.costo || 0,
+              porcentajeDescuento: d.porcentajeDescuento || 0,
               familia: d.familia,
               medida: d.medida,
               impuesto: d.impuesto,
@@ -833,6 +835,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const estadoInfo = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Borrador', color: 'default' };
 
   // ===== Encabezado del formulario =====
+  const documentoTieneTipos = tiposCache.length > 0;
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
@@ -873,7 +876,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
                     placeholder=" "
                     value={conceptoSearchText}
                     readOnly
-                    disabled={!selectedTipo}
+                    disabled={documentoTieneTipos && !selectedTipo}
                     suffix={
                       <Space size={4}>
                         <SearchOutlined onClick={() => setConceptoModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />

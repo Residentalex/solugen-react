@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Spin, message, Button, Row, Col, Table, Statistic, Typography, Empty, Alert } from 'antd';
-import { ArrowLeftOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined, EditOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, message, Row, Col, Table, Statistic, Typography, Empty, Spin, Skeleton } from 'antd';
+import { ArrowUpOutlined, ArrowDownOutlined, SwapOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
 import type { CuentaContableDTO, MovimientoCuentaDTO, BalanceCuentaDTO } from '../../types/contabilidad';
 import { OrigenCuenta } from '../../types/contabilidad';
-import { ErrorDetalle } from '../../components';
+import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
 
 const { Text } = Typography;
 
@@ -32,19 +32,17 @@ const CuentaContableDetalle: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [loadingMovimientos, setLoadingMovimientos] = useState(false);
+  const [loadingBalance, setLoadingBalance] = useState(false);
   const [pagina, setPagina] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  // Carga inicial: cuenta + balance
+  // Carga inicial en dos fases: datos básicos primero, balance pesado después
   useEffect(() => {
     setActiveModule('MCuentaContable');
     if (sucursalActiva === undefined || !noCuenta) return;
     setLoading(true);
-    Promise.all([
-      cuentaContableApi.obtenerPorId(sucursalActiva, noCuenta),
-      cuentaContableApi.obtenerBalance(sucursalActiva, noCuenta),
-    ])
-      .then(([cta, bal]) => {
+    cuentaContableApi.obtenerPorId(sucursalActiva, noCuenta)
+      .then(cta => {
         if (!cta) {
           message.error('Cuenta contable no encontrada en la sucursal seleccionada.');
           setLoadingError(true);
@@ -52,14 +50,23 @@ const CuentaContableDetalle: React.FC = () => {
         }
         setItem(cta);
         setPageTitleOverride(cta.noCuenta);
-        setBalance(bal);
+        setLoading(false);
+        // Fase 2: balance pesado
+        setLoadingBalance(true);
+        return cuentaContableApi.obtenerBalance(sucursalActiva, noCuenta);
+      })
+      .then(bal => {
+        if (bal) setBalance(bal);
       })
       .catch((err: any) => {
         message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
         setLoadingError(true);
         navigate('/MCuentaContable');
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setLoadingBalance(false);
+      });
     return () => setPageTitleOverride('');
   }, [noCuenta, sucursalActiva]);
 
@@ -89,11 +96,8 @@ const CuentaContableDetalle: React.FC = () => {
     if (!noCuenta) return;
     setLoadingError(false);
     setLoading(true);
-    Promise.all([
-      cuentaContableApi.obtenerPorId(sucursalActiva, noCuenta),
-      cuentaContableApi.obtenerBalance(sucursalActiva, noCuenta),
-    ])
-      .then(([cta, bal]) => {
+    cuentaContableApi.obtenerPorId(sucursalActiva, noCuenta)
+      .then(cta => {
         if (!cta) {
           message.error('Cuenta contable no encontrada en la sucursal seleccionada.');
           setLoadingError(true);
@@ -101,26 +105,22 @@ const CuentaContableDetalle: React.FC = () => {
         }
         setItem(cta);
         setPageTitleOverride(cta.noCuenta);
-        setBalance(bal);
+        setLoading(false);
+        setLoadingBalance(true);
+        return cuentaContableApi.obtenerBalance(sucursalActiva, noCuenta);
+      })
+      .then(bal => {
+        if (bal) setBalance(bal);
       })
       .catch((err: any) => {
         message.error(err?.response?.data?.errorMessage || 'Error al recargar');
         setLoadingError(true);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setLoadingBalance(false);
+      });
   }, [noCuenta, sucursalActiva]);
-
-  if (loading || (!item && !loadingError)) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
-  if (loadingError && !item) {
-    return <ErrorDetalle mensaje="Error al cargar el documento" rutaVolver="/MCuentaContable" />;
-  }
-  if (!item) return null;
 
   const columnsMovimientos: ColumnsType<MovimientoCuentaDTO> = [
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 90,
@@ -134,30 +134,16 @@ const CuentaContableDetalle: React.FC = () => {
   ];
 
   return (
-    <div>
-      {loadingError && (
-        <Alert
-          message="Error al cargar detalle de cuenta contable"
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          action={
-            <Button size="small" onClick={handleRefresh}>
-              Reintentar
-            </Button>
-          }
-        />
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/MCuentaContable')}>
-          Volver
-        </Button>
-        <div style={{ flex: 1 }} />
-        <Button type="primary" icon={<EditOutlined />} onClick={() => navigate('/MCuentaContable', { state: { editarNoCuenta: noCuenta } })}>
-          Editar
-        </Button>
-      </div>
-
+    <DetalleCatalogoLayout
+      rutaVolver="/MCuentaContable"
+      loading={loading}
+      mensajeLoading="Cargando cuenta contable..."
+      loadingError={loadingError}
+      mensajeError="Error al cargar detalle de cuenta contable"
+      onRecargar={handleRefresh}
+      dataDisponible={!!item}
+      onEditar={() => navigate('/MCuentaContable', { state: { editarNoCuenta: noCuenta } })}
+    >
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={8}>
           <Card
@@ -165,109 +151,132 @@ const CuentaContableDetalle: React.FC = () => {
             title={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>Datos Generales</span>
-                <Tag color={item.activo ? 'green' : 'default'}>{item.activo ? 'Activo' : 'Inactivo'}</Tag>
+                <Tag color={item?.activo ? 'green' : 'default'}>{item?.activo ? 'Activo' : 'Inactivo'}</Tag>
               </div>
             }
           >
             <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label="Nombre">{item.nombre}</Descriptions.Item>
+              <Descriptions.Item label="Nombre">{item?.nombre}</Descriptions.Item>
               <Descriptions.Item label="Tipo">—</Descriptions.Item>
-              <Descriptions.Item label="Tipo Cuenta">{item.tipoCuenta?.nombre || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Grupo">{item.grupo?.nombre || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Moneda">{item.moneda?.codigo || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Origen">{ORIGEN_LABEL[item.origen] || 'Desconocido'}</Descriptions.Item>
+              <Descriptions.Item label="Tipo Cuenta">{item?.tipoCuenta?.nombre || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Grupo">{item?.grupo?.nombre || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Moneda">{item?.moneda?.codigo || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Origen">{ORIGEN_LABEL[item?.origen ?? -1] || 'Desconocido'}</Descriptions.Item>
               <Descriptions.Item label="Cuenta Control">
-                {item.cuentaControl?.noCuenta
+                {item?.cuentaControl?.noCuenta
                   ? `${item.cuentaControl.noCuenta} - ${item.cuentaControl.nombre}`
                   : '-'}
               </Descriptions.Item>
               <Descriptions.Item label="Cuenta Prima">
-                {item.cuentaPrima?.noCuenta
+                {item?.cuentaPrima?.noCuenta
                   ? `${item.cuentaPrima.noCuenta} - ${item.cuentaPrima.nombre}`
                   : '-'}
               </Descriptions.Item>
               <Descriptions.Item label="Centro Costo">
-                {item.utilizaCentroCosto ? 'Sí' : 'No'}
+                {item?.utilizaCentroCosto ? 'Sí' : 'No'}
               </Descriptions.Item>
-              <Descriptions.Item label="Nota">{item.nota || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Nota">{item?.nota || '-'}</Descriptions.Item>
             </Descriptions>
           </Card>
         </Col>
 
         <Col xs={24} lg={16}>
           <Card className="paces-card" title="Resumen" style={{ marginBottom: 16 }}>
-            <Row gutter={[16, 16]}>
-              <Col xs={12} sm={8}>
-                <Statistic
-                  title="Total Débitos"
-                  value={balance?.totalDebe ?? 0}
-                  precision={2}
-                  prefix={<ArrowDownOutlined style={{ color: '#f5222d' }} />}
-                  valueStyle={{ color: '#f5222d', fontSize: 18 }}
-                />
-              </Col>
-              <Col xs={12} sm={8}>
-                <Statistic
-                  title="Total Créditos"
-                  value={balance?.totalHaber ?? 0}
-                  precision={2}
-                  prefix={<ArrowUpOutlined style={{ color: '#52c41a' }} />}
-                  valueStyle={{ color: '#52c41a', fontSize: 18 }}
-                />
-              </Col>
-              <Col xs={12} sm={8}>
-                <Statistic
-                  title="Saldo Actual"
-                  value={balance?.saldo ?? 0}
-                  precision={2}
-                  prefix={<SwapOutlined style={{ color: '#556ee6' }} />}
-                  valueStyle={{ color: '#556ee6', fontSize: 18, fontWeight: 600 }}
-                />
-              </Col>
-            </Row>
-            {balance?.fechaUltimoCierre && (
-              <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-                <Col span={24}>
-                  <Card size="small" className="paces-card" style={{ background: '#fafafa' }}>
-                    <Text type="secondary">
-                      Último cierre: <Text strong>{balance.fechaUltimoCierre?.split('-').reverse().join('/')}</Text>
-                      {balance.balanceBase != null && (
-                        <> — Balance al cierre: <Text strong>{balance.balanceBase.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</Text></>
-                      )}
-                    </Text>
-                  </Card>
-                </Col>
+            {loadingBalance && balance === null ? (
+              <Row gutter={[16, 16]}>
+                {[0, 1, 2].map(i => (
+                  <Col key={i} xs={12} sm={8}>
+                    <Card size="small" className="paces-card">
+                      <Skeleton active paragraph={false} title={{ width: '60%' }} />
+                    </Card>
+                  </Col>
+                ))}
               </Row>
+            ) : (
+              <>
+                <Row gutter={[16, 16]}>
+                  <Col xs={12} sm={8}>
+                    <Statistic
+                      title="Total Débitos"
+                      value={balance?.totalDebe ?? 0}
+                      precision={2}
+                      prefix={<ArrowDownOutlined style={{ color: '#f5222d' }} />}
+                      valueStyle={{ color: '#f5222d', fontSize: 18 }}
+                    />
+                  </Col>
+                  <Col xs={12} sm={8}>
+                    <Statistic
+                      title="Total Créditos"
+                      value={balance?.totalHaber ?? 0}
+                      precision={2}
+                      prefix={<ArrowUpOutlined style={{ color: '#52c41a' }} />}
+                      valueStyle={{ color: '#52c41a', fontSize: 18 }}
+                    />
+                  </Col>
+                  <Col xs={12} sm={8}>
+                    <Statistic
+                      title="Saldo Actual"
+                      value={balance?.saldo ?? 0}
+                      precision={2}
+                      prefix={<SwapOutlined style={{ color: '#556ee6' }} />}
+                      valueStyle={{ color: '#556ee6', fontSize: 18, fontWeight: 600 }}
+                    />
+                  </Col>
+                </Row>
+                {balance?.fechaUltimoCierre && (
+                  <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+                    <Col span={24}>
+                      <Card size="small" className="paces-card" style={{ background: '#fafafa' }}>
+                        <Text type="secondary">
+                          Último cierre: <Text strong>{balance.fechaUltimoCierre?.split('-').reverse().join('/')}</Text>
+                          {balance.balanceBase != null && (
+                            <> — Balance al cierre: <Text strong>{balance.balanceBase.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</Text></>
+                          )}
+                        </Text>
+                      </Card>
+                    </Col>
+                  </Row>
+                )}
+              </>
             )}
           </Card>
 
           <Card className="paces-card" title={`Movimientos (${totalMovimientos})`}>
-            <Table<MovimientoCuentaDTO>
-              columns={columnsMovimientos}
-              dataSource={movimientos}
-              rowKey="id"
-              loading={loadingMovimientos}
-              size="middle"
-              className="paces-list-table"
-              locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay movimientos registrados" /></div> }}
-              pagination={{
-                current: pagina,
-                pageSize: pageSize,
-                total: totalMovimientos,
-                showSizeChanger: true,
-                pageSizeOptions: ['10', '25', '50', '100'],
-                showTotal: (t) => `${t} registros`,
-                onChange: (pag, size) => {
-                  setPagina(pag);
-                  setPageSize(size);
-                },
-              }}
-              scroll={{ x: 550 }}
-            />
+            {totalMovimientos === 0 && loadingMovimientos ? (
+              <div style={{ textAlign: 'center', padding: '60px 0' }}>
+                <Spin size="large" tip="Cargando movimientos..." />
+              </div>
+            ) : (
+              <Table<MovimientoCuentaDTO>
+                columns={columnsMovimientos}
+                dataSource={movimientos}
+                rowKey="id"
+                size="middle"
+                className="paces-list-table"
+                locale={{
+                  emptyText: loadingMovimientos
+                    ? <Skeleton active paragraph={{ rows: 5 }} />
+                    : <Empty description="No hay movimientos registrados" />,
+                }}
+                pagination={{
+                  current: pagina,
+                  pageSize: pageSize,
+                  total: totalMovimientos,
+                  showSizeChanger: true,
+                  pageSizeOptions: ['10', '25', '50', '100'],
+                  showTotal: (t) => `${t} registros`,
+                  onChange: (pag, size) => {
+                    setPagina(pag);
+                    setPageSize(size);
+                  },
+                }}
+                scroll={{ x: 550 }}
+              />
+            )}
           </Card>
         </Col>
       </Row>
-    </div>
+    </DetalleCatalogoLayout>
   );
 };
 

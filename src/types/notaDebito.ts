@@ -47,7 +47,6 @@ export interface NotaDebitoFullDTO {
   sucursal?: { codigo: string; nombre: string } | null;
   codigoSucursal?: string;
   transaccionesAsociadas?: DocumentoRelacionadoDTO[];
-  devoluciones?: DevolucionAsociadaDTO[];
   impuestosRetenciones?: ImpuestoRetencionDTO[];
   asientos?: AsientoContableDTO[];
   logs?: LogDTO[];
@@ -70,11 +69,12 @@ export interface DocumentoRelacionadoDTO {
 }
 
 export interface DevolucionAsociadaDTO {
-  id?: number;
+  transaccionAsociadaID?: number;
   documento?: string;
   fecha?: string;
-  monto?: number;
-  montoAsignado: number;
+  montoOriginal?: number;
+  monto: number;         // monto asignado
+  esDocumentoInventario: boolean;
 }
 
 export interface ImpuestoRetencionDTO {

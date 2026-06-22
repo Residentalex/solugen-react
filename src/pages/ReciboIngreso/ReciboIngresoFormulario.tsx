@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Popover, Empty,
@@ -31,6 +31,8 @@ import type {
 import LogTable from '../../components/LogTable';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
+import BuscarEntidadSelect from '../../components/BuscarEntidadSelect/BuscarEntidadSelect';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -55,6 +57,28 @@ const MEDIO_COBRO_LABELS: Record<string, string> = {
   TarjetaRegalo: 'Tarjeta Regalo',
   NotaCredito: 'Nota Crédito',
 };
+
+// ===== Mapa de rutas para documentos relacionados (Task 2) =====
+const MAPA_RUTAS_DOC: Record<string, string> = {
+  ND: '/FND',
+  FAC: '/FFAC',
+  NC: '/FNC',
+  RI: '/FRI',
+  NDD: '/FNDD',
+  NDN: '/FNDN',
+  NCN: '/FNCN',
+};
+
+function getRutaDocumento(record: any): string | null {
+  const tipoDoc = record?.tipoDocumento;
+  if (!tipoDoc) return null;
+  const codigo = typeof tipoDoc === 'number' ? (['AID','AIC','ABN','AJA','CBI','CDC','CHK','CHN','CIE','CIT','CKO','CPF','CTT','DBA','DBI','DCA','DCN','DEC','DEP','DEV','DGA','DPN','DPR','DVC','DVN','ED','EDI','EDN','EIN','ENP','EPJ','EPN','ER','EXP','FAC','FAN','LAC','NBN','NC','NCB','NCN','ND','NDB','NDD','NDN','NDV','NOM','ORC','ORT','PAG','PRES','PV','PVC','PVN','PVS','PVT','RAC','RBN','RCM','RDE','RDN','REA','REQ','RES','RETA','RI','RIN','RSV','RTB','RUA','SAP','SCO','SDD','SPA','SPJ','SPN','SPT','TBN','TID','TRB','TRP','TUR','UBD','VD','DBN','PVComponente','Existencia'][tipoDoc] || '') : tipoDoc;
+  const rutaBase = MAPA_RUTAS_DOC[codigo];
+  if (!rutaBase) return null;
+  const docId = record.id || record.transaccionAsociadaID;
+  if (!docId) return null;
+  return `${rutaBase}/${docId}`;
+}
 
 // ===== Helpers para tipo de asiento =====
 function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
@@ -109,10 +133,15 @@ const ReciboIngresoFormulario: React.FC = () => {
   const [logs, setLogs] = useState<LogDTO[]>([]);
   const [conceptoInfo, setConceptoInfo] = useState<string>('');
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
+  const [sucursalesCache, setSucursalesCache] = useState<any[]>([]);
+  const [selectedSucursal, setSelectedSucursal] = useState<any>(null);
 
   // Concepto modal
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
   const [conceptoSearchText, setConceptoSearchText] = useState('');
+
+  // Documento relacionado modal
+  const [documentoModalOpen, setDocumentoModalOpen] = useState(false);
 
   // Quick fields
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -201,6 +230,11 @@ const ReciboIngresoFormulario: React.FC = () => {
       .then((tipos) => setTiposCache(tipos as any))
       .catch(() => {});
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
+    // Cargar sucursales desde el auth store
+    const authSucursales = useAuthStore.getState().sucursalesPermitidas;
+    if (authSucursales.length > 0) {
+      setSucursalesCache(authSucursales);
+    }
 
     if (mode === 'crear') {
       form.setFieldsValue({
@@ -239,6 +273,10 @@ const ReciboIngresoFormulario: React.FC = () => {
 
         setSelectedConcepto(res.concepto || null);
         setSelectedEntidad(res.entidad || null);
+        // Restaurar sucursal
+        if (res.sucursal) {
+          setSelectedSucursal(res.sucursal);
+        }
 
         // Obtener tipo desde res si existe
         if (res.tipo) {
@@ -280,7 +318,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   const cargarEntidades = async (conceptoCodigo?: string) => {
     try {
       const res = await conceptosApi.obtenerEntidades(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo);
-      setEntidadesCache(res || []);
+      setEntidadesCache((res || []).filter((e) => e.activo !== false));
     } catch {
       // Fallback: cargar clientes
       try {
@@ -385,12 +423,13 @@ const ReciboIngresoFormulario: React.FC = () => {
       descuento: base.descuento || 0,
       impuestos: base.impuestos || 0,
       retenciones: Math.round(retenciones * 100) / 100,
-      tipoDocumento: 'RI',
+      tipoDocumento: base.tipoDocumento ?? 66,
       documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       entidad: entidadSel || { nombre: '', codigo: '', identificacion: '' },
       moneda: base.moneda || getMonedaSucursalActiva(),
       codigoTipo: selectedTipo?.codigo || values.tipo || '',
+      sucursal: selectedSucursal || base.sucursal || { nombre: '', codigo: '', identificacion: '' },
       // Colecciones
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
         ...t,
@@ -502,6 +541,11 @@ const ReciboIngresoFormulario: React.FC = () => {
     form.setFieldsValue({ concepto: '', entidad: undefined });
   };
 
+  // ===== Handler para agregar documentos relacionados =====
+  const handleAgregarDocumentos = (docs: any[]) => {
+    setTransaccionesAsociadas((prev) => [...prev, ...docs]);
+  };
+
   // ===== Totales calculados =====
   const totalDistribuido = transaccionesAsociadas.reduce((s, t) => s + (t.monto || 0), 0);
   const totalRetenciones = transaccionesAsociadas.reduce((s, t) => s + (t.retencion || 0), 0);
@@ -528,7 +572,13 @@ const ReciboIngresoFormulario: React.FC = () => {
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => formatDate(v) },
     {
       title: 'Documento', dataIndex: 'documento', key: 'documento', width: 150,
-      render: (doc: string) => <span style={{ color: '#6c5ffc', fontWeight: 500 }}>{doc}</span>,
+      render: (doc: string, record: any) => {
+        const ruta = getRutaDocumento(record);
+        if (ruta) {
+          return <Link to={ruta} style={{ color: '#6c5ffc', fontWeight: 500 }}>{doc}</Link>;
+        }
+        return <span style={{ color: '#6c5ffc', fontWeight: 500 }}>{doc}</span>;
+      },
     },
     { title: 'Sucursal', dataIndex: 'sucursal', key: 'sucursal', width: 100, render: (v: string) => v || '-' },
     { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 140, render: (v: string) => v || '-' },
@@ -621,6 +671,44 @@ const ReciboIngresoFormulario: React.FC = () => {
     },
   ];
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    reciboIngresoApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res: any) => {
+        setData(res);
+        setTransaccionesAsociadas(res.transaccionesAsociadas || []);
+        setAsientos(res.asientos || []);
+        setLogs(res.logs || []);
+        if (res.cobros && res.cobros.length > 0) setCobros(res.cobros);
+        else setCobros(crearCobrosIniciales());
+        setSelectedConcepto(res.concepto || null);
+        setSelectedEntidad(res.entidad || null);
+        setSelectedSucursal(res.sucursal || null);
+        if (res.tipo) setSelectedTipo(res.tipo);
+        else if (res.codigoTipo) {
+          const encontrado = tiposCache.find(t => t.codigo === res.codigoTipo);
+          if (encontrado) setSelectedTipo(encontrado);
+        }
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          tipo: res.tipo?.codigo || res.codigoTipo || '',
+          concepto: res.concepto?.codigo || '',
+          entidad: res.entidad?.codigo || res.codigoEntidad || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          ncf: res.ncf || '', referencia: res.referencia || '',
+          tasa: res.tasa || 1, nota: res.nota || '', total: res.total || 0,
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg); setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   // ===== Loading =====
   if (loading) {
     return <LoadingSpinner mensaje="Cargando documento..." />;
@@ -630,6 +718,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   const estadoInfo = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Borrador', color: 'default' };
 
   // ===== Encabezado =====
+  const documentoTieneTipos = tiposCache.length > 0;
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
@@ -664,17 +753,17 @@ const ReciboIngresoFormulario: React.FC = () => {
                   placeholder=" "
                   value={selectedConcepto ? `${selectedConcepto.codigo || ''} - ${toTitleCase(selectedConcepto.nombre)}` : conceptoSearchText}
                   readOnly
-                  disabled={!selectedTipo}
+                  disabled={documentoTieneTipos && !selectedTipo}
                   suffix={
                     <Space size={4}>
                       <SearchOutlined
-                        onClick={() => selectedTipo && setConceptoModalOpen(true)}
-                        style={{ cursor: selectedTipo ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
+                        onClick={() => (!documentoTieneTipos || selectedTipo) && setConceptoModalOpen(true)}
+                        style={{ cursor: (!documentoTieneTipos || selectedTipo) ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
                       />
                       {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
                     </Space>
                   }
-                  onClick={() => selectedTipo && setConceptoModalOpen(true)}
+                  onClick={() => (!documentoTieneTipos || selectedTipo) && setConceptoModalOpen(true)}
                 />
               </FloatingField>
             </div>
@@ -687,78 +776,32 @@ const ReciboIngresoFormulario: React.FC = () => {
             </Col>
           )}
 
-          {/* Fila 2: Entidad */}
-          <Col xs={24} sm={12} lg={12}>
-            <Form.Item name="entidad" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Entidad Desde" required ref={entidadRef}>
-                <Select
-                  allowClear
-                  showSearch
-                  optionFilterProp="children"
-                  notFoundContent="Seleccione un concepto primero"
-                  onChange={(val) => {
-                    // RI18 - Si hay documentos asignados y se cambia entidad, preguntar
-                    if (transaccionesAsociadas.length > 0) {
-                      const oldVal = form.getFieldValue('entidad');
-                      Modal.confirm({
-                        title: 'Cambiar entidad',
-                        icon: <ExclamationCircleOutlined />,
-                        content: 'La entidad tiene documentos asignados. Se borrarán los documentos agregados. ¿Está seguro?',
-                        okText: 'Sí, cambiar',
-                        cancelText: 'No',
-                        onOk: () => {
-                          setTransaccionesAsociadas([]);
-                          const ent = entidadesCache.find((e: any) => e.codigo === val);
-                          setSelectedEntidad(ent || null);
-                        },
-                        onCancel: () => {
-                          form.setFieldsValue({ entidad: oldVal || undefined });
-                        },
-                      });
-                    } else {
-                      const ent = entidadesCache.find((e: any) => e.codigo === val);
-                      setSelectedEntidad(ent || null);
-                    }
-                  }}
-                  onDropdownVisibleChange={(open) => {
-                    if (open && !selectedConcepto) {
-                      message.info('Seleccione un concepto primero');
-                    }
-                  }}
-                >
-                  {entidadesCache.map((ent: any) => (
-                    <Select.Option key={ent.codigo} value={ent.codigo}>
-                      {toTitleCase(ent.nombre)}{ent.identificacion ? ` (${ent.identificacion})` : ''}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </FloatingField>
-            </Form.Item>
-          </Col>
-
-          {/* RNC ReadOnly */}
-          <Col xs={24} sm={12} lg={6}>
-            <FloatingField label="RNC">
-              <Input value={selectedEntidad?.identificacion || ''} readOnly />
-            </FloatingField>
-          </Col>
-
-          {/* Entidad Nombre ReadOnly */}
-          <Col xs={24} sm={12} lg={6}>
-            <FloatingField label="Entidad Nombre">
-              <Input value={selectedEntidad?.nombre ? toTitleCase(selectedEntidad.nombre) : ''} readOnly />
-            </FloatingField>
-          </Col>
-
-          {/* Fila 3: Fecha + Monto Total */}
-          <Col xs={24} sm={12} lg={6}>
+          {/* Fila 2: Fecha + Cliente */}
+          <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha" required>
                 <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
               </FloatingField>
             </Form.Item>
           </Col>
-          <Col xs={24} sm={12} lg={6}>
+          <Col xs={24} sm={12} lg={15}>
+            <div ref={entidadRef}>
+              <Form.Item name="entidad" required style={{ marginBottom: 0 }}>
+                <BuscarEntidadSelect
+                  entidades={entidadesCache as any}
+                  value={selectedEntidad?.codigo}
+                  label="Cliente"
+                  required
+                  tieneDocumentosAsociados={transaccionesAsociadas.length > 0}
+                  conceptoSeleccionado={!!selectedConcepto}
+                  onChange={(codigo, entidad) => setSelectedEntidad(entidad || null)}
+                />
+              </Form.Item>
+            </div>
+          </Col>
+
+          {/* Fila 3: Monto Total */}
+          <Col xs={24} sm={12} lg={9}>
             <div ref={totalRef}>
               <Form.Item name="total" required style={{ marginBottom: 0 }}>
                 <FloatingField label="Monto Total" required>
@@ -768,94 +811,29 @@ const ReciboIngresoFormulario: React.FC = () => {
             </div>
           </Col>
 
-          {/* Fila 4: Campos rápidos */}
-          <Col xs={24}>
-            <div style={{ marginBottom: 16 }}>
-              <Space size={[8, 8]} wrap>
-                {/* NCF */}
-                <div>
-                  {editingField === 'ncf' ? (
-                    <Input
-                      size="small"
-                      style={{ width: 200 }}
-                      placeholder="NCF"
-                      maxLength={19}
-                      autoFocus
-                      defaultValue={editingValueRef.current as string}
-                      onChange={(e) => { editingValueRef.current = e.target.value; }}
-                      onPressEnter={() => commitFieldEditor()}
-                      onBlur={() => commitFieldEditor()}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                      }}
-                    />
-                  ) : ncfValue ? (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                      NCF: {ncfValue} <EditOutlined />
-                    </Tag>
-                  ) : (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                      <PlusOutlined /> NCF
-                    </Tag>
-                  )}
-                </div>
-
-                {/* Referencia */}
-                {editingField === 'referencia' ? (
-                  <Input
-                    size="small"
-                    style={{ width: 200 }}
-                    placeholder="Referencia"
-                    autoFocus
-                    defaultValue={editingValueRef.current as string}
-                    onChange={(e) => { editingValueRef.current = e.target.value; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : refValue ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
-                    Ref: {refValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
-                    <PlusOutlined /> Referencia
-                  </Tag>
-                )}
-
-                {/* Tasa */}
-                {editingField === 'tasa' ? (
-                  <InputNumber
-                    size="small"
-                    style={{ width: 120 }}
-                    min={0}
-                    step={0.01}
-                    placeholder="Tasa"
-                    autoFocus
-                    defaultValue={editingValueRef.current as number}
-                    onChange={(val) => { editingValueRef.current = val ?? 1; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : tasaValue !== 1 ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
-                    Tasa: {tasaValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
-                    <PlusOutlined /> Tasa
-                  </Tag>
-                )}
-              </Space>
-            </div>
-            <Form.Item name="ncf" hidden><Input /></Form.Item>
-            <Form.Item name="referencia" hidden><Input /></Form.Item>
-            <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
+          {/* Fila 4: Sucursal Contable */}
+          <Col xs={24} sm={12} lg={9}>
+            <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
+              <FloatingField label="Sucursal Contable">
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="children"
+                  placeholder=" "
+                  value={selectedSucursal?.sucursal ?? undefined}
+                  onChange={(val) => {
+                    const suc = sucursalesCache.find((s: any) => s.sucursal === val);
+                    setSelectedSucursal(suc || null);
+                  }}
+                >
+                  {sucursalesCache.map((suc: any) => (
+                    <Select.Option key={suc.sucursal} value={suc.sucursal}>
+                      {toTitleCase(suc.nombre || '')}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </FloatingField>
+            </Form.Item>
           </Col>
 
           {/* Fila 5: Nota */}
@@ -878,6 +856,96 @@ const ReciboIngresoFormulario: React.FC = () => {
               total={totales.total}
               hideTitle
             />
+          </div>
+          <Form.Item name="ncf" hidden><Input /></Form.Item>
+          <Form.Item name="referencia" hidden><Input /></Form.Item>
+          <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* NCF */}
+              <div>
+                {editingField === 'ncf' ? (
+                  <Input
+                    size="small"
+                    style={{ width: '100%' }}
+                    placeholder="NCF"
+                    maxLength={19}
+                    autoFocus
+                    defaultValue={editingValueRef.current as string}
+                    onChange={(e) => { editingValueRef.current = e.target.value; }}
+                    onPressEnter={() => commitFieldEditor()}
+                    onBlur={() => commitFieldEditor()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                    }}
+                  />
+                ) : ncfValue ? (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
+                    NCF: {ncfValue} <EditOutlined />
+                  </Tag>
+                ) : (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
+                    <PlusOutlined /> NCF
+                  </Tag>
+                )}
+              </div>
+
+              {/* Referencia */}
+              <div>
+                {editingField === 'referencia' ? (
+                  <Input
+                    size="small"
+                    style={{ width: '100%' }}
+                    placeholder="Referencia"
+                    autoFocus
+                    defaultValue={editingValueRef.current as string}
+                    onChange={(e) => { editingValueRef.current = e.target.value; }}
+                    onPressEnter={() => commitFieldEditor()}
+                    onBlur={() => commitFieldEditor()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                    }}
+                  />
+                ) : refValue ? (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
+                    Ref: {refValue} <EditOutlined />
+                  </Tag>
+                ) : (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
+                    <PlusOutlined /> Referencia
+                  </Tag>
+                )}
+              </div>
+
+              {/* Tasa */}
+              <div>
+                {editingField === 'tasa' ? (
+                  <InputNumber
+                    size="small"
+                    style={{ width: '100%' }}
+                    min={0}
+                    step={0.01}
+                    placeholder="Tasa"
+                    autoFocus
+                    defaultValue={editingValueRef.current as number}
+                    onChange={(val) => { editingValueRef.current = val ?? 1; }}
+                    onPressEnter={() => commitFieldEditor()}
+                    onBlur={() => commitFieldEditor()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                    }}
+                  />
+                ) : tasaValue !== 1 ? (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
+                    Tasa: {tasaValue} <EditOutlined />
+                  </Tag>
+                ) : (
+                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
+                    <PlusOutlined /> Tasa
+                  </Tag>
+                )}
+              </div>
+            </div>
           </div>
         </Col>
       </Row>
@@ -902,6 +970,15 @@ const ReciboIngresoFormulario: React.FC = () => {
               Por distribuir: <span style={{ color: porDistribuir > 0 ? '#faad14' : '#52c41a', fontWeight: 600 }}>{formatCurrency(porDistribuir)}</span>
             </Text>
           </Space>
+          <Button
+            type="primary"
+            size="small"
+            icon={<PlusOutlined />}
+            disabled={!selectedEntidad}
+            onClick={() => setDocumentoModalOpen(true)}
+          >
+            Agregar
+          </Button>
         </div>
         <Table
           dataSource={transaccionesAsociadas}
@@ -1018,43 +1095,6 @@ const ReciboIngresoFormulario: React.FC = () => {
     ),
   });
 
-  const handleRefresh = useCallback(() => {
-    if (mode === 'crear') return;
-    if (!id) return;
-    setLoadingError(false);
-    setLoading(true);
-    reciboIngresoApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res: any) => {
-        setData(res);
-        setTransaccionesAsociadas(res.transaccionesAsociadas || []);
-        setAsientos(res.asientos || []);
-        setLogs(res.logs || []);
-        if (res.cobros && res.cobros.length > 0) setCobros(res.cobros);
-        else setCobros(crearCobrosIniciales());
-        setSelectedConcepto(res.concepto || null);
-        setSelectedEntidad(res.entidad || null);
-        if (res.tipo) setSelectedTipo(res.tipo);
-        else if (res.codigoTipo) {
-          const encontrado = tiposCache.find(t => t.codigo === res.codigoTipo);
-          if (encontrado) setSelectedTipo(encontrado);
-        }
-        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
-        form.setFieldsValue({
-          tipo: res.tipo?.codigo || res.codigoTipo || '',
-          concepto: res.concepto?.codigo || '',
-          entidad: res.entidad?.codigo || res.codigoEntidad || '',
-          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          ncf: res.ncf || '', referencia: res.referencia || '',
-          tasa: res.tasa || 1, nota: res.nota || '', total: res.total || 0,
-        });
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg); setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form, mode]);
-
   // ===== Render principal =====
   return (
     <div>
@@ -1081,6 +1121,20 @@ const ReciboIngresoFormulario: React.FC = () => {
         sucursal={sucursalActiva}
         documento="RI"
         tipo={selectedTipo?.codigo}
+      />
+
+      <BuscarDocumentoModal
+        open={documentoModalOpen}
+        onClose={() => setDocumentoModalOpen(false)}
+        onSelect={handleAgregarDocumentos}
+        tipoEntidad={selectedConcepto?.entidades?.[0]?.codigo || 'CLI'}
+        codEntidad={selectedEntidad?.codigo || data?.codigoEntidad || ''}
+        origen={selectedConcepto?.entidades?.[0]?.origenCuenta ?? 1}
+        montoTotal={totalValue || 0}
+        documentosIniciales={transaccionesAsociadas
+          .map(t => t.id || t.transaccionAsociadaID)
+          .filter((id): id is number => id != null && id > 0)}
+        documentoEnviado={data?.noDocumento ? `${documentCode}-${data.noDocumento}` : undefined}
       />
 
       {isLarge ? (

@@ -24,6 +24,7 @@ class ChatHubService {
         accessTokenFactory: () => token || '',
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+      .configureLogging(signalR.LogLevel.Warning)
       .build();
 
     this.connection = connection;

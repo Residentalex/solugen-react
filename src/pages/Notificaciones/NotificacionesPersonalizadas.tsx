@@ -12,11 +12,7 @@ import { notificacionesApi } from '../../api/notificacionesApi';
 import type { NotificacionSQLConfig } from '../../types/notificaciones';
 import NotificacionSQLFormulario from './NotificacionSQLFormulario';
 import NotificacionSQLResultadoModal from './NotificacionSQLResultadoModal';
-
-const SUCURSALES_LABELS: Record<number, string> = {
-  0: 'Orense Plaza', 1: 'Hiper Romana',
-  2: 'O. Villa Hermosa', 3: 'El Ofertazo',
-};
+import { useCompanyStore } from '../../stores/companyStore';
 
 function formatIntervalo(minutos: number): string {
   if (minutos < 60) return `Cada ${minutos} min`;
@@ -48,6 +44,13 @@ const tipoColor: Record<string, string> = {
 };
 
 const NotificacionesPersonalizadas: React.FC = () => {
+  const sucursalesData = useCompanyStore((s) => s.data.sucursales);
+  const SUCURSALES_LABELS = Object.fromEntries(
+    (sucursalesData || [])
+      .filter((s: any) => s.sucursal >= 0 && s.sucursal <= 3)
+      .map((s: any) => [s.sucursal, s.nombre])
+  );
+
   const [configs, setConfigs] = useState<NotificacionSQLConfig[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');

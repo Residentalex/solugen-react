@@ -1,15 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tag, Spin, Button, Descriptions, Typography, Empty, Alert,
+  Card, Table, Tag, Descriptions, Typography, Empty,
 } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { conteoApi } from '../../api/conteoApi';
 import { formatCurrency, formatDate, toTitleCase, formatNumber } from '../../utils/formats';
 import type { ConteoFisicoDTO } from '../../types/conteo';
-import ErrorDetalle from '../../components/ErrorDetalle';
+import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
 import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 
 const ConteoDetalle: React.FC = () => {
@@ -45,33 +44,24 @@ const ConteoDetalle: React.FC = () => {
     return () => setPageTitleOverride('');
   }, [cargar, setActiveModule, setPageTitleOverride]);
 
-  if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
-      </div>
-    );
-  }
-
-  if (loadingError) {
-    return <ErrorDetalle rutaVolver="/FConteos" onRecargar={cargar} />;
-  }
-
   if (!data) return null;
 
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <SucursalDocumentoSelector value={sucursalDestino} onChange={setSucursalDestino} />
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FConteos')}>
-          Volver
-        </Button>
-        <div style={{ flex: 1 }} />
+    <DetalleCatalogoLayout
+      rutaVolver="/FConteos"
+      loading={loading}
+      mensajeLoading="Cargando conteo..."
+      loadingError={loadingError}
+      mensajeError="Error al cargar detalle del conteo"
+      onRecargar={cargar}
+      dataDisponible={!!data}
+      extraLeft={<SucursalDocumentoSelector value={sucursalDestino} onChange={setSucursalDestino} />}
+      extraActions={
         <Tag color={data.bloqueado ? 'red' : 'green'}>
           {data.bloqueado ? 'Bloqueado' : 'Activo'}
         </Tag>
-      </div>
+      }
+    >
 
       <Card
         className="paces-card"
@@ -165,7 +155,7 @@ const ConteoDetalle: React.FC = () => {
           <Empty description="Sin detalles" />
         )}
       </Card>
-    </div>
+    </DetalleCatalogoLayout>
   );
 };
 

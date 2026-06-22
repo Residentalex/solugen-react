@@ -35,7 +35,9 @@ function obtenerSucursales(): AuthSucursalPermitidaDTO[] {
 function obtenerSucursalActiva(): Sucursal {
   try {
     const raw = sessionStorage.getItem('sucursalActiva');
-    return raw ? (parseInt(raw, 10) as Sucursal) : SUCURSAL_CONSOLIDADO;
+    if (raw === null) return SUCURSAL_CONSOLIDADO;
+    const parsed = parseInt(raw, 10);
+    return isNaN(parsed) ? SUCURSAL_CONSOLIDADO : (parsed as Sucursal);
   } catch {
     return SUCURSAL_CONSOLIDADO;
   }
@@ -73,6 +75,7 @@ interface AuthState {
   sucursalActiva: Sucursal;
   sucursalContable: Sucursal;
   sucursalesPermitidas: AuthSucursalPermitidaDTO[];
+  securitySucursal: number;
   compania: Sucursal;
   equipo: string;
   ip: string;
@@ -99,6 +102,7 @@ interface AuthState {
   marcarClaveCambiada: () => void;
   setSucursalActiva: (sucursal: Sucursal) => Promise<void>;
   setAppVersion: (version: string) => void;
+  setSecuritySucursal: (sucursal: number) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -109,6 +113,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   sucursalActiva: obtenerSucursalActivaInicial(),
   sucursalContable: obtenerSucursalContable(),
   sucursalesPermitidas: obtenerSucursales(),
+  securitySucursal: 4,
   compania: SUCURSAL_CONSOLIDADO,
   equipo: localStorage.getItem('equipo') || '',
   ip: localStorage.getItem('ip') || '',
@@ -123,7 +128,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.setItem('equipo', request.equipo);
     localStorage.setItem('ip', request.ip);
     const ultimaSucursal = sessionStorage.getItem('ultimaSucursalActiva');
-    const sucursalFinal = ultimaSucursal ? (parseInt(ultimaSucursal, 10) as Sucursal) : sesion.sucursalActiva;
+    const ultimaParsed = parseInt(ultimaSucursal ?? '', 10);
+    const sucursalFinal = (ultimaSucursal && !isNaN(ultimaParsed)) ? (ultimaParsed as Sucursal) : (sesion.sucursalActiva ?? SUCURSAL_CONSOLIDADO);
     sessionStorage.removeItem('ultimaSucursalActiva');
 
     sessionStorage.setItem('sucursalActiva', String(sucursalFinal));
@@ -189,7 +195,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     localStorage.setItem('todasLasPantallas', JSON.stringify(todasLasPantallas));
     localStorage.setItem('sucursalesPermitidas', JSON.stringify(session.sucursalesPermitidas));
     const ultimaSucursal = sessionStorage.getItem('ultimaSucursalActiva');
-    const sucursalFinal = ultimaSucursal ? (parseInt(ultimaSucursal, 10) as Sucursal) : session.sucursalActiva;
+    const ultimaParsed = parseInt(ultimaSucursal ?? '', 10);
+    const sucursalFinal = (ultimaSucursal && !isNaN(ultimaParsed)) ? (ultimaParsed as Sucursal) : (session.sucursalActiva ?? SUCURSAL_CONSOLIDADO);
     sessionStorage.removeItem('ultimaSucursalActiva');
 
     sessionStorage.setItem('sucursalActiva', String(sucursalFinal));
@@ -234,5 +241,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setAppVersion: (version) => {
     localStorage.setItem('appVersion', version);
     set({ appVersion: version });
+  },
+
+  setSecuritySucursal: (sucursal) => {
+    set({ securitySucursal: sucursal });
   },
 }));

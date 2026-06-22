@@ -28,6 +28,7 @@ export function useSignalR(jobId: string | null) {
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(hubUrl)
       .withAutomaticReconnect()
+      .configureLogging(signalR.LogLevel.Warning)
       .build();
 
     connection.on('AplicarIniciado', (data: any) => {

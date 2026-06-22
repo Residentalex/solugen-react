@@ -15,7 +15,7 @@ export const distribucionBalanceApi = {
     salto?: number,
     estado?: number,
     documentCode = TIPO_DOC
-  ): Promise<TransaccionVistaDTO[]> => {
+  ): Promise<{ data: TransaccionVistaDTO[]; total: number }> => {
     const params: Record<string, string | number> = { TipoEntidad: tipoEntidad };
     if (desde) params.desde = desde;
     if (hasta) params.hasta = hasta;
@@ -26,7 +26,7 @@ export const distribucionBalanceApi = {
     const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO[]>>(
       `${BASE}/${sucursal}/tipo/${documentCode}`, { params }
     );
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   filtrar: async (
@@ -34,7 +34,7 @@ export const distribucionBalanceApi = {
     tipoEntidad: string,
     filtro: FiltroTransaccion,
     documentCode = TIPO_DOC
-  ): Promise<TransaccionVistaDTO[]> => {
+  ): Promise<{ data: TransaccionVistaDTO[]; total: number }> => {
     const params: Record<string, string | number> = { tipoEntidad };
     if (filtro.cantidad) params.cantidad = filtro.cantidad;
     if (filtro.salto) params.salto = filtro.salto;
@@ -48,7 +48,7 @@ export const distribucionBalanceApi = {
     const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO[]>>(
       `${BASE}/${sucursal}/tipo/${documentCode}/filtrar`, { params }
     );
-    return data.data;
+    return { data: data.data || [], total: data.total ?? 0 };
   },
 
   obtenerPorId: async (sucursal: number, id: number): Promise<TransaccionDTO> => {

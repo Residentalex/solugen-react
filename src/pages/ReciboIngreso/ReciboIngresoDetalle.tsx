@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Tooltip, Alert, Modal, App
 } from 'antd';
@@ -173,8 +173,40 @@ const ReciboIngresoDetalle: React.FC = () => {
       })
     : (data?.transaccionesAsociadas || []);
 
+  // ===== Mapa de rutas para documentos relacionados =====
+  const MAPA_RUTAS_DOC: Record<string, string> = {
+    ND: '/FND',
+    FAC: '/FFAC',
+    NC: '/FNC',
+    RI: '/FRI',
+    NDD: '/FNDD',
+    NDN: '/FNDN',
+    NCN: '/FNCN',
+  };
+  const getRutaDocumento = (record: any): string | null => {
+    const tipoDoc = record?.tipoDocumento;
+    if (!tipoDoc) return null;
+    const codigo = typeof tipoDoc === 'number'
+      ? (['AID','AIC','ABN','AJA','CBI','CDC','CHK','CHN','CIE','CIT','CKO','CPF','CTT','DBA','DBI','DCA','DCN','DEC','DEP','DEV','DGA','DPN','DPR','DVC','DVN','ED','EDI','EDN','EIN','ENP','EPJ','EPN','ER','EXP','FAC','FAN','LAC','NBN','NC','NCB','NCN','ND','NDB','NDD','NDN','NDV','NOM','ORC','ORT','PAG','PRES','PV','PVC','PVN','PVS','PVT','RAC','RBN','RCM','RDE','RDN','REA','REQ','RES','RETA','RI','RIN','RSV','RTB','RUA','SAP','SCO','SDD','SPA','SPJ','SPN','SPT','TBN','TID','TRB','TRP','TUR','UBD','VD','DBN','PVComponente','Existencia'][tipoDoc] || '')
+      : tipoDoc;
+    const rutaBase = MAPA_RUTAS_DOC[codigo];
+    if (!rutaBase) return null;
+    const docId = record.id || record.transaccionAsociadaID;
+    if (!docId) return null;
+    return `${rutaBase}/${docId}`;
+  };
+
   const asociadasColumns = [
-    { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
+    {
+      title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140,
+      render: (doc: string, record: any) => {
+        const ruta = getRutaDocumento(record);
+        if (ruta) {
+          return <Link to={ruta} style={{ color: '#6c5ffc', fontWeight: 500 }}>{doc}</Link>;
+        }
+        return <span>{doc}</span>;
+      },
+    },
     { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 140, render: (v: string) => v || '-' },
     { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v) },
     { title: 'Pagado', dataIndex: 'pagado', key: 'pagado', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v) },
@@ -257,7 +289,7 @@ const ReciboIngresoDetalle: React.FC = () => {
       message.info('El concepto no genera asientos contables.');
       return;
     }
-    if (data.estado !== 1) {
+    if (data.estado !== 1 && data.estado !== 3) {
       message.info('Debe aplicar el documento antes de postear.');
       return;
     }
@@ -427,17 +459,20 @@ const ReciboIngresoDetalle: React.FC = () => {
                 </Space>
               </div>
             } style={{ marginBottom: 16 }}>
-              <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+              <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Tipo">
                   {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
                 <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
               </Descriptions>
+              {(data.nota) && (
+                <div style={{ marginTop: 12, padding: '0 16px 16px' }}>
+                  <Text strong style={{ fontSize: 13, color: '#595959' }}>Nota:</Text>
+                  <div style={{ whiteSpace: 'pre-wrap', marginTop: 4, fontSize: 13 }}>{data.nota}</div>
+                </div>
+              )}
             </Card>
 
             <Tabs
@@ -535,16 +570,19 @@ const ReciboIngresoDetalle: React.FC = () => {
             </div>
           } style={{ marginBottom: 16 }}>
             <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Documento">{data.noDocumento || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-               <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
-               <Descriptions.Item label="Tipo">
-                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
-                </Descriptions.Item>
-               <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-               <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
-               <Descriptions.Item label="Tasa">{data.tasa ? formatNumber(data.tasa) : '-'}</Descriptions.Item>
-             </Descriptions>
+            <Descriptions.Item label="Tipo">
+               {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+            </Descriptions.Item>
+            <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+            <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+            <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+            </Descriptions>
+            {(data.nota) && (
+            <div style={{ marginTop: 12, padding: '0 16px 16px' }}>
+                <Text strong style={{ fontSize: 13, color: '#595959' }}>Nota:</Text>
+                 <div style={{ whiteSpace: 'pre-wrap', marginTop: 4, fontSize: 13 }}>{data.nota}</div>
+               </div>
+             )}
            </Card>
 
            <Tabs

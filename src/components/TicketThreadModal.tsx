@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { Modal, Typography, Select, Input, Button, Space, Spin, Tag, message, Divider, Empty } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../stores/authStore';
@@ -95,7 +95,7 @@ const TicketThreadModal: React.FC<Props> = ({ open, ticketID, onClose }) => {
       onCancel={onClose}
       footer={null}
       width={640}
-      destroyOnClose
+      destroyOnHidden
     >
       {loading ? (
         <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
@@ -128,7 +128,7 @@ const TicketThreadModal: React.FC<Props> = ({ open, ticketID, onClose }) => {
           {/* Respuestas */}
           <div style={{ maxHeight: 300, overflowY: 'auto', marginBottom: 16 }}>
             {ticket.respuestas.length === 0 ? (
-              <Empty description="Sin respuestas aún" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+              <Empty description="Sin respuestas aÃºn" image={Empty.PRESENTED_IMAGE_SIMPLE} />
             ) : (
               <Space direction="vertical" style={{ width: '100%' }} size={8}>
                 {ticket.respuestas.map((r) => (
@@ -139,7 +139,7 @@ const TicketThreadModal: React.FC<Props> = ({ open, ticketID, onClose }) => {
                     border: '1px solid #f0f0f0',
                   }}>
                     <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>
-                      {r.nombreUsuario || `Usuario #${r.usuarioID}`} · {formatFecha(r.fechaCreacion)}
+                      {r.nombreUsuario || `Usuario #${r.usuarioID}`} Â· {formatFecha(r.fechaCreacion)}
                     </div>
                     <Typography.Text>{r.mensaje}</Typography.Text>
                   </div>

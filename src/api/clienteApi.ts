@@ -7,7 +7,7 @@ const BASE = '/Cliente';
 export const clienteApi = {
   obtenerListado: async (
     sucursal: number,
-    params?: { cantidad?: number; salto?: number; codigo?: string; activo?: boolean }
+    params?: { filas?: number; salto?: number; codigo?: string; activo?: boolean }
   ): Promise<ClienteDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<ClienteDTO[]>>(`${BASE}/${sucursal}`, { params });
     return data.data;

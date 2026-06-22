@@ -46,8 +46,6 @@ const OPCIONES_GRUPO = [
   'Equipos',
 ];
 
-const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
-
 const PantallaFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -56,6 +54,7 @@ const PantallaFormulario: React.FC = () => {
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.usuario?.sucursalActiva);
+  const securitySucursal = useAuthStore((s) => s.securitySucursal);
 
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
@@ -107,7 +106,7 @@ const PantallaFormulario: React.FC = () => {
 
   const cargarPermisosPorPantalla = async (pantallaId: number) => {
     try {
-      const result = await permisoEspecialApi.obtenerPorPantalla(SUCURSAL_SEGURIDAD, pantallaId);
+      const result = await permisoEspecialApi.obtenerPorPantalla(securitySucursal, pantallaId);
       setPermisosEspecialesCatalogo(result || []);
       setSelectedPermisosEspeciales(
         (result || []).filter(p => p.asignado).map(p => p.id)
@@ -204,7 +203,7 @@ const PantallaFormulario: React.FC = () => {
       }
 
       // Asignar permisos especiales
-      await permisoEspecialApi.asignarAPantalla(SUCURSAL_SEGURIDAD, pantallaId, selectedPermisosEspeciales);
+      await permisoEspecialApi.asignarAPantalla(securitySucursal, pantallaId, selectedPermisosEspeciales);
 
       navigationConfirmedRef.current = true;
       navigate(`/MPantalla/${pantallaId}`);

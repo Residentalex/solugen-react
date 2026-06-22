@@ -18,4 +18,10 @@ export const parametrosApi = {
     const { data } = await apiClient.get<string>(`${BASE}/${sucursal}/FechaCierreINV`);
     return data;
   },
+
+  obtenerSucursalContable: async (sucursal: number): Promise<number | null> => {
+    const { data } = await apiClient.get<ApiResponse<number | null>>(`${BASE}/${sucursal}/sucursal-contable`);
+    if (!data.isSuccess) throw new Error(data.errorMessage || 'Error al obtener sucursal contable');
+    return data.data ?? null;
+  },
 };

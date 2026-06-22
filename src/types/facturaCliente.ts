@@ -122,6 +122,7 @@ export interface FacturaClienteFullDTO {
   referencia: string;
   tasa: number;
   diasCredito: number;
+  tipoDocumento?: number;
 
   concepto: ConceptoDTO | null;
   cliente: ClienteDTO | null;

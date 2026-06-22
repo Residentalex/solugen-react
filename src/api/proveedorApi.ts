@@ -9,7 +9,7 @@ export const proveedorApi = {
     const params: Record<string, number> = {};
     if (cantidad) params.cantidad = cantidad;
     if (salto) params.salto = salto;
-    const { data } = await apiClient.get<ApiResponse<SuplidorDTO[]>>(`${BASE}/${sucursal}`, { params });
+    const { data } = await apiClient.get<ApiResponse<SuplidorDTO[]>>(`${BASE}/${sucursal}?activo=true`, { params });
     return data.data;
   },
 
@@ -22,6 +22,7 @@ export const proveedorApi = {
     const params: Record<string, string> = {};
     if (codigo) params.codigo = codigo;
     if (suplidor) params.suplidor = suplidor;
+    params.activo = 'true';
     const { data } = await apiClient.get<ApiResponse<SuplidorDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params });
     return data.data;
   },

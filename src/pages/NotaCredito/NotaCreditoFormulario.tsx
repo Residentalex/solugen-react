@@ -38,12 +38,14 @@ import LogTable from '../../components/LogTable';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
+import BuscarEntidadSelect from '../../components/BuscarEntidadSelect/BuscarEntidadSelect';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
@@ -79,6 +81,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
   const codigoPantalla = tipoEntidad === 'SUP' ? 'FNCSUP' : 'FNCCLI';
+  const { documentCode } = useScreenConfig('FNC');
   const pantallaActiva = usuario?.pantallas?.find((p: any) => p.codigo?.toUpperCase() === codigoPantalla?.toUpperCase());
   const tienePermisoPostear = pantallaActiva?.acciones?.includes('POSTEAR') ?? false;
   const entidadLabel = tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente';
@@ -120,6 +123,8 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   const sucursalRef = useRef<HTMLDivElement>(null);
   const entidadRef = useRef<HTMLDivElement>(null);
   const documentosRef = useRef<HTMLDivElement>(null);
+  const tipoRef = useRef<HTMLDivElement>(null);
+  const montoRef = useRef<HTMLDivElement>(null);
 
   // Quick fields
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -133,6 +138,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   const ncfValue = Form.useWatch('ncf', form) || '';
   const refValue = Form.useWatch('referencia', form) || '';
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
+  const totalValue = Form.useWatch('total', form) ?? 0;
 
   const sinOC = true;
   const isLarge = screens.xxl === true;
@@ -303,7 +309,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   const cargarEntidades = async (conceptoCodigo?: string) => {
     try {
       // Cargar desde el endpoint de entidades
-      const res = await conceptosApi.obtenerEntidades(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo);
+      const res = await conceptosApi.obtenerEntidades(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo, true);
       setEntidadesCache(res || []);
     } catch {
       // Fallback: cargar clientes o suplidores
@@ -483,9 +489,9 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       descuento: base.descuento || 0,
       impuestos: Math.round(totalImpuestos * 100) / 100,
       retenciones: Math.round(retenciones * 100) / 100,
-      tipoDocumento: 'NC',
+      tipoDocumento: base.tipoDocumento ?? 39,
       tipoEntidad,
-      documento: base.documento || { codigo: 'NC' },
+      documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       entidad: entidadSel || { nombre: '', codigo: '', identificacion: '' },
       moneda: base.moneda || getMonedaSucursalActiva(),
@@ -740,15 +746,11 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     },
   ];
 
-  // ===== Loading =====
-  if (loading) {
-    return <LoadingSpinner mensaje="Cargando documento..." />;
-  }
-
   // ===== Estado info =====
   const estadoInfo = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Borrador', color: 'default' };
 
   // ===== Encabezado =====
+  const documentoTieneTipos = tiposCache.length > 0;
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16, paddingBottom: 32 }}>
       <Row gutter={16}>
@@ -771,17 +773,17 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
                   placeholder=" "
                   value={selectedConcepto ? `${selectedConcepto.codigo} - ${toTitleCase(selectedConcepto.nombre)}` : ''}
                   readOnly
-                  disabled={!selectedTipo}
+                  disabled={documentoTieneTipos && !selectedTipo}
                   suffix={
                     <Space size={4}>
                       <SearchOutlined
-                        onClick={() => selectedTipo && setConceptoModalOpen(true)}
-                        style={{ cursor: selectedTipo ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
+                        onClick={() => (!documentoTieneTipos || selectedTipo) && setConceptoModalOpen(true)}
+                        style={{ cursor: (!documentoTieneTipos || selectedTipo) ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
                       />
                       {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
                     </Space>
                   }
-                  onClick={() => selectedTipo && setConceptoModalOpen(true)}
+                  onClick={() => (!documentoTieneTipos || selectedTipo) && setConceptoModalOpen(true)}
                 />
               </FloatingField>
             </div>
@@ -793,74 +795,40 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
 
           {/* Fila 2: Tipo + Entidad */}
           <Col xs={24} sm={12} lg={6}>
-            <Form.Item name="tipo" style={{ marginBottom: 0 }}>
-              <FloatingField label="Tipo">
-                <Select
-                  allowClear
-                  showSearch
-                  optionFilterProp="children"
-                  onChange={handleTipoChange}
-                >
-                  {tiposCache.map((tc) => (
-                    <Select.Option key={tc.codigo} value={tc.codigo}>
-                      {tc.codigo} - {toTitleCase(tc.nombre)}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </FloatingField>
-            </Form.Item>
+            <div ref={tipoRef}>
+              <Form.Item name="tipo" style={{ marginBottom: 0 }}>
+                <FloatingField label="Tipo">
+                  <Select
+                    allowClear
+                    showSearch
+                    optionFilterProp="children"
+                    onChange={handleTipoChange}
+                  >
+                    {tiposCache.map((tc) => (
+                      <Select.Option key={tc.codigo} value={tc.codigo}>
+                        {tc.codigo} - {toTitleCase(tc.nombre)}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </FloatingField>
+              </Form.Item>
+            </div>
           </Col>
 
-          <Col xs={24} sm={12} lg={18} ref={entidadRef}>
-            <Form.Item name="entidad" required style={{ marginBottom: 0 }}>
-              <FloatingField label={entidadLabel} required>
-                <Select
-                  showSearch
-                  allowClear
-                  placeholder=" "
-                  optionFilterProp="label"
-                  onChange={(val) => {
-                    if (!val) { setSelectedEntidad(null); return; }
-                    const ent = entidadesCache.find((e: any) => e.codigo === val);
-                    if (!ent) return;
-
-                    const tieneDocs = transaccionesAsociadas.length > 0 || devoluciones.length > 0;
-                    if (tieneDocs && selectedEntidad) {
-                      Modal.confirm({
-                        title: 'Cambiar entidad',
-                        icon: <ExclamationCircleOutlined />,
-                        content: `La entidad ${ent.nombre} tiene documentos asignados. Se borrarán los documentos agregados. ¿Está seguro?`,
-                        okText: 'Sí, cambiar',
-                        cancelText: 'No',
-                        okButtonProps: { danger: true },
-                        onOk: () => {
-                          setSelectedEntidad(ent);
-                          setTransaccionesAsociadas([]);
-                          setDevoluciones([]);
-                          form.setFieldsValue({ entidad: ent.codigo });
-                        },
-                        onCancel: () => {
-                          form.setFieldsValue({ entidad: selectedEntidad.codigo });
-                        },
-                      });
-                    } else {
-                      setSelectedEntidad(ent);
-                    }
-                  }}
-                  onDropdownVisibleChange={(open) => {
-                    if (open && !selectedConcepto) {
-                      message.info('Seleccione un concepto primero');
-                    }
-                  }}
-                >
-                  {entidadesCache.map((ent: any) => (
-                    <Select.Option key={ent.codigo} value={ent.codigo} label={ent.nombre}>
-                      {toTitleCase(ent.nombre)}{ent.identificacion ? ` (${ent.identificacion})` : ''}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </FloatingField>
-            </Form.Item>
+          <Col xs={24} sm={12} lg={18}>
+            <div ref={entidadRef}>
+              <Form.Item name="entidad" required style={{ marginBottom: 0 }}>
+                <BuscarEntidadSelect
+                  entidades={entidadesCache as any}
+                  value={selectedEntidad?.codigo}
+                  label={entidadLabel}
+                  required
+                  tieneDocumentosAsociados={transaccionesAsociadas.length > 0 || devoluciones.length > 0}
+                  conceptoSeleccionado={!!selectedConcepto}
+                  onChange={(codigo, entidad) => setSelectedEntidad(entidad || null)}
+                />
+              </Form.Item>
+            </div>
           </Col>
 
           {/* Fila 3: Sucursal + Monto Total + Bienes + Servicios */}
@@ -887,11 +855,13 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
           </Col>
 
           <Col xs={24} sm={12} lg={6}>
-            <Form.Item name="total" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Monto Total" required>
-                <InputNumber style={{ width: '100%' }} min={0} step={0.01} precision={2} />
-              </FloatingField>
-            </Form.Item>
+            <div ref={montoRef}>
+              <Form.Item name="total" required style={{ marginBottom: 0 }}>
+                <FloatingField label="Monto Total" required>
+                  <InputNumber style={{ width: '100%' }} min={0} step={0.01} precision={2} />
+                </FloatingField>
+              </Form.Item>
+            </div>
           </Col>
 
           <Col xs={24} sm={12} lg={6}>
@@ -1241,7 +1211,10 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   // ===== Render principal =====
   return (
     <div>
-      <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
+      {loading && <LoadingSpinner mensaje="Cargando documento..." />}
+      {!loading && (
+        <>
+          <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
 
       {loadingError && (
         <Alert
@@ -1306,15 +1279,19 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       {(mode === 'crear' || esBorrador) && (
         <NotaCreditoGuide
           mode={mode}
+          tipo={selectedTipo?.codigo || ''}
           concepto={selectedConcepto}
-          sucursal={selectedSucursal}
           entidad={selectedEntidad}
+          total={totalValue || 0}
           detallesCount={transaccionesAsociadas.length + devoluciones.length}
           conceptoRef={conceptoRef}
-          sucursalRef={sucursalRef}
           entidadRef={entidadRef}
           documentosRef={documentosRef}
+          tipoRef={tipoRef}
+          montoRef={montoRef}
         />
+      )}
+        </>
       )}
     </div>
   );

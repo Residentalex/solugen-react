@@ -430,6 +430,7 @@ const DevolucionVentaFormulario: React.FC = () => {
       impuestos: Math.round(totalImp * 100) / 100,
       total: Math.round(total * 100) / 100,
       tasa: values.tasa || 1,
+      tipoDocumento: base.tipoDocumento ?? 20,
       documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       moneda: base.moneda || getMonedaSucursalActiva(),

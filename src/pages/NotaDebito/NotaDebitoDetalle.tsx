@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Tooltip, Modal, Alert, App
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Tooltip, Modal, Alert, App, Switch
 } from 'antd';
 import {
   LockFilled,
@@ -25,6 +25,7 @@ import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosC
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import PermissionGate from '../../components/PermissionGate';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
@@ -56,6 +57,8 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
   const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
+  const [mostrandoReverso, setMostrandoReverso] = useState(false);
+  const [reversoData, setReversoData] = useState<any>(null);
   const monedaDefault = getMonedaSucursalActiva();
   const screens = Grid.useBreakpoint();
 
@@ -83,6 +86,15 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
         }
         setData(res);
         setPageTitleOverride(`${(res as any).documento.codigo}-${(res as any).noDocumento}`);
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        if (res.estado === 3 && (res as any).reversoID) {
+          notaDebitoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
         notaDebitoApi.verificarScan(sucursalActiva, parseInt(id))
           .then((scanRes) => setTieneScan(scanRes.existe))
           .catch(() => setTieneScan(false));
@@ -94,6 +106,17 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  // Actualizar el título del header al alternar entre Original/Reverso
+  useEffect(() => {
+    if (mostrandoReverso && reversoData) {
+      const doc = reversoData as any;
+      setPageTitleOverride(`${doc.documento?.codigo || 'NDN'}-${doc.noDocumento || ''}`);
+    } else if (data) {
+      const doc = data as any;
+      setPageTitleOverride(`${doc.documento?.codigo || 'ND'}-${doc.noDocumento || ''}`);
+    }
+  }, [mostrandoReverso, reversoData, data, setPageTitleOverride]);
 
   useEffect(() => {
     if (!data?.id) return;
@@ -117,6 +140,15 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
         }
         setData(res);
         setPageTitleOverride(`${(res as any).documento.codigo}-${(res as any).noDocumento}`);
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        if (res.estado === 3 && (res as any).reversoID) {
+          notaDebitoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
         notaDebitoApi.verificarScan(sucursalActiva, parseInt(id))
           .then((scanRes) => setTieneScan(scanRes.existe))
           .catch(() => setTieneScan(false));
@@ -155,7 +187,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
     }
     setOperacionTitulo(`Aplicando ${rutaBase}-${data?.noDocumento || id}`);
     operacion.ejecutar(
-      `/${rutaBase}/${sucursalActiva}/aplicar/${id}`,
+      `/Transaccion/${sucursalActiva}/aplicar/${id}`,
       handleRefresh
     );
   };
@@ -169,6 +201,12 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
       setModalAnularOpen(false);
       const res = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
+      if (res.estado === 3 && (res as any).reversoID) {
+      const revRes = await notaDebitoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        setReversoData(revRes);
+      } else {
+        setReversoData(null);
+      }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
       message.error(msg);
@@ -196,7 +234,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
     if (!data) return;
     setOperacionTitulo(`Posteando ${rutaBase}-${data?.noDocumento || id}`);
     operacion.ejecutar(
-      `/${rutaBase}/${sucursalActiva}/postear`,
+      `/Transaccion/${sucursalActiva}/postear`,
       handleRefresh,
       data
     );
@@ -226,6 +264,12 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
       message.success('Documento reversado exitosamente');
       const res = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
+      if (res.estado === 3 && (res as any).reversoID) {
+        const revRes = await notaDebitoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        setReversoData(revRes);
+      } else {
+        setReversoData(null);
+      }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al reversar');
       message.error(msg);
@@ -281,9 +325,10 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
     return null;
   }
 
+  const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const isLarge = screens.xxl === true;
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = data.periodo === 6;
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[documentoActivo.estado] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = documentoActivo.periodo === 6;
 
   // asientoColumns reemplazado por AsientosContableTable compartido
 
@@ -304,9 +349,9 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
       )}
       <DetalleToolbar
         modulo={codigoPantalla}
-        estado={data.estado}
-        periodo={data.periodo}
-        revisado={data.revisado}
+        estado={documentoActivo.estado}
+        periodo={documentoActivo.periodo}
+        revisado={documentoActivo.revisado}
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
@@ -344,15 +389,38 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
         onDesaplicar={async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
         extraButtons={id ? (
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={handleRecalcular}
-            loading={recalculando}
-          >
-            Recalcular
-          </Button>
+          <>
+            {data?.estado === 3 && reversoData && (
+              <Switch
+                checked={mostrandoReverso}
+                checkedChildren="Reverso"
+                unCheckedChildren="Original"
+                onChange={(checked) => setMostrandoReverso(checked)}
+                style={{ marginLeft: 8 }}
+              />
+            )}
+            <PermissionGate permisoEspecial="pe_recalcular">
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={handleRecalcular}
+                loading={recalculando}
+              >
+                Recalcular
+              </Button>
+            </PermissionGate>
+          </>
         ) : undefined}
       />
+
+      {mostrandoReverso && (
+        <Alert
+          message="Viendo documento de Reverso"
+          description="Este documento es el reverso generado al anular el documento original."
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */
@@ -387,13 +455,17 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
-                <Descriptions.Item label="Tipo">
-                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                <Descriptions.Item label="Fecha:">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto:">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="NCF:">{documentoActivo.ncf || '-'}</Descriptions.Item>
+
+                <Descriptions.Item label="Tipo:">{documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}</Descriptions.Item>
+                <Descriptions.Item label="Referencia:">{documentoActivo.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="NCF Modificado:">{(documentoActivo as any).ncfModificado || '-'}</Descriptions.Item>
+
+                <Descriptions.Item label="Nota:" span={3}>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -403,26 +475,26 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
               items={[
                 {
                   key: 'documentos',
-                  label: `Documentos (${data?.transaccionesAsociadas?.length || 0})`,
+                  label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <TransaccionesAsociadasCard
-                      documentos={data?.transaccionesAsociadas || []}
+                      documentos={documentoActivo?.transaccionesAsociadas || []}
                       readOnly={true}
                     />
                   ),
                 },
                 {
                   key: 'asientos',
-                  label: `Asientos (${data.asientos?.length || 0})`,
+                  label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                    <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
                   ),
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${data.logs?.length || 0})`,
+                  label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
-                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
+                    <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
@@ -430,11 +502,11 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
           </Col>
 
           <Col xxl={6}>
-            <EntidadCard entidad={data.entidad} fallbackTitulo={tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente'} />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
-              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
-              tasa={data.tasa ?? 1}
+            <EntidadCard entidad={documentoActivo.entidad} fallbackTitulo={tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente'} />
+            <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} total={documentoActivo.total} alignRight={false}
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
+              tasa={documentoActivo.tasa ?? 1}
             />
             <DocumentosRelacionadosCard
               documentos={documentosRelacionados}
@@ -473,53 +545,57 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
               }
               style={{ marginBottom: 16 }}
             >
-              <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
-              <Descriptions.Item label="Tipo">
-                {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
-              </Descriptions.Item>
-              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+              <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
+                <Descriptions.Item label="Fecha:">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto:">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="NCF:">{documentoActivo.ncf || '-'}</Descriptions.Item>
+
+                <Descriptions.Item label="Tipo:">{documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}</Descriptions.Item>
+                <Descriptions.Item label="Referencia:">{documentoActivo.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="NCF Modificado:">{(documentoActivo as any).ncfModificado || '-'}</Descriptions.Item>
+
+                <Descriptions.Item label="Nota:" span={3}>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                </Descriptions.Item>
               </Descriptions>
           </Card>
 
           <Tabs
             defaultActiveKey="documentos"
             type="card"
-            items={[
-              {
-                key: 'documentos',
-                label: `Documentos (${data?.transaccionesAsociadas?.length || 0})`,
-                children: (
-                  <TransaccionesAsociadasCard
-                    documentos={data?.transaccionesAsociadas || []}
-                    readOnly={true}
-                  />
-                ),
-              },
-              {
-                key: 'asientos',
-                label: `Asientos (${data.asientos?.length || 0})`,
-                children: (
-                  <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
-                ),
-              },
-              {
-                key: 'historial',
-                label: `Historial (${data.logs?.length || 0})`,
-                children: (
-                  <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
-                ),
-              },
-            ]}
-          />
+              items={[
+                {
+                  key: 'documentos',
+                  label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
+                  children: (
+                    <TransaccionesAsociadasCard
+                      documentos={documentoActivo?.transaccionesAsociadas || []}
+                      readOnly={true}
+                    />
+                  ),
+                },
+                {
+                  key: 'asientos',
+                  label: `Asientos (${documentoActivo.asientos?.length || 0})`,
+                  children: (
+                    <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                  ),
+                },
+                {
+                  key: 'historial',
+                  label: `Historial (${documentoActivo.logs?.length || 0})`,
+                  children: (
+                    <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
+                  ),
+                },
+              ]}
+            />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
-              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
-              tasa={data.tasa ?? 1}
+            <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} total={documentoActivo.total} alignRight={true}
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
+              tasa={documentoActivo.tasa ?? 1}
             />
 
           <DocumentosRelacionadosCard

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Progress, Typography, Button, Result } from 'antd';
+import { Progress, Typography, Button, Result, Spin, Tag, Alert } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, FileTextOutlined, CopyOutlined, ClearOutlined, RetweetOutlined } from '@ant-design/icons';
 import { transaccionApi } from '../../api/transaccionApi';
 import { repostearApi } from '../../api/repostearApi';
@@ -8,10 +8,18 @@ import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { facturaClienteApi } from '../../api/facturaClienteApi';
 import { useUIStore } from '../../stores/uiStore';
 import { posteoHub } from '../../api/posteoHub';
+import type { PosteoProgreso } from '../../api/posteoHub';
 import type { WizardState } from './Repostear';
 import './Repostear.css';
 
 const { Text } = Typography;
+
+const ETAPAS_LOADER = [
+  'Iniciando proceso...',
+  'Conectando con el servidor...',
+  'Esperando respuesta...',
+  'Preparando documentos...',
+];
 
 interface LogEntry {
   documento: string;
@@ -46,7 +54,7 @@ async function procesarEnParalelo<T>(
 
 const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) => {
   const primaryColor = useUIStore((s) => s.primaryColor);
-  const [progreso, setProgreso] = useState(0);
+  const [progreso, setProgreso] = useState<number | null>(null);
   const [total, setTotal] = useState(0);
   const [exitosos, setExitosos] = useState(0);
   const [erroresCount, setErroresCount] = useState(0);
@@ -55,10 +63,21 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
   const [cancelado, setCancelado] = useState(false);
   const [procesando, setProcesando] = useState(true);
   const [showLog, setShowLog] = useState(false);
+  const [jobError, setJobError] = useState<string | null>(null);
+  const [conexionEstado, setConexionEstado] = useState<string>('Desconectado');
+  const [etapaLoaderIdx, setEtapaLoaderIdx] = useState(0);
+  const [tiempoTranscurrido, setTiempoTranscurrido] = useState('00:00');
+  const [velocidadDocs, setVelocidadDocs] = useState(0);
+  const [watchdogActivo, setWatchdogActivo] = useState(false);
   const jobIdRef = useRef<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const startedRef = useRef(false);
   const canceladoRef = useRef(false);
+  const tiempoInicioRef = useRef(Date.now());
+  const velocidadRef = useRef({ docs: 0, time: Date.now() });
+  const ultimoProgresoRef = useRef<PosteoProgreso | null>(null);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notificacionMostradaRef = useRef(false);
 
   useEffect(() => {
     if (logRef.current) {
@@ -68,6 +87,14 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
 
   const agregarLog = useCallback((entry: LogEntry) => {
     setLog((prev) => [...prev, entry]);
+  }, []);
+
+  // Suscripción al estado de conexión SignalR
+  useEffect(() => {
+    const unsub = posteoHub.onStateChange((state) => {
+      setConexionEstado(state);
+    });
+    return unsub;
   }, []);
 
   // Mapa de APIs específicas por tipo de documento para posteo individual
@@ -90,8 +117,80 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
         posteoHub.unsubscribeFromJob(jobIdRef.current).catch(() => {});
       }
       posteoHub.disconnect().catch(() => {});
+      document.title = 'Solugen ERP';
     };
   }, []);
+
+  // Timer de tiempo transcurrido
+  useEffect(() => {
+    if (!procesando) return;
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - tiempoInicioRef.current) / 1000);
+      const mins = Math.floor(elapsed / 60);
+      const secs = elapsed % 60;
+      setTiempoTranscurrido(
+        `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+      );
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [procesando]);
+
+  // Rotación de etapas del loader inicial
+  useEffect(() => {
+    if (progreso !== null || !procesando) return;
+    const interval = setInterval(() => {
+      setEtapaLoaderIdx((prev) => (prev + 1) % ETAPAS_LOADER.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [progreso, procesando]);
+
+  // Watchdog de inactividad (20s sin cambios en progreso)
+  useEffect(() => {
+    if (!procesando || cancelado) {
+      setWatchdogActivo(false);
+      return;
+    }
+    if (progreso !== null) setWatchdogActivo(false);
+    watchdogRef.current = setTimeout(() => {
+      setWatchdogActivo(true);
+    }, 20000);
+    return () => {
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    };
+  }, [procesando, progreso, cancelado]);
+
+  // Timeout total de conexión inicial (45s sin progreso → error automático)
+  useEffect(() => {
+    if (!procesando || cancelado || progreso !== null) return;
+    const timerId = setTimeout(() => {
+      setJobError('No se pudo conectar con el servidor de proceso. Verifique que el servicio esté disponible o intente nuevamente.');
+      setProcesando(false);
+    }, 45000);
+    return () => clearTimeout(timerId);
+  }, [procesando, cancelado, progreso]);
+
+  // Notificación al completar + título
+  useEffect(() => {
+    if (!procesando && !cancelado && progreso !== null && (progreso >= 100 || total > 0) && !notificacionMostradaRef.current) {
+      notificacionMostradaRef.current = true;
+      const hasErrors = erroresCount > 0;
+      document.title = hasErrors
+        ? '❌ Error en posteo - Solugen ERP'
+        : '✅ Posteo completado - Solugen ERP';
+    }
+  }, [procesando, cancelado, progreso, total, exitosos, erroresCount]);
+
+  // Título durante el procesamiento
+  useEffect(() => {
+    if (procesando) {
+      document.title = '🔄 Posteando... - Solugen ERP';
+    }
+    return () => {
+      if (!procesando) {
+        document.title = 'Solugen ERP';
+      }
+    };
+  }, [procesando]);
 
   const procesarDocumentos = async () => {
     const sucursal = wizard.sucursal!;
@@ -120,12 +219,26 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
         timestamp: new Date().toLocaleTimeString(),
       });
       setErrores((prev) => [...prev, err?.message || 'Error inesperado']);
+      setJobError(err?.message || 'Error inesperado en el proceso');
       setProcesando(false);
     }
   };
 
   // ─── Flujo nuevo: Rango de Fechas con SignalR ───────────────────────────
   const procesarPorRangoFechas = async (sucursal: number) => {
+    // Obtener total posteable real (excluye borradores) antes de iniciar el job
+    try {
+      const totalPosteable = await transaccionApi.contarPosteable(
+        sucursal,
+        wizard.tipoDoc || '',
+        wizard.fechaDesde,
+        wizard.fechaHasta
+      );
+      setTotal(totalPosteable);
+    } catch (err) {
+      console.warn('No se pudo obtener total posteable, se usará el de SignalR:', err);
+    }
+
     try {
       const jobId = await repostearApi.repostear(
         wizard.tipoDoc,
@@ -144,18 +257,40 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
 
       await posteoHub.subscribeToJob(
         jobId,
-        (progreso) => {
+        (progresoSignalR) => {
+          // Guardar último progreso para velocidad y detalle
+          ultimoProgresoRef.current = progresoSignalR;
+
+          // Calcular velocidad
+          const ahora = Date.now();
+          const diffDocs = progresoSignalR.documentosProcesados - velocidadRef.current.docs;
+          const diffTime = (ahora - velocidadRef.current.time) / 1000;
+          if (diffTime >= 1 && diffDocs > 0) {
+            setVelocidadDocs(Math.round(diffDocs / diffTime));
+            velocidadRef.current = { docs: progresoSignalR.documentosProcesados, time: ahora };
+          }
+
           // Callback de progreso
-          setTotal(progreso.totalDocumentos);
+          // Actualizar contadores en vivo
+          if (progresoSignalR.documentoActual) {
+            if (progresoSignalR.exitoso) {
+              setExitosos(prev => prev + 1);
+            } else {
+              setErroresCount(prev => prev + 1);
+            }
+          }
+          // Solo usar el total de SignalR si no lo tenemos ya (por si el endpoint falló)
+          setTotal(prev => prev > 0 ? prev : progresoSignalR.totalDocumentos);
+          const totalDocs = total > 0 ? total : progresoSignalR.totalDocumentos;
           setProgreso(
-            progreso.totalDocumentos > 0
-              ? Math.round((progreso.documentosProcesados / progreso.totalDocumentos) * 100)
+            totalDocs > 0
+              ? Math.round((progresoSignalR.documentosProcesados / totalDocs) * 100)
               : 0
           );
           agregarLog({
-            documento: progreso.documentoActual || `Doc ${progreso.documentosProcesados}`,
-            exito: progreso.exitoso,
-            mensaje: progreso.mensaje || undefined,
+            documento: progresoSignalR.documentoActual || `Doc ${progresoSignalR.documentosProcesados}`,
+            exito: progresoSignalR.exitoso,
+            mensaje: progresoSignalR.mensaje || undefined,
             timestamp: new Date().toLocaleTimeString(),
           });
         },
@@ -194,6 +329,7 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
         timestamp: new Date().toLocaleTimeString(),
       });
       setErrores((prev) => [...prev, err?.message || 'Error al iniciar reposteo']);
+      setJobError(err?.message || 'Error al iniciar reposteo');
       setProcesando(false);
     }
   };
@@ -386,6 +522,7 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
       });
       setErrores((prev) => [...prev, 'Error general']);
       setErroresCount(1);
+      setJobError(err?.response?.data?.errorMessage || err?.message || 'Error al obtener documentos');
     } finally {
       setProcesando(false);
     }
@@ -412,8 +549,31 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
     setLog([]);
   };
 
+  // Error antes de obtener jobId o en la creación del job
+  if (jobError && progreso === null && !procesando) {
+    return (
+      <div>
+        <div className="repostear-result">
+          <Result
+            status="error"
+            title="Error al iniciar el proceso"
+            subTitle={jobError}
+            extra={[
+              <Button key="reiniciar" icon={<RetweetOutlined />} onClick={onReiniciar}>
+                Reintentar
+              </Button>,
+              <Button key="fin" type="primary" onClick={onTerminado}>
+                Finalizar
+              </Button>,
+            ]}
+          />
+        </div>
+      </div>
+    );
+  }
+
   // Resultado final visual
-  if (!procesando && !cancelado && (progreso >= 100 || total > 0)) {
+  if (!procesando && !cancelado && progreso !== null && (progreso >= 100 || total > 0)) {
     const hasErrors = erroresCount > 0 || errores.length > 0;
     const totalProcesados = exitosos + erroresCount;
     return (
@@ -424,8 +584,8 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
             title={hasErrors ? 'Proceso completado con errores' : 'Proceso completado exitosamente'}
             subTitle={
               hasErrors
-                ? `Se procesaron ${totalProcesados} documentos: ${exitosos} exitosos y ${erroresCount} con errores.`
-                : `Se procesaron ${totalProcesados} documentos exitosamente.`
+                ? `Se procesaron ${totalProcesados} documentos: ${exitosos} exitosos y ${erroresCount} con errores. Tiempo: ${tiempoTranscurrido}`
+                : `Se procesaron ${totalProcesados} documentos exitosamente. Tiempo: ${tiempoTranscurrido}`
             }
             extra={[
               <Button key="log" icon={<FileTextOutlined />} onClick={() => setShowLog(!showLog)}>
@@ -493,66 +653,134 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
     );
   }
 
+  // Colores/iconos del badge de conexión
+  const cxColor = conexionEstado === 'Connected' ? 'success' : conexionEstado === 'Reconnecting' ? 'processing' : 'error';
+  const cxIcon = conexionEstado === 'Connected' ? '🟢' : conexionEstado === 'Reconnecting' ? '🟡' : '🔴';
+  const cxText = conexionEstado === 'Connected' ? 'En vivo' : conexionEstado === 'Reconnecting' ? 'Conectando...' : 'Desconectado';
+
   return (
     <div>
-      {/* Card de progreso con gradiente */}
-      <div className="repostear-progress-card">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 20 }}>
-          <Text
-            className={procesando ? 'repostear-pulse' : ''}
-            style={{
-              fontSize: 18,
-              fontWeight: 600,
-              color: procesando ? primaryColor : erroresCount > 0 ? '#faad14' : '#52c41a',
-            }}
-          >
-            {procesando ? 'Procesando documentos...' : cancelado ? 'Proceso cancelado' : 'Proceso completado'}
-          </Text>
-          {procesando && (
-            <Button
-              size="small"
-              type="text"
-              icon={<FileTextOutlined />}
-              onClick={() => setShowLog((prev) => !prev)}
-              style={{ fontSize: 12, color: '#8b949e' }}
-            >
-              {showLog ? 'Ocultar Log' : 'Log'}
-            </Button>
-          )}
+      {/* Badge de conexión SignalR */}
+      {procesando && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <Tag color={cxColor} className="repostear-conexion-badge">
+            {cxIcon} {cxText}
+          </Tag>
         </div>
+      )}
 
-        <Progress
-          percent={progreso}
-          status={procesando ? 'active' : erroresCount > 0 ? 'exception' : 'success'}
-          strokeColor={primaryColor}
-          strokeWidth={12}
-          style={{ marginBottom: 16 }}
-        />
-
-        {/* Stats grandes */}
-        <div className="repostear-stats">
-          <div className="repostear-stat repostear-stat--total">
-            <div className="repostear-stat__value">{total}</div>
-            <div className="repostear-stat__label">Total</div>
+      {/* Loader inicial: mientras no hay progreso y estamos en procesamiento */}
+      {progreso === null && procesando && !jobError && (
+        <div className="repostear-loader-inicial">
+          <Spin size="large" />
+          <div className="repostear-loader-texto">
+            {ETAPAS_LOADER[etapaLoaderIdx]}
           </div>
-          <div className="repostear-stat repostear-stat--success">
-            <div className="repostear-stat__value">{exitosos}</div>
-            <div className="repostear-stat__label">
-              <CheckCircleOutlined style={{ marginRight: 4 }} />
-              Exitosos
+          <div className="repostear-loader-tiempo">
+            ⏱ {tiempoTranscurrido}
+          </div>
+        </div>
+      )}
+
+      {/* Card de progreso con gradiente: solo cuando progreso tiene valor */}
+      {progreso !== null && (
+        <div className="repostear-progress-card">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 20 }}>
+            <Text
+              className={procesando ? 'repostear-pulse' : ''}
+              style={{
+                fontSize: 18,
+                fontWeight: 600,
+                color: procesando ? primaryColor : erroresCount > 0 ? '#faad14' : '#52c41a',
+              }}
+            >
+              {procesando ? 'Procesando documentos...' : cancelado ? 'Proceso cancelado' : 'Proceso completado'}
+            </Text>
+            {procesando && (
+              <Button
+                size="small"
+                type="text"
+                icon={<FileTextOutlined />}
+                onClick={() => setShowLog((prev) => !prev)}
+                style={{ fontSize: 12, color: '#8b949e' }}
+              >
+                {showLog ? 'Ocultar Log' : 'Log'}
+              </Button>
+            )}
+          </div>
+
+          <Progress
+            percent={progreso}
+            status={procesando ? 'active' : erroresCount > 0 ? 'exception' : 'success'}
+            strokeColor={primaryColor}
+            strokeWidth={12}
+            style={{ marginBottom: 16 }}
+          />
+
+          {/* Velocidad y tiempo estimado */}
+          {procesando && !cancelado && (
+            <div className="repostear-detalle-progreso">
+              <Text type="secondary">
+                Documento actual: {ultimoProgresoRef.current?.documentoActual || '—'}
+              </Text>
+              <Text type="secondary">
+                Velocidad: {velocidadDocs} docs/seg
+              </Text>
+              <Text type="secondary">
+                Transcurrido: {tiempoTranscurrido}
+                {(() => {
+                  const docsRestantes = total - (ultimoProgresoRef.current?.documentosProcesados ?? 0);
+                  const segundosRestantes = velocidadDocs > 0 && docsRestantes > 0
+                    ? Math.ceil(docsRestantes / velocidadDocs)
+                    : 0;
+                  if (segundosRestantes > 0) {
+                    const mins = Math.floor(segundosRestantes / 60);
+                    const secs = segundosRestantes % 60;
+                    return ` | Restante: ~${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                  }
+                  return '';
+                })()}
+              </Text>
             </div>
-          </div>
-          {erroresCount > 0 && (
-            <div className="repostear-stat repostear-stat--error">
-              <div className="repostear-stat__value">{erroresCount}</div>
+          )}
+
+          {/* Stats grandes */}
+          <div className="repostear-stats">
+            <div className="repostear-stat repostear-stat--total">
+              <div className="repostear-stat__value">{total}</div>
+              <div className="repostear-stat__label">Total</div>
+            </div>
+            <div className="repostear-stat repostear-stat--success">
+              <div className="repostear-stat__value">{exitosos}</div>
               <div className="repostear-stat__label">
-                <CloseCircleOutlined style={{ marginRight: 4 }} />
-                Errores
+                <CheckCircleOutlined style={{ marginRight: 4 }} />
+                Exitosos
               </div>
             </div>
-          )}
+            {erroresCount > 0 && (
+              <div className="repostear-stat repostear-stat--error">
+                <div className="repostear-stat__value">{erroresCount}</div>
+                <div className="repostear-stat__label">
+                  <CloseCircleOutlined style={{ marginRight: 4 }} />
+                  Errores
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Watchdog de inactividad */}
+      {watchdogActivo && (
+        <Alert
+          type="warning"
+          message="Sin actividad"
+          showIcon
+          description="El servidor no ha reportado actividad en los últimos 30 segundos. El proceso podría haberse detenido."
+          action={<Button size="small" onClick={handleCancelar}>Cancelar</Button>}
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {/* Log tipo terminal GitHub dark (oculto por defecto) */}
       {showLog && (

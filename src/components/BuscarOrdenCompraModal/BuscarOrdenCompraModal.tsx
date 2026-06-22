@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Modal, Input, Table, message } from 'antd';
 import { formatCurrency } from '../../utils/formats';
 import type { OrdenCompraVistaDTO } from '../../types/entradaAlmacen';
@@ -33,6 +33,16 @@ const BuscarOrdenCompraModal: React.FC<BuscarOrdenCompraModalProps> = ({
   const [ordenes, setOrdenes] = useState<OrdenCompraVistaDTO[]>([]);
   const [searchText, setSearchText] = useState('');
   const [loading, setLoading] = useState(false);
+  const searchRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+        searchRef.current?.focus?.();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -41,7 +51,7 @@ const BuscarOrdenCompraModal: React.FC<BuscarOrdenCompraModalProps> = ({
       fetchOrdenes()
         .then((res) => setOrdenes(res || []))
         .catch((err: any) => {
-          const msg = err?.response?.data?.errorMessage || 'Error al buscar órdenes de compra';
+          const msg = err?.response?.data?.errorMessage || 'Error al buscar Ã³rdenes de compra';
           message.error(msg);
           setOrdenes([]);
         })
@@ -98,9 +108,10 @@ const BuscarOrdenCompraModal: React.FC<BuscarOrdenCompraModalProps> = ({
       onCancel={onClose}
       footer={null}
       width={800}
-      destroyOnClose
+      destroyOnHidden
     >
       <Input.Search
+        ref={searchRef}
         placeholder="Buscar por documento, suplidor o total..."
         allowClear
         onSearch={(val) => setSearchText(val || '')}

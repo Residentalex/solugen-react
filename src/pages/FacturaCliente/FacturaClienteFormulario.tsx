@@ -34,6 +34,7 @@ import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProd
 import type { DetalleFacturaClienteDTO, FacturaClienteFullDTO } from '../../types/facturaCliente';
 import LogTable from '../../components/LogTable';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import BuscarEntidadSelect from '../../components/BuscarEntidadSelect/BuscarEntidadSelect';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
@@ -553,6 +554,7 @@ const FacturaClienteFormulario: React.FC = () => {
       referencia: values.referencia || '',
       nota: values.nota || '',
       tasa: values.tasa || 1,
+      tipoDocumento: base.tipoDocumento ?? 35,
       diasCredito: values.diasCredito || 0,
       subTotal: Math.round(totalSub * 100) / 100,
       descuento: Math.round(totalDesc * 100) / 100,
@@ -1031,6 +1033,7 @@ const FacturaClienteFormulario: React.FC = () => {
   ];
 
   // ===== Encabezado del formulario =====
+  const documentoTieneTipos = tiposCache.length > 0;
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
@@ -1074,17 +1077,17 @@ const FacturaClienteFormulario: React.FC = () => {
                       placeholder=" "
                       value={selectedConcepto ? `${selectedConcepto.codigo || ''} - ${toTitleCase(selectedConcepto.nombre)}` : conceptoSearchText}
                       readOnly
-                      disabled={!selectedTipo}
+                      disabled={documentoTieneTipos && !selectedTipo}
                       suffix={
                         <Space size={4}>
                           <SearchOutlined
-                            onClick={() => selectedTipo && handleConceptoSearchClick()}
-                            style={{ cursor: selectedTipo ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
+                            onClick={() => (!documentoTieneTipos || selectedTipo) && handleConceptoSearchClick()}
+                            style={{ cursor: (!documentoTieneTipos || selectedTipo) ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
                           />
                           {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
                         </Space>
                       }
-                      onClick={() => selectedTipo && handleConceptoSearchClick()}
+                      onClick={() => (!documentoTieneTipos || selectedTipo) && handleConceptoSearchClick()}
                     />
                   </FloatingField>
                 </div>
@@ -1106,17 +1109,17 @@ const FacturaClienteFormulario: React.FC = () => {
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12} lg={15}>
-                <Form.Item name="cliente" required style={{ marginBottom: 0 }}>
-                  <FloatingField label="Cliente" required ref={clienteRef}>
-                    <Select
-                      allowClear
-                      showSearch
-                      optionFilterProp="children"
-                      onChange={(val) => {
-                        const cli = clientesCache.find((e) => e.codigo === val);
-                        setSelectedCliente(cli || null);
+                <div ref={clienteRef}>
+                  <Form.Item name="cliente" required style={{ marginBottom: 0 }}>
+                    <BuscarEntidadSelect
+                      entidades={clientesCache as any}
+                      value={selectedCliente?.codigo}
+                      label="Cliente"
+                      required
+                      onChange={(codigo, entidad) => {
+                        setSelectedCliente(entidad || null);
                         // FC17 - Si el cliente es exento de impuestos, limpiar
-                        if (cli?.exentoImpuesto && detalles.some((d) => (d.impuesto?.porcentaje || 0) > 0)) {
+                        if (entidad?.exentoImpuesto && detalles.some((d) => (d.impuesto?.porcentaje || 0) > 0)) {
                           message.warning('El cliente está exento de impuestos. Se eliminarán los impuestos de los detalles.');
                           setDetalles((prev) =>
                             prev.map((d) => {
@@ -1126,15 +1129,9 @@ const FacturaClienteFormulario: React.FC = () => {
                           );
                         }
                       }}
-                    >
-                      {clientesCache.map((cli) => (
-                        <Select.Option key={cli.codigo} value={cli.codigo}>
-                          {toTitleCase(cli.nombre)}{cli.identificacion ? ` (${cli.identificacion})` : ''}
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  </FloatingField>
-                </Form.Item>
+                    />
+                  </Form.Item>
+                </div>
               </Col>
 
               {/* Fila 3: FechaVencimiento + Almacén */}

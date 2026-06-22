@@ -110,7 +110,7 @@ const SolicitudPagoFormulario: React.FC = () => {
   // ===== Cargar entidades según concepto =====
   const cargarEntidades = useCallback(async (conceptoCodigo?: string) => {
     try {
-      const res = await conceptosApi.obtenerEntidades(sucursalActiva, conceptoCodigo);
+      const res = await conceptosApi.obtenerEntidades(sucursalActiva, conceptoCodigo, true);
       setEntidadesCache(res || []);
     } catch {
       message.error('Error al cargar entidades');

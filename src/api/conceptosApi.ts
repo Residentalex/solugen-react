@@ -54,10 +54,12 @@ export const conceptosApi = {
 
   obtenerEntidades: async (
     sucursal: number,
-    conceptoCodigo?: string
+    conceptoCodigo?: string,
+    activo?: boolean
   ): Promise<EntidadDTO[]> => {
     const params: Record<string, string> = {};
     if (conceptoCodigo) params.concepto = conceptoCodigo;
+    if (activo !== undefined) params.activo = String(activo);
 
     const { data } = await apiClient.get<ApiResponse<EntidadDTO[]>>(
       `${ENTIDADES_BASE}/${sucursal}`,
@@ -68,7 +70,7 @@ export const conceptosApi = {
 
   obtenerSuplidores: async (sucursal: number): Promise<SuplidorDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<SuplidorDTO[]>>(
-      `${PROVEEDORES_BASE}/${sucursal}`
+      `${PROVEEDORES_BASE}/${sucursal}?activo=true`
     );
     return data.data;
   },

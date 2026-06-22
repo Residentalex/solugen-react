@@ -100,7 +100,7 @@ const FacturaPOS: React.FC = () => {
       key: 'estado',
       width: 100,
       render: (estado: number, record: FacturaVistaDTO) => (
-        <EstadoColumnCell estado={Number(estado)} periodo={record.periodo} />
+        <EstadoColumnCell estado={estado} periodo={record.periodo} />
       ),
     },
   ];

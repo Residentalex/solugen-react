@@ -4,13 +4,12 @@ import { Card, Row, Col, Tag, Button, Spin, message, Empty, Grid, Tooltip, Avata
 import { PlusOutlined, EditOutlined, EyeOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
 import { useUIStore } from '../../stores/uiStore';
+import { useAuthStore } from '../../stores/authStore';
 import { Sucursal } from '../../types/auth';
 import { rolApi } from '../../api/rolApi';
 import type { RolFullDTO } from '../../types/administracion';
 
 const { Text } = Typography;
-
-const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
 
 const Roles: React.FC = () => {
   const navigate = useNavigate();
@@ -18,6 +17,7 @@ const Roles: React.FC = () => {
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const screens = Grid.useBreakpoint();
+  const securitySucursal = useAuthStore((s) => s.securitySucursal);
 
   const [roles, setRoles] = useState<RolFullDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -30,14 +30,14 @@ const Roles: React.FC = () => {
   const cargarRoles = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await rolApi.obtenerListado(SUCURSAL_SEGURIDAD);
+      const data = await rolApi.obtenerListado(securitySucursal);
       setRoles(data || []);
     } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);
     }
-  }, [SUCURSAL_SEGURIDAD]);
+  }, [securitySucursal]);
 
   useEffect(() => {
     setActiveModule('MROL');
@@ -51,7 +51,7 @@ const Roles: React.FC = () => {
     setDetalleVisible(true);
     setCargandoDetalle(true);
     try {
-      const completo = await rolApi.obtenerPorId(SUCURSAL_SEGURIDAD, rol.id);
+      const completo = await rolApi.obtenerPorId(securitySucursal, rol.id);
       setDetalleItem(completo);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar detalle del rol');

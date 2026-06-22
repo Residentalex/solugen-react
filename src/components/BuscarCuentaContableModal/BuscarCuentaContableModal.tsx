@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Modal, Input, Table, Empty, message } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
@@ -19,6 +19,16 @@ const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
 }) => {
   const [cuentas, setCuentas] = useState<CuentaContableDTO[]>([]);
   const [searchText, setSearchText] = useState('');
+  const searchRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+        searchRef.current?.focus?.();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -63,9 +73,10 @@ const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
       onCancel={onClose}
       footer={null}
       width={700}
-      destroyOnClose
+      destroyOnHidden
     >
       <Input.Search
+        ref={searchRef}
         placeholder="Buscar por No. Cuenta o Nombre..."
         allowClear
         onSearch={(val) => setSearchText(val || '')}

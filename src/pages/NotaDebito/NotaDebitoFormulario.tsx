@@ -38,6 +38,7 @@ import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConc
 import BuscarTipoModal from '../../components/BuscarTipoModal/BuscarTipoModal';
 import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import BuscarDevolucionModal from '../../components/BuscarDevolucionModal/BuscarDevolucionModal';
+import BuscarEntidadSelect from '../../components/BuscarEntidadSelect/BuscarEntidadSelect';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -219,8 +220,20 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       setSelectedConcepto(cloneData.concepto || null);
       setSelectedEntidad(cloneData.entidad || null);
       setSelectedSucursal(cloneData.sucursal || null);
-      setDocumentosRelacionados(cloneData.transaccionesAsociadas || []);
-      setDevoluciones(cloneData.devoluciones || []);
+      // Separar transaccionesAsociadas en pagos y devoluciones
+      const todasAsociadasClone = cloneData.transaccionesAsociadas || [];
+      const docsPagoClone = todasAsociadasClone.filter((x: any) => !x.esDocumentoInventario);
+      const docsInventarioClone = todasAsociadasClone.filter((x: any) => x.esDocumentoInventario);
+      const devsMapeadasClone = docsInventarioClone.map((x: any) => ({
+        transaccionAsociadaID: x.transaccionAsociadaID || x.id,
+        documento: x.documento,
+        fecha: x.fecha,
+        montoOriginal: x.montoOriginal,
+        monto: x.monto,
+        esDocumentoInventario: true,
+      }));
+      setDocumentosRelacionados(docsPagoClone);
+      setDevoluciones(devsMapeadasClone);
       setImpuestosRetenciones(cloneData.impuestosRetenciones || []);
       setAsientos(cloneData.asientos || []);
       setDetallesMovimiento(cloneData.detallesMovimiento || cloneData.detalles || []);
@@ -291,7 +304,6 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           entidad: res.entidad || null,
           moneda: res.moneda || null,
           transaccionesAsociadas: res.transaccionesAsociadas || [],
-          devoluciones: res.devoluciones || [],
           impuestosRetenciones: res.impuestosRetenciones || [],
           asientos: res.asientos || [],
           logs: res.logs || [],
@@ -300,8 +312,20 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         setSelectedConcepto(full.concepto || null);
         setSelectedTipo(full.tipo || null);
         setSelectedEntidad(full.entidad || null);
-        setDocumentosRelacionados(full.transaccionesAsociadas || []);
-        setDevoluciones(full.devoluciones || []);
+        // Separar transaccionesAsociadas en pagos (esDocumentoInventario=false) y devoluciones (esDocumentoInventario=true)
+        const todasAsociadas = res.transaccionesAsociadas || [];
+        const docsPago = todasAsociadas.filter((x: any) => !x.esDocumentoInventario);
+        const docsInventario = todasAsociadas.filter((x: any) => x.esDocumentoInventario);
+        const devsMapeadas = docsInventario.map((x: any) => ({
+          transaccionAsociadaID: x.transaccionAsociadaID || x.id,
+          documento: x.documento,
+          fecha: x.fecha,
+          montoOriginal: x.montoOriginal,
+          monto: x.monto,
+          esDocumentoInventario: true,
+        }));
+        setDocumentosRelacionados(docsPago);
+        setDevoluciones(devsMapeadas);
         setImpuestosRetenciones(full.impuestosRetenciones || []);
         setAsientos(full.asientos || []);
         setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);
@@ -334,7 +358,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
         // Cargar entidades seg├║n el concepto
         if (full.concepto?.codigo) {
-          conceptosApi.obtenerEntidades(sucursalActiva, full.concepto.codigo)
+          conceptosApi.obtenerEntidades(sucursalActiva, full.concepto.codigo, true)
             .then(setEntidadesCache)
             .catch(() => {});
         }
@@ -373,7 +397,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     form.setFieldsValue({ concepto: concepto.codigo });
 
     // Cargar entidades según el concepto
-    conceptosApi.obtenerEntidades(sucursalActiva, concepto.codigo)
+    conceptosApi.obtenerEntidades(sucursalActiva, concepto.codigo, true)
       .then((ents) => setEntidadesCache(ents))
       .catch(() => {});
 
@@ -449,19 +473,19 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   // ===== Handlers de Devoluciones =====
   const handleDevolucionSelect = (docs: DevolucionAsociadaDTO[]) => {
     setDevoluciones((prev) => {
-      const existentes = new Set(prev.map((d) => d.id));
-      const nuevos = docs.filter((d) => !existentes.has(d.id));
+      const existentes = new Set(prev.map((d) => d.transaccionAsociadaID));
+      const nuevos = docs.filter((d) => !existentes.has(d.transaccionAsociadaID));
       return [...prev, ...nuevos];
     });
   };
 
   const handleDevolucionRemove = (id?: number) => {
-    setDevoluciones((prev) => prev.filter((d) => d.id !== id));
+    setDevoluciones((prev) => prev.filter((d) => d.transaccionAsociadaID !== id));
   };
 
-  const handleDevMontoChange = (id: number | undefined, montoAsignado: number) => {
+  const handleDevMontoChange = (id: number | undefined, monto: number) => {
     setDevoluciones((prev) =>
-      prev.map((d) => d.id === id ? { ...d, montoAsignado } : d)
+      prev.map((d) => d.transaccionAsociadaID === id ? { ...d, monto } : d)
     );
   };
 
@@ -530,7 +554,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
     // Validar distribución de devoluciones
     if (devoluciones.length > 0) {
-      const sumaDevs = devoluciones.reduce((s, d) => s + (d.montoAsignado || 0), 0);
+      const sumaDevs = devoluciones.reduce((s, d) => s + (d.monto || 0), 0);
       if (Math.abs(sumaDevs - totalMonto) > 0.01) {
         return 'La distribución de devoluciones debe igualar el Total';
       }
@@ -614,8 +638,16 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       entidad: entidadSel ? { codigo: entidadSel.codigo, nombre: entidadSel.nombre || '', identificacion: entidadSel.identificacion || '', telefono: entidadSel.telefono } : { codigo: '', nombre: '' },
       moneda: base.moneda || getMonedaSucursalActiva(),
       sucursal: selectedSucursal ? { codigo: selectedSucursal.codigo || selectedSucursal.idExterno, nombre: selectedSucursal.nombre || '' } : undefined,
-      transaccionesAsociadas: documentosRelacionados,
-      devoluciones,
+      // Combinar pagos y devoluciones en transaccionesAsociadas (formato TransaccionAsociadaDTO)
+      transaccionesAsociadas: [...documentosRelacionados, ...devoluciones.map((d: DevolucionAsociadaDTO) => ({
+        transaccionAsociadaID: d.transaccionAsociadaID,
+        documento: d.documento,
+        fecha: d.fecha,
+        montoOriginal: d.montoOriginal,
+        monto: d.monto,
+        esDocumentoInventario: true,
+        tipoDocumento: 24,    // TipoDocumento.DVC = 24
+      }))],
       impuestosRetenciones,
       asientos: asientos || [],
       detallesMovimiento: tipoEntidad === 'CLI' ? detallesMovimiento : [],
@@ -708,19 +740,19 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const devColumns = [
     { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => v ? formatDate(v) : '-' },
-    { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v) },
+    { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
     {
-      title: 'Monto Asignado', dataIndex: 'montoAsignado', key: 'montoAsignado', width: 140, align: 'right' as const,
+      title: 'Monto Asignado', dataIndex: 'monto', key: 'monto', width: 140, align: 'right' as const,
       render: (_: any, record: DevolucionAsociadaDTO, idx: number) => (
         <InputNumber
           size="small"
           style={{ width: 120 }}
           min={0}
-          max={record.monto || 0}
+          max={record.montoOriginal || record.monto || 0}
           step={0.01}
           precision={2}
-          value={devoluciones[idx]?.montoAsignado}
-          onChange={(val) => handleDevMontoChange(record.id, val || 0)}
+          value={devoluciones[idx]?.monto}
+          onChange={(val) => handleDevMontoChange(record.transaccionAsociadaID, val || 0)}
         />
       ),
     },
@@ -728,7 +760,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       title: '', key: 'accion', width: 50,
       render: (_: any, record: DevolucionAsociadaDTO) => (
         <Button type="text" danger size="small" icon={<DeleteOutlined />}
-          onClick={() => handleDevolucionRemove(record.id)} />
+          onClick={() => handleDevolucionRemove(record.transaccionAsociadaID)} />
       ),
     },
   ];
@@ -796,6 +828,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   // ===== Toolbar =====
 
   // ===== Encabezado =====
+  const documentoTieneTipos = true;
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16, paddingBottom: 32 }}>
       <Row gutter={16}>
@@ -818,17 +851,17 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
                   placeholder=" "
                   value={selectedConcepto ? `${selectedConcepto.codigo} - ${toTitleCase(selectedConcepto.nombre)}` : ''}
                   readOnly
-                  disabled={!selectedTipo}
+                  disabled={documentoTieneTipos && !selectedTipo}
                   suffix={
                     <Space size={4}>
                       <SearchOutlined
-                        onClick={() => selectedTipo && setConceptoModalOpen(true)}
-                        style={{ cursor: selectedTipo ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
+                        onClick={() => (!documentoTieneTipos || selectedTipo) && setConceptoModalOpen(true)}
+                        style={{ cursor: (!documentoTieneTipos || selectedTipo) ? 'pointer' : 'not-allowed', color: 'rgba(0,0,0,0.45)' }}
                       />
                       {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
                     </Space>
                   }
-                  onClick={() => selectedTipo && setConceptoModalOpen(true)}
+                  onClick={() => (!documentoTieneTipos || selectedTipo) && setConceptoModalOpen(true)}
                 />
               </FloatingField>
             </div>
@@ -859,51 +892,20 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
             <Form.Item name="tipo" hidden><Input /></Form.Item>
           </Col>
 
-          <Col xs={24} sm={12} lg={18} ref={entidadRef}>
-            <Form.Item name="entidad" required style={{ marginBottom: 0 }}>
-              <FloatingField label={entidadLabel} required>
-                <Select
-                  showSearch
-                  allowClear
-                  placeholder=" "
-                  optionFilterProp="label"
-                  onChange={(val) => {
-                    if (!val) { setSelectedEntidad(null); return; }
-                    const ent = entidadesCache.find((e: any) => e.codigo === val);
-                    if (!ent) return;
-
-                    const tieneDocs = documentosRelacionados.length > 0 || devoluciones.length > 0;
-                    if (tieneDocs && selectedEntidad) {
-                      Modal.confirm({
-                        title: 'Cambiar entidad',
-                        icon: <ExclamationCircleOutlined />,
-                        content: `La entidad ${ent.nombre} tiene documentos asignados. Se borrarán los documentos agregados. ¿Está seguro?`,
-                        okText: 'Sí, cambiar',
-                        cancelText: 'No',
-                        okButtonProps: { danger: true },
-                        onOk: () => {
-                          setSelectedEntidad(ent);
-                          setDocumentosRelacionados([]);
-                          setDevoluciones([]);
-                          form.setFieldsValue({ entidad: ent.codigo });
-                        },
-                        onCancel: () => {
-                          form.setFieldsValue({ entidad: selectedEntidad.codigo });
-                        },
-                      });
-                    } else {
-                      setSelectedEntidad(ent);
-                    }
-                  }}
-                >
-                  {entidadesCache.map((ent: any) => (
-                    <Select.Option key={ent.codigo} value={ent.codigo} label={ent.nombre}>
-                      {toTitleCase(ent.nombre)}{ent.identificacion ? ` (${ent.identificacion})` : ''}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </FloatingField>
-            </Form.Item>
+          <Col xs={24} sm={12} lg={18}>
+            <div ref={entidadRef}>
+              <Form.Item name="entidad" required style={{ marginBottom: 0 }}>
+                <BuscarEntidadSelect
+                  entidades={entidadesCache as any}
+                  value={selectedEntidad?.codigo}
+                  label={entidadLabel}
+                  required
+                  tieneDocumentosAsociados={documentosRelacionados.length > 0 || devoluciones.length > 0}
+                  conceptoSeleccionado={!!selectedConcepto}
+                  onChange={(codigo, entidad) => setSelectedEntidad(entidad || null)}
+                />
+              </Form.Item>
+            </div>
           </Col>
 
           {/* Fila 3: Sucursal + Monto Total + Bienes + Servicios */}
@@ -1163,7 +1165,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           <Table
             dataSource={devoluciones}
             columns={devColumns}
-            rowKey={(r) => r.id || 0}
+            rowKey={(r) => r.transaccionAsociadaID || 0}
             size="small"
             pagination={false}
             scroll={{ x: 600 }}
@@ -1241,14 +1243,25 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           documento: res.documento || { codigo: 'ND' }, concepto: res.concepto || null,
           tipo: res.tipo || null, entidad: res.entidad || null, moneda: res.moneda || null,
           transaccionesAsociadas: res.transaccionesAsociadas || [],
-          devoluciones: res.devoluciones || [],
           impuestosRetenciones: res.impuestosRetenciones || [],
           asientos: res.asientos || [], logs: res.logs || [],
         };
         setData(full); setSelectedConcepto(full.concepto || null);
         setSelectedTipo(full.tipo || null); setSelectedEntidad(full.entidad || null);
-        setDocumentosRelacionados(full.transaccionesAsociadas || []);
-        setDevoluciones(full.devoluciones || []);
+        // Separar transaccionesAsociadas en pagos y devoluciones
+        const todasAsociadasRefresh = res.transaccionesAsociadas || [];
+        const docsPagoRefresh = todasAsociadasRefresh.filter((x: any) => !x.esDocumentoInventario);
+        const docsInventarioRefresh = todasAsociadasRefresh.filter((x: any) => x.esDocumentoInventario);
+        const devsMapeadasRefresh = docsInventarioRefresh.map((x: any) => ({
+          transaccionAsociadaID: x.transaccionAsociadaID || x.id,
+          documento: x.documento,
+          fecha: x.fecha,
+          montoOriginal: x.montoOriginal,
+          monto: x.monto,
+          esDocumentoInventario: true,
+        }));
+        setDocumentosRelacionados(docsPagoRefresh);
+        setDevoluciones(devsMapeadasRefresh);
         setImpuestosRetenciones(full.impuestosRetenciones || []);
         setAsientos(full.asientos || []);
         setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);

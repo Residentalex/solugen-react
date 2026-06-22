@@ -1,3 +1,6 @@
+import type { UsuarioDTO } from './administracion';
+import type { UnidadMedidaDTO } from './productos';
+
 export interface SuplidorGORC {
   idExterno: string;
   codigo: string;
@@ -29,9 +32,9 @@ export interface GeneradorOrdenCompraDTO {
   subTotal: number;
   descuento: number;
   impuestos: number;
-  redondeo: number;
-  creadoPor: string;
-  validadoPor: string;
+  redondeo: boolean;
+  creadoPor?: UsuarioDTO | null;
+  validadoPor?: UsuarioDTO | null;
   logs?: LogGORC[];
   detalles?: DetalleGeneradorDTO[];
 }
@@ -40,7 +43,7 @@ export interface DetalleGeneradorDTO {
   codigo: string;
   referencia: string;
   producto: string;
-  medida: { id: number; nombre: string } | null;
+  medida?: UnidadMedidaDTO | null;
   impuesto: any | null;
   cantidades: Record<string, number> | null;
   cantidadesBonificadas: Record<string, number> | null;

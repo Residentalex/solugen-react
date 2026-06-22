@@ -19,12 +19,12 @@ export interface DocumentoListadoConfig<T> {
     filas: number,
     salto: number,
     estado?: number
-  ) => Promise<T[]>;
+  ) => Promise<{ data: T[]; total: number }>;
 
   fetchFiltrar: (
     sucursal: number,
     params: Record<string, any>
-  ) => Promise<T[]>;
+  ) => Promise<{ data: T[]; total: number }>;
 
   reporteUrl: (sucursal: number, id: number) => string;
   tituloReporte: string;
@@ -72,22 +72,26 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
     hasta: formatDateParam(new Date()),
   }), []);
 
+  const filtrosRef = useRef(filtros);
+  filtrosRef.current = filtros;
+
   const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
     setLoading(true);
     try {
       const cfg = configRef.current;
-      let desde = filtros.desde ?? rangoDefault.desde;
-      let hasta = filtros.hasta ?? rangoDefault.hasta;
+      const f = filtrosRef.current;
+      let desde = f.desde ?? rangoDefault.desde;
+      let hasta = f.hasta ?? rangoDefault.hasta;
 
       if (busqueda.length > 2 && cfg.modulo !== 'FPV') {
-        if (!filtros.desde) desde = '19000101000000';
-        if (!filtros.hasta) hasta = '20991231235959';
+        if (!f.desde) desde = '19000101000000';
+        if (!f.hasta) hasta = '20991231235959';
       }
 
-      let resultados: T[];
+      let result: { data: T[]; total: number };
 
       if (busqueda.length > 2) {
-        resultados = await cfg.fetchFiltrar(sucursalActiva, {
+        result = await cfg.fetchFiltrar(sucursalActiva, {
           cantidad: filas,
           salto: (pagina - 1) * filas,
           desde,
@@ -96,27 +100,28 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
           nCF: busqueda,
           concepto: busqueda,
           entidad: busqueda,
+          referencia: busqueda,
           almacen: busqueda,
         });
       } else {
-        resultados = await cfg.fetchVista(
+        result = await cfg.fetchVista(
           sucursalActiva,
           desde,
           hasta,
           filas,
           (pagina - 1) * filas,
-          filtros.estado
+          f.estado
         );
       }
 
-      setData(resultados);
-      setTotal(resultados.length < filas ? (pagina - 1) * filas + resultados.length : pagina * filas + 1);
+      setData(result.data);
+      setTotal(result.total);
     } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva, filtros.desde, filtros.hasta, filtros.estado]);
+  }, [sucursalActiva, rangoDefault]);
 
   useEffect(() => {
     cargarDatos(page, pageSize, searchText);

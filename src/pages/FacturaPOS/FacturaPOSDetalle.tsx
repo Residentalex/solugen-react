@@ -24,12 +24,12 @@ import PermissionGate from '../../components/PermissionGate';
 import LogTable from '../../components/LogTable';
 import { formatCurrency } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { resolveEstado } from '../../utils/estadoDocumento';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import CobrosMinimal from '../../components/CobrosCard/CobrosMinimal';
 import ErrorDetalle from '../../components/ErrorDetalle';
-import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
+import DetalleToolbar from '../../components/DetalleToolbar';
 
 const { Text } = Typography;
 
@@ -65,7 +65,6 @@ const FacturaPOSDetalle: React.FC = () => {
   const [detalleSearch, setDetalleSearch] = useState('');
   const [devolucionesPV, setDevolucionesPV] = useState<any[]>([]);
   const [dtransasocDevueltos, setDtransasocDevueltos] = useState<Set<number>>(new Set());
-  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
   const monedaDefault = getMonedaSucursalActiva();
   const screens = Grid.useBreakpoint();
 
@@ -138,7 +137,7 @@ const FacturaPOSDetalle: React.FC = () => {
 
   const isLarge = screens.xxl === true;
 
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
+  const estadoInfo = resolveEstado(data.estado);
   const esCerrado = data.periodo === 6;
 
   const detallesFiltrados = detalleSearch
@@ -378,68 +377,44 @@ const FacturaPOSDetalle: React.FC = () => {
 
   return (
     <div>
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <SucursalDocumentoSelector value={sucursalDestino} onChange={setSucursalDestino} />
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FPV')}>
-          Volver
-        </Button>
-        <div style={{ flex: 1 }} />
-        <Space>
-          <PermissionGate accion="IMPRIMIR">
-            <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
-            setImprimiendo(true);
-            try {
-              const res = await apiClient.post(`/reportes/facturacion/pos/${sucursalActiva}`, data, {
-                responseType: 'blob',
-              });
-              const blobUrl = URL.createObjectURL(res.data);
-              const iframe = document.createElement('iframe');
-              iframe.style.display = 'none';
-              iframe.src = blobUrl;
-              document.body.appendChild(iframe);
+      <DetalleToolbar
+        modulo={screenCode}
+        estado={data.estado}
+        periodo={data.periodo}
+        saving={saving}
+        imprimiendo={imprimiendo}
+        onVolver={() => navigate('/FPV')}
+        onImprimirTicket={async () => {
+          setImprimiendo(true);
+          try {
+            const res = await apiClient.post(`/reportes/facturacion/pos/${sucursalActiva}`, data, {
+              responseType: 'blob',
+            });
+            const blobUrl = URL.createObjectURL(res.data);
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = blobUrl;
+            document.body.appendChild(iframe);
+            setTimeout(() => {
+              iframe.contentWindow?.print();
               setTimeout(() => {
-                iframe.contentWindow?.print();
-                setTimeout(() => {
-                  document.body.removeChild(iframe);
-                  URL.revokeObjectURL(blobUrl);
-                }, 30000);
-              }, 2000);
-            } catch (err: any) {
-              const msg = err?.response?.data?.ErrorMessage || 'Error al generar el PDF';
-              message.error(msg);
-            } finally {
-              setImprimiendo(false);
-            }
-          }} />
-          </PermissionGate>
-          {data.estado === 0 && data.periodo !== 6 && (
-            <PermissionGate accion="EDITAR">
-              <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FPV/${id}/editar`)}>Editar</Button>
-            </PermissionGate>
-          )}
-          {data.estado === 0 && data.periodo !== 6 && (
-            <PermissionGate accion="APLICAR">
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handleAplicar}>
-                Aplicar
-              </Button>
-            </PermissionGate>
-          )}
-          {data.estado !== 3 && (
-            <PermissionGate accion="ANULAR">
-              <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
-                Anular
-              </Button>
-            </PermissionGate>
-          )}
-          {data.estado === 1 && (
-            <PermissionGate accion="POSTEAR">
-              <Button icon={<CheckCircleOutlined />} loading={saving} onClick={handlePostear}>Postear</Button>
-            </PermissionGate>
-          )}
-
-        </Space>
-      </div>
+                document.body.removeChild(iframe);
+                URL.revokeObjectURL(blobUrl);
+              }, 30000);
+            }, 2000);
+          } catch (err: any) {
+            const msg = err?.response?.data?.ErrorMessage || 'Error al generar el PDF';
+            message.error(msg);
+          } finally {
+            setImprimiendo(false);
+          }
+        }}
+        onEditar={() => navigate(`/FPV/${id}/editar`)}
+        onAplicar={handleAplicar}
+        onAnular={handleAnular}
+        onPostear={handlePostear}
+        confirmActions={false}
+      />
 
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+﻿import React, { useState, useCallback } from 'react';
 import { Modal, Form, Input, Button, Typography, message, Alert } from 'antd';
 import { CopyOutlined, CheckOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -26,9 +26,9 @@ const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, 
   const handleClose = useCallback(() => {
     if (modalState === 'created' && !copied && !closingConfirmed) {
       Modal.confirm({
-        title: '¿Copiaste el token?',
-        content: 'El token solo se muestra una vez. Si no lo copiaste, tendrás que generar uno nuevo.',
-        okText: 'Sí, cerrar',
+        title: 'Â¿Copiaste el token?',
+        content: 'El token solo se muestra una vez. Si no lo copiaste, tendrÃ¡s que generar uno nuevo.',
+        okText: 'SÃ­, cerrar',
         cancelText: 'Cancelar',
         onOk: () => {
           setClosingConfirmed(true);
@@ -98,7 +98,7 @@ const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, 
       onCancel={handleClose}
       footer={null}
       width={560}
-      destroyOnClose
+      destroyOnHidden
       closable={modalState !== 'created' || copied}
       maskClosable={modalState !== 'created'}
     >
@@ -109,7 +109,7 @@ const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, 
             label="Nombre del token"
             rules={[{ required: true, message: 'El nombre es obligatorio' }]}
           >
-            <Input placeholder="Ej. Integración POS" maxLength={100} />
+            <Input placeholder="Ej. IntegraciÃ³n POS" maxLength={100} />
           </Form.Item>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -126,7 +126,7 @@ const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, 
           <Alert
             type="warning"
             showIcon
-            message="Guarda este token. No podrás verlo de nuevo."
+            message="Guarda este token. No podrÃ¡s verlo de nuevo."
             style={{ marginBottom: 16 }}
           />
 

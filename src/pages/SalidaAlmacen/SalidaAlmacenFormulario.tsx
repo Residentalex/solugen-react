@@ -493,6 +493,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
       descuento: Math.round(totalDesc * 100) / 100,
       impuestos: Math.round(totalImp * 100) / 100,
       total: Math.round(total * 100) / 100,
+      tipoDocumento: base.tipoDocumento ?? 71,
       tasa: values.tasa || 1,
       documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
@@ -1147,14 +1148,13 @@ const SalidaAlmacenFormulario: React.FC = () => {
                 />
               </FloatingField>
             </div>
+            {conceptoInfo && (
+              <div style={{ marginTop: 4 }}>
+                <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
+              </div>
+            )}
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
-
-          {conceptoInfo && (
-            <Col xs={24}>
-              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-            </Col>
-          )}
 
           {/* Fila 2: Fecha Recibo + Almacén */}
           <Col xs={24} sm={12} lg={9}>

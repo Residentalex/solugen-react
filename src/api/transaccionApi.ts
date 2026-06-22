@@ -38,6 +38,29 @@ export const transaccionApi = {
     return data.data || [];
   },
 
+  /** Obtener transacciones anuladas (paginado) */
+  obtenerAnulados: async (
+    sucursal: number,
+    desde: string,
+    hasta: string,
+    tipoDoc?: string,
+    moduloDocs?: string,
+    page: number = 1,
+    pageSize: number = 25
+  ): Promise<{ data: TransaccionVistaDTO[]; total: number }> => {
+    const params: Record<string, string> = { desde, hasta };
+    if (tipoDoc) params.tipoDoc = tipoDoc;
+    if (moduloDocs) params.moduloDocs = moduloDocs;
+    params.cantidad = String(pageSize);
+    params.salto = String((page - 1) * pageSize);
+
+    const { data } = await apiClient.get<ApiResponse<{ data: TransaccionVistaDTO[]; total: number }>>(
+      `${BASE}/${sucursal}/anulados`,
+      { params }
+    );
+    return data.data || { data: [], total: 0 };
+  },
+
   /** Postear una transacción individual */
   postear: async (
     sucursal: number,
@@ -165,6 +188,18 @@ export const transaccionApi = {
   },
 
   /** Obtener documentos que consumieron a un documento (sin filtro EXCREPSA) */
+  contarPosteable: async (
+    sucursal: number,
+    tipoDoc: string,
+    desde: string,
+    hasta: string
+  ): Promise<number> => {
+    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/${sucursal}/total-posteable/${tipoDoc}`, {
+      params: { desde, hasta }
+    });
+    return data.data ?? 0;
+  },
+
   obtenerConsumidores: async (sucursal: number, id: number): Promise<any[]> => {
     const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/consumidores/${id}`);
     return data.data || [];

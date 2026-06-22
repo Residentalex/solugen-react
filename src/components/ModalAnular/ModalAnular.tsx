@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   Modal, Steps, Divider, Typography, Button, Space, DatePicker,
   Descriptions, Alert, Tooltip, Input,
@@ -18,8 +18,8 @@ const { Text } = Typography;
 const { TextArea } = Input;
 
 export const MOTIVOS_ANULAR = [
-  'Datos Erróneos.',
-  'Falta de Información.',
+  'Datos ErrÃ³neos.',
+  'Falta de InformaciÃ³n.',
   'Entrada Duplicada.',
   'Otros Motivos...',
 ];
@@ -173,7 +173,7 @@ const ModalAnular: React.FC<ModalAnularProps> = ({
   const handleMotivoClick = (motivo: string) => {
     setOpcionMotivo(motivo);
     if (motivo !== 'Otros Motivos...') {
-      // Avanza automáticamente al paso 3 con setTimeout 150ms
+      // Avanza automÃ¡ticamente al paso 3 con setTimeout 150ms
       setTimeout(() => {
         setPaso(3);
       }, 150);
@@ -272,13 +272,13 @@ const ModalAnular: React.FC<ModalAnularProps> = ({
   const renderPasoFecha = () => (
     <div>
       <div style={{ marginBottom: 8 }}>
-        <Text strong>Selecciona la fecha de anulación:</Text>
+        <Text strong>Selecciona la fecha de anulaciÃ³n:</Text>
       </div>
 
       {renderFechaCard(
         'hoy',
         <CalendarOutlined />,
-        'Fecha del Día',
+        'Fecha del DÃ­a',
         `Hoy, ${hoy.format('DD/MM/YYYY')}`,
         false,
       )}
@@ -289,14 +289,14 @@ const ModalAnular: React.FC<ModalAnularProps> = ({
         'Fecha del Documento',
         formatDateLegible(fechaDocumento),
         periodoCerrado,
-        'El período contable está cerrado para esta fecha',
+        'El perÃ­odo contable estÃ¡ cerrado para esta fecha',
       )}
 
       {renderFechaCard(
         'otra',
         <EditOutlined />,
         'Otra Fecha',
-        'Selecciona una fecha específica',
+        'Selecciona una fecha especÃ­fica',
         false,
       )}
 
@@ -322,7 +322,7 @@ const ModalAnular: React.FC<ModalAnularProps> = ({
           disabled={!pasoFechaValido}
           onClick={handleSiguiente}
         >
-          Siguiente →
+          Siguiente â†’
         </Button>
       </div>
     </div>
@@ -332,11 +332,11 @@ const ModalAnular: React.FC<ModalAnularProps> = ({
   const renderPasoMotivo = () => (
     <div>
       <div style={{ marginBottom: 8 }}>
-        <Text strong>Selecciona el motivo de anulación:</Text>
+        <Text strong>Selecciona el motivo de anulaciÃ³n:</Text>
       </div>
 
-      {renderMotivoCard('Datos Erróneos.', <WarningOutlined />)}
-      {renderMotivoCard('Falta de Información.', <InfoCircleOutlined />)}
+      {renderMotivoCard('Datos ErrÃ³neos.', <WarningOutlined />)}
+      {renderMotivoCard('Falta de InformaciÃ³n.', <InfoCircleOutlined />)}
       {renderMotivoCard('Entrada Duplicada.', <CopyOutlined />)}
       {renderMotivoCard('Otros Motivos...', <EditOutlined />)}
 
@@ -356,7 +356,7 @@ const ModalAnular: React.FC<ModalAnularProps> = ({
       <Divider style={{ margin: '16px 0' }} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Button onClick={handleAnterior}>← Anterior</Button>
+        <Button onClick={handleAnterior}>â† Anterior</Button>
         <Space>
           <Button disabled={submitting} onClick={handleClose}>Cancelar</Button>
           {esOtrosMotivos && (
@@ -365,7 +365,7 @@ const ModalAnular: React.FC<ModalAnularProps> = ({
               disabled={!motivoValido}
               onClick={handleSiguiente}
             >
-              Siguiente →
+              Siguiente â†’
             </Button>
           )}
         </Space>
@@ -373,7 +373,7 @@ const ModalAnular: React.FC<ModalAnularProps> = ({
     </div>
   );
 
-  // ===== Render paso 3: Confirmación =====
+  // ===== Render paso 3: ConfirmaciÃ³n =====
   const getMotivoLegible = (): string => {
     if (!opcionMotivo) return '-';
     if (esOtrosMotivos) return motivoLibre.trim() || '-';
@@ -391,7 +391,7 @@ const ModalAnular: React.FC<ModalAnularProps> = ({
       </Descriptions>
 
       <Alert
-        message="Esta acción no se puede deshacer."
+        message="Esta acciÃ³n no se puede deshacer."
         type="warning"
         showIcon
       />
@@ -399,7 +399,7 @@ const ModalAnular: React.FC<ModalAnularProps> = ({
       <Divider style={{ margin: '16px 0' }} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Button onClick={handleAnterior}>← Anterior</Button>
+        <Button onClick={handleAnterior}>â† Anterior</Button>
         <Space>
           <Button disabled={submitting} onClick={handleClose}>Cancelar</Button>
           <Button
@@ -408,7 +408,7 @@ const ModalAnular: React.FC<ModalAnularProps> = ({
             loading={submitting}
             onClick={handleConfirm}
           >
-            🚫 Confirmar Anulación
+            ðŸš« Confirmar AnulaciÃ³n
           </Button>
         </Space>
       </div>
@@ -431,7 +431,7 @@ const ModalAnular: React.FC<ModalAnularProps> = ({
       open={open}
       onCancel={handleClose}
       width={560}
-      destroyOnClose
+      destroyOnHidden
       maskClosable={false}
       closable={!submitting}
       footer={null}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Typography, Tooltip, Descriptions, Alert, Modal, App,
+  Card, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Typography, Tooltip, Descriptions, Alert, Modal, App, Switch,
 } from 'antd';
 import {
   LockFilled,
@@ -69,6 +69,8 @@ const SolicitudPagoDetalle: React.FC = () => {
   const operacion = useAplicar();
   const [operacionTitulo, setOperacionTitulo] = useState('');
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
+  const [mostrandoReverso, setMostrandoReverso] = useState(false);
+  const [reversoData, setReversoData] = useState<any>(null);
 
   // Módulo activo
   useEffect(() => {
@@ -89,6 +91,15 @@ const SolicitudPagoDetalle: React.FC = () => {
         }
         setData(res);
         setPageTitleOverride(`SPA-${res.noDocumento || id}`);
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        if (res.estado === 3 && (res as any).reversoID) {
+          solicitudPagoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar la solicitud de pago';
@@ -110,6 +121,15 @@ const SolicitudPagoDetalle: React.FC = () => {
         }
         setData(res);
         setPageTitleOverride(`SPA-${res.noDocumento || id}`);
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        if (res.estado === 3 && (res as any).reversoID) {
+          solicitudPagoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al recargar';
@@ -150,6 +170,12 @@ const SolicitudPagoDetalle: React.FC = () => {
       message.success('Documento anulado exitosamente');
       const res = await solicitudPagoApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
+      if (res.estado === 3 && (res as any).reversoID) {
+        const revRes = await solicitudPagoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        setReversoData(revRes);
+      } else {
+        setReversoData(null);
+      }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
       message.error(msg);
@@ -192,6 +218,12 @@ const SolicitudPagoDetalle: React.FC = () => {
       message.success('Documento reversado exitosamente');
       const res = await solicitudPagoApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
+      if (res.estado === 3 && (res as any).reversoID) {
+        const revRes = await solicitudPagoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        setReversoData(revRes);
+      } else {
+        setReversoData(null);
+      }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al reversar');
       message.error(msg);
@@ -199,6 +231,17 @@ const SolicitudPagoDetalle: React.FC = () => {
       setSaving(false);
     }
   };
+
+  // Actualizar el título del header al alternar entre Original/Reverso
+  useEffect(() => {
+    if (mostrandoReverso && reversoData) {
+      const doc = reversoData as any;
+      setPageTitleOverride(`SPA-${doc.noDocumento || ''}`);
+    } else if (data) {
+      const doc = data as any;
+      setPageTitleOverride(`SPA-${doc.noDocumento || ''}`);
+    }
+  }, [mostrandoReverso, reversoData, data, setPageTitleOverride]);
 
   // === Early returns ===
   if (loading || (!data && !loadingError)) {
@@ -214,9 +257,10 @@ const SolicitudPagoDetalle: React.FC = () => {
 
   if (!data) return null;
 
+  const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const isLarge = screens.xxl === true;
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = data.periodo === 6;
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[documentoActivo.estado] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = documentoActivo.periodo === 6;
 
   // asientoColumns reemplazado por AsientosContableTable compartido
 
@@ -238,9 +282,9 @@ const SolicitudPagoDetalle: React.FC = () => {
 
       <DetalleToolbar
         modulo="FSPA"
-        estado={data.estado}
-        periodo={data.periodo}
-        revisado={data.revisado}
+        estado={documentoActivo.estado}
+        periodo={documentoActivo.periodo}
+        revisado={documentoActivo.revisado}
         saving={saving}
         operacionLoading={operacion?.loading}
         onVolver={() => navigate('/FSPA')}
@@ -252,7 +296,30 @@ const SolicitudPagoDetalle: React.FC = () => {
         onDesaplicar={handleDesaplicar}
         onReversar={handleReversar}
         showImprimir={false}
+        extraButtons={id ? (
+          <>
+            {data?.estado === 3 && reversoData && (
+              <Switch
+                checked={mostrandoReverso}
+                checkedChildren="Reverso"
+                unCheckedChildren="Original"
+                onChange={(checked) => setMostrandoReverso(checked)}
+                style={{ marginLeft: 8 }}
+              />
+            )}
+          </>
+        ) : undefined}
       />
+
+      {mostrandoReverso && (
+        <Alert
+          message="Viendo documento de Reverso"
+          description="Este documento es el reverso generado al anular el documento original."
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */
@@ -273,19 +340,19 @@ const SolicitudPagoDetalle: React.FC = () => {
               </div>
             } style={{ marginBottom: 16 }}>
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Documento">{strVal(data.documento)}</Descriptions.Item>
-                <Descriptions.Item label="Fecha">{formatDate(data.fecha)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{strVal(data.concepto)}</Descriptions.Item>
+                <Descriptions.Item label="Documento">{strVal(documentoActivo.documento)}</Descriptions.Item>
+                <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fecha)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{strVal(documentoActivo.concepto)}</Descriptions.Item>
                 <Descriptions.Item label="Tipo">
-                  {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                  {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Entidad">{strVal(data.entidad)}</Descriptions.Item>
-                <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Cuenta Bancaria">{data.cuentaBancaria || '-'}</Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="No. Documento">{data.noDocumento || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Entidad">{strVal(documentoActivo.entidad)}</Descriptions.Item>
+                <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Cuenta Bancaria">{documentoActivo.cuentaBancaria || '-'}</Descriptions.Item>
+                <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
+                <Descriptions.Item label="No. Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -307,16 +374,16 @@ const SolicitudPagoDetalle: React.FC = () => {
                 },
                 {
                   key: 'asientos',
-                  label: `Asientos (${data.asientos?.length || 0})`,
+                  label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 900 }} />
+                    <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 900 }} />
                   ),
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${data.logs?.length || 0})`,
+                  label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
-                    <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
+                    <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
               ]}
@@ -325,22 +392,22 @@ const SolicitudPagoDetalle: React.FC = () => {
 
           <Col xxl={6}>
             <EntidadCard entidad={{
-              nombre: typeof data.entidad === 'string' ? data.entidad : data.entidad?.nombre || '',
-              identificacion: data.entidad?.identificacion || '',
-              telefono: data.entidad?.telefono || '',
-              direccion: data.entidad?.direccion || '',
+              nombre: typeof documentoActivo.entidad === 'string' ? documentoActivo.entidad : documentoActivo.entidad?.nombre || '',
+              identificacion: documentoActivo.entidad?.identificacion || '',
+              telefono: documentoActivo.entidad?.telefono || '',
+              direccion: documentoActivo.entidad?.direccion || '',
             }} fallbackTitulo="Entidad" />
             <TotalesCard
-              subTotal={data.subTotal ?? data.total ?? 0}
-              descuento={data.descuento ?? 0}
-              impuestos={data.impuestos ?? 0}
-              retenciones={data.retenciones ?? 0}
-              total={data.total ?? 0}
-              nota={data.nota || ''}
+              subTotal={documentoActivo.subTotal ?? documentoActivo.total ?? 0}
+              descuento={documentoActivo.descuento ?? 0}
+              impuestos={documentoActivo.impuestos ?? 0}
+              retenciones={documentoActivo.retenciones ?? 0}
+              total={documentoActivo.total ?? 0}
+              nota={documentoActivo.nota || ''}
               alignRight={false}
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
-              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
-              tasa={data.tasa ?? 1}
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
+              tasa={documentoActivo.tasa ?? 1}
             />
           </Col>
         </Row>
@@ -361,19 +428,19 @@ const SolicitudPagoDetalle: React.FC = () => {
               </div>
             } style={{ marginBottom: 16 }}>
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Documento">{strVal(data.documento)}</Descriptions.Item>
-              <Descriptions.Item label="Fecha">{formatDate(data.fecha)}</Descriptions.Item>
-              <Descriptions.Item label="Concepto">{strVal(data.concepto)}</Descriptions.Item>
+              <Descriptions.Item label="Documento">{strVal(documentoActivo.documento)}</Descriptions.Item>
+              <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fecha)}</Descriptions.Item>
+              <Descriptions.Item label="Concepto">{strVal(documentoActivo.concepto)}</Descriptions.Item>
               <Descriptions.Item label="Tipo">
-                {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
+                {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
               </Descriptions.Item>
-              <Descriptions.Item label="Entidad">{strVal(data.entidad)}</Descriptions.Item>
-              <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Cuenta Bancaria">{data.cuentaBancaria || '-'}</Descriptions.Item>
-              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-              <Descriptions.Item label="No. Documento">{data.noDocumento || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Entidad">{strVal(documentoActivo.entidad)}</Descriptions.Item>
+              <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Cuenta Bancaria">{documentoActivo.cuentaBancaria || '-'}</Descriptions.Item>
+              <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
+              <Descriptions.Item label="No. Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
               <Descriptions.Item label="Nota">
-                <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+                <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
               </Descriptions.Item>
             </Descriptions>
           </Card>
@@ -394,16 +461,16 @@ const SolicitudPagoDetalle: React.FC = () => {
               },
               {
                 key: 'asientos',
-                label: `Asientos (${data.asientos?.length || 0})`,
+                label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                 children: (
-                  <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 900 }} />
+                  <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 900 }} />
                 ),
               },
               {
                 key: 'historial',
-                label: `Historial (${data.logs?.length || 0})`,
+                label: `Historial (${documentoActivo.logs?.length || 0})`,
                 children: (
-                  <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
+                  <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                 ),
               },
             ]}
@@ -411,16 +478,16 @@ const SolicitudPagoDetalle: React.FC = () => {
 
           <div style={{ marginTop: 24 }}>
             <TotalesCard
-              subTotal={data.subTotal ?? data.total ?? 0}
-              descuento={data.descuento ?? 0}
-              impuestos={data.impuestos ?? 0}
-              retenciones={data.retenciones ?? 0}
-              total={data.total ?? 0}
-              nota={data.nota || ''}
+              subTotal={documentoActivo.subTotal ?? documentoActivo.total ?? 0}
+              descuento={documentoActivo.descuento ?? 0}
+              impuestos={documentoActivo.impuestos ?? 0}
+              retenciones={documentoActivo.retenciones ?? 0}
+              total={documentoActivo.total ?? 0}
+              nota={documentoActivo.nota || ''}
               alignRight={true}
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
-              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
-              tasa={data.tasa ?? 1}
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
+              tasa={documentoActivo.tasa ?? 1}
             />
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Modal, Table, Input, message } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
 import { formatCurrency, toTitleCase, formatDate, extraerMensajeError } from '../../utils/formats';
@@ -16,6 +16,16 @@ const BuscarEntradaModal: React.FC<BuscarEntradaModalProps> = ({ open, onClose, 
   const [resultados, setResultados] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const searchRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => {
+        searchRef.current?.focus?.();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   function fmtFecha(d: Date): string {
     const y = d.getFullYear();
@@ -95,6 +105,7 @@ const BuscarEntradaModal: React.FC<BuscarEntradaModalProps> = ({ open, onClose, 
       destroyOnHidden
     >
       <Input.Search
+        ref={searchRef}
         placeholder="Buscar..."
         allowClear
         value={searchText}

@@ -615,3 +615,61 @@
 .dark-mode .repostear-summary-card__divider {
   background: #3d3d5c;
 }
+
+/* ============================================
+   Feedback visual durante posteo
+   ============================================ */
+
+/* --- Loader inicial (Spin + etapas rotativas) --- */
+.repostear-loader-inicial {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 60px 0;
+}
+
+.repostear-loader-texto {
+  font-size: 16px;
+  color: var(--text-secondary);
+  animation: repostear-pulse 1.5s ease-in-out infinite;
+}
+
+.repostear-loader-tiempo {
+  font-size: 14px;
+  color: var(--text-tertiary);
+  font-family: monospace;
+}
+
+/* --- Badge de conexión SignalR --- */
+.repostear-conexion-badge {
+  margin-left: 8px;
+  font-size: 12px;
+}
+
+/* --- Detalle de progreso (velocidad, tiempo estimado) --- */
+.repostear-detalle-progreso {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 13px;
+}
+
+/* --- Dark mode overrides para los nuevos estilos --- */
+.dark-mode .repostear-detalle-progreso {
+  background: #2d2d44;
+}
+
+.dark-mode .repostear-loader-texto {
+  color: #a2a3b7;
+}
+
+.dark-mode .repostear-loader-tiempo {
+  color: #6c757d;
+}

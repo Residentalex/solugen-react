@@ -8,6 +8,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { Sucursal } from '../../types/auth';
 import { useUIStore } from '../../stores/uiStore';
+import { useAuthStore } from '../../stores/authStore';
 import { formatDateTime } from '../../utils/formats';
 import { usuarioApi } from '../../api/usuarioApi';
 
@@ -26,7 +27,7 @@ const Usuarios: React.FC = () => {
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
 
-  const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
+  const securitySucursal = useAuthStore((s) => s.securitySucursal);
 
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
@@ -37,9 +38,9 @@ const Usuarios: React.FC = () => {
     queryFn: async () => {
       let result: UsuarioDTO[];
       if (searchText) {
-        result = await usuarioApi.filtrar(SUCURSAL_SEGURIDAD, searchText, searchText);
+        result = await usuarioApi.filtrar(securitySucursal, searchText, searchText);
       } else {
-        result = await usuarioApi.obtenerListado(SUCURSAL_SEGURIDAD);
+        result = await usuarioApi.obtenerListado(securitySucursal);
       }
       return result || [];
     },

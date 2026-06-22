@@ -3,37 +3,20 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Row, Col, Button, Form, Input, InputNumber, Switch, Select, Spin, message, Tabs, Tag, Space, Typography, Alert, Table, Modal } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, SearchOutlined, CloseOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
+import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { Sucursal } from '../../types/auth';
 import { usuarioApi } from '../../api/usuarioApi';
 import { empleadoApi, type EmpleadoDTO } from '../../api/empleadoApi';
 import { rolApi } from '../../api/rolApi';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import PermissionGate from '../../components/PermissionGate';
+import { toTitleCase } from '../../utils/formats';
 
 import type { UsuarioDTO } from '../../types/administracion';
 import type { RolDTO, PantallaDTO, UsuarioSucursalRolDTO } from '../../types/auth';
 import BuscarEmpleadoModal from '../../components/BuscarEmpleadoModal/BuscarEmpleadoModal';
 import EntidadImagen from '../../components/EntidadImagen';
-
-const SUCURSAL_SEGURIDAD = Sucursal.Consolidado;
-
-const SUCURSALES: Sucursal[] = [
-  Sucursal.OrensePlaza,
-  Sucursal.HiperRomana,
-  Sucursal.OrenseVillaHermosa,
-  Sucursal.ElOfertazo,
-  Sucursal.Consolidado,
-  Sucursal.Compra,
-];
-
-const SUCURSAL_NOMBRES: Record<number, string> = {
-  [Sucursal.OrensePlaza]: 'Orense Plaza',
-  [Sucursal.HiperRomana]: 'Hiper Romana',
-  [Sucursal.OrenseVillaHermosa]: 'Orense Villa Hermosa',
-  [Sucursal.ElOfertazo]: 'El Ofertazo',
-  [Sucursal.Consolidado]: 'Consolidado',
-  [Sucursal.Compra]: 'Compra',
-};
 
 interface PantallaConRoles extends PantallaDTO {
   rolesAcceso: string[];
@@ -108,6 +91,23 @@ const UsuarioFormulario: React.FC = () => {
 
   const navigationConfirmedRef = useFormularioNavigation();
 
+  const securitySucursal = useAuthStore((s) => s.securitySucursal);
+
+  const sucursalesData = useCompanyStore((s) => s.data.sucursales);
+  // Sucursales del store + virtuales (Consolidado=4, Compra=5) siempre incluidas
+  const SUCURSALES: Sucursal[] = useMemo(() => {
+    const storeSucs = (sucursalesData || []).map((s: any) => s.sucursal as Sucursal);
+    return [...new Set([...storeSucs, 4, 5])];
+  }, [sucursalesData]);
+  const SUCURSAL_NOMBRES: Record<number, string> = useMemo(() => {
+    const storeNames = Object.fromEntries(
+      (sucursalesData || []).map((s: any) => [s.sucursal, toTitleCase(s.nombre)])
+    );
+    if (storeNames[4] === undefined) storeNames[4] = 'Consolidado';
+    if (storeNames[5] === undefined) storeNames[5] = 'Compra';
+    return storeNames;
+  }, [sucursalesData]);
+
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -136,7 +136,7 @@ const UsuarioFormulario: React.FC = () => {
 
   const cargarEmpleados = async () => {
     try {
-      const emps = await empleadoApi.obtenerTodos(SUCURSAL_SEGURIDAD);
+      const emps = await empleadoApi.obtenerTodos(securitySucursal);
       setEmpleados(emps || []);
     } catch {
       // silent
@@ -147,7 +147,7 @@ const UsuarioFormulario: React.FC = () => {
     setLoading(true);
     setLoadingError(false);
     try {
-      const res = await usuarioApi.obtenerPorId(SUCURSAL_SEGURIDAD, userId);
+      const res = await usuarioApi.obtenerPorId(securitySucursal, userId);
       setData(res);
       form.setFieldsValue({
         nombre: res.nombre,
@@ -160,7 +160,7 @@ const UsuarioFormulario: React.FC = () => {
       setSucursalesRolesEdit(JSON.parse(JSON.stringify(res.sucursalesRoles || [])));
       if (res.empleadoID) {
         try {
-          const emp = await empleadoApi.obtenerPorCodigo(SUCURSAL_SEGURIDAD, res.empleadoID);
+          const emp = await empleadoApi.obtenerPorCodigo(securitySucursal, res.empleadoID);
           if (emp?.nombre) {
             setEmpleadoLabel(`${emp.codigo} - ${emp.nombre}`);
           } else {
@@ -181,7 +181,7 @@ const UsuarioFormulario: React.FC = () => {
   const cargarRolesDisponibles = async () => {
     setCargandoRoles(true);
     try {
-      const roles = await rolApi.obtenerListado(SUCURSAL_SEGURIDAD);
+      const roles = await rolApi.obtenerListado(securitySucursal);
       const rolesMapeados = roles.map((r) => ({ id: r.id, nombre: r.nombre }));
       const map: Record<number, RolDTO[]> = {};
       SUCURSALES.forEach((s) => { map[s] = rolesMapeados; });
@@ -200,7 +200,7 @@ const UsuarioFormulario: React.FC = () => {
         setPantallasPorSucursal((prev) => ({ ...prev, [sucursal]: [] }));
         return;
       }
-      const promesas = rolesUsuario.map((r) => rolApi.obtenerPorId(SUCURSAL_SEGURIDAD, r.id));
+      const promesas = rolesUsuario.map((r) => rolApi.obtenerPorId(securitySucursal, r.id));
       const rolesCompletos = await Promise.all(promesas);
       const pantallasMap = new Map<number, PantallaConRoles>();
       rolesCompletos.forEach((rolCompleto) => {
@@ -278,14 +278,14 @@ const UsuarioFormulario: React.FC = () => {
           empleadoID: values.empleadoID || data.empleadoID,
           sucursalesRoles: sucursalesRolesEdit,
         };
-        await usuarioApi.actualizar(SUCURSAL_SEGURIDAD, payload);
+        await usuarioApi.actualizar(securitySucursal, payload);
         message.success('Usuario actualizado correctamente');
         navigationConfirmedRef.current = true;
         navigate(`/MUsuario/${data.id}`);
       } else {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         const pass = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-        const creado = await usuarioApi.crear(SUCURSAL_SEGURIDAD, { ...values, contrasena: pass, debeCambiarClave: true, claveNoExpira: values.claveNoExpira ?? false, sucursalesRoles: sucursalesRolesEdit });
+        const creado = await usuarioApi.crear(securitySucursal, { ...values, contrasena: pass, debeCambiarClave: true, claveNoExpira: values.claveNoExpira ?? false, sucursalesRoles: sucursalesRolesEdit });
         Modal.success({
           title: 'Usuario creado',
           content: (

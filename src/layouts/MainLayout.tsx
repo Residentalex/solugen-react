@@ -3,7 +3,7 @@ import { Layout, Spin, message, Dropdown, Select, Input, Tag, Grid } from 'antd'
 import type { MenuProps } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
-import { Sucursal, type AuthSucursalPermitidaDTO, type PantallaDTO } from '../types/auth';
+import { Sucursal, type PantallaDTO, type AuthSucursalPermitidaDTO } from '../types/auth';
 import { useCompanyStore } from '../stores/companyStore';
 import { useUIStore } from '../stores/uiStore';
 import { useNotificacionesStore } from '../stores/notificacionesStore';
@@ -170,6 +170,13 @@ const MainLayout: React.FC = () => {
   useEffect(() => {
     if (error) message.error(error);
   }, [error]);
+
+  // Sincronizar securitySucursal desde companyStore a authStore
+  useEffect(() => {
+    if (data.securitySucursal) {
+      useAuthStore.getState().setSecuritySucursal(data.securitySucursal);
+    }
+  }, [data.securitySucursal]);
 
   // Notificaciones: conexion SignalR y carga inicial
   useEffect(() => {
@@ -338,7 +345,7 @@ const MainLayout: React.FC = () => {
           <div className="paces-topbar-right">
             <ThemeSwitcher />
             <NotificacionDropdown />
-            {sucursalesFiltradas.length > 1 && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && activeModule !== 'MTicket' && activeModule !== 'notificaciones' && (
+            {sucursalesFiltradas.length > 1 && activeModule !== 'dashboard' && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && activeModule !== 'MTicket' && activeModule !== 'notificaciones' && (
               <Select
                 value={sucursalActiva}
                 onChange={(val) => setSucursalActiva(val)}

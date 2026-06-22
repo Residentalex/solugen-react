@@ -72,6 +72,7 @@ export interface TransferenciaAlmacenFullDTO {
   ncf: string;
   nota: string;
   tasa: number;
+  tipoDocumento?: number;
 
   concepto: ConceptoDTO | null;
   almacen: AlmacenDTO | null;           // Origen

@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid,
-  message, Typography, Descriptions, Alert, Modal,
+  Card, Table, Tabs, Tag, Button, Row, Col, Grid,
+  message, Typography, Descriptions, Modal,
 } from 'antd';
 import {
-  ArrowLeftOutlined, EditOutlined, DeleteOutlined, ExclamationCircleOutlined, CheckCircleOutlined,
+  ExclamationCircleOutlined, CheckCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -13,7 +13,7 @@ import { plantillaSuplidorApi } from '../../api/plantillaSuplidorApi';
 import { analisisCompraApi } from '../../api/analisisCompraApi';
 import PermissionGate from '../../components/PermissionGate';
 import type { PlantillaSuplidorDTO, DetallePlantillaSuplidorDTO } from '../../types/plantillaSuplidor';
-import { ErrorDetalle } from '../../components';
+import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
 
 const { Text } = Typography;
 
@@ -165,17 +165,6 @@ const PlantillaSuplidorDetalle: React.FC = () => {
     });
   };
 
-  if (loading || (!data && !loadingError)) {
-    return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando plantilla...</div>
-      </div>
-    );
-  }
-  if (loadingError && !data) {
-    return <ErrorDetalle mensaje="Error al cargar el documento" rutaVolver="/mplantillasup" />;
-  }
   if (!data) return null;
 
   const detalleColumns = [
@@ -219,52 +208,31 @@ const PlantillaSuplidorDetalle: React.FC = () => {
   ];
 
   return (
-    <div>
-      {loadingError && (
-        <Alert
-          message="Error al cargar detalle de plantilla de suplidor"
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          action={
-            <Button size="small" onClick={handleRefresh}>
-              Reintentar
-            </Button>
-          }
-        />
-      )}
-
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/mplantillasup')}>
-          Volver
-        </Button>
-        <div style={{ flex: 1 }} />
-        <Space>
-          <PermissionGate accion="EDITAR">
-            <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/mplantillasup/${id}/editar`)}>
-              Editar
-            </Button>
-          </PermissionGate>
-          <PermissionGate accion="ELIMINAR">
-            <Button danger icon={<DeleteOutlined />} loading={saving} onClick={handleEliminar}>
-              Eliminar
-            </Button>
-          </PermissionGate>
-          <PermissionGate accion="PROCESAR">
-            <Button
-              type="primary"
-              icon={<CheckCircleOutlined />}
-              loading={generando}
-              onClick={handleGenerarAnalisis}
-              style={{ background: '#389e0d', borderColor: '#389e0d' }}
-            >
-              Generar Análisis
-            </Button>
-          </PermissionGate>
-        </Space>
-      </div>
-
+    <DetalleCatalogoLayout
+      rutaVolver="/mplantillasup"
+      loading={loading}
+      mensajeLoading="Cargando plantilla..."
+      loadingError={loadingError}
+      mensajeError="Error al cargar detalle de plantilla de suplidor"
+      onRecargar={handleRefresh}
+      dataDisponible={!!data}
+      onEditar={() => navigate(`/mplantillasup/${id}/editar`)}
+      onEliminar={handleEliminar}
+      eliminando={saving}
+      extraActions={
+        <PermissionGate accion="PROCESAR">
+          <Button
+            type="primary"
+            icon={<CheckCircleOutlined />}
+            loading={generando}
+            onClick={handleGenerarAnalisis}
+            style={{ background: '#389e0d', borderColor: '#389e0d' }}
+          >
+            Generar Análisis
+          </Button>
+        </PermissionGate>
+      }
+    >
       {isLarge ? (
         <Row gutter={16}>
           <Col lg={18}>
@@ -393,7 +361,7 @@ const PlantillaSuplidorDetalle: React.FC = () => {
           />
         </div>
       )}
-    </div>
+    </DetalleCatalogoLayout>
   );
 };
 

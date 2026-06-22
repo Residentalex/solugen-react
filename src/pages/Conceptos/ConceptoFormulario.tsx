@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Tabs, Tag, Button, Space, Row, Col, Grid,
@@ -51,9 +51,9 @@ const BuscarCuentaInlineModal: React.FC<BuscarCuentaInlineModalProps> = ({ open,
   ];
 
   return (
-    <Modal title="Buscar Cuenta Contable" open={open} onCancel={onClose} footer={null} width={600} destroyOnClose>
+    <Modal title="Buscar Cuenta Contable" open={open} onCancel={onClose} footer={null} width={600} destroyOnHidden>
       <Input.Search
-        placeholder="Buscar por número o nombre..."
+        placeholder="Buscar por nÃºmero o nombre..."
         allowClear
         onSearch={handleSearch}
         style={{ marginBottom: 16 }}
@@ -74,7 +74,7 @@ const BuscarCuentaInlineModal: React.FC<BuscarCuentaInlineModalProps> = ({ open,
   );
 };
 
-// ===== Modal inline para buscar documentos (catálogo) =====
+// ===== Modal inline para buscar documentos (catÃ¡logo) =====
 interface BuscarDocumentoInlineModalProps {
   open: boolean;
   onClose: () => void;
@@ -94,14 +94,14 @@ const BuscarDocumentoInlineModal: React.FC<BuscarDocumentoInlineModalProps> = ({
   };
 
   const columnas = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
+    { title: 'CÃ³digo', dataIndex: 'codigo', key: 'codigo', width: 120 },
     { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true, render: (v: string) => toTitleCase(v) },
   ];
 
   return (
-    <Modal title="Buscar Documento" open={open} onCancel={onClose} footer={null} width={600} destroyOnClose>
+    <Modal title="Buscar Documento" open={open} onCancel={onClose} footer={null} width={600} destroyOnHidden>
       <Input.Search
-        placeholder="Buscar por código o nombre..."
+        placeholder="Buscar por cÃ³digo o nombre..."
         allowClear
         onSearch={handleSearch}
         style={{ marginBottom: 16 }}
@@ -151,7 +151,7 @@ const ConceptoFormulario: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<ConceptoDTO | null>(null);
 
-  // Catálogos
+  // CatÃ¡logos
   const [almacenes, setAlmacenes] = useState<AlmacenDTO[]>([]);
   const [sucursales, setSucursales] = useState<CompaniaDTO[]>([]);
   const [documentos, setDocumentos] = useState<DocumentoDTO[]>([]);
@@ -194,7 +194,7 @@ const ConceptoFormulario: React.FC = () => {
   const noAsientosValue = Form.useWatch('noAsientos', form);
   const activoValue = Form.useWatch('activo', form);
 
-  // ===== Cargar catálogos al montar =====
+  // ===== Cargar catÃ¡logos al montar =====
   useEffect(() => {
     setActiveModule('MConcepto');
     const pageTitle = mode === 'crear' ? 'Nuevo Concepto' : '';
@@ -202,7 +202,7 @@ const ConceptoFormulario: React.FC = () => {
 
     conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenes).catch(() => {});
     conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursales).catch(() => {});
-    documentosApi.obtenerDocumentos(sucursalActiva).then(setDocumentos).catch(() => {});
+    documentosApi.obtenerListado(sucursalActiva).then(setDocumentos).catch(() => {});
     cuentaContableApi.obtenerListadoPaginado(sucursalActiva, 0, 99999).then(r => setCuentasCache(r.data)).catch(() => {});
     tipoApi.obtenerTodo(sucursalActiva).then((tipos) => {
       const map: Record<string, string> = {};
@@ -328,12 +328,12 @@ const ConceptoFormulario: React.FC = () => {
 
       if (replicarVal) {
         if (!sucursalReplicaVal) {
-          message.error('Debe seleccionar una Sucursal Réplica');
+          message.error('Debe seleccionar una Sucursal RÃ©plica');
           setSaving(false);
           return;
         }
         if (!conceptoReplicaVal) {
-          message.error('Debe seleccionar un Concepto Réplica');
+          message.error('Debe seleccionar un Concepto RÃ©plica');
           setSaving(false);
           return;
         }
@@ -379,7 +379,7 @@ const ConceptoFormulario: React.FC = () => {
         navigate(`/MConcepto/${codigo}`);
       }
     } catch (err: any) {
-      if (err?.errorFields) return; // error de validación del form
+      if (err?.errorFields) return; // error de validaciÃ³n del form
       const msg = extraerMensajeError(err, 'Error al guardar el concepto');
       message.error(msg);
     } finally {
@@ -392,8 +392,8 @@ const ConceptoFormulario: React.FC = () => {
       Modal.confirm({
         title: 'Cancelar',
         icon: <ExclamationCircleOutlined />,
-        content: '¿Está seguro que desea descartar los cambios realizados?',
-        okText: 'Sí, descartar',
+        content: 'Â¿EstÃ¡ seguro que desea descartar los cambios realizados?',
+        okText: 'SÃ­, descartar',
         cancelText: 'No, continuar editando',
         okButtonProps: { danger: true },
         onOk: () => {
@@ -466,7 +466,7 @@ const ConceptoFormulario: React.FC = () => {
   const handleBuscarConceptoReplica = () => {
     const sucReplica = form.getFieldValue('sucursalReplica');
     if (!sucReplica) {
-      message.warning('Primero seleccione una Sucursal Réplica');
+      message.warning('Primero seleccione una Sucursal RÃ©plica');
       return;
     }
     setConceptoReplicaModalOpen(true);
@@ -522,7 +522,7 @@ const ConceptoFormulario: React.FC = () => {
   // ===== Handlers para Entidades y Documentos =====
   const handleAgregarEntidad = (ent: any) => {
     if (entidades.find(e => e.codigo === ent.codigo)) {
-      message.warning('La entidad ya está agregada');
+      message.warning('La entidad ya estÃ¡ agregada');
       return;
     }
     setEntidades(prev => [...prev, { codigo: ent.codigo, nombre: ent.nombre || ent.descripcion || '', tipo: '' }]);
@@ -541,7 +541,7 @@ const ConceptoFormulario: React.FC = () => {
 
   const handleAgregarDocumentoForm = (doc: DocumentoDTO) => {
     if (documentosForm.find(d => d.codigo === doc.codigo)) {
-      message.warning('El documento ya está agregado');
+      message.warning('El documento ya estÃ¡ agregado');
       return;
     }
     setDocumentosForm(prev => [...prev, { codigo: doc.codigo, nombre: doc.nombre || '', tipo: '' }]);
@@ -595,10 +595,10 @@ const ConceptoFormulario: React.FC = () => {
                   <Col xs={24} sm={12} lg={8}>
                     <Form.Item
                       name="codigo"
-                      label="Código"
-                      rules={mode === 'crear' ? [{ required: true, message: 'El código es requerido' }] : []}
+                      label="CÃ³digo"
+                      rules={mode === 'crear' ? [{ required: true, message: 'El cÃ³digo es requerido' }] : []}
                     >
-                      <Input disabled={mode === 'editar'} placeholder="Código del concepto" />
+                      <Input disabled={mode === 'editar'} placeholder="CÃ³digo del concepto" />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={8}>
@@ -641,10 +641,10 @@ const ConceptoFormulario: React.FC = () => {
                             </Form.Item>
                           </Col>
                           <Col xs={24} sm={12} lg={8}>
-                            <Form.Item name="codAlm" label="Almacén">
+                            <Form.Item name="codAlm" label="AlmacÃ©n">
                               <Select
                                 allowClear
-                                placeholder="Seleccionar almacén..."
+                                placeholder="Seleccionar almacÃ©n..."
                                 showSearch
                                 optionFilterProp="label"
                                 options={almacenes.map(a => ({ value: a.codigo, label: a.nombre }))}
@@ -735,9 +735,9 @@ const ConceptoFormulario: React.FC = () => {
                             <Col xs={24} sm={12} lg={8}>
                               <Form.Item
                                 name="sucursalReplica"
-                                label="Sucursal réplica"
-                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si Replicar está activo</Text>}
-                                rules={replicarValue ? [{ required: true, message: 'Debe seleccionar una sucursal réplica' }] : []}
+                                label="Sucursal rÃ©plica"
+                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si Replicar estÃ¡ activo</Text>}
+                                rules={replicarValue ? [{ required: true, message: 'Debe seleccionar una sucursal rÃ©plica' }] : []}
                               >
                                 <Select
                                   allowClear
@@ -755,10 +755,10 @@ const ConceptoFormulario: React.FC = () => {
                                 <Input />
                               </Form.Item>
                               <div>
-                                <Text type="secondary" style={{ fontSize: 11 }}>Concepto réplica</Text>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Concepto rÃ©plica</Text>
                                 <div>
                                   <Input
-                                    placeholder="Buscar concepto réplica..."
+                                    placeholder="Buscar concepto rÃ©plica..."
                                     value={conceptoReplicaText}
                                     readOnly
                                     disabled={!replicarValue}
@@ -766,7 +766,7 @@ const ConceptoFormulario: React.FC = () => {
                                     onClick={() => replicarValue && handleBuscarConceptoReplica()}
                                   />
                                 </div>
-                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Concepto que usará en la sucursal réplica</Text>
+                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Concepto que usarÃ¡ en la sucursal rÃ©plica</Text>
                               </div>
                             </Col>
                           </Row>
@@ -843,7 +843,7 @@ const ConceptoFormulario: React.FC = () => {
                           size="small"
                           pagination={false}
                           columns={[
-                            { title: 'Código', dataIndex: 'codigo', width: 120 },
+                            { title: 'CÃ³digo', dataIndex: 'codigo', width: 120 },
                             { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
                             {
                               title: 'Tipo',
@@ -869,7 +869,7 @@ const ConceptoFormulario: React.FC = () => {
                               ),
                             },
                             {
-                              title: 'Acci�n',
+                              title: 'Acciï¿½n',
                               width: 80,
                               render: (_: any, record: any) => (
                                 <Button
@@ -908,7 +908,7 @@ const ConceptoFormulario: React.FC = () => {
                           size="small"
                           pagination={false}
                           columns={[
-                            { title: 'C�digo', dataIndex: 'codigo', width: 120 },
+                            { title: 'Cï¿½digo', dataIndex: 'codigo', width: 120 },
                             { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
                             {
                               title: 'Tipo',
@@ -937,7 +937,7 @@ const ConceptoFormulario: React.FC = () => {
                               );},
                             },
                             {
-                              title: 'Acción',
+                              title: 'AcciÃ³n',
                               width: 80,
                               render: (_: any, record: any) => (
                                 <Button
@@ -978,28 +978,28 @@ const ConceptoFormulario: React.FC = () => {
                   <Text type="secondary" style={{ fontSize: 12 }}>Sin Impuesto</Text>
                   <br />
                   <Tag color={noImpuestoValue ? 'orange' : 'default'}>
-                    {noImpuestoValue ? 'Sí' : 'No'}
+                    {noImpuestoValue ? 'SÃ­' : 'No'}
                   </Tag>
                 </div>
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>No Actualiza Costos</Text>
                   <br />
                   <Tag color={noActualizaCostosValue ? 'orange' : 'default'}>
-                    {noActualizaCostosValue ? 'Sí' : 'No'}
+                    {noActualizaCostosValue ? 'SÃ­' : 'No'}
                   </Tag>
                 </div>
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>No genera asientos</Text>
                   <br />
                   <Tag color={noAsientosValue ? 'orange' : 'default'}>
-                    {noAsientosValue ? 'Sí' : 'No'}
+                    {noAsientosValue ? 'SÃ­' : 'No'}
                   </Tag>
                 </div>
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>Replicar</Text>
                   <br />
                   <Tag color={replicarValue ? 'blue' : 'default'}>
-                    {replicarValue ? 'Sí' : 'No'}
+                    {replicarValue ? 'SÃ­' : 'No'}
                   </Tag>
                 </div>
               </div>
@@ -1015,10 +1015,10 @@ const ConceptoFormulario: React.FC = () => {
                 <Col xs={24}>
                   <Form.Item
                     name="codigo"
-                    label="Código"
-                    rules={mode === 'crear' ? [{ required: true, message: 'El código es requerido' }] : []}
+                    label="CÃ³digo"
+                    rules={mode === 'crear' ? [{ required: true, message: 'El cÃ³digo es requerido' }] : []}
                   >
-                    <Input disabled={mode === 'editar'} placeholder="Código del concepto" />
+                    <Input disabled={mode === 'editar'} placeholder="CÃ³digo del concepto" />
                   </Form.Item>
                 </Col>
                 <Col xs={24}>
@@ -1060,10 +1060,10 @@ const ConceptoFormulario: React.FC = () => {
                             </Form.Item>
                           </Col>
                           <Col xs={24}>
-                            <Form.Item name="codAlm" label="Almacén">
+                            <Form.Item name="codAlm" label="AlmacÃ©n">
                               <Select
                                 allowClear
-                                placeholder="Seleccionar almacén..."
+                                placeholder="Seleccionar almacÃ©n..."
                                 showSearch
                                 optionFilterProp="label"
                                 options={almacenes.map(a => ({ value: a.codigo, label: a.nombre }))}
@@ -1154,9 +1154,9 @@ const ConceptoFormulario: React.FC = () => {
                             <Col xs={24}>
                               <Form.Item
                                 name="sucursalReplica"
-                                label="Sucursal réplica"
-                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si Replicar está activo</Text>}
-                                rules={replicarValue ? [{ required: true, message: 'Debe seleccionar una sucursal réplica' }] : []}
+                                label="Sucursal rÃ©plica"
+                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si Replicar estÃ¡ activo</Text>}
+                                rules={replicarValue ? [{ required: true, message: 'Debe seleccionar una sucursal rÃ©plica' }] : []}
                               >
                                 <Select
                                   allowClear
@@ -1174,10 +1174,10 @@ const ConceptoFormulario: React.FC = () => {
                                 <Input />
                               </Form.Item>
                               <div>
-                                <Text type="secondary" style={{ fontSize: 11 }}>Concepto réplica</Text>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Concepto rÃ©plica</Text>
                                 <div>
                                   <Input
-                                    placeholder="Buscar concepto réplica..."
+                                    placeholder="Buscar concepto rÃ©plica..."
                                     value={conceptoReplicaText}
                                     readOnly
                                     disabled={!replicarValue}
@@ -1185,7 +1185,7 @@ const ConceptoFormulario: React.FC = () => {
                                     onClick={() => replicarValue && handleBuscarConceptoReplica()}
                                   />
                                 </div>
-                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Concepto que usará en la sucursal réplica</Text>
+                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Concepto que usarÃ¡ en la sucursal rÃ©plica</Text>
                               </div>
                             </Col>
                           </Row>
@@ -1262,7 +1262,7 @@ const ConceptoFormulario: React.FC = () => {
                           size="small"
                           pagination={false}
                           columns={[
-                            { title: 'Código', dataIndex: 'codigo', width: 120 },
+                            { title: 'CÃ³digo', dataIndex: 'codigo', width: 120 },
                             { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
                             {
                               title: 'Tipo',
@@ -1287,7 +1287,7 @@ const ConceptoFormulario: React.FC = () => {
                               ),
                             },
                             {
-                              title: 'Acci�n',
+                              title: 'Acciï¿½n',
                               width: 80,
                               render: (_: any, record: any) => (
                                 <Button
@@ -1326,7 +1326,7 @@ const ConceptoFormulario: React.FC = () => {
                           size="small"
                           pagination={false}
                           columns={[
-                            { title: 'C�digo', dataIndex: 'codigo', width: 120 },
+                            { title: 'Cï¿½digo', dataIndex: 'codigo', width: 120 },
                             { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
                             {
                               title: 'Tipo',
@@ -1354,7 +1354,7 @@ const ConceptoFormulario: React.FC = () => {
                               );},
                             },
                             {
-                              title: 'Acción',
+                              title: 'AcciÃ³n',
                               width: 80,
                               render: (_: any, record: any) => (
                                 <Button
@@ -1394,28 +1394,28 @@ const ConceptoFormulario: React.FC = () => {
                   <Text type="secondary" style={{ fontSize: 12 }}>Sin Impuesto</Text>
                   <br />
                   <Tag color={noImpuestoValue ? 'orange' : 'default'}>
-                    {noImpuestoValue ? 'Sí' : 'No'}
+                    {noImpuestoValue ? 'SÃ­' : 'No'}
                   </Tag>
                 </div>
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>No Actualiza Costos</Text>
                   <br />
                   <Tag color={noActualizaCostosValue ? 'orange' : 'default'}>
-                    {noActualizaCostosValue ? 'Sí' : 'No'}
+                    {noActualizaCostosValue ? 'SÃ­' : 'No'}
                   </Tag>
                 </div>
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>No genera asientos</Text>
                   <br />
                   <Tag color={noAsientosValue ? 'orange' : 'default'}>
-                    {noAsientosValue ? 'Sí' : 'No'}
+                    {noAsientosValue ? 'SÃ­' : 'No'}
                   </Tag>
                 </div>
                 <div>
                   <Text type="secondary" style={{ fontSize: 12 }}>Replicar</Text>
                   <br />
                   <Tag color={replicarValue ? 'blue' : 'default'}>
-                    {replicarValue ? 'Sí' : 'No'}
+                    {replicarValue ? 'SÃ­' : 'No'}
                   </Tag>
                 </div>
               </div>
@@ -1455,10 +1455,10 @@ const ConceptoFormulario: React.FC = () => {
         onCancel={() => { setEntidadBuscarModalOpen(false); setEntidadBuscarText(''); setEntidadResultados([]); }}
         footer={null}
         width={600}
-        destroyOnClose
+        destroyOnHidden
       >
         <Input.Search
-          placeholder="Buscar por código o nombre..."
+          placeholder="Buscar por cÃ³digo o nombre..."
           allowClear
           value={entidadBuscarText}
           onChange={(e) => setEntidadBuscarText(e.target.value)}
@@ -1472,7 +1472,7 @@ const ConceptoFormulario: React.FC = () => {
             size="small"
             pagination={false}
             columns={[
-              { title: 'Código', dataIndex: 'codigo', width: 120 },
+              { title: 'CÃ³digo', dataIndex: 'codigo', width: 120 },
               { title: 'Nombre', dataIndex: 'nombre', ellipsis: true, render: (v: string) => toTitleCase(v) },
             ]}
             onRow={(record) => ({
@@ -1499,12 +1499,12 @@ const ConceptoFormulario: React.FC = () => {
         }}
       />
 
-      {/* Modal Buscar Concepto Réplica */}
+      {/* Modal Buscar Concepto RÃ©plica */}
       <BuscarConceptoModal
         open={conceptoReplicaModalOpen}
         onClose={() => setConceptoReplicaModalOpen(false)}
         onSelect={handleConceptoReplicaSelect}
-        title="Buscar Concepto Réplica"
+        title="Buscar Concepto RÃ©plica"
         fetchConceptos={() => {
           const sucReplicaCod = form.getFieldValue('sucursalReplica');
           const encontrada = sucReplicaCod ? sucursales.find(s => s.codigo === sucReplicaCod) : undefined;

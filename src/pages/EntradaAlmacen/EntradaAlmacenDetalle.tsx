@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Dropdown, Modal, DatePicker, Typography, Tooltip, Descriptions, Alert, App, Badge, Empty
+  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Dropdown, Modal, DatePicker, Typography, Tooltip, Descriptions, Alert, App, Badge, Empty, Switch
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -23,6 +23,7 @@ import { ordenCompraApi } from '../../api/ordenCompraApi';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 import { transaccionApi } from '../../api/transaccionApi';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
+import { parametrosApi } from '../../api/parametrosApi';
 import { productoApi } from '../../api/productoApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import LogTable from '../../components/LogTable';
@@ -40,7 +41,7 @@ import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { resolveEstado } from '../../utils/estadoDocumento';
 import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 
@@ -78,6 +79,10 @@ const [vencimientoPendientes, setVencimientoPendientes] = useState<{ id: number;
 const [vencimientoModalOpen, setVencimientoModalOpen] = useState(false);
 const [vencimientoFechas, setVencimientoFechas] = useState<Record<number, dayjs.Dayjs>>({});
 const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
+  const [mostrandoReverso, setMostrandoReverso] = useState(false);
+  const [reversoData, setReversoData] = useState<any>(null);
+
+  const sucursalContableRef = useRef<number>(Sucursal.Consolidado);
 
   const { message, modal } = App.useApp();
 
@@ -119,6 +124,15 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        // Si el documento estÃ¡ anulado y tiene reversoId, cargar el reverso
+        if (res.estado === 3 && (res as any).reversoID) {
+          entradaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
         if (res.ordenCompra?.id) {
           ordenCompraApi.obtenerPorId(Sucursal.Compra, res.ordenCompra.id)
             .then((oc: any) => setOcDetallesData(oc.detalles || []))
@@ -133,7 +147,8 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
           .catch(() => message.warning('No se pudieron cargar los documentos relacionados'));
         // Cargar factura RDE si el concepto genera una
         if (res.concepto?.docAGenerar === 'RDE') {
-          facturaSuplidorApi.obtenerPorDocumento(Sucursal.Consolidado, res.noDocumento)
+          const sucursalRDE = res.concepto?.sucursalDestino?.sucursal ?? sucursalContableRef.current;
+          facturaSuplidorApi.obtenerPorDocumento(sucursalRDE, res.noDocumento)
             .then((factura) => setFacturaData(factura))
             .catch(() => {});
         } else {
@@ -178,10 +193,11 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
     setFechaVencimientoModal({ open: false, detalleId: 0 });
   };
   const screens = Grid.useBreakpoint();
+  const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
 
-  // ===== Detalles filtrados por búsqueda =====
+  // ===== Detalles filtrados por bÃºsqueda =====
   const detallesFiltrados = detalleSearch
-    ? (data?.detalles || []).filter((d) => {
+    ? (documentoActivo?.detalles || []).filter((d: any) => {
         const q = detalleSearch.toLowerCase();
         return (
           (d.codigo || '').toLowerCase().includes(q) ||
@@ -189,7 +205,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
           (d.referencia || '').toLowerCase().includes(q)
         );
       })
-    : (data?.detalles || []);
+    : (documentoActivo?.detalles || []);
 
   const { screenCode } = useScreenConfig('FENP');
 
@@ -211,6 +227,15 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+        // Si el documento estÃ¡ anulado y tiene reversoId, cargar el reverso
+        if (res.estado === 3 && (res as any).reversoID) {
+          entradaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
         if (res.ordenCompra?.id) {
           ordenCompraApi.obtenerPorId(Sucursal.Compra, res.ordenCompra.id)
             .then((oc: any) => setOcDetallesData(oc.detalles || []))
@@ -225,7 +250,8 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
           });
         // Cargar factura RDE si el concepto genera una
         if (res.concepto?.docAGenerar === 'RDE') {
-          facturaSuplidorApi.obtenerPorDocumento(Sucursal.Consolidado, res.noDocumento)
+          const sucursalRDE = res.concepto?.sucursalDestino?.sucursal ?? sucursalContableRef.current;
+          facturaSuplidorApi.obtenerPorDocumento(sucursalRDE, res.noDocumento)
             .then((factura) => setFacturaData(factura))
             .catch(() => {
               // Silencioso - puede no existir si la ENP no se ha posteado
@@ -250,7 +276,26 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
-  // Función lookup: para cada detalle de entrada, obtiene el total devuelto
+  // Cargar sucursal contable desde PARAMETROS para bÃºsqueda de RDE
+  useEffect(() => {
+    if (!sucursalActiva) return;
+    parametrosApi.obtenerSucursalContable(sucursalActiva)
+      .then(s => { if (s != null) sucursalContableRef.current = s; })
+      .catch(() => { /* silencioso - usa Consolidado por defecto */ });
+  }, [sucursalActiva]);
+
+  // Actualizar el tÃ­tulo del header al alternar entre Original/Reverso
+  useEffect(() => {
+    if (mostrandoReverso && reversoData) {
+      const doc = reversoData as any;
+      setPageTitleOverride(`${doc.documento?.codigo || 'ENP'}-${doc.noDocumento || ''}`);
+    } else if (data) {
+      const doc = data as any;
+      setPageTitleOverride(`${doc.documento?.codigo || 'ENP'}-${doc.noDocumento || ''}`);
+    }
+  }, [mostrandoReverso, reversoData, data, setPageTitleOverride]);
+
+  // FunciÃ³n lookup: para cada detalle de entrada, obtiene el total devuelto
   // Primero por idExterno (id del detalle de entrada), luego por codigo+costo
   const obtenerDevueltoPorDetalle = React.useMemo(() => {
     const porIdExterno: Record<number, number> = {};
@@ -332,12 +377,12 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
 
   const isLarge = screens.xxl === true;
 
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = data.periodo === 6;
+  const estadoInfo = resolveEstado(documentoActivo.estado);
+  const esCerrado = documentoActivo.periodo === 6;
 
   const detalleColumns = [
     {
-      title: 'Código',
+      title: 'CÃ³digo',
       key: 'codigo',
       width: 100,
       fixed: 'left' as const,
@@ -372,7 +417,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
               let motivo = 'No coincide con la OC';
               const detalleOC = ocDetallesData.find((d: any) => d.codigo === record.codigo);
               if (!detalleOC) {
-                motivo = 'Código no encontrado en la OC';
+                motivo = 'CÃ³digo no encontrado en la OC';
               } else if (record.tieneVencimiento && !record.fechaVencimiento) {
                 motivo = 'Requiere fecha de vencimiento';
               } else if (record.fechaVencimiento && new Date(record.fechaVencimiento) < new Date()) {
@@ -403,7 +448,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       ),
     },
     {
-      title: 'Artículo',
+      title: 'ArtÃ­culo',
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
@@ -476,7 +521,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div>{formatNumber(costoBase)}</div>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
-              {formatNumber(costoUnitario)} × {factor}
+              {formatNumber(costoUnitario)} Ã— {factor}
             </div>
           </div>
         );
@@ -559,7 +604,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
   const handleAplicar = async () => {
     if (!id) return;
 
-    // Verificación del scanner en tiempo real (solo obligatorio si tiene Orden de Compra)
+    // VerificaciÃ³n del scanner en tiempo real (solo obligatorio si tiene Orden de Compra)
     if (data?.ordenCompra?.noDocumento) {
       try {
         const scanActual = await entradaAlmacenApi.verificarScan(sucursalActiva, parseInt(id!));
@@ -576,14 +621,14 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
     }
 
     // Si el usuario tiene permiso DESAPLICAR y hay detalles con aumento configurado,
-    // mostrar confirmación antes de aplicar
+    // mostrar confirmaciÃ³n antes de aplicar
     if (tienePermisoDESAPLICAR && tieneDetalleConAumentoPrecio) {
       const confirmed = await new Promise<boolean>((resolve) => {
         modal.confirm({
           title: 'Advertencia de sobreprecio',
           icon: <ExclamationCircleOutlined />,
-          content: 'Hay productos cuyo costo podría superar el porcentaje de aumento máximo permitido de su familia. ¿Desea continuar aplicando?',
-          okText: 'Sí, aplicar',
+          content: 'Hay productos cuyo costo podrÃ­a superar el porcentaje de aumento mÃ¡ximo permitido de su familia. Â¿Desea continuar aplicando?',
+          okText: 'SÃ­, aplicar',
           cancelText: 'No, cancelar',
           onOk: () => resolve(true),
           onCancel: () => resolve(false),
@@ -591,11 +636,11 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       });
 
       if (!confirmed) return;
-      // La ejecución continúa al final tras validación de vencimiento
+      // La ejecuciÃ³n continÃºa al final tras validaciÃ³n de vencimiento
     }
 
     // ===== Validar fechas de vencimiento (solo si tiene OrdenCompra) =====
-    if (data?.ordenCompra?.noDocumento && data.detalles?.length) {
+    if (data?.ordenCompra?.noDocumento && documentoActivo.detalles?.length) {
       try {
         const codigos = data.detalles.map((d) => d.codigo).filter(Boolean) as string[];
         const codigosConVencimiento = await productoApi.obtenerProductosVencimiento(Sucursal.Compra, codigos);
@@ -616,7 +661,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       } catch (err: any) {
         const msg = err?.response?.data?.errorMessage || 'Error al validar fechas de vencimiento';
         message.warning(msg);
-        // No bloquear la aplicación si falla la consulta de vencimiento
+        // No bloquear la aplicaciÃ³n si falla la consulta de vencimiento
       }
     }
 
@@ -646,7 +691,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
     setVencimientoPendientes([]);
     setVencimientoFechas({});
 
-    // Continuar con la aplicación (disparar el operacion.ejecutar)
+    // Continuar con la aplicaciÃ³n (disparar el operacion.ejecutar)
     setOperacionTitulo(`Aplicando ENP-${data?.noDocumento || id}`);
     const confirmarSP = (tienePermisoDESAPLICAR && tieneDetalleConAumentoPrecio);
     operacion.ejecutar(
@@ -669,6 +714,12 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       setModalAnularOpen(false);
       const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
+      if (res.estado === 3 && (res as any).reversoID) {
+        const revRes = await entradaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        setReversoData(revRes);
+      } else {
+        setReversoData(null);
+      }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
       message.error(msg);
@@ -683,8 +734,8 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       message.info('El concepto no genera asientos contables.');
       return;
     }
-    // Seguridad: si no está en estado Aplicado (Validado=1), aplicar primero (como en desktop)
-    if (data.estado !== 1) {
+    // Seguridad: si no estÃ¡ en estado Aplicado (Validado=1), aplicar primero (como en desktop)
+    if (data.estado !== 1 && data.estado !== 3) {
       message.info('Debe aplicar el documento antes de postear.');
       return;
     }
@@ -720,6 +771,12 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       message.success('Documento reversado exitosamente');
       const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
+      if (res.estado === 3 && (res as any).reversoID) {
+        const revRes = await entradaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        setReversoData(revRes);
+      } else {
+        setReversoData(null);
+      }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al reversar');
       message.error(msg);
@@ -748,7 +805,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
     <div>
       {loadingError && (
         <Alert
-          message="Error al cargar detalle de entrada de almacén"
+          message="Error al cargar detalle de entrada de almacÃ©n"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
@@ -761,9 +818,9 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       )}
       <DetalleToolbar
         modulo={screenCode}
-        estado={data.estado}
-        periodo={data.periodo}
-        revisado={data.revisado}
+        estado={documentoActivo.estado}
+        periodo={documentoActivo.periodo}
+        revisado={documentoActivo.revisado}
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion.loading}
@@ -795,22 +852,44 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         onEditar={() => navigate(`/FENP/${id}/editar`)}
         onAplicar={handleAplicar}
         onAnular={tienePagos ? undefined : async () => setModalAnularOpen(true)}
-        onPostear={data.concepto?.noAsientos ? undefined : handlePostear}
+        onPostear={documentoActivo.concepto?.noAsientos ? undefined : handlePostear}
         onRevisado={handleRevisado}
         onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
-        extraButtons={
-          data.estado === 1 ? (
-            <PermissionGate codigoPantalla="FDVC" accion="CREAR">
-              <Button icon={<RollbackOutlined />} onClick={() => navigate('/FDVC/nuevo', { state: { entradaId: data?.id } })}>
-                Devolver
-              </Button>
-            </PermissionGate>
-          ) : undefined
-        }
+        extraButtons={id ? (
+          <>
+            {data?.estado === 3 && reversoData && (
+              <Switch
+                checked={mostrandoReverso}
+                checkedChildren="Reverso"
+                unCheckedChildren="Original"
+                onChange={(checked) => setMostrandoReverso(checked)}
+                style={{ marginLeft: 8 }}
+              />
+            )}
+            {documentoActivo.estado === 1 ? (
+              <PermissionGate codigoPantalla="FDVC" accion="CREAR">
+                <Button icon={<RollbackOutlined />} onClick={() => navigate('/FDVC/nuevo', { state: { entradaId: data?.id } })}>
+                  Devolver
+                </Button>
+              </PermissionGate>
+            ) : undefined}
+          </>
+        ) : undefined}
       />
+
+      {mostrandoReverso && (
+        <Alert
+          message="Viendo documento de Reverso"
+          description="Este documento es el reverso generado al anular el documento original."
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
       {isLarge ? (
-        /* === DESKTOP LAYOUT (≥ lg) === */
+        /* === DESKTOP LAYOUT (â‰¥ lg) === */
         <Row gutter={16}>
           <Col xxl={18}>
             <Card className="paces-card" size="small" title={
@@ -818,7 +897,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 <span style={{ fontSize: 16, fontWeight: 600 }}>Datos Generales</span>
                 <Space>
                   {esCerrado && (
-                    <Tooltip title="Período contable cerrado">
+                    <Tooltip title="PerÃ­odo contable cerrado">
                       <LockFilled style={{ fontSize: 14, color: '#595959' }} />
                     </Tooltip>
                   )}
@@ -844,32 +923,32 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 styles={{ content: { background: 'transparent' } }}
               >
                 <Descriptions.Item label="Orden Compra:">
-                  {data.ordenCompra?.noDocumento || '-'}
+                  {documentoActivo.ordenCompra?.noDocumento || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Concepto:">
-                  {data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : toTitleCase(data.concepto?.nombre || '-')}
+                  {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : toTitleCase(documentoActivo.concepto?.nombre || '-')}
                 </Descriptions.Item>
-                <Descriptions.Item label="Tipo:">—</Descriptions.Item>
+                <Descriptions.Item label="Tipo:">â€”</Descriptions.Item>
                 <Descriptions.Item label="Fecha Doc.:">
-                  {formatDate(data.fechaDocumento)}
+                  {formatDate(documentoActivo.fechaDocumento)}
                 </Descriptions.Item>
                 <Descriptions.Item label="Suplidor:">
-                  {toTitleCase(data.suplidor?.nombre || data.entidad?.nombre || '-')}
+                  {toTitleCase(documentoActivo.suplidor?.nombre || documentoActivo.entidad?.nombre || '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="NCF:">
-                  {data.ncf || '-'}
+                  {documentoActivo.ncf || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Fecha Recibo:">
-                  {data.fechaEntrega ? formatDate(data.fechaEntrega) : '-'}
+                  {documentoActivo.fechaEntrega ? formatDate(documentoActivo.fechaEntrega) : '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Almacén:">
-                  {toTitleCase(data.almacen?.nombre || '-')}
+                <Descriptions.Item label="AlmacÃ©n:">
+                  {toTitleCase(documentoActivo.almacen?.nombre || '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="Referencia:">
-                  {data.referencia || '-'}
+                  {documentoActivo.referencia || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -889,7 +968,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                   children: (
                     <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
                   ),
@@ -958,7 +1037,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                           key: 'estado',
                           width: 110,
                           render: (_: any, record: any) => {
-                            const info = ESTADO_DOCUMENTO_MAP[record.estado] || { label: 'Desconocido', color: 'default' };
+                            const info = resolveEstado(record.estado);
                             return <Tag color={info.color}>{info.label}</Tag>;
                           },
                         },
@@ -968,16 +1047,16 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 }] : []),
                 {
                   key: 'asientos',
-                  label: `Asientos (${data.asientos?.length || 0})`,
+                  label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 800 }} />
+                    <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 800 }} />
                   ),
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${data.logs?.length || 0})`,
+                  label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
-                    <LogTable dataSource={data.logs || []} scroll={{ x: 800 }} />
+                    <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 800 }} />
                   ),
                 },
               ]}
@@ -985,11 +1064,11 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
           </Col>
 
           <Col xxl={6}>
-            <EntidadCard entidad={data.suplidor} entidadSecundaria={data.entidad} fallbackTitulo="Suplidor" />
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total}
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
-              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
-              tasa={data.tasa ?? 1}
+            <EntidadCard entidad={documentoActivo.suplidor} entidadSecundaria={documentoActivo.entidad} fallbackTitulo="Suplidor" />
+            <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} total={documentoActivo.total}
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
+              tasa={documentoActivo.tasa ?? 1}
             />
             <DocumentosRelacionadosCard
               documentos={documentosRelacionados}
@@ -1005,7 +1084,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 <span style={{ fontSize: 16, fontWeight: 600 }}>Datos Generales</span>
                 <Space>
                   {esCerrado && (
-                    <Tooltip title="Período contable cerrado">
+                    <Tooltip title="PerÃ­odo contable cerrado">
                       <LockFilled style={{ fontSize: 14, color: '#595959' }} />
                     </Tooltip>
                   )}
@@ -1031,32 +1110,32 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 styles={{ content: { background: 'transparent' } }}
               >
                 <Descriptions.Item label="Orden Compra:">
-                  {data.ordenCompra?.noDocumento || '-'}
+                  {documentoActivo.ordenCompra?.noDocumento || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Concepto:">
-                  {data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : toTitleCase(data.concepto?.nombre || '-')}
+                  {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : toTitleCase(documentoActivo.concepto?.nombre || '-')}
                 </Descriptions.Item>
-                <Descriptions.Item label="Tipo:">—</Descriptions.Item>
+                <Descriptions.Item label="Tipo:">â€”</Descriptions.Item>
                 <Descriptions.Item label="NCF:">
-                  {data.ncf || '-'}
+                  {documentoActivo.ncf || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Fecha Doc.:">
-                  {formatDate(data.fechaDocumento)}
+                  {formatDate(documentoActivo.fechaDocumento)}
                 </Descriptions.Item>
                 <Descriptions.Item label="Suplidor:">
-                  {toTitleCase(data.suplidor?.nombre || data.entidad?.nombre || '-')}
+                  {toTitleCase(documentoActivo.suplidor?.nombre || documentoActivo.entidad?.nombre || '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="Referencia:">
-                  {data.referencia || '-'}
+                  {documentoActivo.referencia || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Fecha Recibo:">
-                  {data.fechaEntrega ? formatDate(data.fechaEntrega) : '-'}
+                  {documentoActivo.fechaEntrega ? formatDate(documentoActivo.fechaEntrega) : '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Almacén:">
-                  {toTitleCase(data.almacen?.nombre || '-')}
+                <Descriptions.Item label="AlmacÃ©n:">
+                  {toTitleCase(documentoActivo.almacen?.nombre || '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:">
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -1076,7 +1155,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                 children: (
                   <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
                 ),
@@ -1153,7 +1232,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                         key: 'estado',
                         width: 110,
                         render: (_: any, record: any) => {
-                          const info = ESTADO_DOCUMENTO_MAP[record.estado] || { label: 'Desconocido', color: 'default' };
+                          const info = resolveEstado(record.estado);
                           return <Tag color={info.color}>{info.label}</Tag>;
                         },
                       },
@@ -1163,26 +1242,26 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
               },
               {
                 key: 'asientos',
-                label: `Asientos (${data.asientos?.length || 0})`,
+                label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                 children: (
-                  <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 800 }} />
+                  <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 800 }} />
                 ),
               },
               {
                 key: 'historial',
-                label: `Historial (${data.logs?.length || 0})`,
+                label: `Historial (${documentoActivo.logs?.length || 0})`,
                 children: (
-                  <LogTable dataSource={data.logs || []} scroll={{ x: 800 }} />
+                  <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 800 }} />
                 ),
               },
             ]}
           />
 
           <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight
-              monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
-              monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
-              tasa={data.tasa ?? 1}
+            <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} total={documentoActivo.total} alignRight
+              monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
+              tasa={documentoActivo.tasa ?? 1}
             />
           <DocumentosRelacionadosCard
             documentos={documentosRelacionados}
@@ -1255,7 +1334,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         open={vencimientoModalOpen}
         onCancel={() => { setVencimientoModalOpen(false); setVencimientoPendientes([]); setVencimientoFechas({}); }}
         width={520}
-        destroyOnClose
+        destroyOnHidden
         maskClosable={false}
         footer={
           <Space>
