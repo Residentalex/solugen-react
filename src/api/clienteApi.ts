@@ -1,10 +1,18 @@
 import { apiClient } from './client';
-import type { ClienteDTO } from '../types/facturacion';
+import type { ClienteDTO, ClienteVistaDTO } from '../types/facturacion';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/Cliente';
 
 export const clienteApi = {
+  obtenerVista: async (
+    sucursal: number,
+    params?: { cantidad?: number; salto?: number; codigo?: string; nombre?: string; activo?: boolean }
+  ): Promise<{ items: ClienteVistaDTO[]; total: number }> => {
+    const { data } = await apiClient.get<ApiResponse<ClienteVistaDTO[]>>(`${BASE}/${sucursal}/vista`, { params });
+    return { items: data.data ?? [], total: data.total ?? 0 };
+  },
+
   obtenerListado: async (
     sucursal: number,
     params?: { filas?: number; salto?: number; codigo?: string; activo?: boolean }

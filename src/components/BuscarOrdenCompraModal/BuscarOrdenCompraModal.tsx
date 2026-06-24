@@ -49,9 +49,9 @@ const BuscarOrdenCompraModal: React.FC<BuscarOrdenCompraModalProps> = ({
       setSearchText('');
       setLoading(true);
       fetchOrdenes()
-        .then((res) => setOrdenes(res || []))
+        .then((res) => setOrdenes(Array.isArray(res) ? res : []))
         .catch((err: any) => {
-          const msg = err?.response?.data?.errorMessage || 'Error al buscar Ã³rdenes de compra';
+          const msg = err?.response?.data?.errorMessage || 'Error al buscar órdenes de compra';
           message.error(msg);
           setOrdenes([]);
         })

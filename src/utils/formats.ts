@@ -87,6 +87,12 @@ export function truncateEmpaque(val: string, maxLen = 12): string {
   return `...${val.slice(-maxLen)}`;
 }
 
+export function truncateText(val: string, maxLen: number = 50): string {
+  if (!val) return '';
+  if (val.length <= maxLen) return val;
+  return `${val.slice(0, maxLen)}...`;
+}
+
 export function toISOFormat(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');

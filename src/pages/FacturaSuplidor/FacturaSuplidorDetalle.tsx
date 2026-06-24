@@ -30,7 +30,7 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 
@@ -87,7 +87,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
         const data = res as any;
         setPageTitleOverride(`${data.documento.codigo}-${data.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
-        if (res.estado === 3 && (res as any).reversoID) {
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           facturaSuplidorApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
@@ -130,7 +130,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
         const data = res as any;
         setPageTitleOverride(`${data.documento.codigo}-${data.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
-        if (res.estado === 3 && (res as any).reversoID) {
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           facturaSuplidorApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
@@ -188,13 +188,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const handleAplicar = () => {
     if (!id) return;
 
-    // Validar scanner (ya existe)
-    if (tieneScan === false) {
-      messageApi.warning('Debe escanear la factura antes de aplicar.');
-      return;
-    }
-
-    // Mejora F15: Validar FechaPermitida del documento
+    // Validar FechaPermitida del documento
     if (data?.documento?.fechaPermitida === 'MenorIgualFechaDia') {
       const hoy = new Date();
       const fechaDoc = new Date(data.fechaDocumento);
@@ -224,7 +218,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
       messageApi.info('El concepto no genera asientos contables.');
       return;
     }
-    if (data.estado !== 1 && data.estado !== 3) {
+    if (toEstadoNum(data.estado) !== 1 && toEstadoNum(data.estado) !== 3) {
       messageApi.info('Debe aplicar el documento antes de postear.');
       return;
     }
@@ -369,7 +363,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[documentoActivo.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = documentoActivo.periodo === 6;
+  const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
   const tienePagos = pagosAsociados.length > 0;
 
   // asientoColumns reemplazado por AsientosContableTable compartido
@@ -431,7 +425,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
         onReversar={handleReversar}
         extraButtons={
           <>
-            {data?.estado === 3 && reversoData && (
+            {toEstadoNum(data?.estado) === 3 && reversoData && (
               <Switch
                 checked={mostrandoReverso}
                 checkedChildren="Reverso"
@@ -445,7 +439,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
                 icon={<RedoOutlined />}
                 onClick={handleRecalcular}
                 loading={recalculando}
-                disabled={data.estado !== 1}
+                disabled={toEstadoNum(data.estado) !== 1}
               >
                 Recalcular
               </Button>
@@ -717,7 +711,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
         onConfirm={handleAnularConfirm}
         documento={`${data.documento.codigo}-${data.noDocumento}`}
         fechaDocumento={data.fechaDocumento}
-        periodoCerrado={data.periodo === 6}
+        periodoCerrado={toPeriodoNum(data.periodo) === 6}
       />
 
       {/* Modal de Desaplicar */}

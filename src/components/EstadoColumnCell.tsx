@@ -9,9 +9,19 @@ interface EstadoColumnCellProps {
   revisado?: boolean;
 }
 
+const LOCK_COLOR: Record<string, string> = {
+  success: '#1b5e1b',
+  error: '#9a0310',
+  default: '#404040',
+  processing: '#0035a0',
+  warning: '#9e5c00',
+  cyan: '#006666',
+};
+
 const EstadoColumnCell: React.FC<EstadoColumnCellProps> = ({ estado, periodo, revisado }) => {
-  const esCerrado = Number(periodo) === 6;
+  const esCerrado = typeof periodo === 'string' ? periodo === 'Cerrado' : Number(periodo) === 6;
   const info = resolveEstado(estado);
+  const lockColor = LOCK_COLOR[info.color] || '#404040';
   return (
     <Tag color={info.color}>
       {info.label}
@@ -22,7 +32,7 @@ const EstadoColumnCell: React.FC<EstadoColumnCellProps> = ({ estado, periodo, re
       )}
       {esCerrado && (
         <Tooltip title="Período contable cerrado">
-          <LockFilled style={{ marginLeft: 4, fontSize: 12, color: '#595959' }} />
+          <LockFilled style={{ marginLeft: 4, fontSize: 12, color: lockColor }} />
         </Tooltip>
       )}
     </Tag>

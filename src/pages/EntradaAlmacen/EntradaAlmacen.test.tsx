@@ -34,7 +34,7 @@ jest.mock('../../components/FiltrosDocumento/FiltrosDocumento', () => ({
   }: {
     filtros: { desde?: string; hasta?: string; estado?: number };
     onAplicar: (nuevos: { desde?: string; hasta?: string; estado?: number }) => void;
-    opcionesEstado: Array<{ value: number; label: string }>;
+    opcionesEstado: Array<{ value: string | number; label: string }>;
     rangoDefault: { desde: string; hasta: string };
   }) => (
     <div data-testid="filtros-documento">

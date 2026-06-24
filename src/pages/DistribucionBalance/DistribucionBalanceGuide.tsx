@@ -5,9 +5,11 @@ import type { ConceptoDTO } from '../../types/entradaAlmacen';
 
 export interface DistribucionBalanceGuideProps {
   mode: 'crear' | 'editar';
+  tipo: any | null;
   concepto: ConceptoDTO | null;
   entidad: any | null;
   detallesCount: number;
+  tipoRef: React.RefObject<HTMLDivElement | null>;
   conceptoRef: React.RefObject<HTMLDivElement | null>;
   entidadRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -20,8 +22,8 @@ interface GuideStep {
 }
 
 export const DistribucionBalanceGuide: React.FC<DistribucionBalanceGuideProps> = ({
-  concepto, entidad, detallesCount,
-  conceptoRef, entidadRef,
+  tipo, concepto, entidad, detallesCount,
+  tipoRef, conceptoRef, entidadRef,
 }) => {
   const [open, setOpen] = useState(false);
   const dismissedStepRef = useRef<string | null>(null);
@@ -30,29 +32,36 @@ export const DistribucionBalanceGuide: React.FC<DistribucionBalanceGuideProps> =
   const getCurrentStep = useCallback((): GuideStep | null => {
     const steps: GuideStep[] = [
       {
+        key: 'tipo',
+        title: 'Paso 1: Tipo',
+        description: 'Seleccione el tipo de documento.',
+        target: () => tipoRef.current,
+      },
+      {
         key: 'concepto',
-        title: 'Paso 1: Concepto',
+        title: 'Paso 2: Concepto',
         description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento.',
         target: () => conceptoRef.current,
       },
       {
         key: 'entidad',
-        title: 'Paso 2: Entidad',
+        title: 'Paso 3: Entidad',
         description: 'Seleccione la entidad asociada a la distribución de balance.',
         target: () => entidadRef.current,
       },
       {
         key: 'detalles',
-        title: 'Paso 3: Débitos y Créditos',
+        title: 'Paso 4: Débitos y Créditos',
         description: 'Agregue los montos a distribuir en las pestañas de Débitos y Créditos.',
         target: () => null,
       },
     ];
-    if (!concepto) return steps[0];
-    if (!entidad) return steps[1];
-    if (detallesCount === 0) return steps[2];
+    if (!tipo) return steps[0];
+    if (!concepto) return steps[1];
+    if (!entidad) return steps[2];
+    if (detallesCount === 0) return steps[3];
     return null;
-  }, [concepto, entidad, detallesCount, conceptoRef, entidadRef]);
+  }, [tipo, concepto, entidad, detallesCount, tipoRef, conceptoRef, entidadRef]);
 
   currentStepRef.current = getCurrentStep();
 
@@ -112,6 +121,7 @@ export const DistribucionBalanceGuide: React.FC<DistribucionBalanceGuideProps> =
       placement="top"
       trigger={[]}
       rootClassName="guide-popover"
+      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
     >
       <span
         style={{

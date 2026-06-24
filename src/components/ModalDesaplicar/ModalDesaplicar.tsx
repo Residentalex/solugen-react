@@ -78,7 +78,7 @@ const ModalDesaplicar: React.FC<ModalDesaplicarProps> = ({
       onCancel={handleCancel}
       width={480}
       destroyOnHidden
-      maskClosable={false}
+      mask={{ closable: false }}
       closable={!submitting}
       footer={
         <Space>

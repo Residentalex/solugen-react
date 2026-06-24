@@ -97,6 +97,7 @@ export interface TransaccionAsientoDTO {
   monto: number;
   tipoAsiento?: number;
   descripcion?: string;
+  cuentaContable?: { noCuenta?: string; nombre?: string };
 }
 
 /** Resultado de postear un documento individual */

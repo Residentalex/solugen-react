@@ -37,7 +37,6 @@ import AsientosContableEditables from '../../components/AsientosContableEditable
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import BuscarTipoModal from '../../components/BuscarTipoModal/BuscarTipoModal';
 import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
-import BuscarDevolucionModal from '../../components/BuscarDevolucionModal/BuscarDevolucionModal';
 import BuscarEntidadSelect from '../../components/BuscarEntidadSelect/BuscarEntidadSelect';
 
 import EntidadCard from '../../components/EntidadCard';
@@ -147,6 +146,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   // Refs para la guía
   const conceptoRef = useRef<HTMLDivElement>(null);
   const sucursalRef = useRef<HTMLDivElement>(null);
+  const tipoRef = useRef<HTMLDivElement>(null);
   const entidadRef = useRef<HTMLDivElement>(null);
   const documentosRef = useRef<HTMLDivElement>(null);
 
@@ -298,6 +298,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           tasa: res.tasa || 1,
           debitos: res.debitos || 0,
           creditos: res.creditos || 0,
+          tipoDocumento: res.tipoDocumento ?? 42,
+          tipoEntidad: res.tipoEntidad || tipoEntidad,
           documento: res.documento || { codigo: 'ND' },
           concepto: res.concepto || null,
           tipo: res.tipo || null,
@@ -471,10 +473,19 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   };
 
   // ===== Handlers de Devoluciones =====
-  const handleDevolucionSelect = (docs: DevolucionAsociadaDTO[]) => {
+  const handleDevolucionSelect = (docs: any[]) => {
     setDevoluciones((prev) => {
       const existentes = new Set(prev.map((d) => d.transaccionAsociadaID));
-      const nuevos = docs.filter((d) => !existentes.has(d.transaccionAsociadaID));
+      const nuevos = docs
+        .filter((d: any) => !existentes.has(d.transaccionAsociadaID))
+        .map((d: any) => ({
+          transaccionAsociadaID: d.transaccionAsociadaID,
+          documento: `DVC-${d.documento}`,
+          fecha: d.fecha,
+          montoOriginal: d.montoOriginal,
+          monto: d.monto,
+          esDocumentoInventario: true,
+        }));
       return [...prev, ...nuevos];
     });
   };
@@ -632,6 +643,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       total: Math.round(montoTotal * 100) / 100,
       debitos: base.debitos || 0,
       creditos: base.creditos || 0,
+      tipoDocumento: base.tipoDocumento ?? 42,
+      tipoEntidad,
       documento: base.documento || { codigo: 'ND' },
       concepto: selectedConcepto || { codigo: '', nombre: '' },
       tipo: selectedTipo || { codigo: '', nombre: '' },
@@ -873,7 +886,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
           {/* Fila 2: Tipo + Entidad */}
           <Col xs={24} sm={12} lg={6}>
-            <div>
+            <div ref={tipoRef}>
               <FloatingField label="Tipo" required>
                 <Input
                   placeholder=" "
@@ -1240,6 +1253,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           total: res.total || 0, subTotal: res.subTotal || 0, descuento: res.descuento || 0,
           impuestos: res.impuestos || 0, retenciones: res.retenciones || 0, tasa: res.tasa || 1,
           debitos: res.debitos || 0, creditos: res.creditos || 0,
+          tipoDocumento: res.tipoDocumento ?? 42,
+          tipoEntidad: res.tipoEntidad || tipoEntidad,
           documento: res.documento || { codigo: 'ND' }, concepto: res.concepto || null,
           tipo: res.tipo || null, entidad: res.entidad || null, moneda: res.moneda || null,
           transaccionesAsociadas: res.transaccionesAsociadas || [],
@@ -1352,10 +1367,15 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         montoTotal={Number(montoTotalWatch) || 0}
       />
       {tipoEntidad === 'SUP' && (
-        <BuscarDevolucionModal
+        <BuscarDocumentoModal
           open={buscarDevModalOpen}
           onClose={() => setBuscarDevModalOpen(false)}
           onSelect={handleDevolucionSelect}
+          tipoEntidad={tipoEntidad}
+          codEntidad={selectedEntidad?.codigo || ''}
+          origen={tipoEntidad === 'SUP' ? 0 : 1}
+          esDocumentoInventario={true}
+          montoTotal={Number(montoTotalWatch) || 0}
         />
       )}
 
@@ -1365,10 +1385,12 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           mode={mode}
           concepto={selectedConcepto}
           sucursal={selectedSucursal}
+          tipo={selectedTipo}
           entidad={selectedEntidad}
           detallesCount={documentosRelacionados.length + devoluciones.length}
           conceptoRef={conceptoRef}
           sucursalRef={sucursalRef}
+          tipoRef={tipoRef}
           entidadRef={entidadRef}
           documentosRef={documentosRef}
         />

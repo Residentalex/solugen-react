@@ -87,6 +87,7 @@ const CierreInventario: React.FC = () => {
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursal = useAuthStore((s: any) => s.sucursalActiva);
+  const codigoUsuario = useAuthStore((s: any) => s.usuario?.nombreUsuario ?? '');
 
   // ===== Estados =====
   const [loading, setLoading] = useState(false);
@@ -773,6 +774,7 @@ const CierreInventario: React.FC = () => {
         open={reaperturaModalOpen}
         sucursal={sucursal}
         fechaCierreActual={fechaCierre}
+        codigoUsuario={codigoUsuario}
         onClose={() => setReaperturaModalOpen(false)}
         onSuccess={handleReaperturaSuccess}
       />

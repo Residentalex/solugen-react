@@ -49,16 +49,43 @@ const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, 
     onClose();
   }, [modalState, copied, closingConfirmed, form, onClose]);
 
+  const copiarAlPortapapeles = useCallback(async (texto: string) => {
+    // Intentar con Clipboard API moderna
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(texto);
+        return true;
+      } catch {
+        // fallback
+      }
+    }
+    // Fallback: textarea oculto + execCommand
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = texto;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const handleCopy = useCallback(async () => {
     if (!createdToken?.token) return;
-    try {
-      await navigator.clipboard.writeText(createdToken.token);
+    const exito = await copiarAlPortapapeles(createdToken.token);
+    if (exito) {
       setCopied(true);
       message.success('Token copiado al portapapeles');
-    } catch {
+    } else {
       message.error('No se pudo copiar el token');
     }
-  }, [createdToken]);
+  }, [createdToken, copiarAlPortapapeles]);
 
   const handleGenerate = useCallback(async () => {
     if (!usuario) return;
@@ -100,7 +127,7 @@ const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, 
       width={560}
       destroyOnHidden
       closable={modalState !== 'created' || copied}
-      maskClosable={modalState !== 'created'}
+      mask={{ closable: modalState !== 'created' }}
     >
       {modalState === 'form' && (
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>

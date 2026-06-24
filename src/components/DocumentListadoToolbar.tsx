@@ -9,9 +9,9 @@ const { Search } = Input;
 
 interface DocumentListadoToolbarProps {
   showFiltros?: boolean;
-  filtros?: { desde?: string; hasta?: string; estado?: number };
+  filtros?: { desde?: string; hasta?: string; estado?: string | number };
   rangoDefault?: { desde: string; hasta: string };
-  opcionesEstado?: { value: number; label: string }[];
+  opcionesEstado?: { value: string | number; label: string }[];
   onFiltrosAplicar?: (filtros: any) => void;
 
   searchPlaceholder?: string;
@@ -34,7 +34,7 @@ interface DocumentListadoToolbarProps {
   showImprimir?: boolean;
   imprimirDisabled?: boolean;
   onImprimir?: () => void;
-
+  ocultarSearch?: boolean;
   onRefresh: () => void;
 
   extraLeft?: React.ReactNode;
@@ -62,6 +62,7 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
   showImprimir,
   imprimirDisabled,
   onImprimir,
+  ocultarSearch,
   onRefresh,
   extraLeft,
   extraRight,
@@ -83,7 +84,7 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
           rangoDefault={rangoDefault}
         />
       )}
-      <Search
+      {!ocultarSearch && <Search
         placeholder={searchPlaceholder}
         allowClear
         onSearch={onSearch}
@@ -95,7 +96,7 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
         }}
         style={{ width: 400 }}
         prefix={<SearchOutlined className="paces-text-icon" />}
-      />
+      />}
       <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
       <div style={{ flex: 1 }} />
       {showCrear && onCrear && (

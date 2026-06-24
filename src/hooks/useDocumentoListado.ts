@@ -11,6 +11,7 @@ const FILAS_POR_PAGINA = 25;
 
 export interface DocumentoListadoConfig<T> {
   modulo: string;
+  rangoDefaultOverride?: { desde: string; hasta: string };
 
   fetchVista: (
     sucursal: number,
@@ -67,10 +68,11 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
   const [loadingError, setLoadingError] = useState(false);
   const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
 
-  const rangoDefault = useMemo(() => ({
-    desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
-    hasta: formatDateParam(new Date()),
-  }), []);
+  const rangoDefault = useMemo(() =>
+    configRef.current.rangoDefaultOverride ?? {
+      desde: formatDateParam(new Date(Date.now() - 30 * 86400000)),
+      hasta: formatDateParam(new Date()),
+    }, []);
 
   const filtrosRef = useRef(filtros);
   filtrosRef.current = filtros;

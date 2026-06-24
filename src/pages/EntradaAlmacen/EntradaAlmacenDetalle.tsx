@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Dropdown, Modal, DatePicker, Typography, Tooltip, Descriptions, Alert, App, Badge, Empty, Switch
@@ -26,6 +26,7 @@ import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { parametrosApi } from '../../api/parametrosApi';
 import { productoApi } from '../../api/productoApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
+import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import PermissionGate from '../../components/PermissionGate';
@@ -41,7 +42,7 @@ import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { resolveEstado } from '../../utils/estadoDocumento';
+import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 
@@ -124,8 +125,8 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
-        // Si el documento estÃ¡ anulado y tiene reversoId, cargar el reverso
-        if (res.estado === 3 && (res as any).reversoID) {
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           entradaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
@@ -195,7 +196,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
   const screens = Grid.useBreakpoint();
   const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
 
-  // ===== Detalles filtrados por bÃºsqueda =====
+  // ===== Detalles filtrados por búsqueda =====
   const detallesFiltrados = detalleSearch
     ? (documentoActivo?.detalles || []).filter((d: any) => {
         const q = detalleSearch.toLowerCase();
@@ -227,8 +228,8 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
-        // Si el documento estÃ¡ anulado y tiene reversoId, cargar el reverso
-        if (res.estado === 3 && (res as any).reversoID) {
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           entradaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
@@ -276,7 +277,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
-  // Cargar sucursal contable desde PARAMETROS para bÃºsqueda de RDE
+  // Cargar sucursal contable desde PARAMETROS para búsqueda de RDE
   useEffect(() => {
     if (!sucursalActiva) return;
     parametrosApi.obtenerSucursalContable(sucursalActiva)
@@ -284,7 +285,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       .catch(() => { /* silencioso - usa Consolidado por defecto */ });
   }, [sucursalActiva]);
 
-  // Actualizar el tÃ­tulo del header al alternar entre Original/Reverso
+  // Actualizar el título del header al alternar entre Original/Reverso
   useEffect(() => {
     if (mostrandoReverso && reversoData) {
       const doc = reversoData as any;
@@ -295,7 +296,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
     }
   }, [mostrandoReverso, reversoData, data, setPageTitleOverride]);
 
-  // FunciÃ³n lookup: para cada detalle de entrada, obtiene el total devuelto
+  // Función lookup: para cada detalle de entrada, obtiene el total devuelto
   // Primero por idExterno (id del detalle de entrada), luego por codigo+costo
   const obtenerDevueltoPorDetalle = React.useMemo(() => {
     const porIdExterno: Record<number, number> = {};
@@ -378,11 +379,11 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
   const isLarge = screens.xxl === true;
 
   const estadoInfo = resolveEstado(documentoActivo.estado);
-  const esCerrado = documentoActivo.periodo === 6;
+  const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
 
   const detalleColumns = [
     {
-      title: 'CÃ³digo',
+      title: 'Código',
       key: 'codigo',
       width: 100,
       fixed: 'left' as const,
@@ -417,7 +418,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
               let motivo = 'No coincide con la OC';
               const detalleOC = ocDetallesData.find((d: any) => d.codigo === record.codigo);
               if (!detalleOC) {
-                motivo = 'CÃ³digo no encontrado en la OC';
+                motivo = 'Código no encontrado en la OC';
               } else if (record.tieneVencimiento && !record.fechaVencimiento) {
                 motivo = 'Requiere fecha de vencimiento';
               } else if (record.fechaVencimiento && new Date(record.fechaVencimiento) < new Date()) {
@@ -448,7 +449,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       ),
     },
     {
-      title: 'ArtÃ­culo',
+      title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
@@ -521,7 +522,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div>{formatNumber(costoBase)}</div>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
-              {formatNumber(costoUnitario)} Ã— {factor}
+              {formatNumber(costoUnitario)} × {factor}
             </div>
           </div>
         );
@@ -604,7 +605,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
   const handleAplicar = async () => {
     if (!id) return;
 
-    // VerificaciÃ³n del scanner en tiempo real (solo obligatorio si tiene Orden de Compra)
+    // Verificación del scanner en tiempo real (solo obligatorio si tiene Orden de Compra)
     if (data?.ordenCompra?.noDocumento) {
       try {
         const scanActual = await entradaAlmacenApi.verificarScan(sucursalActiva, parseInt(id!));
@@ -621,14 +622,14 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
     }
 
     // Si el usuario tiene permiso DESAPLICAR y hay detalles con aumento configurado,
-    // mostrar confirmaciÃ³n antes de aplicar
+    // mostrar confirmación antes de aplicar
     if (tienePermisoDESAPLICAR && tieneDetalleConAumentoPrecio) {
       const confirmed = await new Promise<boolean>((resolve) => {
         modal.confirm({
           title: 'Advertencia de sobreprecio',
           icon: <ExclamationCircleOutlined />,
-          content: 'Hay productos cuyo costo podrÃ­a superar el porcentaje de aumento mÃ¡ximo permitido de su familia. Â¿Desea continuar aplicando?',
-          okText: 'SÃ­, aplicar',
+          content: 'Hay productos cuyo costo podría superar el porcentaje de aumento máximo permitido de su familia. ¿Desea continuar aplicando?',
+          okText: 'Sí, aplicar',
           cancelText: 'No, cancelar',
           onOk: () => resolve(true),
           onCancel: () => resolve(false),
@@ -636,7 +637,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       });
 
       if (!confirmed) return;
-      // La ejecuciÃ³n continÃºa al final tras validaciÃ³n de vencimiento
+      // La ejecución continúa al final tras validación de vencimiento
     }
 
     // ===== Validar fechas de vencimiento (solo si tiene OrdenCompra) =====
@@ -661,7 +662,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       } catch (err: any) {
         const msg = err?.response?.data?.errorMessage || 'Error al validar fechas de vencimiento';
         message.warning(msg);
-        // No bloquear la aplicaciÃ³n si falla la consulta de vencimiento
+        // No bloquear la aplicación si falla la consulta de vencimiento
       }
     }
 
@@ -691,7 +692,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
     setVencimientoPendientes([]);
     setVencimientoFechas({});
 
-    // Continuar con la aplicaciÃ³n (disparar el operacion.ejecutar)
+    // Continuar con la aplicación (disparar el operacion.ejecutar)
     setOperacionTitulo(`Aplicando ENP-${data?.noDocumento || id}`);
     const confirmarSP = (tienePermisoDESAPLICAR && tieneDetalleConAumentoPrecio);
     operacion.ejecutar(
@@ -714,7 +715,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       setModalAnularOpen(false);
       const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
-      if (res.estado === 3 && (res as any).reversoID) {
+      if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
         const revRes = await entradaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
@@ -734,8 +735,8 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       message.info('El concepto no genera asientos contables.');
       return;
     }
-    // Seguridad: si no estÃ¡ en estado Aplicado (Validado=1), aplicar primero (como en desktop)
-    if (data.estado !== 1 && data.estado !== 3) {
+    // Seguridad: si no está en estado Aplicado (Validado=1), aplicar primero (como en desktop)
+    if (toEstadoNum(data.estado) !== 1 && toEstadoNum(data.estado) !== 3) {
       message.info('Debe aplicar el documento antes de postear.');
       return;
     }
@@ -771,7 +772,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       message.success('Documento reversado exitosamente');
       const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
-      if (res.estado === 3 && (res as any).reversoID) {
+      if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
         const revRes = await entradaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
@@ -805,7 +806,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
     <div>
       {loadingError && (
         <Alert
-          message="Error al cargar detalle de entrada de almacÃ©n"
+          message="Error al cargar detalle de entrada de almacén"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
@@ -858,7 +859,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         onReversar={handleReversar}
         extraButtons={id ? (
           <>
-            {data?.estado === 3 && reversoData && (
+            {toEstadoNum(data?.estado) === 3 && reversoData && (
               <Switch
                 checked={mostrandoReverso}
                 checkedChildren="Reverso"
@@ -867,7 +868,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 style={{ marginLeft: 8 }}
               />
             )}
-            {documentoActivo.estado === 1 ? (
+            {toEstadoNum(documentoActivo.estado) === 1 ? (
               <PermissionGate codigoPantalla="FDVC" accion="CREAR">
                 <Button icon={<RollbackOutlined />} onClick={() => navigate('/FDVC/nuevo', { state: { entradaId: data?.id } })}>
                   Devolver
@@ -897,7 +898,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 <span style={{ fontSize: 16, fontWeight: 600 }}>Datos Generales</span>
                 <Space>
                   {esCerrado && (
-                    <Tooltip title="PerÃ­odo contable cerrado">
+                    <Tooltip title="Período contable cerrado">
                       <LockFilled style={{ fontSize: 14, color: '#595959' }} />
                     </Tooltip>
                   )}
@@ -928,7 +929,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 <Descriptions.Item label="Concepto:">
                   {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : toTitleCase(documentoActivo.concepto?.nombre || '-')}
                 </Descriptions.Item>
-                <Descriptions.Item label="Tipo:">â€”</Descriptions.Item>
+                <Descriptions.Item label="Tipo:">{documentoActivo.tipo?.nombre || documentoActivo.codigoTipo || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha Doc.:">
                   {formatDate(documentoActivo.fechaDocumento)}
                 </Descriptions.Item>
@@ -941,11 +942,11 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 <Descriptions.Item label="Fecha Recibo:">
                   {documentoActivo.fechaEntrega ? formatDate(documentoActivo.fechaEntrega) : '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="AlmacÃ©n:">
+                <Descriptions.Item label="Almacén:">
                   {toTitleCase(documentoActivo.almacen?.nombre || '-')}
                 </Descriptions.Item>
-                <Descriptions.Item label="Referencia:">
-                  {documentoActivo.referencia || '-'}
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:" span={3}>
                   <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
@@ -990,7 +991,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                       pagination={false}
                       scroll={{ x: 600 }}
                       rowClassName={(record: any) =>
-                        record.estado === 3 ? 'paces-row-anulado' : ''
+                        toEstadoNum(record.estado) === 3 ? 'paces-row-anulado' : ''
                       }
                       columns={[
                         {
@@ -1084,7 +1085,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 <span style={{ fontSize: 16, fontWeight: 600 }}>Datos Generales</span>
                 <Space>
                   {esCerrado && (
-                    <Tooltip title="PerÃ­odo contable cerrado">
+                    <Tooltip title="Período contable cerrado">
                       <LockFilled style={{ fontSize: 14, color: '#595959' }} />
                     </Tooltip>
                   )}
@@ -1115,7 +1116,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 <Descriptions.Item label="Concepto:">
                   {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : toTitleCase(documentoActivo.concepto?.nombre || '-')}
                 </Descriptions.Item>
-                <Descriptions.Item label="Tipo:">â€”</Descriptions.Item>
+                <Descriptions.Item label="Tipo:">{documentoActivo.tipo?.nombre || documentoActivo.codigoTipo || '-'}</Descriptions.Item>
                 <Descriptions.Item label="NCF:">
                   {documentoActivo.ncf || '-'}
                 </Descriptions.Item>
@@ -1125,13 +1126,13 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 <Descriptions.Item label="Suplidor:">
                   {toTitleCase(documentoActivo.suplidor?.nombre || documentoActivo.entidad?.nombre || '-')}
                 </Descriptions.Item>
-                <Descriptions.Item label="Referencia:">
-                  {documentoActivo.referencia || '-'}
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Fecha Recibo:">
                   {documentoActivo.fechaEntrega ? formatDate(documentoActivo.fechaEntrega) : '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="AlmacÃ©n:">
+                <Descriptions.Item label="Almacén:">
                   {toTitleCase(documentoActivo.almacen?.nombre || '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:">
@@ -1185,7 +1186,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                     pagination={false}
                     scroll={{ x: 600 }}
                     rowClassName={(record: any) =>
-                      record.estado === 3 ? 'paces-row-anulado' : ''
+                      toEstadoNum(record.estado) === 3 ? 'paces-row-anulado' : ''
                     }
                     columns={[
                       {
@@ -1325,7 +1326,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         onConfirm={handleAnularConfirm}
         documento={`${data.documento.codigo}-${data.noDocumento}`}
         fechaDocumento={data.fechaDocumento}
-        periodoCerrado={data.periodo === 6}
+        periodoCerrado={toPeriodoNum(data.periodo) === 6}
       />
 
       {/* Modal de Fechas de Vencimiento Pendientes */}

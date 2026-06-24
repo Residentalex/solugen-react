@@ -15,6 +15,7 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
+import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import { useAplicar } from '../../hooks/useAplicar';
@@ -24,7 +25,7 @@ import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
-import { resolveEstado } from '../../utils/estadoDocumento';
+import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 
 const { Text } = Typography;
@@ -87,7 +88,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
-        if (res.estado === 3 && (res as any).reversoID) {
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           transferenciaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
@@ -185,7 +186,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
 
   const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const estadoInfo = resolveEstado(documentoActivo.estado);
-  const esCerrado = documentoActivo.periodo === 6;
+  const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
 
   // ===== Detalles filtrados por búsqueda =====
   const detallesFiltrados = detalleSearch
@@ -382,12 +383,12 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       </div>
     } style={{ marginBottom: 16 }}>
       <Descriptions bordered size="small" column={columnCount} styles={{ content: { background: 'transparent' } }}>
-        <Descriptions.Item label="Tipo:">—</Descriptions.Item>
+        <Descriptions.Item label="Tipo:">{documentoActivo.tipo?.nombre || documentoActivo.codigoTipo || '-'}</Descriptions.Item>
         <Descriptions.Item label="Concepto:">
           {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}
         </Descriptions.Item>
-        <Descriptions.Item label="Referencia:">
-          {documentoActivo.referencia || '-'}
+        <Descriptions.Item label="Sucursal:">
+          <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
         </Descriptions.Item>
         <Descriptions.Item label="Fecha Doc.:">
           {formatDate(documentoActivo.fechaDocumento)}
@@ -507,7 +508,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         onReversar={handleReversar}
         extraButtons={id ? (
           <>
-            {data?.estado === 3 && reversoData && (
+            {toEstadoNum(data?.estado) === 3 && reversoData && (
               <Switch
                 checked={mostrandoReverso}
                 checkedChildren="Reverso"
@@ -575,7 +576,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         onConfirm={handleAnularConfirm}
         documento={`${data?.documento?.codigo || 'TRP'}-${data?.noDocumento || ''}`}
         fechaDocumento={data?.fechaDocumento || ''}
-        periodoCerrado={data?.periodo === 6}
+        periodoCerrado={toPeriodoNum(data?.periodo) === 6}
       />
 
       {/* Modal de Progreso para Aplicar/Postear */}

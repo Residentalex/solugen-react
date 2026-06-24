@@ -30,9 +30,9 @@ interface DocumentListadoLayoutProps<T> {
 
   toolbarProps?: {
     showFiltros?: boolean;
-    filtros?: { desde?: string; hasta?: string; estado?: number };
+    filtros?: { desde?: string; hasta?: string; estado?: string | number };
     rangoDefault?: { desde: string; hasta: string };
-    opcionesEstado?: { value: number; label: string }[];
+    opcionesEstado?: { value: string | number; label: string }[];
     onFiltrosAplicar?: (filtros: any) => void;
     searchPlaceholder?: string;
     onSearch: (value: string) => void;

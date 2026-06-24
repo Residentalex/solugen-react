@@ -31,11 +31,8 @@ const FamiliasArticulo: React.FC = () => {
       const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
       if (searchText) params.busqueda = searchText;
 
-      const [resultados, totalCount] = await Promise.all([
-        familiaArticuloApi.filtrar(sucursalActiva, params),
-        familiaArticuloApi.obtenerTotal(sucursalActiva, { busqueda: searchText || undefined }),
-      ]);
-      return { datos: resultados || [], total: totalCount ?? 0 };
+      const { items, total } = await familiaArticuloApi.filtrar(sucursalActiva, params);
+      return { datos: items, total };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,

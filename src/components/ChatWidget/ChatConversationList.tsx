@@ -14,6 +14,7 @@ type CreationMode = null | 'individual' | 'grupal';
 const ChatConversationList: React.FC<ChatConversationListProps> = ({ onSelectConversacion }) => {
   const conversaciones = useChatStore((s) => s.conversaciones);
   const cargarConversaciones = useChatStore((s) => s.cargarConversaciones);
+  const conectado = useChatStore((s) => s.conectado);
   const usuarioID = useAuthStore((s) => s.usuario?.id);
   const [creationMode, setCreationMode] = useState<CreationMode>(null);
   const [busqueda, setBusqueda] = useState('');
@@ -178,7 +179,10 @@ const ChatConversationList: React.FC<ChatConversationListProps> = ({ onSelectCon
         display: 'flex', alignItems: 'center', gap: 6,
         background: 'var(--paces-bg-container)', borderRadius: '12px 12px 0 0',
       }}>
-        <span style={{ fontWeight: 600, fontSize: 14, flex: 1, color: 'var(--paces-text)' }}>Chat</span>
+        <span style={{ fontWeight: 600, fontSize: 14, flex: 1, color: 'var(--paces-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          Chat
+          {!conectado && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff4d4f' }} title="Desconectado" />}
+        </span>
         <div ref={plusMenuRef} style={{ position: 'relative' }}>
           <button onClick={() => setPlusMenuOpen(!plusMenuOpen)} title="Nuevo"
             style={{

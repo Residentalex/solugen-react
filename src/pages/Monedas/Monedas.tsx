@@ -50,11 +50,8 @@ const Monedas: React.FC = () => {
       const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
       if (searchText) params.busqueda = searchText;
 
-      const [resultados, totalCount] = await Promise.all([
-        monedaApi.filtrar(sucursalActiva, params),
-        monedaApi.obtenerTotal(sucursalActiva, { busqueda: searchText || undefined }),
-      ]);
-      return { datos: resultados || [], total: totalCount ?? 0 };
+      const { items, total } = await monedaApi.filtrar(sucursalActiva, params);
+      return { datos: items, total };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,

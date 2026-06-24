@@ -1,109 +1,41 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useAuthStore } from '../../stores/authStore';
-import { useUIStore } from '../../stores/uiStore';
 import { asientoContableApi } from '../../api/asientoContableApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
-import { formatCurrency, formatDateRaw, formatDateParam, toTitleCase } from '../../utils/formats';
-import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
+import { useDocumentoListado } from '../../hooks/useDocumentoListado';
+import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import type { TransaccionVistaDTO } from '../../types/transaccion';
 
 const { Text } = Typography;
 
+const OPCIONES_ESTADO = [
+  { value: '', label: 'Todos' },
+  { value: 0, label: 'Borrador' },
+  { value: 1, label: 'Terminado' },
+  { value: 3, label: 'Anulado' },
+];
+
 const AsientosContables: React.FC = () => {
   const navigate = useNavigate();
-  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
-  const setActiveModule = useUIStore((s: any) => s.setActiveModule);
-  const updateToolbar = useUIStore((s: any) => s.updateToolbar);
-  const resetToolbar = useUIStore((s: any) => s.resetToolbar);
+  const { screenCode } = useScreenConfig();
 
-  const [data, setData] = useState<TransaccionVistaDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-  const [selectedRow, setSelectedRow] = useState<TransaccionVistaDTO | null>(null);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [loadingError, setLoadingError] = useState(false);
-  const [searchText, setSearchText] = useState('');
-  const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
+  const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<TransaccionVistaDTO>({
+    modulo: screenCode,
+    fetchVista: (sucursal, desde, hasta, filas, salto, estado) =>
+      asientoContableApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado),
+    fetchFiltrar: (sucursal, params) =>
+      asientoContableApi.filtrarConAsientos(sucursal, params),
+    reporteUrl: () => '',
+    tituloReporte: 'AsientoContable',
+    tituloError: 'Error al cargar asientos contables',
+  });
 
-  const rangoDefault = useMemo(() => ({
-    desde: formatDateParam(new Date(Date.now() - 30 * 86400000)),
-    hasta: formatDateParam(new Date()),
-  }), []);
-
-  const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
-    setLoading(true);
-    try {
-      let desde = filtros.desde ?? rangoDefault.desde;
-      let hasta = filtros.hasta ?? rangoDefault.hasta;
-
-      if (busqueda.length > 2) {
-        if (!filtros.desde) desde = '19000101000000';
-        if (!filtros.hasta) hasta = '20991231235959';
-        const result = await asientoContableApi.filtrarConAsientos(
-          sucursalActiva, filas, (pagina - 1) * filas,
-          desde, hasta, filtros.estado,
-          busqueda, busqueda, busqueda, busqueda
-        );
-        setData(result);
-        setTotal(
-          result.length < filas
-            ? (pagina - 1) * filas + result.length
-            : pagina * filas + 1
-        );
-      } else {
-        const result = await asientoContableApi.obtenerVista(
-          sucursalActiva, desde, hasta, filas, (pagina - 1) * filas, filtros.estado
-        );
-        setData(result);
-        setTotal(
-          result.length < filas
-            ? (pagina - 1) * filas + result.length + 1
-            : (pagina - 1) * filas + result.length + filas
-        );
-      }
-    } catch {
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursalActiva, rangoDefault, filtros]);
-
-  useEffect(() => {
-    cargarDatos(page, pageSize, searchText);
-  }, [page, pageSize, refreshTrigger, searchText, cargarDatos]);
-
-  useEffect(() => {
-    setActiveModule('FAsientoContable');
-    updateToolbar({});
-    return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar]);
-
-  const handleSearch = (value: string) => {
-    setSearchText(value);
-    setPage(1);
-  };
-
-  const handleRefresh = () => {
-    setLoadingError(false);
-    setRefreshTrigger((n) => n + 1);
-  };
-
-  const handleRowClick = (record: TransaccionVistaDTO) => {
-    setSelectedRow(record);
-  };
-
-  const handleNuevo = () => navigate('/FAsientoContable/nuevo');
-  const handleEditar = () => {
-    if (selectedRow) navigate(`/FAsientoContable/${selectedRow.id}/editar`);
-  };
   const handleClonar = async () => {
-    if (!selectedRow) return;
+    if (!state.selectedRow) return;
     message.info('Función de clonar no disponible para asientos contables');
   };
 
@@ -162,7 +94,7 @@ const AsientosContables: React.FC = () => {
       dataIndex: 'estado',
       key: 'estado',
       width: 110,
-      render: (est: number) => (
+      render: (est: string) => (
         <EstadoColumnCell estado={est} />
       ),
     },
@@ -171,39 +103,39 @@ const AsientosContables: React.FC = () => {
   return (
     <DocumentListadoLayout<TransaccionVistaDTO>
       columns={columns}
-      data={data}
+      data={state.data}
       rowKey="id"
-      loading={loading}
-      total={total}
-      page={page}
-      pageSize={pageSize}
+      loading={state.loading}
+      total={state.total}
+      page={state.page}
+      pageSize={state.pageSize}
       scrollX={1080}
-      selectedRowId={selectedRow?.id}
-      loadingError={loadingError}
+      selectedRowId={state.selectedRow?.id}
+      loadingError={state.loadingError}
       errorMessage="Error al cargar asientos contables"
-      onRefresh={handleRefresh}
-      onRowClick={handleRowClick}
-      onPageChange={setPage}
-      pdfPreview={null}
-      onPdfClose={() => {}}
+      onRefresh={actions.handleRefresh}
+      onRowClick={actions.handleRowClick}
+      onPageChange={actions.goToPage}
+      pdfPreview={state.pdfPreview}
+      onPdfClose={actions.handlePdfClose}
       toolbarProps={{
         showFiltros: true,
-        filtros,
+        filtros: state.filtros,
         rangoDefault,
-        opcionesEstado: ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO,
-        onFiltrosAplicar: (nuevos) => { setFiltros(nuevos); setPage(1); },
+        opcionesEstado: OPCIONES_ESTADO,
+        onFiltrosAplicar: actions.handleFiltrosAplicar,
         searchPlaceholder: 'Buscar documento, entidad, concepto...',
-        onSearch: handleSearch,
-        pageSize,
-        onPageSizeChange: (v) => { setPageSize(v); setPage(1); },
-        onRefresh: handleRefresh,
+        onSearch: actions.handleSearch,
+        pageSize: state.pageSize,
+        onPageSizeChange: actions.handlePageSizeChange,
+        onRefresh: actions.handleRefresh,
         showCrear: true,
-        onCrear: handleNuevo,
+        onCrear: () => navigate('/FAsientoContable/nuevo'),
         showEditar: true,
-        editarDisabled: !selectedRow,
-        onEditar: handleEditar,
+        editarDisabled: !state.selectedRow,
+        onEditar: () => navigate(`/FAsientoContable/${state.selectedRow!.id}/editar`),
         showClonar: true,
-        clonarDisabled: !selectedRow,
+        clonarDisabled: !state.selectedRow,
         onClonar: handleClonar,
       }}
     />

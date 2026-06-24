@@ -84,6 +84,7 @@ import Repostear from './pages/Repostear/Repostear';
 import Acciones from './pages/Acciones/Acciones';
 import PlanesPago from './pages/PlanesPago/PlanesPago';
 import Almacenes from './pages/Almacenes/Almacenes';
+import Denominaciones from './pages/Denominaciones/Denominaciones';
 import Proximamente from './pages/Proximamente';
 import PermisosEspeciales from './pages/PermisosEspeciales/PermisosEspeciales';
 import OrdenCompra from './pages/OrdenCompra/OrdenCompra';
@@ -116,8 +117,10 @@ import MovimientosProductos from './pages/MovimientosProductos/MovimientosProduc
 import ImportarInventario from './pages/ImportarInventario/ImportarInventario';
 import ActualizacionCostos from './pages/ActualizacionCostos/ActualizacionCostos';
 import AntiguedadSaldos from './pages/AntiguedadSaldos/AntiguedadSaldos';
+import AntiguedadSaldosDVC from './pages/AntiguedadSaldosDVC/AntiguedadSaldosDVC';
 import MayorAuxiliar from './pages/MayorAuxiliar/MayorAuxiliar';
 import TransaccionNoCuadrada from './pages/TransaccionNoCuadrada/TransaccionNoCuadrada';
+import IntegridadAsientos from './pages/IntegridadAsientos/IntegridadAsientos';
 import DocumentosAnulados from './pages/DocumentosAnulados/DocumentosAnulados';
 import CierreInventario from './pages/CierreInventario/CierreInventario';
 import CierreDetalle from './pages/CierreInventario/CierreDetalle';
@@ -316,6 +319,7 @@ const App: React.FC = () => {
             <Route path="MPOS" element={<PuntosVenta />} />
             <Route path="MMetodosPago" element={<MetodosPago />} />
             <Route path="MAlmacen" element={<Almacenes />} />
+            <Route path="FDenominacion" element={<Denominaciones />} />
             <Route path="MServicio" element={<Servicios />} />
             <Route path="FActPrecio" element={<ActualizacionPrecio />} />
             <Route path="FTarifas" element={<Proximamente modulo="Tarifas" codigo="FTarifas" />} />
@@ -370,8 +374,10 @@ const App: React.FC = () => {
           <Route path="OActualizacionCostos" element={<ActualizacionCostos />} />
           <Route path="RAntiguedaCXC" element={<AntiguedadSaldos tipoEntidad="CLI" />} />
           <Route path="RAntiguedadCXP" element={<AntiguedadSaldos tipoEntidad="SUP" />} />
+          <Route path="RAntiguedadSaldoDVC" element={<AntiguedadSaldosDVC />} />
             <Route path="RMayorAux" element={<MayorAuxiliar />} />
             <Route path="RTransNoCuadrada" element={<TransaccionNoCuadrada />} />
+            <Route path="RIntegridadAsientos" element={<IntegridadAsientos />} />
             <Route path="RDocumentosAnulados" element={<DocumentosAnulados />} />
             <Route path="ORepostear" element={<Repostear />} />
           <Route path="notificaciones" element={<Notificaciones />} />
@@ -520,6 +526,7 @@ const App: React.FC = () => {
             <Route path="MPOS" element={<PuntosVenta />} />
             <Route path="MMetodosPago" element={<MetodosPago />} />
             <Route path="MAlmacen" element={<Almacenes />} />
+            <Route path="FDenominacion" element={<Denominaciones />} />
             <Route path="MServicio" element={<Servicios />} />
             <Route path="FActPrecio" element={<ActualizacionPrecio />} />
             <Route path="FTarifas" element={<Proximamente modulo="Tarifas" codigo="FTarifas" />} />
@@ -574,8 +581,10 @@ const App: React.FC = () => {
           <Route path="OActualizacionCostos" element={<ActualizacionCostos />} />
           <Route path="RAntiguedaCXC" element={<AntiguedadSaldos tipoEntidad="CLI" />} />
           <Route path="RAntiguedadCXP" element={<AntiguedadSaldos tipoEntidad="SUP" />} />
+          <Route path="RAntiguedadSaldoDVC" element={<AntiguedadSaldosDVC />} />
             <Route path="RMayorAux" element={<MayorAuxiliar />} />
             <Route path="RTransNoCuadrada" element={<TransaccionNoCuadrada />} />
+            <Route path="RIntegridadAsientos" element={<IntegridadAsientos />} />
             <Route path="RDocumentosAnulados" element={<DocumentosAnulados />} />
             <Route path="ORepostear" element={<Repostear />} />
           <Route path="notificaciones" element={<Notificaciones />} />

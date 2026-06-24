@@ -47,16 +47,16 @@ export const SalidaAlmacenGuide: React.FC<SalidaAlmacenGuideProps> = ({
         target: () => conceptoRef.current,
       },
       {
-        key: 'almacen',
-        title: 'Almacén',
-        description: 'Debe elegir un almacén para poder continuar.',
-        target: () => almacenRef.current,
-      },
-      {
         key: 'suplidor',
         title: 'Suplidor / Entidad',
         description: 'Debe elegir una entidad para poder continuar.',
         target: () => suplidorRef.current,
+      },
+      {
+        key: 'almacen',
+        title: 'Almacén',
+        description: 'Debe elegir un almacén para poder continuar.',
+        target: () => almacenRef.current,
       },
       {
         key: 'productos',
@@ -67,8 +67,8 @@ export const SalidaAlmacenGuide: React.FC<SalidaAlmacenGuideProps> = ({
     ];
 
     if (!concepto) return steps[0];
-    if (!almacen) return steps[1];
-    if (suplidoresDisponibles && !suplidor) return steps[2];
+    if (suplidoresDisponibles && !suplidor) return steps[1];
+    if (!almacen) return steps[2];
     if (detallesCount === 0) return steps[3];
 
     return null;
@@ -132,6 +132,7 @@ export const SalidaAlmacenGuide: React.FC<SalidaAlmacenGuideProps> = ({
       placement="top"
       trigger={[]}
       rootClassName="guide-popover"
+      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
     >
       <span
         style={{

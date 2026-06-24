@@ -96,7 +96,7 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({
     >
       <Input.Search
         ref={searchRef}
-        placeholder="Buscar por cÃ³digo o nombre..."
+        placeholder="Buscar por código o nombre..."
         allowClear
         onSearch={(val) => setSearchText(val || '')}
         onChange={(e) => {

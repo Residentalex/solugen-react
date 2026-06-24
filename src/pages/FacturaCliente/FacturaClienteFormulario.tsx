@@ -153,6 +153,7 @@ const FacturaClienteFormulario: React.FC = () => {
   const clienteRef = useRef<HTMLDivElement>(null);
   const almacenRef = useRef<HTMLDivElement>(null);
   const agregarFilaRef = useRef<HTMLDivElement>(null);
+  const sucursalRef = useRef<HTMLDivElement>(null);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -1285,7 +1286,7 @@ const FacturaClienteFormulario: React.FC = () => {
               </Col>
 
               {/* Fila 5: Sucursal Contable */}
-              <Col xs={24} sm={12} lg={8}>
+              <Col xs={24} sm={12} lg={8} ref={sucursalRef}>
                 <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
                   <FloatingField label="Sucursal Contable">
                     <Select
@@ -1657,12 +1658,17 @@ const FacturaClienteFormulario: React.FC = () => {
           mode={mode}
           tipo={selectedTipo}
           concepto={selectedConcepto}
+          almacen={selectedAlmacen}
           cliente={selectedCliente}
           detallesCount={detalles.length}
+          tieneProductos={tieneProductos}
           tipoRef={tipoRef}
           conceptoRef={conceptoRef}
+          almacenRef={almacenRef}
           clienteRef={clienteRef}
           agregarFilaRef={agregarFilaRef}
+          sucursal={selectedSucursal}
+          sucursalRef={sucursalRef}
         />
       )}
     </div>
@@ -1674,12 +1680,17 @@ interface FacturaClienteGuideProps {
   mode: 'crear' | 'editar';
   tipo: any | null;
   concepto: any | null;
+  almacen: any | null;
   cliente: any | null;
   detallesCount: number;
+  tieneProductos: boolean;
   tipoRef: React.RefObject<HTMLDivElement | null>;
   conceptoRef: React.RefObject<HTMLDivElement | null>;
+  almacenRef: React.RefObject<HTMLDivElement | null>;
   clienteRef: React.RefObject<HTMLDivElement | null>;
   agregarFilaRef: React.RefObject<HTMLDivElement | null>;
+  sucursal: any | null;
+  sucursalRef: React.RefObject<HTMLDivElement | null>;
 }
 
 interface GuideStep {
@@ -1690,8 +1701,9 @@ interface GuideStep {
 }
 
 const FacturaClienteGuide: React.FC<FacturaClienteGuideProps> = ({
-  tipo, concepto, cliente, detallesCount,
-  tipoRef, conceptoRef, clienteRef, agregarFilaRef,
+  tipo, concepto, almacen, cliente, detallesCount, tieneProductos,
+  tipoRef, conceptoRef, almacenRef, clienteRef, agregarFilaRef,
+  sucursal, sucursalRef,
 }) => {
   const [open, setOpen] = useState(false);
   const dismissedStepRef = useRef<string | null>(null);
@@ -1699,6 +1711,12 @@ const FacturaClienteGuide: React.FC<FacturaClienteGuideProps> = ({
 
   const getCurrentStep = useCallback((): GuideStep | null => {
     const steps: GuideStep[] = [
+      {
+        key: 'sucursal',
+        title: 'Sucursal',
+        description: 'Seleccione la sucursal contable.',
+        target: () => sucursalRef.current,
+      },
       {
         key: 'tipo',
         title: 'Paso 1: Tipo de Documento',
@@ -1718,6 +1736,12 @@ const FacturaClienteGuide: React.FC<FacturaClienteGuideProps> = ({
         target: () => clienteRef.current,
       },
       {
+        key: 'almacen',
+        title: 'Almacén',
+        description: 'Debe elegir un almacén para poder continuar.',
+        target: () => almacenRef.current,
+      },
+      {
         key: 'productos',
         title: 'Paso 4: Productos',
         description: 'Agregue productos usando "Agregar producto" o el scanner.',
@@ -1725,13 +1749,15 @@ const FacturaClienteGuide: React.FC<FacturaClienteGuideProps> = ({
       },
     ];
 
-    if (!tipo) return steps[0];
-    if (!concepto) return steps[1];
-    if (!cliente) return steps[2];
-    if (detallesCount === 0) return steps[3];
+    if (!sucursal) return steps[0];
+    if (!tipo) return steps[1];
+    if (!concepto) return steps[2];
+    if (!cliente) return steps[3];
+    if (tieneProductos && !almacen) return steps[4];
+    if (detallesCount === 0) return steps[5];
 
     return null;
-  }, [tipo, concepto, cliente, detallesCount, tipoRef, conceptoRef, clienteRef, agregarFilaRef]);
+  }, [tipo, concepto, almacen, cliente, detallesCount, tieneProductos, sucursal, tipoRef, conceptoRef, almacenRef, clienteRef, agregarFilaRef, sucursalRef]);
 
   currentStepRef.current = getCurrentStep();
 
@@ -1789,6 +1815,7 @@ const FacturaClienteGuide: React.FC<FacturaClienteGuideProps> = ({
       placement="top"
       trigger={[]}
       rootClassName="guide-popover"
+      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
     >
       <span style={{
         position: 'fixed', top: rect.top, left: rect.left,

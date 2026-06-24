@@ -14,6 +14,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ onBack }) => {
   const enviarMensaje = useChatStore((s) => s.enviarMensaje);
   const conversaciones = useChatStore((s) => s.conversaciones);
   const cargando = useChatStore((s) => s.cargando);
+  const conectado = useChatStore((s) => s.conectado);
   const usuarioID = useAuthStore((s) => s.usuario?.id);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -73,6 +74,9 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ onBack }) => {
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, fontSize: 16, color: '#556ee6' }}>
           ←
         </button>
+        {!conectado && (
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff4d4f', flexShrink: 0 }} title="Desconectado" />
+        )}
         <div style={{ flex: 1, fontWeight: 600, fontSize: 14, color: 'var(--paces-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {titulo}
         </div>
@@ -100,6 +104,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ onBack }) => {
         flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8,
         background: 'var(--paces-bg-layout)',
       }}>
+        {!conectado && <div style={{ textAlign: 'center', color: '#ff4d4f', padding: 8, fontSize: 12, background: 'rgba(255,77,79,0.08)', borderRadius: 6, marginBottom: 4 }}>Sin conexión con el servidor</div>}
         {cargando && <div style={{ textAlign: 'center', color: 'var(--paces-text-secondary)', padding: 20 }}>Cargando mensajes...</div>}
         {!cargando && mensajesActuales.length === 0 && <div style={{ textAlign: 'center', color: 'var(--paces-text-secondary)', padding: 20 }}>No hay mensajes aun. ¡Envia el primero!</div>}
         {mensajesActuales.map((m) => {

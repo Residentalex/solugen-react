@@ -87,6 +87,7 @@ export interface EnvioDGIIDTO {
   tipoDocumento?: number;
   tipoComprobante?: string;
   sucursal: number;
+  sucursalNombre?: string;
   transaccionID: number;
   fechaEnvio?: string;
   estado?: string;

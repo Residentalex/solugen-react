@@ -40,7 +40,7 @@ export const cierreInventarioApi = {
   },
 
   /** Reapertura un periodo cerrado */
-  reaperturar: async (sucursal: number, fechaNueva: string, fechaAnterior: string): Promise<void> => {
-    await apiClient.put(`/cierre/${sucursal}/reaperturar`, { fechaNueva, fechaAnterior });
+  reaperturar: async (sucursal: number, fechaNueva: string, fechaAnterior: string, razon: string, codigoUsuario: string): Promise<void> => {
+    await apiClient.put(`/cierre/${sucursal}/reaperturar`, { fechaNueva, fechaAnterior, razon, codigoUsuario });
   },
 };

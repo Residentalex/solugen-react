@@ -1,16 +1,16 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { authApi } from '../../api/authApi';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Descriptions, Tag, Spin, Button, Space, message, Modal, Alert, Tabs, Typography, Table } from 'antd';
 import { ArrowLeftOutlined, KeyOutlined, StopOutlined, CheckCircleOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
-import { useCompanyStore } from '../../stores/companyStore';
 import { Sucursal } from '../../types/auth';
 import { usuarioApi } from '../../api/usuarioApi';
 import { rolApi } from '../../api/rolApi';
 
 import type { UsuarioDTO } from '../../types/administracion';
-import type { RolDTO, PantallaDTO } from '../../types/auth';
+import type { RolDTO, PantallaDTO, AuthSucursalPermitidaDTO } from '../../types/auth';
 import { ErrorDetalle } from '../../components';
 import EntidadImagen from '../../components/EntidadImagen';
 
@@ -102,10 +102,14 @@ const UsuarioDetalle: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
 
-  const sucursalesData = useCompanyStore((s) => s.data.sucursales);
-  const SUCURSALES: Sucursal[] = (sucursalesData || []).map((s: any) => s.sucursal as Sucursal);
-  const SUCURSAL_NOMBRES: Record<number, string> = Object.fromEntries(
-    (sucursalesData || []).map((s: any) => [s.sucursal, s.nombre])
+  const [sucursalesAuth, setSucursalesAuth] = useState<AuthSucursalPermitidaDTO[]>([]);
+  const SUCURSALES: Sucursal[] = useMemo(() =>
+    sucursalesAuth.map((s) => s.sucursal),
+    [sucursalesAuth]
+  );
+  const SUCURSAL_NOMBRES: Record<number, string> = useMemo(() =>
+    Object.fromEntries(sucursalesAuth.map((s) => [s.sucursal, s.nombre])),
+    [sucursalesAuth]
   );
 
   /* estados */
@@ -113,7 +117,7 @@ const UsuarioDetalle: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [pantallasPorSucursal, setPantallasPorSucursal] = useState<Record<number, PantallaConRoles[]>>({});
-  const [sucursalActivaTab, setSucursalActivaTab] = useState<Sucursal>(SUCURSALES[0]);
+  const [sucursalActivaTab, setSucursalActivaTab] = useState<Sucursal>(0 as Sucursal);
   const [cargandoPantallas, setCargandoPantallas] = useState(false);
   const securitySucursal = useAuthStore((s) => s.securitySucursal);
 
@@ -122,6 +126,14 @@ const UsuarioDetalle: React.FC = () => {
     setActiveModule('MUsuario');
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
+
+  useEffect(() => {
+    authApi.obtenerSucursalesAuth()
+      .then(setSucursalesAuth)
+      .catch((err) => {
+        message.error(err?.response?.data?.errorMessage || 'Error al cargar sucursales');
+      });
+  }, []);
 
   /* ─── carga de datos del usuario ─── */
   const cargarUsuario = useCallback(async () => {

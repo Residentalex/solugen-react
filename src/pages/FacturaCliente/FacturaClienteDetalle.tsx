@@ -27,6 +27,7 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { facturaClienteApi } from '../../api/facturaClienteApi';
 import { obtenerNombreSucursal } from '../../utils/sucursalEnumMapper';
+import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import { useAplicar } from '../../hooks/useAplicar';
@@ -42,7 +43,7 @@ import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosC
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import CobrosMinimal from '../../components/CobrosCard/CobrosMinimal';
@@ -170,8 +171,8 @@ const FacturaClienteDetalle: React.FC = () => {
   const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const isLarge = screens.xxl === true;
 
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[documentoActivo.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = documentoActivo.periodo === 6;
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(documentoActivo.estado)] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
   const tienePagos = pagosAsociados.length > 0;
 
   // ===== Detalles filtrados por búsqueda =====
@@ -371,10 +372,6 @@ const FacturaClienteDetalle: React.FC = () => {
 
   const handleAplicar = () => {
     if (!id) return;
-    if (tieneScan === false) {
-      message.warning('Debe escanear la factura antes de aplicar.');
-      return;
-    }
 
     // Validar DGII si el tipo lo requiere
     if (data?.tipo?.envioDGII && !estadoDGII?.codigoQR) {
@@ -430,7 +427,7 @@ const FacturaClienteDetalle: React.FC = () => {
       message.info('El concepto no genera asientos contables.');
       return;
     }
-    if (data.estado !== 1 && data.estado !== 3) {
+    if (toEstadoNum(data.estado) !== 1 && toEstadoNum(data.estado) !== 3) {
       message.info('Debe aplicar el documento antes de postear.');
       return;
     }
@@ -597,7 +594,7 @@ const FacturaClienteDetalle: React.FC = () => {
         onReversar={handleReversar}
         extraButtons={id ? (
           <>
-            {data?.estado === 3 && reversoData && (
+            {toEstadoNum(data?.estado) === 3 && reversoData && (
               <Switch
                 checked={mostrandoReverso}
                 checkedChildren="Reverso"
@@ -609,8 +606,8 @@ const FacturaClienteDetalle: React.FC = () => {
             {documentoActivo?.tipo?.envioDGII ? (
               <Space>
                 <PermissionGate codigoPantalla="FFAC" accion="APLICAR">
-                  <Button icon={<SendOutlined />} size="small" onClick={handleEnviarDGII} loading={enviandoDGII} disabled={documentoActivo.estado !== 1}>Enviar DGII</Button>
-                  <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF} disabled={documentoActivo.estado !== 1}>Reasignar NCF</Button>
+                  <Button icon={<SendOutlined />} size="small" onClick={handleEnviarDGII} loading={enviandoDGII} disabled={toEstadoNum(documentoActivo.estado) !== 1}>Enviar DGII</Button>
+                  <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF} disabled={toEstadoNum(documentoActivo.estado) !== 1}>Reasignar NCF</Button>
                 </PermissionGate>
                 {estadoDGII?.codigoQR && <Tag color="success" icon={<CheckCircleOutlined />}>DGII OK</Tag>}
               </Space>
@@ -662,7 +659,7 @@ const FacturaClienteDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Sucursal" span={3}>{obtenerNombreSucursal(documentoActivo.codigoSucursal)}</Descriptions.Item>
+                <Descriptions.Item label="Sucursal" span={3}><SucursalField codigoSucursal={documentoActivo.codigoSucursal} /></Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
                 <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
                 <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
@@ -783,7 +780,7 @@ const FacturaClienteDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Sucursal">{obtenerNombreSucursal(documentoActivo.codigoSucursal)}</Descriptions.Item>
+              <Descriptions.Item label="Sucursal"><SucursalField codigoSucursal={documentoActivo.codigoSucursal} /></Descriptions.Item>
               <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
               <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
               <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
@@ -901,7 +898,7 @@ const FacturaClienteDetalle: React.FC = () => {
         onConfirm={handleAnularConfirm}
         documento={`${data.documento.codigo}-${data.noDocumento}`}
         fechaDocumento={data.fechaDocumento}
-        periodoCerrado={data.periodo === 6}
+        periodoCerrado={toPeriodoNum(data.periodo) === 6}
       />
 
       {/* Modal de Desaplicar */}

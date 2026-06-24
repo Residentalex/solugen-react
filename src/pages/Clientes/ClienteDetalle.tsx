@@ -14,7 +14,7 @@ import { clienteApi } from '../../api/clienteApi';
 import { proveedorApi } from '../../api/proveedorApi';
 import { empleadoApi } from '../../api/empleadoApi';
 import type { ClienteDTO, CategoriaEntidadDTO, TipoComprobanteNCFDTO } from '../../types/facturacion';
-import type { CuentaContableDTO, MonedaDTO } from '../../types/contabilidad';
+import type { CuentaContableDTO, CuentaContableResumenDTO, MonedaDTO } from '../../types/contabilidad';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
 import { formatCurrency, toISOFormat } from '../../utils/formats';
@@ -68,7 +68,7 @@ const ClienteDetalle: React.FC = () => {
   // Estados para catálogos
   const [tiposNCF, setTiposNCF] = useState<TipoComprobanteNCFDTO[]>([]);
   const [categorias, setCategorias] = useState<CategoriaEntidadDTO[]>([]);
-  const [cuentasContables, setCuentasContables] = useState<CuentaContableDTO[]>([]);
+  const [cuentasContables, setCuentasContables] = useState<CuentaContableResumenDTO[]>([]);
   const [monedas, setMonedas] = useState<MonedaDTO[]>([]);
 
   // Estados de "loaded" para catálogos bajo demanda

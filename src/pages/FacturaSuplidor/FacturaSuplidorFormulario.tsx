@@ -153,6 +153,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const suplidorRef = useRef<HTMLDivElement>(null);
   const agregarFilaRef = useRef<HTMLDivElement>(null);
   const ncfRef = useRef<HTMLDivElement>(null);
+  const sucursalRef = useRef<HTMLDivElement>(null);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -494,6 +495,8 @@ const FacturaSuplidorFormulario: React.FC = () => {
       retenciones: base.retenciones || 0,
       total: Math.round(total * 100) / 100,
       tasa: values.tasa || 1,
+      tipoDocumento: base.tipoDocumento ?? 60,  // RDE = 60 en enum TipoDocumento
+      tipoEntidad: base.tipoEntidad || 'SUP',
       diasCredito: values.diasCredito || 0,
       documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
@@ -975,27 +978,29 @@ const FacturaSuplidorFormulario: React.FC = () => {
           </Col>
 
           <Col xs={24} sm={12} lg={8}>
-            <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
-              <FloatingField label="Sucursal Contable">
-                <Select
-                  allowClear
-                  showSearch
-                  optionFilterProp="children"
-                  placeholder=" "
-                  value={selectedSucursal?.sucursal ?? undefined}
-                  onChange={(val) => {
-                    const suc = sucursalesCache.find((s: any) => s.sucursal === val);
-                    setSelectedSucursal(suc || null);
-                  }}
-                >
-                  {sucursalesCache.map((suc: any) => (
-                    <Select.Option key={suc.sucursal} value={suc.sucursal}>
-                      {toTitleCase(suc.nombre || '')}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </FloatingField>
-            </Form.Item>
+            <div ref={sucursalRef}>
+              <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
+                <FloatingField label="Sucursal Contable">
+                  <Select
+                    allowClear
+                    showSearch
+                    optionFilterProp="children"
+                    placeholder=" "
+                    value={selectedSucursal?.sucursal ?? undefined}
+                    onChange={(val) => {
+                      const suc = sucursalesCache.find((s: any) => s.sucursal === val);
+                      setSelectedSucursal(suc || null);
+                    }}
+                  >
+                    {sucursalesCache.map((suc: any) => (
+                      <Select.Option key={suc.sucursal} value={suc.sucursal}>
+                        {toTitleCase(suc.nombre || '')}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </FloatingField>
+              </Form.Item>
+            </div>
           </Col>
 
           {/* Fila 4: Botones rápidos para campos opcionales */}
@@ -1685,7 +1690,9 @@ const FacturaSuplidorFormulario: React.FC = () => {
           suplidorRef={suplidorRef}
           agregarFilaRef={agregarFilaRef}
           ncfRef={ncfRef}
+          sucursalRef={sucursalRef}
           suplidoresDisponibles={suplidoresCache.length > 0}
+          sucursal={selectedSucursal}
         />
       )}
     </div>
@@ -1705,7 +1712,9 @@ interface FacturaSuplidorGuideProps {
   suplidorRef: React.RefObject<HTMLDivElement | null>;
   agregarFilaRef: React.RefObject<HTMLDivElement | null>;
   ncfRef: React.RefObject<HTMLDivElement | null>;
+  sucursalRef: React.RefObject<HTMLDivElement | null>;
   suplidoresDisponibles?: boolean;
+  sucursal: any | null;
 }
 
 interface GuideStep {
@@ -1727,7 +1736,9 @@ const FacturaSuplidorGuide: React.FC<FacturaSuplidorGuideProps> = ({
   suplidorRef,
   agregarFilaRef,
   ncfRef,
+  sucursalRef,
   suplidoresDisponibles,
+  sucursal,
 }) => {
   const [open, setOpen] = useState(false);
   const dismissedStepRef = useRef<string | null>(null);
@@ -1736,46 +1747,53 @@ const FacturaSuplidorGuide: React.FC<FacturaSuplidorGuideProps> = ({
   const getCurrentStep = useCallback((): GuideStep | null => {
     const steps: GuideStep[] = [
       {
+        key: 'sucursal',
+        title: 'Paso 1: Sucursal',
+        description: 'Seleccione la sucursal contable.',
+        target: () => sucursalRef.current,
+      },
+      {
         key: 'tipo',
-        title: 'Paso 1: Tipo de Documento',
+        title: 'Paso 2: Tipo de Documento',
         description: 'Debe seleccionar el tipo de documento de la factura. Los tipos definen ciertas acciones del documento.',
         target: () => tipoRef.current,
       },
       {
         key: 'concepto',
-        title: 'Paso 2: Concepto',
+        title: 'Paso 3: Concepto',
         description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento.',
         target: () => conceptoRef.current,
       },
       {
         key: 'suplidor',
-        title: 'Paso 3: Suplidor',
+        title: 'Paso 4: Suplidor',
         description: 'Seleccione el suplidor de la factura.',
         target: () => suplidorRef.current,
       },
       {
         key: 'productos',
-        title: 'Paso 4: Productos',
+        title: 'Paso 5: Productos',
         description: 'Agregue productos al documento usando el botón "Agregar fila" o "Buscar Producto".',
         target: () => agregarFilaRef.current,
       },
       {
         key: 'ncf',
-        title: 'Paso 5: NCF',
+        title: 'Paso 6: NCF',
         description: 'Debe digitar el NCF de la factura para poder continuar.',
         target: () => ncfRef.current,
       },
     ];
 
     // Lógica de prioridad
-    if (!tipo) return steps[0];
-    if (!concepto) return steps[1];
-    if (suplidoresDisponibles && !suplidor) return steps[2];
-    if (detallesCount === 0) return steps[3];
-    if (!ncf) return steps[4];
+    if (!sucursal) return steps[0];
+    if (!tipo) return steps[1];
+    if (!concepto) return steps[2];
+    if (suplidoresDisponibles && !suplidor) return steps[3];
+    if (detallesCount === 0) return steps[4];
+    if (!ncf) return steps[5];
 
     return null;
-  }, [tipo, concepto, suplidor, detallesCount, ncf, suplidoresDisponibles, tipoRef, conceptoRef, suplidorRef, agregarFilaRef, ncfRef]);
+  }, [tipo, concepto, suplidor, detallesCount, ncf, suplidoresDisponibles, tipoRef, conceptoRef, suplidorRef, agregarFilaRef, ncfRef, sucursal, sucursalRef]);
 
   currentStepRef.current = getCurrentStep();
 
@@ -1835,6 +1853,7 @@ const FacturaSuplidorGuide: React.FC<FacturaSuplidorGuideProps> = ({
       placement="top"
       trigger={[]}
       rootClassName="guide-popover"
+      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
     >
       <span
         style={{

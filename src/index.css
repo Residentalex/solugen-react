@@ -1463,6 +1463,7 @@ body.theme-liga .paces-home-header {
 .guide-popover .ant-popover-inner {
   background: var(--paces-primary) !important;
   border-radius: 8px !important;
+  max-width: 320px !important;
 }
 .guide-popover .ant-popover-title {
   color: #ffffff !important;
@@ -1471,6 +1472,7 @@ body.theme-liga .paces-home-header {
 }
 .guide-popover .ant-popover-inner-content {
   color: rgba(255, 255, 255, 0.9) !important;
+  word-break: break-word !important;
 }
 .guide-popover .ant-popover-arrow::before {
   background: var(--paces-primary) !important;

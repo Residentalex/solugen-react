@@ -6,11 +6,12 @@ import {
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import PermissionGate from './PermissionGate';
+import { toEstadoNum, toPeriodoNum } from '../utils/estadoDocumento';
 
 interface DetalleToolbarProps {
   modulo: string;
-  estado: number;
-  periodo: number;
+  estado: string | number;
+  periodo: string | number;
   revisado?: boolean;
   saving?: boolean;
   imprimiendo?: boolean;
@@ -51,6 +52,9 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
   showImprimir = true, confirmActions = true,
   extraButtons,
 }) => {
+  const estadoNum = toEstadoNum(estado);
+  const periodoNum = toPeriodoNum(periodo);
+
   const wrapConfirm = (titulo: string, handler?: () => any) => {
     if (!handler) return undefined;
     if (!confirmActions) return handler;
@@ -80,13 +84,13 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
 
         {extraButtons}
 
-        {estado === 0 && periodo !== 6 && revisado !== true && onEditar && (
+        {estadoNum === 0 && periodoNum !== 6 && revisado !== true && onEditar && (
           <PermissionGate codigoPantalla={modulo} accion="EDITAR">
             <Button type="primary" icon={<EditOutlined />} onClick={onEditar}>Editar</Button>
           </PermissionGate>
         )}
 
-        {estado === 0 && periodo !== 6 && onAplicar && (
+        {estadoNum === 0 && periodoNum !== 6 && onAplicar && (
           <PermissionGate codigoPantalla={modulo} accion="APLICAR">
             <Button
               style={{ background: '#389e0d', borderColor: '#389e0d', color: '#fff' }}
@@ -99,7 +103,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
           </PermissionGate>
         )}
 
-        {revisado !== true && estado !== 3 && periodo !== 6 && onAnular && (
+        {revisado !== true && estadoNum !== 3 && periodoNum !== 6 && onAnular && (
           <PermissionGate codigoPantalla={modulo} accion="ANULAR">
             <Button
               danger
@@ -112,7 +116,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
           </PermissionGate>
         )}
 
-        {(estado === 1 || estado === 3) && revisado !== true && periodo !== 6 && onPostear && (
+        {(estadoNum === 1 || estadoNum === 3) && revisado !== true && periodoNum !== 6 && onPostear && (
           <PermissionGate codigoPantalla={modulo} accion="POSTEAR">
             <Button
               icon={<CheckCircleOutlined />}
@@ -124,7 +128,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
           </PermissionGate>
         )}
 
-        {estado === 1 && revisado !== true && periodo !== 6 && onRevisado && (
+        {estadoNum === 1 && revisado !== true && periodoNum !== 6 && onRevisado && (
           <PermissionGate codigoPantalla={modulo} accion="AUTORIZAR">
             <Button
               icon={<CheckCircleOutlined />}
@@ -136,7 +140,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
           </PermissionGate>
         )}
 
-        {estado === 1 && revisado !== true && periodo !== 6 && onDesaplicar && (
+        {estadoNum === 1 && revisado !== true && periodoNum !== 6 && onDesaplicar && (
           <PermissionGate codigoPantalla={modulo} accion="DESAPLICAR">
             <Button
               icon={<RedoOutlined />}
@@ -148,7 +152,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
           </PermissionGate>
         )}
 
-        {estado === 1 && revisado === true && periodo !== 6 && onReversar && (
+        {estadoNum === 1 && revisado === true && periodoNum !== 6 && onReversar && (
           <PermissionGate codigoPantalla={modulo} accion="REVERSAR">
             <Button
               danger

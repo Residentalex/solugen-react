@@ -4,6 +4,7 @@ export interface PlantillaSuplidorDTO {
   fecha: string;
   codigoSuplidor: string;
   nombreSuplidor: string;
+  tipo?: string;
   notas?: string;
   usuarioId?: number;
   detalles?: DetallePlantillaSuplidorDTO[];

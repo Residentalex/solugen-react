@@ -9,20 +9,13 @@ import { useAuthStore } from '../../stores/authStore';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
 import { monedaApi } from '../../api/monedaApi';
 import PermissionGate from '../../components/PermissionGate';
-import type { CuentaContableDTO, TipoCuentaDTO, GrupoCuentaContableDTO, MonedaDTO } from '../../types/contabilidad';
-import { OrigenCuenta } from '../../types/contabilidad';
+import type { CuentaContableResumenDTO, TipoCuentaDTO, GrupoCuentaContableDTO, MonedaDTO } from '../../types/contabilidad';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
-const ORIGEN_LABEL: Record<number, string> = {
-  [OrigenCuenta.Debito]: 'Débito',
-  [OrigenCuenta.Credito]: 'Crédito',
-  [OrigenCuenta.Desconocido]: 'Desconocido',
-}
-
 const ORIGEN_OPTIONS = [
-  { label: 'Débito', value: OrigenCuenta.Debito },
-  { label: 'Crédito', value: OrigenCuenta.Credito },
-  { label: 'Desconocido', value: OrigenCuenta.Desconocido },
+  { label: 'Débito', value: 0 },
+  { label: 'Crédito', value: 1 },
+  { label: 'Desconocido', value: 2 },
 ];
 
 const { Text } = Typography;
@@ -42,11 +35,11 @@ const CuentasContables: React.FC = () => {
   const [filtro, setFiltro] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [selectedRow, setSelectedRow] = useState<CuentaContableDTO | null>(null);
+  const [selectedRow, setSelectedRow] = useState<CuentaContableResumenDTO | null>(null);
 
   // Estados para crear/editar
   const [modalVisible, setModalVisible] = useState(false);
-  const [editando, setEditando] = useState<CuentaContableDTO | null>(null);
+  const [editando, setEditando] = useState<CuentaContableResumenDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [form] = Form.useForm();
 
@@ -113,20 +106,20 @@ const CuentasContables: React.FC = () => {
     setModalVisible(true);
   };
 
-  const abrirEdicion = (cuenta: CuentaContableDTO) => {
+  const abrirEdicion = (cuenta: CuentaContableResumenDTO) => {
     setEditando(cuenta);
     form.setFieldsValue({
       noCuenta: cuenta.noCuenta,
       nombre: cuenta.nombre,
       nota: cuenta.nota || '',
-      activo: cuenta.activo,
-      origen: cuenta.origen,
-      utilizaCentroCosto: cuenta.utilizaCentroCosto,
-      tipoCuentaCodigo: cuenta.tipoCuenta?.idExterno || undefined,
-      grupoCodigo: cuenta.grupo?.codigo || undefined,
-      monedaCodigo: cuenta.moneda?.codigo || undefined,
-      cuentaControlNo: cuenta.cuentaControl?.noCuenta || undefined,
-      cuentaPrimaNo: cuenta.cuentaPrima?.noCuenta || undefined,
+      activo: cuenta.activo === 'Sí',
+      origen: cuenta.origen === 'Débito' ? 0 : 1,
+      utilizaCentroCosto: cuenta.utilizaCentroCosto === 'Sí',
+      tipoCuentaCodigo: cuenta.tipoCuentaId || undefined,
+      grupoCodigo: cuenta.grupoCodigo || undefined,
+      monedaCodigo: cuenta.monedaCodigo || undefined,
+      cuentaControlNo: cuenta.cuentaControlNo || undefined,
+      cuentaPrimaNo: cuenta.cuentaPrimaNo || undefined,
     });
     setModalVisible(true);
   };
@@ -158,7 +151,7 @@ const CuentasContables: React.FC = () => {
     setPage(1);
   };
 
-  const columns: ColumnsType<CuentaContableDTO> = [
+  const columns: ColumnsType<CuentaContableResumenDTO> = [
     {
       title: 'No. Cuenta',
       dataIndex: 'noCuenta',
@@ -179,41 +172,41 @@ const CuentasContables: React.FC = () => {
       dataIndex: 'tipoCuenta',
       key: 'tipoCuenta',
       width: 160,
-      render: (tipo: { nombre: string }) =>
-        tipo?.nombre ? <Tag style={{ fontSize: 11 }}>{tipo.nombre}</Tag> : '-',
+      render: (val: string) =>
+        val ? <Tag style={{ fontSize: 11 }}>{val}</Tag> : '-',
     },
     {
       title: 'Grupo',
-      dataIndex: 'grupo',
-      key: 'grupo',
+      dataIndex: 'grupoNombre',
+      key: 'grupoNombre',
       width: 160,
       ellipsis: true,
-      render: (grupo: { nombre: string }) =>
-        grupo?.nombre
-          ? <Tag color="geekblue" style={{ fontSize: 11, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{grupo.nombre}</Tag>
+      render: (val: string) =>
+        val
+          ? <Tag color="geekblue" style={{ fontSize: 11, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{val}</Tag>
           : '-',
     },
     {
       title: 'Moneda',
-      dataIndex: 'moneda',
-      key: 'moneda',
+      dataIndex: 'monedaCodigo',
+      key: 'monedaCodigo',
       width: 90,
-      render: (moneda: { codigo: string }) => <Text>{moneda?.codigo || '-'}</Text>,
+      render: (val: string) => <Text>{val || '-'}</Text>,
     },
     {
       title: 'Origen',
       dataIndex: 'origen',
       key: 'origen',
       width: 100,
-      render: (origen: OrigenCuenta) => <Text>{ORIGEN_LABEL[origen] || 'Desconocido'}</Text>,
+      render: (val: string) => <Text>{val || 'Desconocido'}</Text>,
     },
     {
       title: 'Activo',
       dataIndex: 'activo',
       key: 'activo',
       width: 80,
-      render: (activo: boolean) => (
-        <Tag color={activo ? 'green' : 'default'}>{activo ? 'Activo' : 'Inactivo'}</Tag>
+      render: (val: string) => (
+        <Tag color={val === 'Sí' ? 'green' : 'default'}>{val === 'Sí' ? 'Activo' : 'Inactivo'}</Tag>
       ),
     },
 
@@ -247,7 +240,7 @@ const CuentasContables: React.FC = () => {
           onReload={() => refetch()}
         />
 
-      <Table<CuentaContableDTO>
+      <Table<CuentaContableResumenDTO>
         columns={columns}
         dataSource={data?.data || []}
         rowKey="noCuenta"

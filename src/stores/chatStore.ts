@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { message } from 'antd';
 import { chatApi } from '../api/chatApi';
 import { chatHub } from '../api/chatHub';
 import { useAuthStore } from './authStore';
@@ -104,8 +105,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }));
       }
       await chatHub.unirseAConversacion(id);
-    } catch {
-      console.error('Error al cargar mensajes');
+    } catch (err: any) {
+      const msg = typeof err === 'string' ? err : err?.message || 'Error al cargar mensajes';
+      console.error(msg);
     } finally {
       set({ cargando: false, viewState: 'chat' });
     }
@@ -127,23 +129,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       await chatHub.enviarMensaje(convId, contenido);
     } catch (err: any) {
-      console.error('Error al enviar mensaje:', err?.response?.data?.errorMessage || err);
+      const msg = typeof err === 'string' ? err : err?.message || 'Error al enviar mensaje';
+      message.error(msg);
     }
   },
 
   conectarSignalR: async () => {
     const usuarioID = useAuthStore.getState().usuario?.id;
-    if (!usuarioID || get().conectado) return;
+    if (!usuarioID) return;
 
-    try {
-      await chatHub.connect(usuarioID);
-      chatHub.onMensajeRecibido((mensaje) => {
-        get().agregarMensajeTiempoReal(mensaje);
-      });
-      set({ conectado: true });
-    } catch (err) {
-      console.error('Error al conectar SignalR chat:', err);
-    }
+    const conectarConReintento = async (intentos = 5): Promise<void> => {
+      for (let i = 0; i < intentos; i++) {
+        try {
+          await chatHub.connect(usuarioID);
+          chatHub.onMensajeRecibido((mensaje) => {
+            get().agregarMensajeTiempoReal(mensaje);
+          });
+          set({ conectado: true });
+          return;
+        } catch (err) {
+          console.error(`[SignalR Chat] Intento ${i + 1}/${intentos} fallido:`, err);
+          if (i < intentos - 1) await new Promise((r) => setTimeout(r, 5000));
+        }
+      }
+      console.error('[SignalR Chat] No se pudo conectar después de varios intentos');
+    };
+
+    await conectarConReintento();
   },
 
   desconectarSignalR: () => {

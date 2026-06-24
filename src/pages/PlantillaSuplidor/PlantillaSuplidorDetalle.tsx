@@ -252,7 +252,7 @@ const PlantillaSuplidorDetalle: React.FC = () => {
                 <Descriptions.Item label="Número:">
                   {data.numero || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Tipo:">—</Descriptions.Item>
+                <Descriptions.Item label="Tipo:">{data.tipo || '—'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha:">
                   {formatDate(data.fecha)}
                 </Descriptions.Item>
@@ -326,7 +326,7 @@ const PlantillaSuplidorDetalle: React.FC = () => {
               <Descriptions.Item label="Número:">
                 {data.numero || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="Tipo:">—</Descriptions.Item>
+              <Descriptions.Item label="Tipo:">{data.tipo || '—'}</Descriptions.Item>
               <Descriptions.Item label="Fecha:">
                 {formatDate(data.fecha)}
               </Descriptions.Item>

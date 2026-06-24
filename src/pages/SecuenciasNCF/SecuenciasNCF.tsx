@@ -248,9 +248,9 @@ const SecuenciasNCF: React.FC = () => {
       key: 'fechaVencimiento',
       width: 150,
       render: (val?: string) => {
-        if (!val) return <Text type="secondary">â€”</Text>;
+        if (!val) return <Text type="secondary">—</Text>;
         const dias = getDiasRestantes(val);
-        if (dias === null) return <Text type="secondary">â€”</Text>;
+        if (dias === null) return <Text type="secondary">—</Text>;
 
         if (dias < 0) {
           return (
@@ -543,7 +543,7 @@ const SecuenciasNCF: React.FC = () => {
                     })()}
                   </Space>
                 ) : (
-                  <Text type="secondary">â€”</Text>
+                  <Text type="secondary">—</Text>
                 )}
               </Descriptions.Item>
             </Descriptions>

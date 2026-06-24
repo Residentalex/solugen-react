@@ -1,11 +1,30 @@
 import { apiClient } from './client';
 import type { FacturaVistaDTO, FiltroFacturacion } from '../types/facturacion';
-import type { FacturaClienteDTO, FacturaClienteFullDTO, TipoDTO, ConceptoDTO, AlmacenDTO, ClienteDTO } from '../types/facturaCliente';
+import type { FacturaClienteDTO, FacturaClienteFullDTO, FacturaClienteResumenDTO, TipoDTO, ConceptoDTO, AlmacenDTO, ClienteDTO } from '../types/facturaCliente';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/FAC';
 
 export const facturaClienteApi = {
+  obtenerResumen: async (
+    sucursal: number,
+    desde?: string,
+    hasta?: string,
+    cantidad?: number,
+    salto?: number,
+    estado?: number
+  ): Promise<{ data: FacturaClienteResumenDTO[]; total: number }> => {
+    const params: Record<string, string | number> = {};
+    if (desde) params.desde = desde;
+    if (hasta) params.hasta = hasta;
+    if (cantidad) params.cantidad = cantidad;
+    if (salto) params.salto = salto;
+    if (estado !== undefined) params.estado = estado;
+
+    const { data } = await apiClient.get<ApiResponse<FacturaClienteResumenDTO[]>>(`${BASE}/${sucursal}/resumen`, { params });
+    return { data: data.data || [], total: data.total ?? 0 };
+  },
+
   obtenerVista: async (
     sucursal: number,
     desde?: string,

@@ -32,8 +32,9 @@ import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosC
 import DistribucionPagosCard from '../../components/DistribucionPagosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { resolveEstado } from '../../utils/estadoDocumento';
+import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
+import SucursalField from '../../components/SucursalField';
 
 const { Text } = Typography;
 
@@ -89,7 +90,7 @@ const DevolucionCompraDetalle: React.FC = () => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
-        if (res.estado === 3 && (res as any).reversoID) {
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           devolucionCompraApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
@@ -231,7 +232,7 @@ const DevolucionCompraDetalle: React.FC = () => {
   const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const isLarge = screens.xxl === true;
   const estadoInfo = resolveEstado(documentoActivo.estado);
-  const esCerrado = documentoActivo.periodo === 6;
+  const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
   const tienePagos = pagosAsociados.length > 0;
 
   // ===== Detalles filtrados por búsqueda =====
@@ -460,7 +461,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       return;
     }
     // Seguridad: si no está en estado Aplicado (Validado=1), aplicar primero (como en desktop)
-    if (data.estado !== 1 && data.estado !== 3) {
+    if (toEstadoNum(data.estado) !== 1 && toEstadoNum(data.estado) !== 3) {
       messageApi.info('Debe aplicar el documento antes de postear.');
       return;
     }
@@ -592,7 +593,7 @@ const DevolucionCompraDetalle: React.FC = () => {
         onReversar={handleReversar}
         extraButtons={id ? (
           <>
-            {data?.estado === 3 && reversoData && (
+            {toEstadoNum(data?.estado) === 3 && reversoData && (
               <Switch
                 checked={mostrandoReverso}
                 checkedChildren="Reverso"
@@ -655,6 +656,9 @@ const DevolucionCompraDetalle: React.FC = () => {
                 <Descriptions.Item label="Concepto" span={2}>{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
                 <Descriptions.Item label="Almacen" span={2}>{documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                </Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
@@ -756,6 +760,9 @@ const DevolucionCompraDetalle: React.FC = () => {
               <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
               <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
               <Descriptions.Item label="Almacen">{documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Sucursal:">
+                <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+              </Descriptions.Item>
               <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
@@ -825,7 +832,7 @@ const DevolucionCompraDetalle: React.FC = () => {
         onConfirm={handleAnularConfirm}
         documento={`${data.documento.codigo}-${data.noDocumento}`}
         fechaDocumento={data.fechaDocumento}
-        periodoCerrado={data.periodo === 6}
+        periodoCerrado={toPeriodoNum(data.periodo) === 6}
       />
 
       {/* Modal de Desaplicar */}

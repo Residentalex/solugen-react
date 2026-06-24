@@ -1,8 +1,10 @@
-import React from 'react';
-import { Typography } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Typography, message } from 'antd';
 import { useUIStore } from '../../stores/uiStore';
-import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { formatCurrency } from '../../utils/formats';
+import { Sucursal } from '../../types/auth';
+import { transaccionApi } from '../../api/transaccionApi';
 import type { WizardState } from './Repostear';
 
 const { Text } = Typography;
@@ -66,28 +68,73 @@ interface Props {
 
 const PasoConfirmacion: React.FC<Props> = ({ wizard }) => {
   const isDarkMode = useUIStore((s) => s.isDarkMode);
-  const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
+  const sucursalesData = useCompanyStore((s) => s.data.sucursales);
 
-  /* ---- Datos del resumen ---- */
-  const sucursalNombre =
-    wizard.sucursal !== null
-      ? sucursalesPermitidas.find((s) => s.sucursal === wizard.sucursal)?.nombre ||
-        `Sucursal ${wizard.sucursal}`
-      : 'No especificada';
+  // ── Bug 2: Estado y efecto para conteo de documentos ──
+  const [documentCountLabel, setDocumentCountLabel] = useState<string>('Por procesar');
+
+  useEffect(() => {
+    if (!wizard.metodo) return;
+
+    // Métodos con conteo síncrono
+    if (wizard.metodo === 'noCuadrados') {
+      setDocumentCountLabel(String(wizard.documentosSeleccionados.length));
+      return;
+    }
+    if (wizard.metodo === 'documento') {
+      setDocumentCountLabel(wizard.transaccionEncontrada ? '1' : '0');
+      return;
+    }
+
+    // Métodos que requieren API: rangoFechas, criterio
+    const puedeUsarApi = wizard.sucursal !== null && wizard.tipoDoc && wizard.fechaDesde && wizard.fechaHasta;
+    if (!puedeUsarApi) {
+      setDocumentCountLabel('Por determinar');
+      return;
+    }
+
+    // Para criterio con subcriterio avanzado, no hay endpoint de conteo específico
+    if (wizard.metodo === 'criterio' && wizard.subCriterio && wizard.subCriterio !== 'soloFecha') {
+      setDocumentCountLabel('Por determinar (consulte el progreso)');
+      return;
+    }
+
+    // Llamar API contarPosteable
+    setDocumentCountLabel('Calculando…');
+    transaccionApi
+      .contarPosteable(wizard.sucursal, wizard.tipoDoc, wizard.fechaDesde, wizard.fechaHasta)
+      .then((count) => setDocumentCountLabel(String(count)))
+      .catch((err) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al contar documentos';
+        message.error(msg);
+        setDocumentCountLabel('No disponible');
+      });
+  }, [
+    wizard.metodo,
+    wizard.sucursal,
+    wizard.tipoDoc,
+    wizard.fechaDesde,
+    wizard.fechaHasta,
+    wizard.subCriterio,
+    wizard.documentosSeleccionados.length,
+    wizard.transaccionEncontrada,
+  ]);
+
+  // ── Bug 1: Corregir sucursalNombre ──
+  const sucursalNombre = (() => {
+    if (wizard.sucursal === null) return 'No especificada';
+    // Primero buscar en sucursalesData por número (CompaniaDTO.sucursal es entero)
+    const encontrada = sucursalesData?.find((s: any) => s.sucursal === wizard.sucursal);
+    if (encontrada?.nombre) return encontrada.nombre;
+    // Fallback: nombre canónico desde el enum Sucursal
+    const enumKey = Object.entries(Sucursal).find(([, v]) => v === wizard.sucursal)?.[0];
+    return enumKey || `Sucursal ${wizard.sucursal}`;
+  })();
 
   const tipoDocNombre = TIPOS_DOCUMENTO[wizard.tipoDoc] || wizard.tipoDoc || '-';
   const metodoLabel = wizard.metodo ? METODO_LABEL[wizard.metodo] || wizard.metodo : '-';
   const tieneRangoFechas = !!(wizard.fechaDesde && wizard.fechaHasta);
   const filtroAdicional = getFiltroAdicional(wizard);
-
-  const documentosCount =
-    wizard.metodo === 'noCuadrados'
-      ? String(wizard.documentosSeleccionados.length)
-      : wizard.metodo === 'documento'
-        ? wizard.transaccionEncontrada
-          ? '1'
-          : '0'
-        : 'Por procesar';
 
   const mostrarTotales =
     wizard.metodo === 'noCuadrados' && wizard.documentosSeleccionados.length > 0;
@@ -174,7 +221,7 @@ const PasoConfirmacion: React.FC<Props> = ({ wizard }) => {
 
         <div className="repostear-summary-card__divider" style={{ background: dividerColor }} />
 
-        <Row label="Documentos a repostear" value={documentosCount} />
+        <Row label="Documentos a repostear" value={documentCountLabel} />
         {mostrarTotales && (
           <>
             <Row label="Total Débitos" value={formatCurrency(totalDebitos)} />

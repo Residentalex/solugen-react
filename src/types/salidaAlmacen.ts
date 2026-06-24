@@ -94,6 +94,10 @@ export interface SalidaAlmacenFullDTO {
   // Detalles
   detalles: DetalleSalidaAlmacenDTO[];
 
+  // Tipo
+  codigoTipo?: string;
+  tipo?: { nombre?: string; codigo?: string; idExterno?: string | number };
+
   // Adicionales
   asientos?: AsientoContableDTO[];
   logs?: LogDTO[];

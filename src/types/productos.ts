@@ -1,3 +1,15 @@
+export interface ProductoVistaDTO {
+  codigo: string;
+  nombre: string;
+  referencia: string;
+  precio: number;
+  ultimoCosto: number;
+  activo: boolean;
+  familiaNombre: string;
+  categoriaNombre: string;
+  unidadMedidaNombre: string;
+}
+
 export interface ProductoListaDTO {
   codigo: string;
   nombre: string;

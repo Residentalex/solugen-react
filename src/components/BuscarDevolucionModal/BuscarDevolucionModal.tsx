@@ -8,28 +8,33 @@ interface BuscarDevolucionModalProps {
   open: boolean;
   onClose: () => void;
   onSelect: (docs: any[]) => void;
-  tipoDocumento?: string; // 'DVC'
+  codEntidad: string;
 }
 
-const BuscarDevolucionModal: React.FC<BuscarDevolucionModalProps> = ({ open, onClose, onSelect, tipoDocumento }) => {
+const BuscarDevolucionModal: React.FC<BuscarDevolucionModalProps> = ({ open, onClose, onSelect, codEntidad }) => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const [devoluciones, setDevoluciones] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const cargar = useCallback(async () => {
+    if (!codEntidad) return;
     setLoading(true);
     try {
-      const tipoDoc = tipoDocumento || 'DVC';
-      const { data } = await apiClient.get<any>(`/${tipoDoc}/${sucursalActiva}`);
-      const items = (data?.data || []).filter((d: any) => (d.estado || 0) >= 1);
+      const { data } = await apiClient.get<any>(`/Transaccion/${sucursalActiva}/pendienteInv/${codEntidad}`);
+      const items = (data?.data || []).map((d: any) => ({
+        id: d.id,
+        documento: d.documento?.codigo ? `${d.documento.codigo}-${d.noDocumento}` : d.noDocumento,
+        fecha: d.fechaDocumento,
+        total: d.total,
+      }));
       setDevoluciones(items);
     } catch {
       message.error('Error al cargar devoluciones');
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva, tipoDocumento]);
+  }, [sucursalActiva, codEntidad]);
 
   useEffect(() => {
     if (open) { cargar(); setSelectedRowKeys([]); }

@@ -15,6 +15,7 @@ export interface ReciboIngresoDTO {
   nota: string;
   total: number;
   documento: DocumentoDTO;
+  tipoDocumento: number;
 }
 
 // ===== Tipos específicos para formulario de Recibo Ingreso =====
@@ -72,6 +73,7 @@ export interface ReciboIngresoFullDTO {
   entidad?: EntidadDTO | null;
   moneda?: MonedaDTO | null;
   documento: DocumentoDTO;
+  tipoDocumento: number;
   tipoEntidad?: string;
   sucursal?: any;
   codigoSucursal?: string;

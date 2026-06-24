@@ -88,6 +88,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const [conceptoSearchText, setConceptoSearchText] = useState('');
 
   // Refs para la guía
+  const tipoRef = useRef<HTMLDivElement>(null);
   const conceptoRef = useRef<HTMLDivElement>(null);
   const entidadRef = useRef<HTMLDivElement>(null);
 
@@ -600,7 +601,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
           <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
           {/* Fila 1: Tipo + Concepto */}
-          <Col xs={24} sm={12} lg={9}>
+          <Col xs={24} sm={12} lg={9} ref={tipoRef}>
             <Form.Item name="tipo" style={{ marginBottom: 0 }}>
               <FloatingField label="Tipo">
                 <Select
@@ -1006,9 +1007,11 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       {(mode === 'crear' || esBorrador) && (
         <DistribucionBalanceGuide
           mode={mode}
+          tipo={selectedTipo}
           concepto={selectedConcepto}
           entidad={selectedEntidad}
           detallesCount={debitos.length + creditos.length}
+          tipoRef={tipoRef}
           conceptoRef={conceptoRef}
           entidadRef={entidadRef}
         />

@@ -1,3 +1,14 @@
+export interface ServicioVistaDTO {
+  codigo: string;
+  nombre: string;
+  referenciaInterna: string;
+  precio: number;
+  activo: boolean;
+  familiaNombre: string;
+  categoriaNombre: string;
+  unidadMedidaNombre: string;
+}
+
 import type {
   FamiliaArticuloDTO,
   CategoriaArticuloDTO,

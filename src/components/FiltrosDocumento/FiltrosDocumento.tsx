@@ -10,12 +10,12 @@ interface FiltrosDocumentoProps {
   filtros: {
     desde?: string;
     hasta?: string;
-    estado?: number;
+    estado?: string | number;
   };
   /** Callback al aplicar filtros (recibe los nuevos valores) */
-  onAplicar: (filtros: { desde?: string; hasta?: string; estado?: number }) => void;
+  onAplicar: (filtros: { desde?: string; hasta?: string; estado?: string | number }) => void;
   /** Opciones de estado disponibles */
-  opcionesEstado: { value: number; label: string }[];
+  opcionesEstado: { value: string | number; label: string }[];
   /** Rango de fechas por defecto (para no contarlo como filtro activo) */
   rangoDefault?: { desde: string; hasta: string };
 }
@@ -52,7 +52,7 @@ const FiltrosDocumento: React.FC<FiltrosDocumentoProps> = ({
   rangoDefault,
 }) => {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
+  const [draft, setDraft] = useState<{ desde?: string; hasta?: string; estado?: string | number }>({});
 
   const abrirPopover = () => {
     setDraft({ ...filtros });

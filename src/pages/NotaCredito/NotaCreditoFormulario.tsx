@@ -1289,6 +1289,8 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
           documentosRef={documentosRef}
           tipoRef={tipoRef}
           montoRef={montoRef}
+          sucursal={selectedSucursal}
+          sucursalRef={sucursalRef}
         />
       )}
         </>

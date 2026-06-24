@@ -34,11 +34,8 @@ const MetodosPago: React.FC = () => {
       const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
       if (searchText) params.busqueda = searchText;
 
-      const [resultados, totalCount] = await Promise.all([
-        puntoVentaApi.filtrarMetodosPago(sucursalActiva, params),
-        puntoVentaApi.obtenerTotalMetodosPago(sucursalActiva, { busqueda: searchText || undefined }),
-      ]);
-      return { datos: resultados || [], total: totalCount ?? 0 };
+      const { items, total } = await puntoVentaApi.filtrarMetodosPago(sucursalActiva, params);
+      return { datos: items, total };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -89,7 +86,7 @@ const MetodosPago: React.FC = () => {
       key: 'requiereDocumento',
       width: 160,
       render: (val: boolean) => (
-        <Tag color={val ? 'blue' : 'default'}>{val ? 'SÃ­' : 'No'}</Tag>
+        <Tag color={val ? 'blue' : 'default'}>{val ? 'Sí' : 'No'}</Tag>
       ),
     },
     {
@@ -105,7 +102,7 @@ const MetodosPago: React.FC = () => {
     <>
       {isError && (
         <Alert
-          title="Error al cargar mÃ©todos de pago"
+          title="Error al cargar métodos de pago"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
@@ -130,7 +127,7 @@ const MetodosPago: React.FC = () => {
 
       <Table<MetodoPagoDTO>
         columns={columns}
-        dataSource={data?.datos || []}
+        dataSource={Array.isArray(data?.datos) ? data.datos : []}
         rowKey="id"
         loading={isLoading}
         scroll={{ x: 600 }}
@@ -149,7 +146,7 @@ const MetodosPago: React.FC = () => {
           emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {searchText
               ? <Empty description="Sin resultados para la búsqueda" />
-              : <Empty description="No hay mÃ©todos de pago configurados" />
+              : <Empty description="No hay métodos de pago configurados" />
             }
           </div>
         }}
@@ -167,7 +164,7 @@ const MetodosPago: React.FC = () => {
             <Descriptions.Item label="Nombre">{detalleItem.nombre}</Descriptions.Item>
             <Descriptions.Item label="Requiere Documento">
               <Tag color={detalleItem.requiereDocumento ? 'blue' : 'default'}>
-                {detalleItem.requiereDocumento ? 'SÃ­' : 'No'}
+                {detalleItem.requiereDocumento ? 'Sí' : 'No'}
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label="Documento Asociado">

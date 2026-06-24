@@ -26,7 +26,7 @@ export interface AuthApiTokenListadoDTO {
   activo: boolean;
 }
 
-const BASE = '/api/ApiToken';
+const BASE = '/ApiToken';
 
 export const apiTokenApi = {
   renovar: async (id: number): Promise<AuthApiTokenResponseDTO> => {

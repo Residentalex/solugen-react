@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Table, Input, Tag, Button, Card, Select, Typography, Tooltip, Alert, Empty } from 'antd';
-import { ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
+import { Table, Tag, Button, Card, Select, Typography, Tooltip, Alert, Empty, Space } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -10,7 +10,7 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { productoApi } from '../../api/productoApi';
 import PermissionGate from '../../components/PermissionGate';
 import { toTitleCase, formatCurrency } from '../../utils/formats';
-import type { ProductoListaDTO } from '../../types/productos';
+import type { ProductoVistaDTO } from '../../types/productos';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
@@ -38,35 +38,17 @@ const Productos: React.FC = () => {
     queryFn: async () => {
       if (sucursalProductos === undefined) return { data: [], total: 0 };
       const salto = (page - 1) * pageSize;
-
-      let resultados: ProductoListaDTO[];
-      let totalCount: number;
-
-      if (searchText && searchText.length > 2) {
-        resultados = await productoApi.filtrar(sucursalProductos, {
-          cantidad: pageSize,
-          salto,
-          codigo: searchText,
-          referencia: searchText,
-          sku: searchText,
-          familia: searchText,
-          activo: soloActivos,
-        });
-        totalCount = await productoApi.obtenerTotal(sucursalProductos, { codigo: searchText, activo: soloActivos });
-      } else {
-        const params: { cantidad?: number; salto?: number; codigo?: string; activo?: boolean } = {
-          cantidad: pageSize,
-          salto,
-        };
-        if (soloActivos !== undefined) params.activo = soloActivos;
-        resultados = await productoApi.obtenerListado(sucursalProductos, params);
-        totalCount = await productoApi.obtenerTotal(sucursalProductos, { activo: soloActivos });
+      const params: { cantidad?: number; salto?: number; codigo?: string; nombre?: string; activo?: boolean } = {
+        cantidad: pageSize, salto,
+      };
+      if (soloActivos !== undefined) params.activo = soloActivos;
+      if (searchText) {
+        params.codigo = searchText;
+        params.nombre = searchText;
       }
 
-      return {
-        data: (resultados || []).sort((a, b) => b.codigo.localeCompare(a.codigo)),
-        total: totalCount ?? 0,
-      };
+      const { items, total } = await productoApi.obtenerVista(sucursalProductos, params);
+      return { data: items || [], total };
     },
     enabled: sucursalProductos !== undefined,
     placeholderData: (prev) => prev,
@@ -92,14 +74,14 @@ const Productos: React.FC = () => {
     }
   };
 
-  const columns: ColumnsType<ProductoListaDTO> = [
+  const columns: ColumnsType<ProductoVistaDTO> = [
     {
       title: 'Código',
       dataIndex: 'codigo',
       key: 'codigo',
       width: 120,
       fixed: 'left',
-      render: (val: string, record: ProductoListaDTO) =>
+      render: (val: string, record: ProductoVistaDTO) =>
         puedeEditar ? (
           <Link to={`/MProducto/${record.codigo}`} className="paces-doc-link" style={{ fontWeight: 500 }}>
             {val}
@@ -112,8 +94,13 @@ const Productos: React.FC = () => {
       title: 'Nombre',
       dataIndex: 'nombre',
       key: 'nombre',
-      width: 280,
-      render: (val: string) => <Text>{toTitleCase(val ?? '')}</Text>,
+      width: 320,
+      render: (name: string) => (
+        <Space>
+          <div className="paces-avatar-initials">{(name || '?').charAt(0).toUpperCase()}</div>
+          <Text>{toTitleCase(name || '')}</Text>
+        </Space>
+      ),
     },
     {
       title: 'Referencia',
@@ -124,24 +111,24 @@ const Productos: React.FC = () => {
     },
     {
       title: 'Familia',
-      dataIndex: 'familia',
-      key: 'familia',
+      dataIndex: 'familiaNombre',
+      key: 'familiaNombre',
       width: 140,
-      render: (val: { nombre?: string } | null) => val?.nombre ? <Tag style={{ fontSize: 11 }}>{val.nombre}</Tag> : <Text>{'-'}</Text>,
+      render: (val: string) => val ? <Tag style={{ fontSize: 11 }}>{val}</Tag> : <Text>{'-'}</Text>,
     },
     {
       title: 'Categoría',
-      dataIndex: 'categoria',
-      key: 'categoria',
+      dataIndex: 'categoriaNombre',
+      key: 'categoriaNombre',
       width: 140,
-      render: (val: { nombre?: string } | null) => val?.nombre ? <Tag style={{ fontSize: 11 }}>{toTitleCase(val.nombre)}</Tag> : <Text>{'-'}</Text>,
+      render: (val: string) => val ? <Tag style={{ fontSize: 11 }}>{toTitleCase(val)}</Tag> : <Text>{'-'}</Text>,
     },
     {
       title: 'U. Medida',
-      dataIndex: 'unidadMedida',
-      key: 'unidadMedida',
+      dataIndex: 'unidadMedidaNombre',
+      key: 'unidadMedidaNombre',
       width: 100,
-      render: (val: { nombre?: string } | null) => <Text>{val?.nombre ? toTitleCase(val.nombre) : '-'}</Text>,
+      render: (val: string) => <Text>{val ? toTitleCase(val) : '-'}</Text>,
     },
     {
       title: 'Precio',
@@ -214,7 +201,7 @@ const Productos: React.FC = () => {
             </PermissionGate>
           }
         />
-      <Table<ProductoListaDTO>
+      <Table<ProductoVistaDTO>
         columns={columns}
         dataSource={data?.data || []}
         rowKey="codigo"

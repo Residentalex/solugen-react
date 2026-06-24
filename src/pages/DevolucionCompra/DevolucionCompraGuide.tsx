@@ -56,22 +56,22 @@ export const DevolucionCompraGuide: React.FC<DevolucionCompraGuideProps> = ({
         target: () => tipoRef.current,
       },
       {
-        key: 'entrada',
-        title: 'Paso 2: Entrada de Referencia',
-        description: 'Seleccione una Entrada de Almacén de referencia para cargar sus productos.',
-        target: () => entradaRef.current,
-      },
-      {
         key: 'concepto',
-        title: 'Paso 3: Concepto',
+        title: 'Paso 2: Concepto',
         description: 'Seleccione un concepto. Las opciones disponibles dependen del tipo seleccionado.',
         target: () => conceptoRef.current,
       },
       {
         key: 'suplidor',
-        title: 'Paso 4: Suplidor',
+        title: 'Paso 3: Suplidor',
         description: 'Seleccione el suplidor. Puede auto-asignarse al elegir una Entrada de Referencia.',
         target: () => suplidorRef.current,
+      },
+      {
+        key: 'entrada',
+        title: 'Paso 4: Entrada de Referencia',
+        description: 'Seleccione una Entrada de Almacén de referencia para cargar sus productos.',
+        target: () => entradaRef.current,
       },
       {
         key: 'almacen',
@@ -89,12 +89,11 @@ export const DevolucionCompraGuide: React.FC<DevolucionCompraGuideProps> = ({
 
     // Lógica de prioridad (mismo orden que MostrarGuia del desktop)
     if (!tipo) return steps[0];
-    // Paso 2: Entrada solo si el tipo requiere referencia
-    if (tipo?.requiereReferencia && !entrada) return steps[1];
-    if (!concepto) return steps[2];
-    if (suplidoresDisponibles && !suplidor) return steps[3];
-    if (!almacen) return steps[4];
-    if (detallesCount === 0) return steps[5];
+    if (!concepto) return steps[1];                             // concepto ahora paso 1 (índice 1)
+    if (suplidoresDisponibles && !suplidor) return steps[2];    // suplidor ahora paso 2 (índice 2)
+    if (tipo?.requiereReferencia && !entrada) return steps[3];  // entrada ahora paso 3 (índice 3)
+    if (!almacen) return steps[4];                              // almacen ahora paso 4 (índice 4)
+    if (detallesCount === 0) return steps[5];                   // productos ahora paso 5 (índice 5)
 
     return null;
   }, [tipo, concepto, almacen, suplidor, entrada, detallesCount, suplidoresDisponibles, tipoRef, conceptoRef, suplidorRef, almacenRef, agregarFilaRef, entradaRef]);
@@ -157,6 +156,7 @@ export const DevolucionCompraGuide: React.FC<DevolucionCompraGuideProps> = ({
       placement="top"
       trigger={[]}
       rootClassName="guide-popover"
+      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
     >
       <span
         style={{

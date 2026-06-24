@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, Typography, Tooltip, Modal, Alert, App, DatePicker, Dropdown, Switch,
@@ -37,7 +37,7 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { resolveEstado } from '../../utils/estadoDocumento';
+import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import { productoApi } from '../../api/productoApi';
 
 const { Text } = Typography;
@@ -101,7 +101,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Si el documento estÃ¡ anulado y tiene reversoId, cargar el reverso
-        if (res.estado === 3 && (res as any).reversoID) {
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           salidaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
@@ -244,7 +244,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
   const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const isLarge = screens.xxl === true;
   const estadoInfo = resolveEstado(documentoActivo.estado);
-  const esCerrado = documentoActivo.periodo === 6;
+  const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
 
   // ===== Detalles filtrados por bÃºsqueda =====
   const detallesFiltrados = detalleSearch
@@ -337,7 +337,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
           <div>
             <div>{formatNumber(costoBase)}</div>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
-              {formatNumber(costoUnitario)} Ã— {factor}
+              {formatNumber(costoUnitario)} × {factor}
             </div>
           </div>
         );
@@ -616,7 +616,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
         onReversar={handleReversar}
         extraButtons={id ? (
           <>
-            {data?.estado === 3 && reversoData && (
+            {toEstadoNum(data?.estado) === 3 && reversoData && (
               <Switch
                 checked={mostrandoReverso}
                 checkedChildren="Reverso"
@@ -686,7 +686,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Tipo:">â€”</Descriptions.Item>
+                <Descriptions.Item label="Tipo:">{documentoActivo.tipo?.nombre || documentoActivo.codigoTipo || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Concepto:">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
                 <Descriptions.Item label="Referencia:">{documentoActivo.referencia || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha Doc.:">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
@@ -783,7 +783,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Tipo:">â€”</Descriptions.Item>
+              <Descriptions.Item label="Tipo:">{documentoActivo.tipo?.nombre || documentoActivo.codigoTipo || '-'}</Descriptions.Item>
               <Descriptions.Item label="Concepto:">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
               <Descriptions.Item label="Referencia:">{documentoActivo.referencia || '-'}</Descriptions.Item>
               <Descriptions.Item label="Fecha Doc.:">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
@@ -862,7 +862,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
         onConfirm={handleAnularConfirm}
         documento={data ? `${data.documento.codigo}-${data.noDocumento}` : ''}
         fechaDocumento={data?.fechaDocumento || ''}
-        periodoCerrado={data?.periodo === 6}
+        periodoCerrado={toPeriodoNum(data?.periodo) === 6}
       />
 
       {/* Modal de Fecha de Vencimiento */}

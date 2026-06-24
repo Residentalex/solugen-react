@@ -155,6 +155,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   const entidadRef = useRef<HTMLDivElement>(null);
   const totalRef = useRef<HTMLDivElement>(null);
   const documentosRef = useRef<HTMLDivElement>(null);
+  const sucursalRef = useRef<HTMLDivElement>(null);
 
   const [form] = Form.useForm();
 
@@ -424,6 +425,7 @@ const ReciboIngresoFormulario: React.FC = () => {
       impuestos: base.impuestos || 0,
       retenciones: Math.round(retenciones * 100) / 100,
       tipoDocumento: base.tipoDocumento ?? 66,
+      tipoEntidad: base.tipoEntidad || selectedConcepto?.entidades?.[0]?.codigo || 'CLI',
       documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       entidad: entidadSel || { nombre: '', codigo: '', identificacion: '' },
@@ -812,7 +814,7 @@ const ReciboIngresoFormulario: React.FC = () => {
           </Col>
 
           {/* Fila 4: Sucursal Contable */}
-          <Col xs={24} sm={12} lg={9}>
+          <Col xs={24} sm={12} lg={9} ref={sucursalRef}>
             <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
               <FloatingField label="Sucursal Contable">
                 <Select
@@ -1172,11 +1174,13 @@ const ReciboIngresoFormulario: React.FC = () => {
           entidad={selectedEntidad}
           total={totalValue}
           transaccionesCount={transaccionesAsociadas.length}
+          sucursal={selectedSucursal}
           tipoRef={tipoRef}
           conceptoRef={conceptoRef}
           entidadRef={entidadRef}
           totalRef={totalRef}
           documentosRef={documentosRef}
+          sucursalRef={sucursalRef}
         />
       )}
     </div>
@@ -1191,11 +1195,13 @@ interface ReciboIngresoGuideProps {
   entidad: any | null;
   total: number;
   transaccionesCount: number;
+  sucursal: any | null;
   tipoRef: React.RefObject<HTMLDivElement | null>;
   conceptoRef: React.RefObject<HTMLDivElement | null>;
   entidadRef: React.RefObject<HTMLDivElement | null>;
   totalRef: React.RefObject<HTMLDivElement | null>;
   documentosRef: React.RefObject<HTMLDivElement | null>;
+  sucursalRef: React.RefObject<HTMLDivElement | null>;
 }
 
 interface GuideStep {
@@ -1206,8 +1212,8 @@ interface GuideStep {
 }
 
 const ReciboIngresoGuide: React.FC<ReciboIngresoGuideProps> = ({
-  tipo, concepto, entidad, total, transaccionesCount,
-  tipoRef, conceptoRef, entidadRef, totalRef, documentosRef,
+  tipo, concepto, entidad, total, transaccionesCount, sucursal,
+  tipoRef, conceptoRef, entidadRef, totalRef, documentosRef, sucursalRef,
 }) => {
   const [open, setOpen] = useState(false);
   const dismissedStepRef = useRef<string | null>(null);
@@ -1216,45 +1222,52 @@ const ReciboIngresoGuide: React.FC<ReciboIngresoGuideProps> = ({
   const getCurrentStep = useCallback((): GuideStep | null => {
     const steps: GuideStep[] = [
       {
+        key: 'sucursal',
+        title: 'Paso 1: Sucursal',
+        description: 'Seleccione la sucursal contable a la que pertenece el recibo de ingreso.',
+        target: () => sucursalRef.current,
+      },
+      {
         key: 'tipo',
-        title: 'Paso 1: Tipo',
+        title: 'Paso 2: Tipo',
         description: 'Debe elegir un tipo de documento para continuar.',
         target: () => tipoRef.current,
       },
       {
         key: 'concepto',
-        title: 'Paso 2: Concepto',
+        title: 'Paso 3: Concepto',
         description: 'Seleccione un concepto. Las opciones dependen del tipo seleccionado.',
         target: () => conceptoRef.current,
       },
       {
         key: 'entidad',
-        title: 'Paso 3: Entidad',
+        title: 'Paso 4: Entidad',
         description: 'Seleccione la entidad (cliente) asociada al recibo de ingreso.',
         target: () => entidadRef.current,
       },
       {
         key: 'monto',
-        title: 'Paso 4: Monto',
+        title: 'Paso 5: Monto',
         description: 'Ingrese el monto total del recibo de ingreso.',
         target: () => totalRef.current,
       },
       {
         key: 'documentos',
-        title: 'Paso 5: Documentos',
+        title: 'Paso 6: Documentos',
         description: 'Agregue los documentos/pagos asociados al recibo de ingreso.',
         target: () => documentosRef.current,
       },
     ];
 
-    if (!tipo) return steps[0];
-    if (!concepto) return steps[1];
-    if (!entidad) return steps[2];
-    if (!total || total === 0) return steps[3];
-    if (transaccionesCount === 0) return steps[4];
+    if (!sucursal) return steps[0];
+    if (!tipo) return steps[1];
+    if (!concepto) return steps[2];
+    if (!entidad) return steps[3];
+    if (!total || total === 0) return steps[4];
+    if (transaccionesCount === 0) return steps[5];
 
     return null;
-  }, [tipo, concepto, entidad, total, transaccionesCount, tipoRef, conceptoRef, entidadRef, totalRef, documentosRef]);
+  }, [tipo, concepto, entidad, total, transaccionesCount, sucursal, tipoRef, conceptoRef, entidadRef, totalRef, documentosRef, sucursalRef]);
 
   currentStepRef.current = getCurrentStep();
 
@@ -1311,6 +1324,7 @@ const ReciboIngresoGuide: React.FC<ReciboIngresoGuideProps> = ({
       placement="top"
       trigger={[]}
       rootClassName="guide-popover"
+      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
     >
       <span
         style={{

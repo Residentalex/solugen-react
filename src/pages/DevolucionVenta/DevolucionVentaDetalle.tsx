@@ -38,8 +38,9 @@ import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosC
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { resolveEstado } from '../../utils/estadoDocumento';
+import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
+import SucursalField from '../../components/SucursalField';
 
 const { Text } = Typography;
 
@@ -211,7 +212,7 @@ const DevolucionVentaDetalle: React.FC = () => {
   const isLarge = screens.xxl === true;
 
   const estadoInfo = resolveEstado(data.estado);
-  const esCerrado = data.periodo === 6;
+  const esCerrado = toPeriodoNum(data.periodo) === 6;
 
   // ===== Detalles filtrados por búsqueda =====
   const detallesFiltrados = detalleSearch
@@ -394,12 +395,6 @@ const DevolucionVentaDetalle: React.FC = () => {
   const handleAplicar = () => {
     if (!id) return;
 
-    // Verificación temprana del scanner
-    if (tieneScan === false) {
-      messageApi.warning('Debe escanear el documento antes de aplicar.');
-      return;
-    }
-
     setOperacionTitulo(`Aplicando DEV-${data?.noDocumento || id}`);
     operacion.ejecutar(
       `/DEV/${sucursalActiva}/aplicar/${id}`,
@@ -561,6 +556,9 @@ const DevolucionVentaDetalle: React.FC = () => {
                 <Descriptions.Item label="Tipo">—</Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Almacen" span={3}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                </Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
@@ -729,6 +727,9 @@ const DevolucionVentaDetalle: React.FC = () => {
               <Descriptions.Item label="Tipo">—</Descriptions.Item>
               <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
               <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Sucursal:">
+                <SucursalField codigoSucursal={data.codigoSucursal} />
+              </Descriptions.Item>
               <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>

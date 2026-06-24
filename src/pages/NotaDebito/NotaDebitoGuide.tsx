@@ -7,10 +7,12 @@ export interface NotaDebitoGuideProps {
   mode: 'crear' | 'editar';
   concepto: ConceptoDTO | null;
   sucursal: any | null;
+  tipo: any | null;
   entidad: any | null;
   detallesCount: number;
   conceptoRef: React.RefObject<HTMLDivElement | null>;
   sucursalRef: React.RefObject<HTMLDivElement | null>;
+  tipoRef: React.RefObject<HTMLDivElement | null>;
   entidadRef: React.RefObject<HTMLDivElement | null>;
   documentosRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -25,10 +27,12 @@ interface GuideStep {
 export const NotaDebitoGuide: React.FC<NotaDebitoGuideProps> = ({
   concepto,
   sucursal,
+  tipo,
   entidad,
   detallesCount,
   conceptoRef,
   sucursalRef,
+  tipoRef,
   entidadRef,
   documentosRef,
 }) => {
@@ -39,38 +43,45 @@ export const NotaDebitoGuide: React.FC<NotaDebitoGuideProps> = ({
   const getCurrentStep = useCallback((): GuideStep | null => {
     const steps: GuideStep[] = [
       {
-        key: 'concepto',
-        title: 'Paso 1: Concepto',
-        description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento.',
-        target: () => conceptoRef.current,
-      },
-      {
         key: 'sucursal',
-        title: 'Paso 2: Sucursal',
+        title: 'Paso 1: Sucursal',
         description: 'Seleccione la sucursal a la que pertenece la nota de débito.',
         target: () => sucursalRef.current,
       },
       {
+        key: 'tipo',
+        title: 'Paso 2: Tipo',
+        description: 'Seleccione el tipo de documento para la nota de débito.',
+        target: () => tipoRef.current,
+      },
+      {
+        key: 'concepto',
+        title: 'Paso 3: Concepto',
+        description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento.',
+        target: () => conceptoRef.current,
+      },
+      {
         key: 'entidad',
-        title: 'Paso 3: Entidad',
+        title: 'Paso 4: Entidad',
         description: 'Seleccione la entidad (suplidor o cliente) asociada a la nota de débito.',
         target: () => entidadRef.current,
       },
       {
         key: 'documentos',
-        title: 'Paso 4: Documentos',
+        title: 'Paso 5: Documentos',
         description: 'Agregue los documentos asociados a la nota de débito.',
         target: () => documentosRef.current,
       },
     ];
 
-    if (!concepto) return steps[0];
-    if (!sucursal) return steps[1];
-    if (!entidad) return steps[2];
-    if (detallesCount === 0) return steps[3];
+    if (!sucursal) return steps[0];
+    if (!tipo) return steps[1];
+    if (!concepto) return steps[2];
+    if (!entidad) return steps[3];
+    if (detallesCount === 0) return steps[4];
 
     return null;
-  }, [concepto, sucursal, entidad, detallesCount, conceptoRef, sucursalRef, entidadRef, documentosRef]);
+  }, [concepto, sucursal, tipo, entidad, detallesCount, conceptoRef, sucursalRef, tipoRef, entidadRef, documentosRef]);
 
   currentStepRef.current = getCurrentStep();
 
@@ -130,6 +141,7 @@ export const NotaDebitoGuide: React.FC<NotaDebitoGuideProps> = ({
       placement="top"
       trigger={[]}
       rootClassName="guide-popover"
+      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
     >
       <span
         style={{

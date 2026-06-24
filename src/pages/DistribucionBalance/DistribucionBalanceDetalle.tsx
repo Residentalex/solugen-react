@@ -24,7 +24,7 @@ import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
 import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 
 interface DistribucionBalanceDetalleProps {
   tipoEntidad: 'SUP' | 'CLI';
@@ -77,7 +77,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
         const data = res as any;
         setPageTitleOverride(`${data.documento.codigo}-${data.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
-        if (res.estado === 3 && (res as any).reversoID) {
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           distribucionBalanceApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
@@ -162,8 +162,8 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
 
   const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const isLarge = screens.xxl === true;
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[documentoActivo.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = documentoActivo.periodo === 6;
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(documentoActivo.estado)] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
 
   // ===== Columnas para Débitos y Créditos =====
   const asociadasColumnsDebito = [
@@ -211,7 +211,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
       setModalAnularOpen(false);
       const res = await distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
-      if (res.estado === 3 && (res as any).reversoID) {
+      if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
         const revRes = await distribucionBalanceApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
@@ -297,7 +297,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
       message.success('Documento reversado exitosamente');
       const res = await distribucionBalanceApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
-      if (res.estado === 3 && (res as any).reversoID) {
+      if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
         const revRes = await distribucionBalanceApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
@@ -370,7 +370,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
         confirmActions={false}
         extraButtons={
           <>
-            {data?.estado === 3 && reversoData && (
+            {toEstadoNum(data?.estado) === 3 && reversoData && (
               <Switch
                 checked={mostrandoReverso}
                 checkedChildren="Reverso"
@@ -567,7 +567,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
         onConfirm={handleAnularConfirm}
         documento={`${data?.documento?.codigo || 'DBA'}-${data?.noDocumento || ''}`}
         fechaDocumento={data?.fechaDocumento || ''}
-        periodoCerrado={data?.periodo === 6}
+        periodoCerrado={toPeriodoNum(data?.periodo) === 6}
       />
 
       {/* Modal de Progreso para operaciones de estado */}

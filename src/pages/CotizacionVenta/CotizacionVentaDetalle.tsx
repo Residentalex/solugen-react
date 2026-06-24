@@ -26,7 +26,7 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 
 const CotizacionVentaDetalle: React.FC = () => {
@@ -156,8 +156,8 @@ const CotizacionVentaDetalle: React.FC = () => {
 
   const isLarge = screens.xxl === true;
 
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = data.periodo === 6;
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(data.estado)] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = toPeriodoNum(data.periodo) === 6;
 
   const detalleColumns = [
     {

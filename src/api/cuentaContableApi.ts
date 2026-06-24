@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
-import type { CuentaContableDTO, MovimientoCuentaDTO, BalanceCuentaDTO, TipoCuentaDTO, GrupoCuentaContableDTO } from '../types/contabilidad';
+import type { CuentaContableDTO, CuentaContableResumenDTO, MovimientoCuentaDTO, BalanceCuentaDTO, TipoCuentaDTO, GrupoCuentaContableDTO } from '../types/contabilidad';
 
 const BASE = '/CuentaContable';
 
@@ -9,8 +9,8 @@ export const cuentaContableApi = {
     const { data } = await apiClient.get<ApiResponse<CuentaContableDTO>>(`${BASE}/${sucursal}/${noCuenta}`);
     return (data && typeof data === 'object' && 'isSuccess' in data) ? data.data : data as unknown as CuentaContableDTO;
   },
-  obtenerListado: async (sucursal: number): Promise<CuentaContableDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<CuentaContableDTO[]>>(`${BASE}/${sucursal}`);
+  obtenerListado: async (sucursal: number): Promise<CuentaContableResumenDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<CuentaContableResumenDTO[]>>(`${BASE}/${sucursal}`);
     return data.data;
   },
 
@@ -19,16 +19,16 @@ export const cuentaContableApi = {
     cantidad = 25,
     salto = 0,
     filtro = ''
-  ): Promise<{ data: CuentaContableDTO[]; total: number }> => {
-    const params = new URLSearchParams({ cantidad: String(cantidad), salto: String(salto), filtro });
-    const { data } = await apiClient.get<ApiResponse<CuentaContableDTO[]> & { total: number }>(
+  ): Promise<{ data: CuentaContableResumenDTO[]; total: number }> => {
+    const params = new URLSearchParams({ take: String(cantidad), skip: String(salto), filtro });
+    const { data } = await apiClient.get<ApiResponse<CuentaContableResumenDTO[]> & { total: number }>(
       `${BASE}/${sucursal}?${params}`
     );
     return { data: data.data, total: data.total };
   },
 
-  obtenerAuxiliares: async (sucursal: number): Promise<CuentaContableDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<CuentaContableDTO[]>>(`${BASE}/${sucursal}/Auxiliares`);
+  obtenerAuxiliares: async (sucursal: number): Promise<CuentaContableResumenDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<CuentaContableResumenDTO[]>>(`${BASE}/${sucursal}/Auxiliares`);
     return data.data;
   },
 

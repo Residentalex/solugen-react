@@ -16,6 +16,7 @@ import { apiClient } from '../../api/client';
 import { reciboIngresoApi } from '../../api/reciboIngresoApi';
 import { transaccionApi } from '../../api/transaccionApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
+import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import { useAplicar } from '../../hooks/useAplicar';
@@ -28,7 +29,7 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 
 // ===== Helpers para tipo de asiento =====
@@ -159,8 +160,8 @@ const ReciboIngresoDetalle: React.FC = () => {
   }
 
   const isLarge = screens.xxl === true;
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = data.periodo === 6;
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(data.estado)] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = toPeriodoNum(data.periodo) === 6;
 
   // ===== Documentos filtrados por búsqueda =====
   const documentosFiltrados = detalleSearch
@@ -238,12 +239,6 @@ const ReciboIngresoDetalle: React.FC = () => {
   const handleAplicar = () => {
     if (!id) return;
 
-    // Verificación temprana del scanner
-    if (tieneScan === false) {
-      message.warning('Debe escanear la factura antes de aplicar.');
-      return;
-    }
-
     // Validar FechaPermitida del documento
     if (data?.documento?.fechaPermitida === 'MenorIgualFechaDia') {
       const hoy = new Date();
@@ -289,7 +284,7 @@ const ReciboIngresoDetalle: React.FC = () => {
       message.info('El concepto no genera asientos contables.');
       return;
     }
-    if (data.estado !== 1 && data.estado !== 3) {
+    if (toEstadoNum(data.estado) !== 1 && toEstadoNum(data.estado) !== 3) {
       message.info('Debe aplicar el documento antes de postear.');
       return;
     }
@@ -465,7 +460,9 @@ const ReciboIngresoDetalle: React.FC = () => {
                 </Descriptions.Item>
                 <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Sucursal">
+                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                </Descriptions.Item>
               </Descriptions>
               {(data.nota) && (
                 <div style={{ marginTop: 12, padding: '0 16px 16px' }}>
@@ -575,7 +572,9 @@ const ReciboIngresoDetalle: React.FC = () => {
             </Descriptions.Item>
             <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
             <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-            <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Sucursal">
+                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                </Descriptions.Item>
             </Descriptions>
             {(data.nota) && (
             <div style={{ marginTop: 12, padding: '0 16px 16px' }}>
@@ -683,7 +682,7 @@ const ReciboIngresoDetalle: React.FC = () => {
         onConfirm={handleAnularConfirm}
         documento={`${data.documento.codigo}-${data.noDocumento}`}
         fechaDocumento={data.fechaDocumento}
-        periodoCerrado={data.periodo === 6}
+        periodoCerrado={toPeriodoNum(data.periodo) === 6}
       />
 
       {/* Modal de Desaplicar */}

@@ -141,6 +141,25 @@ export interface FacturaPOSFormularioDTO {
   logs?: LogDTO[];
 }
 
+export interface FacturaPOSResumenDTO {
+  id: number;
+  fecha: string;
+  documento: string;
+  cliente: string;
+  clienteIdentificacion: string;
+  concepto: string;
+  almacen: string;
+  ncf: string;
+  ncfModificado: string;
+  turno: string;
+  total: string;
+  estado: string;
+  periodo: string;
+  referencia: string;
+  cajero: string;
+  caja: string;
+}
+
 export interface FacturaPOSDTO {
   id: number;
   fechaDocumento: string;

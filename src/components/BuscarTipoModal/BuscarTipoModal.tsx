@@ -35,7 +35,7 @@ const BuscarTipoModal: React.FC<BuscarTipoModalProps> = ({ open, onClose, onSele
   }, [open, cargar]);
 
   const columnas = [
-    { title: 'CÃ³digo', dataIndex: 'codigo', key: 'codigo', width: 120 },
+    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120 },
     {
       title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
       render: (v: string) => toTitleCase(v),

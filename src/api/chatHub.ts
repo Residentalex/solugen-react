@@ -13,8 +13,11 @@ class ChatHubService {
   private connection: signalR.HubConnection | null = null;
 
   async connect(usuarioID: number): Promise<void> {
-    if (this.connection && this.connection.state === signalR.HubConnectionState.Connected) {
-      return;
+    if (this.connection?.state === signalR.HubConnectionState.Connected) return;
+
+    if (this.connection) {
+      try { await this.connection.stop(); } catch { /* ignore */ }
+      this.connection = null;
     }
 
     const token = useAuthStore.getState().accessToken;
@@ -29,6 +32,9 @@ class ChatHubService {
 
     this.connection = connection;
 
+    connection.on('UsuarioConectado', () => {});
+    connection.on('UsuarioDesconectado', () => {});
+
     connection.onreconnecting(() => {
       console.warn('[SignalR Chat] Reconectando...');
     });
@@ -42,41 +48,41 @@ class ChatHubService {
       this.connection = null;
     });
 
-    try {
-      await connection.start();
-    } catch (err) {
-      console.warn('[SignalR Chat] Error inicial de conexion:', err);
+    await connection.start();
+  }
+
+  private async invokeOrThrow(method: string, ...args: any[]): Promise<void> {
+    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) {
+      throw new Error('SignalR no está conectado');
     }
+    await this.connection.invoke(method, ...args);
+  }
+
+  private async invokeBestEffort(method: string, ...args: any[]): Promise<void> {
+    if (!this.connection || this.connection.state !== signalR.HubConnectionState.Connected) return;
+    try {
+      await this.connection.invoke(method, ...args);
+    } catch { /* conexión caída, no crítica */ }
   }
 
   async unirseAConversacion(conversacionId: number): Promise<void> {
-    try {
-      await this.connection?.invoke('UnirseAConversacion', conversacionId);
-    } catch { /* ignore */ }
+    await this.invokeOrThrow('UnirseAConversacion', conversacionId);
   }
 
   async salirDeConversacion(conversacionId: number): Promise<void> {
-    try {
-      await this.connection?.invoke('SalirDeConversacion', conversacionId);
-    } catch { /* ignore */ }
+    await this.invokeBestEffort('SalirDeConversacion', conversacionId);
   }
 
   async enviarMensaje(conversacionId: number, contenido: string): Promise<void> {
-    try {
-      await this.connection?.invoke('EnviarMensaje', conversacionId, contenido);
-    } catch { /* ignore */ }
+    await this.invokeOrThrow('EnviarMensaje', conversacionId, contenido);
   }
 
   async escribir(conversacionId: number): Promise<void> {
-    try {
-      await this.connection?.invoke('Escribiendo', conversacionId);
-    } catch { /* ignore */ }
+    await this.invokeBestEffort('Escribiendo', conversacionId);
   }
 
   async marcarLeido(conversacionId: number): Promise<void> {
-    try {
-      await this.connection?.invoke('MarcarLeido', conversacionId);
-    } catch { /* ignore */ }
+    await this.invokeBestEffort('MarcarLeido', conversacionId);
   }
 
   onMensajeRecibido(callback: MensajeRecibidoCallback): void {

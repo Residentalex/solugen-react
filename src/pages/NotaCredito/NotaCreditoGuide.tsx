@@ -18,6 +18,8 @@ export interface NotaCreditoGuideProps {
   montoRef: React.RefObject<HTMLDivElement | null>;
   documentosRef: React.RefObject<HTMLDivElement | null>;
   ncfRef?: React.RefObject<HTMLDivElement | null>;
+  sucursal: any | null;
+  sucursalRef: React.RefObject<HTMLDivElement | null>;
 }
 
 interface GuideStep {
@@ -41,6 +43,8 @@ export const NotaCreditoGuide: React.FC<NotaCreditoGuideProps> = ({
   montoRef,
   documentosRef,
   ncfRef,
+  sucursal,
+  sucursalRef,
 }) => {
   const [open, setOpen] = useState(false);
   const dismissedStepRef = useRef<string | null>(null);
@@ -48,6 +52,12 @@ export const NotaCreditoGuide: React.FC<NotaCreditoGuideProps> = ({
 
   const getCurrentStep = useCallback((): GuideStep | null => {
     const steps: GuideStep[] = [
+      {
+        key: 'sucursal',
+        title: 'Paso 1: Sucursal',
+        description: 'Seleccione la sucursal contable a la que pertenece la nota de crédito.',
+        target: () => sucursalRef.current,
+      },
       {
         key: 'tipo',
         title: 'Tipo de Documento',
@@ -86,15 +96,16 @@ export const NotaCreditoGuide: React.FC<NotaCreditoGuideProps> = ({
       },
     ];
 
-    if (!tipo) return steps[0];
-    if (!concepto) return steps[1];
-    if (!entidad) return steps[2];
-    if (total === 0) return steps[3];
-    if (detallesCount === 0) return steps[4];
-    if (requiereNCF && !ncf) return steps[5];
+    if (!sucursal) return steps[0];
+    if (!tipo) return steps[1];
+    if (!concepto) return steps[2];
+    if (!entidad) return steps[3];
+    if (total === 0) return steps[4];
+    if (detallesCount === 0) return steps[5];
+    if (requiereNCF && !ncf) return steps[6];
 
     return null;
-  }, [tipo, concepto, entidad, total, detallesCount, ncf, requiereNCF, tipoRef, conceptoRef, entidadRef, montoRef, documentosRef, ncfRef]);
+  }, [tipo, concepto, entidad, total, detallesCount, ncf, requiereNCF, tipoRef, conceptoRef, entidadRef, montoRef, documentosRef, ncfRef, sucursal, sucursalRef]);
 
   currentStepRef.current = getCurrentStep();
 
@@ -154,6 +165,7 @@ export const NotaCreditoGuide: React.FC<NotaCreditoGuideProps> = ({
       placement="top"
       trigger={[]}
       rootClassName="guide-popover"
+      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
     >
       <span
         style={{

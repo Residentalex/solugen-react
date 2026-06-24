@@ -2,12 +2,12 @@
 import { Modal, Input, Table, Empty, message } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
-import type { CuentaContableDTO } from '../../types/contabilidad';
+import type { CuentaContableResumenDTO } from '../../types/contabilidad';
 
 interface BuscarCuentaContableModalProps {
   open: boolean;
   onClose: () => void;
-  onSelect: (cuenta: CuentaContableDTO) => void;
+  onSelect: (cuenta: CuentaContableResumenDTO) => void;
   sucursal: number;
 }
 
@@ -17,7 +17,7 @@ const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
   onSelect,
   sucursal,
 }) => {
-  const [cuentas, setCuentas] = useState<CuentaContableDTO[]>([]);
+  const [cuentas, setCuentas] = useState<CuentaContableResumenDTO[]>([]);
   const [searchText, setSearchText] = useState('');
   const searchRef = useRef<any>(null);
 

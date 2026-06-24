@@ -432,7 +432,7 @@ const ModalAnular: React.FC<ModalAnularProps> = ({
       onCancel={handleClose}
       width={560}
       destroyOnHidden
-      maskClosable={false}
+      mask={{ closable: false }}
       closable={!submitting}
       footer={null}
     >

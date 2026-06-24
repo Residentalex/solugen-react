@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { AuthLoginRequest, AuthSesionDTO, PantallaDTO } from '../types/auth';
+import type { AuthLoginRequest, AuthSesionDTO, PantallaDTO, AuthSucursalPermitidaDTO } from '../types/auth';
 
 export interface CambiarClaveRequest {
   usuarioID: number;
@@ -30,5 +30,10 @@ export const authApi = {
   obtenerPantallasPorSucursal: async (sucursal: number, usuarioID: number): Promise<PantallaDTO[]> => {
     const { data } = await apiClient.get<PantallaDTO[]>(`/Usuario/${sucursal}/${usuarioID}/pantallas-por-sucursal`);
     return data;
+  },
+
+  obtenerSucursalesAuth: async (): Promise<AuthSucursalPermitidaDTO[]> => {
+    const { data } = await apiClient.get('/Auth/sucursales');
+    return Array.isArray(data) ? data : data?.data ?? [];
   },
 };

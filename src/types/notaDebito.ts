@@ -17,6 +17,8 @@ export interface NotaDebitoDTO {
   retenciones?: number;
   tasa?: number;
   documento: DocumentoDTO;
+  tipoDocumento: number;
+  tipoEntidad: string;
 }
 
 export interface NotaDebitoFullDTO {
@@ -40,6 +42,8 @@ export interface NotaDebitoFullDTO {
   bienes?: number;
   servicios?: number;
   documento: DocumentoDTO;
+  tipoDocumento: number;
+  tipoEntidad: string;
   concepto?: ConceptoDTO | null;
   tipo?: TipoDTO | null;
   entidad?: EntidadDTO | null;

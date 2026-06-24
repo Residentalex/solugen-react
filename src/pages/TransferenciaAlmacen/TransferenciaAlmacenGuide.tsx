@@ -131,6 +131,7 @@ export const TransferenciaAlmacenGuide: React.FC<TransferenciaAlmacenGuideProps>
       placement="top"
       trigger={[]}
       rootClassName="guide-popover"
+      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
     >
       <span
         style={{

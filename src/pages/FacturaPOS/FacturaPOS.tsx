@@ -1,42 +1,67 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography, Alert } from 'antd';
+import { Typography, Alert, Select, Input } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { useDocumentoListado } from '../../hooks/useDocumentoListado';
+import { useAuthStore } from '../../stores/authStore';
+import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
+import type { FacturaPOSResumenDTO } from '../../types/facturaPOS';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import EntidadColumnCell from '../../components/EntidadColumnCell';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
-import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
-import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
-import type { FacturaVistaDTO } from '../../types/facturacion';
-import { useScreenConfig } from '../../hooks/useScreenConfig';
 
 const { Text } = Typography;
 
+const ESTADO_OPCIONES = [
+  { value: '', label: 'Todos' },
+  { value: 'Borrador', label: 'Borrador' },
+  { value: 'Terminado', label: 'Terminado' },
+  { value: 'Anulado', label: 'Anulado' },
+];
+
+const CAMPOS_BUSQUEDA = [
+  { value: 'documento', label: 'Documento' },
+  { value: 'ncf', label: 'NCF' },
+  { value: 'cliente', label: 'Cliente' },
+  { value: 'turno', label: 'Turno' },
+];
+
 const FacturaPOS: React.FC = () => {
   const navigate = useNavigate();
-  const { screenCode, documentCode } = useScreenConfig();
+  const { screenCode } = useScreenConfig();
+  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const [campoBusqueda, setCampoBusqueda] = useState('documento');
 
-  const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<FacturaVistaDTO>({
+  const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<FacturaPOSResumenDTO>({
     modulo: screenCode,
     fetchVista: (sucursal, desde, hasta, filas, salto, estado) =>
-      facturaPOSApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado),
-    fetchFiltrar: (sucursal, params) =>
-      facturaPOSApi.filtrar(sucursal, params),
+      facturaPOSApi.obtenerResumen(sucursal, desde, hasta, filas, salto, estado),
+    fetchFiltrar: (sucursal, params) => {
+      const valor = params.documento || '';
+      const base = { cantidad: params.cantidad, salto: params.salto, desde: params.desde, hasta: params.hasta };
+      switch (campoBusqueda) {
+        case 'documento': return facturaPOSApi.buscarPorDocumento(sucursal, { ...base, documento: valor });
+        case 'ncf': return facturaPOSApi.buscarPorNCF(sucursal, { ...base, nCF: valor });
+        case 'turno': return facturaPOSApi.buscarPorTurno(sucursal, { ...base, turno: valor });
+        case 'cliente': return facturaPOSApi.buscarPorCliente(sucursal, { ...base, cliente: valor });
+        default: return facturaPOSApi.buscarPorDocumento(sucursal, { ...base, documento: valor });
+      }
+    },
     reporteUrl: (sucursal, id) => `/reportes/facturacion/pos/${sucursal}/${id}`,
     tituloReporte: 'POS',
     tituloError: 'Error al cargar facturas POS',
   });
 
-  const columns: ColumnsType<FacturaVistaDTO> = [
+  const columns: ColumnsType<FacturaPOSResumenDTO> = [
     {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
       width: 180,
       fixed: 'left',
-      render: (doc: string, record: FacturaVistaDTO) => (
+      render: (doc: string, record: FacturaPOSResumenDTO) => (
         <Link to={`/FPV/${record.id}`} className="paces-doc-link"><Text strong>{doc}</Text></Link>
       ),
     },
@@ -49,10 +74,10 @@ const FacturaPOS: React.FC = () => {
     },
     {
       title: 'Cliente',
-      dataIndex: 'entidad',
-      key: 'entidad',
-      render: (name: string, record: any) => (
-        <EntidadColumnCell name={name} identificacion={record.identificacion} />
+      dataIndex: 'cliente',
+      key: 'cliente',
+      render: (name: string, record: FacturaPOSResumenDTO) => (
+        <EntidadColumnCell name={name} identificacion={record.clienteIdentificacion} />
       ),
     },
     {
@@ -90,8 +115,8 @@ const FacturaPOS: React.FC = () => {
       key: 'total',
       width: 160,
       align: 'right',
-      render: (total: number) => (
-        <Text strong className="paces-text-total">{formatCurrency(total)}</Text>
+      render: (total: string) => (
+        <Text strong className="paces-text-total">{formatCurrency(Number(total))}</Text>
       ),
     },
     {
@@ -99,25 +124,16 @@ const FacturaPOS: React.FC = () => {
       dataIndex: 'estado',
       key: 'estado',
       width: 100,
-      render: (estado: number, record: FacturaVistaDTO) => (
+      render: (estado: string, record: FacturaPOSResumenDTO) => (
         <EstadoColumnCell estado={estado} periodo={record.periodo} />
       ),
     },
   ];
 
-  const customEmptyText = state.searchText ? (
-    <div style={{ padding: '20px 0' }}>
-      <Alert
-        type="info"
-        showIcon
-        message="Búsqueda limitada"
-        description={`La búsqueda en Factura POS solo considera los últimos 30 días. Si la factura "${state.searchText}" es más antigua, use el botón "Filtros" para expandir el rango de fechas manualmente.`}
-      />
-    </div>
-  ) : undefined;
+  const customEmptyText = undefined;
 
   return (
-    <DocumentListadoLayout<FacturaVistaDTO>
+    <DocumentListadoLayout<FacturaPOSResumenDTO>
       columns={columns}
       data={state.data}
       rowKey="id"
@@ -136,15 +152,33 @@ const FacturaPOS: React.FC = () => {
       onPdfClose={actions.handlePdfClose}
       emptyText={customEmptyText}
       toolbarProps={{
-        showFiltros: true,
-        filtros: state.filtros,
-        rangoDefault,
-        opcionesEstado: ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO,
-        onFiltrosAplicar: actions.handleFiltrosAplicar,
-        searchPlaceholder: 'Buscar documento, NCF, concepto...',
-        onSearch: actions.handleSearch,
+        opcionesEstado: ESTADO_OPCIONES,
+        ocultarSearch: true,
         pageSize: state.pageSize,
         onPageSizeChange: actions.handlePageSizeChange,
+        extraLeft: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Select
+              value={campoBusqueda}
+              onChange={setCampoBusqueda}
+              style={{ width: 120 }}
+              size="middle"
+              options={CAMPOS_BUSQUEDA}
+            />
+            <Input.Search
+              placeholder="Buscar..."
+              allowClear
+              onSearch={(val) => actions.handleSearch(val)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  (e.target as HTMLInputElement).blur();
+                  actions.handleSearch('');
+                }
+              }}
+              style={{ width: 260 }}
+            />
+          </div>
+        ),
         showCrear: true,
         onCrear: () => navigate('/FPV/nuevo'),
         showEditar: true,

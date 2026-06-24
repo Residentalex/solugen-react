@@ -4,9 +4,9 @@ import { Card, Row, Col, Button, Form, Input, InputNumber, Switch, Select, Spin,
 import { ArrowLeftOutlined, SaveOutlined, SearchOutlined, CloseOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
-import { useCompanyStore } from '../../stores/companyStore';
 import { Sucursal } from '../../types/auth';
 import { usuarioApi } from '../../api/usuarioApi';
+import { authApi } from '../../api/authApi';
 import { empleadoApi, type EmpleadoDTO } from '../../api/empleadoApi';
 import { rolApi } from '../../api/rolApi';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
@@ -14,7 +14,7 @@ import PermissionGate from '../../components/PermissionGate';
 import { toTitleCase } from '../../utils/formats';
 
 import type { UsuarioDTO } from '../../types/administracion';
-import type { RolDTO, PantallaDTO, UsuarioSucursalRolDTO } from '../../types/auth';
+import type { RolDTO, PantallaDTO, UsuarioSucursalRolDTO, AuthSucursalPermitidaDTO } from '../../types/auth';
 import BuscarEmpleadoModal from '../../components/BuscarEmpleadoModal/BuscarEmpleadoModal';
 import EntidadImagen from '../../components/EntidadImagen';
 
@@ -93,20 +93,16 @@ const UsuarioFormulario: React.FC = () => {
 
   const securitySucursal = useAuthStore((s) => s.securitySucursal);
 
-  const sucursalesData = useCompanyStore((s) => s.data.sucursales);
-  // Sucursales del store + virtuales (Consolidado=4, Compra=5) siempre incluidas
-  const SUCURSALES: Sucursal[] = useMemo(() => {
-    const storeSucs = (sucursalesData || []).map((s: any) => s.sucursal as Sucursal);
-    return [...new Set([...storeSucs, 4, 5])];
-  }, [sucursalesData]);
-  const SUCURSAL_NOMBRES: Record<number, string> = useMemo(() => {
-    const storeNames = Object.fromEntries(
-      (sucursalesData || []).map((s: any) => [s.sucursal, toTitleCase(s.nombre)])
-    );
-    if (storeNames[4] === undefined) storeNames[4] = 'Consolidado';
-    if (storeNames[5] === undefined) storeNames[5] = 'Compra';
-    return storeNames;
-  }, [sucursalesData]);
+  const [sucursalesAuth, setSucursalesAuth] = useState<AuthSucursalPermitidaDTO[]>([]);
+
+  const SUCURSALES: Sucursal[] = useMemo(() =>
+    sucursalesAuth.map((s) => s.sucursal),
+    [sucursalesAuth]
+  );
+  const SUCURSAL_NOMBRES: Record<number, string> = useMemo(() =>
+    Object.fromEntries(sucursalesAuth.map((s) => [s.sucursal, toTitleCase(s.nombre)])),
+    [sucursalesAuth]
+  );
 
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
@@ -117,7 +113,7 @@ const UsuarioFormulario: React.FC = () => {
   const [empleadoLabel, setEmpleadoLabel] = useState('');
   const [sucursalesRolesEdit, setSucursalesRolesEdit] = useState<UsuarioSucursalRolDTO[]>([]);
   const [rolesDisponibles, setRolesDisponibles] = useState<Record<number, RolDTO[]>>({});
-  const [sucursalActivaTab, setSucursalActivaTab] = useState<Sucursal>(SUCURSALES[0]);
+  const [sucursalActivaTab, setSucursalActivaTab] = useState<Sucursal>(0 as Sucursal);
   const [pantallasPorSucursal, setPantallasPorSucursal] = useState<Record<number, PantallaConRoles[]>>({});
   const [cargandoPantallas, setCargandoPantallas] = useState(false);
   const [cargandoRoles, setCargandoRoles] = useState(false);
@@ -125,14 +121,29 @@ const UsuarioFormulario: React.FC = () => {
   const [form] = Form.useForm();
 
   useEffect(() => {
+    authApi.obtenerSucursalesAuth()
+      .then(setSucursalesAuth)
+      .catch((err) => {
+        message.error(err?.response?.data?.errorMessage || 'Error al cargar sucursales');
+      });
+  }, []);
+
+  useEffect(() => {
     setActiveModule('MUsuario');
     updateToolbar({});
     cargarEmpleados();
-    cargarRolesDisponibles();
+    // cargarRolesDisponibles se dispara desde el efecto de sucursalesAuth
     if (id) cargarUsuario(parseInt(id));
     else form.setFieldsValue({ activo: true, claveNoExpira: false, diasVigencia: 30 });
     return () => resetToolbar();
   }, [id]);
+
+  useEffect(() => {
+    if (sucursalesAuth.length > 0) {
+      cargarRolesDisponibles();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sucursalesAuth]);
 
   const cargarEmpleados = async () => {
     try {

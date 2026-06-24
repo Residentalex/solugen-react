@@ -87,6 +87,10 @@ export interface TransferenciaAlmacenFullDTO {
 
   detalles: DetalleTransferenciaAlmacenDTO[];
 
+  // Tipo
+  codigoTipo?: string;
+  tipo?: { nombre?: string; codigo?: string; idExterno?: string | number };
+
   asientos?: AsientoContableDTO[];
   logs?: LogDTO[];
   noDocumentoGenerado?: string;

@@ -24,6 +24,7 @@ export interface GeneradorOrdenCompraDTO {
   idExterno: string;
   numero: string;
   fecha: string;
+  tipo?: string;
   suplidor: SuplidorGORC | null;
   almacen: string;
   notas: string;

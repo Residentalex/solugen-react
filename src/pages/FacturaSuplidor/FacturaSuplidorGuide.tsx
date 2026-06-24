@@ -16,6 +16,8 @@ export interface FacturaSuplidorGuideProps {
   suplidorRef: React.RefObject<HTMLDivElement | null>;
   montoRef: React.RefObject<HTMLDivElement | null>;
   ncfRef?: React.RefObject<HTMLDivElement | null>;
+  sucursalRef: React.RefObject<HTMLDivElement | null>;
+  sucursal: any | null;
 }
 
 interface GuideStep {
@@ -37,6 +39,8 @@ const FacturaSuplidorGuide: React.FC<FacturaSuplidorGuideProps> = ({
   suplidorRef,
   montoRef,
   ncfRef,
+  sucursalRef,
+  sucursal,
 }) => {
   const [open, setOpen] = useState(false);
   const dismissedStepRef = useRef<string | null>(null);
@@ -44,6 +48,12 @@ const FacturaSuplidorGuide: React.FC<FacturaSuplidorGuideProps> = ({
 
   const getCurrentStep = useCallback((): GuideStep | null => {
     const steps: GuideStep[] = [
+      {
+        key: 'sucursal',
+        title: 'Sucursal',
+        description: 'Seleccione la sucursal contable.',
+        target: () => sucursalRef.current,
+      },
       {
         key: 'tipo',
         title: 'Tipo de Documento',
@@ -76,14 +86,15 @@ const FacturaSuplidorGuide: React.FC<FacturaSuplidorGuideProps> = ({
       },
     ];
 
-    if (!tipo) return steps[0];
-    if (!concepto) return steps[1];
-    if (suplidoresDisponibles && !suplidor) return steps[2];
-    if (total === 0) return steps[3];
-    if (!ncf) return steps[4];
+    if (!sucursal) return steps[0];
+    if (!tipo) return steps[1];
+    if (!concepto) return steps[2];
+    if (suplidoresDisponibles && !suplidor) return steps[3];
+    if (total === 0) return steps[4];
+    if (!ncf) return steps[5];
 
     return null;
-  }, [tipo, concepto, suplidor, total, ncf, suplidoresDisponibles, tipoRef, conceptoRef, suplidorRef, montoRef, ncfRef]);
+  }, [tipo, concepto, suplidor, total, ncf, suplidoresDisponibles, tipoRef, conceptoRef, suplidorRef, montoRef, ncfRef, sucursal, sucursalRef]);
 
   currentStepRef.current = getCurrentStep();
 
@@ -143,6 +154,7 @@ const FacturaSuplidorGuide: React.FC<FacturaSuplidorGuideProps> = ({
       placement="top"
       trigger={[]}
       rootClassName="guide-popover"
+      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
     >
       <span
         style={{

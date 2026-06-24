@@ -1,22 +1,16 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Table, Select, Tag, Button, message, Card, Typography, Modal, Descriptions, Alert, Empty } from 'antd';
+import { Table, Select, Tag, Button, message, Card, Typography, Modal, Descriptions, Alert, Empty, Space } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { servicioApi } from '../../api/servicioApi';
-import type { ServicioDTO } from '../../types/servicio';
-import { formatCurrency } from '../../utils/formats';
-import { getMonedaSucursalActiva } from '../../utils/moneda';
+import type { ServicioDTO, ServicioVistaDTO } from '../../types/servicio';
+import { formatCurrency, toTitleCase } from '../../utils/formats';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
-
-function toTitleCase(str: string): string {
-  if (!str) return str;
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 const Servicios: React.FC = () => {
   const navigate = useNavigate();
@@ -39,15 +33,12 @@ const Servicios: React.FC = () => {
     queryFn: async () => {
       if (sucursalActiva === undefined) return { datos: [], total: 0 };
       const salto = (page - 1) * pageSize;
-      const params: { cantidad: number; salto: number; busqueda?: string; activo?: boolean } = { cantidad: pageSize, salto };
-      if (searchText) params.busqueda = searchText;
+      const params: { cantidad?: number; salto?: number; codigo?: string; nombre?: string; activo?: boolean } = { cantidad: pageSize, salto };
+      if (searchText) { params.codigo = searchText; params.nombre = searchText; }
       if (soloActivos !== undefined) params.activo = soloActivos;
 
-      const [resultados, totalCount] = await Promise.all([
-        servicioApi.filtrar(sucursalActiva, params),
-        servicioApi.obtenerTotal(sucursalActiva, { busqueda: searchText || undefined, activo: soloActivos }),
-      ]);
-      return { datos: resultados || [], total: totalCount ?? 0 };
+      const { items, total } = await servicioApi.obtenerVista(sucursalActiva, params);
+      return { datos: items, total };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -79,7 +70,7 @@ const Servicios: React.FC = () => {
     }
   };
 
-  const columns: ColumnsType<ServicioDTO> = [
+  const columns: ColumnsType<ServicioVistaDTO> = [
     {
       title: 'Código',
       dataIndex: 'codigo',
@@ -96,8 +87,13 @@ const Servicios: React.FC = () => {
       title: 'Nombre',
       dataIndex: 'nombre',
       key: 'nombre',
-      width: 280,
-      render: (val: string) => <Text>{toTitleCase(val ?? '')}</Text>,
+      width: 320,
+      render: (name: string) => (
+        <Space>
+          <div className="paces-avatar-initials">{(name || '?').charAt(0).toUpperCase()}</div>
+          <Text>{toTitleCase(name || '')}</Text>
+        </Space>
+      ),
     },
     {
       title: 'Precio',
@@ -118,28 +114,24 @@ const Servicios: React.FC = () => {
     },
     {
       title: 'Familia',
-      dataIndex: 'familia',
-      key: 'familia',
+      dataIndex: 'familiaNombre',
+      key: 'familiaNombre',
       width: 150,
-      render: (val: { nombre?: string } | null) =>
-        val?.nombre ? <Tag style={{ fontSize: 11 }}>{val.nombre}</Tag> : <Text>{'-'}</Text>,
+      render: (val: string) => val ? <Tag style={{ fontSize: 11 }}>{val}</Tag> : <Text>{'-'}</Text>,
     },
     {
       title: 'Categoría',
-      dataIndex: 'categoria',
-      key: 'categoria',
+      dataIndex: 'categoriaNombre',
+      key: 'categoriaNombre',
       width: 150,
-      render: (val: { nombre?: string } | null) =>
-        val?.nombre ? <Tag style={{ fontSize: 11 }}>{toTitleCase(val.nombre)}</Tag> : <Text>{'-'}</Text>,
+      render: (val: string) => val ? <Tag style={{ fontSize: 11 }}>{toTitleCase(val)}</Tag> : <Text>{'-'}</Text>,
     },
     {
       title: 'Unidad Medida',
-      dataIndex: 'unidadMedida',
-      key: 'unidadMedida',
+      dataIndex: 'unidadMedidaNombre',
+      key: 'unidadMedidaNombre',
       width: 100,
-      render: (val: { nombre?: string } | null) => (
-        <Text>{val?.nombre ? toTitleCase(val.nombre) : '-'}</Text>
-      ),
+      render: (val: string) => <Text>{val ? toTitleCase(val) : '-'}</Text>,
     },
     {
       title: 'Activo',
@@ -190,7 +182,7 @@ const Servicios: React.FC = () => {
             />
           }
         />
-        <Table<ServicioDTO>
+        <Table<ServicioVistaDTO>
           columns={columns}
           dataSource={data?.datos || []}
           rowKey="codigo"

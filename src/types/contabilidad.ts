@@ -14,6 +14,24 @@ export interface TipoCuentaDTO {
   idExterno: string;
 }
 
+// --- Cuentas Contables (resumen plano para listados) ---
+export interface CuentaContableResumenDTO {
+  noCuenta: string;
+  nombre: string;
+  tipoCuenta: string;
+  tipoCuentaId: string;
+  origen: string;
+  grupoNombre: string;
+  grupoCodigo: string;
+  monedaCodigo: string;
+  cuentaControlNo: string;
+  cuentaPrimaNo: string;
+  nota: string;
+  activo: string;
+  utilizaCentroCosto: string;
+  idExterno: string;
+}
+
 // --- Cuentas Contables ---
 export interface GrupoCuentaContableDTO {
   idExterno: string;
@@ -46,8 +64,8 @@ export interface CuentaContableDTO {
 
 // --- Impuestos ---
 export const MetodoCalculoImpuesto = {
-  Porcentaje: 0,
-  Fijo: 1,
+  Porcentaje: 'Porcentaje',
+  Fijo: 'Fijo',
 } as const;
 export type MetodoCalculoImpuesto = (typeof MetodoCalculoImpuesto)[keyof typeof MetodoCalculoImpuesto];
 
@@ -60,16 +78,16 @@ export const TipoImpuesto = {
 export type TipoImpuesto = (typeof TipoImpuesto)[keyof typeof TipoImpuesto];
 
 export const AmbitoImpuesto = {
-  Venta: 0,
-  Compra: 1,
-  Ninguno: 2,
+  Venta: 'Venta',
+  Compra: 'Compra',
+  Ninguno: 'Ninguno',
 } as const;
 export type AmbitoImpuesto = (typeof AmbitoImpuesto)[keyof typeof AmbitoImpuesto];
 
 export const BaseCalculoImpuesto = {
-  Indefinido: 0,
-  MontoNeto: 1,
-  MontoTotal: 2,
+  Indefinido: 'Indefinido',
+  MontoNeto: 'MontoNeto',
+  MontoTotal: 'MontoTotal',
 } as const;
 export type BaseCalculoImpuesto = (typeof BaseCalculoImpuesto)[keyof typeof BaseCalculoImpuesto];
 

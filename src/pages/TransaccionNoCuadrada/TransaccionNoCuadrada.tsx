@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Typography, Select } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { transaccionApi } from '../../api/transaccionApi';
 import { documentosApi } from '../../api/documentosApi';
@@ -18,6 +19,7 @@ const { Text } = Typography;
 const TransaccionNoCuadrada: React.FC = () => {
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const sucursalesDisponibles = useCompanyStore((s: any) => s.data.sucursales);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
@@ -49,15 +51,29 @@ const TransaccionNoCuadrada: React.FC = () => {
     try {
       const desde = filtros.desde ?? rangoDefault.desde;
       const hasta = filtros.hasta ?? rangoDefault.hasta;
-      const suc = sucursalFiltro ?? sucursalActiva;
-      const result = await transaccionApi.obtenerNoCuadrados(suc, desde, hasta, tipoDoc || undefined);
-      setData(result);
+      if (sucursalFiltro === -1) {
+        const sucursalesIds = (sucursalesDisponibles || [])
+          .filter((s: any) => s.sucursal !== undefined)
+          .map((s: any) => s.sucursal as number);
+        const resultados = await Promise.all(
+          sucursalesIds.map(suc =>
+            transaccionApi.obtenerNoCuadrados(suc, desde, hasta, tipoDoc || undefined)
+              .catch(() => [] as any[])
+          )
+        );
+        const result = resultados.flat();
+        setData(result);
+      } else {
+        const suc = sucursalFiltro ?? sucursalActiva;
+        const result = await transaccionApi.obtenerNoCuadrados(suc, desde, hasta, tipoDoc || undefined);
+        setData(result);
+      }
     } catch {
       setLoadingError(true);
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva, sucursalFiltro, rangoDefault, filtros, tipoDoc]);
+  }, [sucursalActiva, sucursalFiltro, rangoDefault, filtros, tipoDoc, sucursalesDisponibles]);
 
   useEffect(() => {
     cargarDatos();
@@ -211,6 +227,7 @@ const TransaccionNoCuadrada: React.FC = () => {
             <SucursalDocumentoSelector
               value={sucursalFiltro}
               onChange={(val) => { setSucursalFiltro(val); setPage(1); }}
+              showAllOption
             />
             <Select
               placeholder="Documento"

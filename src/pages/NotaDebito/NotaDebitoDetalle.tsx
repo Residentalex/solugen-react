@@ -14,6 +14,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { notaDebitoApi } from '../../api/notaDebitoApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
+import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import { useAplicar } from '../../hooks/useAplicar';
@@ -24,7 +25,7 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import PermissionGate from '../../components/PermissionGate';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
@@ -87,7 +88,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
         setData(res);
         setPageTitleOverride(`${(res as any).documento.codigo}-${(res as any).noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
-        if (res.estado === 3 && (res as any).reversoID) {
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           notaDebitoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
@@ -141,7 +142,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
         setData(res);
         setPageTitleOverride(`${(res as any).documento.codigo}-${(res as any).noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
-        if (res.estado === 3 && (res as any).reversoID) {
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           notaDebitoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
@@ -181,10 +182,6 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
 
   const handleAplicar = () => {
     if (!id) return;
-    if (tieneScan === false) {
-      message.warning('Debe escanear la factura antes de aplicar.');
-      return;
-    }
     setOperacionTitulo(`Aplicando ${rutaBase}-${data?.noDocumento || id}`);
     operacion.ejecutar(
       `/Transaccion/${sucursalActiva}/aplicar/${id}`,
@@ -201,7 +198,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
       setModalAnularOpen(false);
       const res = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
-      if (res.estado === 3 && (res as any).reversoID) {
+      if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
       const revRes = await notaDebitoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
@@ -264,7 +261,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
       message.success('Documento reversado exitosamente');
       const res = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
-      if (res.estado === 3 && (res as any).reversoID) {
+      if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
         const revRes = await notaDebitoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
@@ -327,8 +324,8 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
 
   const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const isLarge = screens.xxl === true;
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[documentoActivo.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = documentoActivo.periodo === 6;
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(documentoActivo.estado)] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
 
   // asientoColumns reemplazado por AsientosContableTable compartido
 
@@ -359,7 +356,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
         onImprimir={async () => {
           setImprimiendo(true);
           try {
-            const res = await apiClient.get(`/reportes/contabilidad/nota-debito/${sucursalActiva}/${id}`, {
+            const res = await apiClient.post('/reportes/contabilidad/nota-debito', data, {
               responseType: 'blob',
             });
             const blobUrl = URL.createObjectURL(res.data);
@@ -390,7 +387,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
         onReversar={handleReversar}
         extraButtons={id ? (
           <>
-            {data?.estado === 3 && reversoData && (
+            {toEstadoNum(data?.estado) === 3 && reversoData && (
               <Switch
                 checked={mostrandoReverso}
                 checkedChildren="Reverso"
@@ -460,7 +457,9 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
                 <Descriptions.Item label="NCF:">{documentoActivo.ncf || '-'}</Descriptions.Item>
 
                 <Descriptions.Item label="Tipo:">{documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}</Descriptions.Item>
-                <Descriptions.Item label="Referencia:">{documentoActivo.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                </Descriptions.Item>
                 <Descriptions.Item label="NCF Modificado:">{(documentoActivo as any).ncfModificado || '-'}</Descriptions.Item>
 
                 <Descriptions.Item label="Nota:" span={3}>
@@ -551,7 +550,9 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
                 <Descriptions.Item label="NCF:">{documentoActivo.ncf || '-'}</Descriptions.Item>
 
                 <Descriptions.Item label="Tipo:">{documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}</Descriptions.Item>
-                <Descriptions.Item label="Referencia:">{documentoActivo.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                </Descriptions.Item>
                 <Descriptions.Item label="NCF Modificado:">{(documentoActivo as any).ncfModificado || '-'}</Descriptions.Item>
 
                 <Descriptions.Item label="Nota:" span={3}>
@@ -651,7 +652,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
         onConfirm={handleAnularConfirm}
         documento={`${data?.documento?.codigo || rutaBase}-${data?.noDocumento || ''}`}
         fechaDocumento={data?.fechaDocumento || ''}
-        periodoCerrado={data?.periodo === 6}
+        periodoCerrado={toPeriodoNum(data?.periodo) === 6}
       />
     </div>
   );

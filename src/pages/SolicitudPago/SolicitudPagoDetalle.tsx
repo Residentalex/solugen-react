@@ -13,6 +13,7 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard/TransaccionesAsociadasCard';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
+import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import { useAplicar } from '../../hooks/useAplicar';
@@ -22,7 +23,7 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 
 const { Text } = Typography;
@@ -92,7 +93,7 @@ const SolicitudPagoDetalle: React.FC = () => {
         setData(res);
         setPageTitleOverride(`SPA-${res.noDocumento || id}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
-        if (res.estado === 3 && (res as any).reversoID) {
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           solicitudPagoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
@@ -122,7 +123,7 @@ const SolicitudPagoDetalle: React.FC = () => {
         setData(res);
         setPageTitleOverride(`SPA-${res.noDocumento || id}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
-        if (res.estado === 3 && (res as any).reversoID) {
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           solicitudPagoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
@@ -170,7 +171,7 @@ const SolicitudPagoDetalle: React.FC = () => {
       message.success('Documento anulado exitosamente');
       const res = await solicitudPagoApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
-      if (res.estado === 3 && (res as any).reversoID) {
+      if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
         const revRes = await solicitudPagoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
@@ -218,7 +219,7 @@ const SolicitudPagoDetalle: React.FC = () => {
       message.success('Documento reversado exitosamente');
       const res = await solicitudPagoApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
-      if (res.estado === 3 && (res as any).reversoID) {
+      if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
         const revRes = await solicitudPagoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
@@ -259,8 +260,8 @@ const SolicitudPagoDetalle: React.FC = () => {
 
   const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const isLarge = screens.xxl === true;
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[documentoActivo.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = documentoActivo.periodo === 6;
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(documentoActivo.estado)] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
 
   // asientoColumns reemplazado por AsientosContableTable compartido
 
@@ -298,7 +299,7 @@ const SolicitudPagoDetalle: React.FC = () => {
         showImprimir={false}
         extraButtons={id ? (
           <>
-            {data?.estado === 3 && reversoData && (
+            {toEstadoNum(data?.estado) === 3 && reversoData && (
               <Switch
                 checked={mostrandoReverso}
                 checkedChildren="Reverso"
@@ -347,7 +348,9 @@ const SolicitudPagoDetalle: React.FC = () => {
                   {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Entidad">{strVal(documentoActivo.entidad)}</Descriptions.Item>
-                <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                </Descriptions.Item>
                 <Descriptions.Item label="Cuenta Bancaria">{documentoActivo.cuentaBancaria || '-'}</Descriptions.Item>
                 <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="No. Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
@@ -435,7 +438,9 @@ const SolicitudPagoDetalle: React.FC = () => {
                 {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
               </Descriptions.Item>
               <Descriptions.Item label="Entidad">{strVal(documentoActivo.entidad)}</Descriptions.Item>
-              <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                </Descriptions.Item>
               <Descriptions.Item label="Cuenta Bancaria">{documentoActivo.cuentaBancaria || '-'}</Descriptions.Item>
               <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
               <Descriptions.Item label="No. Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>

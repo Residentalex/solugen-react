@@ -18,6 +18,7 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
+import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import { useAplicar } from '../../hooks/useAplicar';
@@ -27,7 +28,7 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 
 const { Text } = Typography;
@@ -262,8 +263,8 @@ const OrdenCompraDetalle: React.FC = () => {
   // ===== Cálculos derivados =====
 
   const isLarge = screens.xxl === true;
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = data.periodo === 6;
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(data.estado)] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = toPeriodoNum(data.periodo) === 6;
 
   const detallesFiltrados = detalleSearch
     ? (data.detalles || []).filter((d: any) => {
@@ -485,8 +486,8 @@ const OrdenCompraDetalle: React.FC = () => {
                 <Descriptions.Item label="Suplidor">
                   {data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Referencia">
-                  {data.referencia || '-'}
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={data.codigoSucursal} />
                 </Descriptions.Item>
                 {data.nota && (
                   <Descriptions.Item label="Nota" span={3}>
@@ -581,7 +582,9 @@ const OrdenCompraDetalle: React.FC = () => {
               <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
               <Descriptions.Item label="Suplidor">{data.suplidor?.nombre ? toTitleCase(data.suplidor.nombre) : '-'}</Descriptions.Item>
               <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Referencia">{data.referencia || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                </Descriptions.Item>
             </Descriptions>
           </Card>
 

@@ -14,16 +14,16 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { transaccionApi } from '../../api/transaccionApi';
 import type { TransaccionDTO, TransaccionAsientoDTO } from '../../types/transaccion';
 import { ErrorDetalle } from '../../components';
-import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import LogTable from '../../components/LogTable';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import { formatCurrency } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { obtenerNombreSucursal } from '../../utils/sucursalEnumMapper';
+import SucursalField from '../../components/SucursalField';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import CobrosCard from '../../components/CobrosCard';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
@@ -60,7 +60,6 @@ const AsientoContableDetalle: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
   const [documentosRelacionados, setDocumentosRelacionados] = React.useState<DocumentoRelacionDTO[]>([]);
-  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     setActiveModule(screenCode);
@@ -126,8 +125,8 @@ const AsientoContableDetalle: React.FC = () => {
   if (!data) return null;
 
   const isLarge = screens.lg ?? true;
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[data.estado] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = data.periodo === 6;
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(data.estado)] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = toPeriodoNum(data.periodo) === 6;
 
   return (
     <div>
@@ -147,7 +146,6 @@ const AsientoContableDetalle: React.FC = () => {
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <SucursalDocumentoSelector value={sucursalDestino} onChange={setSucursalDestino} />
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FAsientoContable')}>
           Volver
         </Button>
@@ -197,7 +195,7 @@ const AsientoContableDetalle: React.FC = () => {
                   {data.referencia || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  {obtenerNombreSucursal(data.codigoSucursal)}
+                  <SucursalField codigoSucursal={data.codigoSucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="NCF Modificado:">
                   {data.ncfModificado || '-'}
@@ -281,7 +279,7 @@ const AsientoContableDetalle: React.FC = () => {
               <Descriptions.Item label="Concepto:">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : toTitleCase(data.concepto?.nombre || data.codigoConcepto || '-')}</Descriptions.Item>
               <Descriptions.Item label="NCF:">{data.ncf || '-'}</Descriptions.Item>
               <Descriptions.Item label="Referencia:">{data.referencia || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Sucursal:">{obtenerNombreSucursal(data.codigoSucursal)}</Descriptions.Item>
+              <Descriptions.Item label="Sucursal:"><SucursalField codigoSucursal={data.codigoSucursal} /></Descriptions.Item>
               <Descriptions.Item label="NCF Modificado:">{data.ncfModificado || '-'}</Descriptions.Item>
               <Descriptions.Item label="Nota:"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
             </Descriptions>

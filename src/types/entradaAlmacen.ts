@@ -66,6 +66,7 @@ export interface ConceptoDTO {
   moneda?: MonedaDTO;
   almacen?: AlmacenDTO;
   cuentaContable?: CuentaContableDTO;
+  noCuenta?: string;
   tipoIngreso?: number;
   sucursalDestino?: CompaniaDTO;
   conceptoDestino?: string;
@@ -211,6 +212,8 @@ export interface EntradaAlmacenDTO {
   logs: LogDTO[];
   revisado?: boolean;
   actualizarCostos?: boolean;
+  codigoTipo?: string;
+  tipo?: { nombre?: string; codigo?: string; idExterno?: string | number };
   codigoAlmacenOrigen?: string;
   codigoAlmacenDestino?: string;
   fechaEntrega?: string;

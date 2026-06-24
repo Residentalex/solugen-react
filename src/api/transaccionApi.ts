@@ -38,6 +38,23 @@ export const transaccionApi = {
     return data.data || [];
   },
 
+  /** Obtener transacciones con cuentas inválidas (inexistentes o de control) */
+  obtenerCuentasInvalidas: async (
+    sucursal: number,
+    desde: string,
+    hasta: string,
+    tipoDoc?: string
+  ): Promise<TransaccionDTO[]> => {
+    const params: Record<string, string> = { desde, hasta };
+    if (tipoDoc) params.tipoDoc = tipoDoc;
+
+    const { data } = await apiClient.get<ApiResponse<TransaccionDTO[]>>(
+      `${BASE}/${sucursal}/asientosintegridad`,
+      { params }
+    );
+    return data.data || [];
+  },
+
   /** Obtener transacciones anuladas (paginado) */
   obtenerAnulados: async (
     sucursal: number,

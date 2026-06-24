@@ -1,6 +1,6 @@
 import React from 'react';
 import { Typography } from 'antd';
-import { getInitials, toTitleCase, getColorMonograma, getColorFromName } from '../utils/formats';
+import { getInitials, toTitleCase, getColorMonograma, getColorFromName, truncateText } from '../utils/formats';
 
 const { Text } = Typography;
 
@@ -23,7 +23,7 @@ const EntidadColumnCell: React.FC<EntidadColumnCellProps> = ({ name, diasCredito
         {getInitials(name)}
       </div>
       <div>
-        <div><Text>{toTitleCase(name) || ''}</Text></div>
+        <div><Text>{truncateText(toTitleCase(name))}</Text></div>
         {identificacion && (
           <div className="paces-text-secondary" style={{ fontSize: 10, lineHeight: 1.4, marginTop: 1 }}>
             RNC: {identificacion}

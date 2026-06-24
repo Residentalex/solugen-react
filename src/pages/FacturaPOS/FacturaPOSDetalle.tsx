@@ -24,12 +24,13 @@ import PermissionGate from '../../components/PermissionGate';
 import LogTable from '../../components/LogTable';
 import { formatCurrency } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { resolveEstado } from '../../utils/estadoDocumento';
+import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import CobrosMinimal from '../../components/CobrosCard/CobrosMinimal';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import DetalleToolbar from '../../components/DetalleToolbar';
+import SucursalField from '../../components/SucursalField';
 
 const { Text } = Typography;
 
@@ -138,7 +139,7 @@ const FacturaPOSDetalle: React.FC = () => {
   const isLarge = screens.xxl === true;
 
   const estadoInfo = resolveEstado(data.estado);
-  const esCerrado = data.periodo === 6;
+  const esCerrado = toPeriodoNum(data.periodo) === 6;
 
   const detallesFiltrados = detalleSearch
     ? (data.detalles || []).filter((d) => {
@@ -460,6 +461,9 @@ const FacturaPOSDetalle: React.FC = () => {
                     </div>
                   )}
                 </Descriptions.Item>
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                </Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
@@ -646,6 +650,9 @@ const FacturaPOSDetalle: React.FC = () => {
                       <Tag style={{ background: '#d9d9d9', borderColor: '#d9d9d9', color: '#595959', marginRight: 0 }}>Local</Tag>
                     </div>
                   )}
+                </Descriptions.Item>
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={data.codigoSucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>

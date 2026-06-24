@@ -15,6 +15,8 @@ export interface FacturaSuplidorDTO {
   nota: string;
   total: number;
   documento: DocumentoDTO;
+  tipoDocumento: number;
+  tipoEntidad: string;
 }
 
 // ===== Interfaces específicas de Factura Suplidor =====
@@ -75,6 +77,8 @@ export interface FacturaSuplidorFullDTO {
   tipo: TipoDTO | null;
   moneda: MonedaDTO | null;
   documento: DocumentoDTO;
+  tipoDocumento: number;
+  tipoEntidad: string;
   entradaAlmacen?: EntradaReferenciaDTO | null;
 
   subTotal: number;

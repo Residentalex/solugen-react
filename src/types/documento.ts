@@ -2,6 +2,7 @@ export interface DocumentoDTO {
   id: number;
   codigo: string;
   nombre?: string;
+  tipo?: string;
   longitudCodigo?: number;
   puedeReimprimir?: boolean;
   recibePagos?: boolean;

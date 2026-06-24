@@ -22,6 +22,13 @@ const ICONOS_SUCURSAL: Record<string, React.ReactNode> = {
   Compra: <PieChartOutlined />,
 };
 
+/** Convierte el valor numérico Sucursal a su clave string (ej: 0 → "OrensePlaza") */
+function sucursalKey(valor: number): string | undefined {
+  return (Object.keys(Sucursal) as (keyof typeof Sucursal)[]).find(
+    (k) => Sucursal[k] === valor,
+  );
+}
+
 const PasoSucursal: React.FC<Props> = ({ value, onChange }) => {
   const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
   const isDarkMode = useUIStore((s) => s.isDarkMode);
@@ -32,11 +39,11 @@ const PasoSucursal: React.FC<Props> = ({ value, onChange }) => {
     Sucursal[nombre as keyof typeof Sucursal];
 
   const SUCURSALES: { value: Sucursal; label: string; icon: React.ReactNode }[] = (sucursalesData || [])
-    .filter((s: any) => sucursalId(s.sucursal) !== undefined)
+    .filter((s: any) => s.sucursal !== undefined && s.sucursal !== null)
     .map((s: any) => ({
-      value: sucursalId(s.sucursal)!,
+      value: s.sucursal as Sucursal,
       label: s.nombre,
-      icon: ICONOS_SUCURSAL[s.sucursal] || <BankOutlined />,
+      icon: ICONOS_SUCURSAL[sucursalKey(s.sucursal) || ''] || <BankOutlined />,
     }));
 
   const sucursalesMostrar = SUCURSALES.filter((s) =>

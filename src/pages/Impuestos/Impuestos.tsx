@@ -11,19 +11,20 @@ import {
   MetodoCalculoImpuesto,
   AmbitoImpuesto,
   BaseCalculoImpuesto,
+  TipoImpuesto,
 } from '../../types/contabilidad';
 import { toTitleCase } from '../../utils/formats';
 import BuscarCuentaContableModal from '../../components/BuscarCuentaContableModal/BuscarCuentaContableModal';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
-const TIPO_IMPUESTO_LABEL: Record<string, { label: string; color: string }> = {
+const TIPO_IMPUESTO_LABEL: Record<string, { label: string }> = {
   I: { label: 'Impuesto', color: 'blue' },
   L: { label: 'Liquidación', color: 'orange' },
   V: { label: 'Informativo', color: 'purple' },
   R: { label: 'Retención', color: 'red' },
 };
 
-const AMBITO_LABEL: Record<number, string> = {
+const AMBITO_LABEL: Record<string, string> = {
   [AmbitoImpuesto.Venta]: 'Venta',
   [AmbitoImpuesto.Compra]: 'Compra',
   [AmbitoImpuesto.Ninguno]: 'Ninguno',
@@ -61,11 +62,8 @@ const Impuestos: React.FC = () => {
       const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
       if (searchText) params.busqueda = searchText;
 
-      const [resultados, totalCount] = await Promise.all([
-        impuestoApi.filtrar(sucursalActiva, params),
-        impuestoApi.obtenerTotal(sucursalActiva, { busqueda: searchText || undefined }),
-      ]);
-      return { datos: resultados || [], total: totalCount ?? 0 };
+      const { items, total } = await impuestoApi.filtrar(sucursalActiva, params);
+      return { datos: items, total };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -96,12 +94,11 @@ const Impuestos: React.FC = () => {
   useEffect(() => {
     if (!modalVisible) return;
     if (editando) {
-      const TIPO_MAP_REVERSE: Record<number, string> = { 0: 'I', 1: 'L', 2: 'V', 3: 'R' };
       form.setFieldsValue({
         codigo: editando.codigo,
         nombre: editando.nombre,
         porcentaje: editando.porcentaje,
-        tipo: TIPO_MAP_REVERSE[editando.tipo as unknown as number] ?? editando.tipo,
+        tipo: editando.tipo,
         ambito: editando.ambito,
         metodoCalculo: editando.metodoCalculo,
         baseCalculo: editando.baseCalculo,
@@ -127,9 +124,7 @@ const Impuestos: React.FC = () => {
       const values = await form.validateFields();
       if (sucursalActiva === undefined) return;
       setGuardando(true);
-      // Convertir tipo de string a numero (I=0, L=1, V=2, R=3)
-      const TIPO_MAP: Record<string, number> = { I: 0, L: 1, V: 2, R: 3 };
-      const payload = { ...values, tipo: TIPO_MAP[values.tipo] ?? values.tipo };
+      const payload = { ...values };
       if (editando) {
         await impuestoApi.actualizar(sucursalActiva, editando.codigo, payload);
         message.success('Impuesto actualizado correctamente');
@@ -188,11 +183,7 @@ const Impuestos: React.FC = () => {
       dataIndex: 'tipo',
       key: 'tipo',
       width: 120,
-      render: (tipo: number) => {
-        const TIPO_NUM_MAP: Record<number, string> = { 0: 'I', 1: 'L', 2: 'V', 3: 'R' };
-        const key = TIPO_NUM_MAP[tipo] ?? tipo;
-        return <Text>{TIPO_IMPUESTO_LABEL[key]?.label || key}</Text>;
-      },
+      render: (tipo: TipoImpuesto) => <Text>{TIPO_IMPUESTO_LABEL[tipo]?.label || tipo}</Text>,
     },
     {
       title: 'Ámbito',

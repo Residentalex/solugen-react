@@ -8,7 +8,7 @@ const { Text } = Typography;
 
 // ===== Helpers =====
 function formatDateDisplay(dateStr: string): string {
-  if (!dateStr) return 'â€”';
+  if (!dateStr) return '—';
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
@@ -35,6 +35,7 @@ interface CierreReaperturaModalProps {
   open: boolean;
   sucursal: number;
   fechaCierreActual: string;
+  codigoUsuario: string;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -43,6 +44,7 @@ const CierreReaperturaModal: React.FC<CierreReaperturaModalProps> = ({
   open,
   sucursal,
   fechaCierreActual,
+  codigoUsuario,
   onClose,
   onSuccess,
 }) => {
@@ -68,12 +70,13 @@ const CierreReaperturaModal: React.FC<CierreReaperturaModalProps> = ({
     setError(null);
 
     try {
-      const fechaNuevaStr = formatDateISO(fechaNueva.toDate());
+      const fechaNuevaStr = fechaNueva.toDate().toISOString();
       const fechaAnterior = fechaCierreActual
-        ? formatDateISO(new Date(fechaCierreActual))
-        : formatDateISO(new Date());
+        ? new Date(fechaCierreActual).toISOString()
+        : new Date().toISOString();
+      const razon = 'Reapertura manual de cierre de inventario';
 
-      await cierreInventarioApi.reaperturar(sucursal, fechaNuevaStr, fechaAnterior);
+      await cierreInventarioApi.reaperturar(sucursal, fechaNuevaStr, fechaAnterior, razon, codigoUsuario);
       message.success('PerÃ­odo reaperturado exitosamente');
       onSuccess();
     } catch (err: any) {

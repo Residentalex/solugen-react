@@ -14,6 +14,22 @@ import type {
 } from './facturaPOS';
 import type { DocumentoDTO } from './documento';
 
+export interface FacturaClienteResumenDTO {
+  id: number;
+  fecha: string;
+  documento: string;
+  cliente: string;
+  clienteIdentificacion: string;
+  concepto: string;
+  ncf: string;
+  ncfModificado: string;
+  turno: string;
+  total: string;
+  estado: string;
+  periodo: string;
+  referencia: string;
+}
+
 export type {
   ClienteDTO,
   EntidadDTO,

@@ -212,9 +212,34 @@ const ApiTokens: React.FC = () => {
         onCancel={() => setRenovarModal({ open: false, token: '', nombre: '' })}
         footer={
           <Space>
-            <Button onClick={() => {
-              navigator.clipboard.writeText(renovarModal.token);
-              message.success('Token copiado al portapapeles');
+            <Button onClick={async () => {
+              const texto = renovarModal.token;
+              let exito = false;
+              if (navigator.clipboard?.writeText) {
+                try {
+                  await navigator.clipboard.writeText(texto);
+                  exito = true;
+                } catch { /* fallback */ }
+              }
+              if (!exito) {
+                try {
+                  const ta = document.createElement('textarea');
+                  ta.value = texto;
+                  ta.style.position = 'fixed';
+                  ta.style.opacity = '0';
+                  ta.style.left = '-9999px';
+                  document.body.appendChild(ta);
+                  ta.select();
+                  document.execCommand('copy');
+                  document.body.removeChild(ta);
+                  exito = true;
+                } catch { /* nada */ }
+              }
+              if (exito) {
+                message.success('Token copiado al portapapeles');
+              } else {
+                message.error('No se pudo copiar el token');
+              }
             }} icon={<CopyOutlined />}>
               Copiar
             </Button>

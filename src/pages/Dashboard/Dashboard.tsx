@@ -594,7 +594,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                       { title: 'Cliente', dataIndex: 'cliente', key: 'cliente', ellipsis: true, render: (v: string) => <Text style={{ fontSize: 12 }}>{v ? v.toLowerCase().split(' ').map((s:string) => s.charAt(0).toUpperCase()+s.slice(1)).join(' ') : '-'}</Text> },
                       { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 140, render: (v: string) => <Text code style={{ fontSize: 11 }}>{v || '-'}</Text> },
                       { title: 'Mensaje DGII', dataIndex: 'respuestaDGII', key: 'respuestaDGII', ellipsis: true, render: (v: string) => v ? <Text style={{ color: '#f46a6a', fontSize: 12 }}>{v}</Text> : <Text className="paces-text-placeholder" style={{ fontSize: 12 }}>-</Text> },
-                      { title: 'Sucursal', dataIndex: 'sucursal', key: 'sucursal', width: 120, render: (v: number) => <Text style={{ fontSize: 12 }}>{['Orense Plaza','Hiper Romana','O. Villa Hermosa','El Ofertazo'][v] || `Suc ${v}`}</Text> },
+                      { title: 'Sucursal', dataIndex: 'sucursalNombre', key: 'sucursalNombre', width: 120, render: (v: string) => <Text style={{ fontSize: 12 }}>{v || '-'}</Text> },
                     ]}
                     style={{ borderTop: '1px solid var(--paces-border)' }}
                   />

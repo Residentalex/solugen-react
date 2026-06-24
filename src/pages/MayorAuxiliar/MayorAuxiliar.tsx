@@ -12,7 +12,7 @@ import { mayorAuxiliarApi } from '../../api/mayorAuxiliarApi';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
 import { companiaApi } from '../../api/companiaApi';
 import { formatDateParam } from '../../utils/formats';
-import type { CuentaContableDTO } from '../../types/contabilidad';
+import type { CuentaContableResumenDTO } from '../../types/contabilidad';
 
 const { Text } = Typography;
 
@@ -61,8 +61,8 @@ const MayorAuxiliar: React.FC = () => {
 
   // Modal de busqueda de cuenta contable
   const [modalCuentaAbierto, setModalCuentaAbierto] = useState(false);
-  const [cuentas, setCuentas] = useState<CuentaContableDTO[]>([]);
-  const [cuentasOrig, setCuentasOrig] = useState<CuentaContableDTO[]>([]);
+  const [cuentas, setCuentas] = useState<CuentaContableResumenDTO[]>([]);
+  const [cuentasOrig, setCuentasOrig] = useState<CuentaContableResumenDTO[]>([]);
   const [buscandoCuenta, setBuscandoCuenta] = useState(false);
   const [_searchCuenta, setSearchCuenta] = useState('');
   const cuentaSearchRef = useRef<any>(null);
@@ -322,7 +322,7 @@ const MayorAuxiliar: React.FC = () => {
     setCuentas(filtradas);
   };
 
-  const seleccionarCuenta = (item: CuentaContableDTO) => {
+  const seleccionarCuenta = (item: CuentaContableResumenDTO) => {
     setNoCuenta(item.noCuenta);
     setNomCuenta(`${item.noCuenta} - ${item.nombre}`);
     setModalCuentaAbierto(false);
@@ -581,7 +581,7 @@ const MayorAuxiliar: React.FC = () => {
           loading={buscandoCuenta}
           size="small"
           pagination={{ pageSize: 10, showSizeChanger: false }}
-          onRow={(record: CuentaContableDTO) => ({
+          onRow={(record: CuentaContableResumenDTO) => ({
             onClick: () => seleccionarCuenta(record),
             style: { cursor: 'pointer' },
           })}

@@ -1,6 +1,7 @@
 /** DTO de transacción para el reporte de antigüedad de saldos */
 export interface TransaccionBalanceDTO {
   id: number;
+  tipoDocumento?: string;
   noDocumento: string;
   ncf: string;
   fechaDocumento: string;

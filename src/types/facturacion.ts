@@ -83,6 +83,17 @@ export interface ClienteDTO {
   codigoMoneda?: string;
 }
 
+export interface ClienteVistaDTO {
+  codigo: string;
+  nombre: string;
+  identificacion: string;
+  telefono: string;
+  correoElectronico: string;
+  activo: boolean;
+  vendedorNombre: string;
+  balance: number;
+}
+
 // Basado en PuntoVentaDTO.cs
 export interface PuntoVentaDTO {
   nombre: string;
@@ -106,6 +117,7 @@ export interface FacturaVistaDTO {
   fecha: string;
   documento: string;
   entidad: string;
+  identificacion?: string;
   concepto: string;
   referencia: string;
   ncf: string;
@@ -190,6 +202,7 @@ export interface EnvioDGIIDTO {
   tipoDocumento?: number;
   tipoComprobante?: string;
   sucursal: number;
+  sucursalNombre?: string;
   transaccionID: number;
   fechaEnvio?: string;
   estado?: string;

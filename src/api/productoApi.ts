@@ -1,10 +1,18 @@
 import { apiClient } from './client';
-import type { ProductoListaDTO, ProductoDTO, FiltroProducto, ResultadoImportacionDTO, ProductoImportadoDTO } from '../types/productos';
+import type { ProductoListaDTO, ProductoDTO, ProductoVistaDTO, FiltroProducto, ResultadoImportacionDTO, ProductoImportadoDTO } from '../types/productos';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/Producto';
 
 export const productoApi = {
+  obtenerVista: async (
+    sucursal: number,
+    params?: { cantidad?: number; salto?: number; codigo?: string; nombre?: string; activo?: boolean }
+  ): Promise<{ items: ProductoVistaDTO[]; total: number }> => {
+    const { data } = await apiClient.get<ApiResponse<ProductoVistaDTO[]>>(`${BASE}/${sucursal}/vista`, { params });
+    return { items: data.data ?? [], total: data.total ?? 0 };
+  },
+
   /** Obtener listado paginado */
   obtenerListado: async (
     sucursal: number,

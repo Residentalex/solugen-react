@@ -166,6 +166,7 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
       placement="top"
       trigger={[]}
       rootClassName="guide-popover"
+      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
     >
       <span
         style={{

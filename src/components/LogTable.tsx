@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Table, Tag, Tooltip, Empty } from 'antd';
 import { HistoryOutlined } from '@ant-design/icons';
 import { formatDate, toTitleCase } from '../utils/formats';
@@ -41,6 +41,18 @@ interface LogTableProps {
 }
 
 const LogTable: React.FC<LogTableProps> = ({ dataSource, loading, scroll }) => {
+  const sortedData = useMemo(() => {
+    if (!dataSource) return [];
+    return [...dataSource].sort((a, b) => {
+      const dateA = new Date(a.fecha).getTime();
+      const dateB = new Date(b.fecha).getTime();
+      if (dateA !== dateB) return dateB - dateA;
+      const idA = a.logid ?? a.id ?? 0;
+      const idB = b.logid ?? b.id ?? 0;
+      return idB - idA;
+    });
+  }, [dataSource]);
+
   const columns = [
     {
       title: 'Fecha / Hora',
@@ -133,7 +145,7 @@ const LogTable: React.FC<LogTableProps> = ({ dataSource, loading, scroll }) => {
   // Modo tabla
   return (
     <Table
-      dataSource={dataSource || []}
+      dataSource={sortedData}
       columns={columns}
       rowKey={(record) => String(record.id ?? record.logid ?? `${record.fecha}-${record.accion}-${record.usuario?.nombreUsuario ?? ''}`)}
       size="small"

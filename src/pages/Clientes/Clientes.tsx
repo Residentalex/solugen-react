@@ -1,24 +1,24 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
-  Card, Table, Button, Select, Tag, Typography, Alert, Empty,
+  Card, Table, Button, Select, Tag, Typography, Alert, Empty, Space,
 } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useQuery } from '@tanstack/react-query';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { clienteApi } from '../../api/clienteApi';
-import PermissionGate from '../../components/PermissionGate';
 import { toTitleCase, formatCurrency } from '../../utils/formats';
-import type { ClienteDTO } from '../../types/facturacion';
+import type { ClienteVistaDTO } from '../../types/facturacion';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
 
+
+
 const Clientes: React.FC = () => {
-  const navigate = useNavigate();
+
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
@@ -44,17 +44,17 @@ const Clientes: React.FC = () => {
     queryFn: async () => {
       const salto = (page - 1) * pageSize;
       const soloActivos = filtroActivo === 'todos' ? undefined : filtroActivo === 'activos';
-      const params: { filas?: number; salto?: number; codigo?: string; activo?: boolean } = {
-        filas: pageSize, salto,
+      const params: { cantidad?: number; salto?: number; codigo?: string; nombre?: string; activo?: boolean } = {
+        cantidad: pageSize, salto,
       };
       if (soloActivos !== undefined) params.activo = soloActivos;
-      if (searchText) params.codigo = searchText;
+      if (searchText) {
+        params.codigo = searchText;
+        params.nombre = searchText;
+      }
 
-      const [resultados, totalCount] = await Promise.all([
-        clienteApi.obtenerListado(sucursalClientes, params).catch(() => [] as ClienteDTO[]),
-        clienteApi.obtenerTotal(sucursalClientes, { codigo: searchText || undefined, activo: soloActivos }).catch(() => 0),
-      ]);
-      return { datos: resultados || [], total: totalCount ?? 0 };
+      const { items, total } = await clienteApi.obtenerVista(sucursalClientes, params);
+      return { datos: items || [], total };
     },
     enabled: sucursalClientes !== undefined,
   });
@@ -64,16 +64,16 @@ const Clientes: React.FC = () => {
     setPage(1);
   };
 
-  const abrirNuevo = () => navigate('/MCliente/nuevo');
+  const abrirNuevo = () => window.location.href = '/MCliente/nuevo';
 
-  const columns: ColumnsType<ClienteDTO> = [
+  const columns: ColumnsType<ClienteVistaDTO> = [
     {
       title: 'Código',
       dataIndex: 'codigo',
       key: 'codigo',
       width: 120,
       fixed: 'left',
-      render: (val: string, record: ClienteDTO) =>
+      render: (val: string, record: ClienteVistaDTO) =>
         puedeEditar ? (
           <Link to={`/MCliente/${record.codigo}`} className="paces-doc-link" style={{ fontWeight: 500 }}>
             {val}
@@ -86,15 +86,13 @@ const Clientes: React.FC = () => {
       title: 'Nombre',
       dataIndex: 'nombre',
       key: 'nombre',
-      width: 280,
-      render: (val: string) => <Text strong>{toTitleCase(val ?? '')}</Text>,
-    },
-    {
-      title: 'Identificación',
-      dataIndex: 'identificacion',
-      key: 'identificacion',
-      width: 150,
-      render: (val: string) => <Text style={{ fontFamily: 'monospace' }}>{val || '-'}</Text>,
+      width: 320,
+      render: (name: string) => (
+        <Space>
+          <div className="paces-avatar-initials">{(name || '?').charAt(0).toUpperCase()}</div>
+          <Text>{toTitleCase(name || '')}</Text>
+        </Space>
+      ),
     },
     {
       title: 'Teléfono',
@@ -104,15 +102,6 @@ const Clientes: React.FC = () => {
       render: (val: string) => <Text>{val || '-'}</Text>,
     },
     {
-      title: 'Correo Electrónico',
-      dataIndex: 'correoElectronico',
-      key: 'correoElectronico',
-      width: 200,
-      render: (val: string) => val ? (
-        <Text type="secondary">{val}</Text>
-      ) : <Text>{'-'}</Text>,
-    },
-    {
       title: 'Estado',
       dataIndex: 'activo',
       key: 'activo',
@@ -120,13 +109,6 @@ const Clientes: React.FC = () => {
       render: (activo: boolean) => (
         <Tag color={activo ? 'green' : 'default'}>{activo ? 'Activo' : 'Inactivo'}</Tag>
       ),
-    },
-    {
-      title: 'Vendedor',
-      dataIndex: 'vendedorNombre',
-      key: 'vendedorNombre',
-      width: 150,
-      render: (val: string) => <Text>{val || '-'}</Text>,
     },
     {
       title: 'Balance',
@@ -176,7 +158,7 @@ const Clientes: React.FC = () => {
             />
           }
         />
-        <Table<ClienteDTO>
+        <Table<ClienteVistaDTO>
           columns={columns}
           dataSource={data?.datos || []}
           rowKey="codigo"
