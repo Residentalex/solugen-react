@@ -43,6 +43,7 @@ export interface EntidadDTO {
   direccion?: string;
   requiereORC?: boolean;
   activo?: boolean;
+  diasCredito?: number;
 }
 
 export interface TipoEntidadDTO {

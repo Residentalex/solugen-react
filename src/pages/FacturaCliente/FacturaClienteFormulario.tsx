@@ -39,8 +39,10 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import GuidePopover from '../../components/GuidePopover/GuidePopover';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
-import ImpuestosFacturaEditables from '../../components/ImpuestosFacturaEditables';
+import SeleccionarImpuestosModal from '../../components/SeleccionarImpuestosModal';
+import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestosModal';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
@@ -141,6 +143,7 @@ const FacturaClienteFormulario: React.FC = () => {
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
   const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
   const [impuestosFactura, setImpuestosFactura] = useState<any[]>([]);
+  const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
 
   // Cache de medidas
   const [medidasCache, setMedidasCache] = useState<any[]>([]);
@@ -375,6 +378,31 @@ const FacturaClienteFormulario: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
+
+  // ===== Handler del modal de impuestos compartido =====
+  const handleConfirmarImpuestos = (items: ImpuestoSeleccionado[]) => {
+    const mapeados = items.map((i) => ({
+      id: i.codigo,
+      codigo: i.codigo,
+      nombre: i.nombre,
+      porcentaje: i.porcentaje,
+      tipo: i.tipo,
+      monto: i.monto,
+      impuesto: { nombre: i.nombre, porcentaje: i.porcentaje },
+    }));
+    setImpuestosFactura((prev: any[]) => {
+      const existentes = new Map(prev.map((i: any) => [i.codigo, i]));
+      for (const n of mapeados) {
+        const existente = existentes.get(n.codigo);
+        if (existente) {
+          existentes.set(n.codigo, { ...existente, monto: existente.monto ?? n.monto });
+        } else {
+          existentes.set(n.codigo, n);
+        }
+      }
+      return Array.from(existentes.values());
+    });
+  };
 
   // ===== Handlers =====
   const handleCancelar = () => {
@@ -1339,6 +1367,72 @@ const FacturaClienteFormulario: React.FC = () => {
     </Card>
   );
 
+  // ===== Columnas de impuestos =====
+  const impuestoColumns = [
+    {
+      title: 'Tipo',
+      dataIndex: 'tipo',
+      key: 'tipo',
+      width: 120,
+      render: (v: string) => <Text>{v || '-'}</Text>,
+    },
+    {
+      title: 'Nombre',
+      dataIndex: 'nombre',
+      key: 'nombre',
+      ellipsis: true,
+      render: (v: string) => <Text>{v || '-'}</Text>,
+    },
+    {
+      title: '%',
+      dataIndex: 'porcentaje',
+      key: 'porcentaje',
+      width: 80,
+      align: 'right' as const,
+      render: (v: number) => <Text>{v != null ? `${v}%` : '-'}</Text>,
+    },
+    {
+      title: 'Monto',
+      dataIndex: 'monto',
+      key: 'monto',
+      width: 140,
+      align: 'right' as const,
+      render: (_: any, _record: any, idx: number) => (
+        <InputNumber
+          size="small"
+          style={{ width: 120 }}
+          min={0}
+          step={0.01}
+          precision={2}
+          value={impuestosFactura[idx]?.monto}
+          onChange={(val) => {
+            setImpuestosFactura((prev: any[]) => {
+              const next = [...prev];
+              next[idx] = { ...next[idx], monto: val || 0 };
+              return next;
+            });
+          }}
+        />
+      ),
+    },
+    {
+      title: '',
+      key: 'accion',
+      width: 50,
+      render: (_: any, record: any, idx: number) => (
+        <Button
+          type="text"
+          danger
+          size="small"
+          icon={<DeleteOutlined />}
+          onClick={() => {
+            setImpuestosFactura((prev: any[]) => prev.filter((_: any, i: number) => i !== idx));
+          }}
+        />
+      ),
+    },
+  ];
+
   const handleRefresh = useCallback(() => {
     if (mode === 'crear') return;
     if (!id) return;
@@ -1418,6 +1512,22 @@ const FacturaClienteFormulario: React.FC = () => {
         mode="venta"
       />
 
+      {/* Modal de selección de impuestos */}
+      <SeleccionarImpuestosModal
+        open={modalImpuestosOpen}
+        onClose={() => setModalImpuestosOpen(false)}
+        onConfirm={handleConfirmarImpuestos}
+        tipoEntidad="CLI"
+        sucursal={sucursalActiva}
+        existentes={impuestosFactura.map((i: any) => ({
+          codigo: i.codigo || '',
+          nombre: i.nombre || '',
+          porcentaje: i.porcentaje || 0,
+          tipo: i.tipo || 'Impuesto',
+          monto: i.monto,
+        }))}
+      />
+
       {isLarge ? (
         /* === DESKTOP LAYOUT (>= xxl) === */
         <Row gutter={16}>
@@ -1495,11 +1605,27 @@ const FacturaClienteFormulario: React.FC = () => {
                   key: 'impuestos',
                   label: `Impuestos (${impuestosFactura.length})`,
                   children: (
-                    <ImpuestosFacturaEditables
-                      impuestos={impuestosFactura}
-                      onChange={setImpuestosFactura}
-                      editable={mode === 'crear' || mode === 'editar'}
-                    />
+                    <>
+                      <div style={{ marginBottom: 8 }}>
+                        <Button type="primary" ghost icon={<SearchOutlined />} onClick={() => setModalImpuestosOpen(true)}>
+                          Seleccionar del catálogo
+                        </Button>
+                        {impuestosFactura.length > 0 && (
+                          <Button type="link" danger style={{ marginLeft: 8 }} onClick={() => setImpuestosFactura([])}>
+                            Limpiar todos
+                          </Button>
+                        )}
+                      </div>
+                      <Table
+                        dataSource={impuestosFactura}
+                        columns={impuestoColumns}
+                        rowKey={(r: any) => r.id || r.codigo || Math.random()}
+                        size="small"
+                        pagination={false}
+                        scroll={{ x: 600 }}
+                        locale={{ emptyText: 'Sin impuestos seleccionados' }}
+                      />
+                    </>
                   ),
                 },
                 {
@@ -1599,15 +1725,31 @@ const FacturaClienteFormulario: React.FC = () => {
                     </>
                   ),
                 },
-                {
-                  key: 'impuestos',
-                  label: `Impuestos (${impuestosFactura.length})`,
-                children: (
-                  <ImpuestosFacturaEditables
-                    impuestos={impuestosFactura}
-                    onChange={setImpuestosFactura}
-                    editable={mode === 'crear' || mode === 'editar'}
-                  />
+              {
+                key: 'impuestos',
+                label: `Impuestos (${impuestosFactura.length})`,
+              children: (
+                  <>
+                    <div style={{ marginBottom: 8 }}>
+                      <Button type="primary" ghost icon={<SearchOutlined />} onClick={() => setModalImpuestosOpen(true)}>
+                        Seleccionar del catálogo
+                      </Button>
+                      {impuestosFactura.length > 0 && (
+                        <Button type="link" danger style={{ marginLeft: 8 }} onClick={() => setImpuestosFactura([])}>
+                          Limpiar todos
+                        </Button>
+                      )}
+                    </div>
+                    <Table
+                      dataSource={impuestosFactura}
+                      columns={impuestoColumns}
+                      rowKey={(r: any) => r.id || r.codigo || Math.random()}
+                      size="small"
+                      pagination={false}
+                      scroll={{ x: 600 }}
+                      locale={{ emptyText: 'Sin impuestos seleccionados' }}
+                    />
+                  </>
                 ),
               },
               {
@@ -1773,57 +1915,17 @@ const FacturaClienteGuide: React.FC<FacturaClienteGuideProps> = ({
     }
   }, [getCurrentStep]);
 
-  useEffect(() => {
-    if (!open) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.closest('.ant-popover')) return;
-      setOpen(false);
-      if (currentStepRef.current) {
-        dismissedStepRef.current = currentStepRef.current.key;
-      }
-    };
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [open]);
+  const currentStep = getCurrentStep();
+  if (!currentStep) return null;
 
-  if (!getCurrentStep()) return null;
-
-  const targetElement = getCurrentStep()!.target();
-  if (!targetElement) return null;
-
-  const rect = targetElement.getBoundingClientRect();
-
-  return createPortal(
-    <Popover
+  return (
+    <GuidePopover
+      title={currentStep.title}
+      description={currentStep.description}
+      targetElement={currentStep.target()}
       open={open}
-      onOpenChange={(visible) => {
-        if (!visible) {
-          setOpen(false);
-          if (currentStepRef.current) {
-            dismissedStepRef.current = currentStepRef.current.key;
-          }
-        }
-      }}
-      title={getCurrentStep()!.title}
-      content={getCurrentStep()!.description}
-      placement="top"
-      trigger={[]}
-      rootClassName="guide-popover"
-      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
-    >
-      <span style={{
-        position: 'fixed', top: rect.top, left: rect.left,
-        width: rect.width, height: rect.height,
-        pointerEvents: 'none', zIndex: -1,
-      }} />
-    </Popover>,
-    document.body,
+      onClose={() => { setOpen(false); dismissedStepRef.current = currentStepRef.current?.key || ''; }}
+    />
   );
 };
 

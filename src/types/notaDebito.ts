@@ -37,6 +37,7 @@ export interface NotaDebitoFullDTO {
   impuestos: number;
   retenciones: number;
   tasa: number;
+  diasCredito?: number;
   debitos: number;
   creditos: number;
   bienes?: number;

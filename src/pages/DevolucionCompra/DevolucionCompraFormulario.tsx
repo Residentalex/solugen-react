@@ -549,7 +549,9 @@ const DevolucionCompraFormulario: React.FC = () => {
       descuento: Math.round(totalDesc * 100) / 100,
       impuestos: Math.round(totalImp * 100) / 100,
       total: Math.round(total * 100) / 100,
+      retenciones: base.retenciones || 0,
       tasa: values.tasa || 1,
+      diasCredito: entidadSel?.diasCredito || base.diasCredito || 0,
       tipoDocumento: base.tipoDocumento ?? 24,
       tipoDocumentoExterno: selectedTipo?.idExterno,
       documento: base.documento || { codigo: documentCode },
@@ -560,7 +562,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       entidad: entidadSel
         ? { nombre: nombreEntidad, codigo: entidadSel.codigo, identificacion: identificacionEntidad, telefono: entidadSel.telefono, direccion: entidadSel.direccion }
         : { nombre: '', codigo: '', identificacion: '' },
-      tipo: selectedTipo || null,
+      codigoTipo: selectedTipo?.codigo || '',
       entrada: selectedEntrada || null,
       detalles: detallesSeguros,
       asientos: base.asientos || [],

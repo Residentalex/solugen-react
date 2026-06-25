@@ -5,8 +5,29 @@ export interface CompaniaTurnoDTO {
 
 export interface FacturaTurnoDTO {
   id: number;
-  documento: string;
+  noDocumento?: string;
+  documento?: string;
   total: number;
+  fechaDocumento?: string;
+  cliente?: {
+    nombre: string;
+    codigo: string;
+  };
+  [key: string]: any;
+}
+
+export interface CobroDTO {
+  efectivo: number;
+  cheque: number;
+  transferencia: number;
+  tarjetaCredito: number;
+  tarjetaDebito: number;
+  bono: number;
+  tarjetaRegalo: number;
+  notaCredito: number;
+  pago: number;
+  devuelta: number;
+  facturaId: number;
 }
 
 export interface TurnoDTO {
@@ -22,5 +43,11 @@ export interface TurnoDTO {
   total: number;
   sucursal: CompaniaTurnoDTO | null;
   facturas: FacturaTurnoDTO[];
-  cobros: any[];
+  cobros: CobroDTO[];
+  factura?: {
+    asientos?: any[];
+    logs?: any[];
+    [key: string]: any;
+  };
+  [key: string]: any;
 }

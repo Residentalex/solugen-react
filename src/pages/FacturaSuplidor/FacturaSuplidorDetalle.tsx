@@ -500,7 +500,6 @@ const FacturaSuplidorDetalle: React.FC = () => {
                 <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
 
                 <Descriptions.Item label="Tasa">{documentoActivo.tasa ? formatNumber(documentoActivo.tasa) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Vencimiento">{documentoActivo.fechaVencimiento ? formatDate(documentoActivo.fechaVencimiento) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Tipo Compra">{documentoActivo.tipoCompra === 'C' ? 'Contado' : documentoActivo.tipoCompra === 'D' ? 'Crédito' : documentoActivo.tipoCompra || '-'}</Descriptions.Item>
               </Descriptions>
             </Card>
@@ -611,7 +610,6 @@ const FacturaSuplidorDetalle: React.FC = () => {
                 <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
 
                 <Descriptions.Item label="Tasa">{documentoActivo.tasa ? formatNumber(documentoActivo.tasa) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Vencimiento">{documentoActivo.fechaVencimiento ? formatDate(documentoActivo.fechaVencimiento) : '-'}</Descriptions.Item>
               </Descriptions>
           </Card>
 

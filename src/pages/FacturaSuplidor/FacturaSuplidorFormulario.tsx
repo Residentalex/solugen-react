@@ -41,12 +41,14 @@ import type {
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
-import ImpuestosFacturaEditables from '../../components/ImpuestosFacturaEditables';
+import SeleccionarImpuestosModal from '../../components/SeleccionarImpuestosModal';
+import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestosModal';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import GuidePopover from '../../components/GuidePopover/GuidePopover';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
@@ -146,6 +148,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const [selectedSucursal, setSelectedSucursal] = useState<any>(null);
   const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
   const [impuestosFactura, setImpuestosFactura] = useState<any[]>([]);
+  const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
 
   // Refs para la guía
   const tipoRef = useRef<HTMLDivElement>(null);
@@ -267,12 +270,11 @@ const FacturaSuplidorFormulario: React.FC = () => {
       setSucursalesCache(authSucursales);
     }
 
-    // Inicializar fecha en modo crear
+    // Inicializar fecha y monto en modo crear
     if (mode === 'crear') {
       form.setFieldsValue({
         fechaDocumento: dayjs(),
-        fechaVencimiento: dayjs(),
-        fechaEntrega: dayjs(),
+        monto: 0,
       });
     }
 
@@ -308,14 +310,13 @@ const FacturaSuplidorFormulario: React.FC = () => {
           concepto: res.concepto?.codigo || '',
           suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
           fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          fechaVencimiento: res.fechaVencimiento ? dayjs(parseDateRaw(res.fechaVencimiento)) : null,
-          fechaEntrega: res.fechaEntrega ? dayjs(parseDateRaw(res.fechaEntrega)) : null,
           ncf: res.ncf || '',
           referencia: res.referencia || '',
-          diasCredito: res.diasCredito || 0,
           moneda: res.moneda?.nombre || '',
+          monto: res.total || 0,
           tasa: res.tasa || 1,
           nota: res.nota || '',
+          diasCredito: res.diasCredito ?? res.suplidor?.diasCredito ?? 0,
         });
 
         // Cargar suplidores
@@ -336,6 +337,31 @@ const FacturaSuplidorFormulario: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
+
+  // ===== Handler del modal de impuestos compartido =====
+  const handleConfirmarImpuestos = (items: ImpuestoSeleccionado[]) => {
+    const mapeados = items.map((i) => ({
+      id: i.codigo,
+      codigo: i.codigo,
+      nombre: i.nombre,
+      porcentaje: i.porcentaje,
+      tipo: i.tipo,
+      monto: i.monto,
+      impuesto: { nombre: i.nombre, porcentaje: i.porcentaje },
+    }));
+    setImpuestosFactura((prev: any[]) => {
+      const existentes = new Map(prev.map((i: any) => [i.codigo, i]));
+      for (const n of mapeados) {
+        const existente = existentes.get(n.codigo);
+        if (existente) {
+          existentes.set(n.codigo, { ...existente, monto: existente.monto ?? n.monto });
+        } else {
+          existentes.set(n.codigo, n);
+        }
+      }
+      return Array.from(existentes.values());
+    });
+  };
 
   // ===== Handlers =====
   const handleCancelar = () => {
@@ -372,14 +398,13 @@ const FacturaSuplidorFormulario: React.FC = () => {
                   concepto: res.concepto?.codigo || '',
                   suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
                   fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-                  fechaVencimiento: res.fechaVencimiento ? dayjs(parseDateRaw(res.fechaVencimiento)) : null,
-                  fechaEntrega: res.fechaEntrega ? dayjs(parseDateRaw(res.fechaEntrega)) : null,
                   ncf: res.ncf || '',
                   referencia: res.referencia || '',
-                  diasCredito: res.diasCredito || 0,
                   moneda: res.moneda?.nombre || '',
                   tasa: res.tasa || 1,
                   nota: res.nota || '',
+                  monto: res.total || 0,
+                  diasCredito: res.diasCredito ?? res.suplidor?.diasCredito ?? 0,
                 });
 
                 if (res.tipo?.idExterno) {
@@ -427,14 +452,6 @@ const FacturaSuplidorFormulario: React.FC = () => {
       }
     }
 
-    // Validar fecha entrega â‰¤ fecha doc
-    const fechaEntrega = values.fechaEntrega;
-    if (fechaDoc && dayjs.isDayjs(fechaDoc) && fechaEntrega && dayjs.isDayjs(fechaEntrega)) {
-      if (fechaEntrega.isAfter(fechaDoc, 'day')) {
-        return 'La fecha de entrega no puede ser mayor a la fecha del documento.';
-      }
-    }
-
     // Validar asientos cuadrados si existen
     const asientosAValidar = asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []);
     if (asientosAValidar.length > 0) {
@@ -461,28 +478,15 @@ const FacturaSuplidorFormulario: React.FC = () => {
         : values.fechaDocumento)
       : toISOFormat(new Date());
 
-    const fechaVenc = values.fechaVencimiento
-      ? (typeof values.fechaVencimiento === 'object' && values.fechaVencimiento.toDate
-          ? toISOFormat(values.fechaVencimiento.toDate())
-          : values.fechaVencimiento)
-      : undefined;
-
-    const fechaEnt = values.fechaEntrega
-      ? (typeof values.fechaEntrega === 'object' && values.fechaEntrega.toDate
-          ? toISOFormat(values.fechaEntrega.toDate())
-          : values.fechaEntrega)
-      : undefined;
-
     const totalSub = detalles.reduce((s, d) => s + (d.subTotal || 0), 0);
     const totalDesc = detalles.reduce((s, d) => s + (d.descuento || 0), 0);
     const totalImp = detalles.reduce((s, d) => s + (d.impuestos || 0), 0);
-    const total = detalles.reduce((s, d) => s + (d.total || 0), 0);
+    const totalCalculado = detalles.reduce((s, d) => s + (d.total || 0), 0);
+    const total = values.monto != null ? Number(values.monto) : totalCalculado;
 
     return {
       id: base.id || 0,
       fechaDocumento: fechaDoc,
-      fechaVencimiento: fechaVenc || '',
-      fechaEntrega: fechaEnt || '',
       noDocumento: base.noDocumento || '',
       estado: base.estado || 0,
       periodo: base.periodo || new Date().getMonth() + 1,
@@ -497,7 +501,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       tasa: values.tasa || 1,
       tipoDocumento: base.tipoDocumento ?? 60,  // RDE = 60 en enum TipoDocumento
       tipoEntidad: base.tipoEntidad || 'SUP',
-      diasCredito: values.diasCredito || 0,
+      diasCredito: values.diasCredito ?? 0,
       documento: base.documento || { codigo: documentCode },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
       moneda: base.moneda || getMonedaSucursalActiva(),
@@ -664,7 +668,10 @@ const FacturaSuplidorFormulario: React.FC = () => {
             impuesto: d.impuesto,
             tieneVencimiento: d.tieneVencimiento,
           }));
-          setDetalles(nuevosDetalles.map((d: DetalleFacturaSuplidorDTO) => calcularFila(d)));
+          const calculados = nuevosDetalles.map((d: DetalleFacturaSuplidorDTO) => calcularFila(d));
+          setDetalles(calculados);
+          const totalEntrada = calculados.reduce((s, d) => s + (d.total || 0), 0);
+          form.setFieldsValue({ monto: totalEntrada });
         } catch (err: any) {
           const msg = extraerMensajeError(err, 'Error al cargar detalles de la entrada');
           message.error(msg);
@@ -694,7 +701,10 @@ const FacturaSuplidorFormulario: React.FC = () => {
               impuesto: d.impuesto,
               tieneVencimiento: d.tieneVencimiento,
             }));
-            setDetalles(nuevosDetalles.map((d: DetalleFacturaSuplidorDTO) => calcularFila(d)));
+            const calculados = nuevosDetalles.map((d: DetalleFacturaSuplidorDTO) => calcularFila(d));
+            setDetalles(calculados);
+            const totalEntrada = calculados.reduce((s, d) => s + (d.total || 0), 0);
+            form.setFieldsValue({ monto: totalEntrada });
           } catch (err: any) {
             const msg = extraerMensajeError(err, 'Error al cargar detalles de la entrada');
             message.error(msg);
@@ -706,7 +716,10 @@ const FacturaSuplidorFormulario: React.FC = () => {
     setSelectedEntrada(entrada);
     if (entrada?.suplidor?.codigo) {
       setSelectedEntidad(entrada.suplidor);
-      form.setFieldsValue({ suplidor: entrada.suplidor.codigo });
+      form.setFieldsValue({
+        suplidor: entrada.suplidor.codigo,
+        diasCredito: entrada.suplidor.diasCredito ?? 0,
+      });
     }
   };
 
@@ -845,7 +858,33 @@ const FacturaSuplidorFormulario: React.FC = () => {
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
-          {/* Fila 1: Tipo + Concepto + Suplidor */}
+          {/* Fila 1: Sucursal (8) | Tipo Documento (8) | Concepto (8) */}
+          <Col xs={24} sm={12} lg={8}>
+            <div ref={sucursalRef}>
+              <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
+                <FloatingField label="Sucursal Contable">
+                  <Select
+                    allowClear
+                    showSearch
+                    optionFilterProp="children"
+                    placeholder=" "
+                    value={selectedSucursal?.sucursal ?? undefined}
+                    onChange={(val) => {
+                      const suc = sucursalesCache.find((s: any) => s.sucursal === val);
+                      setSelectedSucursal(suc || null);
+                    }}
+                  >
+                    {sucursalesCache.map((suc: any) => (
+                      <Select.Option key={suc.sucursal} value={suc.sucursal}>
+                        {toTitleCase(suc.nombre || '')}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </FloatingField>
+              </Form.Item>
+            </div>
+          </Col>
+
           <Col xs={24} sm={12} lg={8}>
             <div ref={tipoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
               <div style={{ flex: 1 }}>
@@ -892,9 +931,23 @@ const FacturaSuplidorFormulario: React.FC = () => {
               </div>
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
+            {conceptoInfo && (
+              <div style={{ marginTop: 4 }}>
+                <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
+              </div>
+            )}
           </Col>
 
+          {/* Fila 2: Fecha Documento (8) | Suplidor (16) */}
           <Col xs={24} sm={12} lg={8}>
+            <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
+              <FloatingField label="Fecha Documento" required>
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+              </FloatingField>
+            </Form.Item>
+          </Col>
+
+          <Col xs={24} sm={12} lg={16}>
             <div ref={suplidorRef}>
               <Form.Item name="suplidor" required style={{ marginBottom: 0 }}>
                 <FloatingField label="Suplidor" required>
@@ -907,6 +960,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
                     onChange={(val) => {
                       const ent = suplidoresCache.find((e) => e.codigo === val);
                       setSelectedEntidad(ent || null);
+                      form.setFieldsValue({ diasCredito: ent?.diasCredito ?? 0 });
                     }}
                   >
                     {suplidoresCache.map((ent) => (
@@ -920,38 +974,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
             </div>
           </Col>
 
-          {conceptoInfo && (
-            <Col xs={24}>
-              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-            </Col>
-          )}
-
-          {/* Fila 2: Fecha Doc + Fecha Vencimiento + Fecha Entrega */}
-          <Col xs={24} sm={12} lg={8}>
-            <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Fecha Documento" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-              </FloatingField>
-            </Form.Item>
-          </Col>
-
-          <Col xs={24} sm={12} lg={8}>
-            <Form.Item name="fechaVencimiento" style={{ marginBottom: 0 }}>
-              <FloatingField label="Fecha Vencimiento">
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-              </FloatingField>
-            </Form.Item>
-          </Col>
-
-          <Col xs={24} sm={12} lg={8}>
-            <Form.Item name="fechaEntrega" style={{ marginBottom: 0 }}>
-              <FloatingField label="Fecha Entrega">
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-              </FloatingField>
-            </Form.Item>
-          </Col>
-
-          {/* Fila 3: Entrada Referencia + Días Crédito */}
+          {/* Fila 3: Entrada Ref (8) | Monto (8) | Bienes (4) | Servicio (4) */}
           <Col xs={24} sm={12} lg={8}>
             <FloatingField label="Entrada Almacén de Referencia">
               <Input
@@ -970,40 +993,50 @@ const FacturaSuplidorFormulario: React.FC = () => {
           </Col>
 
           <Col xs={24} sm={12} lg={8}>
-            <Form.Item name="diasCredito" style={{ marginBottom: 0 }}>
-              <FloatingField label="Días Crédito">
-                <InputNumber style={{ width: '100%' }} min={0} precision={0} placeholder=" " />
+            <Form.Item name="monto" style={{ marginBottom: 0 }}>
+              <FloatingField label="Monto">
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  step={0.01}
+                  precision={2}
+                  formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={(value) => value!.replace(/,/g, '')}
+                  placeholder=" "
+                />
               </FloatingField>
             </Form.Item>
           </Col>
 
-          <Col xs={24} sm={12} lg={8}>
-            <div ref={sucursalRef}>
-              <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
-                <FloatingField label="Sucursal Contable">
-                  <Select
-                    allowClear
-                    showSearch
-                    optionFilterProp="children"
-                    placeholder=" "
-                    value={selectedSucursal?.sucursal ?? undefined}
-                    onChange={(val) => {
-                      const suc = sucursalesCache.find((s: any) => s.sucursal === val);
-                      setSelectedSucursal(suc || null);
-                    }}
-                  >
-                    {sucursalesCache.map((suc: any) => (
-                      <Select.Option key={suc.sucursal} value={suc.sucursal}>
-                        {toTitleCase(suc.nombre || '')}
-                      </Select.Option>
-                    ))}
-                  </Select>
-                </FloatingField>
-              </Form.Item>
-            </div>
+          <Col xs={24} sm={12} lg={4}>
+            <FloatingField label="Bienes">
+              <InputNumber
+                style={{ width: '100%' }}
+                value={selectedEntrada ? detalles.reduce((s, d) => s + (d.subTotal || 0), 0) : 0}
+                readOnly
+                precision={2}
+                formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={(value) => value!.replace(/,/g, '')}
+                placeholder=" "
+              />
+            </FloatingField>
           </Col>
 
-          {/* Fila 4: Botones rápidos para campos opcionales */}
+          <Col xs={24} sm={12} lg={4}>
+            <FloatingField label="Servicio">
+              <InputNumber
+                style={{ width: '100%' }}
+                value={selectedEntrada ? 0 : (totales.total - totales.impuestos)}
+                readOnly
+                precision={2}
+                formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={(value) => value!.replace(/,/g, '')}
+                placeholder=" "
+              />
+            </FloatingField>
+          </Col>
+
+          {/* Tags inline editables (NCF, Referencia, Tasa) */}
           <Col xs={24}>
             <div style={{ marginBottom: 16 }}>
               <Space size={[8, 8]} wrap>
@@ -1097,7 +1130,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
             <Form.Item name="moneda" hidden><Input /></Form.Item>
           </Col>
 
-          {/* Fila 5: Nota */}
+          {/* Fila 4: Nota */}
           <Col xs={24}>
             <Form.Item name="nota" style={{ marginBottom: 0 }}>
               <FloatingField label="Nota">
@@ -1378,6 +1411,72 @@ const FacturaSuplidorFormulario: React.FC = () => {
     },
   ];
 
+  // ===== Columnas de impuestos =====
+  const impuestoColumns = [
+    {
+      title: 'Tipo',
+      dataIndex: 'tipo',
+      key: 'tipo',
+      width: 120,
+      render: (v: string) => <Text>{v || '-'}</Text>,
+    },
+    {
+      title: 'Nombre',
+      dataIndex: 'nombre',
+      key: 'nombre',
+      ellipsis: true,
+      render: (v: string) => <Text>{v || '-'}</Text>,
+    },
+    {
+      title: '%',
+      dataIndex: 'porcentaje',
+      key: 'porcentaje',
+      width: 80,
+      align: 'right' as const,
+      render: (v: number) => <Text>{v != null ? `${v}%` : '-'}</Text>,
+    },
+    {
+      title: 'Monto',
+      dataIndex: 'monto',
+      key: 'monto',
+      width: 140,
+      align: 'right' as const,
+      render: (_: any, _record: any, idx: number) => (
+        <InputNumber
+          size="small"
+          style={{ width: 120 }}
+          min={0}
+          step={0.01}
+          precision={2}
+          value={impuestosFactura[idx]?.monto}
+          onChange={(val) => {
+            setImpuestosFactura((prev: any[]) => {
+              const next = [...prev];
+              next[idx] = { ...next[idx], monto: val || 0 };
+              return next;
+            });
+          }}
+        />
+      ),
+    },
+    {
+      title: '',
+      key: 'accion',
+      width: 50,
+      render: (_: any, record: any, idx: number) => (
+        <Button
+          type="text"
+          danger
+          size="small"
+          icon={<DeleteOutlined />}
+          onClick={() => {
+            setImpuestosFactura((prev: any[]) => prev.filter((_: any, i: number) => i !== idx));
+          }}
+        />
+      ),
+    },
+  ];
+
   const handleRefresh = useCallback(() => {
     if (mode === 'crear') return;
     if (!id) return;
@@ -1398,11 +1497,10 @@ const FacturaSuplidorFormulario: React.FC = () => {
           tipo: res.tipo?.codigo || '', concepto: res.concepto?.codigo || '',
           suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
           fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          fechaVencimiento: res.fechaVencimiento ? dayjs(parseDateRaw(res.fechaVencimiento)) : null,
-          fechaEntrega: res.fechaEntrega ? dayjs(parseDateRaw(res.fechaEntrega)) : null,
           ncf: res.ncf || '', referencia: res.referencia || '',
-          diasCredito: res.diasCredito || 0, moneda: res.moneda?.nombre || '',
+          moneda: res.moneda?.nombre || '', monto: res.total || 0,
           tasa: res.tasa || 1, nota: res.nota || '',
+          diasCredito: res.diasCredito ?? res.suplidor?.diasCredito ?? 0,
         });
       })
       .catch((err: any) => {
@@ -1451,6 +1549,22 @@ const FacturaSuplidorFormulario: React.FC = () => {
         onSelect={handleEntradaSelect}
         entidad={selectedEntidad?.codigo}
         onBuscar={facturaSuplidorApi.obtenerEntradasAlmacen}
+      />
+
+      {/* Modal de selección de impuestos */}
+      <SeleccionarImpuestosModal
+        open={modalImpuestosOpen}
+        onClose={() => setModalImpuestosOpen(false)}
+        onConfirm={handleConfirmarImpuestos}
+        tipoEntidad="SUP"
+        sucursal={sucursalActiva}
+        existentes={impuestosFactura.map((i: any) => ({
+          codigo: i.codigo || '',
+          nombre: i.nombre || '',
+          porcentaje: i.porcentaje || 0,
+          tipo: i.tipo || 'Impuesto',
+          monto: i.monto,
+        }))}
       />
 
       {isLarge ? (
@@ -1530,11 +1644,27 @@ const FacturaSuplidorFormulario: React.FC = () => {
                   key: 'impuestos',
                   label: `Impuestos (${impuestosFactura.length})`,
                   children: (
-                    <ImpuestosFacturaEditables
-                      impuestos={impuestosFactura}
-                      onChange={setImpuestosFactura}
-                      editable={mode === 'crear' || mode === 'editar'}
-                    />
+                    <>
+                      <div style={{ marginBottom: 8 }}>
+                        <Button type="primary" ghost icon={<SearchOutlined />} onClick={() => setModalImpuestosOpen(true)}>
+                          Seleccionar del catálogo
+                        </Button>
+                        {impuestosFactura.length > 0 && (
+                          <Button type="link" danger style={{ marginLeft: 8 }} onClick={() => setImpuestosFactura([])}>
+                            Limpiar todos
+                          </Button>
+                        )}
+                      </div>
+                      <Table
+                        dataSource={impuestosFactura}
+                        columns={impuestoColumns}
+                        rowKey={(r: any) => r.id || r.codigo || Math.random()}
+                        size="small"
+                        pagination={false}
+                        scroll={{ x: 600 }}
+                        locale={{ emptyText: 'Sin impuestos seleccionados' }}
+                      />
+                    </>
                   ),
                 },
                 {
@@ -1629,11 +1759,27 @@ const FacturaSuplidorFormulario: React.FC = () => {
                 key: 'impuestos',
                 label: `Impuestos (${impuestosFactura.length})`,
                 children: (
-                  <ImpuestosFacturaEditables
-                    impuestos={impuestosFactura}
-                    onChange={setImpuestosFactura}
-                    editable={mode === 'crear' || mode === 'editar'}
-                  />
+                  <>
+                    <div style={{ marginBottom: 8 }}>
+                      <Button type="primary" ghost icon={<SearchOutlined />} onClick={() => setModalImpuestosOpen(true)}>
+                        Seleccionar del catálogo
+                      </Button>
+                      {impuestosFactura.length > 0 && (
+                        <Button type="link" danger style={{ marginLeft: 8 }} onClick={() => setImpuestosFactura([])}>
+                          Limpiar todos
+                        </Button>
+                      )}
+                    </div>
+                    <Table
+                      dataSource={impuestosFactura}
+                      columns={impuestoColumns}
+                      rowKey={(r: any) => r.id || r.codigo || Math.random()}
+                      size="small"
+                      pagination={false}
+                      scroll={{ x: 600 }}
+                      locale={{ emptyText: 'Sin impuestos seleccionados' }}
+                    />
+                  </>
                 ),
               },
               {
@@ -1809,65 +1955,17 @@ const FacturaSuplidorGuide: React.FC<FacturaSuplidorGuideProps> = ({
     }
   }, [getCurrentStep]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.closest('.ant-popover')) return;
-      setOpen(false);
-      if (currentStepRef.current) {
-        dismissedStepRef.current = currentStepRef.current.key;
-      }
-    };
-
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [open]);
-
   const currentStep = getCurrentStep();
   if (!currentStep) return null;
 
-  const targetElement = currentStep.target();
-  if (!targetElement) return null;
-
-  const rect = targetElement.getBoundingClientRect();
-
-  return createPortal(
-    <Popover
-      open={open}
-      onOpenChange={(visible: boolean) => {
-        if (!visible) {
-          setOpen(false);
-          dismissedStepRef.current = currentStep.key;
-        }
-      }}
+  return (
+    <GuidePopover
       title={currentStep.title}
-      content={currentStep.description}
-      placement="top"
-      trigger={[]}
-      rootClassName="guide-popover"
-      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
-    >
-      <span
-        style={{
-          position: 'fixed',
-          top: rect.top,
-          left: rect.left,
-          width: rect.width,
-          height: rect.height,
-          pointerEvents: 'none',
-          zIndex: -1,
-        }}
-      />
-    </Popover>,
-    document.body,
+      description={currentStep.description}
+      targetElement={currentStep.target()}
+      open={open}
+      onClose={() => { setOpen(false); dismissedStepRef.current = currentStepRef.current?.key || ''; }}
+    />
   );
 };
 

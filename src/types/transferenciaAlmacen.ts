@@ -72,6 +72,7 @@ export interface TransferenciaAlmacenFullDTO {
   ncf: string;
   nota: string;
   tasa: number;
+  diasCredito?: number;
   tipoDocumento?: number;
 
   concepto: ConceptoDTO | null;

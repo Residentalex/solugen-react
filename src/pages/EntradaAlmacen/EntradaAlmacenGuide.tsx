@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { Popover } from 'antd';
+import GuidePopover from '../../components/GuidePopover/GuidePopover';
 import type { ConceptoDTO, SuplidorDTO, AlmacenDTO, OrdenCompraVistaDTO } from '../../types/entradaAlmacen';
 
 export interface EntradaAlmacenGuideProps {
@@ -122,65 +121,16 @@ const EntradaAlmacenGuide: React.FC<EntradaAlmacenGuideProps> = ({
     }
   }, [currentStep?.key]);
 
-  // Cerrar guía al hacer click fuera del popover
-  useEffect(() => {
-    if (!open) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.closest('.ant-popover')) return;
-      setOpen(false);
-      if (currentStepRef.current) {
-        dismissedStepRef.current = currentStepRef.current.key;
-      }
-    };
-
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [open]);
-
   if (!currentStep) return null;
 
-  const targetElement = currentStep.target();
-  if (!targetElement) return null;
-
-  const rect = targetElement.getBoundingClientRect();
-
-  return createPortal(
-    <Popover
-      open={open}
-      onOpenChange={(visible) => {
-        if (!visible) {
-          setOpen(false);
-          dismissedStepRef.current = currentStep.key;
-        }
-      }}
+  return (
+    <GuidePopover
       title={currentStep.title}
-      content={currentStep.description}
-      placement="top"
-      trigger={[]}
-      rootClassName="guide-popover"
-      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
-    >
-      <span
-        style={{
-          position: 'fixed',
-          top: rect.top,
-          left: rect.left,
-          width: rect.width,
-          height: rect.height,
-          pointerEvents: 'none',
-          zIndex: -1,
-        }}
-      />
-    </Popover>,
-    document.body,
+      description={currentStep.description}
+      targetElement={currentStep.target()}
+      open={open}
+      onClose={() => { setOpen(false); dismissedStepRef.current = currentStepRef.current?.key || ''; }}
+    />
   );
 };
 

@@ -1,8 +1,8 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import {
-  Alert, Table, DatePicker, Tag, Card, Button, Typography,
-  Modal, Descriptions, Divider, Input, Empty,
+  Alert, Table, DatePicker, Tag, Card, Button, Typography, Empty, Input
 } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -11,7 +11,6 @@ import type { TurnoDTO } from '../../types/turno';
 import type { ColumnsType } from 'antd/es/table';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/formats';
-import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
@@ -51,6 +50,7 @@ function formatDateParam(d: Date): string {
 }
 
 const Turnos: React.FC = () => {
+  const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
@@ -60,7 +60,6 @@ const Turnos: React.FC = () => {
   const [pageSize] = useState(FILAS_POR_PAGINA);
   const [selectedRow, setSelectedRow] = useState<TurnoDTO | null>(null);
   const [searchText, setSearchText] = useState('');
-  const [detalleItem, setDetalleItem] = useState<TurnoDTO | null>(null);
 
   const dateParamsRef = useRef({
     desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
@@ -71,19 +70,32 @@ const Turnos: React.FC = () => {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['turnos', sucursalActiva, page, pageSize, searchText, dateTrigger],
     queryFn: async () => {
-      const params: { cantidad?: number; salto?: number; desde?: string; hasta?: string; turno?: string } = {
-        desde: dateParamsRef.current.desde,
-        hasta: dateParamsRef.current.hasta,
-        cantidad: pageSize,
-        salto: (page - 1) * pageSize,
-      };
-      if (searchText) params.turno = searchText;
-
-      const result = await turnoApi.filtrar(sucursalActiva, params);
-      const total = result.length < pageSize
-        ? (page - 1) * pageSize + result.length + 1
-        : (page - 1) * pageSize + result.length + pageSize;
-      return { datos: result, total };
+      if (searchText) {
+        // Búsqueda: solo filtrar por turno, sin fechas
+        const params: { cantidad?: number; salto?: number; turno?: string } = {
+          cantidad: pageSize,
+          salto: (page - 1) * pageSize,
+          turno: searchText,
+        };
+        const result = await turnoApi.filtrar(sucursalActiva, params);
+        const total = result.length < pageSize
+          ? (page - 1) * pageSize + result.length + 1
+          : (page - 1) * pageSize + result.length + pageSize;
+        return { datos: result, total };
+      } else {
+        // Listado normal: con rango de fechas
+        const params = {
+          desde: dateParamsRef.current.desde,
+          hasta: dateParamsRef.current.hasta,
+          cantidad: pageSize,
+          salto: (page - 1) * pageSize,
+        };
+        const result = await turnoApi.obtenerListadoResumido(sucursalActiva, params);
+        const total = result.length < pageSize
+          ? (page - 1) * pageSize + result.length + 1
+          : (page - 1) * pageSize + result.length + pageSize;
+        return { datos: result, total };
+      }
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -125,11 +137,7 @@ const Turnos: React.FC = () => {
   };
 
   const openDetalle = (record: TurnoDTO) => {
-    setDetalleItem(record);
-  };
-
-  const closeDetalle = () => {
-    setDetalleItem(null);
+    navigate(`/FTURNOS/${record.noTurno}`);
   };
 
   const columns: ColumnsType<TurnoDTO> = [
@@ -184,31 +192,12 @@ const Turnos: React.FC = () => {
       render: (val: number) => <Text strong>{formatCurrency(val)}</Text>,
     },
     {
-      title: 'Estado',
-      dataIndex: 'periodo',
-      key: 'periodo',
-      width: 110,
-      render: (val: number) => {
-        const info = PERIODO_MAP[val] || { label: 'Desconocido', color: 'default' };
-        return <Tag color={info.color}>{info.label}</Tag>;
-      },
-    },
-    {
       title: 'Cerrado',
       dataIndex: 'cerrado',
       key: 'cerrado',
       width: 90,
       render: (val: boolean) => (
         <Tag color={val ? 'green' : 'default'}>{val ? 'Sí' : 'No'}</Tag>
-      ),
-    },
-    {
-      title: 'Transferido',
-      dataIndex: 'transferido',
-      key: 'transferido',
-      width: 100,
-      render: (val: boolean) => (
-        <Tag color={val ? 'blue' : 'default'}>{val ? 'Sí' : 'No'}</Tag>
       ),
     },
   ];
@@ -228,37 +217,43 @@ const Turnos: React.FC = () => {
           }
         />
       )}
-      <Card styles={{ body: { padding: 0 } }} className="paces-card-erp" style={{ borderRadius: 8 }}>
-        <CatalogoListadoToolbar
-          onSearch={handleSearch}
-          pageSize={25}
-          onPageSizeChange={(v) => {}}
-          ocultarPageSize
-          onReload={handleRefresh}
-          filtros={
+      <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }}
+        styles={{ body: { padding: 0 } }}>
+        <div style={{ padding: '16px 24px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
+            <Input.Search
+              placeholder="Buscar turno..."
+              allowClear
+              onSearch={handleSearch}
+              style={{ width: 400 }}
+              prefix={<SearchOutlined className="paces-text-icon" />}
+            />
             <RangePicker
               style={{ width: 180 }}
               format="YYYY-MM-DD"
               onChange={handleDateChange}
               placeholder={["Desde", "Hasta"]}
             />
-          }
-        />
+            <div style={{ flex: 1 }} />
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+          </div>
+        </div>
 
         <Table<TurnoDTO>
+          className="paces-border-top paces-list-table"
           columns={columns}
           dataSource={data?.datos || []}
           rowKey="id"
           loading={isLoading}
           size="middle"
-          scroll={{ x: 1100 }}
+          scroll={{ x: 900 }}
           locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay turnos registrados" /></div> }}
           pagination={{
             current: page,
             pageSize,
             total: data?.total || 0,
             showSizeChanger: false,
-            showTotal: (t) => `Aprox. ${t} registros`,
+            showTotal: (t) => `${t} registros`,
           }}
           onChange={(pagination) => {
             if (pagination.current) setPage(pagination.current);
@@ -272,68 +267,6 @@ const Turnos: React.FC = () => {
           })}
         />
       </Card>
-
-      <Modal
-        title={`Turno: ${detalleItem?.noTurno || ''}`}
-        open={!!detalleItem}
-        onCancel={closeDetalle}
-        footer={null}
-        width={600}
-      >
-        {detalleItem && (
-          <>
-            <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label="No. Turno">{detalleItem.noTurno}</Descriptions.Item>
-              <Descriptions.Item label="Fecha Apertura">{formatDateTime(detalleItem.fechaApertura)}</Descriptions.Item>
-              <Descriptions.Item label="Fecha Cierre">
-                {detalleItem.fechaCierre ? formatDateTime(detalleItem.fechaCierre) : '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Usuario">
-                {toTitleCase(detalleItem.usuario?.nombre || '')}
-              </Descriptions.Item>
-              <Descriptions.Item label="POS">{detalleItem.nombrePOS || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Total">{formatCurrency(detalleItem.total)}</Descriptions.Item>
-              <Descriptions.Item label="Período">
-                <Tag color={PERIODO_MAP[detalleItem.periodo]?.color || 'default'}>
-                  {PERIODO_MAP[detalleItem.periodo]?.label || 'Desconocido'}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Cerrado">
-                <Tag color={detalleItem.cerrado ? 'green' : 'default'}>
-                  {detalleItem.cerrado ? 'Sí' : 'No'}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Transferido">
-                <Tag color={detalleItem.transferido ? 'blue' : 'default'}>
-                  {detalleItem.transferido ? 'Sí' : 'No'}
-                </Tag>
-              </Descriptions.Item>
-            </Descriptions>
-
-            {detalleItem.facturas?.length > 0 && (
-              <>
-                <Divider>Facturas del Turno ({detalleItem.facturas.length})</Divider>
-                <Table
-                  dataSource={detalleItem.facturas}
-                  size="small"
-                  pagination={false}
-                  rowKey="id"
-                  scroll={{ x: 500 }}
-                >
-                  <Table.Column title="Doc." dataIndex="documento" width={140} />
-                  <Table.Column
-                    title="Total"
-                    dataIndex="total"
-                    align="right"
-                    render={(v: number) => formatCurrency(v)}
-                    width={120}
-                  />
-                </Table>
-              </>
-            )}
-          </>
-        )}
-      </Modal>
     </>
   );
 };

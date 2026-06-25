@@ -65,6 +65,7 @@ export interface ReciboIngresoFullDTO {
   descuento: number;
   impuestos: number;
   retenciones: number;
+  diasCredito?: number;
   codigoTipo?: string;
   codigoEntidad?: string;
 

@@ -91,6 +91,7 @@ export interface NotaCreditoFullDTO {
   nota: string;
   referencia: string;
   tasa: number;
+  diasCredito?: number;
   total: number;
   subTotal: number;
   descuento: number;

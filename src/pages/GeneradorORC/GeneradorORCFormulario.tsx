@@ -63,7 +63,7 @@ const SUCURSALES = ['OP', 'HR', 'VH'];
 
 
 
-// ===== CÃ¡lculo de fila GORC =====
+// ===== Cálculo de fila GORC =====
 function calcularFilaGORC(fila: DetalleGeneradorDTO): DetalleGeneradorDTO {
   const cantTotal = Object.values(fila.cantidades || {}).reduce((s, v) => s + (v || 0), 0);
   const costo = fila.costo || 0;
@@ -150,7 +150,7 @@ const BuscarSuplidorModal: React.FC<BuscarSuplidorModalProps> = ({ open, onClose
   }, [open, cargar]);
 
   const columnas = [
-    { title: 'CÃ³digo', dataIndex: 'codigo', key: 'codigo', width: 100 },
+    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
     { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
       render: (v: string) => toTitleCase(v || '') },
     { title: 'RNC', dataIndex: 'identificacion', key: 'rnc', width: 140 },
@@ -160,7 +160,7 @@ const BuscarSuplidorModal: React.FC<BuscarSuplidorModalProps> = ({ open, onClose
     <Modal title="Buscar Suplidor" open={open} onCancel={onClose} footer={null} width={600} destroyOnHidden>
       <Input.Search
         ref={searchRef}
-        placeholder="Buscar por cÃ³digo o nombre..."
+        placeholder="Buscar por código o nombre..."
         allowClear
         onSearch={(val) => { setSearch(val); cargar(val); }}
         style={{ marginBottom: 16 }}
@@ -227,7 +227,7 @@ const ModosCargaModal: React.FC<ModosCargaModalProps> = ({ open, onClose, onSele
           <ShoppingCartOutlined style={{ fontSize: 36, color: 'var(--paces-primary)', marginBottom: 12 }} />
           <div style={{ fontWeight: 600, fontSize: 15 }}>Plantilla</div>
           <div className="paces-text-secondary" style={{ fontSize: 12, marginTop: 4 }}>
-            Cargar desde una plantilla o conteo fÃ­sico
+            Cargar desde una plantilla o conteo físico
           </div>
         </Card>
       </Col>
@@ -273,7 +273,7 @@ const BuscarPlantillaGORCModal: React.FC<BuscarPlantillaGORCModalProps> = ({ ope
   }, [data, search]);
 
   const columnas = [
-    { title: 'CÃ³digo', dataIndex: 'codigo', key: 'codigo', width: 150 },
+    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 150 },
     { title: 'Suplidor', dataIndex: 'suplidor', key: 'suplidor', ellipsis: true,
       render: (v: string) => toTitleCase(v || '') },
   ];
@@ -281,7 +281,7 @@ const BuscarPlantillaGORCModal: React.FC<BuscarPlantillaGORCModalProps> = ({ ope
   return (
     <Modal title="Buscar Plantilla de Conteo" open={open} onCancel={onClose} footer={null} width={600} destroyOnHidden>
       <Input.Search
-        placeholder="Buscar por cÃ³digo..."
+        placeholder="Buscar por código..."
         allowClear
         onSearch={(val) => setSearch(val)}
         style={{ marginBottom: 16 }}
@@ -332,7 +332,7 @@ const SeleccionarConteosModal: React.FC<SeleccionarConteosModalProps> = ({ open,
       render: (_: any, r: any) => r.noinvent || r.documento || '-' },
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 95,
       render: (v: string) => formatDate(v) },
-    { title: 'AlmacÃ©n', key: 'codalm', width: 120,
+    { title: 'Almacén', key: 'codalm', width: 120,
       render: (_: any, r: any) => toTitleCase(r.almacen || '') || r.codigoAlmacen || '-' },
     { title: 'Sucursal', key: 'codsuc', width: 90,
       render: (_: any, r: any) => getSucursal(r) },
@@ -359,7 +359,7 @@ const SeleccionarConteosModal: React.FC<SeleccionarConteosModalProps> = ({ open,
 
   return (
     <Modal
-      title="Seleccionar conteos fÃ­sicos"
+      title="Seleccionar conteos físicos"
       open={open}
       onCancel={onClose}
       width={800}
@@ -369,7 +369,7 @@ const SeleccionarConteosModal: React.FC<SeleccionarConteosModalProps> = ({ open,
       okButtonProps={{ disabled: selectedRowKeys.length === 0 }}
     >
       <p style={{ marginBottom: 12 }} className="paces-text-secondary">
-        Seleccione uno o mÃ¡s conteos fÃ­sicos (mÃ¡ximo uno por almacÃ©n) para cargar sus productos.
+        Seleccione uno o más conteos físicos (máximo uno por almacén) para cargar sus productos.
       </p>
       <Table
         dataSource={conteos}
@@ -447,11 +447,11 @@ const GeneradorORCFormulario: React.FC = () => {
   const [maestroDetallesData, setMaestroDetallesData] = useState<any[] | null>(null);
   const [codigoInput, setCodigoInput] = useState('');
 
-  // SelecciÃ³n mÃºltiple
+  // Selección múltiple
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  // AnÃ¡lisis / monitor
+  // Análisis / monitor
   const [analisisOpen, setAnalisisOpen] = useState(false);
   const [analisisDetalle, setAnalisisDetalle] = useState<DetalleGeneradorDTO | null>(null);
   const [analisisData, setAnalisisData] = useState<Array<{
@@ -516,7 +516,7 @@ const GeneradorORCFormulario: React.FC = () => {
       setAnalisisData(datos);
       setAnalisisLoading(false);
 
-      // Fase 2: resumen movimientos para las que sÃ­ tienen fecha
+      // Fase 2: resumen movimientos para las que sí tienen fecha
       const conDatos = datos.filter((d) => d?.fecha);
       if (conDatos.length > 0) {
         setAnalisisResumenLoading(true);
@@ -569,7 +569,7 @@ const GeneradorORCFormulario: React.FC = () => {
       .catch(() => {});
   }, [sucursalActiva]);
 
-  // ===== Carga inicial y tÃ­tulo =====
+  // ===== Carga inicial y título =====
   useEffect(() => {
     setActiveModule(screenCode);
     const pageTitle = mode === 'crear' ? 'Nuevo Generador ORC' : 'Editar Generador ORC';
@@ -587,7 +587,7 @@ const GeneradorORCFormulario: React.FC = () => {
     };
   }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, form]);
 
-  // ===== Cargar datos si es ediciÃ³n =====
+  // ===== Cargar datos si es edición =====
   useEffect(() => {
     if (mode === 'crear') return;
     if (!id) return;
@@ -596,7 +596,7 @@ const GeneradorORCFormulario: React.FC = () => {
     generadorOrcApi.obtenerPorId(sucursalActiva, id)
       .then((res) => {
         setData(res);
-        setPageTitleOverride(`GORC-${res.numero} â€” Editar`);
+        setPageTitleOverride(`GORC-${res.numero} — Editar`);
         const detallesMapeados = (res.detalles || []).map((d) => calcularFilaGORC(d));
         setDetalles(detallesMapeados);
         setLoadVersion((v) => v + 1);
@@ -622,13 +622,13 @@ const GeneradorORCFormulario: React.FC = () => {
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
 
-  // ===== Handlers de navegaciÃ³n =====
+  // ===== Handlers de navegación =====
   const handleCancelar = () => {
     Modal.confirm({
-      title: 'Â¿Descartar cambios?',
+      title: '¿Descartar cambios?',
       icon: <ExclamationCircleOutlined />,
-      content: 'Los cambios no guardados se perderÃ¡n. Â¿EstÃ¡ seguro que desea salir?',
-      okText: 'SÃ­, descartar',
+      content: 'Los cambios no guardados se perderán. ¿Está seguro que desea salir?',
+      okText: 'Sí, descartar',
       cancelText: 'Continuar editando',
       okButtonProps: { danger: true },
       onOk: () => {
@@ -638,7 +638,7 @@ const GeneradorORCFormulario: React.FC = () => {
     });
   };
 
-  // ===== ValidaciÃ³n =====
+  // ===== Validación =====
   const validarFormulario = (): string | null => {
     if (!selectedSuplidor) return 'Debe seleccionar un suplidor antes de guardar.';
     if (detalles.length === 0) return 'Debe agregar al menos un producto al generador.';
@@ -724,8 +724,8 @@ const GeneradorORCFormulario: React.FC = () => {
       Modal.confirm({
         title: 'Cambiar suplidor',
         icon: <ExclamationCircleOutlined />,
-        content: `Al cambiar el suplidor a "${toTitleCase(suplidor.nombre)}", los productos actuales serÃ¡n eliminados. Â¿Desea continuar?`,
-        okText: 'SÃ­, cambiar',
+        content: `Al cambiar el suplidor a "${toTitleCase(suplidor.nombre)}", los productos actuales serán eliminados. ¿Desea continuar?`,
+        okText: 'Sí, cambiar',
         cancelText: 'Cancelar',
         okButtonProps: { danger: true },
         onOk: () => {
@@ -796,13 +796,13 @@ const GeneradorORCFormulario: React.FC = () => {
         };
       });
 
-      // Modal de confirmaciÃ³n
+      // Modal de confirmación
       const shouldLoad = await new Promise<boolean>((resolve) => {
         Modal.confirm({
           title: 'Cargar productos del maestro',
           icon: <ExclamationCircleOutlined />,
-          content: `Â¿Desea cargar los ${todosProductosMaestro.length} productos del suplidor ${toTitleCase(suplidor.nombre)}?`,
-          okText: 'SÃ­',
+          content: `¿Desea cargar los ${todosProductosMaestro.length} productos del suplidor ${toTitleCase(suplidor.nombre)}?`,
+          okText: 'Sí',
           cancelText: 'No',
           onOk: () => resolve(true),
           onCancel: () => resolve(false),
@@ -880,7 +880,7 @@ const GeneradorORCFormulario: React.FC = () => {
           (actualizado as any)[campo] = valor;
         }
 
-        // Recalcular precio sugerido: costo unitario Ã— (1 + margen/100)
+        // Recalcular precio sugerido: costo unitario × (1 + margen/100)
         if (campo === 'costo' || campo === 'margen') {
           const factor = actualizado.medida?.factor || 1;
           const costoUnitario = (actualizado.costo || 0) / factor;
@@ -936,7 +936,7 @@ const GeneradorORCFormulario: React.FC = () => {
     (producto: any) => {
       const yaExiste = detalles.some((d) => d.codigo === producto.codigo);
       if (yaExiste) {
-        message.warning(`${producto.codigo} ya estÃ¡ en la tabla`);
+        message.warning(`${producto.codigo} ya está en la tabla`);
         return;
       }
 
@@ -967,7 +967,7 @@ const GeneradorORCFormulario: React.FC = () => {
     [detalles]
   );
 
-  // ===== CÃ³digo rÃ¡pido (Enter para buscar producto) =====
+  // ===== Código rápido (Enter para buscar producto) =====
   const handleCodigoEnter = async () => {
     const codigo = codigoInput.trim();
     if (!codigo) return;
@@ -984,7 +984,7 @@ const GeneradorORCFormulario: React.FC = () => {
         return;
       }
 
-      // Obtener existencias reales por sucursal usando el prefijo de cada compaÃ±Ã­a
+      // Obtener existencias reales por sucursal usando el prefijo de cada compañía
       const fechaStr = dayjs().format('YYYYMMDDHHmmss');
       const existenciasFisicas: Record<string, number> = { OP: 0, HR: 0, VH: 0 };
       const columnasValidas = ['OP', 'HR', 'VH'];
@@ -1038,7 +1038,7 @@ const GeneradorORCFormulario: React.FC = () => {
       Modal.confirm({
         title: 'Producto encontrado',
         icon: <ExclamationCircleOutlined />,
-        content: `Â¿Agregar ${producto.nombre || ''} (${codigo})?`,
+        content: `¿Agregar ${producto.nombre || ''} (${codigo})?`,
         okText: 'Agregar',
         cancelText: 'Cancelar',
         onOk: () => {
@@ -1192,8 +1192,8 @@ const GeneradorORCFormulario: React.FC = () => {
             const shouldLoad = await new Promise<boolean>((resolve) => {
               Modal.confirm({
                 title: 'Cargar productos de la plantilla',
-                content: `No hay conteos recientes. Â¿Desea cargar los ${filas.length} productos definidos en la plantilla?`,
-                okText: 'SÃ­',
+                content: `No hay conteos recientes. ¿Desea cargar los ${filas.length} productos definidos en la plantilla?`,
+                okText: 'Sí',
                 cancelText: 'No',
                 onOk: () => resolve(true),
                 onCancel: () => resolve(false),
@@ -1211,7 +1211,7 @@ const GeneradorORCFormulario: React.FC = () => {
           }
         } catch {}
 
-        message.info('No se encontraron conteos fÃ­sicos para esta plantilla en los Ãºltimos 15 dÃ­as.');
+        message.info('No se encontraron conteos físicos para esta plantilla en los últimos 15 días.');
         setConteosPlantilla([]);
         return;
       }
@@ -1316,8 +1316,8 @@ const GeneradorORCFormulario: React.FC = () => {
       const shouldLoad = await new Promise<boolean>((resolve) => {
         Modal.confirm({
           title: 'Cargar productos del conteo',
-          content: `Â¿Desea cargar los ${todosDetallesEnriquecidos.length} productos de los conteos fÃ­sicos?`,
-          okText: 'SÃ­',
+          content: `¿Desea cargar los ${todosDetallesEnriquecidos.length} productos de los conteos físicos?`,
+          okText: 'Sí',
           cancelText: 'No',
           onOk: () => resolve(true),
           onCancel: () => resolve(false),
@@ -1501,9 +1501,9 @@ const GeneradorORCFormulario: React.FC = () => {
     });
 
     return [
-      // Columna ArtÃ­culo (unifica cÃ³digo + producto + referencia, fija izquierda)
+      // Columna Artículo (unifica código + producto + referencia, fija izquierda)
       {
-        title: 'ArtÃ­culo',
+        title: 'Artículo',
         key: 'articulo',
         width: 280,
         fixed: 'left' as const,
@@ -1546,7 +1546,7 @@ const GeneradorORCFormulario: React.FC = () => {
                     const diffDias = dayjs().diff(dayjs(record.ultimaCompraFecha), 'day');
                     if (diffDias > 30) {
                       return (
-                        <Tooltip title={`Ãšltima compra: ${formatDate(record.ultimaCompraFecha)} (${diffDias} dÃ­as)`}>
+                        <Tooltip title={`Última compra: ${formatDate(record.ultimaCompraFecha)} (${diffDias} días)`}>
                           <ClockCircleOutlined
                             style={{ color: '#fa8c16', cursor: 'pointer', marginTop: 2, fontSize: 14 }}
                           />
@@ -1937,7 +1937,7 @@ const GeneradorORCFormulario: React.FC = () => {
       title={`Productos (${detalles.length})`}
       style={{ marginBottom: 24 }}
     >
-      {/* Botones de acciÃ³n sobre la tabla */}
+      {/* Botones de acción sobre la tabla */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAgregarProducto} size="small">
           Agregar producto
@@ -1955,7 +1955,7 @@ const GeneradorORCFormulario: React.FC = () => {
         {selectedSuplidor && (
           <Input
             ref={codigoInputRef}
-            placeholder="CÃ³digo + Enter"
+            placeholder="Código + Enter"
             style={{ width: 180, marginLeft: 'auto' }}
             value={codigoInput}
             onChange={(e) => setCodigoInput(e.target.value)}
@@ -1971,10 +1971,10 @@ const GeneradorORCFormulario: React.FC = () => {
             size="small"
             onClick={() => {
               Modal.confirm({
-                title: `Â¿Eliminar ${selectedRowKeys.length} producto(s)?`,
+                title: `¿Eliminar ${selectedRowKeys.length} producto(s)?`,
                 icon: <ExclamationCircleOutlined />,
-                content: 'Los productos seleccionados serÃ¡n eliminados de la tabla.',
-                okText: 'SÃ­, eliminar',
+                content: 'Los productos seleccionados serán eliminados de la tabla.',
+                okText: 'Sí, eliminar',
                 okButtonProps: { danger: true },
                 cancelText: 'Cancelar',
                 onOk: () => {
@@ -2048,7 +2048,7 @@ const GeneradorORCFormulario: React.FC = () => {
             <>
               <div className="paces-text-secondary" style={{ fontSize: 13 }}>
                 Usa "Cargar Maestro/Plantilla" para cargar productos del suplidor,
-                o "Agregar producto" para aÃ±adir uno a uno.
+                o "Agregar producto" para añadir uno a uno.
               </div>
               <Space>
                 <Button
@@ -2060,7 +2060,7 @@ const GeneradorORCFormulario: React.FC = () => {
                 </Button>
                 <Input
                   ref={codigoInputRef}
-                  placeholder="CÃ³digo + Enter"
+                  placeholder="Código + Enter"
                   style={{ width: 180 }}
                   value={codigoInput}
                   onChange={(e) => setCodigoInput(e.target.value)}
@@ -2102,7 +2102,7 @@ const GeneradorORCFormulario: React.FC = () => {
       {loadingError && (
         <Alert
           message="Error al cargar el documento"
-          description="No se pudo obtener la informaciÃ³n del generador. Verifique su conexiÃ³n e intente nuevamente."
+          description="No se pudo obtener la información del generador. Verifique su conexión e intente nuevamente."
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
@@ -2112,7 +2112,7 @@ const GeneradorORCFormulario: React.FC = () => {
       {renderEncabezado()}
 
       {isLarge ? (
-        /* === DESKTOP â‰¥ lg === */
+        /* === DESKTOP ≥ lg === */
         <Row gutter={16}>
           <Col xxl={24}>
             {renderDetalles()}
@@ -2203,12 +2203,12 @@ const GeneradorORCFormulario: React.FC = () => {
         }}
       />
 
-      {/* ===== Monitor de AnÃ¡lisis (Drawer) ===== */}
+      {/* ===== Monitor de Análisis (Drawer) ===== */}
       <Drawer
         title={
           <Space>
             <BarChartOutlined style={{ color: 'var(--paces-primary)' }} />
-            <span style={{ fontWeight: 600 }}>AnÃ¡lisis de Producto</span>
+            <span style={{ fontWeight: 600 }}>Análisis de Producto</span>
           </Space>
         }
         placement="right"
@@ -2218,7 +2218,7 @@ const GeneradorORCFormulario: React.FC = () => {
       >
         {analisisDetalle && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {/* SECCIÃ“N A â€” Identidad del producto */}
+            {/* SECCIÓN A — Identidad del producto */}
             <Space align="start" size={12} style={{ marginBottom: 16, width: '100%' }}>
               <Avatar size={40} style={{ backgroundColor: 'rgba(85,110,230,0.12)', color: 'var(--paces-primary)', fontWeight: 600, flexShrink: 0 }}>
                 {(analisisDetalle?.producto || '?')[0].toUpperCase()}
@@ -2226,15 +2226,15 @@ const GeneradorORCFormulario: React.FC = () => {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Typography.Title level={5} style={{ margin: 0 }}>{toTitleCase(analisisDetalle?.producto || '')}</Typography.Title>
                 <Typography.Text className="paces-text-secondary" style={{ fontSize: 12 }}>
-                  CÃ³digo: {analisisDetalle?.codigo}
-                  {analisisDetalle?.referencia ? <span> Â· Ref: {analisisDetalle.referencia}</span> : ''}
-                  {analisisDetalle?.medida?.nombre ? <span> Â· Medida: {analisisDetalle.medida.nombre}</span> : ''}
+                  Código: {analisisDetalle?.codigo}
+                  {analisisDetalle?.referencia ? <span> · Ref: {analisisDetalle.referencia}</span> : ''}
+                  {analisisDetalle?.medida?.nombre ? <span> · Medida: {analisisDetalle.medida.nombre}</span> : ''}
                 </Typography.Text>
               </div>
             </Space>
             <Divider style={{ margin: '0 0 16px 0' }} />
 
-            {/* SECCIÃ“N B â€” Ãšltima Entrada por sucursal */}
+            {/* SECCIÓN B — Última Entrada por sucursal */}
             {analisisError ? (
               <Alert type="error" message="Error al cargar datos" style={{ marginBottom: 16 }}
                 action={<Button size="small" onClick={() => { setAnalisisOpen(false); setTimeout(() => setAnalisisOpen(true), 100); }}><ReloadOutlined />Reintentar</Button>} />
@@ -2255,7 +2255,7 @@ const GeneradorORCFormulario: React.FC = () => {
                   }}
                 >
                   <Typography.Text strong style={{ fontSize: 12, color: '#556ee6', display: 'block', marginBottom: 6 }}>
-                    ðŸ“Š Resumen total
+                    📊 Resumen total
                   </Typography.Text>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
                     {(() => {
@@ -2329,17 +2329,17 @@ const GeneradorORCFormulario: React.FC = () => {
                             onClick={() => handleVerMovimientos(item)}
                             style={{ fontSize: 12 }}
                           >
-                            Ver movimientos â†’
+                            Ver movimientos →
                           </Button>
                         )}
                       </div>
 
                       {!sinRegistro ? (
                         <>
-                          {/* BLOQUE 1: Ãšltima compra */}
+                          {/* BLOQUE 1: Última compra */}
                           <div style={{ marginBottom: 10 }}>
                             <Typography.Text strong style={{ fontSize: 12, color: '#262626', display: 'block', marginBottom: 6 }}>
-                              ðŸ“¦ Ãšltima compra  <Typography.Text strong style={{ fontSize: 13, color: '#556ee6' }}>{item.fecha ? formatDate(item.fecha) : '-'}</Typography.Text>
+                              📦 Última compra  <Typography.Text strong style={{ fontSize: 13, color: '#556ee6' }}>{item.fecha ? formatDate(item.fecha) : '-'}</Typography.Text>
                             </Typography.Text>
                             <div style={{ marginTop: 8 }}>
                               <Typography.Text style={{ fontSize: 12, color: '#8c8c8c', marginRight: 8 }}>
@@ -2355,7 +2355,7 @@ const GeneradorORCFormulario: React.FC = () => {
                           {/* BLOQUE 2: Movimientos posteriores */}
                           <div style={{ marginBottom: 10 }}>
                             <Typography.Text strong style={{ fontSize: 12, color: '#262626', display: 'block', marginBottom: 6 }}>
-                              ðŸ“Š Movimientos posteriores
+                              📊 Movimientos posteriores
                             </Typography.Text>
 
                             {/* Grid 2x2 de KPIs */}
@@ -2382,24 +2382,24 @@ const GeneradorORCFormulario: React.FC = () => {
                               ))}
                             </div>
 
-                            {/* Ãšltima venta */}
+                            {/* Última venta */}
                             {item.resumen?.ultimaVentaFecha && (
                               <div style={{ background: 'rgba(85,110,230,0.04)', borderRadius: 4, padding: '6px 8px', marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Typography.Text style={{ fontSize: 11, color: '#595959' }}>
-                                  ðŸ• Ãšltima venta: {formatDate(item.resumen.ultimaVentaFecha)}
+                                  🕐 Última venta: {formatDate(item.resumen.ultimaVentaFecha)}
                                 </Typography.Text>
                                 <Typography.Text style={{ fontSize: 11, color: '#8c8c8c', fontStyle: 'italic' }}>
                                   {(() => {
                                     const diffDias = dayjs(item.resumen!.ultimaVentaFecha).diff(dayjs(item.fecha), 'day');
                                     if (diffDias === 0) return 'hoy';
-                                    if (diffDias === 1) return 'hace 1 dÃ­a';
-                                    if (diffDias < 30) return `hace ${diffDias} dÃ­as`;
+                                    if (diffDias === 1) return 'hace 1 día';
+                                    if (diffDias < 30) return `hace ${diffDias} días`;
                                     const diffMeses = Math.floor(diffDias / 30);
                                     if (diffMeses === 1) return 'hace 1 mes';
                                     if (diffMeses < 12) return `hace ${diffMeses} meses`;
                                     const diffAnios = Math.floor(diffDias / 365);
-                                    if (diffAnios === 1) return 'hace 1 aÃ±o';
-                                    return `hace ${diffAnios} aÃ±os`;
+                                    if (diffAnios === 1) return 'hace 1 año';
+                                    return `hace ${diffAnios} años`;
                                   })()}
                                 </Typography.Text>
                               </div>
@@ -2424,7 +2424,7 @@ const GeneradorORCFormulario: React.FC = () => {
               <Alert type="info" message="No se encontraron entradas para este producto" style={{ marginBottom: 16 }} />
             )}
 
-            {/* SECCIÃ“N C â€” Costos y Precio */}
+            {/* SECCIÓN C — Costos y Precio */}
             <Divider orientation="left" style={{ fontSize: 12, color: '#8c8c8c' }}>Costos y Precio</Divider>
             <div style={{ background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0', padding: '12px 0', marginBottom: 16 }}>
               <Row gutter={0}>
@@ -2454,7 +2454,7 @@ const GeneradorORCFormulario: React.FC = () => {
 
       {/* ===== Modal de Movimientos Posteriores ===== */}
       <Modal
-        title={`Movimientos posteriores â€” ${movimientosSucursal} â€” ${analisisDetalle?.codigo || ''}`}
+        title={`Movimientos posteriores — ${movimientosSucursal} — ${analisisDetalle?.codigo || ''}`}
         open={movimientosModalOpen}
         onCancel={() => setMovimientosModalOpen(false)}
         footer={null}

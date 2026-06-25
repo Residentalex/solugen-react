@@ -38,6 +38,7 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import GuidePopover from '../../components/GuidePopover/GuidePopover';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
@@ -423,6 +424,7 @@ const ReciboIngresoFormulario: React.FC = () => {
       subTotal: Math.round(subTotal * 100) / 100,
       descuento: base.descuento || 0,
       impuestos: base.impuestos || 0,
+      diasCredito: selectedEntidad?.diasCredito || 0,
       retenciones: Math.round(retenciones * 100) / 100,
       tipoDocumento: base.tipoDocumento ?? 66,
       tipoEntidad: base.tipoEntidad || selectedConcepto?.entidades?.[0]?.codigo || 'CLI',
@@ -1283,62 +1285,17 @@ const ReciboIngresoGuide: React.FC<ReciboIngresoGuideProps> = ({
     }
   }, [getCurrentStep]);
 
-  useEffect(() => {
-    if (!open) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.closest('.ant-popover')) return;
-      setOpen(false);
-      if (currentStepRef.current) {
-        dismissedStepRef.current = currentStepRef.current.key;
-      }
-    };
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [open]);
-
   const currentStep = getCurrentStep();
   if (!currentStep) return null;
 
-  const targetElement = currentStep.target();
-  if (!targetElement) return null;
-
-  const rect = targetElement.getBoundingClientRect();
-
-  return createPortal(
-    <Popover
-      open={open}
-      onOpenChange={(visible: boolean) => {
-        if (!visible) {
-          setOpen(false);
-          dismissedStepRef.current = currentStep.key;
-        }
-      }}
+  return (
+    <GuidePopover
       title={currentStep.title}
-      content={currentStep.description}
-      placement="top"
-      trigger={[]}
-      rootClassName="guide-popover"
-      styles={{ body: { maxWidth: 360, whiteSpace: 'normal', wordBreak: 'break-word' } }}
-    >
-      <span
-        style={{
-          position: 'fixed',
-          top: rect.top,
-          left: rect.left,
-          width: rect.width,
-          height: rect.height,
-          pointerEvents: 'none',
-          zIndex: -1,
-        }}
-      />
-    </Popover>,
-    document.body,
+      description={currentStep.description}
+      targetElement={currentStep.target()}
+      open={open}
+      onClose={() => { setOpen(false); dismissedStepRef.current = currentStepRef.current?.key || ''; }}
+    />
   );
 };
 

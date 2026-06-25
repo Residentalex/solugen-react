@@ -16,6 +16,8 @@ export { default as CobrosCard } from './CobrosCard';
 export type { CobrosCardProps } from './CobrosCard/CobrosCard';
 export { default as NotasSeguimientoCard } from './NotasSeguimientoCard';
 export type { NotaSeguimientoItem, NotasSeguimientoCardProps } from './NotasSeguimientoCard/NotasSeguimientoCard';
+export { default as SeleccionarImpuestosModal } from './SeleccionarImpuestosModal';
+export type { ImpuestoSeleccionado } from './SeleccionarImpuestosModal';
 export { default as BuscarTipoModal } from './BuscarTipoModal/BuscarTipoModal';
 export { default as BuscarDocumentoModal } from './BuscarDocumentoModal/BuscarDocumentoModal';
 export { default as BuscarDevolucionModal } from './BuscarDevolucionModal/BuscarDevolucionModal';

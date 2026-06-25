@@ -35,6 +35,7 @@ export interface FiltroTransaccion {
 export interface TransaccionDTO {
   id: number;
   fechaDocumento: string;
+  fechaVencimiento?: string;
   noDocumento: string;
   codigoEntidad?: string;
   codigoEntidadOrigen?: string;

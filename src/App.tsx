@@ -111,6 +111,7 @@ import MiPerfil from './pages/MiPerfil/MiPerfil';
 import Servicios from './pages/Servicios/Servicios';
 import ActualizacionPrecio from './pages/ActualizacionPrecio/ActualizacionPrecio';
 import Turnos from './pages/Turnos/Turnos';
+import TurnoDetalle from './pages/Turnos/TurnoDetalle';
 import Conteos from './pages/Conteos/Conteos';
 import ConteoDetalle from './pages/Conteos/ConteoDetalle';
 import MovimientosProductos from './pages/MovimientosProductos/MovimientosProductos';
@@ -352,6 +353,7 @@ const App: React.FC = () => {
           <Route path="MEMP/nuevo" element={<EmpleadoFormulario />} />
           <Route path="MEMP/:codigo" element={<EmpleadoDetalle />} />
           <Route path="MEMP/:codigo/editar" element={<EmpleadoFormulario />} />
+          <Route path="FTURNOS/:noTurno" element={<TurnoDetalle />} />
           <Route path="FTURNOS" element={<Turnos />} />
           <Route path="FConteos" element={<Conteos />} />
           <Route path="FConteos/:documento" element={<ConteoDetalle />} />
@@ -559,6 +561,7 @@ const App: React.FC = () => {
           <Route path="MEMP/nuevo" element={<EmpleadoFormulario />} />
           <Route path="MEMP/:codigo" element={<EmpleadoDetalle />} />
           <Route path="MEMP/:codigo/editar" element={<EmpleadoFormulario />} />
+          <Route path="FTURNOS/:noTurno" element={<TurnoDetalle />} />
           <Route path="FTURNOS" element={<Turnos />} />
           <Route path="FConteos" element={<Conteos />} />
           <Route path="FConteos/:documento" element={<ConteoDetalle />} />

@@ -418,9 +418,26 @@ const EntradaAlmacenFormulario: React.FC = () => {
       .catch(() => console.warn('No se pudieron cargar los comodines'));
   }, [data?.ordenCompra?.id, ocDetallesData.length]);
 
+  // Cargar comodines cuando el documento tiene OC vinculada (independiente de ocDetallesData)
+  useEffect(() => {
+    if (!data?.ordenCompra?.id) return;
+    productoApi.obtenerComodines(Sucursal.Compra)
+      .then(setComodines)
+      .catch(() => console.warn('No se pudieron cargar los comodines'));
+  }, [data?.ordenCompra?.id]);
+
   // Cargar detalles de OC y comodines al abrir el modal si no se han cargado antes
   useEffect(() => {
     if (!ocProductosModalOpen || !selectedOC) return;
+
+    // Cargar comodines siempre que se abre el modal (independiente de ocDetallesData)
+    if (comodines.length === 0) {
+      productoApi.obtenerComodines(Sucursal.Compra)
+        .then(setComodines)
+        .catch(() => console.warn('No se pudieron cargar los comodines'));
+    }
+
+    // Cargar detalles de OC solo si no se han cargado antes
     if (ocDetallesData.length > 0) return;
 
     ordenCompraApi.obtenerPorId(Sucursal.Compra, selectedOC.id)
@@ -430,10 +447,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         }
       })
       .catch(() => message.warning('No se pudieron cargar los detalles de la OC'));
-    productoApi.obtenerComodines(Sucursal.Compra)
-      .then(setComodines)
-      .catch(() => console.warn('No se pudieron cargar los comodines'));
-  }, [ocProductosModalOpen, selectedOC, ocDetallesData.length]);
+  }, [ocProductosModalOpen, selectedOC, comodines.length, ocDetallesData.length]);
 
   const navigationConfirmedRef = useFormularioNavigation();
 
@@ -1579,6 +1593,14 @@ const EntradaAlmacenFormulario: React.FC = () => {
               icon={<RollbackOutlined />}
               disabled={!cantidadDevolucionInput || cantidadDevolucionInput <= 0 || cantidadDevolucionInput > disponible}
               onClick={() => {
+                const subTotal = cantidadDevolucionInput * (record.costo || 0);
+                const pctDesc = record.porcentajeDescuento || 0;
+                const pctImp = record.impuesto?.porcentaje || 0;
+                const descuento = Math.round(subTotal * (pctDesc / 100) * 100) / 100;
+                const baseImponible = subTotal - descuento;
+                const impuestos = Math.round(baseImponible * (pctImp / 100) * 100) / 100;
+                const total = Math.round((baseImponible + impuestos) * 100) / 100;
+
                 const nuevoDetalle: any = {
                   id: -(detallesDevolucion.length + 1),
                   idExterno: record.id,
@@ -1589,10 +1611,10 @@ const EntradaAlmacenFormulario: React.FC = () => {
                   costo: record.costo || 0,
                   subTotal: (cantidadDevolucionInput * (record.costo || 0)),
                   porcentajeDescuento: record.porcentajeDescuento || 0,
-                  descuento: 0,
+                  descuento,
                   impuesto: record.impuesto,
-                  impuestos: 0,
-                  total: (cantidadDevolucionInput * (record.costo || 0)),
+                  impuestos,
+                  total,
                   familia: record.familia,
                   medida: record.medida,
                   tipoArticulo: record.tipoArticulo || 'Producto',
@@ -1659,6 +1681,14 @@ const EntradaAlmacenFormulario: React.FC = () => {
           onChange={(val) => setCantidadDevolucionInput(val || 0)}
           onPressEnter={() => {
             if (cantidadDevolucionInput > 0 && cantidadDevolucionInput <= disponible) {
+              const subTotal = cantidadDevolucionInput * (record.costo || 0);
+              const pctDesc = record.porcentajeDescuento || 0;
+              const pctImp = record.impuesto?.porcentaje || 0;
+              const descuento = Math.round(subTotal * (pctDesc / 100) * 100) / 100;
+              const baseImponible = subTotal - descuento;
+              const impuestos = Math.round(baseImponible * (pctImp / 100) * 100) / 100;
+              const total = Math.round((baseImponible + impuestos) * 100) / 100;
+
               const nuevoDetalle: any = {
                 id: -(detallesDevolucion.length + 1),
                 idExterno: record.id,
@@ -1669,10 +1699,10 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 costo: record.costo || 0,
                 subTotal: (cantidadDevolucionInput * (record.costo || 0)),
                 porcentajeDescuento: record.porcentajeDescuento || 0,
-                descuento: 0,
+                descuento,
                 impuesto: record.impuesto,
-                impuestos: 0,
-                total: (cantidadDevolucionInput * (record.costo || 0)),
+                impuestos,
+                total,
                 familia: record.familia,
                 medida: record.medida,
                 tipoArticulo: record.tipoArticulo || 'Producto',

@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Empty,
+  Card, Table, Tabs, Tag, Button, Space, Row, Col, Divider, Grid,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -18,6 +18,7 @@ import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { notaDebitoApi } from '../../api/notaDebitoApi';
+
 import { conceptosApi } from '../../api/conceptosApi';
 import { parametrosApi } from '../../api/parametrosApi';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
@@ -34,6 +35,8 @@ import type { UnidadMedidaDTO } from '../../types/productos';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
+import SeleccionarImpuestosModal from '../../components/SeleccionarImpuestosModal';
+import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestosModal';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import BuscarTipoModal from '../../components/BuscarTipoModal/BuscarTipoModal';
 import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
@@ -121,6 +124,9 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionadoDTO[]>([]);
   const [devoluciones, setDevoluciones] = useState<DevolucionAsociadaDTO[]>([]);
   const [impuestosRetenciones, setImpuestosRetenciones] = useState<ImpuestoRetencionDTO[]>([]);
+
+  // Modal de selección de impuestos
+  const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
 
   // NCF
   const [ncfTipo, setNcfTipo] = useState<'documento' | 'modificado'>('documento');
@@ -501,21 +507,30 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   };
 
   // ===== Handlers de Impuestos y Retenciones =====
-  const handleImpuestoAdd = () => {
-    setImpuestosRetenciones((prev) => [
-      ...prev,
-      { id: -(prev.length + 1), nombre: '', tipo: 'Impuesto', monto: 0, porcentaje: 0 },
-    ]);
+  const handleImpuestoRemove = (id?: number | string) => {
+    setImpuestosRetenciones((prev) => prev.filter((i) => i.id !== id && i.codigo !== id));
   };
 
-  const handleImpuestoRemove = (id?: number) => {
-    setImpuestosRetenciones((prev) => prev.filter((i) => i.id !== id));
-  };
-
-  const handleImpuestoChange = (id: number | undefined, field: string, value: any) => {
+  const handleImpuestoChange = (id: number | string | undefined, field: string, value: any) => {
     setImpuestosRetenciones((prev) =>
-      prev.map((i) => i.id === id ? { ...i, [field]: value } : i)
+      prev.map((i) => (i.id === id || i.codigo === id) ? { ...i, [field]: value } : i)
     );
+  };
+
+  // ===== Handler del modal de impuestos compartido =====
+  const handleConfirmarImpuestos = (items: ImpuestoSeleccionado[]) => {
+    setImpuestosRetenciones((prev) => {
+      const existentes = new Map(prev.map((i) => [i.codigo, i]));
+      for (const n of items) {
+        const existente = existentes.get(n.codigo);
+        if (existente) {
+          existentes.set(n.codigo, { ...existente, monto: existente.monto ?? n.monto });
+        } else {
+          existentes.set(n.codigo, { ...n, id: n.codigo, baseImponible: 0 });
+        }
+      }
+      return Array.from(existentes.values());
+    });
   };
 
   // ===== NCF Modificado =====
@@ -634,6 +649,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       referencia: values.referencia || '',
       nota: values.nota || '',
       tasa: values.tasa || 1,
+      diasCredito: selectedEntidad?.diasCredito || 0,
       bienes: values.bienes || 0,
       servicios: values.servicios || 0,
       subTotal: Math.round((montoTotal - totalImpuestos) * 100) / 100,
@@ -647,7 +663,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       tipoEntidad,
       documento: base.documento || { codigo: 'ND' },
       concepto: selectedConcepto || { codigo: '', nombre: '' },
-      tipo: selectedTipo || { codigo: '', nombre: '' },
+      codigoTipo: selectedTipo?.codigo || '',
       entidad: entidadSel ? { codigo: entidadSel.codigo, nombre: entidadSel.nombre || '', identificacion: entidadSel.identificacion || '', telefono: entidadSel.telefono } : { codigo: '', nombre: '' },
       moneda: base.moneda || getMonedaSucursalActiva(),
       sucursal: selectedSucursal ? { codigo: selectedSucursal.codigo || selectedSucursal.idExterno, nombre: selectedSucursal.nombre || '' } : undefined,
@@ -780,50 +796,57 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
   const impuestoColumns = [
     {
-      title: 'Tipo', dataIndex: 'tipo', key: 'tipo', width: 140,
+      title: 'Tipo',
+      dataIndex: 'tipo',
+      key: 'tipo',
+      width: 120,
+      render: (v: string) => <Text>{v || '-'}</Text>,
+    },
+    {
+      title: 'Nombre',
+      dataIndex: 'nombre',
+      key: 'nombre',
+      ellipsis: true,
+      render: (v: string) => <Text>{v || '-'}</Text>,
+    },
+    {
+      title: '%',
+      dataIndex: 'porcentaje',
+      key: 'porcentaje',
+      width: 80,
+      align: 'right' as const,
+      render: (v: number) => <Text>{v != null ? `${v}%` : '-'}</Text>,
+    },
+    {
+      title: 'Monto',
+      dataIndex: 'monto',
+      key: 'monto',
+      width: 140,
+      align: 'right' as const,
       render: (_: any, record: ImpuestoRetencionDTO, idx: number) => (
-        <Select
+        <InputNumber
           size="small"
-          style={{ width: 130 }}
-          value={impuestosRetenciones[idx]?.tipo}
-          onChange={(val) => handleImpuestoChange(record.id, 'tipo', val)}
-          options={[
-            { value: 'Impuesto', label: 'Impuesto' },
-            { value: 'Retencion', label: 'Retención' },
-            { value: 'Informativo', label: 'Informativo' },
-            { value: 'Otro', label: 'Otro' },
-          ]}
+          style={{ width: 120 }}
+          min={0}
+          step={0.01}
+          precision={2}
+          value={impuestosRetenciones[idx]?.monto}
+          onChange={(val) => handleImpuestoChange(record.id ?? record.codigo, 'monto', val || 0)}
         />
       ),
     },
-    { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-      render: (_: any, record: ImpuestoRetencionDTO, idx: number) => (
-        <Input size="small" value={impuestosRetenciones[idx]?.nombre || ''}
-          onChange={(e) => handleImpuestoChange(record.id, 'nombre', e.target.value)} />
-      ),
-    },
     {
-      title: '%', dataIndex: 'porcentaje', key: 'porcentaje', width: 80, align: 'right' as const,
-      render: (_: any, record: ImpuestoRetencionDTO, idx: number) => (
-        <InputNumber size="small" style={{ width: 70 }} min={0} max={100} step={0.01} precision={2}
-          value={impuestosRetenciones[idx]?.porcentaje}
-          onChange={(val) => handleImpuestoChange(record.id, 'porcentaje', val || 0)}
-          addonAfter="%" />
-      ),
-    },
-    {
-      title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const,
-      render: (_: any, record: ImpuestoRetencionDTO, idx: number) => (
-        <InputNumber size="small" style={{ width: 110 }} min={0} step={0.01} precision={2}
-          value={impuestosRetenciones[idx]?.monto}
-          onChange={(val) => handleImpuestoChange(record.id, 'monto', val || 0)} />
-      ),
-    },
-    {
-      title: '', key: 'accion', width: 50,
+      title: '',
+      key: 'accion',
+      width: 50,
       render: (_: any, record: ImpuestoRetencionDTO) => (
-        <Button type="text" danger size="small" icon={<DeleteOutlined />}
-          onClick={() => handleImpuestoRemove(record.id)} />
+        <Button
+          type="text"
+          danger
+          size="small"
+          icon={<DeleteOutlined />}
+          onClick={() => handleImpuestoRemove(record.id ?? record.codigo)}
+        />
       ),
     },
   ];
@@ -1192,17 +1215,23 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       children: (
         <>
           <div style={{ marginBottom: 8 }}>
-            <Button type="dashed" icon={<PlusOutlined />} onClick={handleImpuestoAdd}>
-              Agregar
+            <Button type="primary" ghost icon={<SearchOutlined />} onClick={() => setModalImpuestosOpen(true)}>
+              Seleccionar del catálogo
             </Button>
+            {impuestosRetenciones.length > 0 && (
+              <Button type="link" danger style={{ marginLeft: 8 }} onClick={() => setImpuestosRetenciones([])}>
+                Limpiar todos
+              </Button>
+            )}
           </div>
           <Table
             dataSource={impuestosRetenciones}
             columns={impuestoColumns}
-            rowKey={(r) => r.id || 0}
+            rowKey={(r) => r.id || r.codigo || 0}
             size="small"
             pagination={false}
             scroll={{ x: 600 }}
+            locale={{ emptyText: 'Sin impuestos seleccionados' }}
           />
           <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end', gap: 16 }}>
             <Text className="paces-text-secondary">SubTotal: <strong>{formatNumber(totales.subTotal)}</strong></Text>
@@ -1378,6 +1407,22 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           montoTotal={Number(montoTotalWatch) || 0}
         />
       )}
+
+      {/* Modal de selección de impuestos / retenciones */}
+      <SeleccionarImpuestosModal
+        open={modalImpuestosOpen}
+        onClose={() => setModalImpuestosOpen(false)}
+        onConfirm={handleConfirmarImpuestos}
+        tipoEntidad={tipoEntidad}
+        sucursal={sucursalActiva}
+        existentes={impuestosRetenciones.map((i) => ({
+          codigo: i.codigo || '',
+          nombre: i.nombre || '',
+          porcentaje: i.porcentaje || 0,
+          tipo: i.tipo || 'Impuesto',
+          monto: i.monto,
+        }))}
+      />
 
       {/* Guía paso a paso (solo en modo crear o editar borrador) */}
       {(mode === 'crear' || esBorrador) && (

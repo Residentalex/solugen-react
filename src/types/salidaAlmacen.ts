@@ -72,6 +72,7 @@ export interface SalidaAlmacenFullDTO {
   ncf: string;
   nota: string;
   tasa: number;
+  diasCredito?: number;
   tipoDocumento?: number;
   revisado?: boolean;
 

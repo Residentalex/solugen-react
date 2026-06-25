@@ -96,6 +96,7 @@ export interface DevolucionCompraFullDTO {
   ncf: string;
   nota: string;
   tasa: number;
+  diasCredito?: number;
   tipoDocumentoExterno?: number;
   tipoDocumento?: number;
 

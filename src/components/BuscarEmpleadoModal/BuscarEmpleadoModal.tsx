@@ -3,6 +3,7 @@ import { Modal, Input, Table, Button, Typography, Empty } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { empleadoApi, type EmpleadoDTO } from '../../api/empleadoApi';
+import { toTitleCase } from '../../utils/formats';
 
 const { Text } = Typography;
 
@@ -69,7 +70,7 @@ const BuscarEmpleadoModal: React.FC<Props> = ({ open, onClose, onSelect }) => {
     >
       <Input.Search
         ref={searchRef}
-        placeholder="Buscar por nombre o cÃ³digo..."
+        placeholder="Buscar por nombre o código..."
         allowClear
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -79,9 +80,10 @@ const BuscarEmpleadoModal: React.FC<Props> = ({ open, onClose, onSelect }) => {
       />
       <Table
         columns={[
-          { title: 'CÃ³digo', dataIndex: 'codigo', width: 100 },
-          { title: 'Nombre', dataIndex: 'nombre', ellipsis: true },
-          { title: 'CÃ©dula', dataIndex: 'cedula', width: 130 },
+          { title: 'Código', dataIndex: 'codigo', width: 100 },
+          { title: 'Nombre', dataIndex: 'nombre', ellipsis: true,
+            render: (v: string) => toTitleCase(v) },
+          { title: 'Cédula', dataIndex: 'cedula', width: 130 },
         ]}
         dataSource={data}
         rowKey="codigo"

@@ -36,6 +36,8 @@ import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import { parametrosApi } from '../../api/parametrosApi';
 import LogTable from '../../components/LogTable';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
+import SeleccionarImpuestosModal from '../../components/SeleccionarImpuestosModal';
+import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestosModal';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import BuscarEntidadSelect from '../../components/BuscarEntidadSelect/BuscarEntidadSelect';
@@ -110,6 +112,9 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   // NCF Modificado
   const [ncfTipo, setNcfTipo] = useState<'documento' | 'modificado'>('documento');
   const [ncfModificadoVal, setNcfModificadoVal] = useState('');
+
+  // Modal de selección de impuestos
+  const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
 
   // Concepto modal
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
@@ -459,13 +464,13 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
 
     // Calcular impuestos desde la tabla de impuestos factura
     const retenciones = impuestosFactura
-      .filter((i) => i.tipo === 'R' || i.tipo === 'Retenciones')
+      .filter((i) => i.tipo === 'R' || i.tipo === 'Retencion' || i.tipo === 'Retenciones')
       .reduce((s, i) => s + (i.monto || 0), 0);
     const impuestosCalc = impuestosFactura
       .filter((i) => i.tipo === 'I' || i.tipo === 'Impuesto' || i.tipo === 'V' || i.tipo === 'Informativo')
       .reduce((s, i) => s + (i.monto || 0), 0);
     const otrosImpuestos = impuestosFactura
-      .filter((i) => i.tipo !== 'R' && i.tipo !== 'Retenciones' && i.tipo !== 'I' && i.tipo !== 'Impuesto' && i.tipo !== 'V' && i.tipo !== 'Informativo')
+      .filter((i) => i.tipo !== 'R' && i.tipo !== 'Retencion' && i.tipo !== 'Retenciones' && i.tipo !== 'I' && i.tipo !== 'Impuesto' && i.tipo !== 'V' && i.tipo !== 'Informativo')
       .reduce((s, i) => s + (i.monto || 0), 0);
 
     const totalImpuestos = impuestosCalc + otrosImpuestos;
@@ -482,6 +487,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       referencia: values.referencia || '',
       nota: values.nota || '',
       tasa: values.tasa || 1,
+      diasCredito: selectedEntidad?.diasCredito || 0,
       total: values.total || 0,
       bienes: values.bienes || 0,
       servicios: values.servicios || 0,
@@ -601,6 +607,29 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       const existentes = new Set(prev.map((d) => d.transaccionAsociadaID));
       const nuevos = docs.filter((d) => !existentes.has(d.transaccionAsociadaID));
       return [...prev, ...nuevos];
+    });
+  };
+
+  // ===== Handler del modal de impuestos compartido =====
+  const handleConfirmarImpuestos = (items: ImpuestoSeleccionado[]) => {
+    setImpuestosFactura((prev) => {
+      const existentes = new Map(prev.map((i) => [i.codigo, i]));
+      for (const n of items) {
+        const existente = existentes.get(n.codigo);
+        if (existente) {
+          existentes.set(n.codigo, { ...existente, monto: existente.monto ?? n.monto });
+        } else {
+          existentes.set(n.codigo, {
+            id: Date.now() + Math.random(),
+            codigo: n.codigo,
+            nombre: n.nombre,
+            porcentaje: n.porcentaje,
+            tipo: n.tipo,
+            monto: n.monto,
+          } as any);
+        }
+      }
+      return Array.from(existentes.values());
     });
   };
 
@@ -724,14 +753,38 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   ];
 
   const impuestoFacturaColumns = [
-    { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true },
-    { title: 'Cuenta', dataIndex: 'cuenta', key: 'cuenta', width: 120, render: (v: string) => v || '-' },
     {
-      title: 'Monto', dataIndex: 'monto', key: 'monto', width: 130, align: 'right' as const,
+      title: 'Tipo',
+      dataIndex: 'tipo',
+      key: 'tipo',
+      width: 120,
+      render: (v: string) => <Text>{v || '-'}</Text>,
+    },
+    {
+      title: 'Nombre',
+      dataIndex: 'nombre',
+      key: 'nombre',
+      ellipsis: true,
+      render: (v: string) => <Text>{v || '-'}</Text>,
+    },
+    {
+      title: '%',
+      dataIndex: 'porcentaje',
+      key: 'porcentaje',
+      width: 80,
+      align: 'right' as const,
+      render: (v: number) => <Text>{v != null ? `${v}%` : '-'}</Text>,
+    },
+    {
+      title: 'Monto',
+      dataIndex: 'monto',
+      key: 'monto',
+      width: 140,
+      align: 'right' as const,
       render: (_: any, _record: ImpuestoFacturaDTO, idx: number) => (
         <InputNumber
           size="small"
-          style={{ width: '100%' }}
+          style={{ width: 120 }}
           min={0}
           step={0.01}
           precision={2}
@@ -740,6 +793,22 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
             setImpuestosFactura((prev) =>
               prev.map((im, i) => i === idx ? { ...im, monto: val || 0 } : im)
             );
+          }}
+        />
+      ),
+    },
+    {
+      title: '',
+      key: 'accion',
+      width: 50,
+      render: (_: any, record: ImpuestoFacturaDTO, idx: number) => (
+        <Button
+          type="text"
+          danger
+          size="small"
+          icon={<DeleteOutlined />}
+          onClick={() => {
+            setImpuestosFactura((prev) => prev.filter((_, i) => i !== idx));
           }}
         />
       ),
@@ -1134,14 +1203,27 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     key: 'impuestos',
     label: `Impuestos y Retenciones (${impuestosFactura.length})`,
     children: (
-      <Table
-        dataSource={impuestosFactura}
-        columns={impuestoFacturaColumns}
-        rowKey={(r) => r.id || Math.random()}
-        size="small"
-        pagination={false}
-        scroll={{ x: 500 }}
-      />
+      <>
+        <div style={{ marginBottom: 8 }}>
+          <Button type="primary" ghost icon={<SearchOutlined />} onClick={() => setModalImpuestosOpen(true)}>
+            Seleccionar del catálogo
+          </Button>
+          {impuestosFactura.length > 0 && (
+            <Button type="link" danger style={{ marginLeft: 8 }} onClick={() => setImpuestosFactura([])}>
+              Limpiar todos
+            </Button>
+          )}
+        </div>
+        <Table
+          dataSource={impuestosFactura}
+          columns={impuestoFacturaColumns}
+          rowKey={(r) => r.id || Math.random()}
+          size="small"
+          pagination={false}
+          scroll={{ x: 600 }}
+          locale={{ emptyText: 'Sin impuestos seleccionados' }}
+        />
+      </>
     ),
   });
 
@@ -1247,6 +1329,22 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         codEntidad={selectedEntidad?.codigo || ''}
         origen={tipoEntidad === 'SUP' ? 1 : 0}
         montoTotal={Number(form.getFieldValue('total') || 0)}
+      />
+
+      {/* Modal de selección de impuestos */}
+      <SeleccionarImpuestosModal
+        open={modalImpuestosOpen}
+        onClose={() => setModalImpuestosOpen(false)}
+        onConfirm={handleConfirmarImpuestos}
+        tipoEntidad={tipoEntidad}
+        sucursal={sucursalActiva}
+        existentes={impuestosFactura.map((i) => ({
+          codigo: i.codigo || '',
+          nombre: i.nombre || '',
+          porcentaje: i.porcentaje || 0,
+          tipo: i.tipo || 'Impuesto',
+          monto: i.monto,
+        }))}
       />
 
       {isLarge ? (

@@ -60,8 +60,6 @@ export interface DetalleFacturaSuplidorDTO {
 export interface FacturaSuplidorFullDTO {
   id: number;
   fechaDocumento: string;
-  fechaVencimiento?: string;
-  fechaEntrega?: string;
   noDocumento: string;
   estado: number;
   periodo: number;
@@ -69,7 +67,8 @@ export interface FacturaSuplidorFullDTO {
   nota: string;
   referencia: string;
   tasa: number;
-  diasCredito: number;
+  montoBienes?: number;
+  montoServicio?: number;
 
   concepto: ConceptoDTO | null;
   suplidor: SuplidorDTO | null;
@@ -79,6 +78,7 @@ export interface FacturaSuplidorFullDTO {
   documento: DocumentoDTO;
   tipoDocumento: number;
   tipoEntidad: string;
+  diasCredito: number;
   entradaAlmacen?: EntradaReferenciaDTO | null;
 
   subTotal: number;
