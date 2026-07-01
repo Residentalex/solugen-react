@@ -145,6 +145,7 @@ const MainLayout: React.FC = () => {
   const setSidebarCollapsed = useUIStore((s: any) => s.setSidebarCollapsed);
   const activeModule = useUIStore((s: any) => s.activeModule);
   const pageTitleOverride = useUIStore((s: any) => s.pageTitleOverride);
+  const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
   const themeName = useUIStore((s: any) => s.themeName);
   const screens = useBreakpoint();
 
@@ -170,6 +171,11 @@ const MainLayout: React.FC = () => {
   useEffect(() => {
     if (error) message.error(error);
   }, [error]);
+
+  // Limpiar pageTitleOverride en cada cambio de ruta
+  useEffect(() => {
+    setPageTitleOverride('');
+  }, [location.pathname, setPageTitleOverride]);
 
   // Sincronizar securitySucursal desde companyStore a authStore
   useEffect(() => {
@@ -345,7 +351,7 @@ const MainLayout: React.FC = () => {
           <div className="paces-topbar-right">
             <ThemeSwitcher />
             <NotificacionDropdown />
-            {sucursalesFiltradas.length > 1 && activeModule !== 'dashboard' && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && activeModule !== 'MTicket' && activeModule !== 'notificaciones' && (
+            {sucursalesFiltradas.length > 1 && activeModule !== 'dashboard' && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && activeModule !== 'MTicket' && activeModule !== 'notificaciones' && activeModule !== 'MDocumento' && activeModule !== 'MProducto' && (
               <Select
                 value={sucursalActiva}
                 onChange={(val) => setSucursalActiva(val)}

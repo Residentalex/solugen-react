@@ -167,9 +167,15 @@ const CFacturasElectronicas: React.FC = () => {
         const maxParalelo = 5;
         let completados = 0;
 
+        function inferirTipoDocumento(item: EnvioDGIIDTO): number {
+          if (item.tipoDocumento !== undefined) return item.tipoDocumento;
+          const prefix = item.ncf && item.ncf.length >= 3 ? item.ncf.substring(0, 3) : '';
+          return prefix === 'E34' ? 20 : 35; // E34→DEV, otros(E31/E32/PV)→FAC
+        }
+
         const nextTask = async (item: EnvioDGIIDTO) => {
           try {
-            await dgiiApi.cargarYEnviarFactura(item.sucursal, item.transaccionID, item.tipoDocumento!);
+            await dgiiApi.cargarYEnviarFactura(item.sucursal, item.transaccionID, inferirTipoDocumento(item));
           } catch (err: any) {
             errores.push(`ID ${item.transaccionID}: ${err?.message || err}`);
           }

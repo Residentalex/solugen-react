@@ -17,9 +17,11 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { notaCreditoApi } from '../../api/notaCreditoApi';
 import { conceptosApi } from '../../api/conceptosApi';
+import { entidadApi } from '../../api/entidadApi';
 import { tipoApi } from '../../api/tipoApi';
 import { clienteApi } from '../../api/clienteApi';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
@@ -38,6 +40,7 @@ import LogTable from '../../components/LogTable';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import SeleccionarImpuestosModal from '../../components/SeleccionarImpuestosModal';
 import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestosModal';
+import { OrigenCuenta } from '../../types/contabilidad';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import BuscarEntidadSelect from '../../components/BuscarEntidadSelect/BuscarEntidadSelect';
@@ -52,6 +55,7 @@ import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, to
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import { NotaCreditoGuide } from './NotaCreditoGuide';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -123,6 +127,8 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   // Documentos relacionados modal
   const [buscarDocModalOpen, setBuscarDocModalOpen] = useState(false);
 
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
+
   // Refs para la guía
   const conceptoRef = useRef<HTMLDivElement>(null);
   const sucursalRef = useRef<HTMLDivElement>(null);
@@ -147,7 +153,6 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
 
   const sinOC = true;
   const isLarge = screens.xxl === true;
-  const [conceptoInfo, setConceptoInfo] = useState<string>('');
 
   // Estado
   const estado = data?.estado ?? 0;
@@ -270,6 +275,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
 
         setSelectedConcepto(res.concepto || null);
         setSelectedEntidad(res.entidad || null);
+        setSelectedSucursal(res.sucursal || null);
 
         // Obtener tipo desde res si existe
         if (res.tipo) {
@@ -314,7 +320,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   const cargarEntidades = async (conceptoCodigo?: string) => {
     try {
       // Cargar desde el endpoint de entidades
-      const res = await conceptosApi.obtenerEntidades(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo, true);
+      const res = await entidadApi.obtenerEntidades(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo, true, tipoEntidad);
       setEntidadesCache(res || []);
     } catch {
       // Fallback: cargar clientes o suplidores
@@ -476,6 +482,25 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     const totalImpuestos = impuestosCalc + otrosImpuestos;
     const subTotal = (values.total || 0) - totalImpuestos;
 
+    // Asegurar documento con origenCuenta desde companyStore
+    const { documentos } = useCompanyStore.getState().data;
+    const docConfig = documentos.find((d: any) => d.codigo === documentCode);
+    const docOrigenCuenta = base.documento?.origenCuenta ?? docConfig?.origenCuenta ?? OrigenCuenta.Desconocido;
+    const documento = base.documento?.codigo
+      ? { ...base.documento, origenCuenta: docOrigenCuenta }
+      : { codigo: documentCode, origenCuenta: docOrigenCuenta };
+
+    // Asegurar entidad con tipoEntidad
+    const tipoEntidadStr = tipoEntidad;
+    const entidadBase = entidadSel || { nombre: '', codigo: '', identificacion: '' };
+    const entidad = {
+      ...entidadBase,
+      tipoEntidad: entidadBase.tipoEntidad ?? {
+        codigo: tipoEntidadStr,
+        origenCuenta: docOrigenCuenta,
+      },
+    };
+
     return {
       id: base.id || 0,
       fechaDocumento: fechaDoc,
@@ -497,12 +522,12 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       retenciones: Math.round(retenciones * 100) / 100,
       tipoDocumento: base.tipoDocumento ?? 39,
       tipoEntidad,
-      documento: base.documento || { codigo: documentCode },
+      documento,
       concepto: selectedConcepto || { nombre: '', codigo: '' },
-      entidad: entidadSel || { nombre: '', codigo: '', identificacion: '' },
+      entidad,
       moneda: base.moneda || getMonedaSucursalActiva(),
       codigoTipo: selectedTipo?.codigo || values.tipo || '',
-      sucursal: selectedSucursal ? { codigo: selectedSucursal.codigo || selectedSucursal.idExterno, nombre: selectedSucursal.nombre || '' } : undefined,
+      sucursal: selectedSucursal ?? undefined,
       // Colecciones
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
         ...t,
@@ -566,31 +591,43 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     setSelectedConcepto(concepto);
     setEditingField(null);
     setConceptoSearchText('');
-    form.setFieldsValue({ concepto: concepto.codigo });
 
     // Cargar entidades según concepto
     cargarEntidades(concepto.codigo);
 
     // === ConfigurarMoneda ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
-    form.setFieldsValue({
-      moneda: monedaObj.nombre,
-      tasa: monedaObj.tasa ?? 1,
-    });
-    // Actualizar data local para que la UI lo refleje
     const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || getMonedaSucursalActiva().simbolo, codigo: monedaObj.codigo };
     setData((prev: any) => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaFull };
     });
 
-    // === Mostrar avisos si el concepto tiene flags especiales ===
-    const infoParts: string[] = [];
-    if (concepto.noImpuesto) infoParts.push(' * No Impuestos * ');
-    if (concepto.noAsientos) infoParts.push(' * No Asientos * ');
-    if (concepto.activo === false) infoParts.push(' * Concepto Inactivo * ');
-    if (concepto.noActualizaCostos) infoParts.push(' * No Actualiza Costos * ');
-    setConceptoInfo(infoParts.join(''));
+    form.setFieldsValue({
+      concepto: concepto.codigo,
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.tasa ?? 1,
+    });
+
+    // === NoImpuesto: si el concepto no acepta impuestos, limpiarlos ===
+    const prevNoImpuesto = selectedConcepto?.noImpuesto;
+    if (concepto.noImpuesto) {
+      // Limpiar impuestosFactura si existe alguno
+      const hayImpuestos = impuestosFactura.length > 0;
+      if (hayImpuestos) {
+        const backup = new Map<number, { impuesto?: any; porcentajeImpuesto: number }>();
+        impuestosFactura.forEach((i, idx) => {
+          if ((i.monto || 0) > 0) {
+            backup.set(idx, { impuesto: i, porcentajeImpuesto: i.porcentaje || 0 });
+          }
+        });
+        (impuestosBackupRef as any).current = backup;
+        message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+        setImpuestosFactura([]);
+      }
+    } else if (prevNoImpuesto && !concepto.noImpuesto) {
+      // Restoration not implemented for NC since impuestosFactura are managed via modal
+    }
   };
 
   const handleConceptoClear = () => {
@@ -857,9 +894,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
               </FloatingField>
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
-            {conceptoInfo && (
-              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-            )}
+            <ConceptoInfoLabel concepto={selectedConcepto} />
           </Col>
 
           {/* Fila 2: Tipo + Entidad */}
@@ -1327,7 +1362,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         onSelect={handleDocRelacionadoSelect}
         tipoEntidad={tipoEntidad}
         codEntidad={selectedEntidad?.codigo || ''}
-        origen={tipoEntidad === 'SUP' ? 1 : 0}
+        origen={(() => { const { documentos } = useCompanyStore.getState().data; const docConfig = documentos.find((d: any) => d.codigo === 'NC'); const docOrigen = docConfig?.origenCuenta ?? OrigenCuenta.Desconocido; return typeof docOrigen === 'number' ? docOrigen : (docOrigen === 'Credito' ? OrigenCuenta.Credito : OrigenCuenta.Debito); })()}
         montoTotal={Number(form.getFieldValue('total') || 0)}
       />
 

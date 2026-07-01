@@ -47,6 +47,7 @@ export interface DetalleFacturaSuplidorDTO {
   porcentajeDescuento: number;
   descuento: number;
   impuesto?: { nombre: string; porcentaje: number; codigo: string; idExterno: string };
+  porcentajeImpuesto?: number;
   impuestos: number;
   total: number;
   familia?: { nombre: string; idExterno: string };
@@ -55,6 +56,8 @@ export interface DetalleFacturaSuplidorDTO {
   nota: string;
   tieneVencimiento?: boolean;
   fechaVencimiento?: string;
+  modificaPrecio?: boolean;
+  modificaDescripcion?: boolean;
 }
 
 export interface FacturaSuplidorFullDTO {

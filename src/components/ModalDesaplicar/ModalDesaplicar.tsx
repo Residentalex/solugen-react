@@ -6,8 +6,8 @@ const { Text } = Typography;
 const { TextArea } = Input;
 
 export const MOTIVOS_DESAPLICAR = [
-  'Datos ErrÃ³neos.',
-  'Falta de InformaciÃ³n.',
+  'Datos Erróneos.',
+  'Falta de Información.',
   'Falta de un Producto.',
   'Entrada Duplicada.',
   'Otro motivo...',
@@ -106,7 +106,7 @@ const ModalDesaplicar: React.FC<ModalDesaplicarProps> = ({
       <Divider style={{ margin: '12px 0' }} />
 
       <div style={{ marginBottom: 8 }}>
-        <Text>Selecciona el motivo de desaplicaciÃ³n:</Text>
+        <Text>Selecciona el motivo de desaplicación:</Text>
       </div>
 
       <Select

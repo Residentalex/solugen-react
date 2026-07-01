@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Tooltip, Modal, Alert, App, Switch
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, message, Tooltip, Modal, Alert, App, Switch, Typography
 } from 'antd';
 import {
   LockFilled,
@@ -19,7 +19,6 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { transaccionApi } from '../../api/transaccionApi';
-import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import { useAplicar } from '../../hooks/useAplicar';
@@ -28,9 +27,10 @@ import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/docum
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 
@@ -62,6 +62,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
   const [mostrandoReverso, setMostrandoReverso] = useState(false);
   const [reversoData, setReversoData] = useState<any>(null);
+  const [detalleSearch, setDetalleSearch] = useState('');
 
   const { message: messageApi } = App.useApp();
   const operacion = useAplicar();
@@ -224,7 +225,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
     }
     setOperacionTitulo(`Posteando RDE-${data?.noDocumento || id}`);
     operacion.ejecutar(
-      `/RDE/${sucursalActiva}/postear`,
+      `/Transaccion/${sucursalActiva}/postear`,
       handleRefresh,
       data
     );
@@ -234,9 +235,8 @@ const FacturaSuplidorDetalle: React.FC = () => {
     if (!id || !data) return;
     setSaving(true);
     try {
-      const origen = obtenerNombreEnumSucursal(data.codigoSucursal || String(sucursalActiva));
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
-      await facturaSuplidorApi.desaplicar(origen, documento);
+      await facturaSuplidorApi.desaplicar(sucursalActiva, documento);
       messageApi.success('Documento desaplicado exitosamente');
       setModalDesaplicarOpen(false);
       handleRefresh();
@@ -362,11 +362,145 @@ const FacturaSuplidorDetalle: React.FC = () => {
 
   const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
   const isLarge = screens.xxl === true;
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[documentoActivo.estado] || { label: 'Desconocido', color: 'default' };
+  const estadoInfo = resolveEstado(documentoActivo.estado);
   const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
   const tienePagos = pagosAsociados.length > 0;
 
+  const detallesFiltrados = detalleSearch
+    ? (documentoActivo?.detalles || []).filter((d: any) => {
+        const q = detalleSearch.toLowerCase();
+        return (
+          (d.codigo || '').toLowerCase().includes(q) ||
+          (d.articulo || '').toLowerCase().includes(q) ||
+          (d.referencia || '').toLowerCase().includes(q)
+        );
+      })
+    : (documentoActivo?.detalles || []);
+
   // asientoColumns reemplazado por AsientosContableTable compartido
+
+  const detalleColumns = [
+    {
+      title: 'Código',
+      key: 'codigo',
+      width: 100,
+      fixed: 'left' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column' }}>
+          <span>{record.codigo || '-'}</span>
+          {record.referencia && (
+            <Tooltip title={record.referencia}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                {record.referencia}
+              </div>
+            </Tooltip>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: 'Artículo',
+      key: 'articulo',
+      ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column' }}>
+          <span>{toTitleCase(record.articulo || '')}</span>
+          {record.familia?.nombre && (
+            <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px', marginTop: 4, width: 'fit-content' }}>
+              {toTitleCase(record.familia.nombre)}
+            </Tag>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: 'Cantidad',
+      dataIndex: 'cantidad',
+      key: 'cantidad',
+      width: 110,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div>{formatNumber(record.cantidad || 0)}</div>
+          <Tooltip title={record.medida?.nombre || ''}>
+            <div className="paces-text-secondary" style={{ fontSize: 11, marginTop: 'auto' }}>
+              {record.medida?.nombre || ''}
+            </div>
+          </Tooltip>
+        </div>
+      ),
+    },
+    {
+      title: 'Precio',
+      key: 'costo',
+      width: 110,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
+      render: (_: any, record: any) => {
+        const factor = Number(record.medida?.factor) || 1;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div>{formatNumber(record.costo || 0)}</div>
+            <div className="paces-text-secondary" style={{ fontSize: 11 }}>
+              {factor > 1 ? `${formatNumber((record.costo || 0) / factor)} × ${factor}` : ''}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      title: 'Descuento',
+      key: 'descuento',
+      width: 100,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
+      render: (_: any, record: any) => (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div>{formatNumber(record.porcentajeDescuento || 0)}%</div>
+          <div className="paces-text-secondary" style={{ fontSize: 12 }}>
+            {formatNumber(record.descuento || 0)}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Impuestos',
+      key: 'impuestos',
+      width: 140,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
+      render: (_: any, record: any) => (
+        <div>
+          <div>{formatNumber(record.impuestos || 0)}</div>
+          {record.impuesto?.nombre && (
+            <Tooltip title={record.impuesto.nombre}>
+              <div className="paces-text-secondary" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {toTitleCase(record.impuesto.nombre)}
+              </div>
+            </Tooltip>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: 'Total',
+      dataIndex: 'total',
+      key: 'total',
+      width: 100,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top', paddingRight: 16 } }),
+      onHeaderCell: () => ({ style: { paddingRight: 16 } }),
+      render: (_: any, record: any) => (
+        <Typography.Text strong>{formatNumber(record.total || 0)}</Typography.Text>
+      ),
+    },
+  ];
 
   return (
     <div>
@@ -395,7 +529,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
         onImprimir={async () => {
           setImprimiendo(true);
           try {
-            const res = await apiClient.post('/reportes/contabilidad/factura-suplidor', data, {
+            const res = await apiClient.get(`/reportes/contabilidad/facturaSuplidor/${sucursalActiva}/${id}`, {
               responseType: 'blob',
             });
             const blobUrl = URL.createObjectURL(res.data);
@@ -492,12 +626,13 @@ const FacturaSuplidorDetalle: React.FC = () => {
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="Tipo">
                   {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
                 <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Sucursal">{documentoActivo.sucursal?.nombre || documentoActivo.sucursal?.codigo || '-'}</Descriptions.Item>
 
                 <Descriptions.Item label="Tasa">{documentoActivo.tasa ? formatNumber(documentoActivo.tasa) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Tipo Compra">{documentoActivo.tipoCompra === 'C' ? 'Contado' : documentoActivo.tipoCompra === 'D' ? 'Crédito' : documentoActivo.tipoCompra || '-'}</Descriptions.Item>
@@ -505,9 +640,25 @@ const FacturaSuplidorDetalle: React.FC = () => {
             </Card>
 
             <Tabs
-              defaultActiveKey="documentos"
+              defaultActiveKey="articulos"
               type="card"
+              tabBarExtraContent={
+                <Input.Search
+                  placeholder="Buscar artículo..."
+                  allowClear
+                  style={{ width: 320 }}
+                  onSearch={(value) => setDetalleSearch(value)}
+                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                />
+              }
               items={[
+                {
+                  key: 'articulos',
+                  label: `Artículos (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detalles?.length || 0}` : ''})`,
+                  children: (
+                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
+                  ),
+                },
                 {
                   key: 'documentos',
                   label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
@@ -602,7 +753,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="Tipo">
                   {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
@@ -614,9 +765,25 @@ const FacturaSuplidorDetalle: React.FC = () => {
           </Card>
 
           <Tabs
-            defaultActiveKey="documentos"
+            defaultActiveKey="articulos"
             type="card"
+            tabBarExtraContent={
+              <Input.Search
+                placeholder="Buscar artículo..."
+                allowClear
+                style={{ width: 320 }}
+                onSearch={(value) => setDetalleSearch(value)}
+                onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+              />
+            }
             items={[
+              {
+                key: 'articulos',
+                label: `Artículos (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detalles?.length || 0}` : ''})`,
+                children: (
+                  <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
+                ),
+              },
               {
                 key: 'documentos',
                 label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,

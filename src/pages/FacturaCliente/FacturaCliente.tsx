@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography, message } from 'antd';
+import { Typography, message, Spin } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { facturaClienteApi } from '../../api/facturaClienteApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
@@ -56,22 +56,27 @@ const FacturaCliente: React.FC = () => {
   });
 
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const [clonando, setClonando] = useState(false);
 
   const handleClonar = async () => {
     if (!state.selectedRow) return;
+    setClonando(true);
     try {
-      const { obtenerPorId } = await import('../../api/facturaClienteApi');
-      const data = await obtenerPorId(sucursalActiva, state.selectedRow.id);
+      const data = await facturaClienteApi.obtenerPorId(sucursalActiva, state.selectedRow.id);
       const cloneData = {
         ...data,
         id: 0,
         noDocumento: '',
+        ncf: '',
+        ncfModificado: '',
         estado: 0,
         asientos: [],
         logs: [],
       };
+      setClonando(false);
       navigate('/FFAC/nuevo', { state: { cloneData } });
     } catch (err: any) {
+      setClonando(false);
       message.error(err?.response?.data?.errorMessage || 'Error al obtener datos para clonar');
     }
   };
@@ -139,6 +144,7 @@ const FacturaCliente: React.FC = () => {
   ];
 
   return (
+    <Spin spinning={clonando} tip="Clonando factura..." size="large">
     <DocumentListadoLayout<FacturaClienteResumenDTO>
       columns={columns}
       data={state.data}
@@ -164,6 +170,7 @@ const FacturaCliente: React.FC = () => {
         onFiltrosAplicar: actions.handleFiltrosAplicar,
         searchPlaceholder: 'Buscar documento, NCF, concepto...',
         onSearch: actions.handleSearch,
+        searchDefaultValue: state.searchText,
         pageSize: state.pageSize,
         onPageSizeChange: actions.handlePageSizeChange,
         showCrear: true,
@@ -180,6 +187,7 @@ const FacturaCliente: React.FC = () => {
         onRefresh: actions.handleRefresh,
       }}
     />
+    </Spin>
   );
 };
 

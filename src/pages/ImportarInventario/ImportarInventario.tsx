@@ -30,6 +30,7 @@ import type {
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import TotalesCard from '../../components/TotalesCard';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import { TIPO_DOC_LABELS, TIPO_DOC_ROUTES } from '../../types/importarInventario';
 import type { ConceptoDTO, AlmacenDTO, SuplidorDTO, EntradaAlmacenDTO, DetalleEntradaAlmacenDTO } from '../../types/entradaAlmacen';
 import type { SalidaAlmacenFullDTO, DetalleSalidaAlmacenDTO } from '../../types/salidaAlmacen';
@@ -208,6 +209,8 @@ const ImportarInventario: React.FC = () => {
   const [entidadDesdeVal, setEntidadDesdeVal] = useState<string>('');
   const [entidadHastaVal, setEntidadHastaVal] = useState<string>('');
 
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
+
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -277,14 +280,47 @@ const ImportarInventario: React.FC = () => {
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
     setConceptoSearchText(`${concepto.codigo || ''} - ${toTitleCase(concepto.nombre)}`);
-    form.setFieldsValue({ conceptoNombre: concepto.nombre });
 
     // === ConfigurarMoneda ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
+      conceptoNombre: concepto.nombre,
       moneda: monedaObj.nombre,
       tasa: monedaObj.tasa ?? 1,
     });
+
+    // === NoImpuesto: si el concepto no acepta impuestos, limpiarlos ===
+    const prevNoImpuesto = selectedConcepto?.noImpuesto;
+    if (concepto.noImpuesto) {
+      const hayImpuestos = detalles.some((d) => (d.porcentajeImpuesto || 0) > 0);
+      if (hayImpuestos) {
+        const backup = new Map<number, { impuesto?: any; porcentajeImpuesto: number }>();
+        detalles.forEach((d) => {
+          if ((d.porcentajeImpuesto || 0) > 0) {
+            backup.set(d.id, { impuesto: d.impuesto, porcentajeImpuesto: d.porcentajeImpuesto || 0 });
+          }
+        });
+        impuestosBackupRef.current = backup;
+        message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+        setDetalles((prev) =>
+          prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
+        );
+      }
+    } else if (prevNoImpuesto && !concepto.noImpuesto) {
+      const backup = impuestosBackupRef.current;
+      if (backup.size > 0) {
+        setDetalles((prev) =>
+          prev.map((d) => {
+            const saved = backup.get(d.id);
+            if (saved) {
+              return calcularFila({ ...d, impuesto: saved.impuesto, porcentajeImpuesto: saved.porcentajeImpuesto });
+            }
+            return d;
+          })
+        );
+        impuestosBackupRef.current = new Map();
+      }
+    }
   };
 
   const handleConceptoSearchClick = () => {
@@ -504,6 +540,7 @@ const ImportarInventario: React.FC = () => {
 
       case 'SAP': {
         const almacenSel = almacenesCache.find((a) => a.codigo === entidadDesdeVal);
+        const suplidorSel = suplidoresCache.find((s) => s.codigo === entidadHastaVal);
         return {
           ...encabezadoBase,
           fechaRecibo: undefined,
@@ -513,8 +550,10 @@ const ImportarInventario: React.FC = () => {
           total: detalles.reduce((s, d) => s + (d.total || 0), 0),
           concepto: selectedConcepto || { nombre: '', codigo: '' },
           almacen: almacenSel || { nombre: '', codigo: '' },
-          suplidor: { nombre: entidadHastaVal, codigo: '', identificacion: '' },
-          entidad: { nombre: entidadHastaVal, codigo: '', identificacion: '' },
+          suplidor: suplidorSel || { nombre: entidadHastaVal || '', codigo: '', identificacion: '' },
+          entidad: suplidorSel
+            ? { nombre: suplidorSel.nombre, codigo: suplidorSel.codigo, identificacion: suplidorSel.identificacion || '' }
+            : { nombre: entidadHastaVal || '', codigo: '', identificacion: '' },
           moneda: getMonedaSucursalActiva(),
           detalles: detalles.map((d) => ({
             id: d.id,
@@ -832,15 +871,17 @@ const ImportarInventario: React.FC = () => {
 
   const opcionesHasta = useMemo(() => {
     if (tipoDocumento === 'SAP') {
-      // Para SAP "hasta" podría ser un input de texto o cliente; por ahora input libre
-      return [];
+      return suplidoresCache.map((s) => ({
+        value: s.codigo,
+        label: `${toTitleCase(s.nombre)}${s.identificacion ? ` (${s.identificacion})` : ''}`,
+      }));
     }
     // ENP, DVC, TRP: hasta = Almacén
     return almacenesCache.map((a) => ({
       value: a.codigo,
       label: toTitleCase(a.nombre),
     }));
-  }, [tipoDocumento, almacenesCache]);
+  }, [tipoDocumento, almacenesCache, suplidoresCache]);
 
   // ===== Encabezado del formulario =====
   const renderEncabezado = () => (
@@ -878,6 +919,7 @@ const ImportarInventario: React.FC = () => {
               <Button icon={<SearchOutlined />} onClick={handleConceptoSearchClick} />
             </div>
             <Form.Item name="conceptoNombre" hidden><Input /></Form.Item>
+            <ConceptoInfoLabel concepto={selectedConcepto} />
           </Col>
 
           {/* Fila 2: Entidad Desde */}
@@ -910,23 +952,15 @@ const ImportarInventario: React.FC = () => {
           {/* Fila 2: Entidad Hasta */}
           <Col xs={24} sm={12} lg={8}>
             <Form.Item label={entidadLabels.hasta} required style={{ marginBottom: 0 }}>
-              {tipoDocumento === 'SAP' ? (
-                <Input
-                  placeholder="Nombre del cliente"
-                  value={entidadHastaVal}
-                  onChange={(e) => setEntidadHastaVal(e.target.value)}
-                />
-              ) : (
-                <Select
-                  value={entidadHastaVal || undefined}
-                  onChange={setEntidadHastaVal}
-                  allowClear
-                  showSearch
-                  optionFilterProp="label"
-                  placeholder={`Seleccionar ${entidadLabels.hasta}`}
-                  options={opcionesHasta}
-                />
-              )}
+              <Select
+                value={entidadHastaVal || undefined}
+                onChange={setEntidadHastaVal}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder={`Seleccionar ${entidadLabels.hasta}`}
+                options={opcionesHasta}
+              />
             </Form.Item>
           </Col>
 

@@ -60,19 +60,24 @@ export const dgiiApi = {
     return metodo;
   },
 
-  cargarYEnviarFactura: async (sucursal: number, transaccionID: number, tipoDocumento: number): Promise<void> => {
+  cargarYEnviarFactura: async (sucursal: number, transaccionID: number, tipoDocumento: number | string | undefined): Promise<void> => {
+    const MAPA_TIPO_STR: Record<string, number> = { PV: 52, FAC: 35, DEV: 20 };
     const TIPO_PV = 52;
     const TIPO_FAC = 35;
     const TIPO_DEV = 20;
 
-    if (tipoDocumento === TIPO_PV || tipoDocumento === TIPO_FAC) {
-      const prefix = tipoDocumento === TIPO_PV ? 'PV' : 'FAC';
+    const tipoNum: number | undefined = typeof tipoDocumento === 'string'
+      ? MAPA_TIPO_STR[tipoDocumento]
+      : tipoDocumento;
+
+    if (tipoNum === TIPO_PV || tipoNum === TIPO_FAC) {
+      const prefix = tipoNum === TIPO_PV ? 'PV' : 'FAC';
       const loadResp = await apiClient.get(`/${prefix}/${sucursal}/${transaccionID}`);
       const doc = await extraerDatos(loadResp);
       const sendResp = await apiClient.post(`/ecf/${sucursal}/Facturas/enviar`, doc);
       const result = await extraerDatos<{ isSuccess: boolean; errorMessage?: string }>(sendResp);
       if (!result?.isSuccess) throw new Error(result?.errorMessage || 'Error al enviar a DGII');
-    } else if (tipoDocumento === TIPO_DEV) {
+    } else if (tipoNum === TIPO_DEV) {
       const loadResp = await apiClient.get(`/DEV/${sucursal}/${transaccionID}`);
       const doc = await extraerDatos(loadResp);
       const sendResp = await apiClient.post(`/ecf/${sucursal}/NotaCredito/enviar`, doc);

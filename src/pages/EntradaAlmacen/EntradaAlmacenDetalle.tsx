@@ -25,7 +25,6 @@ import { transaccionApi } from '../../api/transaccionApi';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { parametrosApi } from '../../api/parametrosApi';
 import { productoApi } from '../../api/productoApi';
-import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
@@ -45,6 +44,7 @@ import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { Text } = Typography;
 
@@ -588,9 +588,8 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
     if (!id || !data) return;
     setSaving(true);
     try {
-      const origen = obtenerNombreEnumSucursal(data.codigoSucursal || String(sucursalActiva));
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
-      await entradaAlmacenApi.desaplicar(origen, documento);
+      await entradaAlmacenApi.desaplicar(sucursalActiva, documento);
       message.success('Documento desaplicado exitosamente');
       setModalDesaplicarOpen(false);
       handleRefresh();
@@ -825,7 +824,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion.loading}
-        onVolver={() => navigate('/FENP')}
+        onVolver={() => navigate(-1)}
         onImprimir={async () => {
           setImprimiendo(true);
           try {
@@ -890,7 +889,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       )}
 
       {isLarge ? (
-        /* === DESKTOP LAYOUT (â‰¥ lg) === */
+        /* === DESKTOP LAYOUT (â‰¥ xxl) === */
         <Row gutter={16}>
           <Col xxl={18}>
             <Card className="paces-card" size="small" title={
@@ -928,6 +927,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 </Descriptions.Item>
                 <Descriptions.Item label="Concepto:">
                   {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : toTitleCase(documentoActivo.concepto?.nombre || '-')}
+                  <ConceptoInfoLabel concepto={documentoActivo.concepto} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Tipo:">{documentoActivo.tipo?.nombre || documentoActivo.codigoTipo || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha Doc.:">
@@ -1115,6 +1115,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 </Descriptions.Item>
                 <Descriptions.Item label="Concepto:">
                   {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : toTitleCase(documentoActivo.concepto?.nombre || '-')}
+                  <ConceptoInfoLabel concepto={documentoActivo.concepto} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Tipo:">{documentoActivo.tipo?.nombre || documentoActivo.codigoTipo || '-'}</Descriptions.Item>
                 <Descriptions.Item label="NCF:">

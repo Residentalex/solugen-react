@@ -30,6 +30,7 @@ import TotalesCard from '../../components/TotalesCard';
 import CobrosMinimal from '../../components/CobrosCard/CobrosMinimal';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import DetalleToolbar from '../../components/DetalleToolbar';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import SucursalField from '../../components/SucursalField';
 
 const { Text } = Typography;
@@ -440,7 +441,7 @@ const FacturaPOSDetalle: React.FC = () => {
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={data.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="Tipo">—</Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Hora">{data.fechaDocumento ? new Date(data.fechaDocumento).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</Descriptions.Item>
@@ -630,7 +631,7 @@ const FacturaPOSDetalle: React.FC = () => {
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
               <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={data.concepto} /></Descriptions.Item>
               <Descriptions.Item label="Tipo">—</Descriptions.Item>
               <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
               <Descriptions.Item label="Hora">{data.fechaDocumento ? new Date(data.fechaDocumento).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</Descriptions.Item>

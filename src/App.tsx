@@ -57,9 +57,12 @@ import ModuloFormulario from './pages/Modulos/ModuloFormulario';
 import ModuloDetalle from './pages/Modulos/ModuloDetalle';
 import Productos from './pages/Productos/Productos';
 import ProductoDetalle from './pages/Productos/ProductoDetalle';
+import ProductoFormulario from './pages/Productos/ProductoFormulario';
 import ProductosImportar from './pages/Productos/ProductosImportar';
 import Monedas from './pages/Monedas/Monedas';
 import Documentos from './pages/Documentos/Documentos';
+import DocumentosDetalle from './pages/Documentos/DocumentosDetalle';
+import DocumentosFormulario from './pages/Documentos/DocumentosFormulario';
 import Conceptos from './pages/Conceptos/Conceptos';
 import ConceptoDetalle from './pages/Conceptos/ConceptoDetalle';
 import ConceptoFormulario from './pages/Conceptos/ConceptoFormulario';
@@ -74,6 +77,7 @@ import AsientosContables from './pages/AsientosContables/AsientosContables';
 import AsientoContableDetalle from './pages/AsientosContables/AsientoContableDetalle';
 import CFacturasElectronicas from './pages/DGII/CFacturasElectronicas';
 import CierreFiscal from './pages/CierreFiscal/CierreFiscal';
+import CierreFiscalDetalle from './pages/CierreFiscal/CierreFiscalDetalle';
 import CierreMes from './pages/CierreMes/CierreMes';
 import SecuenciasNCF from './pages/SecuenciasNCF/SecuenciasNCF';
 import Clientes from './pages/Clientes/Clientes';
@@ -119,6 +123,7 @@ import ImportarInventario from './pages/ImportarInventario/ImportarInventario';
 import ActualizacionCostos from './pages/ActualizacionCostos/ActualizacionCostos';
 import AntiguedadSaldos from './pages/AntiguedadSaldos/AntiguedadSaldos';
 import AntiguedadSaldosDVC from './pages/AntiguedadSaldosDVC/AntiguedadSaldosDVC';
+import FacturasVencidas from './pages/FacturasVencidas/FacturasVencidas';
 import MayorAuxiliar from './pages/MayorAuxiliar/MayorAuxiliar';
 import TransaccionNoCuadrada from './pages/TransaccionNoCuadrada/TransaccionNoCuadrada';
 import IntegridadAsientos from './pages/IntegridadAsientos/IntegridadAsientos';
@@ -289,10 +294,15 @@ const App: React.FC = () => {
             <Route path="MROL/nuevo" element={<RolFormulario />} />
             <Route path="MROL/:id/editar" element={<RolFormulario />} />
             <Route path="MProducto" element={<Productos />} />
+            <Route path="MProducto/nuevo" element={<ProductoFormulario />} />
+            <Route path="MProducto/:codigo/editar" element={<ProductoFormulario />} />
             <Route path="MProducto/:codigo" element={<ProductoDetalle />} />
             <Route path="MProducto/importar" element={<ProductosImportar />} />
             <Route path="MMoneda" element={<Monedas />} />
             <Route path="MDocumento" element={<Documentos />} />
+            <Route path="MDocumento/nuevo" element={<DocumentosFormulario />} />
+            <Route path="MDocumento/:id/editar" element={<DocumentosFormulario />} />
+            <Route path="MDocumento/:id" element={<DocumentosDetalle />} />
             <Route path="MConcepto" element={<Conceptos />} />
             <Route path="MConcepto/nuevo" element={<ConceptoFormulario />} />
             <Route path="MConcepto/:codigo/editar" element={<ConceptoFormulario />} />
@@ -344,6 +354,7 @@ const App: React.FC = () => {
             <Route path="MAtributo" element={<Proximamente modulo="Atributos" codigo="MAtributo" />} />
             <Route path="MPaquete" element={<Proximamente modulo="Paquetes" codigo="MPaquete" />} />
             <Route path="RCIERREFISCAL" element={<CierreFiscal />} />
+            <Route path="RCIERREFISCAL/:transacId" element={<CierreFiscalDetalle />} />
             <Route path="OCierreMes" element={<CierreMes />} />
             <Route path="OPROCESOS" element={<Proximamente modulo="Procesos Contables" codigo="OPROCESOS" />} />
             <Route path="MReceta" element={<Recetas />} />
@@ -377,6 +388,7 @@ const App: React.FC = () => {
           <Route path="RAntiguedaCXC" element={<AntiguedadSaldos tipoEntidad="CLI" />} />
           <Route path="RAntiguedadCXP" element={<AntiguedadSaldos tipoEntidad="SUP" />} />
           <Route path="RAntiguedadSaldoDVC" element={<AntiguedadSaldosDVC />} />
+          <Route path="RFACVEN" element={<FacturasVencidas />} />
             <Route path="RMayorAux" element={<MayorAuxiliar />} />
             <Route path="RTransNoCuadrada" element={<TransaccionNoCuadrada />} />
             <Route path="RIntegridadAsientos" element={<IntegridadAsientos />} />
@@ -497,10 +509,15 @@ const App: React.FC = () => {
             <Route path="MROL/nuevo" element={<RolFormulario />} />
             <Route path="MROL/:id/editar" element={<RolFormulario />} />
             <Route path="MProducto" element={<Productos />} />
+            <Route path="MProducto/nuevo" element={<ProductoFormulario />} />
+            <Route path="MProducto/:codigo/editar" element={<ProductoFormulario />} />
             <Route path="MProducto/:codigo" element={<ProductoDetalle />} />
             <Route path="MProducto/importar" element={<ProductosImportar />} />
             <Route path="MMoneda" element={<Monedas />} />
             <Route path="MDocumento" element={<Documentos />} />
+            <Route path="MDocumento/nuevo" element={<DocumentosFormulario />} />
+            <Route path="MDocumento/:id/editar" element={<DocumentosFormulario />} />
+            <Route path="MDocumento/:id" element={<DocumentosDetalle />} />
             <Route path="MConcepto" element={<Conceptos />} />
             <Route path="MConcepto/nuevo" element={<ConceptoFormulario />} />
             <Route path="MConcepto/:codigo/editar" element={<ConceptoFormulario />} />
@@ -552,6 +569,7 @@ const App: React.FC = () => {
             <Route path="MAtributo" element={<Proximamente modulo="Atributos" codigo="MAtributo" />} />
             <Route path="MPaquete" element={<Proximamente modulo="Paquetes" codigo="MPaquete" />} />
             <Route path="RCIERREFISCAL" element={<CierreFiscal />} />
+            <Route path="RCIERREFISCAL/:transacId" element={<CierreFiscalDetalle />} />
             <Route path="OCierreMes" element={<CierreMes />} />
             <Route path="OPROCESOS" element={<Proximamente modulo="Procesos Contables" codigo="OPROCESOS" />} />
             <Route path="MReceta" element={<Recetas />} />
@@ -585,6 +603,7 @@ const App: React.FC = () => {
           <Route path="RAntiguedaCXC" element={<AntiguedadSaldos tipoEntidad="CLI" />} />
           <Route path="RAntiguedadCXP" element={<AntiguedadSaldos tipoEntidad="SUP" />} />
           <Route path="RAntiguedadSaldoDVC" element={<AntiguedadSaldosDVC />} />
+          <Route path="RFACVEN" element={<FacturasVencidas />} />
             <Route path="RMayorAux" element={<MayorAuxiliar />} />
             <Route path="RTransNoCuadrada" element={<TransaccionNoCuadrada />} />
             <Route path="RIntegridadAsientos" element={<IntegridadAsientos />} />

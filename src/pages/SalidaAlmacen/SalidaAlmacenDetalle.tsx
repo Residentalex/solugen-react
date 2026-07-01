@@ -35,6 +35,8 @@ import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/docum
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
+import SucursalField from '../../components/SucursalField';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
@@ -100,7 +102,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
       .then((res) => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
-        // Si el documento estÃ¡ anulado y tiene reversoId, cargar el reverso
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
         if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           salidaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
@@ -142,7 +144,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
         }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
-        // Si el documento estÃ¡ anulado y tiene reversoId, cargar el reverso
+        // Si el documento está anulado y tiene reversoId, cargar el reverso
         if (res.estado === 3 && (res as any).reversoID) {
           salidaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
@@ -164,7 +166,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
-  // Actualizar el tÃ­tulo del header al alternar entre Original/Reverso
+  // Actualizar el título del header al alternar entre Original/Reverso
   useEffect(() => {
     if (mostrandoReverso && reversoData) {
       const doc = reversoData as any;
@@ -246,7 +248,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
   const estadoInfo = resolveEstado(documentoActivo.estado);
   const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
 
-  // ===== Detalles filtrados por bÃºsqueda =====
+  // ===== Detalles filtrados por búsqueda =====
   const detallesFiltrados = detalleSearch
     ? (data?.detalles || []).filter((d: DetalleSalidaAlmacenDTO) => {
         const q = detalleSearch.toLowerCase();
@@ -260,7 +262,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
 
   const detalleColumns = [
     {
-      title: 'CÃ³digo',
+      title: 'Código',
       key: 'codigo',
       width: 100,
       fixed: 'left' as const,
@@ -287,7 +289,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
       },
     },
     {
-      title: 'ArtÃ­culo',
+      title: 'Artículo',
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
@@ -403,7 +405,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
   const handleAplicar = async () => {
     if (!id) return;
 
-    // VerificaciÃ³n temprana del scanner (solo obligatorio si no genera documento derivado)
+    // Verificación temprana del scanner (solo obligatorio si no genera documento derivado)
     if (tieneScan === false && !data?.concepto?.docAGenerar) {
       message.warning('Debe escanear el documento antes de aplicar.');
       return;
@@ -431,7 +433,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
       } catch (err: any) {
         const msg = err?.response?.data?.errorMessage || 'Error al validar fechas de vencimiento';
         message.warning(msg);
-        // No bloquear la aplicaciÃ³n si falla la consulta de vencimiento
+        // No bloquear la aplicación si falla la consulta de vencimiento
       }
     }
 
@@ -456,7 +458,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
     setVencimientoPendientes([]);
     setVencimientoFechas({});
 
-    // Continuar con la aplicaciÃ³n
+    // Continuar con la aplicación
     setOperacionTitulo(`Aplicando SAP-${data?.noDocumento || id}`);
     operacion.ejecutar(`/SAP/${sucursalActiva}/aplicar/${id}`, handleRefresh);
   };
@@ -479,7 +481,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
   const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
     if (!data || !id) return;
     try {
-      // Incluir motivo en el payload de anulaciÃ³n
+      // Incluir motivo en el payload de anulación
       const payload = { ...data, motivo: dataAnular.motivo, fechaAnulacion: dataAnular.fecha };
       await salidaAlmacenApi.anular(sucursalActiva, payload);
       message.success('Documento anulado exitosamente');
@@ -585,7 +587,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
     <div>
       {loadingError && (
         <Alert
-          message="Error al cargar detalle de salida de almacÃ©n"
+          message="Error al cargar detalle de salida de almacén"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
@@ -604,7 +606,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
-        onVolver={() => navigate('/FSAP')}
+        onVolver={() => navigate(-1)}
         showImprimir={false}
         onEditar={() => navigate(`/FSAP/${id}/editar`)}
         confirmActions={true}
@@ -660,7 +662,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
                   </span>
                   <Space>
                     {esCerrado && (
-  <Tooltip title="PerÃ­odo contable cerrado">
+  <Tooltip title="Período contable cerrado">
     <LockFilled style={{ marginLeft: 4, fontSize: 14, color: '#595959' }} />
   </Tooltip>
 )}
@@ -686,14 +688,36 @@ const SalidaAlmacenDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
+                {/* Fila 1 */}
+                <Descriptions.Item label="Documento Generado:">
+                  {documentoActivo.documento?.codigo ? `${documentoActivo.documento.codigo}-${documentoActivo.noDocumento}` : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Concepto:">
+                  {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}
+                  <ConceptoInfoLabel concepto={documentoActivo.concepto} />
+                </Descriptions.Item>
                 <Descriptions.Item label="Tipo:">{documentoActivo.tipo?.nombre || documentoActivo.codigoTipo || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Concepto:">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
-                <Descriptions.Item label="Referencia:">{documentoActivo.referencia || '-'}</Descriptions.Item>
+
+                {/* Fila 2 */}
                 <Descriptions.Item label="Fecha Doc.:">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Entidad:" span={2}>{documentoActivo.suplidor?.nombre ? toTitleCase(documentoActivo.suplidor.nombre) : (documentoActivo.entidad?.nombre ? toTitleCase(documentoActivo.entidad.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Entidad:">
+                  {documentoActivo.suplidor?.nombre ? toTitleCase(documentoActivo.suplidor.nombre) : (documentoActivo.entidad?.nombre ? toTitleCase(documentoActivo.entidad.nombre) : '-')}
+                </Descriptions.Item>
+                <Descriptions.Item label="Referencia:">{documentoActivo.referencia || '-'}</Descriptions.Item>
+
+                {/* Fila 3 */}
                 <Descriptions.Item label="Fecha Entrega:">{documentoActivo.fechaRecibo ? formatDate(documentoActivo.fechaRecibo) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="AlmacÃ©n:" span={2}>{documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Nota:" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
+                <Descriptions.Item label="Almacén:">
+                  {documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                </Descriptions.Item>
+
+                {/* Fila 4 */}
+                <Descriptions.Item label="Nota:" span={3}>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                </Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -757,7 +781,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
                   </span>
                   <Space>
                     {esCerrado && (
-  <Tooltip title="PerÃ­odo contable cerrado">
+  <Tooltip title="Período contable cerrado">
     <LockFilled style={{ marginLeft: 4, fontSize: 14, color: '#595959' }} />
   </Tooltip>
 )}
@@ -783,14 +807,29 @@ const SalidaAlmacenDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Tipo:">{documentoActivo.tipo?.nombre || documentoActivo.codigoTipo || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Concepto:">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
-              <Descriptions.Item label="Referencia:">{documentoActivo.referencia || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Fecha Doc.:">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
-              <Descriptions.Item label="Entidad:">{documentoActivo.suplidor?.nombre ? toTitleCase(documentoActivo.suplidor.nombre) : (documentoActivo.entidad?.nombre ? toTitleCase(documentoActivo.entidad.nombre) : '-')}</Descriptions.Item>
-              <Descriptions.Item label="Fecha Entrega:">{documentoActivo.fechaRecibo ? formatDate(documentoActivo.fechaRecibo) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="AlmacÃ©n:">{documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Nota:"><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
+                <Descriptions.Item label="Documento Generado:">
+                  {documentoActivo.documento?.codigo ? `${documentoActivo.documento.codigo}-${documentoActivo.noDocumento}` : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Concepto:">
+                  {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}
+                  <ConceptoInfoLabel concepto={documentoActivo.concepto} />
+                </Descriptions.Item>
+                <Descriptions.Item label="Tipo:">{documentoActivo.tipo?.nombre || documentoActivo.codigoTipo || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha Doc.:">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Entidad:">
+                  {documentoActivo.suplidor?.nombre ? toTitleCase(documentoActivo.suplidor.nombre) : (documentoActivo.entidad?.nombre ? toTitleCase(documentoActivo.entidad.nombre) : '-')}
+                </Descriptions.Item>
+                <Descriptions.Item label="Referencia:">{documentoActivo.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha Entrega:">{documentoActivo.fechaRecibo ? formatDate(documentoActivo.fechaRecibo) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Almacén:">
+                  {documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                </Descriptions.Item>
+                <Descriptions.Item label="Nota:">
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                </Descriptions.Item>
               </Descriptions>
             </Card>
 

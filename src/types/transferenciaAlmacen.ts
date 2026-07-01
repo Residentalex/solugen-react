@@ -60,6 +60,8 @@ export interface DetalleTransferenciaAlmacenDTO {
   nota?: string;
   familia?: { nombre: string; idExterno: string };
   medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
+  modificaPrecio?: boolean;
+  modificaDescripcion?: boolean;
 }
 
 export interface TransferenciaAlmacenFullDTO {

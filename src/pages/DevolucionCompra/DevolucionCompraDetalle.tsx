@@ -30,6 +30,7 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import DistribucionPagosCard from '../../components/DistribucionPagosCard';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
@@ -552,7 +553,7 @@ const DevolucionCompraDetalle: React.FC = () => {
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
-        onVolver={() => navigate('/FDVC')}
+        onVolver={() => navigate(-1)}
         onImprimir={async () => {
           setImprimiendo(true);
           try {
@@ -652,14 +653,26 @@ const DevolucionCompraDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Tipo">{documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}</Descriptions.Item>
-                <Descriptions.Item label="Concepto" span={2}>{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
-                <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Almacen" span={2}>{documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}</Descriptions.Item>
+                {/* Fila 1 */}
+                <Descriptions.Item label="Fecha Doc.:">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto:">
+                  {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}
+                  <ConceptoInfoLabel concepto={documentoActivo.concepto} />
+                </Descriptions.Item>
+                <Descriptions.Item label="Tipo:">{documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}</Descriptions.Item>
+
+                {/* Fila 2 */}
+                <Descriptions.Item label="Almacén:" span={2}>
+                  {documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}
+                </Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
                   <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
                 </Descriptions.Item>
-                <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
+
+                {/* Fila 3 */}
+                <Descriptions.Item label="Nota:" span={3}>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                </Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -756,14 +769,21 @@ const DevolucionCompraDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Tipo">{documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}</Descriptions.Item>
-              <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
-              <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
-              <Descriptions.Item label="Almacen">{documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}</Descriptions.Item>
-              <Descriptions.Item label="Sucursal:">
-                <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
-              </Descriptions.Item>
-              <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
+                <Descriptions.Item label="Fecha Doc.:">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto:">
+                  {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}
+                  <ConceptoInfoLabel concepto={documentoActivo.concepto} />
+                </Descriptions.Item>
+                <Descriptions.Item label="Tipo:">{documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}</Descriptions.Item>
+                <Descriptions.Item label="Almacén:">
+                  {documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                </Descriptions.Item>
+                <Descriptions.Item label="Nota:">
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                </Descriptions.Item>
               </Descriptions>
             </Card>
 

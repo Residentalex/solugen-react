@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import { ArrowLeftOutlined, DownloadOutlined, UploadOutlined, InboxOutlined } from '@ant-design/icons';
 import type { UploadProps } from 'antd';
-import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { productoApi } from '../../api/productoApi';
 import type { ResultadoImportacionDTO } from '../../types/productos';
@@ -15,7 +15,7 @@ const { Dragger } = Upload;
 
 const ProductosImportar: React.FC = () => {
   const navigate = useNavigate();
-  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const sucursalProductos = useCompanyStore((s) => s.data.sucursalProductos);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
 
   const [step, setStep] = useState(0);
@@ -37,7 +37,7 @@ const ProductosImportar: React.FC = () => {
   const handleDescargarResultado = async () => {
     if (!resultado?.productos?.length) return;
     try {
-      const blob = await productoApi.descargarResultado(sucursalActiva, resultado.productos);
+      const blob = await productoApi.descargarResultado(sucursalProductos, resultado.productos);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -49,7 +49,7 @@ const ProductosImportar: React.FC = () => {
 
   const handleDescargarPlantilla = async () => {
     try {
-      const blob = await productoApi.descargarPlantilla(sucursalActiva);
+      const blob = await productoApi.descargarPlantilla(sucursalProductos);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -88,7 +88,7 @@ const ProductosImportar: React.FC = () => {
     setImportando(true);
     setErrorMsg('');
     try {
-      const res = await productoApi.importarExcel(sucursalActiva, file);
+      const res = await productoApi.importarExcel(sucursalProductos, file);
       setResultado(res);
       setStep(2);
     } catch (err: any) {

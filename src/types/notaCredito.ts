@@ -59,6 +59,8 @@ export interface DetalleMovimientoDTO {
   medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
   tipoArticulo: string;
   costo?: number;
+  modificaPrecio?: boolean;
+  modificaDescripcion?: boolean;
 }
 
 export interface DevolucionDTO {

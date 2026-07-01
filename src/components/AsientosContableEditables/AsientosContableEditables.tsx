@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
-import { Table, InputNumber, Button, Tag, Tooltip, Empty } from 'antd';
-import { CheckCircleOutlined, ExclamationCircleOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Table, InputNumber, Button, Tag, Tooltip, Empty, Popconfirm } from 'antd';
+import { CheckCircleOutlined, ExclamationCircleOutlined, ThunderboltOutlined, DeleteOutlined } from '@ant-design/icons';
 import { toTitleCase } from '../../utils/formats';
 import { formatNumber, esDebito, esCredito } from '../../utils/contabilidad';
 
@@ -149,6 +149,35 @@ const AsientosContableEditables: React.FC<AsientosContableEditablesProps> = ({
         </Tag>
       ),
     },
+    ...(editable
+      ? [{
+          title: 'Acc',
+          key: 'acciones',
+          width: 50,
+          align: 'center' as const,
+          render: (_: any, r: any) => (
+            <Popconfirm
+              title="¿Eliminar este asiento?"
+              onConfirm={() => {
+                const filtered = (asientos || []).filter(
+                  (item: any) => item.id !== r.id && item.key !== r.key
+                );
+                onChange(filtered);
+              }}
+              okText="Eliminar"
+              cancelText="Cancelar"
+              placement="left"
+            >
+              <Button
+                type="text"
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+              />
+            </Popconfirm>
+          ),
+        }]
+      : []),
   ];
 
   return (
@@ -203,7 +232,7 @@ const AsientosContableEditables: React.FC<AsientosContableEditablesProps> = ({
               <Table.Summary.Cell index={3} align="right">
                 <strong style={{ color: '#34c38f' }}>{formatNumber(totalCreditos)}</strong>
               </Table.Summary.Cell>
-              <Table.Summary.Cell index={4} />
+              <Table.Summary.Cell index={editable ? 5 : 4} />
             </Table.Summary.Row>
           </Table.Summary>
         )}

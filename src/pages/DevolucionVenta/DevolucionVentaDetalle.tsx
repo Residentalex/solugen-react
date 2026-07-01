@@ -36,6 +36,7 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
@@ -552,7 +553,7 @@ const DevolucionVentaDetalle: React.FC = () => {
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={data.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="Tipo">—</Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Almacen" span={3}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
@@ -723,7 +724,7 @@ const DevolucionVentaDetalle: React.FC = () => {
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
               <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={data.concepto} /></Descriptions.Item>
               <Descriptions.Item label="Tipo">—</Descriptions.Item>
               <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
               <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card, Table, Typography, Empty, Space, Skeleton } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -19,6 +19,7 @@ export interface DocumentoAsociadoItem {
   monto?: number;
   fecha?: string;
   estado?: number;
+  perdida?: number;
 }
 
 export interface TransaccionesAsociadasCardProps {
@@ -53,6 +54,11 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
   rutas,
 }) => {
   const navigate = useNavigate();
+
+  const docsNormalizados = useMemo(() =>
+    documentos.map((d: any) => ({ ...d, nCF: d.nCF || d.ncf || '', perdida: d.perdida || 0 })),
+    [documentos]
+  );
 
   const columns = [
     {
@@ -104,6 +110,14 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
       align: 'right' as const,
       render: (v: number) => <Text strong>{formatCurrency(v ?? 0)}</Text>,
     },
+    {
+      title: 'Pérdida',
+      dataIndex: 'perdida',
+      key: 'perdida',
+      width: 110,
+      align: 'right' as const,
+      render: (v: number) => <Text>{formatCurrency(v ?? 0)}</Text>,
+    },
   ];
 
   const renderContent = () => {
@@ -127,7 +141,7 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
 
     return (
       <Table
-        dataSource={documentos}
+        dataSource={docsNormalizados}
         rowKey={(r: DocumentoAsociadoItem) => r.transaccionAsociadaID ?? r.id}
         size="small"
         pagination={false}

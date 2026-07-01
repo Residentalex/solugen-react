@@ -85,6 +85,7 @@ export interface AuthPermisoEspecialDTO {
   valor: boolean;
   tipoValor?: string;      // 'BOOLEANO' | 'NUMERICO'
   valorNumerico?: number;  // valor numerico (tope maximo o fijo)
+  pantallaId?: number;     // opcional: si viene, el permiso es especifico de esa pantalla
 }
 
 export interface PermisoEspecialRequestDTO {
@@ -112,6 +113,7 @@ export interface PermisoEspecialConRolDTO {
   valor: boolean;
   tipoValor?: string;
   valorNumerico?: number;
+  pantallaId?: number;     // Si viene, el permiso es especifico de esa pantalla del rol
 }
 
 export interface AuthUsuarioSesionDTO {

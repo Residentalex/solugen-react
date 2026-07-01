@@ -132,4 +132,14 @@ export const productoApi = {
     );
     return data.data;
   },
+
+  crear: async (sucursal: number, producto: ProductoDTO): Promise<ProductoDTO> => {
+    const { data } = await apiClient.post<ApiResponse<ProductoDTO>>(`${BASE}/${sucursal}`, producto);
+    return data.data;
+  },
+
+  actualizar: async (sucursal: number, producto: ProductoDTO): Promise<ProductoDTO> => {
+    const { data } = await apiClient.put<ApiResponse<ProductoDTO>>(`${BASE}/${sucursal}`, producto);
+    return data.data;
+  },
 };

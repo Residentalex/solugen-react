@@ -12,12 +12,13 @@ import * as XLSX from 'xlsx';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { antiguedadSaldosApi } from '../../api/antiguedadSaldosApi';
+import { conceptosApi } from '../../api/conceptosApi';
 import { proveedorApi } from '../../api/proveedorApi';
 import { clienteApi } from '../../api/clienteApi';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { toTitleCase, formatCurrency } from '../../utils/formats';
 import type { TransaccionBalanceDTO, ResumenAgingDTO, CategoriaEntidadDTO } from '../../types/antiguedadSaldos';
-import type { SuplidorDTO } from '../../types/entradaAlmacen';
+import type { SuplidorDTO, CompaniaDTO } from '../../types/entradaAlmacen';
 import type { ClienteDTO } from '../../types/facturacion';
 
 const { Text } = Typography;
@@ -102,8 +103,18 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
   const [categoriasOrig, setCategoriasOrig] = useState<CategoriaEntidadDTO[]>([]);
   const [buscandoCategoria, setBuscandoCategoria] = useState(false);
   const [_searchCategoria, setSearchCategoria] = useState('');
+  // Modal de bÃºsqueda de sucursal/compaÃ±Ã­a
+  const [modalSucursalAbierto, setModalSucursalAbierto] = useState(false);
+  const [sucursales, setSucursales] = useState<CompaniaDTO[]>([]);
+  const [sucursalesOrig, setSucursalesOrig] = useState<CompaniaDTO[]>([]);
+  const [buscandoSucursal, setBuscandoSucursal] = useState(false);
+  const [_searchSucursal, setSearchSucursal] = useState('');
+  const [codSucursalFiltro, setCodSucursalFiltro] = useState<string>('');
+  const [nomSucursalFiltro, setNomSucursalFiltro] = useState<string>('');
+
   const entidadSearchRef = useRef<any>(null);
   const categoriaSearchRef = useRef<any>(null);
+  const sucursalSearchRef = useRef<any>(null);
 
   useEffect(() => {
     if (modalEntidadAbierto) {
@@ -123,6 +134,15 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     }
   }, [modalCategoriaAbierto]);
 
+  useEffect(() => {
+    if (modalSucursalAbierto) {
+      const timer = setTimeout(() => {
+        sucursalSearchRef.current?.focus?.();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [modalSucursalAbierto]);
+
   /* â”€â”€â”€â”€â”€ Cargar datos â”€â”€â”€â”€â”€ */
 
   const generarReporte = useCallback(async () => {
@@ -135,6 +155,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
         hasta,
         codEntidad || undefined,
         codCategoria || undefined,
+        codSucursalFiltro || undefined,
       );
       setData(resultados || []);
       setSearchText('');
@@ -147,7 +168,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva, tipoEntidad, fechaHasta, codEntidad, codCategoria]);
+  }, [sucursalActiva, tipoEntidad, fechaHasta, codEntidad, codCategoria, codSucursalFiltro]);
 
   /* â”€â”€â”€â”€â”€ UI setup â”€â”€â”€â”€â”€ */
 
@@ -182,7 +203,8 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       const hasta = formatDateParam(fechaHasta.toDate());
       const blob = await antiguedadSaldosApi.generarPDF(
         sucursalActiva, tipoEntidad, hasta,
-        codEntidad || undefined, codCategoria || undefined
+        codEntidad || undefined, codCategoria || undefined,
+        codSucursalFiltro || undefined
       );
       const blobUrl = URL.createObjectURL(blob);
       const iframe = document.createElement('iframe');
@@ -209,6 +231,8 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     setNomEntidad('');
     setCodCategoria('');
     setNomCategoria('');
+    setCodSucursalFiltro('');
+    setNomSucursalFiltro('');
     setDetallado(true);
     setData([]);
     setSearchText('');
@@ -307,7 +331,50 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     setNomCategoria('');
   };
 
-  /* â”€â”€â”€â”€â”€ Procesar datos: filtro local â”€â”€â”€â”€â”€ */
+  /* ───── Handlers de búsqueda de sucursal/compañía ───── */
+
+  const abrirModalSucursal = async () => {
+    setModalSucursalAbierto(true);
+    setSearchSucursal('');
+    setBuscandoSucursal(true);
+    try {
+      const lista = await conceptosApi.obtenerSucursales(sucursalActiva);
+      setSucursales(lista || []);
+      setSucursalesOrig(lista || []);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al cargar sucursales');
+    } finally {
+      setBuscandoSucursal(false);
+    }
+  };
+
+  const buscarSucursal = (valor: string) => {
+    setSearchSucursal(valor);
+    if (!valor) {
+      setSucursales(sucursalesOrig);
+      return;
+    }
+    const term = valor.toLowerCase();
+    const filtradas = sucursalesOrig.filter(
+      (s) =>
+        s.nombre?.toLowerCase().includes(term) ||
+        s.codigo?.toLowerCase().includes(term),
+    );
+    setSucursales(filtradas);
+  };
+
+  const seleccionarSucursal = (item: CompaniaDTO) => {
+    setCodSucursalFiltro(item.codigo);
+    setNomSucursalFiltro(item.nombre);
+    setModalSucursalAbierto(false);
+  };
+
+  const limpiarSucursal = () => {
+    setCodSucursalFiltro('');
+    setNomSucursalFiltro('');
+  };
+
+  /* ───── Procesar datos: filtro local ───── */
 
   const filteredData = useMemo(() => {
     if (!searchText) return data;
@@ -686,7 +753,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       <Card className="paces-card no-print" style={{ marginBottom: 16 }}>
         <div style={{ padding: '16px 24px' }}>
           <Row gutter={[16, 12]}>
-            <Col xs={24} sm={12} md={6}>
+            <Col xs={24} sm={12} md={4}>
               <div style={{ marginBottom: 4 }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>Fecha corte</Text>
               </div>
@@ -698,7 +765,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
               />
             </Col>
 
-            <Col xs={24} sm={12} md={6}>
+            <Col xs={24} sm={12} md={5}>
               <div style={{ marginBottom: 4 }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>{entidadLabel}</Text>
               </div>
@@ -716,7 +783,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
               </Space.Compact>
             </Col>
 
-            <Col xs={24} sm={12} md={6}>
+            <Col xs={24} sm={12} md={5}>
               <div style={{ marginBottom: 4 }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>CategorÃ­a</Text>
               </div>
@@ -739,6 +806,32 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                   ) : undefined
                 }
                 onClick={abrirModalCategoria}
+              />
+            </Col>
+
+            <Col xs={24} sm={12} md={5}>
+              <div style={{ marginBottom: 4 }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>Sucursal</Text>
+              </div>
+              <Input
+                placeholder="Buscar sucursal..."
+                value={nomSucursalFiltro}
+                readOnly
+                style={{ width: '100%' }}
+                prefix={<SearchOutlined className="paces-text-icon" />}
+                suffix={
+                  nomSucursalFiltro ? (
+                    <Button
+                      type="text"
+                      size="small"
+                      onClick={limpiarSucursal}
+                      style={{ color: '#999' }}
+                    >
+                      Ã—
+                    </Button>
+                  ) : undefined
+                }
+                onClick={abrirModalSucursal}
               />
             </Col>
 
@@ -908,6 +1001,40 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
           pagination={{ pageSize: 10, showSizeChanger: false }}
           onRow={(record: any) => ({
             onClick: () => seleccionarCategoria(record),
+            style: { cursor: 'pointer' },
+          })}
+          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
+        />
+      </Modal>
+
+      {/* â”€â”€â”€â”€â”€ Modal bÃºsqueda sucursal/compaÃ±Ã­a â”€â”€â”€â”€â”€ */}
+      <Modal
+        title="Buscar Sucursal/CompaÃ±Ã­a"
+        open={modalSucursalAbierto}
+        onCancel={() => setModalSucursalAbierto(false)}
+        footer={null}
+        width={500}
+        destroyOnHidden
+      >
+        <Input.Search
+          ref={sucursalSearchRef}
+          placeholder="Buscar por nombre o cÃ³digo..."
+          allowClear
+          onSearch={buscarSucursal}
+          style={{ marginBottom: 12 }}
+        />
+        <Table
+          columns={[
+            { title: 'CÃ³digo', dataIndex: 'codigo', key: 'codigo', width: 100 },
+            { title: 'Nombre', dataIndex: 'nombre', key: 'nombre' },
+          ]}
+          dataSource={sucursales}
+          rowKey={(r) => r.id || r.codigo}
+          loading={buscandoSucursal}
+          size="small"
+          pagination={{ pageSize: 10, showSizeChanger: false }}
+          onRow={(record: any) => ({
+            onClick: () => seleccionarSucursal(record),
             style: { cursor: 'pointer' },
           })}
           locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}

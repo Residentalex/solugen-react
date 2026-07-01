@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Popover, Empty,
@@ -46,9 +46,12 @@ import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestos
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
+import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -121,6 +124,9 @@ const FacturaClienteFormulario: React.FC = () => {
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
   const { screenCode, documentCode } = useScreenConfig('FFAC');
+  const documentoConfig = useDocumentoConfig(sucursalActiva, documentCode);
+  const location = useLocation();
+  const cloneData = (location.state as any)?.cloneData;
   const monedaDefault = getMonedaSucursalActiva();
 
   // ===== States =====
@@ -136,7 +142,6 @@ const FacturaClienteFormulario: React.FC = () => {
   const [selectedAlmacen, setSelectedAlmacen] = useState<AlmacenDTO | null>(null);
   const [selectedTipo, setSelectedTipo] = useState<TipoDTO | null>(null);
   const [tiposCache, setTiposCache] = useState<TipoDTO[]>([]);
-  const [conceptoInfo, setConceptoInfo] = useState<string>('');
   const [productoModalOpen, setProductoModalOpen] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -157,6 +162,9 @@ const FacturaClienteFormulario: React.FC = () => {
   const almacenRef = useRef<HTMLDivElement>(null);
   const agregarFilaRef = useRef<HTMLDivElement>(null);
   const sucursalRef = useRef<HTMLDivElement>(null);
+
+  // Backup de impuestos para restaurar cuando el concepto deje de ser noImpuesto
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -183,7 +191,7 @@ const FacturaClienteFormulario: React.FC = () => {
 
   const openFieldEditor = (field: string) => {
     const val = form.getFieldValue(field);
-    const defaultVal = field === 'tasa' ? 1 : field === 'diasCredito' ? 0 : '';
+    const defaultVal = field === 'tasa' ? 1 : '';
     editingOriginalValue.current = val ?? defaultVal;
     editingValueRef.current = val ?? defaultVal;
     setEditingField(field);
@@ -281,8 +289,6 @@ const FacturaClienteFormulario: React.FC = () => {
     if (mode === 'crear') {
       form.setFieldsValue({
         fechaDocumento: dayjs(),
-        fechaVencimiento: dayjs().add(30, 'day'),
-        diasCredito: 30,
         tasa: 1,
       });
     }
@@ -292,6 +298,65 @@ const FacturaClienteFormulario: React.FC = () => {
       setPageTitleOverride('');
     };
   }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form]);
+
+  // ===== Procesar cloneData =====
+  useEffect(() => {
+    if (mode !== 'crear' || !cloneData) return;
+
+    // Poblar estados
+    setSelectedConcepto(cloneData.concepto || null);
+    setSelectedCliente(cloneData.cliente || null);
+    setSelectedAlmacen(cloneData.almacen || null);
+    setSelectedTipo(cloneData.tipo || null);
+    setSelectedSucursal(cloneData.sucursal || null);
+    setDetalles((cloneData.detalles || []).map((d: any) => calcularFila({
+      ...d,
+      id: d.id,
+      codigo: d.codigo || '',
+      articulo: d.articulo || '',
+      referencia: d.referencia || '',
+      cantidad: d.cantidad || 0,
+      precio: d.precio || 0,
+      costo: d.costo || 0,
+      porcentajeDescuento: d.porcentajeDescuento || 0,
+      descuento: d.descuento || 0,
+      porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
+      impuestos: d.impuestos || 0,
+      total: d.total || 0,
+      tipoArticulo: d.tipoArticulo || 'Producto',
+      tieneVencimiento: d.tieneVencimiento ?? false,
+      familia: d.familia,
+      medida: d.medida ? { ...d.medida, id: d.medida.idExterno ?? d.medida.id } : undefined,
+      impuesto: d.impuesto,
+      idTransaccion: 0,
+    })));
+    setAsientosLocales(cloneData.asientos || []);
+
+    // Poblar campos del form
+    form.setFieldsValue({
+      concepto: cloneData.concepto?.codigo || '',
+      cliente: cloneData.cliente?.codigo || '',
+      almacen: cloneData.almacen?.codigo || '',
+      tipo: cloneData.tipo?.codigo || '',
+      fechaDocumento: dayjs(),
+      ncf: cloneData.ncf || '',
+      referencia: cloneData.referencia || '',
+      tasa: cloneData.tasa || 1,
+      nota: cloneData.nota || '',
+    });
+
+    // Actualizar texto de busqueda del concepto
+    if (cloneData.concepto) {
+      setConceptoSearchText(`${cloneData.concepto.codigo || ''} - ${toTitleCase(cloneData.concepto.nombre || '')}`);
+    }
+
+    // Cargar clientes si hay concepto
+    if (cloneData.concepto?.codigo) {
+      facturaClienteApi.obtenerClientes(sucursalActiva)
+        .then(setClientesCache)
+        .catch(() => {});
+    }
+  }, [mode, cloneData, sucursalActiva, form]);
 
   // ===== Cargar datos si es modo editar =====
   useEffect(() => {
@@ -350,10 +415,8 @@ const FacturaClienteFormulario: React.FC = () => {
           almacen: full.almacen?.codigo || '',
           tipo: full.tipo?.codigo || '',
           fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          fechaVencimiento: fechaVenc ? dayjs(fechaVenc) : null,
           ncf: full.ncf || '',
           referencia: full.referencia || '',
-          diasCredito: full.diasCredito || 0,
           tasa: full.tasa || 1,
           nota: full.nota || '',
         });
@@ -471,10 +534,8 @@ const FacturaClienteFormulario: React.FC = () => {
                   almacen: full.almacen?.codigo || '',
                   tipo: full.tipo?.codigo || '',
                   fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-                  fechaVencimiento: fechaVenc ? dayjs(fechaVenc) : null,
                   ncf: full.ncf || '',
                   referencia: full.referencia || '',
-                  diasCredito: full.diasCredito || 0,
                   tasa: full.tasa || 1,
                   nota: full.nota || '',
                 });
@@ -565,7 +626,7 @@ const FacturaClienteFormulario: React.FC = () => {
       ? (typeof values.fechaVencimiento === 'object' && values.fechaVencimiento.toDate
           ? toISOFormat(values.fechaVencimiento.toDate())
           : values.fechaVencimiento)
-      : '';
+      : null;
 
     const totalSub = detalles.reduce((s, d) => s + (d.subTotal || 0), 0);
     const totalDesc = detalles.reduce((s, d) => s + (d.descuento || 0), 0);
@@ -584,7 +645,6 @@ const FacturaClienteFormulario: React.FC = () => {
       nota: values.nota || '',
       tasa: values.tasa || 1,
       tipoDocumento: base.tipoDocumento ?? 35,
-      diasCredito: values.diasCredito || 0,
       subTotal: Math.round(totalSub * 100) / 100,
       descuento: Math.round(totalDesc * 100) / 100,
       impuestos: Math.round(totalImp * 100) / 100,
@@ -634,31 +694,11 @@ const FacturaClienteFormulario: React.FC = () => {
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
     setEditingField(null);
-    form.setFieldsValue({ concepto: concepto.codigo });
 
-    // Cargar clientes
-    facturaClienteApi.obtenerClientes(sucursalActiva)
-      .then((ents) => setClientesCache(ents))
-      .catch(() => {});
-
-    // Mostrar avisos si el concepto tiene flags especiales
-    const infoParts: string[] = [];
-    if (concepto.noImpuesto) infoParts.push(' * No Impuestos * ');
-    if (concepto.noAsientos) infoParts.push(' * No Asientos * ');
-    if (concepto.activo === false) infoParts.push(' * Concepto Inactivo * ');
-    setConceptoInfo(infoParts.join(''));
-
-    // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
-    if (concepto.noImpuesto && detalles.some((d) => (d.porcentajeImpuesto || 0) > 0)) {
-      message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
-      setDetalles((prev) =>
-        prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0 }))
-      );
-    }
-
-    // === ConfigurarMoneda ===
+    // === ConfigurarMoneda (unificado con conceptoNombre) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
+      concepto: concepto.codigo,
       moneda: monedaObj.nombre,
       tasa: monedaObj.tasa ?? 1,
     });
@@ -667,6 +707,46 @@ const FacturaClienteFormulario: React.FC = () => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaObj };
     });
+
+    // Cargar clientes
+    facturaClienteApi.obtenerClientes(sucursalActiva)
+      .then((ents) => setClientesCache(ents))
+      .catch(() => {});
+
+    // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
+    const prevNoImpuesto = selectedConcepto?.noImpuesto;
+
+    if (concepto.noImpuesto) {
+      const hayImpuestos = detalles.some((d) => (d.porcentajeImpuesto || 0) > 0);
+      if (hayImpuestos) {
+        const backup = new Map<number, { impuesto?: any; porcentajeImpuesto: number }>();
+        detalles.forEach((d) => {
+          if ((d.porcentajeImpuesto || 0) > 0) {
+            backup.set(d.id, { impuesto: d.impuesto, porcentajeImpuesto: d.porcentajeImpuesto || 0 });
+          }
+        });
+        impuestosBackupRef.current = backup;
+
+        message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+        setDetalles((prev) =>
+          prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
+        );
+      }
+    } else if (prevNoImpuesto && !concepto.noImpuesto) {
+      const backup = impuestosBackupRef.current;
+      if (backup.size > 0) {
+        setDetalles((prev) =>
+          prev.map((d) => {
+            const saved = backup.get(d.id);
+            if (saved) {
+              return calcularFila({ ...d, impuesto: saved.impuesto, porcentajeImpuesto: saved.porcentajeImpuesto });
+            }
+            return d;
+          })
+        );
+        impuestosBackupRef.current = new Map();
+      }
+    }
   };
 
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
@@ -736,6 +816,8 @@ const FacturaClienteFormulario: React.FC = () => {
           impuesto: producto.impuesto,
           porcentajeImpuesto: producto.impuesto?.porcentaje || 0,
           tieneVencimiento: producto.tieneVencimiento,
+          modificaPrecio: producto.modificaPrecio ?? false,
+          modificaDescripcion: producto.modificaDescripcion ?? false,
         };
         return [calcularFila(filled), ...prev];
       });
@@ -754,6 +836,8 @@ const FacturaClienteFormulario: React.FC = () => {
             impuesto: producto.impuesto,
             porcentajeImpuesto: producto.impuesto?.porcentaje || 0,
             tieneVencimiento: producto.tieneVencimiento,
+            modificaPrecio: producto.modificaPrecio ?? false,
+            modificaDescripcion: producto.modificaDescripcion ?? false,
           };
           return calcularFila(filled);
         })
@@ -800,6 +884,50 @@ const FacturaClienteFormulario: React.FC = () => {
   function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
   function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    facturaClienteApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        const full: FacturaClienteFullDTO = {
+          id: res.id, fechaDocumento: res.fechaDocumento,
+          fechaVencimiento: (res as any).fechaVencimiento || '', noDocumento: res.noDocumento,
+          estado: res.estado, periodo: res.periodo, ncf: res.ncf || '', nota: res.nota || '',
+          referencia: res.referencia || '', tasa: res.tasa || 1, diasCredito: res.diasCredito || 0,
+          concepto: res.concepto || null, cliente: res.cliente || null, almacen: res.almacen || null,
+          tipo: (res as any).tipo || null, moneda: res.moneda || null, documento: res.documento,
+          subTotal: res.subTotal, descuento: res.descuento, impuestos: res.impuestos, total: res.total,
+          detalles: (res.detalles || []).map((d: any) => ({
+            ...d, porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
+            tieneVencimiento: d.tieneVencimiento ?? false,
+          })),
+          asientos: res.asientos || [], logs: res.logs || [],
+        };
+        setData(full); setDetalles(full.detalles);
+        setAsientosLocales(full.asientos || []);
+        setImpuestosFactura((full as any).impuestosFactura || []);
+        setSelectedConcepto(full.concepto); setSelectedCliente(full.cliente);
+        setSelectedAlmacen(full.almacen); setSelectedTipo(full.tipo);
+        setSelectedSucursal((full as any).sucursal || null);
+        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
+        const fechaVenc = full.fechaVencimiento ? parseDateRaw(full.fechaVencimiento) : null;
+        form.setFieldsValue({
+          concepto: full.concepto?.codigo || '', cliente: full.cliente?.codigo || '',
+          almacen: full.almacen?.codigo || '', tipo: full.tipo?.codigo || '',
+          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          ncf: full.ncf || '', referencia: full.referencia || '',
+          tasa: full.tasa || 1, nota: full.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg); setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   // ===== Loading state =====
   if (loading) {
     return <LoadingSpinner mensaje="Cargando documento..." />;
@@ -838,15 +966,37 @@ const FacturaClienteFormulario: React.FC = () => {
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: DetalleFacturaClienteDTO) => (
-        <div style={{ fontSize: 13 }}>
-          <div>{toTitleCase(record.articulo || '')}</div>
-          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
-            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
-            {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
+      render: (_: any, _record: DetalleFacturaClienteDTO, idx: number) => {
+        const fila = detalles[idx];
+        if (!fila) return null;
+        // Jerarquía Descripción: 1) Documento.modificaDescripcion? 2) Producto.modificaDescripcion?
+        const docPermiteDesc = documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion ?? true;
+        if (docPermiteDesc) {
+          return (
+            <div style={{ fontSize: 13 }}>
+              <Input
+                size="small"
+                style={{ width: '100%' }}
+                value={fila.articulo || ''}
+                onChange={(e) => handleDetalleUpdateValue(fila.id, 'articulo', e.target.value)}
+              />
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+                {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+                {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div style={{ fontSize: 13 }}>
+            <div>{toTitleCase(fila.articulo || '')}</div>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+              {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+              {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: 'Cantidad',
@@ -886,7 +1036,7 @@ const FacturaClienteFormulario: React.FC = () => {
       width: 160,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleFacturaClienteDTO, _idx: number) => {
-        const curId = record.medida?.id;
+        const curId = record.medida?.idExterno ?? record.medida?.id;
         const hasMatch = medidasCache.some((m: any) => m.idExterno === curId);
         return (
           <Select
@@ -923,28 +1073,42 @@ const FacturaClienteFormulario: React.FC = () => {
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
-      shouldCellUpdate: (record: DetalleFacturaClienteDTO, prevRecord: DetalleFacturaClienteDTO) => record.precio !== prevRecord.precio || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
-      render: (_: any, record: DetalleFacturaClienteDTO, idx: number) => {
-        const precioBase = Number(detalles[idx]?.precio) || 0;
-        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
-        const factor = Number(detalles[idx]?.medida?.factor) || 1;
+      shouldCellUpdate: (record: DetalleFacturaClienteDTO, prevRecord: DetalleFacturaClienteDTO) => record.precio !== prevRecord.precio || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor || record.modificaPrecio !== prevRecord.modificaPrecio,
+      render: (_: any, _record: DetalleFacturaClienteDTO, idx: number) => {
+        const fila = detalles[idx];
+        if (!fila) return null;
+        const precioBase = Number(fila.precio) || 0;
+        const pctDesc = Number(fila.porcentajeDescuento) || 0;
+        const factor = Number(fila.medida?.factor) || 1;
         const precioConDescuento = precioBase - ((precioBase * pctDesc) / 100);
         const precioUnitario = precioConDescuento / factor;
+        // Jerarquía Precio: 1) Documento.modificaPrecio? 2) Producto.modificaPrecio?
+        const docPermiteEditar = documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio ?? true;
+        if (docPermiteEditar) {
+          return (
+            <div>
+              <InputNumber
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                step={0.01}
+                precision={2}
+                controls={false}
+                value={fila.precio}
+                onChange={(val) => handleDetalleUpdateValue(fila.id, 'precio', val || 0)}
+                onBlur={() => handleDetalleCalculate(fila.id, 'precio', fila.precio || 0)}
+                onPressEnter={() => handleDetalleCalculate(fila.id, 'precio', fila.precio || 0)}
+              />
+              <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+                {formatNumber(precioUnitario)} × {factor}
+              </div>
+            </div>
+          );
+        }
         return (
           <div>
-            <InputNumber
-              size="small"
-              style={{ width: '100%' }}
-              styles={{ input: { textAlign: 'right' } }}
-              min={0}
-              step={0.01}
-              precision={2}
-              controls={false}
-              value={detalles[idx]?.precio}
-              onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'precio', val || 0)}
-              onBlur={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
-              onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
-            />
+            <Text>{formatCurrency(precioBase)}</Text>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
               {formatNumber(precioUnitario)} × {factor}
             </div>
@@ -1078,22 +1242,24 @@ const FacturaClienteFormulario: React.FC = () => {
                         <Select
                           allowClear
                           showSearch
-                          optionFilterProp="children"
+                          optionFilterProp="label"
+                          labelInValue
+                          value={selectedTipo ? { value: selectedTipo.codigo, label: `${selectedTipo.codigo} - ${toTitleCase(selectedTipo.nombre)}` } : undefined}
                           placeholder=" "
-                          onChange={(val) => {
-                            const t = tiposCache.find((tc) => tc.codigo === val);
+                          onChange={(val: any) => {
+                            const t = tiposCache.find((tc) => tc.codigo === val?.value);
                             setSelectedTipo(t || null);
+                            form.setFieldsValue({ tipo: val?.value || '' });
                           }}
                           onClear={() => {
                             setSelectedTipo(null);
+                            form.setFieldsValue({ tipo: '' });
                           }}
-                        >
-                          {tiposCache.map((tc) => (
-                            <Select.Option key={tc.codigo} value={tc.codigo}>
-                              {tc.codigo} - {toTitleCase(tc.nombre)}
-                            </Select.Option>
-                          ))}
-                        </Select>
+                          options={tiposCache.map((tc) => ({
+                            value: tc.codigo,
+                            label: `${tc.codigo} - ${toTitleCase(tc.nombre)}`,
+                          }))}
+                        />
                       </FloatingField>
                     </Form.Item>
                   </div>
@@ -1119,15 +1285,10 @@ const FacturaClienteFormulario: React.FC = () => {
                       onClick={() => (!documentoTieneTipos || selectedTipo) && handleConceptoSearchClick()}
                     />
                   </FloatingField>
+                  <ConceptoInfoLabel concepto={selectedConcepto} />
                 </div>
                 <Form.Item name="concepto" hidden><Input /></Form.Item>
               </Col>
-
-              {conceptoInfo && (
-                <Col xs={24}>
-                  <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-                </Col>
-              )}
 
               {/* Fila 2: FechaDocumento + Cliente */}
               <Col xs={24} sm={12} lg={9}>
@@ -1163,13 +1324,40 @@ const FacturaClienteFormulario: React.FC = () => {
                 </div>
               </Col>
 
-              {/* Fila 3: FechaVencimiento + Almacén */}
+              {/* Fila 3: Sucursal + Almacén */}
               <Col xs={24} sm={12} lg={9}>
-                <Form.Item name="fechaVencimiento" style={{ marginBottom: 0 }}>
-                  <FloatingField label="Fecha Vencimiento">
-                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-                  </FloatingField>
-                </Form.Item>
+                <div ref={sucursalRef}>
+                  <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
+                    <FloatingField label="Sucursal">
+                      <Select
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        labelInValue
+                        value={selectedSucursal ? (() => {
+                          const match = sucursalesCache.find((s: any) => 
+                            String(s.sucursal ?? s.codigo) === String(selectedSucursal.sucursal ?? selectedSucursal.codigo)
+                          );
+                          return { 
+                            value: String(selectedSucursal.sucursal ?? selectedSucursal.codigo), 
+                            label: toTitleCase(match?.nombre || selectedSucursal.nombre || '') 
+                          };
+                        })() : undefined}
+                        onChange={(val: any) => {
+                          const suc = sucursalesCache.find((s: any) => 
+                            String(s.sucursal ?? s.codigo) === val?.value
+                          );
+                          setSelectedSucursal(suc || null);
+                        }}
+                        placeholder="Seleccionar sucursal"
+                        options={sucursalesCache.map((s: any) => ({
+                          value: String(s.sucursal ?? s.codigo),
+                          label: toTitleCase(s.nombre || ''),
+                        }))}
+                      />
+                    </FloatingField>
+                  </Form.Item>
+                </div>
               </Col>
               <Col xs={24} sm={12} lg={15}>
                 <Form.Item name="almacen" required={tieneProductos} style={{ marginBottom: 0 }}>
@@ -1277,68 +1465,17 @@ const FacturaClienteFormulario: React.FC = () => {
                       </Tag>
                     )}
 
-                    {/* Días Crédito */}
-                    {editingField === 'diasCredito' ? (
-                      <InputNumber
-                        size="small"
-                        style={{ width: 120 }}
-                        min={0}
-                        max={365}
-                        step={1}
-                        placeholder="Días Crédito"
-                        autoFocus
-                        defaultValue={editingValueRef.current as number}
-                        onChange={(val) => { editingValueRef.current = val ?? 0; }}
-                        onPressEnter={() => commitFieldEditor()}
-                        onBlur={() => commitFieldEditor()}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                        }}
-                      />
-                    ) : (
-                      <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('diasCredito')}>
-                        {form.getFieldValue('diasCredito') !== undefined && form.getFieldValue('diasCredito') !== null
-                          ? `Crédito: ${form.getFieldValue('diasCredito')} días`
-                          : <><PlusOutlined /> Días Crédito</>}
-                        {form.getFieldValue('diasCredito') !== undefined && form.getFieldValue('diasCredito') !== null && form.getFieldValue('diasCredito') !== '' && <EditOutlined />}
-                      </Tag>
-                    )}
+                    {/* Días Crédito - eliminado */}
                   </Space>
                 </div>
                 {/* Hidden form items para campos rápidos */}
                 <Form.Item name="ncf" hidden><Input /></Form.Item>
                 <Form.Item name="referencia" hidden><Input /></Form.Item>
                 <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
-                <Form.Item name="diasCredito" hidden><InputNumber /></Form.Item>
                 <Form.Item name="moneda" hidden><Input /></Form.Item>
               </Col>
 
-              {/* Fila 5: Sucursal Contable */}
-              <Col xs={24} sm={12} lg={8} ref={sucursalRef}>
-                <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
-                  <FloatingField label="Sucursal Contable">
-                    <Select
-                      allowClear
-                      showSearch
-                      optionFilterProp="children"
-                      placeholder=" "
-                      value={selectedSucursal?.sucursal ?? undefined}
-                      onChange={(val) => {
-                        const suc = sucursalesCache.find((s: any) => s.sucursal === val);
-                        setSelectedSucursal(suc || null);
-                      }}
-                    >
-                      {sucursalesCache.map((suc: any) => (
-                        <Select.Option key={suc.sucursal} value={suc.sucursal}>
-                          {toTitleCase(suc.nombre || '')}
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  </FloatingField>
-                </Form.Item>
-              </Col>
-
-              {/* Fila 6: Nota */}
+              {/* Fila 5: Nota */}
               <Col xs={24}>
                 <Form.Item name="nota" style={{ marginBottom: 0 }}>
                   <FloatingField label="Nota">
@@ -1433,51 +1570,6 @@ const FacturaClienteFormulario: React.FC = () => {
     },
   ];
 
-  const handleRefresh = useCallback(() => {
-    if (mode === 'crear') return;
-    if (!id) return;
-    setLoadingError(false);
-    setLoading(true);
-    facturaClienteApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        const full: FacturaClienteFullDTO = {
-          id: res.id, fechaDocumento: res.fechaDocumento,
-          fechaVencimiento: (res as any).fechaVencimiento || '', noDocumento: res.noDocumento,
-          estado: res.estado, periodo: res.periodo, ncf: res.ncf || '', nota: res.nota || '',
-          referencia: res.referencia || '', tasa: res.tasa || 1, diasCredito: res.diasCredito || 0,
-          concepto: res.concepto || null, cliente: res.cliente || null, almacen: res.almacen || null,
-          tipo: (res as any).tipo || null, moneda: res.moneda || null, documento: res.documento,
-          subTotal: res.subTotal, descuento: res.descuento, impuestos: res.impuestos, total: res.total,
-          detalles: (res.detalles || []).map((d: any) => ({
-            ...d, porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
-            tieneVencimiento: d.tieneVencimiento ?? false,
-          })),
-          asientos: res.asientos || [], logs: res.logs || [],
-        };
-        setData(full); setDetalles(full.detalles);
-        setAsientosLocales(full.asientos || []);
-        setImpuestosFactura((full as any).impuestosFactura || []);
-        setSelectedConcepto(full.concepto); setSelectedCliente(full.cliente);
-        setSelectedAlmacen(full.almacen); setSelectedTipo(full.tipo);
-        setSelectedSucursal((full as any).sucursal || null);
-        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
-        const fechaVenc = full.fechaVencimiento ? parseDateRaw(full.fechaVencimiento) : null;
-        form.setFieldsValue({
-          concepto: full.concepto?.codigo || '', cliente: full.cliente?.codigo || '',
-          almacen: full.almacen?.codigo || '', tipo: full.tipo?.codigo || '',
-          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          fechaVencimiento: fechaVenc ? dayjs(fechaVenc) : null,
-          ncf: full.ncf || '', referencia: full.referencia || '',
-          diasCredito: full.diasCredito || 0, tasa: full.tasa || 1, nota: full.nota || '',
-        });
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg); setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form, mode]);
-
   return (
     <div>
       <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
@@ -1568,6 +1660,12 @@ const FacturaClienteFormulario: React.FC = () => {
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
+                      {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false || data?.documento?.modificaPrecio === false || data?.documento?.modificaDescripcion === false) && detalles.length > 0 && (
+                        <CamposRestringidosAlert
+                          modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+                          modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+                        />
+                      )}
                       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(event.active.id as number); }} onDragEnd={handleDragEnd}>
                         <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                         <Table
@@ -1692,6 +1790,12 @@ const FacturaClienteFormulario: React.FC = () => {
                         onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                       />
                     </div>
+                    {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false || data?.documento?.modificaPrecio === false || data?.documento?.modificaDescripcion === false) && detalles.length > 0 && (
+                      <CamposRestringidosAlert
+                        modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+                        modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+                      />
+                    )}
                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(event.active.id as number); }} onDragEnd={handleDragEnd}>
                       <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                       <Table

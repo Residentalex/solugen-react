@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { Modal, Input, Table, Empty, message } from 'antd';
+import { Modal, Input, Table, Empty, message, Spin } from 'antd';
 import type { ConceptoDTO } from '../../types/entradaAlmacen';
 import { conceptosApi } from '../../api/conceptosApi';
 import { toTitleCase } from '../../utils/formats';
@@ -30,6 +30,7 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({
 }) => {
   const [conceptos, setConceptos] = useState<ConceptoDTO[]>([]);
   const [searchText, setSearchText] = useState('');
+  const [loading, setLoading] = useState(false);
   const searchRef = useRef<any>(null);
 
   useEffect(() => {
@@ -44,22 +45,28 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({
   useEffect(() => {
     if (!open) return;
     setSearchText('');
+    setLoading(true);
 
     const filterActivos = (items: ConceptoDTO[]) =>
       (items || []).filter((c) => c.activo !== false);
 
+    const handleFinally = () => setLoading(false);
+
     if (sucursal != null && documento && tipo) {
       conceptosApi.obtenerConceptosPorDocumentoTipo(sucursal, documento, tipo, tipoEntidad)
         .then((res) => setConceptos(filterActivos(res)))
-        .catch(() => message.error('Error al cargar conceptos'));
+        .catch(() => message.error('Error al cargar conceptos'))
+        .finally(handleFinally);
     } else if (sucursal != null && documento) {
       conceptosApi.obtenerConceptosPorDocumento(sucursal, documento)
         .then((res) => setConceptos(filterActivos(res)))
-        .catch(() => message.error('Error al cargar conceptos'));
+        .catch(() => message.error('Error al cargar conceptos'))
+        .finally(handleFinally);
     } else {
       fetchConceptos()
         .then((res) => setConceptos(filterActivos(res)))
-        .catch(() => message.error('Error al cargar conceptos'));
+        .catch(() => message.error('Error al cargar conceptos'))
+        .finally(handleFinally);
     }
   }, [open, fetchConceptos, sucursal, documento, tipo, tipoEntidad]);
 
@@ -94,31 +101,33 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({
       width={600}
       destroyOnHidden
     >
-      <Input.Search
-        ref={searchRef}
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        onSearch={(val) => setSearchText(val || '')}
-        onChange={(e) => {
-          if (!e.target.value) setSearchText('');
-        }}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={conceptosFiltrados}
-        columns={columnas}
-        rowKey="codigo"
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: () => {
-            onSelect(record);
-            onClose();
-          },
-          style: { cursor: 'pointer' },
-        })}
-        locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay conceptos" /></div> }}
-      />
+      <Spin spinning={loading} tip="Cargando conceptos...">
+        <Input.Search
+          ref={searchRef}
+          placeholder="Buscar por código o nombre..."
+          allowClear
+          onSearch={(val) => setSearchText(val || '')}
+          onChange={(e) => {
+            if (!e.target.value) setSearchText('');
+          }}
+          style={{ marginBottom: 16 }}
+        />
+        <Table
+          dataSource={conceptosFiltrados}
+          columns={columnas}
+          rowKey="codigo"
+          size="small"
+          pagination={{ pageSize: 10, showSizeChanger: false }}
+          onRow={(record) => ({
+            onClick: () => {
+              onSelect(record);
+              onClose();
+            },
+            style: { cursor: 'pointer' },
+          })}
+          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay conceptos" /></div> }}
+        />
+      </Spin>
     </Modal>
   );
 };

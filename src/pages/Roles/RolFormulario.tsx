@@ -7,10 +7,9 @@ import { useAuthStore } from '../../stores/authStore';
 import { Sucursal } from '../../types/auth';
 import { rolApi } from '../../api/rolApi';
 import type { RolFullDTO } from '../../types/administracion';
-import type { PantallaDTO } from '../../types/auth';
+import type { PantallaDTO, AuthPermisoEspecialDTO } from '../../types/auth';
 import { useMemo } from 'react';
 import { permisoEspecialApi } from '../../api/permisoEspecialApi';
-import type { PermisoEspecialConRolDTO } from '../../types/auth';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import PermissionGate from '../../components/PermissionGate';
 
@@ -29,7 +28,10 @@ const RolFormulario: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [pantallasDisponibles, setPantallasDisponibles] = useState<PantallaDTO[]>([]);
-  const [permisosEspeciales, setPermisosEspeciales] = useState<PermisoEspecialConRolDTO[]>([]);
+  // Catalogo de permisos especiales (id, codigo, nombre, tipoValor) — informacion de referencia
+  const [catalogoPermisosEspeciales, setCatalogoPermisosEspeciales] = useState<AuthPermisoEspecialDTO[]>([]);
+  // Valores de permisos por pantalla: clave "${pantallaId}-${permisoId}" → { valor, valorNumerico }
+  const [permisosPorPantalla, setPermisosPorPantalla] = useState<Record<string, { valor: boolean; valorNumerico?: number }>>({});
   const [cargandoPermisosEspeciales, setCargandoPermisosEspeciales] = useState(false);
 
   // Deduplicar por id (safety: si backend devuelve la misma pantalla múltiples veces)
@@ -115,7 +117,22 @@ const RolFormulario: React.FC = () => {
         setCargandoPermisosEspeciales(true);
         try {
           const result = await permisoEspecialApi.obtenerPorRol(securitySucursal, parseInt(id));
-          setPermisosEspeciales(result || []);
+          // Construir catalogo deduplicado por id (para tener id, codigo, nombre, tipoValor)
+          const catalogMap = new Map<number, AuthPermisoEspecialDTO>();
+          for (const p of result || []) {
+            if (!catalogMap.has(p.id)) {
+              catalogMap.set(p.id, { id: p.id, codigo: p.codigo, nombre: p.nombre, activo: p.activo, valor: p.valor, tipoValor: p.tipoValor, valorNumerico: p.valorNumerico, pantallaId: p.pantallaId });
+            }
+          }
+          setCatalogoPermisosEspeciales(Array.from(catalogMap.values()));
+          // Construir mapa de valores por pantalla
+          const map: Record<string, { valor: boolean; valorNumerico?: number }> = {};
+          for (const p of result || []) {
+            const pantallaId = p.pantallaId ?? 0;
+            const key = `${pantallaId}-${p.id}`;
+            map[key] = { valor: p.valor, valorNumerico: p.valorNumerico };
+          }
+          setPermisosPorPantalla(map);
         } catch {
           // no crítico, los permisos especiales se cargan aparte
         } finally {
@@ -126,15 +143,8 @@ const RolFormulario: React.FC = () => {
 
         try {
           const catalogo = await permisoEspecialApi.obtenerListado(securitySucursal);
-          setPermisosEspeciales(
-            (catalogo || []).filter(p => p.activo).map(p => ({
-              id: p.id,
-              codigo: p.codigo,
-              nombre: p.nombre,
-              activo: p.activo,
-              valor: false,
-            }))
-          );
+          setCatalogoPermisosEspeciales((catalogo || []).filter(p => p.activo));
+          // permisosPorPantalla se queda vacio (sin valores asignados aun)
         } catch { /* ignorar */ }
       }
     } catch (err: any) {
@@ -168,10 +178,12 @@ const RolFormulario: React.FC = () => {
     }));
   };
 
-  const handleTogglePermisoEspecial = (permisoId: number, checked: boolean, valorNumerico?: number) => {
-    setPermisosEspeciales((prev) =>
-      prev.map((p) => (p.id === permisoId ? { ...p, valor: checked, valorNumerico: valorNumerico ?? p.valorNumerico } : p))
-    );
+  const handleTogglePermisoEspecial = (pantallaId: number, permisoId: number, checked: boolean, valorNumerico?: number) => {
+    const key = `${pantallaId}-${permisoId}`;
+    setPermisosPorPantalla((prev) => ({
+      ...prev,
+      [key]: { valor: checked, valorNumerico: valorNumerico ?? prev[key]?.valorNumerico },
+    }));
   };
 
   const guardar = async () => {
@@ -203,15 +215,25 @@ const RolFormulario: React.FC = () => {
       }
 
       try {
-        const payloadPermisos = permisosEspeciales
-          .filter(p => p.valor || (p.valorNumerico ?? 0) > 0)
-          .map(p => ({
-            permisoId: p.id,
-            valor: p.valor,
-            valorNumerico: p.tipoValor === 'NUMERICO' ? p.valorNumerico : undefined,
-          }));
-        if (payloadPermisos.length > 0) {
-          await permisoEspecialApi.asignarARol(securitySucursal, rolId, payloadPermisos);
+        // Agrupar permisos por pantallaId
+        const permisosPorPantallaId: Record<number, { permisoId: number; valor: boolean; valorNumerico?: number }[]> = {};
+        for (const [key, val] of Object.entries(permisosPorPantalla)) {
+          const [pantallaIdStr, permisoIdStr] = key.split('-');
+          const pantallaId = parseInt(pantallaIdStr, 10);
+          const permisoId = parseInt(permisoIdStr, 10);
+          if (!val.valor && !((val.valorNumerico ?? 0) > 0)) continue;
+          if (!permisosPorPantallaId[pantallaId]) permisosPorPantallaId[pantallaId] = [];
+          const permCatalogo = catalogoPermisosEspeciales.find(p => p.id === permisoId);
+          permisosPorPantallaId[pantallaId].push({
+            permisoId,
+            valor: val.valor,
+            valorNumerico: permCatalogo?.tipoValor === 'NUMERICO' ? val.valorNumerico : undefined,
+          });
+        }
+        for (const [pantallaId, payloadPermisos] of Object.entries(permisosPorPantallaId)) {
+          if (payloadPermisos.length > 0) {
+            await permisoEspecialApi.asignarARol(securitySucursal, rolId, parseInt(pantallaId), payloadPermisos);
+          }
         }
       } catch {
         // no crítico, el rol ya se guardó
@@ -438,9 +460,13 @@ const RolFormulario: React.FC = () => {
                               {pp.permisosEspeciales && pp.permisosEspeciales.length > 0 && (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4, marginLeft: 24, width: '100%' }}>
                                   {pp.permisosEspeciales.map((peCodigo) => {
-                                    const permiso = permisosEspeciales.find(p => p.codigo === peCodigo);
-                                    const esNumerico = permiso?.tipoValor === 'NUMERICO';
-                                    const checked = permiso?.valor ?? false;
+                                    const permisoCatalogo = catalogoPermisosEspeciales.find(p => p.codigo === peCodigo);
+                                    if (!permisoCatalogo) return null;
+                                    const key = `${pantallaId}-${permisoCatalogo.id}`;
+                                    // Buscar valor especifico de esta pantalla, o global (pantallaId=0) como fallback
+                                    const valorActual = permisosPorPantalla[key] ?? permisosPorPantalla[`0-${permisoCatalogo.id}`] ?? { valor: false };
+                                    const esNumerico = permisoCatalogo.tipoValor === 'NUMERICO';
+                                    const checked = valorActual.valor;
                                     return (
                                       <div key={peCodigo}
                                         style={{
@@ -453,15 +479,15 @@ const RolFormulario: React.FC = () => {
                                       >
                                         {esNumerico ? (
                                           <>
-                                            <span style={{ fontSize: 11, marginRight: 2 }}>{permiso?.nombre || peCodigo}:</span>
+                                            <span style={{ fontSize: 11, marginRight: 2 }}>{permisoCatalogo.nombre || peCodigo}:</span>
                                             <InputNumber
                                               min={0}
                                               step={0.01}
                                               size="small"
                                               style={{ width: 90 }}
-                                              value={permiso?.valorNumerico}
+                                              value={valorActual.valorNumerico}
                                               onChange={(val) => {
-                                                if (permiso) handleTogglePermisoEspecial(permiso.id, true, val ?? 0);
+                                                handleTogglePermisoEspecial(pantallaId, permisoCatalogo.id, true, val ?? 0);
                                               }}
                                               placeholder="Tope"
                                             />
@@ -470,11 +496,11 @@ const RolFormulario: React.FC = () => {
                                           <Checkbox
                                             checked={checked}
                                             onChange={(e) => {
-                                              if (permiso) handleTogglePermisoEspecial(permiso.id, e.target.checked);
+                                              handleTogglePermisoEspecial(pantallaId, permisoCatalogo.id, e.target.checked);
                                             }}
                                             style={{ fontSize: 11, marginRight: 0 }}
                                           >
-                                            <span style={{ fontSize: 11 }}>{permiso?.nombre || peCodigo}</span>
+                                            <span style={{ fontSize: 11 }}>{permisoCatalogo.nombre || peCodigo}</span>
                                           </Checkbox>
                                         )}
                                       </div>

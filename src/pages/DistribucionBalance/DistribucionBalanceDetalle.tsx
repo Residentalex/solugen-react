@@ -22,6 +22,7 @@ import TotalesCard from '../../components/TotalesCard';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
@@ -425,7 +426,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="Tipo">
                   {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
@@ -502,7 +503,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="Tipo">
                   {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>

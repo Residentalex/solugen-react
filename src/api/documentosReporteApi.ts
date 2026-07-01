@@ -25,10 +25,10 @@ export const documentosReporteApi = {
     return data;
   },
 
-  imprimirReporteConDatos: async (sucursal: number, titulo: string, items: any[]): Promise<Blob> => {
+  imprimirReporteConDatos: async (sucursal: number, titulo: string, items: any[], desde?: string, hasta?: string): Promise<Blob> => {
     const { data } = await apiClient.post<Blob>(
       `/reportes/inventario/imprimir-por-datos/${sucursal}`,
-      { titulo, items },
+      { titulo, items, fechaDesde: desde, fechaHasta: hasta },
       { responseType: 'blob' }
     );
     return data;

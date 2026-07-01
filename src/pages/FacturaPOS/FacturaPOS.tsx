@@ -154,6 +154,7 @@ const FacturaPOS: React.FC = () => {
       toolbarProps={{
         opcionesEstado: ESTADO_OPCIONES,
         ocultarSearch: true,
+        searchDefaultValue: state.searchText,
         pageSize: state.pageSize,
         onPageSizeChange: actions.handlePageSizeChange,
         extraLeft: (

@@ -3,7 +3,6 @@ import type { ApiResponse } from '../types/auth';
 import type { ConceptoDTO, EntidadDTO, AlmacenDTO, SuplidorDTO, CompaniaDTO } from '../types/entradaAlmacen';
 
 const CONCEPTOS_BASE = '/Concepto';
-const ENTIDADES_BASE = '/Entidad';
 const PROVEEDORES_BASE = '/Proveedor';
 const ALMACENES_BASE = '/Almacen';
 
@@ -55,14 +54,16 @@ export const conceptosApi = {
   obtenerEntidades: async (
     sucursal: number,
     conceptoCodigo?: string,
-    activo?: boolean
+    activo?: boolean,
+    tipo?: string
   ): Promise<EntidadDTO[]> => {
     const params: Record<string, string> = {};
     if (conceptoCodigo) params.concepto = conceptoCodigo;
     if (activo !== undefined) params.activo = String(activo);
+    if (tipo) params.tipo = tipo;
 
     const { data } = await apiClient.get<ApiResponse<EntidadDTO[]>>(
-      `${ENTIDADES_BASE}/${sucursal}`,
+      `/Entidad/${sucursal}`,
       { params }
     );
     return data.data;

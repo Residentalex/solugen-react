@@ -41,4 +41,22 @@ export const documentosApi = {
   eliminar: async (sucursal: number, id: number): Promise<void> => {
     await apiClient.delete(`${BASE}/${sucursal}/${id}`);
   },
+
+  obtenerPorId: async (sucursal: number, id: number): Promise<DocumentoDTO | null> => {
+    try {
+      const { data } = await apiClient.get<ApiResponse<DocumentoDTO>>(`${BASE}/${sucursal}/por-id/${id}`);
+      return data.data || null;
+    } catch {
+      return null;
+    }
+  },
+
+  obtenerPorCodigo: async (sucursal: number, codigo: string): Promise<DocumentoDTO | null> => {
+    try {
+      const { data } = await apiClient.get<ApiResponse<DocumentoDTO>>(`${BASE}/${sucursal}/${codigo}`);
+      return data.data || null;
+    } catch {
+      return null;
+    }
+  },
 };

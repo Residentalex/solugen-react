@@ -126,6 +126,7 @@ const AsientosContables: React.FC = () => {
         onFiltrosAplicar: actions.handleFiltrosAplicar,
         searchPlaceholder: 'Buscar documento, entidad, concepto...',
         onSearch: actions.handleSearch,
+        searchDefaultValue: state.searchText,
         pageSize: state.pageSize,
         onPageSizeChange: actions.handlePageSizeChange,
         onRefresh: actions.handleRefresh,

@@ -13,9 +13,11 @@ import {
   ClearOutlined,
   EditOutlined,
   PlusOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { reciboIngresoApi } from '../../api/reciboIngresoApi';
 import { conceptosApi } from '../../api/conceptosApi';
@@ -28,6 +30,7 @@ import type { UnidadMedidaDTO } from '../../types/productos';
 import type {
   ReciboIngresoFullDTO, TransaccionAsociadaDTO, CobroDTO, TipoRISelectDTO,
 } from '../../types/reciboIngreso';
+import { OrigenCuenta } from '../../types/contabilidad';
 import LogTable from '../../components/LogTable';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
@@ -44,6 +47,7 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -132,7 +136,6 @@ const ReciboIngresoFormulario: React.FC = () => {
   const [cobros, setCobros] = useState<CobroDTO[]>(crearCobrosIniciales());
   const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
   const [logs, setLogs] = useState<LogDTO[]>([]);
-  const [conceptoInfo, setConceptoInfo] = useState<string>('');
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
   const [sucursalesCache, setSucursalesCache] = useState<any[]>([]);
   const [selectedSucursal, setSelectedSucursal] = useState<any>(null);
@@ -143,6 +146,8 @@ const ReciboIngresoFormulario: React.FC = () => {
 
   // Documento relacionado modal
   const [documentoModalOpen, setDocumentoModalOpen] = useState(false);
+
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
 
   // Quick fields
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -410,6 +415,25 @@ const ReciboIngresoFormulario: React.FC = () => {
 
     const subTotal = (values.total || 0) - (base.impuestos || 0);
 
+    // Asegurar documento con origenCuenta desde companyStore
+    const { documentos } = useCompanyStore.getState().data;
+    const docConfig = documentos.find((d: any) => d.codigo === documentCode);
+    const docOrigenCuenta = base.documento?.origenCuenta ?? docConfig?.origenCuenta ?? OrigenCuenta.Desconocido;
+    const documento = base.documento?.codigo
+      ? { ...base.documento, origenCuenta: docOrigenCuenta }
+      : { codigo: documentCode, origenCuenta: docOrigenCuenta };
+
+    // Asegurar entidad con tipoEntidad
+    const tipoEntidadStr = base.tipoEntidad || 'CLI';
+    const entidadBase = entidadSel || { nombre: '', codigo: '', identificacion: '' };
+    const entidad = {
+      ...entidadBase,
+      tipoEntidad: entidadBase.tipoEntidad ?? {
+        codigo: tipoEntidadStr,
+        origenCuenta: docOrigenCuenta,
+      },
+    };
+
     return {
       id: base.id || 0,
       fechaDocumento: fechaDoc,
@@ -428,9 +452,9 @@ const ReciboIngresoFormulario: React.FC = () => {
       retenciones: Math.round(retenciones * 100) / 100,
       tipoDocumento: base.tipoDocumento ?? 66,
       tipoEntidad: base.tipoEntidad || selectedConcepto?.entidades?.[0]?.codigo || 'CLI',
-      documento: base.documento || { codigo: documentCode },
+      documento,
       concepto: selectedConcepto || { nombre: '', codigo: '' },
-      entidad: entidadSel || { nombre: '', codigo: '', identificacion: '' },
+      entidad,
       moneda: base.moneda || getMonedaSucursalActiva(),
       codigoTipo: selectedTipo?.codigo || values.tipo || '',
       sucursal: selectedSucursal || base.sucursal || { nombre: '', codigo: '', identificacion: '' },
@@ -502,7 +526,6 @@ const ReciboIngresoFormulario: React.FC = () => {
     setConceptoSearchText('');
     setEntidadesCache([]);
     setSelectedEntidad(null);
-    setConceptoInfo('');
     form.setFieldsValue({ concepto: '', entidad: undefined });
   };
 
@@ -511,29 +534,31 @@ const ReciboIngresoFormulario: React.FC = () => {
     setSelectedConcepto(concepto);
     setEditingField(null);
     setConceptoSearchText('');
-    form.setFieldsValue({ concepto: concepto.codigo });
 
     // Cargar entidades según concepto
     cargarEntidades(concepto.codigo);
 
-    // Mostrar avisos si el concepto tiene flags especiales
-    const infoParts: string[] = [];
-    if (concepto.noImpuesto) infoParts.push(' * No Impuestos * ');
-    if (concepto.noAsientos) infoParts.push(' * No Asientos * ');
-    if (concepto.activo === false) infoParts.push(' * Concepto Inactivo * ');
-    setConceptoInfo(infoParts.join(''));
-
     // === ConfigurarMoneda ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
-    form.setFieldsValue({
-      moneda: monedaObj.nombre,
-      tasa: monedaObj.tasa ?? 1,
-    });
     // Actualizar data local para que la UI lo refleje
     setData((prev) => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaObj };
     });
+
+    form.setFieldsValue({
+      concepto: concepto.codigo,
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.tasa ?? 1,
+    });
+
+    // === NoImpuesto: si el concepto no acepta impuestos, mostrar advertencia ===
+    if (concepto.noImpuesto) {
+      const hayRetenciones = transaccionesAsociadas.some((t) => (t.retencion || 0) > 0);
+      if (hayRetenciones) {
+        message.warning('El Concepto no acepta Impuestos/Retenciones. Verifique las retenciones en documentos relacionados.');
+      }
+    }
   };
 
   const handleConceptoClear = () => {
@@ -541,13 +566,26 @@ const ReciboIngresoFormulario: React.FC = () => {
     setConceptoSearchText('');
     setEntidadesCache([]);
     setSelectedEntidad(null);
-    setConceptoInfo('');
     form.setFieldsValue({ concepto: '', entidad: undefined });
   };
 
   // ===== Handler para agregar documentos relacionados =====
   const handleAgregarDocumentos = (docs: any[]) => {
-    setTransaccionesAsociadas((prev) => [...prev, ...docs]);
+    setTransaccionesAsociadas((prev) => {
+      const idsExistentes = new Set(
+        prev.map((t) => t.transaccionAsociadaID || t.id)
+      );
+      const nuevos = docs.filter(
+        (d) => !idsExistentes.has(d.transaccionAsociadaID || d.id)
+      );
+      return [...prev, ...nuevos];
+    });
+  };
+
+  const handleDocRelacionadoRemove = (id?: number) => {
+    setTransaccionesAsociadas((prev) =>
+      prev.filter((t) => (t.transaccionAsociadaID || t.id) !== id)
+    );
   };
 
   // ===== Totales calculados =====
@@ -606,6 +644,13 @@ const ReciboIngresoFormulario: React.FC = () => {
             );
           }}
         />
+      ),
+    },
+    {
+      title: '', key: 'accion', width: 50,
+      render: (_: any, record: TransaccionAsociadaDTO) => (
+        <Button type="text" danger size="small" icon={<DeleteOutlined />}
+          onClick={() => handleDocRelacionadoRemove(record.transaccionAsociadaID || record.id)} />
       ),
     },
   ];
@@ -772,13 +817,8 @@ const ReciboIngresoFormulario: React.FC = () => {
               </FloatingField>
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
+            <ConceptoInfoLabel concepto={selectedConcepto} />
           </Col>
-
-          {conceptoInfo && (
-            <Col xs={24}>
-              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-            </Col>
-          )}
 
           {/* Fila 2: Fecha + Cliente */}
           <Col xs={24} sm={12} lg={9}>
@@ -1133,7 +1173,7 @@ const ReciboIngresoFormulario: React.FC = () => {
         onSelect={handleAgregarDocumentos}
         tipoEntidad={selectedConcepto?.entidades?.[0]?.codigo || 'CLI'}
         codEntidad={selectedEntidad?.codigo || data?.codigoEntidad || ''}
-        origen={selectedConcepto?.entidades?.[0]?.origenCuenta ?? 1}
+        origen={(() => { const { documentos } = useCompanyStore.getState().data; const docConfig = documentos.find((d: any) => d.codigo === 'RI'); const docOrigen = docConfig?.origenCuenta ?? OrigenCuenta.Desconocido; return typeof docOrigen === 'number' ? docOrigen : (docOrigen === 'Credito' ? OrigenCuenta.Credito : OrigenCuenta.Debito); })()}
         montoTotal={totalValue || 0}
         documentosIniciales={transaccionesAsociadas
           .map(t => t.id || t.transaccionAsociadaID)

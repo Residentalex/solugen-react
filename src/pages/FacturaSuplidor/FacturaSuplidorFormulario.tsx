@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Popover, Empty,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Popover, Empty, Tooltip,
 } from 'antd';
 import {
   SaveOutlined,
@@ -11,12 +11,13 @@ import {
   DeleteOutlined,
   PlusOutlined,
   SearchOutlined,
-  ClearOutlined,
   ExclamationCircleOutlined,
   EditOutlined,
   MoreOutlined,
   CalendarOutlined,
   HolderOutlined,
+  BarcodeOutlined,
+  PercentageOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -25,14 +26,16 @@ import { DragHandle, SortableRow } from '../../components/DragSortable';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
+import { conceptosApi } from '../../api/conceptosApi';
 import { productoApi } from '../../api/productoApi';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import { BuscarEntradaModal } from '../../components/BuscarEntradaModal';
+import ScannerModal from '../../components/ScannerModal/ScannerModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type {
-  ConceptoDTO, SuplidorDTO,
+  ConceptoDTO, SuplidorDTO, AlmacenDTO,
 } from '../../types/entradaAlmacen';
 import type { UnidadMedidaDTO } from '../../types/productos';
 import type {
@@ -43,6 +46,8 @@ import LogTable from '../../components/LogTable';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import SeleccionarImpuestosModal from '../../components/SeleccionarImpuestosModal';
 import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestosModal';
+import AsientosContableTable from '../../components/AsientosContableTable';
+import BuscarCuentaContableModal from '../../components/BuscarCuentaContableModal/BuscarCuentaContableModal';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -51,9 +56,12 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import GuidePopover from '../../components/GuidePopover/GuidePopover';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
+import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -63,7 +71,7 @@ function calcularFila(fila: DetalleFacturaSuplidorDTO): DetalleFacturaSuplidorDT
   const cantidad = fila.cantidad || 0;
   const costo = fila.costo || 0;
   const pctDesc = fila.porcentajeDescuento || 0;
-  const pctImp = fila.impuesto?.porcentaje || 0;
+  const pctImp = fila.impuesto?.porcentaje ?? (fila.porcentajeImpuesto || 0);
 
   const subTotal = Math.round(cantidad * costo * 100) / 100;
   const descuento = Math.round(subTotal * (pctDesc / 100) * 100) / 100;
@@ -92,6 +100,7 @@ function filaVacia(): DetalleFacturaSuplidorDTO {
     costo: 0,
     subTotal: 0,
     porcentajeDescuento: 0,
+    porcentajeImpuesto: 0,
     descuento: 0,
     impuestos: 0,
     total: 0,
@@ -108,6 +117,38 @@ const esNcfValido = (ncf: string): boolean => {
   return false; // no empieza con B ni E
 };
 
+// ===== Error Boundary =====
+class FacturaSuplidorErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[FacturaSuplidorErrorBoundary]', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 24 }}>
+          <h2>Error en el formulario</h2>
+          <pre style={{ color: 'red', whiteSpace: 'pre-wrap' }}>
+            {this.state.error?.message}
+          </pre>
+          <pre style={{ fontSize: 12, whiteSpace: 'pre-wrap', marginTop: 8 }}>
+            {this.state.error?.stack}
+          </pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ===== Componente principal =====
 const FacturaSuplidorFormulario: React.FC = () => {
@@ -121,6 +162,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
   const { screenCode, documentCode } = useScreenConfig('FRDE');
+  const documentoConfig = useDocumentoConfig(sucursalActiva, documentCode);
   const monedaDefault = getMonedaSucursalActiva();
 
   // ===== States =====
@@ -130,14 +172,13 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const [data, setData] = useState<FacturaSuplidorFullDTO | null>(null);
   const [detalles, setDetalles] = useState<DetalleFacturaSuplidorDTO[]>([]);
   const [suplidoresCache, setSuplidoresCache] = useState<SuplidorDTO[]>([]);
-  const [tiposCache, setTiposCache] = useState<TipoDTO[]>([]);
-  const [selectedTipo, setSelectedTipo] = useState<TipoDTO | null>(null);
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
   const [conceptoSearchText, setConceptoSearchText] = useState('');
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
   const [selectedEntidad, setSelectedEntidad] = useState<SuplidorDTO | null>(null);
   const [selectedEntrada, setSelectedEntrada] = useState<any>(null);
-  const [conceptoInfo, setConceptoInfo] = useState<string>('');
+  const [almacenesCache, setAlmacenesCache] = useState<AlmacenDTO[]>([]);
+  const [selectedAlmacen, setSelectedAlmacen] = useState<AlmacenDTO | null>(null);
   const [productoModalOpen, setProductoModalOpen] = useState(false);
   const [entradaModalOpen, setEntradaModalOpen] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
@@ -149,11 +190,15 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
   const [impuestosFactura, setImpuestosFactura] = useState<any[]>([]);
   const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
+  const [scannerModalOpen, setScannerModalOpen] = useState(false);
+  const [generandoAsientos, setGenerandoAsientos] = useState(false);
+  const [cuentaModalAsientoOpen, setCuentaModalAsientoOpen] = useState(false);
 
   // Refs para la guía
-  const tipoRef = useRef<HTMLDivElement>(null);
+  const entradaRef = useRef<HTMLDivElement>(null);
   const conceptoRef = useRef<HTMLDivElement>(null);
   const suplidorRef = useRef<HTMLDivElement>(null);
+  const almacenRef = useRef<HTMLDivElement>(null);
   const agregarFilaRef = useRef<HTMLDivElement>(null);
   const ncfRef = useRef<HTMLDivElement>(null);
   const sucursalRef = useRef<HTMLDivElement>(null);
@@ -162,6 +207,30 @@ const FacturaSuplidorFormulario: React.FC = () => {
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   );
+
+  const editValuesRef = useRef<Record<string, any>>({});
+
+  // Backup de impuestos para restaurar cuando el concepto deje de ser noImpuesto
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
+
+  // Normalizar impuestosFactura del API (estructura anidada → plana)
+  function normalizarImpuestos(items: any[]): any[] {
+    return (items || []).map((item: any) => ({
+      id: item.impuesto?.codigo || item.id,
+      codigo: item.impuesto?.codigo || item.codigo,
+      idExterno: item.impuesto?.idExterno || item.idExterno,
+      nombre: item.impuesto?.nombre || item.nombre || '',
+      porcentaje: item.impuesto?.porcentaje ?? item.porcentaje ?? 0,
+      tipo: item.tipo || item.impuesto?.tipo || '',
+      monto: item.monto ?? 0,
+      impuesto: item.impuesto || {
+        nombre: item.impuesto?.nombre || item.nombre || '',
+        porcentaje: item.impuesto?.porcentaje ?? item.porcentaje ?? 0,
+        codigo: item.impuesto?.codigo || item.codigo || '',
+        idExterno: item.impuesto?.idExterno || item.idExterno || ''
+      },
+    }));
+  }
 
   // ===== Detalles filtrados por búsqueda =====
   const detallesFiltrados = detalleSearch
@@ -247,6 +316,11 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const sinOC = true;
   const isLarge = screens.xxl === true;
 
+  const usuario = useAuthStore((s) => s.usuario);
+  const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
+    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+  ) ?? false;
+
   // ===== Determinar estado =====
   const estado = data?.estado ?? 0;
   const esCerrado = data?.periodo === 6;
@@ -261,14 +335,11 @@ const FacturaSuplidorFormulario: React.FC = () => {
     setPageTitleOverride(pageTitle);
 
     // Cargar catálogos iniciales
-    facturaSuplidorApi.obtenerTipos(sucursalActiva).then(setTiposCache).catch(() => {});
+    conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
 
-    // Cargar sucursales desde el auth store
-    const authSucursales = useAuthStore.getState().sucursalesPermitidas;
-    if (authSucursales.length > 0) {
-      setSucursalesCache(authSucursales);
-    }
+    // Cargar sucursales desde la API (CompanioDTO con codigo/idExterno)
+    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch(() => {});
 
     // Inicializar fecha y monto en modo crear
     if (mode === 'crear') {
@@ -296,8 +367,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
         setData(res);
         setDetalles(res.detalles || []);
         setAsientosLocales(res.asientos || []);
-        setImpuestosFactura(res.impuestosFactura || []);
-        setSelectedTipo(res.tipo || null);
+        setImpuestosFactura(normalizarImpuestos(res.impuestosFactura));
         setSelectedConcepto(res.concepto || null);
         setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
         setSelectedEntidad(res.suplidor || res.entidad || null);
@@ -306,9 +376,8 @@ const FacturaSuplidorFormulario: React.FC = () => {
         const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
 
         form.setFieldsValue({
-          tipo: res.tipo?.codigo || '',
           concepto: res.concepto?.codigo || '',
-          suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
+          suplidor: res.suplidor?.codigo || res.entidad?.codigo || res.codigoEntidad || '',
           fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
           ncf: res.ncf || '',
           referencia: res.referencia || '',
@@ -319,9 +388,16 @@ const FacturaSuplidorFormulario: React.FC = () => {
           diasCredito: res.diasCredito ?? res.suplidor?.diasCredito ?? 0,
         });
 
-        // Cargar suplidores
+        // Cargar suplidores y actualizar selectedEntidad con datos completos
         facturaSuplidorApi.obtenerSuplidores(sucursalActiva)
-          .then(setSuplidoresCache)
+          .then((suplidores) => {
+            setSuplidoresCache(suplidores);
+            const codigoEntidad = (res as any).entidad?.codigo || (res as any).suplidor?.codigo || (res as any).codigoEntidad;
+            if (codigoEntidad) {
+              const match = suplidores.find((s: any) => s.codigo === codigoEntidad);
+              if (match) setSelectedEntidad(match);
+            }
+          })
           .catch(() => {});
 
         // Restaurar sucursal
@@ -343,11 +419,12 @@ const FacturaSuplidorFormulario: React.FC = () => {
     const mapeados = items.map((i) => ({
       id: i.codigo,
       codigo: i.codigo,
+      idExterno: i.idExterno,
       nombre: i.nombre,
       porcentaje: i.porcentaje,
       tipo: i.tipo,
       monto: i.monto,
-      impuesto: { nombre: i.nombre, porcentaje: i.porcentaje },
+      impuesto: { nombre: i.nombre, porcentaje: i.porcentaje, idExterno: i.idExterno, codigo: i.codigo },
     }));
     setImpuestosFactura((prev: any[]) => {
       const existentes = new Map(prev.map((i: any) => [i.codigo, i]));
@@ -362,6 +439,34 @@ const FacturaSuplidorFormulario: React.FC = () => {
       return Array.from(existentes.values());
     });
   };
+
+  // ===== Sincronizar impuesto de detalle con impuestosFactura =====
+  const agregarImpuestoAFactura = useCallback((
+    codigo: string,
+    idExterno: string | undefined,
+    nombre: string,
+    porcentaje: number,
+    tipo: string,
+  ) => {
+    if (!codigo) return;
+    setImpuestosFactura((prev: any[]) => {
+      const existe = prev.some((i: any) => i.codigo === codigo);
+      if (existe) return prev; // ya está registrado
+      return [
+        ...prev,
+        {
+          id: codigo,
+          codigo,
+          idExterno: idExterno || codigo,
+          nombre,
+          porcentaje,
+          tipo: tipo || 'Impuesto',
+          monto: 0, // se calculará automáticamente
+          impuesto: { nombre, porcentaje, idExterno: idExterno || codigo, codigo },
+        },
+      ];
+    });
+  }, []);
 
   // ===== Handlers =====
   const handleCancelar = () => {
@@ -385,8 +490,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
                 setData(res);
                 setDetalles(res.detalles || []);
                 setAsientosLocales(res.asientos || []);
-                setImpuestosFactura(res.impuestosFactura || []);
-                setSelectedTipo(res.tipo || null);
+                setImpuestosFactura(normalizarImpuestos(res.impuestosFactura));
                 setSelectedConcepto(res.concepto || null);
                 setSelectedEntidad(res.suplidor || res.entidad || null);
                 setSelectedEntrada(res.entradaAlmacen || null);
@@ -394,9 +498,8 @@ const FacturaSuplidorFormulario: React.FC = () => {
                 const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
 
                 form.setFieldsValue({
-                  tipo: res.tipo?.codigo || '',
                   concepto: res.concepto?.codigo || '',
-                  suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
+                  suplidor: res.suplidor?.codigo || res.entidad?.codigo || res.codigoEntidad || '',
                   fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
                   ncf: res.ncf || '',
                   referencia: res.referencia || '',
@@ -407,11 +510,15 @@ const FacturaSuplidorFormulario: React.FC = () => {
                   diasCredito: res.diasCredito ?? res.suplidor?.diasCredito ?? 0,
                 });
 
-                if (res.tipo?.idExterno) {
-                  setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
-                }
                 facturaSuplidorApi.obtenerSuplidores(sucursalActiva)
-                  .then(setSuplidoresCache)
+                  .then((suplidores) => {
+                    setSuplidoresCache(suplidores);
+                    const codigoEntidad = (res as any).entidad?.codigo || (res as any).suplidor?.codigo || (res as any).codigoEntidad;
+                    if (codigoEntidad) {
+                      const match = suplidores.find((s: any) => s.codigo === codigoEntidad);
+                      if (match) setSelectedEntidad(match);
+                    }
+                  })
                   .catch(() => {});
               })
               .catch((err: any) => {
@@ -429,7 +536,6 @@ const FacturaSuplidorFormulario: React.FC = () => {
   // ===== Validación del formulario =====
   const validarFormulario = (): string | null => {
     const values = form.getFieldsValue();
-    if (!selectedTipo) return 'Debe seleccionar un Tipo de Documento.';
     if (!selectedConcepto) return 'Debe elegir un Concepto para poder continuar.';
     if (suplidoresCache.length > 0 && !values.suplidor && !selectedEntidad) return 'El suplidor es requerido.';
     if (detalles.length === 0) return 'No se puede crear un documento de FACTURA SUPLIDOR sin detalle.';
@@ -458,7 +564,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       const totalDebitos = asientosAValidar.reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
       const totalCreditos = asientosAValidar.reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
       if (Math.abs(totalDebitos - totalCreditos) > 0.01) {
-        return 'Los asientos contables no estÃ¡n cuadrados. Los dÃ©bitos deben ser igual a los crÃ©ditos.';
+        return 'Los asientos contables no están cuadrados. Los débitos deben ser igual a los créditos.';
       }
     }
 
@@ -507,14 +613,34 @@ const FacturaSuplidorFormulario: React.FC = () => {
       moneda: base.moneda || getMonedaSucursalActiva(),
       suplidor: entidadSel || { nombre: '', codigo: '', identificacion: '' },
       entidad: entidadSel
-        ? { nombre: entidadSel.nombre, codigo: entidadSel.codigo, identificacion: entidadSel.identificacion || '', telefono: entidadSel.telefono, direccion: entidadSel.direccion }
+        ? {
+            nombre: entidadSel.nombre,
+            codigo: entidadSel.codigo,
+            identificacion: entidadSel.identificacion || '',
+            telefono: entidadSel.telefono,
+            direccion: entidadSel.direccion,
+            codigoTipoEntidad: entidadSel.codigoTipoEntidad,
+            tipoEntidad: entidadSel.tipoEntidad,
+            cuentaContable: entidadSel.cuentaContable,
+          }
         : { nombre: '', codigo: '', identificacion: '' },
-      tipo: selectedTipo || null,
+      tipo: null,
       entradaAlmacen: selectedEntrada || null,
-      sucursal: selectedSucursal || base.sucursal || { nombre: '', codigo: '', identificacion: '' },
+      sucursal: selectedSucursal
+        ? { ...selectedSucursal, codigo: selectedSucursal.codigo || selectedSucursal.idExterno, idExterno: selectedSucursal.idExterno || selectedSucursal.codigo }
+        : base.sucursal || { nombre: '', codigo: '', identificacion: '' },
       detalles: detalles.map((d) => calcularFila(d)),
       asientos: asientosLocales.length > 0 ? asientosLocales : (base.asientos || []),
-      impuestosFactura: impuestosFactura,
+      impuestosFactura: impuestosFactura.map((imp: any) => {
+        // Calcular monto automático desde los detalles que tengan este impuesto
+        const montoCalculado = detalles
+          .filter((d) => d.impuesto?.codigo === imp.codigo || d.impuesto?.idExterno === imp.idExterno)
+          .reduce((sum, d) => sum + (d.impuestos || 0), 0);
+        return {
+          ...imp,
+          monto: montoCalculado > 0 ? montoCalculado : (imp.monto ?? 0),
+        };
+      }),
       logs: base.logs || [],
     };
   };
@@ -530,7 +656,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
           return `El NCF "${ncf}" ya existe para este suplidor.`;
         }
       } catch {
-        // Si falla la verificaciÃ³n, continuar
+        // Si falla la verificación, continuar
       }
     }
     return null;
@@ -570,55 +696,16 @@ const FacturaSuplidorFormulario: React.FC = () => {
     }
   };
 
-  // ===== Handlers de Tipo =====
-  const handleTipoSelect = (tipoCodigo: string) => {
-    const tipo = tiposCache.find((t) => t.codigo === tipoCodigo) || null;
-    setSelectedTipo(tipo);
-    setSelectedConcepto(null);
-    setConceptoSearchText('');
-    setConceptoInfo('');
-    form.setFieldsValue({ concepto: '' });
-  };
-
-  const handleTipoClear = () => {
-    setSelectedTipo(null);
-    setSelectedConcepto(null);
-    setConceptoSearchText('');
-    setConceptoInfo('');
-    form.setFieldsValue({ tipo: '', concepto: '' });
-  };
-
   // ===== Handlers de Concepto =====
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
     setConceptoSearchText(`${concepto.codigo || ''} - ${toTitleCase(concepto.nombre)}`);
     setEditingField(null);
-    form.setFieldsValue({ concepto: concepto.codigo });
 
-    // Cargar suplidores
-    facturaSuplidorApi.obtenerSuplidores(sucursalActiva)
-      .then((ents) => setSuplidoresCache(ents))
-      .catch(() => {});
-
-    // Mostrar avisos si el concepto tiene flags especiales
-    const infoParts: string[] = [];
-    if (concepto.noImpuesto) infoParts.push(' * No Impuestos * ');
-    if (concepto.noAsientos) infoParts.push(' * No Asientos * ');
-    if (concepto.activo === false) infoParts.push(' * Concepto Inactivo * ');
-    if (concepto.noActualizaCostos) infoParts.push(' * No Actualiza Costos * ');
-    setConceptoInfo(infoParts.join(''));
-
-    // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
-    if (concepto.noImpuesto && detalles.some((d) => (d.impuesto?.porcentaje || 0) > 0)) {
-      message.warning('El Concepto no acepta Impuestos, por lo que serÃ¡n eliminados.');
-      setDetalles((prev) =>
-        prev.map((d) => calcularFila({ ...d, impuesto: undefined }))
-      );
-    }
-
-    // === ConfigurarMoneda ===
+    // === ConfigurarMoneda (unificado con conceptoNombre) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
+      concepto: concepto.codigo,
       moneda: monedaObj.nombre,
       tasa: monedaObj.tasa ?? 1,
     });
@@ -627,6 +714,53 @@ const FacturaSuplidorFormulario: React.FC = () => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaObj };
     });
+
+    // Cargar suplidores y actualizar selectedEntidad con datos completos
+    facturaSuplidorApi.obtenerSuplidores(sucursalActiva)
+      .then((suplidores) => {
+        setSuplidoresCache(suplidores);
+        const codigoEntidad = data?.entidad?.codigo || data?.suplidor?.codigo || data?.codigoEntidad;
+        if (codigoEntidad) {
+          const match = suplidores.find((s: any) => s.codigo === codigoEntidad);
+          if (match) setSelectedEntidad(match);
+        }
+      })
+      .catch(() => {});
+
+    // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
+    const prevNoImpuesto = selectedConcepto?.noImpuesto;
+
+    if (concepto.noImpuesto) {
+      const hayImpuestos = detalles.some((d) => (d.impuesto?.porcentaje || 0) > 0);
+      if (hayImpuestos) {
+        const backup = new Map<number, { impuesto?: any; porcentajeImpuesto: number }>();
+        detalles.forEach((d) => {
+          if ((d.impuesto?.porcentaje || 0) > 0) {
+            backup.set(d.id, { impuesto: d.impuesto, porcentajeImpuesto: d.porcentajeImpuesto || 0 });
+          }
+        });
+        impuestosBackupRef.current = backup;
+
+        message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+        setDetalles((prev) =>
+          prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
+        );
+      }
+    } else if (prevNoImpuesto && !concepto.noImpuesto) {
+      const backup = impuestosBackupRef.current;
+      if (backup.size > 0) {
+        setDetalles((prev) =>
+          prev.map((d) => {
+            const saved = backup.get(d.id);
+            if (saved) {
+              return calcularFila({ ...d, impuesto: saved.impuesto, porcentajeImpuesto: saved.porcentajeImpuesto });
+            }
+            return d;
+          })
+        );
+        impuestosBackupRef.current = new Map();
+      }
+    }
   };
 
   const handleConceptoClear = () => {
@@ -670,6 +804,22 @@ const FacturaSuplidorFormulario: React.FC = () => {
           }));
           const calculados = nuevosDetalles.map((d: DetalleFacturaSuplidorDTO) => calcularFila(d));
           setDetalles(calculados);
+          // Sincronizar impuestos únicos desde los detalles de la ENP
+          const impuestosUnicos = new Map<string, any>();
+          (calculados as any[]).forEach((d: any) => {
+            if (d.impuesto?.codigo && !impuestosUnicos.has(d.impuesto.codigo)) {
+              impuestosUnicos.set(d.impuesto.codigo, {
+                codigo: d.impuesto.codigo,
+                idExterno: d.impuesto.idExterno || d.impuesto.codigo,
+                nombre: d.impuesto.nombre,
+                porcentaje: d.impuesto.porcentaje,
+                tipo: d.impuesto.tipo || 'Impuesto',
+              });
+            }
+          });
+          impuestosUnicos.forEach((imp) => {
+            agregarImpuestoAFactura(imp.codigo, imp.idExterno, imp.nombre, imp.porcentaje, imp.tipo);
+          });
           const totalEntrada = calculados.reduce((s, d) => s + (d.total || 0), 0);
           form.setFieldsValue({ monto: totalEntrada });
         } catch (err: any) {
@@ -703,6 +853,22 @@ const FacturaSuplidorFormulario: React.FC = () => {
             }));
             const calculados = nuevosDetalles.map((d: DetalleFacturaSuplidorDTO) => calcularFila(d));
             setDetalles(calculados);
+            // Sincronizar impuestos únicos desde los detalles de la ENP
+            const impuestosUnicos = new Map<string, any>();
+            (calculados as any[]).forEach((d: any) => {
+              if (d.impuesto?.codigo && !impuestosUnicos.has(d.impuesto.codigo)) {
+                impuestosUnicos.set(d.impuesto.codigo, {
+                  codigo: d.impuesto.codigo,
+                  idExterno: d.impuesto.idExterno || d.impuesto.codigo,
+                  nombre: d.impuesto.nombre,
+                  porcentaje: d.impuesto.porcentaje,
+                  tipo: d.impuesto.tipo || 'Impuesto',
+                });
+              }
+            });
+            impuestosUnicos.forEach((imp) => {
+              agregarImpuestoAFactura(imp.codigo, imp.idExterno, imp.nombre, imp.porcentaje, imp.tipo);
+            });
             const totalEntrada = calculados.reduce((s, d) => s + (d.total || 0), 0);
             form.setFieldsValue({ monto: totalEntrada });
           } catch (err: any) {
@@ -723,16 +889,13 @@ const FacturaSuplidorFormulario: React.FC = () => {
     }
   };
 
-  const handleEntradaClear = () => {
-    setSelectedEntrada(null);
-  };
-
   // ===== Handlers de detalles =====
   const handleAgregarFila = () => {
     setDetalles((prev) => [{ ...filaVacia(), id: -(prev.length + 1) }, ...prev]);
   };
 
   const handleEliminarFila = (idFila: number) => {
+    const detalleEliminado = detalles.find((d) => d.id === idFila);
     Modal.confirm({
       title: 'Eliminar detalle',
       icon: <ExclamationCircleOutlined />,
@@ -741,7 +904,18 @@ const FacturaSuplidorFormulario: React.FC = () => {
       cancelText: 'No',
       okButtonProps: { danger: true },
       onOk: () => {
-        setDetalles((prev) => prev.filter((d) => d.id !== idFila));
+        setDetalles((prev) => {
+          const nuevos = prev.filter((d) => d.id !== idFila);
+          // Limpiar impuestos que ya no usa ningún detalle
+          if (detalleEliminado?.impuesto?.codigo) {
+            const codImpuesto = detalleEliminado.impuesto.codigo;
+            const sigueEnUso = nuevos.some((d) => d.impuesto?.codigo === codImpuesto);
+            if (!sigueEnUso) {
+              setImpuestosFactura((prevImp) => prevImp.filter((i: any) => i.codigo !== codImpuesto));
+            }
+          }
+          return nuevos;
+        });
       },
     });
   };
@@ -753,13 +927,20 @@ const FacturaSuplidorFormulario: React.FC = () => {
   };
 
   const handleDetalleCalculate = (idFila: number, field: string, value: any) => {
-    setDetalles((prev) =>
-      prev.map((d) => {
-        if (d.id !== idFila) return d;
-        const updated = { ...d, [field]: value };
-        return calcularFila(updated);
-      })
-    );
+    const nuevosDetalles = detalles.map((d) => {
+      if (d.id !== idFila) return d;
+      const updated = { ...d, [field]: value };
+      return calcularFila(updated);
+    });
+    setDetalles(nuevosDetalles);
+
+    // Recalcular montos de impuestosFactura al salir del campo
+    setImpuestosFactura((prev) => prev.map((imp: any) => {
+      const montoCalculado = nuevosDetalles
+        .filter((d: any) => d.impuesto?.codigo === imp.codigo || d.impuesto?.idExterno === imp.idExterno)
+        .reduce((sum: number, d: any) => sum + (d.impuestos || 0), 0);
+      return { ...imp, monto: montoCalculado };
+    }));
   };
 
   const handleProductoSelect = (producto: any) => {
@@ -774,14 +955,28 @@ const FacturaSuplidorFormulario: React.FC = () => {
           codigo: producto.codigo,
           articulo: producto.articulo,
           referencia: producto.referencia || '',
+          cantidad: producto.cantidad || 1,
           costo: producto.costo || 0,
           familia: producto.familia,
           medida: producto.medida,
           impuesto: producto.impuesto,
+          porcentajeImpuesto: producto.impuesto?.porcentaje ?? 0,
           tieneVencimiento: producto.tieneVencimiento,
+          modificaPrecio: producto.modificaPrecio ?? false,
+          modificaDescripcion: producto.modificaDescripcion ?? false,
         };
         return [calcularFila(filled), ...prev];
       });
+      // Sincronizar impuesto del producto con impuestosFactura
+      if (producto.impuesto?.codigo) {
+        agregarImpuestoAFactura(
+          producto.impuesto.codigo,
+          producto.impuesto.idExterno,
+          producto.impuesto.nombre,
+          producto.impuesto.porcentaje,
+          producto.impuesto.tipo || 'Impuesto',
+        );
+      }
     } else {
       setDetalles((prev) =>
         prev.map((d) => {
@@ -791,15 +986,29 @@ const FacturaSuplidorFormulario: React.FC = () => {
             codigo: producto.codigo,
             articulo: producto.articulo,
             referencia: producto.referencia || '',
+            cantidad: producto.cantidad || 1,
             costo: producto.costo || 0,
             familia: producto.familia,
             medida: producto.medida,
             impuesto: producto.impuesto,
+            porcentajeImpuesto: producto.impuesto?.porcentaje ?? 0,
             tieneVencimiento: producto.tieneVencimiento,
+            modificaPrecio: producto.modificaPrecio ?? false,
+            modificaDescripcion: producto.modificaDescripcion ?? false,
           };
           return calcularFila(filled);
         })
       );
+      // Sincronizar impuesto del producto con impuestosFactura
+      if (producto.impuesto?.codigo) {
+        agregarImpuestoAFactura(
+          producto.impuesto.codigo,
+          producto.impuesto.idExterno,
+          producto.impuesto.nombre,
+          producto.impuesto.porcentaje,
+          producto.impuesto.tipo || 'Impuesto',
+        );
+      }
     }
   };
 
@@ -830,6 +1039,36 @@ const FacturaSuplidorFormulario: React.FC = () => {
     });
   };
 
+  const handleDescuentoGlobal = () => {
+    Modal.confirm({
+      title: 'Descuento global',
+      content: (
+        <InputNumber
+          min={0}
+          max={100}
+          step={0.01}
+          precision={2}
+          style={{ width: '100%' }}
+          placeholder="Porcentaje de descuento"
+          id="descuento-global-input"
+          onChange={(val) => {
+            (window as any).__descuentoGlobal = val;
+          }}
+        />
+      ),
+      onOk: () => {
+        const pct = (window as any).__descuentoGlobal;
+        if (pct === undefined || pct === null) {
+          message.warning('Debe ingresar un porcentaje');
+          return false;
+        }
+        setDetalles((prev) =>
+          prev.map((d) => calcularFila({ ...d, porcentajeDescuento: Number(pct) }))
+        );
+      },
+    });
+  };
+
   // ===== Totales calculados =====
   const totales = {
     subTotal: detalles.reduce((s, d) => s + (d.subTotal || 0), 0),
@@ -842,213 +1081,174 @@ const FacturaSuplidorFormulario: React.FC = () => {
   function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
   function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
 
-  // ===== Loading state =====
-  if (loading) {
-    return <LoadingSpinner mensaje="Cargando documento..." />;
-  }
+  // ===== Loading state (inline) =====
 
   // ===== Estado info =====
   const estadoInfo = ESTADO_DOCUMENTO_MAP[estado] || { label: 'Borrador', color: 'default' };
 
   // ===== Encabezado del formulario =====
-  const documentoTieneTipos = tiposCache.length > 0;
   const renderEncabezado = () => (
     <Card className="paces-card" size="small" title="Datos Generales" extra={<EstadoTag estado={estado} periodo={data?.periodo} />} style={{ marginBottom: 16 }}>
       <Row gutter={16}>
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
-        <Row gutter={[16, 24]}>
-          {/* Fila 1: Sucursal (8) | Tipo Documento (8) | Concepto (8) */}
-          <Col xs={24} sm={12} lg={8}>
-            <div ref={sucursalRef}>
-              <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
-                <FloatingField label="Sucursal Contable">
-                  <Select
-                    allowClear
-                    showSearch
-                    optionFilterProp="children"
-                    placeholder=" "
-                    value={selectedSucursal?.sucursal ?? undefined}
-                    onChange={(val) => {
-                      const suc = sucursalesCache.find((s: any) => s.sucursal === val);
-                      setSelectedSucursal(suc || null);
-                    }}
-                  >
-                    {sucursalesCache.map((suc: any) => (
-                      <Select.Option key={suc.sucursal} value={suc.sucursal}>
-                        {toTitleCase(suc.nombre || '')}
-                      </Select.Option>
-                    ))}
-                  </Select>
-                </FloatingField>
-              </Form.Item>
-            </div>
-          </Col>
-
-          <Col xs={24} sm={12} lg={8}>
-            <div ref={tipoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <Form.Item name="tipo" required style={{ marginBottom: 0 }}>
-                  <FloatingField label="Tipo de Documento" required>
-                    <Select
-                      allowClear
-                      showSearch
-                      optionFilterProp="children"
+            <Row gutter={[16, 24]}>
+              {/* Fila 1: Entrada Almacén Ref + Concepto */}
+              <Col xs={24} sm={12} lg={9}>
+                <div ref={entradaRef}>
+                  <FloatingField label="Entrada Almacén Ref" externalValue={selectedEntrada?.noDocumento || ''}>
+                    <Input
                       placeholder=" "
-                      onChange={handleTipoSelect}
-                      onClear={handleTipoClear}
-                    >
-                      {tiposCache.map((t) => (
-                        <Select.Option key={t.codigo} value={t.codigo}>
-                          {toTitleCase(t.nombre)}
-                        </Select.Option>
-                      ))}
-                    </Select>
+                      value={selectedEntrada?.noDocumento || ''}
+                      readOnly
+                      suffix={<SearchOutlined style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />}
+                      onClick={() => setEntradaModalOpen(true)}
+                    />
+                  </FloatingField>
+                </div>
+                <Form.Item name="entradaAlmacen" hidden><Input /></Form.Item>
+              </Col>
+
+              <Col xs={24} sm={12} lg={15}>
+                <div ref={conceptoRef}>
+                  <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
+                    <Input
+                      placeholder=" "
+                      value={conceptoSearchText}
+                      readOnly
+                      suffix={<SearchOutlined style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />}
+                      onClick={() => setConceptoModalOpen(true)}
+                    />
+                  </FloatingField>
+                  <ConceptoInfoLabel concepto={selectedConcepto} />
+                </div>
+                <Form.Item name="concepto" hidden><Input /></Form.Item>
+              </Col>
+
+              {/* Fila 2: FechaDocumento + Suplidor */}
+              <Col xs={24} sm={12} lg={9}>
+                <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
+                  <FloatingField label="Fecha Documento" required>
+                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
                   </FloatingField>
                 </Form.Item>
-              </div>
-            </div>
-          </Col>
+              </Col>
+              <Col xs={24} sm={12} lg={15}>
+                <div ref={suplidorRef}>
+                  <Form.Item name="suplidor" required style={{ marginBottom: 0 }}>
+                    <FloatingField label="Suplidor" required>
+                      <Select
+                        allowClear
+                        showSearch
+                        optionFilterProp="children"
+                        placeholder=" "
+                        value={selectedEntidad?.codigo || undefined}
+                        onChange={(val) => {
+                          const ent = suplidoresCache.find((e) => e.codigo === val);
+                          setSelectedEntidad(ent || null);
+                          form.setFieldsValue({ diasCredito: ent?.diasCredito ?? 0 });
+                        }}
+                      >
+                        {suplidoresCache.map((ent) => (
+                          <Select.Option key={ent.codigo} value={ent.codigo}>
+                            {toTitleCase(ent.nombre)}{ent.identificacion ? ` (${ent.identificacion})` : ''}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </FloatingField>
+                  </Form.Item>
+                </div>
+              </Col>
 
-          <Col xs={24} sm={12} lg={8}>
-            <div ref={conceptoRef} style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-              <div style={{ flex: 1 }}>
-                <FloatingField label="Concepto" required externalValue={conceptoSearchText}>
-                  <Input
-                    placeholder=" "
-                    value={conceptoSearchText}
-                    readOnly
-                    disabled={documentoTieneTipos && !selectedTipo}
-                    suffix={
-                      <Space size={4}>
-                        <SearchOutlined onClick={() => setConceptoModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
-                        {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
-                      </Space>
-                    }
-                    onClick={() => setConceptoModalOpen(true)}
-                  />
-                </FloatingField>
-              </div>
-            </div>
-            <Form.Item name="concepto" hidden><Input /></Form.Item>
-            {conceptoInfo && (
-              <div style={{ marginTop: 4 }}>
-                <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-              </div>
-            )}
-          </Col>
+              {/* Fila 3: Sucursal Contable + Almacén */}
+              <Col xs={24} sm={12} lg={9}>
+                <div ref={sucursalRef}>
+                  <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
+                    <FloatingField label="Sucursal Contable">
+                      <Select
+                        allowClear
+                        showSearch
+                        optionFilterProp="children"
+                        placeholder=" "
+                        value={selectedSucursal?.sucursal ?? undefined}
+                        onChange={(val) => {
+                          const suc = sucursalesCache.find((s: any) => s.sucursal === val);
+                          setSelectedSucursal(suc || null);
+                        }}
+                      >
+                        {sucursalesCache.map((suc: any) => (
+                          <Select.Option key={suc.sucursal} value={suc.sucursal}>
+                            {toTitleCase(suc.nombre || '')}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </FloatingField>
+                  </Form.Item>
+                </div>
+              </Col>
 
-          {/* Fila 2: Fecha Documento (8) | Suplidor (16) */}
-          <Col xs={24} sm={12} lg={8}>
-            <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Fecha Documento" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-              </FloatingField>
-            </Form.Item>
-          </Col>
+              <Col xs={24} sm={12} lg={15}>
+                <div ref={almacenRef}>
+                  <Form.Item name="almacen" style={{ marginBottom: 0 }}>
+                    <FloatingField label="Almacén">
+                      <Select
+                        allowClear
+                        showSearch
+                        optionFilterProp="children"
+                        placeholder=" "
+                        onChange={(val) => {
+                          const alm = almacenesCache.find((a: any) => a.codigo === val);
+                          setSelectedAlmacen(alm || null);
+                        }}
+                      >
+                        {almacenesCache.map((alm: any) => (
+                          <Select.Option key={alm.codigo} value={alm.codigo}>
+                            {toTitleCase(alm.nombre)}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </FloatingField>
+                  </Form.Item>
+                </div>
+              </Col>
 
-          <Col xs={24} sm={12} lg={16}>
-            <div ref={suplidorRef}>
-              <Form.Item name="suplidor" required style={{ marginBottom: 0 }}>
-                <FloatingField label="Suplidor" required>
-                  <Select
-                    allowClear
-                    showSearch
-                    optionFilterProp="children"
-                    placeholder=" "
-                    value={selectedEntidad?.codigo || undefined}
-                    onChange={(val) => {
-                      const ent = suplidoresCache.find((e) => e.codigo === val);
-                      setSelectedEntidad(ent || null);
-                      form.setFieldsValue({ diasCredito: ent?.diasCredito ?? 0 });
-                    }}
-                  >
-                    {suplidoresCache.map((ent) => (
-                      <Select.Option key={ent.codigo} value={ent.codigo}>
-                        {toTitleCase(ent.nombre)}{ent.identificacion ? ` (${ent.identificacion})` : ''}
-                      </Select.Option>
-                    ))}
-                  </Select>
-                </FloatingField>
-              </Form.Item>
-            </div>
-          </Col>
+              {/* Fila 4: Campos rápidos (NCF, Referencia, Tasa) */}
+              <Col xs={24}>
+                <div style={{ marginBottom: 16 }}>
+                  <Space size={[8, 8]} wrap>
+                    <div ref={ncfRef}>
+                      {editingField === 'ncf' ? (
+                        <Input
+                          size="small"
+                          style={{ width: 200 }}
+                          placeholder="NCF"
+                          maxLength={19}
+                          autoFocus
+                          defaultValue={editingValueRef.current as string}
+                          onChange={(e) => { editingValueRef.current = e.target.value; }}
+                          onPressEnter={() => commitFieldEditor()}
+                          onBlur={() => commitFieldEditor()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                          }}
+                        />
+                      ) : ncfValue ? (
+                        <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
+                          NCF: {ncfValue} <EditOutlined />
+                        </Tag>
+                      ) : (
+                        <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
+                          <PlusOutlined /> NCF
+                        </Tag>
+                      )}
+                    </div>
 
-          {/* Fila 3: Entrada Ref (8) | Monto (8) | Bienes (4) | Servicio (4) */}
-          <Col xs={24} sm={12} lg={8}>
-            <FloatingField label="Entrada Almacén de Referencia">
-              <Input
-                placeholder=" "
-                value={selectedEntrada?.documento || ''}
-                readOnly
-                suffix={
-                  <Space size={4}>
-                    <SearchOutlined onClick={() => setEntradaModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
-                    {selectedEntrada && <ClearOutlined onClick={handleEntradaClear} style={{ cursor: 'pointer' }} />}
-                  </Space>
-                }
-                onClick={() => setEntradaModalOpen(true)}
-              />
-            </FloatingField>
-          </Col>
-
-          <Col xs={24} sm={12} lg={8}>
-            <Form.Item name="monto" style={{ marginBottom: 0 }}>
-              <FloatingField label="Monto">
-                <InputNumber
-                  style={{ width: '100%' }}
-                  min={0}
-                  step={0.01}
-                  precision={2}
-                  formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={(value) => value!.replace(/,/g, '')}
-                  placeholder=" "
-                />
-              </FloatingField>
-            </Form.Item>
-          </Col>
-
-          <Col xs={24} sm={12} lg={4}>
-            <FloatingField label="Bienes">
-              <InputNumber
-                style={{ width: '100%' }}
-                value={selectedEntrada ? detalles.reduce((s, d) => s + (d.subTotal || 0), 0) : 0}
-                readOnly
-                precision={2}
-                formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                parser={(value) => value!.replace(/,/g, '')}
-                placeholder=" "
-              />
-            </FloatingField>
-          </Col>
-
-          <Col xs={24} sm={12} lg={4}>
-            <FloatingField label="Servicio">
-              <InputNumber
-                style={{ width: '100%' }}
-                value={selectedEntrada ? 0 : (totales.total - totales.impuestos)}
-                readOnly
-                precision={2}
-                formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                parser={(value) => value!.replace(/,/g, '')}
-                placeholder=" "
-              />
-            </FloatingField>
-          </Col>
-
-          {/* Tags inline editables (NCF, Referencia, Tasa) */}
-          <Col xs={24}>
-            <div style={{ marginBottom: 16 }}>
-              <Space size={[8, 8]} wrap>
-                <div ref={ncfRef}>
-                  {/* NCF */}
-                  <div>
-                    {editingField === 'ncf' ? (
+                    {/* Referencia */}
+                    {editingField === 'referencia' ? (
                       <Input
                         size="small"
                         style={{ width: 200 }}
-                        placeholder="NCF"
-                        maxLength={19}
+                        placeholder="Referencia"
                         autoFocus
                         defaultValue={editingValueRef.current as string}
                         onChange={(e) => { editingValueRef.current = e.target.value; }}
@@ -1058,88 +1258,61 @@ const FacturaSuplidorFormulario: React.FC = () => {
                           if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
                         }}
                       />
-                    ) : ncfValue ? (
-                      <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                        NCF: {ncfValue} <EditOutlined />
+                    ) : refValue ? (
+                      <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
+                        Ref: {refValue} <EditOutlined />
                       </Tag>
                     ) : (
-                      <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                        <PlusOutlined /> NCF
+                      <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
+                        <PlusOutlined /> Referencia
                       </Tag>
                     )}
-                  </div>
+
+                    {/* Tasa */}
+                    {editingField === 'tasa' ? (
+                      <InputNumber
+                        size="small"
+                        style={{ width: 120 }}
+                        min={0}
+                        step={0.01}
+                        placeholder="Tasa"
+                        autoFocus
+                        defaultValue={editingValueRef.current as number}
+                        onChange={(val) => { editingValueRef.current = val ?? 1; }}
+                        onPressEnter={() => commitFieldEditor()}
+                        onBlur={() => commitFieldEditor()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
+                        }}
+                      />
+                    ) : tasaValue !== 1 ? (
+                      <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
+                        Tasa: {tasaValue} <EditOutlined />
+                      </Tag>
+                    ) : (
+                      <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
+                        <PlusOutlined /> Tasa
+                      </Tag>
+                    )}
+                  </Space>
                 </div>
+                {/* Hidden form items para campos rápidos */}
+                <Form.Item name="ncf" hidden><Input /></Form.Item>
+                <Form.Item name="referencia" hidden><Input /></Form.Item>
+                <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
+                <Form.Item name="moneda" hidden><Input /></Form.Item>
+              </Col>
 
-                {/* Referencia */}
-                {editingField === 'referencia' ? (
-                  <Input
-                    size="small"
-                    style={{ width: 200 }}
-                    placeholder="Referencia"
-                    autoFocus
-                    defaultValue={editingValueRef.current as string}
-                    onChange={(e) => { editingValueRef.current = e.target.value; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : refValue ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
-                    Ref: {refValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
-                    <PlusOutlined /> Referencia
-                  </Tag>
-                )}
-
-                {/* Tasa */}
-                {editingField === 'tasa' ? (
-                  <InputNumber
-                    size="small"
-                    style={{ width: 120 }}
-                    min={0}
-                    step={0.01}
-                    placeholder="Tasa"
-                    autoFocus
-                    defaultValue={editingValueRef.current as number}
-                    onChange={(val) => { editingValueRef.current = val ?? 1; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : tasaValue !== 1 ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
-                    Tasa: {tasaValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
-                    <PlusOutlined /> Tasa
-                  </Tag>
-                )}
-              </Space>
-            </div>
-            {/* Hidden form items para campos rápidos */}
-            <Form.Item name="ncf" hidden><Input /></Form.Item>
-            <Form.Item name="referencia" hidden><Input /></Form.Item>
-            <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
-            <Form.Item name="moneda" hidden><Input /></Form.Item>
-          </Col>
-
-          {/* Fila 4: Nota */}
-          <Col xs={24}>
-            <Form.Item name="nota" style={{ marginBottom: 0 }}>
-              <FloatingField label="Nota">
-                <TextArea rows={3} />
-              </FloatingField>
-            </Form.Item>
-          </Col>
-        </Row>
-      </Form>
+              {/* Fila 5: Nota */}
+              <Col xs={24}>
+                <Form.Item name="nota" style={{ marginBottom: 0 }}>
+                  <FloatingField label="Nota">
+                    <TextArea rows={3} />
+                  </FloatingField>
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
         </Col>
         <Col xs={24} xxl={6}>
           <div style={{ marginTop: 24 }}>
@@ -1174,10 +1347,10 @@ const FacturaSuplidorFormulario: React.FC = () => {
       fixed: 'left' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
+        <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div>{record.codigo || '-'}</div>
           {record.referencia && (
-            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto' }}>
               {record.referencia}
             </div>
           )}
@@ -1189,15 +1362,38 @@ const FacturaSuplidorFormulario: React.FC = () => {
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
-          <div>{toTitleCase(record.articulo || '')}</div>
-          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
-            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
-            {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
+      render: (_: any, _record: any, idx: number) => {
+        const fila = detalles[idx];
+        if (!fila) return null;
+        const docPermiteDesc = documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion ?? true;
+        if (docPermiteDesc) {
+          return (
+            <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <Input
+                size="small"
+                style={{ width: '100%' }}
+                value={fila.articulo || ''}
+                onChange={(e) => handleDetalleUpdateValue(fila.id, 'articulo', e.target.value)}
+              />
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between', marginTop: 'auto' }}>
+                {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+                {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <span style={{ flex: 1 }}>{toTitleCase(fila.articulo || '')}</span>
+            </div>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between', marginTop: 'auto' }}>
+              {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+              {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: 'Cantidad',
@@ -1209,25 +1405,31 @@ const FacturaSuplidorFormulario: React.FC = () => {
       shouldCellUpdate: (record: DetalleFacturaSuplidorDTO, prevRecord: DetalleFacturaSuplidorDTO) =>
         record.cantidad !== prevRecord.cantidad || record.medida?.nombre !== prevRecord.medida?.nombre,
       render: (_: any, _record: DetalleFacturaSuplidorDTO, idx: number) => (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
           <InputNumber
             size="small"
             style={{ width: '100%' }}
             styles={{ input: { textAlign: 'right' } }}
-            min={0.01}
+            min={0}
             step={0.01}
             precision={2}
             controls={false}
-            value={detalles[idx]?.cantidad}
-            onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'cantidad', val || 0)}
-            onBlur={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
-            onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0)}
+            defaultValue={detalles[idx]?.cantidad}
+            onChange={(val) => {
+              editValuesRef.current[`${detalles[idx].id}_cantidad`] = val || 0;
+            }}
+            onBlur={() => {
+              const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? detalles[idx]?.cantidad;
+              handleDetalleCalculate(detalles[idx].id, 'cantidad', val);
+            }}
+            onPressEnter={() => {
+              const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? detalles[idx]?.cantidad;
+              handleDetalleCalculate(detalles[idx].id, 'cantidad', val);
+            }}
           />
-          {detalles[idx]?.medida?.nombre && !sinOC && (
-            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
-              {toTitleCase(detalles[idx].medida!.nombre)}
-            </div>
-          )}
+          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto', minHeight: 18 }}>
+            {!sinOC && detalles[idx]?.medida?.nombre ? toTitleCase(detalles[idx].medida.nombre) : ''}
+          </div>
         </div>
       ),
     },
@@ -1240,30 +1442,30 @@ const FacturaSuplidorFormulario: React.FC = () => {
         const curId = record.medida?.idExterno;
         const hasMatch = medidasCache.some((m) => m.idExterno === curId);
         return (
-          <Select
-            size="small"
-            style={{ width: '100%' }}
-            key={medidasCache.length}
-            value={hasMatch ? curId : undefined}
-            onChange={(idExterno) => {
-              const medida = medidasCache.find((m) => m.idExterno === idExterno);
-              if (medida) {
-                handleDetalleCalculate(record.id, 'medida', {
-                  nombre: medida.nombre,
-                  codigo: medida.codigo,
-                  factor: medida.factor,
-                  idExterno: medida.idExterno,
-                });
-              }
-            }}
-          >
-            {medidasCache.map((m) => (
-              <Select.Option key={m.idExterno ?? 0} value={m.idExterno}>
-                {toTitleCase(m.nombre || '')}
-              </Select.Option>
-            ))}
-          </Select>
-        );
+        <Select
+          size="small"
+          style={{ width: '100%' }}
+          key={medidasCache.length}
+          value={hasMatch ? curId : undefined}
+          onChange={(idExterno) => {
+            const medida = medidasCache.find((m) => m.idExterno === idExterno);
+            if (medida) {
+              handleDetalleCalculate(record.id, 'medida', {
+                nombre: medida.nombre,
+                codigo: medida.codigo,
+                factor: medida.factor,
+                idExterno: medida.idExterno,
+              });
+            }
+          }}
+        >
+          {medidasCache.map((m) => (
+            <Select.Option key={m.idExterno ?? 0} value={m.idExterno}>
+              {toTitleCase(m.nombre || '')}
+            </Select.Option>
+          ))}
+        </Select>
+      );
       },
     }] : []),
     {
@@ -1274,57 +1476,47 @@ const FacturaSuplidorFormulario: React.FC = () => {
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
-      shouldCellUpdate: (record: DetalleFacturaSuplidorDTO, prevRecord: DetalleFacturaSuplidorDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
-      render: (_: any, record: DetalleFacturaSuplidorDTO, idx: number) => {
-        const costoBase = Number(detalles[idx]?.costo) || 0;
-        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
-        const factor = Number(detalles[idx]?.medida?.factor) || 1;
+      shouldCellUpdate: (record: DetalleFacturaSuplidorDTO, prevRecord: DetalleFacturaSuplidorDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor || record.modificaPrecio !== prevRecord.modificaPrecio,
+      render: (_: any, _record: DetalleFacturaSuplidorDTO, idx: number) => {
+        const fila = detalles[idx];
+        if (!fila) return null;
+        const costoBase = Number(fila.costo) || 0;
+        const pctDesc = Number(fila.porcentajeDescuento) || 0;
+        const factor = Number(fila.medida?.factor) || 1;
         const costoConDescuento = costoBase - ((costoBase * pctDesc) / 100);
         const costoUnitario = costoConDescuento / factor;
+        const docPermiteEditar = documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio ?? true;
+        if (docPermiteEditar) {
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
+              <InputNumber
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                step={0.01}
+                precision={2}
+                controls={false}
+                value={fila.costo}
+                onChange={(val) => handleDetalleUpdateValue(fila.id, 'costo', val || 0)}
+                onBlur={() => handleDetalleCalculate(fila.id, 'costo', fila.costo || 0)}
+                onPressEnter={() => handleDetalleCalculate(fila.id, 'costo', fila.costo || 0)}
+              />
+              <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
+                {formatNumber(costoUnitario)} × {factor}
+              </div>
+            </div>
+          );
+        }
         return (
-          <div>
-            <InputNumber
-              size="small"
-              style={{ width: '100%' }}
-              styles={{ input: { textAlign: 'right' } }}
-              min={0}
-              step={0.01}
-              precision={2}
-              controls={false}
-              value={detalles[idx]?.costo}
-              onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'costo', val || 0)}
-              onBlur={() => handleDetalleCalculate(detalles[idx].id, 'costo', detalles[idx]?.costo || 0)}
-              onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'costo', detalles[idx]?.costo || 0)}
-            />
-            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
+            <div style={{ textAlign: 'right', fontWeight: 500 }}>{formatCurrency(costoBase)}</div>
+            <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
               {formatNumber(costoUnitario)} × {factor}
             </div>
           </div>
         );
       },
-    },
-    {
-      title: '% Desc',
-      key: 'porcentajeDescuento',
-      width: 90,
-      align: 'right' as const,
-      onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, _record: DetalleFacturaSuplidorDTO, idx: number) => (
-        <InputNumber
-          size="small"
-          style={{ width: '100%' }}
-          min={0}
-          max={100}
-          step={0.01}
-          precision={2}
-          controls={false}
-          value={detalles[idx]?.porcentajeDescuento}
-          onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'porcentajeDescuento', val || 0)}
-          onBlur={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
-          onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0)}
-          addonAfter="%"
-        />
-      ),
     },
     {
       title: 'Descuento',
@@ -1333,8 +1525,34 @@ const FacturaSuplidorFormulario: React.FC = () => {
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
-      render: (_: any, record: DetalleFacturaSuplidorDTO) => (
-        <Text>{formatNumber(record.descuento || 0)}</Text>
+      render: (_: any, _record: any, idx: number) => (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
+          <InputNumber
+            size="small"
+            style={{ width: '100%' }}
+            styles={{ input: { textAlign: 'right' } }}
+            min={0}
+            max={100}
+            step={0.01}
+            precision={2}
+            controls={false}
+            defaultValue={detalles[idx]?.porcentajeDescuento}
+            onChange={(val) => {
+              editValuesRef.current[`${detalles[idx].id}_descuento`] = val || 0;
+            }}
+            onBlur={() => {
+              const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
+              handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
+            }}
+            onPressEnter={() => {
+              const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
+              handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
+            }}
+          />
+          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, minHeight: 18 }}>
+            {formatNumber(detalles[idx]?.descuento || 0)}
+          </div>
+        </div>
       ),
     },
     {
@@ -1346,7 +1564,10 @@ const FacturaSuplidorFormulario: React.FC = () => {
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaSuplidorDTO) => (
-        <Text>{formatNumber(record.subTotal || 0)}</Text>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <Text>{formatNumber(record.subTotal || 0)}</Text>
+          <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto' }}>&nbsp;</div>
+        </div>
       ),
     },
     {
@@ -1357,11 +1578,11 @@ const FacturaSuplidorFormulario: React.FC = () => {
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: DetalleFacturaSuplidorDTO) => (
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div>{formatNumber(record.impuestos || 0)}</div>
-          {record.impuesto?.nombre && (
-            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5 }}>{toTitleCase(record.impuesto.nombre)}</div>
-          )}
+          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto', minHeight: 18 }}>
+            {record.impuesto?.nombre ? toTitleCase(record.impuesto.nombre) : ''}
+          </div>
         </div>
       ),
     },
@@ -1373,7 +1594,10 @@ const FacturaSuplidorFormulario: React.FC = () => {
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleFacturaSuplidorDTO) => (
-        <Text strong>{formatNumber(record.total || 0)}</Text>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <Text strong>{formatNumber(record.total || 0)}</Text>
+          <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto' }}>&nbsp;</div>
+        </div>
       ),
     },
     {
@@ -1381,33 +1605,11 @@ const FacturaSuplidorFormulario: React.FC = () => {
       key: 'acciones',
       width: 50,
       onCell: () => ({ style: { paddingRight: 8 } }),
-      render: (_: any, _record: DetalleFacturaSuplidorDTO, idx: number) => {
-        const items = [
-          {
-            key: 'eliminar',
-            label: 'Eliminar',
-            icon: <DeleteOutlined />,
-            danger: true,
-            onClick: () => handleEliminarFila(detalles[idx].id),
-          },
-        ];
-
-        if (detalles[idx]?.tieneVencimiento) {
-          items.unshift({
-            key: 'vencimiento',
-            label: detalles[idx].fechaVencimiento ? `Venc: ${formatDate(detalles[idx].fechaVencimiento!)}` : 'Fecha Vencimiento',
-            icon: <CalendarOutlined />,
-            danger: false,
-            onClick: () => setFechaVencimientoModal({ open: true, detalleId: detalles[idx].id }),
-          });
-        }
-
-        return (
-          <Dropdown menu={{ items }} trigger={['click']}>
-            <Button type="text" size="small" icon={<MoreOutlined />} />
-          </Dropdown>
-        );
-      },
+      render: (_: any, _record: DetalleFacturaSuplidorDTO, idx: number) => (
+        <Tooltip title="Quitar producto">
+          <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={() => handleEliminarFila(detalles[idx].id)} />
+        </Tooltip>
+      ),
     },
   ];
 
@@ -1487,15 +1689,15 @@ const FacturaSuplidorFormulario: React.FC = () => {
         const res = _res as any;
         setData(res); setDetalles(res.detalles || []);
         setAsientosLocales(res.asientos || []);
-        setImpuestosFactura(res.impuestosFactura || []);
-        setSelectedTipo(res.tipo || null); setSelectedConcepto(res.concepto || null);
+        setImpuestosFactura(normalizarImpuestos(res.impuestosFactura));
+        setSelectedConcepto(res.concepto || null);
         setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
         setSelectedEntidad(res.suplidor || res.entidad || null);
         setSelectedEntrada(res.entradaAlmacen || null);
         const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
         form.setFieldsValue({
-          tipo: res.tipo?.codigo || '', concepto: res.concepto?.codigo || '',
-          suplidor: res.suplidor?.codigo || res.entidad?.codigo || '',
+          concepto: res.concepto?.codigo || '',
+          suplidor: res.suplidor?.codigo || res.entidad?.codigo || res.codigoEntidad || '',
           fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
           ncf: res.ncf || '', referencia: res.referencia || '',
           moneda: res.moneda?.nombre || '', monto: res.total || 0,
@@ -1509,6 +1711,38 @@ const FacturaSuplidorFormulario: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, form, mode]);
+
+  const handleGenerarAsientos = useCallback(async () => {
+    if (sucursalActiva === undefined) return;
+    setGenerandoAsientos(true);
+    try {
+      const dto = construirDTO();
+      const asientosGenerados = await facturaSuplidorApi.generarAsientos(sucursalActiva, dto);
+      setAsientosLocales(asientosGenerados);
+      message.success(`Se generaron ${asientosGenerados.length} asientos`);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al generar asientos');
+      message.error(msg);
+    } finally {
+      setGenerandoAsientos(false);
+    }
+  }, [sucursalActiva, construirDTO]);
+
+  const handleAgregarAsientoManual = (cuenta: any) => {
+    const nuevoAsiento = {
+      id: Date.now(),
+      cuentaContable: { noCuenta: cuenta.noCuenta, nombre: cuenta.nombre },
+      monto: 0,
+      tipoAsiento: 'D',
+      generado: false,
+      descripcion: '',
+    };
+    setAsientosLocales((prev: any[]) => [...prev, nuevoAsiento]);
+  };
+
+  if (loading) {
+    return <LoadingSpinner mensaje="Cargando documento..." />;
+  }
 
   return (
     <div>
@@ -1534,7 +1768,6 @@ const FacturaSuplidorFormulario: React.FC = () => {
         onSelect={handleConceptoSelect}
         sucursal={sucursalActiva}
         documento="RDE"
-        tipo={selectedTipo?.codigo}
         tipoEntidad="SUP"
       />
       <BuscarProductoModal
@@ -1567,6 +1800,25 @@ const FacturaSuplidorFormulario: React.FC = () => {
         }))}
       />
 
+      <ScannerModal
+        open={scannerModalOpen}
+        onClose={() => setScannerModalOpen(false)}
+        onSelect={(producto: any) => {
+          handleProductoSelect(producto);
+          setScannerModalOpen(false);
+        }}
+      />
+
+      <BuscarCuentaContableModal
+        open={cuentaModalAsientoOpen}
+        onClose={() => setCuentaModalAsientoOpen(false)}
+        onSelect={(cuenta) => {
+          handleAgregarAsientoManual(cuenta);
+          setCuentaModalAsientoOpen(false);
+        }}
+        sucursal={sucursalActiva}
+      />
+
       {isLarge ? (
         /* === DESKTOP LAYOUT (>= xxl) === */
         <Row gutter={16}>
@@ -1585,18 +1837,12 @@ const FacturaSuplidorFormulario: React.FC = () => {
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
                         <Space>
-                          <Button
-                            type="dashed"
-                            icon={<PlusOutlined />}
-                            onClick={handleAgregarFila}
-                          >
-                            Agregar fila
+                          <Button type="primary" icon={<PlusOutlined />} onClick={() => setProductoModalOpen(true)}>
+                            Agregar producto
                           </Button>
-                          <Button
-                            icon={<SearchOutlined />}
-                            onClick={() => setProductoModalOpen(true)}
-                          >
-                            Buscar Producto
+                          <Button icon={<BarcodeOutlined />} onClick={() => setScannerModalOpen(true)} />
+                          <Button icon={<PercentageOutlined />} onClick={handleDescuentoGlobal}>
+                            Dto. global
                           </Button>
                         </Space>
                         <Input.Search
@@ -1607,6 +1853,12 @@ const FacturaSuplidorFormulario: React.FC = () => {
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
+                      {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false || data?.documento?.modificaPrecio === false || data?.documento?.modificaDescripcion === false) && detalles.length > 0 && (
+                        <CamposRestringidosAlert
+                          modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+                          modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+                        />
+                      )}
                       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(event.active.id as number); }} onDragEnd={handleDragEnd}>
                         <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                         <Table
@@ -1670,11 +1922,25 @@ const FacturaSuplidorFormulario: React.FC = () => {
                 {
                   key: 'asientos',
                   label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
-                  children: (
-                    <AsientosContableEditables
-                      asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
-                      onChange={setAsientosLocales}
-                      editable={mode === 'editar' || mode === 'crear'}
+                  children: permisoModificarAsientos ? (
+                    <>
+                      <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
+                        <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)}>
+                          Agregar asiento manual
+                        </Button>
+                      </div>
+                      <AsientosContableEditables
+                        asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
+                        onChange={setAsientosLocales}
+                        editable={true}
+                        scroll={{ x: 600 }}
+                        onGenerar={handleGenerarAsientos}
+                        generando={generandoAsientos}
+                      />
+                    </>
+                  ) : (
+                    <AsientosContableTable
+                      asientos={data?.asientos || []}
                       scroll={{ x: 600 }}
                     />
                   ),
@@ -1707,18 +1973,12 @@ const FacturaSuplidorFormulario: React.FC = () => {
                   <>
                     <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
                       <Space>
-                        <Button
-                          type="dashed"
-                          icon={<PlusOutlined />}
-                          onClick={handleAgregarFila}
-                        >
-                          Agregar fila
+                        <Button type="primary" icon={<PlusOutlined />} onClick={() => setProductoModalOpen(true)}>
+                          Agregar producto
                         </Button>
-                        <Button
-                          icon={<SearchOutlined />}
-                          onClick={() => setProductoModalOpen(true)}
-                        >
-                          Buscar Prod.
+                        <Button icon={<BarcodeOutlined />} onClick={() => setScannerModalOpen(true)} />
+                        <Button icon={<PercentageOutlined />} onClick={handleDescuentoGlobal}>
+                          Dto. global
                         </Button>
                       </Space>
                       <Input.Search
@@ -1729,6 +1989,12 @@ const FacturaSuplidorFormulario: React.FC = () => {
                         onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                       />
                     </div>
+                    {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false || data?.documento?.modificaPrecio === false || data?.documento?.modificaDescripcion === false) && detalles.length > 0 && (
+                      <CamposRestringidosAlert
+                        modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+                        modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+                      />
+                    )}
                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(event.active.id as number); }} onDragEnd={handleDragEnd}>
                       <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                     <Table
@@ -1739,6 +2005,13 @@ const FacturaSuplidorFormulario: React.FC = () => {
                       pagination={false}
                       scroll={{ x: 1300 }}
                       components={{ body: { row: SortableRow } }}
+                      locale={{
+                        emptyText: (
+                          <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Empty description="Sin registros" />
+                          </div>
+                        ),
+                      }}
                     />
                     </SortableContext>
                     <DragOverlay>
@@ -1785,11 +2058,25 @@ const FacturaSuplidorFormulario: React.FC = () => {
               {
                 key: 'asientos',
                 label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
-                children: (
-                  <AsientosContableEditables
-                    asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
-                    onChange={setAsientosLocales}
-                    editable={mode === 'editar' || mode === 'crear'}
+                children: permisoModificarAsientos ? (
+                  <>
+                    <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
+                      <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)}>
+                        Agregar asiento manual
+                      </Button>
+                    </div>
+                    <AsientosContableEditables
+                      asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
+                      onChange={setAsientosLocales}
+                      editable={true}
+                      scroll={{ x: 600 }}
+                      onGenerar={handleGenerarAsientos}
+                      generando={generandoAsientos}
+                    />
+                  </>
+                ) : (
+                  <AsientosContableTable
+                    asientos={data?.asientos || []}
                     scroll={{ x: 600 }}
                   />
                 ),
@@ -1826,19 +2113,17 @@ const FacturaSuplidorFormulario: React.FC = () => {
       {(mode === 'crear' || esBorrador) && (
         <FacturaSuplidorGuide
           mode={mode}
-          tipo={selectedTipo}
           concepto={selectedConcepto}
           suplidor={selectedEntidad}
+          almacen={selectedAlmacen}
           detallesCount={detalles.length}
           ncf={ncfValue}
-          tipoRef={tipoRef}
           conceptoRef={conceptoRef}
           suplidorRef={suplidorRef}
+          almacenRef={almacenRef}
           agregarFilaRef={agregarFilaRef}
           ncfRef={ncfRef}
-          sucursalRef={sucursalRef}
           suplidoresDisponibles={suplidoresCache.length > 0}
-          sucursal={selectedSucursal}
         />
       )}
     </div>
@@ -1848,19 +2133,17 @@ const FacturaSuplidorFormulario: React.FC = () => {
 // ===== Componente Guía paso a paso para FRDE =====
 interface FacturaSuplidorGuideProps {
   mode: 'crear' | 'editar';
-  tipo: any | null;
   concepto: any | null;
   suplidor: any | null;
+  almacen: any | null;
   detallesCount: number;
   ncf?: string;
-  tipoRef: React.RefObject<HTMLDivElement | null>;
   conceptoRef: React.RefObject<HTMLDivElement | null>;
   suplidorRef: React.RefObject<HTMLDivElement | null>;
+  almacenRef: React.RefObject<HTMLDivElement | null>;
   agregarFilaRef: React.RefObject<HTMLDivElement | null>;
   ncfRef: React.RefObject<HTMLDivElement | null>;
-  sucursalRef: React.RefObject<HTMLDivElement | null>;
   suplidoresDisponibles?: boolean;
-  sucursal: any | null;
 }
 
 interface GuideStep {
@@ -1872,19 +2155,17 @@ interface GuideStep {
 
 const FacturaSuplidorGuide: React.FC<FacturaSuplidorGuideProps> = ({
   mode: _mode,
-  tipo,
   concepto,
   suplidor,
+  almacen,
   detallesCount,
   ncf,
-  tipoRef,
   conceptoRef,
   suplidorRef,
+  almacenRef,
   agregarFilaRef,
   ncfRef,
-  sucursalRef,
   suplidoresDisponibles,
-  sucursal,
 }) => {
   const [open, setOpen] = useState(false);
   const dismissedStepRef = useRef<string | null>(null);
@@ -1893,53 +2174,46 @@ const FacturaSuplidorGuide: React.FC<FacturaSuplidorGuideProps> = ({
   const getCurrentStep = useCallback((): GuideStep | null => {
     const steps: GuideStep[] = [
       {
-        key: 'sucursal',
-        title: 'Paso 1: Sucursal',
-        description: 'Seleccione la sucursal contable.',
-        target: () => sucursalRef.current,
-      },
-      {
-        key: 'tipo',
-        title: 'Paso 2: Tipo de Documento',
-        description: 'Debe seleccionar el tipo de documento de la factura. Los tipos definen ciertas acciones del documento.',
-        target: () => tipoRef.current,
-      },
-      {
         key: 'concepto',
-        title: 'Paso 3: Concepto',
+        title: 'Paso 1: Concepto',
         description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento.',
         target: () => conceptoRef.current,
       },
       {
         key: 'suplidor',
-        title: 'Paso 4: Suplidor',
+        title: 'Paso 2: Suplidor',
         description: 'Seleccione el suplidor de la factura.',
         target: () => suplidorRef.current,
       },
       {
+        key: 'almacen',
+        title: 'Paso 3: Almacén',
+        description: 'Seleccione el almacén de destino.',
+        target: () => almacenRef.current,
+      },
+      {
         key: 'productos',
-        title: 'Paso 5: Productos',
+        title: 'Paso 4: Productos',
         description: 'Agregue productos al documento usando el botón "Agregar fila" o "Buscar Producto".',
         target: () => agregarFilaRef.current,
       },
       {
         key: 'ncf',
-        title: 'Paso 6: NCF',
+        title: 'Paso 5: NCF',
         description: 'Debe digitar el NCF de la factura para poder continuar.',
         target: () => ncfRef.current,
       },
     ];
 
     // Lógica de prioridad
-    if (!sucursal) return steps[0];
-    if (!tipo) return steps[1];
-    if (!concepto) return steps[2];
-    if (suplidoresDisponibles && !suplidor) return steps[3];
-    if (detallesCount === 0) return steps[4];
-    if (!ncf) return steps[5];
+    if (!concepto) return steps[0];
+    if (suplidoresDisponibles && !suplidor) return steps[1];
+    if (!almacen) return steps[2];
+    if (detallesCount === 0) return steps[3];
+    if (!ncf) return steps[4];
 
     return null;
-  }, [tipo, concepto, suplidor, detallesCount, ncf, suplidoresDisponibles, tipoRef, conceptoRef, suplidorRef, agregarFilaRef, ncfRef, sucursal, sucursalRef]);
+  }, [concepto, suplidor, almacen, detallesCount, ncf, suplidoresDisponibles, conceptoRef, suplidorRef, almacenRef, agregarFilaRef, ncfRef]);
 
   currentStepRef.current = getCurrentStep();
 
@@ -1969,5 +2243,10 @@ const FacturaSuplidorGuide: React.FC<FacturaSuplidorGuideProps> = ({
   );
 };
 
-export default FacturaSuplidorFormulario;
+const FacturaSuplidorFormularioConErrorBoundary: React.FC = () => (
+  <FacturaSuplidorErrorBoundary>
+    <FacturaSuplidorFormulario />
+  </FacturaSuplidorErrorBoundary>
+);
+export default FacturaSuplidorFormularioConErrorBoundary;
 

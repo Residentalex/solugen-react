@@ -27,6 +27,7 @@ import FormularioToolbar from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber } from '../../utils/formats';
 
 const { TextArea } = Input;
@@ -47,6 +48,7 @@ const SolicitudPagoFormulario: React.FC = () => {
   const { screenCode, documentCode } = useScreenConfig('FSPA');
   const [form] = Form.useForm();
   const navigationConfirmedRef = useRef(false);
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -224,7 +226,6 @@ const SolicitudPagoFormulario: React.FC = () => {
     setSelectedConcepto(concepto);
     setConceptoSearchText('');
     setSelectedEntidad(null);
-    form.setFieldsValue({ concepto: concepto.codigo, entidad: undefined });
 
     // Cargar entidades según concepto
     if (concepto.codigo) {
@@ -233,14 +234,34 @@ const SolicitudPagoFormulario: React.FC = () => {
 
     // === ConfigurarMoneda ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
-    form.setFieldsValue({
-      moneda: monedaObj.nombre,
-      tasa: monedaObj.tasa ?? 1,
-    });
     setData((prev) => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaObj };
     });
+
+    form.setFieldsValue({
+      concepto: concepto.codigo,
+      entidad: undefined,
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.tasa ?? 1,
+    });
+
+    // === NoImpuesto: si el concepto no acepta impuestos, limpiarlos ===
+    const prevNoImpuesto = selectedConcepto?.noImpuesto;
+    if (concepto.noImpuesto) {
+      const impuestosActual = form.getFieldValue('impuestos') || 0;
+      if (impuestosActual > 0) {
+        impuestosBackupRef.current.set(0, { impuesto: undefined, porcentajeImpuesto: impuestosActual });
+        message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+        form.setFieldsValue({ impuestos: 0 });
+      }
+    } else if (prevNoImpuesto && !concepto.noImpuesto) {
+      const saved = impuestosBackupRef.current.get(0);
+      if (saved) {
+        form.setFieldsValue({ impuestos: saved.porcentajeImpuesto });
+        impuestosBackupRef.current = new Map();
+      }
+    }
   };
 
   const handleConceptoClear = () => {
@@ -474,6 +495,7 @@ const SolicitudPagoFormulario: React.FC = () => {
                 <Form.Item name="concepto" hidden>
                   <Input />
                 </Form.Item>
+                <ConceptoInfoLabel concepto={selectedConcepto} />
               </Col>
 
               <Col xs={24} sm={12} lg={6}>

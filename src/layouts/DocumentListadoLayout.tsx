@@ -35,6 +35,7 @@ interface DocumentListadoLayoutProps<T> {
     opcionesEstado?: { value: string | number; label: string }[];
     onFiltrosAplicar?: (filtros: any) => void;
     searchPlaceholder?: string;
+    searchDefaultValue?: string;
     onSearch: (value: string) => void;
     pageSize: number;
     onPageSizeChange: (value: number) => void;

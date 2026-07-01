@@ -26,7 +26,6 @@ import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { facturaClienteApi } from '../../api/facturaClienteApi';
-import { obtenerNombreSucursal } from '../../utils/sucursalEnumMapper';
 import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
@@ -41,6 +40,7 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
@@ -356,9 +356,8 @@ const FacturaClienteDetalle: React.FC = () => {
     if (!id || !data) return;
     setSaving(true);
     try {
-      const origen = obtenerNombreSucursal(data.codigoSucursal || String(sucursalActiva));
       const documento = `${data.documento.codigo}-${data.noDocumento}`;
-      await facturaClienteApi.desaplicar(origen, documento);
+      await facturaClienteApi.desaplicar(sucursalActiva, documento);
       message.success('Documento desaplicado exitosamente');
       setModalDesaplicarOpen(false);
       handleRefresh();
@@ -661,7 +660,7 @@ const FacturaClienteDetalle: React.FC = () => {
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Sucursal" span={3}><SucursalField codigoSucursal={documentoActivo.codigoSucursal} /></Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Tipo">
                   {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
@@ -782,7 +781,7 @@ const FacturaClienteDetalle: React.FC = () => {
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
               <Descriptions.Item label="Sucursal"><SucursalField codigoSucursal={documentoActivo.codigoSucursal} /></Descriptions.Item>
               <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
-              <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}</Descriptions.Item>
+              <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
               <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
               <Descriptions.Item label="Tipo">
                 {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Descriptions, Table, Tabs, Tag, Row, Col, Typography, message,
 } from 'antd';
-import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { productoApi } from '../../api/productoApi';
 import type { ProductoDTO, ImpuestoProductoDTO } from '../../types/productos';
@@ -43,7 +43,7 @@ function formatDate(val: string): string {
 const ProductoDetalle: React.FC = () => {
   const { codigo } = useParams<{ codigo: string }>();
   const navigate = useNavigate();
-  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const sucursalProductos = useCompanyStore((s) => s.data.sucursalProductos);
 
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
@@ -61,7 +61,7 @@ const ProductoDetalle: React.FC = () => {
     if (!codigo) return;
     const abortController = new AbortController();
     setLoading(true);
-    productoApi.obtenerDetalle(sucursalActiva, codigo, abortController.signal)
+    productoApi.obtenerDetalle(sucursalProductos, codigo, abortController.signal)
       .then((res) => {
         if (abortController.signal.aborted) return;
         if (!res) {
@@ -81,14 +81,14 @@ const ProductoDetalle: React.FC = () => {
         if (!abortController.signal.aborted) setLoading(false);
       });
     return () => abortController.abort();
-  }, [codigo, sucursalActiva, setPageTitleOverride]);
+  }, [codigo, sucursalProductos, setPageTitleOverride]);
 
   const handleRefresh = () => {
     if (!codigo) return;
     setLoadingError(false);
     setLoading(true);
     const abortController = new AbortController();
-    productoApi.obtenerDetalle(sucursalActiva, codigo, abortController.signal)
+    productoApi.obtenerDetalle(sucursalProductos, codigo, abortController.signal)
       .then((res) => {
         if (abortController.signal.aborted) return;
         if (!res) {
@@ -198,7 +198,7 @@ const ProductoDetalle: React.FC = () => {
       mensajeError="Error al cargar detalle de producto"
       onRecargar={handleRefresh}
       dataDisponible={!!data}
-      onEditar={() => navigate('/MProducto')}
+      onEditar={() => navigate(`/MProducto/${codigo}/editar`)}
     >
       <Row gutter={16}>
         {/* Columna izquierda - Datos Generales + Configuración */}

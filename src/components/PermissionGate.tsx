@@ -24,6 +24,19 @@ const PermissionGate: React.FC<PermissionGateProps> = ({ codigoPantalla, accion,
     );
     if (!permiso) return null;
 
+    // Si el permiso tiene pantallaId > 0, verificar que coincida con la pantalla actual
+    if (permiso.pantallaId !== undefined && permiso.pantallaId > 0) {
+      const codigo = codigoPantalla || activeModule;
+      if (codigo) {
+        const pantallaActual = usuario.pantallas.find(
+          (p) => p.codigo?.toUpperCase() === codigo?.toUpperCase()
+        );
+        if (!pantallaActual || pantallaActual.id !== permiso.pantallaId) {
+          return null;
+        }
+      }
+    }
+
     // BOOLEANO: valor debe ser true
     // NUMERICO: valorNumerico debe ser > 0
     const activo = permiso.tipoValor === 'NUMERICO'

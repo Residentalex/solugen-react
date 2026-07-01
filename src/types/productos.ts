@@ -113,6 +113,8 @@ export interface ProductoDTO {
   datosExtra?: DatosExtraProductoDTO | null;
   requiereFechaVenc?: boolean;
   diasVencimiento?: number;
+  modificaPrecio?: boolean;
+  modificaDescripcion?: boolean;
 }
 
 export interface ResultadoImportacionDTO {

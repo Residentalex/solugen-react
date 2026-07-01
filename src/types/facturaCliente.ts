@@ -83,6 +83,8 @@ export interface DetalleFacturaClienteDTO {
   fechaVencimiento?: string;
   tieneVencimiento: boolean;
   componentes?: DetalleFacturaClienteDTO[];
+  modificaPrecio?: boolean;
+  modificaDescripcion?: boolean;
 }
 
 export interface FacturaClienteDTO {

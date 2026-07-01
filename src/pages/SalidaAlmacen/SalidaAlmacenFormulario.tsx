@@ -49,10 +49,13 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { SalidaAlmacenGuide } from './SalidaAlmacenGuide';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
+import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -115,6 +118,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
   const { screenCode, documentCode } = useScreenConfig('FSAP');
+  const documentoConfig = useDocumentoConfig(sucursalActiva, documentCode);
   const monedaDefault = getMonedaSucursalActiva();
 
   // ===== States =====
@@ -128,7 +132,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
   const [selectedEntidad, setSelectedEntidad] = useState<SuplidorDTO | null>(null);
   const [selectedAlmacen, setSelectedAlmacen] = useState<AlmacenDTO | null>(null);
-  const [conceptoInfo, setConceptoInfo] = useState<string>('');
+
   const [productoModalOpen, setProductoModalOpen] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -142,6 +146,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
 
   const editValuesRef = useRef<Record<string, any>>({});
   const tasaAnteriorRef = useRef<number>(1);
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
   const navigationConfirmedRef = useFormularioNavigation();
 
   // Refs para la guía
@@ -545,32 +550,53 @@ const SalidaAlmacenFormulario: React.FC = () => {
     setSelectedConcepto(concepto);
     setConceptoSearchText(`${concepto.codigo || ''} - ${toTitleCase(concepto.nombre)}`);
     setEditingField(null);
-    form.setFieldsValue({ concepto: concepto.codigo });
 
     // Cargar suplidores
     salidaAlmacenApi.obtenerSuplidores(sucursalActiva)
       .then((ents) => setSuplidoresCache(ents))
       .catch(() => {});
 
-    // Mostrar avisos si el concepto tiene flags especiales
-    const infoParts: string[] = [];
-    if (concepto.noImpuesto) infoParts.push(' * No Impuestos * ');
-    if (concepto.noAsientos) infoParts.push(' * No Asientos * ');
-    if (concepto.activo === false) infoParts.push(' * Concepto Inactivo * ');
-    if (concepto.noActualizaCostos) infoParts.push(' * No Actualiza Costos * ');
-    setConceptoInfo(infoParts.join(''));
+    // === ValidarImpuestosProducto (con backup/restore) ===
+    const prevNoImpuesto = selectedConcepto?.noImpuesto;
 
-    // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
-    if (concepto.noImpuesto && detalles.some((d) => (d.porcentajeImpuesto || 0) > 0)) {
-      message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
-      setDetalles((prev) =>
-        prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0 }))
-      );
+    if (concepto.noImpuesto) {
+      // Guardar backup de impuestos actuales antes de limpiarlos
+      const hayImpuestos = detalles.some((d) => (d.porcentajeImpuesto || 0) > 0);
+      if (hayImpuestos) {
+        const backup = new Map<number, { impuesto?: any; porcentajeImpuesto: number }>();
+        detalles.forEach((d) => {
+          if ((d.porcentajeImpuesto || 0) > 0) {
+            backup.set(d.id, { impuesto: d.impuesto, porcentajeImpuesto: d.porcentajeImpuesto || 0 });
+          }
+        });
+        impuestosBackupRef.current = backup;
+
+        message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+        setDetalles((prev) =>
+          prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
+        );
+      }
+    } else if (prevNoImpuesto && !concepto.noImpuesto) {
+      // Restaurar impuestos desde backup
+      const backup = impuestosBackupRef.current;
+      if (backup.size > 0) {
+        setDetalles((prev) =>
+          prev.map((d) => {
+            const saved = backup.get(d.id);
+            if (saved) {
+              return calcularFila({ ...d, impuesto: saved.impuesto, porcentajeImpuesto: saved.porcentajeImpuesto });
+            }
+            return d;
+          })
+        );
+        impuestosBackupRef.current = new Map();
+      }
     }
 
     // === ConfigurarMoneda ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
+      concepto: concepto.codigo,
       moneda: monedaObj.nombre,
       tasa: monedaObj.tasa ?? 1,
     });
@@ -692,19 +718,22 @@ const SalidaAlmacenFormulario: React.FC = () => {
       const nuevoId = -(detalles.length + 1);
       setDetalles((prev) => {
         const filled: DetalleSalidaAlmacenDTO = {
-          ...nuevaFila,
-          id: nuevoId,
-          codigo: producto.codigo,
-          articulo: producto.articulo,
-          referencia: producto.referencia || '',
-          costo: producto.costo || 0,
-          familia: producto.familia,
-          medida: producto.medida,
-          impuesto: producto.impuesto,
-          porcentajeImpuesto: producto.impuesto?.porcentaje || 0,
-          tieneVencimiento: producto.tieneVencimiento,
+        ...nuevaFila,
+        id: nuevoId,
+        codigo: producto.codigo,
+        articulo: producto.articulo,
+        referencia: producto.referencia || '',
+        costo: producto.costo || 0,
+        cantidad: 1,
+        familia: producto.familia,
+        medida: producto.medida,
+        impuesto: producto.impuesto,
+        porcentajeImpuesto: producto.impuesto?.porcentaje || 0,
+        tieneVencimiento: producto.tieneVencimiento,
+        modificaPrecio: producto.modificaPrecio ?? false,
+          modificaDescripcion: producto.modificaDescripcion ?? false,
         };
-        return [calcularFila(filled), ...prev];
+          return [calcularFila(filled), ...prev];
       });
     } else {
       setDetalles((prev) =>
@@ -716,11 +745,14 @@ const SalidaAlmacenFormulario: React.FC = () => {
             articulo: producto.articulo,
             referencia: producto.referencia || '',
             costo: producto.costo || 0,
+            cantidad: 1,
             familia: producto.familia,
             medida: producto.medida,
             impuesto: producto.impuesto,
             porcentajeImpuesto: producto.impuesto?.porcentaje || 0,
             tieneVencimiento: producto.tieneVencimiento,
+            modificaPrecio: producto.modificaPrecio ?? false,
+            modificaDescripcion: producto.modificaDescripcion ?? false,
           };
           return calcularFila(filled);
         })
@@ -859,15 +891,37 @@ const SalidaAlmacenFormulario: React.FC = () => {
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
-          <div>{toTitleCase(record.articulo || '')}</div>
-          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
-            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
-            {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
+      render: (_: any, _record: any, idx: number) => {
+        const fila = detalles[idx];
+        if (!fila) return null;
+        // Jerarquía Descripción: 1) Documento.modificaDescripcion? 2) Producto.modificaDescripcion?
+        const docPermiteDesc = documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion ?? true;
+        if (docPermiteDesc) {
+          return (
+            <div style={{ fontSize: 13 }}>
+              <Input
+                size="small"
+                style={{ width: '100%' }}
+                value={fila.articulo || ''}
+                onChange={(e) => handleDetalleUpdateValue(fila.id, 'articulo', e.target.value)}
+              />
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+                {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+                {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div style={{ fontSize: 13 }}>
+            <div>{toTitleCase(fila.articulo || '')}</div>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+              {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+              {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: 'Cantidad',
@@ -944,28 +998,42 @@ const SalidaAlmacenFormulario: React.FC = () => {
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
-      shouldCellUpdate: (record: DetalleSalidaAlmacenDTO, prevRecord: DetalleSalidaAlmacenDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
-      render: (_: any, record: DetalleSalidaAlmacenDTO, idx: number) => {
-        const costoBase = Number(detalles[idx]?.costo) || 0;
-        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
-        const factor = Number(detalles[idx]?.medida?.factor) || 1;
+      shouldCellUpdate: (record: DetalleSalidaAlmacenDTO, prevRecord: DetalleSalidaAlmacenDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor || record.modificaPrecio !== prevRecord.modificaPrecio,
+      render: (_: any, _record: DetalleSalidaAlmacenDTO, idx: number) => {
+        const fila = detalles[idx];
+        if (!fila) return null;
+        const costoBase = Number(fila.costo) || 0;
+        const pctDesc = Number(fila.porcentajeDescuento) || 0;
+        const factor = Number(fila.medida?.factor) || 1;
         const costoConDescuento = costoBase - ((costoBase * pctDesc) / 100);
         const costoUnitario = costoConDescuento / factor;
+        // Jerarquía Precio: 1) Documento.modificaPrecio? 2) Producto.modificaPrecio?
+        const docPermiteEditar = documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio ?? true;
+        if (docPermiteEditar) {
+          return (
+            <div>
+              <InputNumber
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                step={0.01}
+                precision={2}
+                controls={false}
+                value={fila.costo}
+                onChange={(val) => handleDetalleUpdateValue(fila.id, 'costo', val || 0)}
+                onBlur={() => handleDetalleCalculate(fila.id, 'costo', fila.costo || 0)}
+                onPressEnter={() => handleDetalleCalculate(fila.id, 'costo', fila.costo || 0)}
+              />
+              <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+                {formatNumber(costoUnitario)} × {factor}
+              </div>
+            </div>
+          );
+        }
         return (
           <div>
-            <InputNumber
-              size="small"
-              style={{ width: '100%' }}
-              styles={{ input: { textAlign: 'right' } }}
-              min={0}
-              step={0.01}
-              precision={2}
-              controls={false}
-              defaultValue={detalles[idx]?.costo}
-              onChange={(val) => { editValuesRef.current[`${detalles[idx].id}_costo`] = val || 0; }}
-              onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_costo`] ?? (detalles[idx]?.costo || 0); handleDetalleCalculate(detalles[idx].id, 'costo', val); }}
-              onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_costo`] ?? (detalles[idx]?.costo || 0); handleDetalleCalculate(detalles[idx].id, 'costo', val); }}
-            />
+            <div style={{ textAlign: 'right', fontWeight: 500 }}>{formatCurrency(costoBase)}</div>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
               {formatNumber(costoUnitario)} × {factor}
             </div>
@@ -1150,11 +1218,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
                 />
               </FloatingField>
             </div>
-            {conceptoInfo && (
-              <div style={{ marginTop: 4 }}>
-                <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-              </div>
-            )}
+            <ConceptoInfoLabel concepto={selectedConcepto} />
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
 
@@ -1371,6 +1435,12 @@ const SalidaAlmacenFormulario: React.FC = () => {
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
+                      {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false || data?.documento?.modificaPrecio === false || data?.documento?.modificaDescripcion === false) && detalles.length > 0 && (
+                        <CamposRestringidosAlert
+                          modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+                          modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+                        />
+                      )}
                       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(event.active.id as number); }} onDragEnd={handleDragEnd}>
                         <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                         <Table
@@ -1469,6 +1539,12 @@ const SalidaAlmacenFormulario: React.FC = () => {
                         onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                       />
                     </div>
+                    {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false || data?.documento?.modificaPrecio === false || data?.documento?.modificaDescripcion === false) && detalles.length > 0 && (
+                      <CamposRestringidosAlert
+                        modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+                        modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+                      />
+                    )}
                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(event.active.id as number); }} onDragEnd={handleDragEnd}>
                       <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                     <Table

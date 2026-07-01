@@ -75,7 +75,9 @@ export const reciboIngresoApi = {
   },
 
   desaplicar: async (sucursal: number, documento: string): Promise<TransaccionVistaDTO> => {
-    const { data } = await apiClient.put<ApiResponse<TransaccionVistaDTO>>(`${BASE}/desaplicar?sucursal=${sucursal}&documento=${documento}`);
+    const { data } = await apiClient.put<ApiResponse<TransaccionVistaDTO>>(`${BASE}/desaplicar`, null, {
+      params: { origen: sucursal, documento }
+    });
     return data.data;
   },
 

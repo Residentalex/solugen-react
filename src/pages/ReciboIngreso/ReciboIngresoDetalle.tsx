@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Tooltip, Alert, Modal, App
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Tooltip, Alert, Modal, App, Typography
 } from 'antd';
 import {
   LockFilled,
@@ -27,6 +27,7 @@ import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/docum
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
@@ -35,6 +36,8 @@ import ErrorDetalle from '../../components/ErrorDetalle';
 // ===== Helpers para tipo de asiento =====
 function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
 function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
+
+const { Text } = Typography;
 
 const ReciboIngresoDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -251,7 +254,7 @@ const ReciboIngresoDetalle: React.FC = () => {
 
     setOperacionTitulo(`Aplicando FRI-${data?.noDocumento || id}`);
     operacion.ejecutar(
-      `/FRI/${sucursalActiva}/aplicar/${id}`,
+      `/Transaccion/${sucursalActiva}/aplicar/${id}`,
       handleRefresh
     );
   };
@@ -393,9 +396,10 @@ const ReciboIngresoDetalle: React.FC = () => {
         operacionLoading={operacion?.loading}
         onVolver={() => navigate('/FRI')}
         onImprimir={async () => {
+          if (!id || !data) return;
           setImprimiendo(true);
           try {
-            const res = await apiClient.get(`/reportes/contabilidad/reciboIngreso/${sucursalActiva}/${id}`, {
+            const res = await apiClient.post('/reportes/contabilidad/reciboIngreso', data, {
               responseType: 'blob',
             });
             const blobUrl = URL.createObjectURL(res.data);
@@ -458,7 +462,7 @@ const ReciboIngresoDetalle: React.FC = () => {
                 <Descriptions.Item label="Tipo">
                   {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={data.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
                 <Descriptions.Item label="Sucursal">
                   <SucursalField codigoSucursal={data.codigoSucursal} />
@@ -570,7 +574,7 @@ const ReciboIngresoDetalle: React.FC = () => {
             <Descriptions.Item label="Tipo">
                {data.tipo ? `${data.tipo.codigo} - ${toTitleCase(data.tipo.nombre)}` : '—'}
             </Descriptions.Item>
-            <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}</Descriptions.Item>
+            <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={data.concepto} /></Descriptions.Item>
             <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
             <Descriptions.Item label="Sucursal">
                   <SucursalField codigoSucursal={data.codigoSucursal} />

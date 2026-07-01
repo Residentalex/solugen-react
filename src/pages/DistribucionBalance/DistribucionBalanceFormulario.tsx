@@ -16,6 +16,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { distribucionBalanceApi } from '../../api/distribucionBalanceApi';
 import { conceptosApi } from '../../api/conceptosApi';
@@ -34,6 +35,7 @@ import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import { OrigenCuenta } from '../../types/contabilidad';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -44,6 +46,7 @@ import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, to
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import { DistribucionBalanceGuide } from './DistribucionBalanceGuide';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { TextArea } = Input;
 
@@ -86,6 +89,8 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   // Concepto modal
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
   const [conceptoSearchText, setConceptoSearchText] = useState('');
+
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
 
   // Refs para la guía
   const tipoRef = useRef<HTMLDivElement>(null);
@@ -341,6 +346,25 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
         : values.fechaDocumento)
       : toISOFormat(new Date());
 
+    // Asegurar documento con origenCuenta desde companyStore
+    const { documentos } = useCompanyStore.getState().data;
+    const docConfig = documentos.find((d: any) => d.codigo === 'DBA');
+    const docOrigenCuenta = base.documento?.origenCuenta ?? docConfig?.origenCuenta ?? OrigenCuenta.Desconocido;
+    const documento = base.documento?.codigo
+      ? { ...base.documento, origenCuenta: docOrigenCuenta }
+      : { codigo: 'DBA', origenCuenta: docOrigenCuenta };
+
+    // Asegurar entidad con tipoEntidad
+    const tipoEntidadStr = tipoEntidad;
+    const entidadBase = entidadSel || { nombre: '', codigo: '', identificacion: '' };
+    const entidad = {
+      ...entidadBase,
+      tipoEntidad: entidadBase.tipoEntidad ?? {
+        codigo: tipoEntidadStr,
+        origenCuenta: docOrigenCuenta,
+      },
+    };
+
     return {
       id: base.id || 0,
       fechaDocumento: fechaDoc,
@@ -357,9 +381,9 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       impuestos: base.impuestos || 0,
       tipoDocumento: 'DBA',
       tipoEntidad,
-      documento: base.documento || { codigo: 'DBA' },
+      documento,
       concepto: selectedConcepto || { nombre: '', codigo: '' },
-      entidad: entidadSel || { nombre: '', codigo: '', identificacion: '' },
+      entidad,
       moneda: base.moneda || getMonedaSucursalActiva(),
       codigoTipo: selectedTipo?.codigo || values.tipo || '',
       // Colecciones
@@ -422,23 +446,31 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     setSelectedConcepto(concepto);
     setEditingField(null);
     setConceptoSearchText('');
-    form.setFieldsValue({ concepto: concepto.codigo });
 
     // Cargar entidades según concepto
     cargarEntidades(concepto.codigo);
 
     // === ConfigurarMoneda ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
-    form.setFieldsValue({
-      moneda: monedaObj.nombre,
-      tasa: monedaObj.tasa ?? 1,
-    });
-    // Actualizar data local para que la UI lo refleje
     const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || getMonedaSucursalActiva().simbolo, codigo: monedaObj.codigo };
     setData((prev: any) => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaFull };
     });
+
+    form.setFieldsValue({
+      concepto: concepto.codigo,
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.tasa ?? 1,
+    });
+
+    // === NoImpuesto: si el concepto no acepta impuestos, mostrar advertencia ===
+    if (concepto.noImpuesto) {
+      const hayRetenciones = transaccionesAsociadas.some((t) => (t.retencion || 0) > 0);
+      if (hayRetenciones) {
+        message.warning('El Concepto no acepta Impuestos/Retenciones. Verifique las retenciones en documentos relacionados.');
+      }
+    }
   };
 
   const handleConceptoSearchClick = () => setConceptoModalOpen(true);
@@ -645,6 +677,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
               </FloatingField>
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
+            <ConceptoInfoLabel concepto={selectedConcepto} />
           </Col>
 
           {/* Fila 2: Fecha + Entidad */}

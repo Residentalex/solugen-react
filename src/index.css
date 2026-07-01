@@ -924,6 +924,12 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
   gap: 3px;
 }
 
+/* Stat card modifier classes for left bar */
+.paces-stat-card--primary::before { background: var(--paces-primary); }
+.paces-stat-card--success::before { background: #34c38f; }
+.paces-stat-card--warning::before { background: #f0b345; }
+.paces-stat-card--danger::before { background: #f46a6a; }
+
 /* Stat card inner structure */
 .paces-stat-card-body {
   display: flex;
@@ -934,12 +940,6 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
 .paces-stat-card-content {
   flex: 1;
 }
-
-/* Stat card modifier classes for left bar */
-.paces-stat-card--primary::before { background: var(--paces-primary); }
-.paces-stat-card--success::before { background: #34c38f; }
-.paces-stat-card--warning::before { background: #f0b345; }
-.paces-stat-card--danger::before { background: #f46a6a; }
 
 /* ===== Paces Card ===== */
 .paces-card {
@@ -1901,6 +1901,17 @@ body.theme-liga .doc-content code {
   background: var(--paces-bg-container);
   position: relative;
   overflow: hidden;
+}
+
+.dashboard-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--kpi-accent, var(--paces-primary));
+  border-radius: 14px 0 0 14px;
 }
 
 .dashboard-kpi-card:hover {

@@ -50,6 +50,11 @@ export const devolucionCompraApi = {
     return data.data;
   },
 
+  obtenerPorNoDocumento: async (sucursal: number, noDoc: string): Promise<DevolucionCompraFullDTO> => {
+    const { data } = await apiClient.get<ApiResponse<DevolucionCompraFullDTO>>(`${BASE}/${sucursal}/noDoc/${noDoc}`);
+    return data.data;
+  },
+
   crear: async (sucursal: number, devolucion: DevolucionCompraFullDTO): Promise<DevolucionCompraFullDTO> => {
     const { data } = await apiClient.post<ApiResponse<DevolucionCompraFullDTO>>(`${BASE}/${sucursal}`, devolucion);
     return data.data;
@@ -66,7 +71,9 @@ export const devolucionCompraApi = {
   },
 
   desaplicar: async (sucursal: number, documento: string): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/desaplicar?sucursal=${sucursal}&documento=${documento}`);
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/desaplicar`, null, {
+      params: { origen: sucursal, documento }
+    });
     return data.data;
   },
 

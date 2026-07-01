@@ -37,9 +37,12 @@ import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
+import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -102,6 +105,7 @@ const CotizacionVentaFormulario: React.FC = () => {
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
   const { screenCode, documentCode } = useScreenConfig('FCotizacion');
+  const documentoConfig = useDocumentoConfig(sucursalActiva, documentCode);
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -114,7 +118,6 @@ const CotizacionVentaFormulario: React.FC = () => {
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
   const [selectedCliente, setSelectedCliente] = useState<ClienteDTO | null>(null);
   const [selectedAlmacen, setSelectedAlmacen] = useState<any | null>(null);
-  const [conceptoInfo, setConceptoInfo] = useState<string>('');
   const [productoModalOpen, setProductoModalOpen] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
@@ -124,6 +127,9 @@ const CotizacionVentaFormulario: React.FC = () => {
   const editingOriginalValue = useRef<string | number>('');
   const editingValueRef = useRef<string | number>('');
   const fieldCloseHandledRef = useRef(false);
+
+  // Backup de impuestos para restaurar cuando el concepto deje de ser noImpuesto
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
 
   const openFieldEditor = (field: string) => {
     const val = form.getFieldValue(field);
@@ -391,31 +397,11 @@ const CotizacionVentaFormulario: React.FC = () => {
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
     setEditingField(null);
-    form.setFieldsValue({ concepto: concepto.codigo });
 
-    // Cargar clientes
-    facturaPOSApi.obtenerClientes(sucursalActiva)
-      .then((ents) => setClientesCache(ents))
-      .catch(() => {});
-
-    // Mostrar avisos si el concepto tiene flags especiales
-    const infoParts: string[] = [];
-    if (concepto.noImpuesto) infoParts.push(' * No Impuestos * ');
-    if (concepto.noAsientos) infoParts.push(' * No Asientos * ');
-    if (concepto.activo === false) infoParts.push(' * Concepto Inactivo * ');
-    setConceptoInfo(infoParts.join(''));
-
-    // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
-    if (concepto.noImpuesto && detalles.some((d) => (d.porcentajeImpuesto || 0) > 0)) {
-      message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
-      setDetalles((prev) =>
-        prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0 }))
-      );
-    }
-
-    // === ConfigurarMoneda ===
+    // === ConfigurarMoneda (unificado con conceptoNombre) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
+      concepto: concepto.codigo,
       moneda: monedaObj.nombre,
       tasa: monedaObj.tasa ?? 1,
     });
@@ -424,6 +410,46 @@ const CotizacionVentaFormulario: React.FC = () => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaObj };
     });
+
+    // Cargar clientes
+    facturaPOSApi.obtenerClientes(sucursalActiva)
+      .then((ents) => setClientesCache(ents))
+      .catch(() => {});
+
+    // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
+    const prevNoImpuesto = selectedConcepto?.noImpuesto;
+
+    if (concepto.noImpuesto) {
+      const hayImpuestos = detalles.some((d) => (d.porcentajeImpuesto || 0) > 0);
+      if (hayImpuestos) {
+        const backup = new Map<number, { impuesto?: any; porcentajeImpuesto: number }>();
+        detalles.forEach((d) => {
+          if ((d.porcentajeImpuesto || 0) > 0) {
+            backup.set(d.id, { impuesto: d.impuesto, porcentajeImpuesto: d.porcentajeImpuesto || 0 });
+          }
+        });
+        impuestosBackupRef.current = backup;
+
+        message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+        setDetalles((prev) =>
+          prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
+        );
+      }
+    } else if (prevNoImpuesto && !concepto.noImpuesto) {
+      const backup = impuestosBackupRef.current;
+      if (backup.size > 0) {
+        setDetalles((prev) =>
+          prev.map((d) => {
+            const saved = backup.get(d.id);
+            if (saved) {
+              return calcularFila({ ...d, impuesto: saved.impuesto, porcentajeImpuesto: saved.porcentajeImpuesto });
+            }
+            return d;
+          })
+        );
+        impuestosBackupRef.current = new Map();
+      }
+    }
 
     // Auto-asignar almacén del concepto si tiene
     if ((concepto as any).almacen) {
@@ -498,6 +524,8 @@ const CotizacionVentaFormulario: React.FC = () => {
           impuesto: producto.impuesto,
           porcentajeImpuesto: producto.impuesto?.porcentaje || 0,
           tieneVencimiento: producto.tieneVencimiento,
+          modificaPrecio: producto.modificaPrecio ?? false,
+          modificaDescripcion: producto.modificaDescripcion ?? false,
         };
         return [calcularFila(filled), ...prev];
       });
@@ -516,6 +544,8 @@ const CotizacionVentaFormulario: React.FC = () => {
             impuesto: producto.impuesto,
             porcentajeImpuesto: producto.impuesto?.porcentaje || 0,
             tieneVencimiento: producto.tieneVencimiento,
+            modificaPrecio: producto.modificaPrecio ?? false,
+            modificaDescripcion: producto.modificaDescripcion ?? false,
           };
           return calcularFila(filled);
         })
@@ -550,6 +580,47 @@ const CotizacionVentaFormulario: React.FC = () => {
       render: (_: any, r: any) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
   ];
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res: any) => {
+        setData(res);
+        const detallesMapeados: DetalleFacturaPOSDTO[] = (res.detalles || []).map((d: any) => ({
+          id: d.id, codigo: d.codigo || '', articulo: d.articulo || '', referencia: d.referencia || '',
+          cantidad: d.cantidad || 0, costo: d.costo || 0, precio: d.precio || 0,
+          subTotal: d.subTotal || 0, porcentajeDescuento: d.porcentajeDescuento || 0,
+          descuento: d.descuento || 0, porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
+          impuestos: d.impuestos || 0, total: d.total || 0, tipoArticulo: d.tipoArticulo || 'Producto',
+          tieneVencimiento: d.tieneVencimiento ?? false, idTransaccion: d.idTransaccion || 0,
+          impuesto: d.impuesto, familia: d.familia, medida: d.medida,
+        }));
+        setDetalles(detallesMapeados);
+        setSelectedConcepto(res.concepto || null);
+        setSelectedAlmacen(res.almacen || null);
+        const clienteObj: ClienteDTO = {
+          nombre: res.entidad?.nombre || res.cliente || '', codigo: res.entidad?.codigo || '',
+          identificacion: res.entidad?.identificacion || '', telefono: res.entidad?.telefono || '',
+          direccion: res.entidad?.direccion || '',
+        };
+        setSelectedCliente(clienteObj);
+        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+        form.setFieldsValue({
+          concepto: res.concepto?.codigo || '', cliente: res.entidad?.codigo || '',
+          almacen: res.almacen?.codigo || '', fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          ncf: res.ncf || '', referencia: res.referencia || '', tasa: res.tasa || 1, nota: res.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   // ===== Loading state =====
   if (loading) {
     return <LoadingSpinner mensaje="Cargando cotización..." />;
@@ -582,15 +653,36 @@ const CotizacionVentaFormulario: React.FC = () => {
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
-          <div>{toTitleCase(record.articulo || '')}</div>
-          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
-            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
-            {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
+      render: (_: any, _record: any, idx: number) => {
+        const fila = detalles[idx];
+        if (!fila) return null;
+        const docPermiteDesc = documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion ?? true;
+        if (docPermiteDesc) {
+          return (
+            <div style={{ fontSize: 13 }}>
+              <Input
+                size="small"
+                style={{ width: '100%' }}
+                value={fila.articulo || ''}
+                onChange={(e) => handleDetalleUpdateValue(fila.id, 'articulo', e.target.value)}
+              />
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+                {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+                {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div style={{ fontSize: 13 }}>
+            <div>{toTitleCase(fila.articulo || '')}</div>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+              {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+              {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: 'Cantidad',
@@ -665,28 +757,41 @@ const CotizacionVentaFormulario: React.FC = () => {
       width: 130,
       align: 'right' as const,
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
-      shouldCellUpdate: (record: DetalleFacturaPOSDTO, prevRecord: DetalleFacturaPOSDTO) => record.precio !== prevRecord.precio || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
-      render: (_: any, record: DetalleFacturaPOSDTO, idx: number) => {
-        const precioBase = Number(detalles[idx]?.precio) || 0;
-        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
-        const factor = Number(detalles[idx]?.medida?.factor) || 1;
+      shouldCellUpdate: (record: DetalleFacturaPOSDTO, prevRecord: DetalleFacturaPOSDTO) => record.precio !== prevRecord.precio || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor || record.modificaPrecio !== prevRecord.modificaPrecio,
+      render: (_: any, _record: DetalleFacturaPOSDTO, idx: number) => {
+        const fila = detalles[idx];
+        if (!fila) return null;
+        const precioBase = Number(fila.precio) || 0;
+        const pctDesc = Number(fila.porcentajeDescuento) || 0;
+        const factor = Number(fila.medida?.factor) || 1;
         const precioConDescuento = precioBase - ((precioBase * pctDesc) / 100);
         const precioUnitario = precioConDescuento / factor;
+        const docPermiteEditar = documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio ?? true;
+        if (docPermiteEditar) {
+          return (
+            <div>
+              <InputNumber
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                step={0.01}
+                precision={2}
+                controls={false}
+                value={fila.precio}
+                onChange={(val) => handleDetalleUpdateValue(fila.id, 'precio', val || 0)}
+                onBlur={() => handleDetalleCalculate(fila.id, 'precio', fila.precio || 0)}
+                onPressEnter={() => handleDetalleCalculate(fila.id, 'precio', fila.precio || 0)}
+              />
+              <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+                {formatNumber(precioUnitario)} × {factor}
+              </div>
+            </div>
+          );
+        }
         return (
           <div>
-            <InputNumber
-              size="small"
-              style={{ width: '100%' }}
-              styles={{ input: { textAlign: 'right' } }}
-              min={0}
-              step={0.01}
-              precision={2}
-              controls={false}
-              value={detalles[idx]?.precio}
-              onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'precio', val || 0)}
-              onBlur={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
-              onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
-            />
+            <Text>{formatCurrency(precioBase)}</Text>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
               {formatNumber(precioUnitario)} × {factor}
             </div>
@@ -829,15 +934,10 @@ const CotizacionVentaFormulario: React.FC = () => {
                   onClick={handleConceptoSearchClick}
                 />
               </FloatingField>
+              <ConceptoInfoLabel concepto={selectedConcepto} />
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
-
-          {conceptoInfo && (
-            <Col xs={24}>
-              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-            </Col>
-          )}
 
           {/* Fila 2: Fecha + Cliente */}
           <Col xs={24} sm={12} lg={8}>
@@ -987,47 +1087,6 @@ const CotizacionVentaFormulario: React.FC = () => {
     </Card>
   );
 
-  const handleRefresh = useCallback(() => {
-    if (mode === 'crear') return;
-    if (!id) return;
-    setLoadingError(false);
-    setLoading(true);
-    cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res: any) => {
-        setData(res);
-        const detallesMapeados: DetalleFacturaPOSDTO[] = (res.detalles || []).map((d: any) => ({
-          id: d.id, codigo: d.codigo || '', articulo: d.articulo || '', referencia: d.referencia || '',
-          cantidad: d.cantidad || 0, costo: d.costo || 0, precio: d.precio || 0,
-          subTotal: d.subTotal || 0, porcentajeDescuento: d.porcentajeDescuento || 0,
-          descuento: d.descuento || 0, porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
-          impuestos: d.impuestos || 0, total: d.total || 0, tipoArticulo: d.tipoArticulo || 'Producto',
-          tieneVencimiento: d.tieneVencimiento ?? false, idTransaccion: d.idTransaccion || 0,
-          impuesto: d.impuesto, familia: d.familia, medida: d.medida,
-        }));
-        setDetalles(detallesMapeados);
-        setSelectedConcepto(res.concepto || null);
-        setSelectedAlmacen(res.almacen || null);
-        const clienteObj: ClienteDTO = {
-          nombre: res.entidad?.nombre || res.cliente || '', codigo: res.entidad?.codigo || '',
-          identificacion: res.entidad?.identificacion || '', telefono: res.entidad?.telefono || '',
-          direccion: res.entidad?.direccion || '',
-        };
-        setSelectedCliente(clienteObj);
-        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
-        form.setFieldsValue({
-          concepto: res.concepto?.codigo || '', cliente: res.entidad?.codigo || '',
-          almacen: res.almacen?.codigo || '', fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          ncf: res.ncf || '', referencia: res.referencia || '', tasa: res.tasa || 1, nota: res.nota || '',
-        });
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg);
-        setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form, mode]);
-
   return (
     <div>
       <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
@@ -1098,6 +1157,12 @@ const CotizacionVentaFormulario: React.FC = () => {
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
+                      {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false) && detalles.length > 0 && (
+                        <CamposRestringidosAlert
+                          modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+                          modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+                        />
+                      )}
                       <Table
                         dataSource={detallesFiltrados}
                         columns={detalleColumns}
@@ -1200,6 +1265,12 @@ const CotizacionVentaFormulario: React.FC = () => {
               onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
             />
           </div>
+          {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false) && detalles.length > 0 && (
+            <CamposRestringidosAlert
+              modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+              modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+            />
+          )}
           <Table
             dataSource={detallesFiltrados}
             columns={detalleColumns}

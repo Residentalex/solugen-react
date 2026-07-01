@@ -1,27 +1,27 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
+import type { EntidadDTO } from '../types/entradaAlmacen';
 
-const BASE = '/Entidad';
-
-export interface EntidadBusquedaDTO {
-  codigo?: string;
-  id?: string;
-  nombre?: string;
-  identificacion?: string;
-  entidad?: string;
-  descripcion?: string;
-}
+const ENTIDADES_BASE = '/Entidad';
 
 export const entidadApi = {
-  buscar: async (
+  obtenerEntidades: async (
     sucursal: number,
-    valor: string,
-    cantidad: number = 10
-  ): Promise<EntidadBusquedaDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<EntidadBusquedaDTO[]>>(
-      `${BASE}/${sucursal}/buscar`,
-      { params: { valor, cantidad } }
+    conceptoCodigo?: string,
+    activo?: boolean,
+    tipo?: string
+  ): Promise<EntidadDTO[]> => {
+    const params: Record<string, string> = {};
+    if (conceptoCodigo) params.concepto = conceptoCodigo;
+    if (activo !== undefined) params.activo = String(activo);
+    if (tipo) params.tipo = tipo;
+
+    const { data } = await apiClient.get<ApiResponse<EntidadDTO[]>>(
+      `${ENTIDADES_BASE}/${sucursal}`,
+      { params }
     );
     return data.data;
   },
 };
+
+export default entidadApi;

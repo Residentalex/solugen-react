@@ -47,6 +47,7 @@ import type { GeneradorOrdenCompraDTO, DetalleGeneradorDTO, SuplidorGORC } from 
 import type { ProductoDTO, UnidadMedidaDTO } from '../../types/productos';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import { companiaApi } from '../../api/companiaApi';
+import PermissionGate from '../../components/PermissionGate';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -1533,14 +1534,16 @@ const GeneradorORCFormulario: React.FC = () => {
             </div>
             {!selectionMode && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-                <EyeOutlined
-                  style={{ cursor: 'pointer', marginTop: 2, color: 'var(--paces-primary)', fontSize: 14 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setAnalisisDetalle(record);
-                    setAnalisisOpen(true);
-                  }}
-                />
+                <PermissionGate permisoEspecial="pe_ver_analisis_compra">
+                  <EyeOutlined
+                    style={{ cursor: 'pointer', marginTop: 2, color: 'var(--paces-primary)', fontSize: 14 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAnalisisDetalle(record);
+                      setAnalisisOpen(true);
+                    }}
+                  />
+                </PermissionGate>
                 {record.ultimaCompraFecha && (
                   (() => {
                     const diffDias = dayjs().diff(dayjs(record.ultimaCompraFecha), 'day');

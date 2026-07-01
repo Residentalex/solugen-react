@@ -154,7 +154,7 @@ export const facturaClienteApi = {
   },
 
   obtenerTipos: async (sucursal: number): Promise<TipoDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<TipoDTO[]>>(`/Tipo/${sucursal}/documento/FFAC`);
+    const { data } = await apiClient.get<ApiResponse<TipoDTO[]>>(`/Tipo/${sucursal}/documento/FAC`);
     return data.data;
   },
 };

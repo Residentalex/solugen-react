@@ -44,6 +44,7 @@ import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
+import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
@@ -52,6 +53,7 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
 import type {
   EntradaAlmacenDTO, DetalleEntradaAlmacenDTO,
   ConceptoDTO, AlmacenDTO, SuplidorDTO,
@@ -60,6 +62,7 @@ import type {
 import type { UnidadMedidaDTO } from '../../types/productos';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -150,6 +153,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
   const { screenCode, documentCode } = useScreenConfig('FENP');
   const monedaDefault = getMonedaSucursalActiva();
+  const documentoConfig = useDocumentoConfig(sucursalActiva, documentCode);
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -169,7 +173,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const [selectedOC, setSelectedOC] = useState<OrdenCompraVistaDTO | null>(null);
   const [ocDetallesData, setOcDetallesData] = useState<DetalleOrdenCompraVistaDTO[]>([]);
   const [ordenCompraNoDoc, setOrdenCompraNoDoc] = useState('');
-  const [conceptoInfo, setConceptoInfo] = useState<string>('');
+
   const [agregarFilaBloqueado, setAgregarFilaBloqueado] = useState(false);
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
   const [detalleSearch, setDetalleSearch] = useState('');
@@ -189,6 +193,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const [cantidadDevolucionInput, setCantidadDevolucionInput] = useState<number>(0);
 
   const editValuesRef = useRef<Record<string, any>>({});
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -706,28 +711,47 @@ const EntradaAlmacenFormulario: React.FC = () => {
     setSelectedConcepto(concepto);
     setConceptoSearchText(`${concepto.codigo || ''} - ${toTitleCase(concepto.nombre)}`);
     setEditingField(null);
-    form.setFieldsValue({ conceptoNombre: concepto.nombre });
 
     // Cargar suplidores del concepto (desde Sucursal.Compra para que idExterno coincida)
     conceptosApi.obtenerSuplidores(Sucursal.Compra)
       .then((ents) => setEntidadesCache(ents))
       .catch(() => {});
 
-    // === ValidarImpuestosProducto ===
-    // Mostrar avisos si el concepto tiene flags especiales
-    const infoParts: string[] = [];
-    if (concepto.noImpuesto) infoParts.push(' * No Impuestos * ');
-    if (concepto.noAsientos) infoParts.push(' * No Asientos * ');
-    if (concepto.activo === false) infoParts.push(' * Concepto Inactivo * ');
-    if (concepto.noActualizaCostos) infoParts.push(' * No Actualiza Costos * ');
-    setConceptoInfo(infoParts.join(''));
+    // === ValidarImpuestosProducto (con backup/restore) ===
+    const prevNoImpuesto = selectedConcepto?.noImpuesto;
 
-    // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
-    if (concepto.noImpuesto && detalles.some((d) => (d.porcentajeImpuesto || 0) > 0)) {
-      message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
-      setDetalles((prev) =>
-        prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
-      );
+    if (concepto.noImpuesto) {
+      // Guardar backup de impuestos actuales antes de limpiarlos
+      const hayImpuestos = detalles.some((d) => (d.porcentajeImpuesto || 0) > 0);
+      if (hayImpuestos) {
+        const backup = new Map<number, { impuesto?: any; porcentajeImpuesto: number }>();
+        detalles.forEach((d) => {
+          if ((d.porcentajeImpuesto || 0) > 0) {
+            backup.set(d.id, { impuesto: d.impuesto, porcentajeImpuesto: d.porcentajeImpuesto || 0 });
+          }
+        });
+        impuestosBackupRef.current = backup;
+
+        message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+        setDetalles((prev) =>
+          prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
+        );
+      }
+    } else if (prevNoImpuesto && !concepto.noImpuesto) {
+      // Restaurar impuestos desde backup
+      const backup = impuestosBackupRef.current;
+      if (backup.size > 0) {
+        setDetalles((prev) =>
+          prev.map((d) => {
+            const saved = backup.get(d.id);
+            if (saved) {
+              return calcularFila({ ...d, impuesto: saved.impuesto, porcentajeImpuesto: saved.porcentajeImpuesto });
+            }
+            return d;
+          })
+        );
+        impuestosBackupRef.current = new Map();
+      }
     }
 
     // === ConfigurarMoneda ===
@@ -736,6 +760,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     const monedaNombre = monedaObj.nombre;
     const tasaDefault = monedaObj.tasa ?? 1;
     form.setFieldsValue({
+      conceptoNombre: concepto.nombre,
       moneda: monedaNombre,
       tasa: tasaDefault ?? 1,
     });
@@ -955,6 +980,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
           medida: producto.medida || { nombre: '', codigo: '', factor: 1, idExterno: 0 },
           impuesto: producto.impuesto,
           porcentajeImpuesto: producto.impuesto?.porcentaje ?? 0,
+          modificaPrecio: producto.modificaPrecio ?? false,
+          modificaDescripcion: producto.modificaDescripcion ?? false,
         },
         ...prev,
       ]);
@@ -983,6 +1010,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
           articulo: producto.articulo,
           referencia: producto.referencia || '',
           costo: producto.costo || 0,
+          modificaPrecio: producto.modificaPrecio ?? false,
           cantidad: producto.cantidad || 1,
           familia: producto.familia,
           medida: producto.medida || { nombre: '', codigo: '', factor: 1, idExterno: 0 },
@@ -1239,15 +1267,35 @@ const EntradaAlmacenFormulario: React.FC = () => {
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: DetalleEntradaAlmacenDTO) => {
+      render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => {
+        const fila = detalles[idx];
+        if (!fila) return null;
+        // Jerarquía Descripción: 1) Documento.modificaDescripcion? 2) Producto.modificaDescripcion?
+        const docPermiteDesc = documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion ?? true;
+        if (docPermiteDesc) {
+          return (
+            <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <Input
+                size="small"
+                style={{ width: '100%' }}
+                value={fila.articulo || ''}
+                onChange={(e) => handleDetalleUpdateValue(fila.id, 'articulo', e.target.value)}
+              />
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between', marginTop: 'auto' }}>
+                {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+                {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
+              </div>
+            </div>
+          );
+        }
         return (
           <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <span style={{ flex: 1 }}>{toTitleCase(record.articulo || '')}</span>
+              <span style={{ flex: 1 }}>{toTitleCase(fila.articulo || '')}</span>
             </div>
             <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between', marginTop: 'auto' }}>
-              {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
-              {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
+              {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+              {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
             </div>
           </div>
         );
@@ -1334,36 +1382,42 @@ const EntradaAlmacenFormulario: React.FC = () => {
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
-      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
-      render: (_: any, record: DetalleEntradaAlmacenDTO, idx: number) => {
-        const costoBase = Number(detalles[idx]?.costo) || 0;
-        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
-        const factor = Number(detalles[idx]?.medida?.factor) || 1;
+      shouldCellUpdate: (record: DetalleEntradaAlmacenDTO, prevRecord: DetalleEntradaAlmacenDTO) => record.costo !== prevRecord.costo || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor || record.modificaPrecio !== prevRecord.modificaPrecio,
+      render: (_: any, _record: DetalleEntradaAlmacenDTO, idx: number) => {
+        const fila = detalles[idx];
+        if (!fila) return null;
+        const costoBase = Number(fila.costo) || 0;
+        const pctDesc = Number(fila.porcentajeDescuento) || 0;
+        const factor = Number(fila.medida?.factor) || 1;
         const costoConDescuento = costoBase - ((costoBase * pctDesc) / 100);
         const costoUnitario = costoConDescuento / factor;
+        // Jerarquía Precio: 1) Documento.modificaPrecio? 2) Producto.modificaPrecio?
+        const docPermiteEditar = documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio ?? true;
+        if (docPermiteEditar) {
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
+              <InputNumber
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                step={0.01}
+                precision={2}
+                controls={false}
+                value={fila.costo}
+                onChange={(val) => handleDetalleUpdateValue(fila.id, 'costo', val || 0)}
+                onBlur={() => handleDetalleCalculate(fila.id, 'costo', fila.costo || 0)}
+                onPressEnter={() => handleDetalleCalculate(fila.id, 'costo', fila.costo || 0)}
+              />
+              <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
+                {formatNumber(costoUnitario)} × {factor}
+              </div>
+            </div>
+          );
+        }
         return (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
-            <InputNumber
-              size="small"
-              style={{ width: '100%' }}
-              styles={{ input: { textAlign: 'right' } }}
-              min={0}
-              step={0.01}
-              precision={2}
-              controls={false}
-              defaultValue={detalles[idx]?.costo}
-              onChange={(val) => {
-                editValuesRef.current[`${detalles[idx].id}_costo`] = val || 0;
-              }}
-              onBlur={() => {
-                const val = editValuesRef.current[`${detalles[idx].id}_costo`] ?? detalles[idx]?.costo;
-                handleDetalleCalculate(detalles[idx].id, 'costo', val);
-              }}
-              onPressEnter={() => {
-                const val = editValuesRef.current[`${detalles[idx].id}_costo`] ?? detalles[idx]?.costo;
-                handleDetalleCalculate(detalles[idx].id, 'costo', val);
-              }}
-            />
+            <div style={{ textAlign: 'right', fontWeight: 500 }}>{formatCurrency(costoBase)}</div>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
               {formatNumber(costoUnitario)} × {factor}
             </div>
@@ -1764,15 +1818,10 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 />
               </FloatingField>
             </div>
+            <ConceptoInfoLabel concepto={selectedConcepto} />
             <Form.Item name="concepto" hidden><Input /></Form.Item>
             <Form.Item name="conceptoNombre" hidden><Input /></Form.Item>
           </Col>
-
-          {conceptoInfo && (
-            <Col xs={24}>
-              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-            </Col>
-          )}
 
           {/* Fila 2: FechaDocumento + Suplidor */}
           <Col xs={24} sm={12} lg={9}>
@@ -2176,6 +2225,12 @@ const EntradaAlmacenFormulario: React.FC = () => {
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
+                      {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false || data?.documento?.modificaPrecio === false || data?.documento?.modificaDescripcion === false) && detalles.length > 0 && (
+                        <CamposRestringidosAlert
+                          modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+                          modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+                        />
+                      )}
                       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(Number(event.active.id)); }} onDragEnd={handleDragEnd}>
                         <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                     <Table
@@ -2401,6 +2456,12 @@ const EntradaAlmacenFormulario: React.FC = () => {
                         onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                       />
                     </div>
+                    {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false || data?.documento?.modificaPrecio === false || data?.documento?.modificaDescripcion === false) && detalles.length > 0 && (
+                      <CamposRestringidosAlert
+                        modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+                        modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+                      />
+                    )}
                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(event) => { setActiveId(Number(event.active.id)); }} onDragEnd={handleDragEnd}>
                       <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                     <Table

@@ -69,7 +69,9 @@ export const devolucionVentaApi = {
   },
 
   desaplicar: async (sucursal: number, documento: string): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/desaplicar?sucursal=${sucursal}&documento=${documento}`);
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/desaplicar`, null, {
+      params: { origen: sucursal, documento }
+    });
     return data.data;
   },
 

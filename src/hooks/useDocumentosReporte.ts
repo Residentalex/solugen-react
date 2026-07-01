@@ -65,7 +65,7 @@ export function useDocumentosReporte(config: DocumentosReporteConfig) {
             };
           });
         const titulo = `Reporte de Documentos ${config.tituloReporte} (SELECCIONADOS)`;
-        blob = await documentosReporteApi.imprimirReporteConDatos(sucursalActiva, titulo, items);
+        blob = await documentosReporteApi.imprimirReporteConDatos(sucursalActiva, titulo, items, desde, hasta);
       } else {
         // Sin selección: usar endpoint GET por período (comportamiento original)
         blob = await config.reporteBlob(sucursalActiva, desde, hasta);

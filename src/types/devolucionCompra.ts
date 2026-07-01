@@ -84,6 +84,8 @@ export interface DetalleDevolucionCompraDTO {
   nota: string;
   tieneVencimiento?: boolean;
   fechaVencimiento?: string;
+  modificaPrecio?: boolean;
+  modificaDescripcion?: boolean;
 }
 
 export interface DevolucionCompraFullDTO {

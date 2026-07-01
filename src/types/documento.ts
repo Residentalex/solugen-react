@@ -13,4 +13,12 @@ export interface DocumentoDTO {
   origenCuenta?: number;
   tipoImpuesto?: number;
   idExterno?: string;
+  incluirEstadoCuenta?: boolean;
+  preciosIncluyenImpuestos?: boolean;
+  afectaInventario?: boolean;
+  requiereAsiento?: boolean;
+  modificaPrecio?: boolean;
+  modificaDescripcion?: boolean;
+  tipoNumeracion?: number;
+  metodoAplicar?: number;
 }

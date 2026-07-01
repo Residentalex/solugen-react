@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Button, Space, Row, Col, Divider, Grid,
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert,
+  Switch, Empty,
 } from 'antd';
 import {
   SaveOutlined,
@@ -16,10 +17,13 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { notaDebitoApi } from '../../api/notaDebitoApi';
+import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 
 import { conceptosApi } from '../../api/conceptosApi';
+import { entidadApi } from '../../api/entidadApi';
 import { parametrosApi } from '../../api/parametrosApi';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
@@ -37,6 +41,7 @@ import LogTable from '../../components/LogTable';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import SeleccionarImpuestosModal from '../../components/SeleccionarImpuestosModal';
 import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestosModal';
+import { OrigenCuenta } from '../../types/contabilidad';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import BuscarTipoModal from '../../components/BuscarTipoModal/BuscarTipoModal';
 import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
@@ -54,9 +59,10 @@ import { NotaDebitoGuide } from './NotaDebitoGuide';
 
 const { Text } = Typography;
 const { TextArea } = Input;
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 // ===== Calcular totales desde impuestos =====
-function calcularTotales(impuestos: ImpuestoRetencionDTO[], total: number) {
+function calcularTotales(impuestos: ImpuestoRetencionDTO[], total: number, perdidas: number = 0) {
   const retenciones = impuestos
     .filter((i) => i.tipo === 'Retencion')
     .reduce((s, i) => s + (i.monto || 0), 0);
@@ -72,17 +78,35 @@ function calcularTotales(impuestos: ImpuestoRetencionDTO[], total: number) {
     retenciones: Math.round(retenciones * 100) / 100,
     impuestos: Math.round(totalImpuestos * 100) / 100,
     subTotal: Math.round(subTotal * 100) / 100,
+    perdidas: Math.round(perdidas * 100) / 100,
   };
 }
 
-// ===== Validación de formato NCF Modificado =====
-function validarNcfModificado(val: string): boolean {
-  if (!val) return true; // vacío permitido
-  // B0 + 9 dígitos o E3 + 10 dígitos
-  const b0Pattern = /^B0\d{9}$/;
-  const e3Pattern = /^E3\d{10}$/;
-  return b0Pattern.test(val) || e3Pattern.test(val);
-}
+// ===== Sub-componente para mostrar totales =====
+const TotalesSection: React.FC<{
+  impuestosRetenciones: ImpuestoRetencionDTO[];
+  montoTotal: number;
+  perdidas?: number;
+}> = React.memo(({ impuestosRetenciones, montoTotal, perdidas = 0 }) => {
+  const totales = calcularTotales(impuestosRetenciones, Number(montoTotal) || 0, perdidas);
+  return (
+    <div style={{ marginTop: 24 }}>
+      <TotalesCard
+        subTotal={totales.subTotal}
+        descuento={0}
+        impuestos={totales.impuestos}
+        total={Number(montoTotal) || 0}
+        hideTitle
+      />
+      {perdidas > 0 && (
+        <div style={{ marginTop: 8, textAlign: 'right' }}>
+          <Text type="warning" strong>Pérdida: {formatCurrency(perdidas)}</Text>
+        </div>
+      )}
+    </div>
+  );
+});
+
 
 
 
@@ -128,6 +152,9 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   // Modal de selección de impuestos
   const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
 
+  // Estado para total confirmado (se actualiza solo al salir del campo o presionar Enter)
+  const [montoTotalConfirmado, setMontoTotalConfirmado] = useState<number>(0);
+
   // NCF
   const [ncfTipo, setNcfTipo] = useState<'documento' | 'modificado'>('documento');
   const [ncfModificadoVal, setNcfModificadoVal] = useState('');
@@ -135,6 +162,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
   // Artículos (solo CLI)
   const [detallesMovimiento, setDetallesMovimiento] = useState<any[]>([]);
+
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
 
   // Quick field editors (para NCF, Referencia, Tasa)
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -147,8 +176,6 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const [fechaCierreContable, setFechaCierreContable] = useState<string | null>(null);
   const [sucursalesCache, setSucursalesCache] = useState<any[]>([]);
   const [selectedSucursal, setSelectedSucursal] = useState<any>(null);
-  const [conceptoInfo, setConceptoInfo] = useState<string>('');
-
   // Refs para la guía
   const conceptoRef = useRef<HTMLDivElement>(null);
   const sucursalRef = useRef<HTMLDivElement>(null);
@@ -161,17 +188,25 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const isLarge = screens.xxl === true;
 
   // ===== Watchers =====
-  const montoTotalWatch = Form.useWatch('total', form) || 0;
   const ncfValue = Form.useWatch('ncf', form) || '';
   const refValue = Form.useWatch('referencia', form) || '';
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
-  // ===== Totales derivados =====
-  const totales = calcularTotales(impuestosRetenciones, Number(montoTotalWatch) || 0);
+  // ===== Totales derivados (usando getFieldValue para no causar re-render en cada tecla) =====
+  const totales = calcularTotales(
+    impuestosRetenciones,
+    Number(form.getFieldValue('total')) || 0,
+    devoluciones.reduce((s, d) => s + (d.perdida || 0), 0)
+  );
 
   // ===== Quick field editors =====
   const openFieldEditor = (field: string) => {
-    const val = form.getFieldValue(field);
+    let val;
+    if (field === 'ncfModificado') {
+      val = ncfModificadoVal;
+    } else {
+      val = form.getFieldValue(field);
+    }
     const defaultVal = field === 'tasa' ? 1 : '';
     editingOriginalValue.current = val ?? defaultVal;
     editingValueRef.current = val ?? defaultVal;
@@ -185,6 +220,9 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     const field = editingField;
     if (field) {
       form.setFieldsValue({ [field]: editingValueRef.current });
+      if (field === 'ncfModificado') {
+        setNcfModificadoVal(editingValueRef.current as string);
+      }
     }
     setEditingField(null);
   };
@@ -219,13 +257,31 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
     parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch(() => {});
-    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch(() => {});
+    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch(() => message.error('Error al cargar sucursales'));
 
     // === Si viene de Clonar ===
     if (cloneData) {
       setSelectedConcepto(cloneData.concepto || null);
-      setSelectedEntidad(cloneData.entidad || null);
-      setSelectedSucursal(cloneData.sucursal || null);
+      const entidadCloneNorm = cloneData.entidad ? {
+        ...cloneData.entidad,
+        codigo: cloneData.entidad.codigo || cloneData.entidad.idExterno || '',
+      } : null;
+      setSelectedEntidad(entidadCloneNorm);
+      // Normalizar sucursal (clonado)
+      const sucursalCloneNorm = cloneData.sucursal ? {
+        ...cloneData.sucursal,
+        codigo: cloneData.sucursal.codigo || cloneData.sucursal.idExterno || '',
+      } : null;
+      if (sucursalCloneNorm) {
+        setSucursalesCache(prev => {
+          const existe = prev.find((x: any) => x.codigo === sucursalCloneNorm!.codigo || x.idExterno === sucursalCloneNorm!.codigo);
+          if (existe) return prev;
+          return [...prev, sucursalCloneNorm as any];
+        });
+        setSelectedSucursal(sucursalCloneNorm);
+      } else {
+        setSelectedSucursal(null);
+      }
       // Separar transaccionesAsociadas en pagos y devoluciones
       const todasAsociadasClone = cloneData.transaccionesAsociadas || [];
       const docsPagoClone = todasAsociadasClone.filter((x: any) => !x.esDocumentoInventario);
@@ -236,7 +292,10 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         fecha: x.fecha,
         montoOriginal: x.montoOriginal,
         monto: x.monto,
+        impuesto: x.impuesto || 0,
         esDocumentoInventario: true,
+        perdida: x.perdida || 0,
+        generarPerdida: false,
       }));
       setDocumentosRelacionados(docsPagoClone);
       setDevoluciones(devsMapeadasClone);
@@ -250,17 +309,18 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       form.setFieldsValue({
         concepto: cloneData.concepto?.codigo || '',
         tipo: cloneData.tipo?.codigo || '',
-        entidad: cloneData.entidad?.codigo || '',
+        entidad: entidadCloneNorm?.codigo || '',
         fechaDocumento: fechaDoc ? dayjs(fechaDoc) : dayjs(),
         total: cloneData.total || 0,
         ncf: cloneData.ncf || '',
         tasa: cloneData.tasa || 1,
         referencia: cloneData.referencia || '',
         nota: cloneData.nota || '',
-        sucursal: cloneData.sucursal?.codigo || '',
+        sucursal: sucursalCloneNorm?.codigo || '',
         bienes: cloneData.bienes || 0,
         servicios: cloneData.servicios || 0,
       });
+      setMontoTotalConfirmado(Number(cloneData.total) || 0);
       return () => { resetToolbar(); setPageTitleOverride(''); };
     }
 
@@ -315,14 +375,24 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           impuestosRetenciones: res.impuestosRetenciones || [],
           asientos: res.asientos || [],
           logs: res.logs || [],
+          sucursal: res.sucursal,
+          bienes: res.bienes || 0,
+          servicios: res.servicios || 0,
         };
         setData(full);
         setSelectedConcepto(full.concepto || null);
         setSelectedTipo(full.tipo || null);
-        setSelectedEntidad(full.entidad || null);
+        const entidadNormalizada = full.entidad ? {
+          ...full.entidad,
+          codigo: full.entidad.codigo || full.entidad.idExterno || '',
+        } : null;
+        setSelectedEntidad(entidadNormalizada);
+        setEntidadesCache(entidadNormalizada ? [entidadNormalizada as any] : []);
         // Separar transaccionesAsociadas en pagos (esDocumentoInventario=false) y devoluciones (esDocumentoInventario=true)
         const todasAsociadas = res.transaccionesAsociadas || [];
-        const docsPago = todasAsociadas.filter((x: any) => !x.esDocumentoInventario);
+        const docsPago = todasAsociadas
+          .filter((x: any) => !x.esDocumentoInventario)
+          .map((x: any) => ({ ...x, nCF: x.nCF || x.ncf || '' }));
         const docsInventario = todasAsociadas.filter((x: any) => x.esDocumentoInventario);
         const devsMapeadas = docsInventario.map((x: any) => ({
           transaccionAsociadaID: x.transaccionAsociadaID || x.id,
@@ -330,7 +400,10 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           fecha: x.fecha,
           montoOriginal: x.montoOriginal,
           monto: x.monto,
+          impuesto: x.impuesto || 0,
           esDocumentoInventario: true,
+          perdida: x.perdida || 0,
+          generarPerdida: false,
         }));
         setDocumentosRelacionados(docsPago);
         setDevoluciones(devsMapeadas);
@@ -339,36 +412,64 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);
         setNcfModificadoVal(full.ncfModificado || '');
         setNcfTipo(full.ncfModificado ? 'modificado' : 'documento');
+        // Auto-asignar ncfModificado desde el primer documento relacionado (no inventario) que tenga NCF
+        if (!full.ncfModificado && docsPago.length > 0) {
+          const docNcf = docsPago[0].ncf || docsPago[0].nCF || '';
+          if (docNcf) {
+            setNcfModificadoVal(docNcf);
+            setNcfTipo('modificado');
+          }
+        }
 
         const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
+
+        const entidadCodigo = full.entidad?.codigo || full.entidad?.idExterno || '';
+
+        // Normalizar sucursal
+        const sucursalData = full.sucursal ? {
+          ...full.sucursal,
+          codigo: full.sucursal.codigo || full.sucursal.idExterno || '',
+        } : null;
+
+        if (sucursalData) {
+          setSucursalesCache(prev => {
+            const existe = prev.find((x: any) => x.codigo === sucursalData!.codigo || x.idExterno === sucursalData!.codigo);
+            if (existe) return prev;
+            return [...prev, sucursalData as any];
+          });
+          setSelectedSucursal(sucursalData);
+        }
 
         form.setFieldsValue({
           concepto: full.concepto?.codigo || '',
           tipo: full.tipo?.codigo || '',
-          entidad: full.entidad?.codigo || '',
+          entidad: entidadCodigo,
           fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
           total: full.total || 0,
           ncf: full.ncf || '',
           tasa: full.tasa || 1,
           referencia: full.referencia || '',
           nota: full.nota || '',
-          sucursal: full.sucursal?.codigo || full.codigoSucursal || '',
+          sucursal: sucursalData?.codigo || '',
           bienes: full.bienes || 0,
           servicios: full.servicios || 0,
         });
+        setMontoTotalConfirmado(Number(full.total) || 0);
 
-        if (full.sucursal) {
-          const encontrada = sucursalesCache.find((x: any) =>
-            x.codigo === full.sucursal!.codigo || x.idExterno === full.sucursal!.codigo
-          );
-          setSelectedSucursal(encontrada || full.sucursal);
-        }
-
-        // Cargar entidades seg├║n el concepto
+        // Cargar entidades según el concepto
         if (full.concepto?.codigo) {
-          conceptosApi.obtenerEntidades(sucursalActiva, full.concepto.codigo, true)
-            .then(setEntidadesCache)
-            .catch(() => {});
+          entidadApi.obtenerEntidades(sucursalActiva, full.concepto.codigo, true, tipoEntidad)
+            .then((ents: any[]) => {
+              if (full.entidad && !ents.find((e: any) => e.codigo === entidadCodigo)) {
+                ents = [entidadNormalizada as any, ...ents];
+              }
+              setEntidadesCache(ents);
+            })
+            .catch(() => {
+              if (full.entidad) {
+                setEntidadesCache([full.entidad as any]);
+              }
+            });
         }
       })
       .catch((err: any) => {
@@ -402,33 +503,46 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   // ===== Handlers de Concepto =====
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
-    form.setFieldsValue({ concepto: concepto.codigo });
 
     // Cargar entidades según el concepto
-    conceptosApi.obtenerEntidades(sucursalActiva, concepto.codigo, true)
+    entidadApi.obtenerEntidades(sucursalActiva, concepto.codigo, true, tipoEntidad)
       .then((ents) => setEntidadesCache(ents))
       .catch(() => {});
 
     // === ConfigurarMoneda ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || getMonedaSucursalActiva().simbolo, codigo: monedaObj.codigo };
-    form.setFieldsValue({
-      moneda: monedaObj.nombre,
-      tasa: monedaObj.tasa ?? 1,
-    });
     // Actualizar data local para que la UI lo refleje
     setData((prev) => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaFull };
     });
 
-    // === Indicadores de concepto ===
-    const infoParts: string[] = [];
-    if (concepto.noImpuesto) infoParts.push('* No Impuestos *');
-    if (concepto.noAsientos) infoParts.push('* No Asientos *');
-    if (concepto.activo === false) infoParts.push('* Concepto Inactivo *');
-    if (concepto.noActualizaCostos) infoParts.push('* No Actualiza Costos *');
-    setConceptoInfo(infoParts.join(''));
+    form.setFieldsValue({
+      concepto: concepto.codigo,
+      moneda: monedaObj.nombre,
+      tasa: monedaObj.tasa ?? 1,
+    });
+
+    // === NoImpuesto: si el concepto no acepta impuestos, limpiarlos ===
+    const prevNoImpuesto = selectedConcepto?.noImpuesto;
+    if (concepto.noImpuesto) {
+      // Limpiar impuestosRetenciones si existe alguno
+      const hayImpuestos = impuestosRetenciones.length > 0;
+      if (hayImpuestos) {
+        const backup = new Map<number, { impuesto?: any; porcentajeImpuesto: number }>();
+        impuestosRetenciones.forEach((i, idx) => {
+          if ((i.monto || 0) > 0) {
+            backup.set(idx, { impuesto: i, porcentajeImpuesto: i.porcentaje || 0 });
+          }
+        });
+        (impuestosBackupRef as any).current = backup;
+        message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+        setImpuestosRetenciones([]);
+      }
+    } else if (prevNoImpuesto && !concepto.noImpuesto) {
+      // Restoration not implemented for ND since impuestosRetenciones are managed via modal
+    }
   };
 
   const handleConceptoClear = () => {
@@ -454,22 +568,31 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
   // ===== Handlers de Documentos Relacionados =====
   const handleDocRelacionadoSelect = (docs: DocumentoRelacionadoDTO[]) => {
-    setDocumentosRelacionados((prev) => {
-      const existentes = new Set(prev.map((d) => d.transaccionAsociadaID));
-      const nuevos = docs.filter((d) => !existentes.has(d.transaccionAsociadaID));
-      // Auto-asignar NCF Modificado del primer documento si no hay
-      if (ncfTipo === 'modificado' && !ncfModificadoVal && nuevos.length > 0) {
-        const primerNcf = nuevos[0].nCF;
-        if (primerNcf) {
-          setNcfModificadoVal(primerNcf);
-        }
-      }
-      return [...prev, ...nuevos];
-    });
+    if (docs.length === 0) return;
+    const d = docs[0]; // solo el primer documento seleccionado
+    setDocumentosRelacionados([{
+      transaccionAsociadaID: d.transaccionAsociadaID,
+      id: d.id,
+      documento: d.documento,
+      nCF: d.nCF,
+      montoOriginal: d.montoOriginal,
+      pagado: d.pagado,
+      saldoPendiente: d.saldoPendiente,
+      monto: d.monto,
+    }]);
+    // Auto-asignar NCF Modificado desde el documento
+    if (d.nCF) {
+      setNcfTipo('modificado');
+      setNcfModificadoVal(d.nCF);
+    }
   };
 
   const handleDocRelacionadoRemove = (id?: number) => {
-    setDocumentosRelacionados((prev) => prev.filter((d) => d.transaccionAsociadaID !== id && d.id !== id));
+    setDocumentosRelacionados([]);
+    setNcfModificadoVal('');
+    if (ncfTipo === 'modificado') {
+      setNcfTipo('documento');
+    }
   };
 
   const handleDocMontoChange = (id: number | undefined, monto: number) => {
@@ -486,14 +609,66 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         .filter((d: any) => !existentes.has(d.transaccionAsociadaID))
         .map((d: any) => ({
           transaccionAsociadaID: d.transaccionAsociadaID,
-          documento: `DVC-${d.documento}`,
+          documento: d.documento,
           fecha: d.fecha,
           montoOriginal: d.montoOriginal,
           monto: d.monto,
+          impuesto: d.impuesto || 0,
           esDocumentoInventario: true,
+          perdida: 0,
+          generarPerdida: false,
         }));
       return [...prev, ...nuevos];
     });
+
+    // Auto-cargar impuestos desde devoluciones calientes
+    const tipoCalienteCodigo = useCompanyStore.getState().tipoDevolucionCaliente?.codigo;
+    docs.forEach((d: any) => {
+      const noDoc = d.documento?.includes('-') ? d.documento.split('-').slice(1).join('-') : (d.documento || '');
+      console.warn('NotaDebito: devolucion seleccionada', { documento: d.documento, noDoc, sucursal: sucursalActiva });
+      if (noDoc) {
+        devolucionCompraApi.obtenerPorNoDocumento(sucursalActiva, noDoc)
+          .then((devolucion: any) => {
+            if (devolucion?.detalles && (!tipoCalienteCodigo || devolucion?.tipo?.codigo === tipoCalienteCodigo)) {
+                const impuestosMap = new Map<string, { codigo: string; nombre: string; porcentaje: number; tipo: string; monto: number }>();
+                devolucion.detalles
+                  .filter((det: any) => det.impuesto != null && det.impuestos > 0)
+                  .forEach((det: any) => {
+                    const key = det.impuesto.idExterno || det.impuesto.codigo;
+                    if (impuestosMap.has(key)) {
+                      impuestosMap.get(key)!.monto += det.impuestos;
+                    } else {
+                      impuestosMap.set(key, {
+                        codigo: det.impuesto.codigo,
+                        nombre: det.impuesto.nombre,
+                        porcentaje: det.impuesto.porcentaje,
+                        tipo: 'Impuesto',
+                        monto: det.impuestos,
+                      });
+                    }
+                  });
+                if (impuestosMap.size > 0) {
+                  setImpuestosRetenciones((prev) => {
+                    const nuevos = Array.from(impuestosMap.values());
+                    const existentes = new Map(prev.map((i) => [i.codigo, i]));
+                    for (const n of nuevos) {
+                      const existente = existentes.get(n.codigo);
+                      if (existente) {
+                        existente.monto = (existente.monto || 0) + n.monto;
+                      } else {
+                        existentes.set(n.codigo, { ...n, id: n.codigo, baseImponible: 0 });
+                      }
+                    }
+                    return Array.from(existentes.values());
+                  });
+                }
+              }
+            })
+            .catch((err: any) => {
+              console.warn('NotaDebito: error al cargar devolución para impuestos', err?.response?.data || err?.message || err);
+            });
+        }
+      });
   };
 
   const handleDevolucionRemove = (id?: number) => {
@@ -502,7 +677,16 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
   const handleDevMontoChange = (id: number | undefined, monto: number) => {
     setDevoluciones((prev) =>
-      prev.map((d) => d.transaccionAsociadaID === id ? { ...d, monto } : d)
+      prev.map((d) =>
+        d.transaccionAsociadaID === id
+          ? {
+              ...d,
+              monto,
+              perdida: ((d.montoOriginal || 0) + (d.impuesto || 0)) - monto,
+              generarPerdida: false,
+            }
+          : d
+      )
     );
   };
 
@@ -566,11 +750,6 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       }
     }
 
-    // Validar NCF Modificado
-    if (ncfTipo === 'modificado' && ncfModificadoVal && !validarNcfModificado(ncfModificadoVal)) {
-      return 'El formato del NCF Modificado no es válido (B0+9dígitos o E3+10dígitos)';
-    }
-
     // Validar distribución de documentos relacionados
     const totalMonto = Number(values.total) || 0;
     const sumaDocs = documentosRelacionados.reduce((s, d) => s + (d.monto || 0), 0);
@@ -625,7 +804,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     const values = form.getFieldsValue();
     const base = data || {} as any;
 
-    const entidadSel = entidadesCache.find((e) => e.codigo === values.entidad) || selectedEntidad;
+    const entidadSel = entidadesCache.find((e) => e.codigo === values.entidad || e.idExterno === values.entidad) || selectedEntidad;
 
     const fechaDoc = values.fechaDocumento
       ? (typeof values.fechaDocumento === 'object' && values.fechaDocumento.toDate
@@ -637,6 +816,25 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     const totalImpuestos = impuestosRetenciones
       .filter((i) => i.tipo === 'Impuesto' || i.tipo === 'Informativo' || i.tipo === 'Otro' || !i.tipo)
       .reduce((s, i) => s + (i.monto || 0), 0);
+
+    // Asegurar documento con origenCuenta desde companyStore
+    const { documentos } = useCompanyStore.getState().data;
+    const docConfig = documentos.find((d: any) => d.codigo === 'ND');
+    const docOrigenCuenta = base.documento?.origenCuenta ?? docConfig?.origenCuenta ?? OrigenCuenta.Desconocido;
+    const documento = base.documento?.codigo
+      ? { ...base.documento, origenCuenta: docOrigenCuenta }
+      : { codigo: 'ND', origenCuenta: docOrigenCuenta };
+
+    // Asegurar entidad con tipoEntidad
+    const tipoEntidadStr = tipoEntidad;
+    const entidadBaseObj = entidadSel || { nombre: '', codigo: '', identificacion: '' };
+    const entidad = {
+      ...entidadBaseObj,
+      tipoEntidad: entidadBaseObj.tipoEntidad ?? {
+        codigo: tipoEntidadStr,
+        origenCuenta: docOrigenCuenta,
+      },
+    };
 
     return {
       id: base.id || 0,
@@ -661,10 +859,10 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       creditos: base.creditos || 0,
       tipoDocumento: base.tipoDocumento ?? 42,
       tipoEntidad,
-      documento: base.documento || { codigo: 'ND' },
+      documento,
       concepto: selectedConcepto || { codigo: '', nombre: '' },
       codigoTipo: selectedTipo?.codigo || '',
-      entidad: entidadSel ? { codigo: entidadSel.codigo, nombre: entidadSel.nombre || '', identificacion: entidadSel.identificacion || '', telefono: entidadSel.telefono } : { codigo: '', nombre: '' },
+      entidad,
       moneda: base.moneda || getMonedaSucursalActiva(),
       sucursal: selectedSucursal ? { codigo: selectedSucursal.codigo || selectedSucursal.idExterno, nombre: selectedSucursal.nombre || '' } : undefined,
       // Combinar pagos y devoluciones en transaccionesAsociadas (formato TransaccionAsociadaDTO)
@@ -674,6 +872,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         fecha: d.fecha,
         montoOriginal: d.montoOriginal,
         monto: d.monto,
+        perdida: d.perdida || 0,
         esDocumentoInventario: true,
         tipoDocumento: 24,    // TipoDocumento.DVC = 24
       }))],
@@ -729,6 +928,105 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     }
   };
 
+  // ===== handleRefresh =====
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res: any) => {
+        const full: NotaDebitoFullDTO = {
+          id: res.id, fechaDocumento: res.fechaDocumento, noDocumento: res.noDocumento,
+          estado: res.estado, periodo: res.periodo, referencia: res.referencia || '',
+          ncf: res.ncf || '', ncfModificado: res.ncfModificado || '', nota: res.nota || '',
+          total: res.total || 0, subTotal: res.subTotal || 0, descuento: res.descuento || 0,
+          impuestos: res.impuestos || 0, retenciones: res.retenciones || 0, tasa: res.tasa || 1,
+          debitos: res.debitos || 0, creditos: res.creditos || 0,
+          tipoDocumento: res.tipoDocumento ?? 42,
+          tipoEntidad: res.tipoEntidad || tipoEntidad,
+          documento: res.documento || { codigo: 'ND' }, concepto: res.concepto || null,
+          tipo: res.tipo || null, entidad: res.entidad || null, moneda: res.moneda || null,
+          transaccionesAsociadas: res.transaccionesAsociadas || [],
+          impuestosRetenciones: res.impuestosRetenciones || [],
+          asientos: res.asientos || [], logs: res.logs || [],
+          sucursal: res.sucursal,
+          bienes: res.bienes || 0,
+          servicios: res.servicios || 0,
+        };
+        setData(full); setSelectedConcepto(full.concepto || null);
+        setSelectedTipo(full.tipo || null);
+        const entidadRefreshNorm = full.entidad ? {
+          ...full.entidad,
+          codigo: full.entidad.codigo || full.entidad.idExterno || '',
+        } : null;
+        setSelectedEntidad(entidadRefreshNorm);
+        // Separar transaccionesAsociadas en pagos y devoluciones
+        const todasAsociadasRefresh = res.transaccionesAsociadas || [];
+        const docsPagoRefresh = todasAsociadasRefresh
+          .filter((x: any) => !x.esDocumentoInventario)
+          .map((x: any) => ({ ...x, nCF: x.nCF || x.ncf || '' }));
+        const docsInventarioRefresh = todasAsociadasRefresh.filter((x: any) => x.esDocumentoInventario);
+        const devsMapeadasRefresh = docsInventarioRefresh.map((x: any) => ({
+          transaccionAsociadaID: x.transaccionAsociadaID || x.id,
+          documento: x.documento,
+          fecha: x.fecha,
+          montoOriginal: x.montoOriginal,
+          monto: x.monto,
+          impuesto: x.impuesto || 0,
+          esDocumentoInventario: true,
+          perdida: x.perdida || 0,
+          generarPerdida: false,
+        }));
+        setDocumentosRelacionados(docsPagoRefresh);
+        setDevoluciones(devsMapeadasRefresh);
+        setImpuestosRetenciones(full.impuestosRetenciones || []);
+        setAsientos(full.asientos || []);
+        setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);
+        setNcfModificadoVal(full.ncfModificado || '');
+        setNcfTipo(full.ncfModificado ? 'modificado' : 'documento');
+        // Auto-asignar ncfModificado desde el primer documento relacionado (no inventario) que tenga NCF
+        if (!full.ncfModificado && docsPagoRefresh.length > 0) {
+          const docNcf = docsPagoRefresh[0].ncf || docsPagoRefresh[0].nCF || '';
+          if (docNcf) {
+            setNcfModificadoVal(docNcf);
+            setNcfTipo('modificado');
+          }
+        }
+        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
+
+        // Normalizar sucursal (handleRefresh)
+        const sucursalRefreshData = full.sucursal ? {
+          ...full.sucursal,
+          codigo: full.sucursal.codigo || full.sucursal.idExterno || '',
+        } : null;
+
+        if (sucursalRefreshData) {
+          setSucursalesCache(prev => {
+            const existe = prev.find((x: any) => x.codigo === sucursalRefreshData!.codigo || x.idExterno === sucursalRefreshData!.codigo);
+            if (existe) return prev;
+            return [...prev, sucursalRefreshData as any];
+          });
+          setSelectedSucursal(sucursalRefreshData);
+        }
+
+        form.setFieldsValue({
+          concepto: full.concepto?.codigo || '', tipo: full.tipo?.codigo || '',
+          entidad: entidadRefreshNorm?.codigo || '', fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          total: full.total || 0, ncf: full.ncf || '', tasa: full.tasa || 1,
+          referencia: full.referencia || '', nota: full.nota || '',
+          sucursal: sucursalRefreshData?.codigo || '',
+          bienes: full.bienes || 0, servicios: full.servicios || 0,
+        });
+        setMontoTotalConfirmado(Number(full.total) || 0);
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg); setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   // ===== Loader =====
   if (loading) {
     return <LoadingSpinner mensaje="Cargando documento..." />;
@@ -769,19 +1067,63 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const devColumns = [
     { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => v ? formatDate(v) : '-' },
-    { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
     {
-      title: 'Monto Asignado', dataIndex: 'monto', key: 'monto', width: 140, align: 'right' as const,
+      title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 140, align: 'right' as const,
+      render: (_: any, record: DevolucionAsociadaDTO) => formatNumber((record.montoOriginal || 0) + (record.impuesto || 0)),
+    },
+    {
+      title: 'Monto Asignado', dataIndex: 'monto', key: 'monto', width: 220, align: 'right' as const,
+      render: (_: any, record: DevolucionAsociadaDTO, idx: number) => {
+        const montoSub = devoluciones[idx]?.monto || 0;
+        const imp = record.impuesto || 0;
+        return (
+          <Space size={4}>
+            <InputNumber
+              size="small"
+              style={{ width: 120 }}
+              min={0}
+              step={0.01}
+              precision={2}
+              value={montoSub}
+              onChange={(val) => handleDevMontoChange(record.transaccionAsociadaID, val || 0)}
+            />
+            <Text type="secondary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+              Total: {formatNumber(montoSub + imp)}
+            </Text>
+          </Space>
+        );
+      },
+    },
+    {
+      title: 'Pérdida',
+      dataIndex: 'perdida',
+      key: 'perdida',
+      width: 130,
+      align: 'right' as const,
+      render: (v: number) => {
+        const val = v ?? 0;
+        if (val === 0) return <Text style={{ color: '#8c8c8c' }}>-</Text>;
+        return (
+          <Text style={{ color: val > 0 ? '#ff4d4f' : '#52c41a', fontWeight: 600 }}>
+            {val > 0 ? '− ' : '+ '}{formatCurrency(Math.abs(val))}
+          </Text>
+        );
+      },
+    },
+    {
+      title: 'Gen. Pérdida',
+      dataIndex: 'generarPerdida',
+      key: 'generarPerdida',
+      width: 110,
       render: (_: any, record: DevolucionAsociadaDTO, idx: number) => (
-        <InputNumber
+        <Switch
           size="small"
-          style={{ width: 120 }}
-          min={0}
-          max={record.montoOriginal || record.monto || 0}
-          step={0.01}
-          precision={2}
-          value={devoluciones[idx]?.monto}
-          onChange={(val) => handleDevMontoChange(record.transaccionAsociadaID, val || 0)}
+          checked={record.generarPerdida}
+          onChange={(checked) => {
+            setDevoluciones((prev) =>
+              prev.map((d, i) => i === idx ? { ...d, generarPerdida: checked } : d)
+            );
+          }}
         />
       ),
     },
@@ -902,9 +1244,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
               </FloatingField>
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
-            {conceptoInfo && (
-              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-            )}
+            <ConceptoInfoLabel concepto={selectedConcepto} />
           </Col>
 
           {/* Fila 2: Tipo + Entidad */}
@@ -968,7 +1308,20 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           <Col xs={24} sm={12} lg={6}>
             <Form.Item name="total" required style={{ marginBottom: 0 }}>
               <FloatingField label="Monto Total" required>
-                <InputNumber style={{ width: '100%' }} min={0} step={0.01} precision={2} />
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0}
+                  step={0.01}
+                  precision={2}
+                  onBlur={() => {
+                    const val = form.getFieldValue('total') || 0;
+                    setMontoTotalConfirmado(Number(val));
+                  }}
+                  onPressEnter={() => {
+                    const val = form.getFieldValue('total') || 0;
+                    setMontoTotalConfirmado(Number(val));
+                  }}
+                />
               </FloatingField>
             </Form.Item>
           </Col>
@@ -1044,7 +1397,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
                     onKeyDown={(e) => {
                       if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
                     }}
-                    status={editingValueRef.current && !validarNcfModificado(editingValueRef.current as string) ? 'error' : undefined}
+
                   />
                 ) : ncfModificadoVal ? (
                   <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncfModificado')}>
@@ -1119,15 +1472,11 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       </Form>
         </Col>
         <Col xs={24} xxl={6}>
-          <div style={{ marginTop: 24 }}>
-            <TotalesCard
-              subTotal={totales.subTotal}
-              descuento={0}
-              impuestos={totales.impuestos}
-              total={Number(montoTotalWatch) || 0}
-              hideTitle
-            />
-          </div>
+          <TotalesSection
+            impuestosRetenciones={impuestosRetenciones}
+            montoTotal={montoTotalConfirmado}
+            perdidas={devoluciones.reduce((s, d) => s + (d.perdida || 0), 0)}
+          />
         </Col>
       </Row>
     </Card>
@@ -1234,9 +1583,16 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
             locale={{ emptyText: 'Sin impuestos seleccionados' }}
           />
           <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end', gap: 16 }}>
-            <Text className="paces-text-secondary">SubTotal: <strong>{formatNumber(totales.subTotal)}</strong></Text>
-            <Text className="paces-text-secondary">Impuestos: <strong>{formatNumber(totales.impuestos)}</strong></Text>
-            <Text className="paces-text-secondary">Retenciones: <strong>{formatNumber(totales.retenciones)}</strong></Text>
+            {(() => {
+              const totales = calcularTotales(impuestosRetenciones, Number(montoTotalConfirmado) || 0);
+              return (
+                <>
+                  <Text className="paces-text-secondary">SubTotal: <strong>{formatNumber(totales.subTotal)}</strong></Text>
+                  <Text className="paces-text-secondary">Impuestos: <strong>{formatNumber(totales.impuestos)}</strong></Text>
+                  <Text className="paces-text-secondary">Retenciones: <strong>{formatNumber(totales.retenciones)}</strong></Text>
+                </>
+              );
+            })()}
           </div>
         </>
       ),
@@ -1267,73 +1623,6 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const contenidoPestanas = (
     <Tabs defaultActiveKey="documentos" type="card" items={tabItems} />
   );
-
-  const handleRefresh = useCallback(() => {
-    if (mode === 'crear') return;
-    if (!id) return;
-    setLoadingError(false);
-    setLoading(true);
-    notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res: any) => {
-        const full: NotaDebitoFullDTO = {
-          id: res.id, fechaDocumento: res.fechaDocumento, noDocumento: res.noDocumento,
-          estado: res.estado, periodo: res.periodo, referencia: res.referencia || '',
-          ncf: res.ncf || '', ncfModificado: res.ncfModificado || '', nota: res.nota || '',
-          total: res.total || 0, subTotal: res.subTotal || 0, descuento: res.descuento || 0,
-          impuestos: res.impuestos || 0, retenciones: res.retenciones || 0, tasa: res.tasa || 1,
-          debitos: res.debitos || 0, creditos: res.creditos || 0,
-          tipoDocumento: res.tipoDocumento ?? 42,
-          tipoEntidad: res.tipoEntidad || tipoEntidad,
-          documento: res.documento || { codigo: 'ND' }, concepto: res.concepto || null,
-          tipo: res.tipo || null, entidad: res.entidad || null, moneda: res.moneda || null,
-          transaccionesAsociadas: res.transaccionesAsociadas || [],
-          impuestosRetenciones: res.impuestosRetenciones || [],
-          asientos: res.asientos || [], logs: res.logs || [],
-        };
-        setData(full); setSelectedConcepto(full.concepto || null);
-        setSelectedTipo(full.tipo || null); setSelectedEntidad(full.entidad || null);
-        // Separar transaccionesAsociadas en pagos y devoluciones
-        const todasAsociadasRefresh = res.transaccionesAsociadas || [];
-        const docsPagoRefresh = todasAsociadasRefresh.filter((x: any) => !x.esDocumentoInventario);
-        const docsInventarioRefresh = todasAsociadasRefresh.filter((x: any) => x.esDocumentoInventario);
-        const devsMapeadasRefresh = docsInventarioRefresh.map((x: any) => ({
-          transaccionAsociadaID: x.transaccionAsociadaID || x.id,
-          documento: x.documento,
-          fecha: x.fecha,
-          montoOriginal: x.montoOriginal,
-          monto: x.monto,
-          esDocumentoInventario: true,
-        }));
-        setDocumentosRelacionados(docsPagoRefresh);
-        setDevoluciones(devsMapeadasRefresh);
-        setImpuestosRetenciones(full.impuestosRetenciones || []);
-        setAsientos(full.asientos || []);
-        setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);
-        setNcfModificadoVal(full.ncfModificado || '');
-        setNcfTipo(full.ncfModificado ? 'modificado' : 'documento');
-        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
-        form.setFieldsValue({
-          concepto: full.concepto?.codigo || '', tipo: full.tipo?.codigo || '',
-          entidad: full.entidad?.codigo || '', fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          total: full.total || 0, ncf: full.ncf || '', tasa: full.tasa || 1,
-          referencia: full.referencia || '', nota: full.nota || '',
-          sucursal: full.sucursal?.codigo || full.codigoSucursal || '',
-          bienes: full.bienes || 0, servicios: full.servicios || 0,
-        });
-
-        if (full.sucursal) {
-          const encontrada = sucursalesCache.find((x: any) =>
-            x.codigo === full.sucursal!.codigo || x.idExterno === full.sucursal!.codigo
-          );
-          setSelectedSucursal(encontrada || full.sucursal);
-        }
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg); setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form, mode]);
 
   return (
     <div>
@@ -1392,8 +1681,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         onSelect={handleDocRelacionadoSelect}
         tipoEntidad={tipoEntidad}
         codEntidad={selectedEntidad?.codigo || ''}
-        origen={tipoEntidad === 'SUP' ? 0 : 1}
-        montoTotal={Number(montoTotalWatch) || 0}
+        origen={(() => { const { documentos } = useCompanyStore.getState().data; const ndConfig = documentos.find((d: any) => d.codigo === 'ND'); const ndOrigen = ndConfig?.origenCuenta ?? OrigenCuenta.Desconocido; return typeof ndOrigen === 'number' ? ndOrigen : (ndOrigen === 'Credito' ? OrigenCuenta.Credito : OrigenCuenta.Debito); })()}
+        montoTotal={Number(form.getFieldValue('total')) || 0}
       />
       {tipoEntidad === 'SUP' && (
         <BuscarDocumentoModal
@@ -1402,9 +1691,9 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           onSelect={handleDevolucionSelect}
           tipoEntidad={tipoEntidad}
           codEntidad={selectedEntidad?.codigo || ''}
-          origen={tipoEntidad === 'SUP' ? 0 : 1}
+          origen={(() => { const { documentos } = useCompanyStore.getState().data; const ndConfig = documentos.find((d: any) => d.codigo === 'ND'); const ndOrigen = ndConfig?.origenCuenta ?? OrigenCuenta.Desconocido; return typeof ndOrigen === 'number' ? ndOrigen : (ndOrigen === 'Credito' ? OrigenCuenta.Credito : OrigenCuenta.Debito); })()}
           esDocumentoInventario={true}
-          montoTotal={Number(montoTotalWatch) || 0}
+          montoTotal={Number(form.getFieldValue('total')) || 0}
         />
       )}
 

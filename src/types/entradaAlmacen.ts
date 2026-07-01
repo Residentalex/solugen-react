@@ -44,6 +44,8 @@ export interface EntidadDTO {
   requiereORC?: boolean;
   activo?: boolean;
   diasCredito?: number;
+  tipoEntidad?: TipoEntidadDTO;
+  idExterno?: string;
 }
 
 export interface TipoEntidadDTO {
@@ -153,6 +155,8 @@ export interface DetalleEntradaAlmacenDTO {
   categoria?: { nombre: string; codigo: string; idExterno: string };
   medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
   impuesto?: { nombre: string; porcentaje: number; codigo: string; idExterno: string };
+  modificaPrecio?: boolean;
+  modificaDescripcion?: boolean;
 }
 
 export interface AsientoContableDTO {

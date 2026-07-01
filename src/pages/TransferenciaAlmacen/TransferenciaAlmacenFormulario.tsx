@@ -48,9 +48,12 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
+import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -105,6 +108,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
   const { screenCode, documentCode } = useScreenConfig('FTRP');
+  const documentoConfig = useDocumentoConfig(sucursalActiva, documentCode);
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -116,7 +120,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
   const [selectedAlmacen, setSelectedAlmacen] = useState<AlmacenDTO | null>(null);
   const [selectedAlmacenDestino, setSelectedAlmacenDestino] = useState<AlmacenDTO | null>(null);
-  const [conceptoInfo, setConceptoInfo] = useState<string>('');
+
   const [productoModalOpen, setProductoModalOpen] = useState(false);
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
@@ -127,6 +131,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
 
   const editValuesRef = useRef<Record<string, any>>({});
   const tasaAnteriorRef = useRef<number>(1);
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
   const navigationConfirmedRef = useFormularioNavigation();
 
   const sensors = useSensors(
@@ -486,7 +491,6 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
     setEditingField(null);
-    form.setFieldsValue({ concepto: concepto.codigo });
 
     // Auto-asignar almacenes según concepto
     if (concepto.almacen) {
@@ -494,17 +498,10 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       form.setFieldsValue({ almacen: concepto.almacen.codigo });
     }
 
-    // Mostrar avisos si el concepto tiene flags especiales
-    const infoParts: string[] = [];
-    if (concepto.noImpuesto) infoParts.push(' * No Impuestos * ');
-    if (concepto.noAsientos) infoParts.push(' * No Asientos * ');
-    if (concepto.activo === false) infoParts.push(' * Concepto Inactivo * ');
-    if (concepto.noActualizaCostos) infoParts.push(' * No Actualiza Costos * ');
-    setConceptoInfo(infoParts.join(''));
-
     // === ConfigurarMoneda ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
+      concepto: concepto.codigo,
       moneda: monedaObj.nombre,
       tasa: monedaObj.tasa ?? 1,
     });
@@ -513,6 +510,39 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaObj };
     });
+
+    // === NoImpuesto: si el concepto no acepta impuestos, limpiarlos ===
+    const prevNoImpuesto = selectedConcepto?.noImpuesto;
+    if (concepto.noImpuesto) {
+      const hayImpuestos = detalles.some((d) => (d.porcentajeImpuesto || 0) > 0);
+      if (hayImpuestos) {
+        const backup = new Map<number, { impuesto?: any; porcentajeImpuesto: number }>();
+        detalles.forEach((d) => {
+          if ((d.porcentajeImpuesto || 0) > 0) {
+            backup.set(d.id, { impuesto: d.impuesto, porcentajeImpuesto: d.porcentajeImpuesto || 0 });
+          }
+        });
+        impuestosBackupRef.current = backup;
+        message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+        setDetalles((prev) =>
+          prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
+        );
+      }
+    } else if (prevNoImpuesto && !concepto.noImpuesto) {
+      const backup = impuestosBackupRef.current;
+      if (backup.size > 0) {
+        setDetalles((prev) =>
+          prev.map((d) => {
+            const saved = backup.get(d.id);
+            if (saved) {
+              return calcularFila({ ...d, impuesto: saved.impuesto, porcentajeImpuesto: saved.porcentajeImpuesto });
+            }
+            return d;
+          })
+        );
+        impuestosBackupRef.current = new Map();
+      }
+    }
   };
 
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
@@ -579,6 +609,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
           _costo: producto.costo || 0,
           familia: producto.familia,
           medida: producto.medida,
+          modificaDescripcion: producto.modificaDescripcion ?? false,
         };
         return [calcularFila(filled), ...prev];
       });
@@ -594,6 +625,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
             _costo: producto.costo || 0,
             familia: producto.familia,
             medida: producto.medida,
+            modificaDescripcion: producto.modificaDescripcion ?? false,
           });
         })
       );
@@ -721,15 +753,36 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
-          <div>{toTitleCase(record.articulo || '')}</div>
-          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
-            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
-            {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
+      render: (_: any, _record: any, idx: number) => {
+        const fila = detalles[idx];
+        if (!fila) return null;
+        const docPermiteDesc = documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion ?? true;
+        if (docPermiteDesc) {
+          return (
+            <div style={{ fontSize: 13 }}>
+              <Input
+                size="small"
+                style={{ width: '100%' }}
+                value={fila.articulo || ''}
+                onChange={(e) => handleDetalleUpdateValue(fila.id, 'articulo', e.target.value)}
+              />
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+                {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+                {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div style={{ fontSize: 13 }}>
+            <div>{toTitleCase(fila.articulo || '')}</div>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+              {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+              {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: 'Cantidad',
@@ -853,14 +906,9 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                 />
               </FloatingField>
             </div>
+            <ConceptoInfoLabel concepto={selectedConcepto} />
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
-
-          {conceptoInfo && (
-            <Col xs={24}>
-              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-            </Col>
-          )}
 
           {/* Fila 2: FechaDocumento + Almacén Origen */}
           <Col xs={24} sm={12} lg={9}>
@@ -1102,6 +1150,12 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
+                      {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false) && detalles.length > 0 && (
+                        <CamposRestringidosAlert
+                          modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+                          modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+                        />
+                      )}
                       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={({ active }) => setActiveId(active.id as number)} onDragEnd={handleDragEnd}>
                         <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                           <Table
@@ -1197,38 +1251,44 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                         onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                       />
                      </div>
-                     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={({ active }) => setActiveId(active.id as number)} onDragEnd={handleDragEnd}>
-                       <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
-                         <Table
-                            dataSource={detallesFiltrados}
-                             columns={detalleColumns}
-                             rowKey="id"
-                             size="small"
-                             pagination={false}
-                              scroll={{ x: 800 }}
-                              components={{ body: { row: SortableRow } }}
-                              locale={{
-                                emptyText: (
-                                  <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Empty description="Sin registros" />
-                                  </div>
-                                ),
-                              }}
-                            />
-                          </SortableContext>
-                          <DragOverlay>
-                           {activeId ? (
-                             <div style={{ padding: '8px 12px', background: '#fafafa', border: '1px solid #d9d9d9', borderRadius: 4, opacity: 0.8 }}>
-                               Arrastrando...
-                            </div>
-                          ) : null}
-                        </DragOverlay>
-                      </DndContext>
-                   </>
+                       {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false) && detalles.length > 0 && (
+                         <CamposRestringidosAlert
+                           modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+                           modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+                         />
+                       )}
+                       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={({ active }) => setActiveId(active.id as number)} onDragEnd={handleDragEnd}>
+                         <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
+                           <Table
+                              dataSource={detallesFiltrados}
+                               columns={detalleColumns}
+                               rowKey="id"
+                               size="small"
+                               pagination={false}
+                                scroll={{ x: 800 }}
+                                components={{ body: { row: SortableRow } }}
+                               locale={{
+                                 emptyText: (
+                                   <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                     <Empty description="Sin registros" />
+                                   </div>
+                                 ),
+                               }}
+                             />
+                           </SortableContext>
+                           <DragOverlay>
+                            {activeId ? (
+                              <div style={{ padding: '8px 12px', background: '#fafafa', border: '1px solid #d9d9d9', borderRadius: 4, opacity: 0.8 }}>
+                                Arrastrando...
+                             </div>
+                           ) : null}
+                         </DragOverlay>
+                       </DndContext>
+                    </>
                 ),
-              },
-              {
-                key: 'asientos',
+                },
+                {
+                  key: 'asientos',
                 label: `Asientos (${data?.asientos?.length || 0})`,
                 children: (
                   <Table

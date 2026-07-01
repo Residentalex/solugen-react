@@ -132,15 +132,20 @@ export const facturaSuplidorApi = {
 
   // ===== Scanner =====
   verificarScan: async (sucursal: number, id: number): Promise<{ existe: boolean }> => {
-    const { data } = await apiClient.get<ApiResponse<{ existe: boolean }>>(`/RDE/${sucursal}/${id}/scanner/verificar`);
+    const { data } = await apiClient.get<ApiResponse<{ existe: boolean }>>(`/Transaccion/${sucursal}/${id}/scanner/verificar`);
     return data.data;
   },
 
   descargarScan: async (sucursal: number, id: number): Promise<Blob> => {
-    const { data } = await apiClient.get<Blob>(`/RDE/${sucursal}/${id}/scanner/descargar`, {
+    const { data } = await apiClient.get<Blob>(`/Transaccion/${sucursal}/${id}/scanner/descargar`, {
       responseType: 'blob',
     });
     return data;
+  },
+
+  generarAsientos: async (sucursal: number, transaccion: any): Promise<any[]> => {
+    const { data } = await apiClient.post<ApiResponse<any[]>>(`${BASE}/${sucursal}/generarAsiento`, transaccion);
+    return data.data;
   },
 
   // ===== Acciones de estado =====

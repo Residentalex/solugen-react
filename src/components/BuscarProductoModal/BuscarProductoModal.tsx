@@ -17,6 +17,8 @@ export interface ProductoSeleccionado {
   medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
   impuesto?: { nombre: string; porcentaje: number; codigo: string; idExterno: string };
   tieneVencimiento?: boolean;
+  modificaPrecio?: boolean;
+  modificaDescripcion?: boolean;
 }
 
 interface BuscarProductoModalProps {
@@ -170,6 +172,8 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
                     : undefined,
                 impuesto: (detalle.impuestos?.[0]?.impuesto as any) || undefined,
                 tieneVencimiento: detalle.pesado || false,
+                modificaPrecio: detalle.modificaPrecio ?? false,
+                modificaDescripcion: detalle.modificaDescripcion ?? false,
               });
             } catch {
               onSelect({
@@ -184,6 +188,8 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
                   : undefined,
                 impuesto: undefined,
                 tieneVencimiento: false,
+                modificaPrecio: false,
+                modificaDescripcion: false,
               });
             }
             onClose();

@@ -78,6 +78,8 @@ export interface DetalleFacturaPOSDTO {
   fechaVencimiento?: string;
   tieneVencimiento: boolean;
   componentes?: DetalleFacturaPOSDTO[];
+  modificaPrecio?: boolean;
+  modificaDescripcion?: boolean;
 }
 
 // Reusar tipos de entradaAlmacen.ts

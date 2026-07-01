@@ -20,6 +20,7 @@ const Productos: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
+  const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
   const sucursalProductos = useCompanyStore((s) => s.data.sucursalProductos);
 
   const [searchText, setSearchText] = useState('');
@@ -57,8 +58,12 @@ const Productos: React.FC = () => {
   useEffect(() => {
     setActiveModule('MProducto');
     updateToolbar({});
-    return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar]);
+    setPageTitleOverride('');
+    return () => {
+      resetToolbar();
+      setPageTitleOverride('');
+    };
+  }, [setActiveModule, updateToolbar, resetToolbar, setPageTitleOverride]);
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -178,6 +183,7 @@ const Productos: React.FC = () => {
           pageSize={pageSize}
           onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onReload={() => refetch()}
+          onNuevo={() => navigate('/MProducto/nuevo')}
           filtros={
             <Select
               value={filtroActivo}

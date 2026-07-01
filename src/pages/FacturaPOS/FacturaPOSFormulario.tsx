@@ -39,9 +39,12 @@ import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
+import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -123,6 +126,7 @@ const FacturaPOSFormulario: React.FC = () => {
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
   const { screenCode, documentCode } = useScreenConfig('FPV');
+  const documentoConfig = useDocumentoConfig(sucursalActiva, documentCode);
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -136,7 +140,6 @@ const FacturaPOSFormulario: React.FC = () => {
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
   const [selectedCliente, setSelectedCliente] = useState<ClienteDTO | null>(null);
   const [selectedAlmacen, setSelectedAlmacen] = useState<any | null>(null);
-  const [conceptoInfo, setConceptoInfo] = useState<string>('');
   const [productoModalOpen, setProductoModalOpen] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
@@ -149,6 +152,9 @@ const FacturaPOSFormulario: React.FC = () => {
   const editingOriginalValue = useRef<string | number>('');
   const editingValueRef = useRef<string | number>('');
   const fieldCloseHandledRef = useRef(false);
+
+  // Backup de impuestos para restaurar cuando el concepto deje de ser noImpuesto
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
 
   const openFieldEditor = (field: string) => {
     const val = form.getFieldValue(field);
@@ -419,31 +425,11 @@ const FacturaPOSFormulario: React.FC = () => {
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
     setEditingField(null);
-    form.setFieldsValue({ concepto: concepto.codigo });
 
-    // Cargar clientes
-    facturaPOSApi.obtenerClientes(sucursalActiva)
-      .then((ents) => setClientesCache(ents))
-      .catch(() => {});
-
-    // Mostrar avisos si el concepto tiene flags especiales
-    const infoParts: string[] = [];
-    if (concepto.noImpuesto) infoParts.push(' * No Impuestos * ');
-    if (concepto.noAsientos) infoParts.push(' * No Asientos * ');
-    if (concepto.activo === false) infoParts.push(' * Concepto Inactivo * ');
-    setConceptoInfo(infoParts.join(''));
-
-    // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
-    if (concepto.noImpuesto && detalles.some((d) => (d.porcentajeImpuesto || 0) > 0)) {
-      message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
-      setDetalles((prev) =>
-        prev.map((d) => calcularFilaPOS({ ...d, porcentajeImpuesto: 0 }))
-      );
-    }
-
-    // === ConfigurarMoneda ===
+    // === ConfigurarMoneda (unificado con conceptoNombre) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
+      concepto: concepto.codigo,
       moneda: monedaObj.nombre,
       tasa: monedaObj.tasa ?? 1,
     });
@@ -452,6 +438,46 @@ const FacturaPOSFormulario: React.FC = () => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaObj };
     });
+
+    // Cargar clientes
+    facturaPOSApi.obtenerClientes(sucursalActiva)
+      .then((ents) => setClientesCache(ents))
+      .catch(() => {});
+
+    // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
+    const prevNoImpuesto = selectedConcepto?.noImpuesto;
+
+    if (concepto.noImpuesto) {
+      const hayImpuestos = detalles.some((d) => (d.porcentajeImpuesto || 0) > 0);
+      if (hayImpuestos) {
+        const backup = new Map<number, { impuesto?: any; porcentajeImpuesto: number }>();
+        detalles.forEach((d) => {
+          if ((d.porcentajeImpuesto || 0) > 0) {
+            backup.set(d.id, { impuesto: d.impuesto, porcentajeImpuesto: d.porcentajeImpuesto || 0 });
+          }
+        });
+        impuestosBackupRef.current = backup;
+
+        message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+        setDetalles((prev) =>
+          prev.map((d) => calcularFilaPOS({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
+        );
+      }
+    } else if (prevNoImpuesto && !concepto.noImpuesto) {
+      const backup = impuestosBackupRef.current;
+      if (backup.size > 0) {
+        setDetalles((prev) =>
+          prev.map((d) => {
+            const saved = backup.get(d.id);
+            if (saved) {
+              return calcularFilaPOS({ ...d, impuesto: saved.impuesto, porcentajeImpuesto: saved.porcentajeImpuesto });
+            }
+            return d;
+          })
+        );
+        impuestosBackupRef.current = new Map();
+      }
+    }
 
     // Auto-asignar almacén del concepto si tiene
     if ((concepto as any).almacen) {
@@ -526,6 +552,8 @@ const FacturaPOSFormulario: React.FC = () => {
           impuesto: producto.impuesto,
           porcentajeImpuesto: producto.impuesto?.porcentaje || 0,
           tieneVencimiento: producto.tieneVencimiento,
+          modificaPrecio: producto.modificaPrecio ?? false,
+          modificaDescripcion: producto.modificaDescripcion ?? false,
         };
         return [calcularFilaPOS(filled), ...prev];
       });
@@ -544,6 +572,8 @@ const FacturaPOSFormulario: React.FC = () => {
             impuesto: producto.impuesto,
             porcentajeImpuesto: producto.impuesto?.porcentaje || 0,
             tieneVencimiento: producto.tieneVencimiento,
+            modificaPrecio: producto.modificaPrecio ?? false,
+            modificaDescripcion: producto.modificaDescripcion ?? false,
           };
           return calcularFilaPOS(filled);
         })
@@ -595,6 +625,44 @@ const FacturaPOSFormulario: React.FC = () => {
       render: (_: any, r: AsientoContableDTO) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
   ];
 
+  const handleRefresh = useCallback(() => {
+    if (mode === 'crear') return;
+    if (!id) return;
+    setLoadingError(false);
+    setLoading(true);
+    facturaPOSApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((res) => {
+        const full: FacturaPOSFormularioDTO = {
+          id: res.id, fechaDocumento: res.fechaDocumento, noDocumento: res.noDocumento,
+          estado: res.estado, periodo: res.periodo, ncf: res.ncf || '', nota: res.nota || '',
+          referencia: res.referencia || '', tasa: res.tasa || 1, diasCredito: res.diasCredito || 0,
+          turno: res.turno || '', concepto: res.concepto || null, cliente: res.cliente || null,
+          almacen: res.almacen || null, moneda: res.moneda || null, documento: res.documento,
+          subTotal: res.subTotal, descuento: res.descuento, impuestos: res.impuestos, total: res.total,
+          detalles: (res.detalles || []).map((d: any) => ({
+            ...d, porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
+            tieneVencimiento: d.tieneVencimiento ?? false,
+          })),
+          cobros: (res.cobros || cobrosVacios()) as unknown as CobroDTO,
+          asientos: res.asientos || [], logs: res.logs || [],
+        };
+        setData(full); setDetalles(full.detalles); setCobros(full.cobros || cobrosVacios());
+        setSelectedConcepto(full.concepto); setSelectedCliente(full.cliente); setSelectedAlmacen(full.almacen);
+        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
+        form.setFieldsValue({
+          concepto: full.concepto?.codigo || '', cliente: full.cliente?.codigo || '',
+          almacen: full.almacen?.codigo || '', fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+          turno: full.turno || '', ncf: full.ncf || '', referencia: full.referencia || '',
+          diasCredito: full.diasCredito || 0, tasa: full.tasa || 1, nota: full.nota || '',
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg); setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form, mode]);
+
   // ===== Loading state =====
   if (loading) {
     return <LoadingSpinner mensaje="Cargando documento..." />;
@@ -627,15 +695,36 @@ const FacturaPOSFormulario: React.FC = () => {
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
-          <div>{toTitleCase(record.articulo || '')}</div>
-          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
-            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
-            {record.fechaVencimiento && <span>V: {formatDate(record.fechaVencimiento)}</span>}
+      render: (_: any, _record: any, idx: number) => {
+        const fila = detalles[idx];
+        if (!fila) return null;
+        const docPermiteDesc = documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion ?? true;
+        if (docPermiteDesc) {
+          return (
+            <div style={{ fontSize: 13 }}>
+              <Input
+                size="small"
+                style={{ width: '100%' }}
+                value={fila.articulo || ''}
+                onChange={(e) => handleDetalleUpdateValue(fila.id, 'articulo', e.target.value)}
+              />
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+                {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+                {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div style={{ fontSize: 13 }}>
+            <div>{toTitleCase(fila.articulo || '')}</div>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+              {fila.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(fila.familia.nombre)}</Tag> : null}
+              {fila.fechaVencimiento && <span>V: {formatDate(fila.fechaVencimiento)}</span>}
+            </div>
           </div>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: 'Cantidad',
@@ -710,28 +799,41 @@ const FacturaPOSFormulario: React.FC = () => {
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
-      shouldCellUpdate: (record: DetalleFacturaPOSDTO, prevRecord: DetalleFacturaPOSDTO) => record.precio !== prevRecord.precio || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor,
-      render: (_: any, record: DetalleFacturaPOSDTO, idx: number) => {
-        const precioBase = Number(detalles[idx]?.precio) || 0;
-        const pctDesc = Number(detalles[idx]?.porcentajeDescuento) || 0;
-        const factor = Number(detalles[idx]?.medida?.factor) || 1;
+      shouldCellUpdate: (record: DetalleFacturaPOSDTO, prevRecord: DetalleFacturaPOSDTO) => record.precio !== prevRecord.precio || record.porcentajeDescuento !== prevRecord.porcentajeDescuento || record.cantidad !== prevRecord.cantidad || record.medida?.factor !== prevRecord.medida?.factor || record.modificaPrecio !== prevRecord.modificaPrecio,
+      render: (_: any, _record: DetalleFacturaPOSDTO, idx: number) => {
+        const fila = detalles[idx];
+        if (!fila) return null;
+        const precioBase = Number(fila.precio) || 0;
+        const pctDesc = Number(fila.porcentajeDescuento) || 0;
+        const factor = Number(fila.medida?.factor) || 1;
         const precioConDescuento = precioBase - ((precioBase * pctDesc) / 100);
         const precioUnitario = precioConDescuento / factor;
+        const docPermiteEditar = documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio ?? true;
+        if (docPermiteEditar) {
+          return (
+            <div>
+              <InputNumber
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                step={0.01}
+                precision={2}
+                controls={false}
+                value={fila.precio}
+                onChange={(val) => handleDetalleUpdateValue(fila.id, 'precio', val || 0)}
+                onBlur={() => handleDetalleCalculate(fila.id, 'precio', fila.precio || 0)}
+                onPressEnter={() => handleDetalleCalculate(fila.id, 'precio', fila.precio || 0)}
+              />
+              <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+                {formatNumber(precioUnitario)} × {factor}
+              </div>
+            </div>
+          );
+        }
         return (
           <div>
-            <InputNumber
-              size="small"
-              style={{ width: '100%' }}
-              styles={{ input: { textAlign: 'right' } }}
-              min={0}
-              step={0.01}
-              precision={2}
-              controls={false}
-              value={detalles[idx]?.precio}
-              onChange={(val) => handleDetalleUpdateValue(detalles[idx].id, 'precio', val || 0)}
-              onBlur={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
-              onPressEnter={() => handleDetalleCalculate(detalles[idx].id, 'precio', detalles[idx]?.precio || 0)}
-            />
+            <Text>{formatCurrency(precioBase)}</Text>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
               {formatNumber(precioUnitario)} × {factor}
             </div>
@@ -874,48 +976,10 @@ const FacturaPOSFormulario: React.FC = () => {
                   onClick={handleConceptoSearchClick}
                 />
               </FloatingField>
+              <ConceptoInfoLabel concepto={selectedConcepto} />
             </div>
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
-          <Col xs={24} sm={12} lg={12}>
-            <Form.Item name="turno" style={{ marginBottom: 0 }}>
-              <FloatingField label="Turno" required>
-                <Input
-                  placeholder="Turno POS"
-                  value={form.getFieldValue('turno') || 'POS-001'}
-                  readOnly
-                />
-              </FloatingField>
-            </Form.Item>
-          </Col>
-
-          <Col xs={24} sm={12} lg={12}>
-            <FloatingField label="Cajero">
-              <Input
-                placeholder=" "
-                value={mode === 'crear' ? (authUser?.nombre || '') : (data?.cajero || '')}
-                readOnly
-              />
-            </FloatingField>
-          </Col>
-          <Col xs={24} sm={12} lg={12}>
-            <FloatingField label="Caja">
-              <Input
-                placeholder=" "
-                value={(() => {
-                  const turnoVal = form.getFieldValue('turno') || '';
-                  return turnoVal.length >= 3 ? turnoVal.substring(1, 3) : (data?.caja || '');
-                })()}
-                readOnly
-              />
-            </FloatingField>
-          </Col>
-
-          {conceptoInfo && (
-            <Col xs={24}>
-              <Text type="warning" style={{ fontSize: 12 }}>{conceptoInfo}</Text>
-            </Col>
-          )}
 
           {/* Fila 2: Fecha + Cliente */}
           <Col xs={24} sm={12} lg={8}>
@@ -1144,44 +1208,6 @@ const FacturaPOSFormulario: React.FC = () => {
     </div>
   );
 
-  const handleRefresh = useCallback(() => {
-    if (mode === 'crear') return;
-    if (!id) return;
-    setLoadingError(false);
-    setLoading(true);
-    facturaPOSApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        const full: FacturaPOSFormularioDTO = {
-          id: res.id, fechaDocumento: res.fechaDocumento, noDocumento: res.noDocumento,
-          estado: res.estado, periodo: res.periodo, ncf: res.ncf || '', nota: res.nota || '',
-          referencia: res.referencia || '', tasa: res.tasa || 1, diasCredito: res.diasCredito || 0,
-          turno: res.turno || '', concepto: res.concepto || null, cliente: res.cliente || null,
-          almacen: res.almacen || null, moneda: res.moneda || null, documento: res.documento,
-          subTotal: res.subTotal, descuento: res.descuento, impuestos: res.impuestos, total: res.total,
-          detalles: (res.detalles || []).map((d: any) => ({
-            ...d, porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
-            tieneVencimiento: d.tieneVencimiento ?? false,
-          })),
-          cobros: (res.cobros || cobrosVacios()) as unknown as CobroDTO,
-          asientos: res.asientos || [], logs: res.logs || [],
-        };
-        setData(full); setDetalles(full.detalles); setCobros(full.cobros || cobrosVacios());
-        setSelectedConcepto(full.concepto); setSelectedCliente(full.cliente); setSelectedAlmacen(full.almacen);
-        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
-        form.setFieldsValue({
-          concepto: full.concepto?.codigo || '', cliente: full.cliente?.codigo || '',
-          almacen: full.almacen?.codigo || '', fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          turno: full.turno || '', ncf: full.ncf || '', referencia: full.referencia || '',
-          diasCredito: full.diasCredito || 0, tasa: full.tasa || 1, nota: full.nota || '',
-        });
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg); setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form, mode]);
-
   return (
     <div>
       <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
@@ -1260,6 +1286,12 @@ const FacturaPOSFormulario: React.FC = () => {
                           onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                         />
                       </div>
+                      {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false || data?.documento?.modificaPrecio === false || data?.documento?.modificaDescripcion === false) && detalles.length > 0 && (
+                        <CamposRestringidosAlert
+                          modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+                          modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+                        />
+                      )}
                       <Table
                         dataSource={detallesFiltrados}
                         columns={detalleColumns}
@@ -1361,6 +1393,12 @@ const FacturaPOSFormulario: React.FC = () => {
                         onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
                       />
                     </div>
+                    {(documentoConfig?.modificaPrecio === false || documentoConfig?.modificaDescripcion === false || data?.documento?.modificaPrecio === false || data?.documento?.modificaDescripcion === false) && detalles.length > 0 && (
+                      <CamposRestringidosAlert
+                        modificaPrecio={documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio}
+                        modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
+                      />
+                    )}
                     <Table
                       dataSource={detallesFiltrados}
                       columns={detalleColumns}

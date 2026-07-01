@@ -79,8 +79,8 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       const params: any = {};
       if (!esDocumentoInventario) params.tipoEntidad = tipoEntidad;
 
-      const { data } = await apiClient.get<any>(endpoint, { params });
-      let docs = data?.data || [];
+      const { data: respData } = await apiClient.get<any>(endpoint, { params });
+      let docs = respData?.data || [];
 
       // Filtrar solo documentos con pendiente > 0
       docs = docs.filter((d: any) => calcularPendiente(d) > 0);
@@ -274,7 +274,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       return {
         transaccionAsociadaID: doc?.id,
         id: doc?.id,
-        documento: doc?.noDocumento,
+        documento: obtenerCodigoCompleto(doc),
         nCF: doc?.ncf,
         ncf: doc?.ncf,
         montoOriginal: doc?.total || 0,
@@ -283,6 +283,8 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
         monto: Math.min(montoFila, pendiente),
         fecha: doc?.fechaDocumento,
         tipoDocumento: doc?.tipoDocumento,
+        codigoSucursal: doc?.codigoSucursal,
+        sucursal: doc?.sucursal?.nombre,
       };
     });
     onSelect(selected);

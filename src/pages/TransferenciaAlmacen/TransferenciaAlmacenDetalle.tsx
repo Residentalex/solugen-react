@@ -24,6 +24,7 @@ import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
@@ -383,22 +384,28 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       </div>
     } style={{ marginBottom: 16 }}>
       <Descriptions bordered size="small" column={columnCount} styles={{ content: { background: 'transparent' } }}>
-        <Descriptions.Item label="Tipo:">{documentoActivo.tipo?.nombre || documentoActivo.codigoTipo || '-'}</Descriptions.Item>
-        <Descriptions.Item label="Concepto:">
-          {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}
-        </Descriptions.Item>
-        <Descriptions.Item label="Sucursal:">
-          <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
-        </Descriptions.Item>
+        {/* Fila 1 */}
         <Descriptions.Item label="Fecha Doc.:">
           {formatDate(documentoActivo.fechaDocumento)}
         </Descriptions.Item>
+        <Descriptions.Item label="Concepto:">
+          {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}
+          <ConceptoInfoLabel concepto={documentoActivo.concepto} />
+        </Descriptions.Item>
+        <Descriptions.Item label="Tipo:">{documentoActivo.tipo?.nombre || documentoActivo.codigoTipo || '-'}</Descriptions.Item>
+
+        {/* Fila 2 */}
         <Descriptions.Item label="Almacén Origen:">
           {documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}
         </Descriptions.Item>
         <Descriptions.Item label="Almacén Destino:">
           {documentoActivo.almacenDestino?.nombre ? toTitleCase(documentoActivo.almacenDestino.nombre) : '-'}
         </Descriptions.Item>
+        <Descriptions.Item label="Sucursal:">
+          <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+        </Descriptions.Item>
+
+        {/* Fila 3 */}
         <Descriptions.Item label="Nota:" span={columnCount}>
           <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
         </Descriptions.Item>
@@ -470,7 +477,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
-        onVolver={() => navigate('/FTRP')}
+        onVolver={() => navigate(-1)}
         onImprimir={async () => {
           setImprimiendo(true);
           try {

@@ -59,6 +59,8 @@ export interface DetalleSalidaAlmacenDTO {
   fechaVencimiento?: string;
   tieneVencimiento?: boolean;
   nota?: string;
+  modificaPrecio?: boolean;
+  modificaDescripcion?: boolean;
 }
 
 export interface SalidaAlmacenFullDTO {
@@ -104,4 +106,5 @@ export interface SalidaAlmacenFullDTO {
   logs?: LogDTO[];
   actualizarCostos?: boolean;
   noDocumentoGenerado?: string;
+  codigoSucursal?: string;
 }

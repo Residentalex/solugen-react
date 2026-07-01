@@ -29,11 +29,13 @@ export const antiguedadSaldosApi = {
     hasta: string,
     codEntidad?: string,
     codCategoria?: string,
+    codSucursal?: string,
   ): Promise<Blob> => {
     const params = new URLSearchParams();
     params.set('hasta', hasta);
     if (codEntidad) params.set('codEntidad', codEntidad);
     if (codCategoria) params.set('codCategoria', codCategoria);
+    if (codSucursal) params.set('codSucursal', codSucursal);
 
     const { data } = await apiClient.get<Blob>(
       `/reportes/antiguedad-saldos/${sucursal}/${tipoEntidad}?${params.toString()}`,

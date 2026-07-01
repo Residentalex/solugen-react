@@ -15,6 +15,7 @@ interface DocumentListadoToolbarProps {
   onFiltrosAplicar?: (filtros: any) => void;
 
   searchPlaceholder?: string;
+  searchDefaultValue?: string;
   onSearch: (value: string) => void;
 
   pageSize: number;
@@ -48,6 +49,7 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
   opcionesEstado,
   onFiltrosAplicar,
   searchPlaceholder = 'Buscar...',
+  searchDefaultValue,
   onSearch,
   pageSize,
   onPageSizeChange,
@@ -87,6 +89,7 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
       {!ocultarSearch && <Search
         placeholder={searchPlaceholder}
         allowClear
+        defaultValue={searchDefaultValue}
         onSearch={onSearch}
         onKeyDown={(e) => {
           if (e.key === 'Escape') {

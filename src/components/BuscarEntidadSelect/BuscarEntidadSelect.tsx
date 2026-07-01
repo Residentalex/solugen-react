@@ -31,7 +31,7 @@ interface BuscarEntidadSelectProps {
   /** Ref pasada al FloatingField */
   ref?: React.Ref<HTMLDivElement>;
   /** Callback cuando se abre/cierra el dropdown */
-  onDropdownVisibleChange?: (open: boolean) => void;
+  onOpenChange?: (open: boolean) => void;
   /** Si no se ha seleccionado concepto aún, mostrar mensaje */
   conceptoSeleccionado?: boolean;
 }
@@ -45,7 +45,7 @@ const BuscarEntidadSelect: React.FC<BuscarEntidadSelectProps> = ({
   required = false,
   disabled = false,
   placeholder = ' ',
-  onDropdownVisibleChange,
+  onOpenChange,
   conceptoSeleccionado = true,
 }) => {
   const handleChange = (val: string | undefined) => {
@@ -79,7 +79,7 @@ const BuscarEntidadSelect: React.FC<BuscarEntidadSelectProps> = ({
     if (open && !conceptoSeleccionado) {
       message.info('Seleccione un concepto primero');
     }
-    onDropdownVisibleChange?.(open);
+    onOpenChange?.(open);
   };
 
   return (
@@ -92,7 +92,7 @@ const BuscarEntidadSelect: React.FC<BuscarEntidadSelectProps> = ({
         value={value}
         onChange={handleChange}
         disabled={disabled}
-        onDropdownVisibleChange={handleDropdownVisibleChange}
+        onOpenChange={handleDropdownVisibleChange}
         notFoundContent={!conceptoSeleccionado ? 'Seleccione un concepto primero' : undefined}
         filterOption={(input, option) =>
           (option?.label as string)?.toLowerCase()?.includes(input.toLowerCase()) ?? false

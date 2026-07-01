@@ -2,13 +2,16 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Row, Col, Card, Typography, Button, Space, Tag, message, Spin, Empty,
-  Table, theme, Tooltip, Segmented, Modal, Checkbox, Input, Select,
+  Table, theme, Tooltip, Segmented, Modal, Checkbox, Input, Select, Skeleton,
 } from 'antd';
 import {
   DollarOutlined, ShoppingCartOutlined, FileTextOutlined,
   OrderedListOutlined, TeamOutlined, InboxOutlined,
   RiseOutlined, SyncOutlined, ReloadOutlined,
   SettingOutlined, SearchOutlined,
+  BarChartOutlined, LineChartOutlined, WarningOutlined,
+  UserOutlined, RocketOutlined, CheckCircleOutlined,
+  ArrowUpOutlined, ArrowDownOutlined,
 } from '@ant-design/icons';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { useAuthStore } from '../../stores/authStore';
@@ -21,7 +24,7 @@ import type {
   EvolucionDiariaDTO, EnvioDGIIDTO,
 } from '../../api/dashboardApi';
 import EntidadImagen from '../../components/EntidadImagen';
-import { formatDateParam, formatCurrency, extraerMensajeError } from '../../utils/formats';
+import { formatDateParam, formatCurrency, formatNumber, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import type { PantallaDTO } from '../../types/auth';
 
@@ -43,9 +46,9 @@ function guardarPreferidas(usuarioID: number, codigos: string[]) {
 
 function formatKPIValue(value: number, kind: 'currency' | 'number'): string {
   if (kind === 'currency') {
-    if (value >= 1_000_000) return `RD$${(value / 1_000_000).toFixed(1)}M`;
-    if (value >= 1_000) return `RD$${(value / 1_000).toFixed(1)}K`;
-    try { return formatCurrency(value); } catch { return `RD$${value.toLocaleString('es-DO')}`; }
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+    if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+    try { return formatNumber(value); } catch { return value.toLocaleString('es-DO'); }
   }
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return value.toLocaleString('es-DO');
@@ -417,11 +420,25 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
       </div>
 
       {loading && !resumen ? (
-        <div style={{ textAlign: 'center', padding: 80 }}>
-          <Spin size="large" />
-          <div className="paces-text-secondary" style={{ marginTop: 16 }}>
-            Cargando dashboard...
-          </div>
+        <div style={{ padding: '0 0 24px' }}>
+          <Row gutter={[16, 16]}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Col xs={12} sm={8} lg={6} xl={4} key={i}>
+                <div className="dashboard-kpi-card">
+                  <Skeleton active paragraph={{ rows: 2 }} title={{ width: '60%' }} />
+                </div>
+              </Col>
+            ))}
+          </Row>
+          <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Col xs={24} lg={8} key={i}>
+                <div className="dashboard-chart-card">
+                  <Skeleton active paragraph={{ rows: 6 }} title={{ width: '40%' }} />
+                </div>
+              </Col>
+            ))}
+          </Row>
         </div>
       ) : (
         <>
@@ -431,6 +448,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
               <Col xs={12} sm={8} lg={6} xl={4} key={kpi.key}>
                 <div
                   className="dashboard-kpi-card"
+                  style={{ '--kpi-accent': kpi.color } as React.CSSProperties}
                   onClick={() => navegarKPI(kpi.path)}
                 >
                   <div
@@ -450,19 +468,22 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     {kpi.changeUp ? (
                       <RiseOutlined style={{ fontSize: 11 }} />
                     ) : (
-                      <span style={{ fontSize: 11 }}>⚡</span>
+                      <WarningOutlined style={{ fontSize: 11 }} />
                     )}
                     {' '}{kpi.change}
                   </div>
-                  {/* Variación vs período anterior */}
                   {'variacion' in kpi && kpi.variacion !== undefined && (
                     <div style={{
                       fontSize: 11,
                       color: kpi.variacion >= 0 ? '#34c38f' : '#f46a6a',
                       fontWeight: 500,
-                      marginTop: 2
+                      marginTop: 2,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 2,
                     }}>
-                      {kpi.variacion >= 0 ? '▲' : '▼'} {Math.abs(kpi.variacion).toFixed(1)}% vs período anterior
+                      {kpi.variacion >= 0 ? <ArrowUpOutlined style={{ fontSize: 10 }} /> : <ArrowDownOutlined style={{ fontSize: 10 }} />}
+                      {' '}{Math.abs(kpi.variacion).toFixed(1)}% vs período anterior
                     </div>
                   )}
                 </div>
@@ -474,9 +495,9 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
           <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
             <Col xs={24} lg={8}>
               <div className="dashboard-chart-card">
-                <h3 className="dashboard-section-title">
-                  📊 Ventas vs Compras por Mes
-                </h3>
+                  <h3 className="dashboard-section-title">
+                    <BarChartOutlined /> Ventas vs Compras por Mes
+                  </h3>
                 {ventasPorMes.length > 0 ? (
                   <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={ventasPorMes} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
@@ -484,7 +505,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                       <XAxis dataKey="etiqueta" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} />
                       <RechartsTooltip
-                        formatter={(value: number) => [`RD$${value.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`, undefined]}
+                        formatter={(value: number) => [formatCurrency(value), undefined]}
                       />
                       <Legend />
                       <Bar dataKey="totalVentas" name="Ventas" fill="#34c38f" radius={[4, 4, 0, 0]} />
@@ -500,34 +521,41 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
               <div className="dashboard-chart-card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ padding: '16px 20px 8px' }}>
                   <h3 className="dashboard-section-title" style={{ margin: 0 }}>
-                    📊 Comparativo por Sucursales
+                    <BarChartOutlined /> Comparativo por Sucursales
                   </h3>
                 </div>
                 {comparativo.length > 0 ? (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                      <thead>
-                        <tr style={{ borderBottom: '2px solid var(--paces-border)' }}>
-                          <th style={{ padding: '8px 12px', textAlign: 'left' }}>Sucursal</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'right' }}>Ventas 🟢</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'right' }}>Compras 🔵</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {comparativo.map((row) => (
-                          <tr key={row.sucursal} style={{ borderBottom: '1px solid var(--paces-border)' }}>
-                            <td style={{ padding: '8px 12px', fontWeight: 600 }}>{row.sucursal}</td>
-                            <td style={{ padding: '8px 12px', textAlign: 'right', color: '#34c38f' }}>
-                              {formatCurrency(row.ventas)}
-                            </td>
-                            <td style={{ padding: '8px 12px', textAlign: 'right', color: '#556ee6' }}>
-                              {formatCurrency(row.compras)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <Table
+                    dataSource={comparativo}
+                    rowKey="sucursal"
+                    pagination={false}
+                    size="small"
+                    className="paces-list-table"
+                    showHeader={false}
+                    style={{ borderTop: '1px solid var(--paces-border)' }}
+                    columns={[
+                      {
+                        title: 'Sucursal',
+                        dataIndex: 'sucursal',
+                        key: 'sucursal',
+                        render: (v: string) => <Text strong style={{ fontSize: 13 }}>{v}</Text>,
+                      },
+                      {
+                        title: 'Ventas',
+                        dataIndex: 'ventas',
+                        key: 'ventas',
+                        align: 'right',
+                        render: (v: number) => <Text style={{ color: '#34c38f', fontSize: 13, fontWeight: 600 }}>{formatCurrency(v)}</Text>,
+                      },
+                      {
+                        title: 'Compras',
+                        dataIndex: 'compras',
+                        key: 'compras',
+                        align: 'right',
+                        render: (v: number) => <Text style={{ color: '#556ee6', fontSize: 13, fontWeight: 600 }}>{formatCurrency(v)}</Text>,
+                      },
+                    ]}
+                  />
                 ) : (
                   <div style={{ padding: 40, textAlign: 'center' }}>
                     <span className="paces-text-secondary">Sin datos del período</span>
@@ -537,9 +565,9 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
             </Col>
             <Col xs={24} lg={8}>
               <div className="dashboard-chart-card">
-                <h3 className="dashboard-section-title">
-                  📈 Evolución Diaria
-                </h3>
+                  <h3 className="dashboard-section-title">
+                    <LineChartOutlined /> Evolución Diaria
+                  </h3>
                 {evolucionDiaria.length > 0 ? (
                   <ResponsiveContainer width="100%" height={280}>
                     <LineChart data={evolucionDiaria} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
@@ -555,7 +583,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                       <YAxis tick={{ fontSize: 11 }} />
                       <RechartsTooltip
                         labelFormatter={(val: string) => new Date(val).toLocaleDateString('es-DO')}
-                        formatter={(value: number) => [`RD$${value.toLocaleString('es-DO', { minimumFractionDigits: 2 })}`, undefined]}
+                        formatter={(value: number) => [formatCurrency(value), undefined]}
                       />
                       <Line type="monotone" dataKey="ventas" name="Ventas" stroke="#34c38f" strokeWidth={2} dot={{ r: 3 }} />
                     </LineChart>
@@ -575,10 +603,10 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
               <div className="dashboard-chart-card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--paces-border)' }}>
                   <h3 className="dashboard-section-title" style={{ margin: 0 }}>
-                    📄 NCF Pendientes por Enviar
+                    <FileTextOutlined /> NCF Pendientes por Enviar
                   </h3>
                   <span style={{ fontSize: 13, color: pendientesNCF.length > 0 ? '#f46a6a' : '#34c38f', fontWeight: 600 }}>
-                    {pendientesNCF.length > 0 ? `${pendientesNCF.length} pendiente(s)` : '✅ Al día'}
+                    {pendientesNCF.length > 0 ? `${pendientesNCF.length} pendiente(s)` : <><CheckCircleOutlined /> Al día</>}
                   </span>
                 </div>
                 {pendientesNCF.length > 0 ? (
@@ -600,7 +628,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                   />
                 ) : (
                   <div style={{ padding: 24, textAlign: 'center' }}>
-                    <span className="paces-text-secondary">✅ No hay NCF pendientes por enviar en este período</span>
+                    <span className="paces-text-secondary"><CheckCircleOutlined /> No hay NCF pendientes por enviar en este período</span>
                   </div>
                 )}
               </div>
@@ -613,10 +641,10 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
               <div className="dashboard-chart-card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--paces-border)' }}>
                   <h3 className="dashboard-section-title" style={{ margin: 0 }}>
-                    ⚠️ Documentos No Cuadrados
+                    <WarningOutlined /> Documentos No Cuadrados
                   </h3>
                   <span style={{ fontSize: 13, color: docsNoCuadrados.length > 0 ? '#f46a6a' : '#34c38f', fontWeight: 600 }}>
-                    {docsNoCuadrados.length > 0 ? `${docsNoCuadrados.length} documento(s)` : '✅ Al día'}
+                    {docsNoCuadrados.length > 0 ? `${docsNoCuadrados.length} documento(s)` : <><CheckCircleOutlined /> Al día</>}
                   </span>
                 </div>
                 {docsNoCuadrados.length > 0 ? (
@@ -630,18 +658,18 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                       { title: 'Fecha', dataIndex: 'fechaDocumento', key: 'fechaDocumento', width: 110, render: (v: string) => <Text style={{ fontSize: 12 }}>{v?.split('T')[0]}</Text> },
                       { title: 'Documento', dataIndex: 'noDocumento', key: 'noDocumento', width: 150, render: (v: string) => <Text style={{ fontSize: 12 }}>{v || '-'}</Text> },
                       { title: 'Entidad', dataIndex: 'nombreEntidad', key: 'nombreEntidad', ellipsis: true, render: (v: string) => <Text style={{ fontSize: 12 }}>{v || '-'}</Text> },
-                      { title: 'Débitos', dataIndex: 'debitos', key: 'debitos', width: 130, align: 'right' as const, render: (v: number) => <Text style={{ fontSize: 12 }}>{v.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</Text> },
-                      { title: 'Créditos', dataIndex: 'creditos', key: 'creditos', width: 130, align: 'right' as const, render: (v: number) => <Text style={{ fontSize: 12 }}>{v.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</Text> },
+                      { title: 'Débitos', dataIndex: 'debitos', key: 'debitos', width: 130, align: 'right' as const, render: (v: number) => <Text style={{ fontSize: 12 }}>{formatNumber(v)}</Text> },
+                      { title: 'Créditos', dataIndex: 'creditos', key: 'creditos', width: 130, align: 'right' as const, render: (v: number) => <Text style={{ fontSize: 12 }}>{formatNumber(v)}</Text> },
                       { title: 'Diferencia', key: 'diferencia', width: 130, align: 'right' as const, render: (_: any, r: any) => {
                         const diff = (r.debitos || 0) - (r.creditos || 0);
-                        return <Text style={{ color: '#f46a6a', fontWeight: 600, fontSize: 12 }}>{diff.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</Text>;
+                        return <Text style={{ color: '#f46a6a', fontWeight: 600, fontSize: 12 }}>{formatNumber(diff)}</Text>;
                       }},
                     ]}
                     style={{ borderTop: '1px solid var(--paces-border)' }}
                   />
                 ) : (
                   <div style={{ padding: 24, textAlign: 'center' }}>
-                    <span className="paces-text-secondary">✅ No hay documentos no cuadrados en este período</span>
+                    <span className="paces-text-secondary"><CheckCircleOutlined /> No hay documentos no cuadrados en este período</span>
                   </div>
                 )}
               </div>
@@ -654,7 +682,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
               <div className="dashboard-chart-card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ padding: '20px 20px 0' }}>
                   <h3 className="dashboard-section-title">
-                    📄 Últimos Documentos
+                    <FileTextOutlined /> Últimos Documentos
                   </h3>
                 </div>
                 {recientes.length > 0 ? (
@@ -681,7 +709,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 <div className="dashboard-chart-card" style={{ padding: 0, overflow: 'hidden' }}>
                   <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--paces-border)' }}>
                     <h3 className="dashboard-section-title" style={{ margin: 0 }}>
-                      📦 Productos con Stock Negativo
+                      <InboxOutlined /> Productos con Stock Negativo
                     </h3>
                     <Select
                       value={sucursalStock}
@@ -716,16 +744,16 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                         { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120, render: (v: string) => <Text code style={{ fontSize: 12 }}>{v}</Text> },
                         { title: 'Producto', dataIndex: 'nombre', key: 'nombre', ellipsis: true, render: (v: string) => <Text style={{ fontSize: 13 }}>{v || '-'}</Text> },
                         { title: 'Existencia', dataIndex: 'existencia', key: 'existencia', width: 110, align: 'right',
-                          render: (v: number) => <Text style={{ color: '#f46a6a', fontWeight: 600, fontSize: 13 }}>{v}</Text> },
+                          render: (v: number) => <Text style={{ color: '#f46a6a', fontWeight: 600, fontSize: 13 }}>{v.toLocaleString('es-DO')}</Text> },
                         { title: 'Costo', dataIndex: 'ultimoCosto', key: 'ultimoCosto', width: 160, align: 'right',
-                          render: (v: number | null) => <Text style={{ fontSize: 13 }}>{v != null ? v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-'}</Text> },
+                          render: (v: number | null) => <Text style={{ fontSize: 13 }}>{v != null ? formatNumber(v) : '-'}</Text> },
                         { title: 'Almacén', dataIndex: 'almacen', key: 'almacen', width: 180, render: (v: string) => <Text style={{ fontSize: 13 }}>{v?.trim() || '-'}</Text> },
                       ]}
                       style={{ borderTop: '1px solid var(--paces-border)' }}
                     />
                   ) : (
                     <div style={{ padding: 40, textAlign: 'center' }}>
-                      <span className="paces-text-secondary">✅ No hay productos con stock negativo en esta sucursal</span>
+                      <span className="paces-text-secondary"><CheckCircleOutlined /> No hay productos con stock negativo en esta sucursal</span>
                     </div>
                   )}
                 </div>
@@ -738,7 +766,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
             <Col xs={24} lg={12}>
               <div className="paces-card">
                 <div className="paces-card-header">
-                  <span>👤 Información del Usuario</span>
+                  <span><UserOutlined /> Información del Usuario</span>
                 </div>
                 <div className="paces-card-body">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
@@ -786,7 +814,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
             <Col xs={24} lg={12}>
               <div className="paces-card">
                 <div className="paces-card-header">
-                  <span>🚀 Accesos Rápidos</span>
+                  <span><RocketOutlined /> Accesos Rápidos</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span className="paces-text-secondary" style={{ fontSize: 12, fontWeight: 400 }}>
                       {pantallasVisibles.length} de {todasPantallas.length}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Spin, Button, Space, Row, Col, Divider,
@@ -30,6 +30,7 @@ import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 import PermissionGate from '../../components/PermissionGate';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -127,6 +128,7 @@ const OrdenCompraFormulario: React.FC = () => {
   const { screenCode, documentCode } = useScreenConfig('FORC');
   const destino = Sucursal.Compra;
   const navigationConfirmedRef = useFormularioNavigation();
+  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
 
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
@@ -331,21 +333,101 @@ const OrdenCompraFormulario: React.FC = () => {
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
     setConceptoSearchText(`${concepto.codigo || ''} - ${toTitleCase(concepto.nombre)}`);
-    form.setFieldsValue({ conceptoNombre: concepto.nombre });
 
     // === ConfigurarMoneda ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
+    setData((prev: any) => {
+      if (!prev) return prev;
+      return { ...prev, moneda: { ...monedaObj, simbolo: (monedaObj as any).simbolo || getMonedaSucursalActiva().simbolo } };
+    });
+
     form.setFieldsValue({
+      conceptoNombre: concepto.nombre,
       moneda: monedaObj.nombre,
       tasa: monedaObj.tasa ?? 1,
     });
-    // Actualizar data local para que la UI lo refleje
-    const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || getMonedaSucursalActiva().simbolo, codigo: monedaObj.codigo };
-    setData((prev: any) => {
-      if (!prev) return prev;
-      return { ...prev, moneda: monedaFull };
-    });
+
+    // === NoImpuesto: si el concepto no acepta impuestos, limpiarlos ===
+    const prevNoImpuesto = selectedConcepto?.noImpuesto;
+    if (concepto.noImpuesto) {
+      const hayImpuestos = detalles.some((d) => (d.porcentajeImpuesto || 0) > 0);
+      if (hayImpuestos) {
+        const backup = new Map<number, { impuesto?: any; porcentajeImpuesto: number }>();
+        detalles.forEach((d) => {
+          if ((d.porcentajeImpuesto || 0) > 0) {
+            backup.set(d.id, { impuesto: d.impuesto, porcentajeImpuesto: d.porcentajeImpuesto || 0 });
+          }
+        });
+        impuestosBackupRef.current = backup;
+        message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+        setDetalles((prev) =>
+          prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
+        );
+      }
+    } else if (prevNoImpuesto && !concepto.noImpuesto) {
+      const backup = impuestosBackupRef.current;
+      if (backup.size > 0) {
+        setDetalles((prev) =>
+          prev.map((d) => {
+            const saved = backup.get(d.id);
+            if (saved) {
+              return calcularFila({ ...d, impuesto: saved.impuesto, porcentajeImpuesto: saved.porcentajeImpuesto });
+            }
+            return d;
+          })
+        );
+        impuestosBackupRef.current = new Map();
+      }
+    }
   };
+
+  const handleRefresh = useCallback(() => {
+    setLoadingError(false);
+    if (!id) return;
+    setLoading(true);
+    ordenCompraApi.obtenerPorId(sucursalActiva, parseInt(id))
+      .then((_res) => {
+        const res = _res as any;
+        setData(res);
+        const detallesMap = (res.detalles || []).map((d: any, idx: number) => ({
+          id: -(idx + 1),
+          codigo: d.codigo || '',
+          articulo: d.articulo || '',
+          referencia: d.referencia || '',
+          cantidad: d.cantidad || 0,
+          costo: d.costo || 0,
+          subTotal: d.subTotal || 0,
+          descuento: d.descuento || 0,
+          porcentajeDescuento: d.porcentajeDescuento || 0,
+          impuestos: d.impuestos || 0,
+          porcentajeImpuesto: d.porcentajeImpuesto || 0,
+          total: d.total || 0,
+          cantidadBonificable: d.cantidadBonificable || 0,
+          tipoArticulo: d.tipoArticulo || 'Producto',
+          medida: d.medida || undefined,
+        }));
+        setDetalles(detallesMap);
+        setSelectedConcepto(res.concepto || null);
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
+        setSelectedSuplidor(res.suplidor || null);
+
+        form.setFieldsValue({
+          conceptoNombre: res.concepto?.nombre || '',
+          suplidor: res.suplidor?.codigo || '',
+          fechaDocumento: res.fechaDocumento ? dayjs(res.fechaDocumento) : null,
+          ncf: res.ncf || '',
+          referencia: res.referencia || '',
+          nota: res.nota || '',
+          diasCredito: res.diasCredito || 0,
+        });
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, form]);
 
   if (loading) {
     return (
@@ -470,54 +552,6 @@ const OrdenCompraFormulario: React.FC = () => {
     </div>
   );
 
-  const handleRefresh = useCallback(() => {
-    setLoadingError(false);
-    if (!id) return;
-    setLoading(true);
-    ordenCompraApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((_res) => {
-        const res = _res as any;
-        setData(res);
-        const detallesMap = (res.detalles || []).map((d: any, idx: number) => ({
-          id: -(idx + 1),
-          codigo: d.codigo || '',
-          articulo: d.articulo || '',
-          referencia: d.referencia || '',
-          cantidad: d.cantidad || 0,
-          costo: d.costo || 0,
-          subTotal: d.subTotal || 0,
-          descuento: d.descuento || 0,
-          porcentajeDescuento: d.porcentajeDescuento || 0,
-          impuestos: d.impuestos || 0,
-          porcentajeImpuesto: d.porcentajeImpuesto || 0,
-          total: d.total || 0,
-          cantidadBonificable: d.cantidadBonificable || 0,
-          tipoArticulo: d.tipoArticulo || 'Producto',
-          medida: d.medida || undefined,
-        }));
-        setDetalles(detallesMap);
-        setSelectedConcepto(res.concepto || null);
-        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
-        setSelectedSuplidor(res.suplidor || null);
-
-        form.setFieldsValue({
-          conceptoNombre: res.concepto?.nombre || '',
-          suplidor: res.suplidor?.codigo || '',
-          fechaDocumento: res.fechaDocumento ? dayjs(res.fechaDocumento) : null,
-          ncf: res.ncf || '',
-          referencia: res.referencia || '',
-          nota: res.nota || '',
-          diasCredito: res.diasCredito || 0,
-        });
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg);
-        setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form]);
-
   return (
     <div>
       {renderToolbar()}
@@ -555,6 +589,7 @@ const OrdenCompraFormulario: React.FC = () => {
                     <div className="paces-text-secondary" style={{ fontSize: 11, marginTop: 2 }}>Concepto</div>
                   </div>
                   <Form.Item name="concepto" hidden><Input /></Form.Item>
+                  <ConceptoInfoLabel concepto={selectedConcepto} />
                 </Col>
 
                 <Col xs={24} sm={12} lg={6}>

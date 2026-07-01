@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { message } from 'antd';
 import { useAuthStore } from '../stores/authStore';
 import { useUIStore } from '../stores/uiStore';
@@ -56,17 +56,23 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
   const configRef = useRef(config);
   configRef.current = config;
 
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState(() => searchParams.get('busqueda') || '');
   const [selectedRow, setSelectedRow] = useState<T | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [pdfPreview, setPdfPreview] = useState<{ url: string; title: string } | null>(null);
   const [loadingError, setLoadingError] = useState(false);
-  const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
+  const filtros = useMemo(() => ({
+    desde: searchParams.get('desde') || undefined,
+    hasta: searchParams.get('hasta') || undefined,
+    estado: searchParams.has('estado') ? Number(searchParams.get('estado')) : undefined,
+  }), [searchParams]);
 
   const rangoDefault = useMemo(() =>
     configRef.current.rangoDefaultOverride ?? {
@@ -123,7 +129,7 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva, rangoDefault]);
+  }, [sucursalActiva, rangoDefault, config.modulo]);
 
   useEffect(() => {
     cargarDatos(page, pageSize, searchText);
@@ -140,7 +146,14 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
   const handleSearch = useCallback((value: string) => {
     setSearchText(value);
     setPage(1);
-  }, []);
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) {
+      params.set('busqueda', value);
+    } else {
+      params.delete('busqueda');
+    }
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const handleRefresh = useCallback(() => {
     setLoadingError(false);
@@ -178,9 +191,15 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
   }, []);
 
   const handleFiltrosAplicar = useCallback((nuevos: { desde?: string; hasta?: string; estado?: number }) => {
-    setFiltros(nuevos);
+    const params = new URLSearchParams();
+    if (nuevos.desde) params.set('desde', nuevos.desde);
+    if (nuevos.hasta) params.set('hasta', nuevos.hasta);
+    if (nuevos.estado !== undefined && nuevos.estado !== null) params.set('estado', nuevos.estado.toString());
+    const curBusqueda = searchParams.get('busqueda');
+    if (curBusqueda) params.set('busqueda', curBusqueda);
+    setSearchParams(params, { replace: true });
     setPage(1);
-  }, []);
+  }, [searchParams, setSearchParams]);
 
   const handlePdfClose = useCallback(() => {
     if (pdfPreview) URL.revokeObjectURL(pdfPreview.url);

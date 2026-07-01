@@ -6,6 +6,7 @@ import { toTitleCase } from '../../utils/formats';
 
 export interface ImpuestoSeleccionado {
   codigo: string;
+  idExterno: string;
   nombre: string;
   porcentaje: number;
   tipo: string; // 'Impuesto' | 'Retencion' | 'Informativo' | 'Otro'
@@ -16,7 +17,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onConfirm: (items: ImpuestoSeleccionado[]) => void;
-  tipoEntidad: 'SUP' | 'CLI';
+  tipoEntidad?: 'SUP' | 'CLI';
   sucursal: number;
   existentes?: ImpuestoSeleccionado[];
 }
@@ -41,21 +42,51 @@ const SeleccionarImpuestosModal: React.FC<Props> = ({
   useEffect(() => {
     if (!open) return;
     setLoading(true);
-    setSelectedKeys(new Set());
-    const endpoint = tipoEntidad === 'SUP'
-      ? impuestoApi.obtenerParaCompras(sucursal)
-      : impuestoApi.obtenerParaVentas(sucursal);
-    endpoint
-      .then((lista) => setCatalogo(lista || []))
-      .catch(() => setCatalogo([]))
-      .finally(() => setLoading(false));
-  }, [open, tipoEntidad, sucursal]);
+    setSelectedKeys(new Set(existentes.map((e) => e.codigo)));
+
+    const cargar = async () => {
+      try {
+        let lista: ImpuestoDTO[] = [];
+
+        if (tipoEntidad === 'SUP') {
+          // Solo compras
+          lista = (await impuestoApi.obtenerParaCompras(sucursal)) || [];
+        } else if (tipoEntidad === 'CLI') {
+          // Solo ventas
+          lista = (await impuestoApi.obtenerParaVentas(sucursal)) || [];
+        } else {
+          // Ambos — llamar a las dos APIs independientemente y deduplicar
+          const [compras, ventas] = await Promise.all([
+            impuestoApi.obtenerParaCompras(sucursal).catch(() => [] as ImpuestoDTO[]),
+            impuestoApi.obtenerParaVentas(sucursal).catch(() => [] as ImpuestoDTO[]),
+          ]);
+          const mapa = new Map<string, ImpuestoDTO>();
+          for (const imp of [...(compras || []), ...(ventas || [])]) {
+            const key = imp.codigo || imp.idExterno;
+            if (key && !mapa.has(key)) {
+              mapa.set(key, imp);
+            }
+          }
+          lista = Array.from(mapa.values());
+        }
+
+        setCatalogo(lista || []);
+      } catch {
+        setCatalogo([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    cargar();
+  }, [open, tipoEntidad, sucursal, existentes]);
 
   const handleConfirmar = useCallback(() => {
     const nuevos: ImpuestoSeleccionado[] = catalogo
       .filter((imp) => selectedKeys.has(imp.idExterno || imp.codigo))
       .map((imp) => ({
         codigo: imp.codigo,
+        idExterno: imp.idExterno,
         nombre: imp.nombre,
         porcentaje: imp.porcentaje,
         tipo: mapTipoImpuesto(imp.tipo),
@@ -63,10 +94,10 @@ const SeleccionarImpuestosModal: React.FC<Props> = ({
       }));
 
     // Mezclar con existentes: conservar montos previos
-    const mapaExistentes = new Map(existentes.map((e) => [e.codigo, e.monto]));
+    const mapaExistentes = new Map(existentes.map((e) => [e.idExterno || e.codigo, e.monto]));
     for (const n of nuevos) {
-      if (mapaExistentes.has(n.codigo)) {
-        n.monto = mapaExistentes.get(n.codigo)!;
+      if (mapaExistentes.has(n.idExterno || n.codigo)) {
+        n.monto = mapaExistentes.get(n.idExterno || n.codigo)!;
       }
     }
 
