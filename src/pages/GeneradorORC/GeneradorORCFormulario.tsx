@@ -618,7 +618,7 @@ const GeneradorORCFormulario: React.FC = () => {
         message.error(msg);
         setLoadingError(true);
         navigationConfirmedRef.current = true;
-        navigate('/FGORC');
+        navigate('/FGORC', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
@@ -634,7 +634,7 @@ const GeneradorORCFormulario: React.FC = () => {
       okButtonProps: { danger: true },
       onOk: () => {
         navigationConfirmedRef.current = true;
-        navigate('/FGORC');
+        navigate('/FGORC', { replace: true });
       },
     });
   };
@@ -704,12 +704,12 @@ const GeneradorORCFormulario: React.FC = () => {
         const result = await generadorOrcApi.crear(sucursalActiva, dto);
         message.success('Generador ORC creado correctamente');
         navigationConfirmedRef.current = true;
-        navigate(`/FGORC/${result.idExterno}`);
+        navigate(`/FGORC/${result.idExterno}`, { replace: true });
       } else {
         await generadorOrcApi.actualizar(sucursalActiva, dto);
         message.success('Generador ORC actualizado correctamente');
         navigationConfirmedRef.current = true;
-        navigate(`/FGORC/${id}`);
+        navigate(`/FGORC/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');
@@ -780,7 +780,7 @@ const GeneradorORCFormulario: React.FC = () => {
       const todosProductosMaestro = productos.map((prod: ProductoDTO) => {
         const hist = mapDatosAnteriores.get(prod.codigo);
         const impuestoCompra =
-          (prod.impuestos || []).find((i) => i.impuesto?.ambito === 0)?.impuesto || null;
+          (prod.impuestos || []).find((i) => i.impuesto?.ambito === "Compra")?.impuesto || null;
         return {
           codigo: prod.codigo,
           articulo: prod.nombre || '',
@@ -815,7 +815,7 @@ const GeneradorORCFormulario: React.FC = () => {
         const filas: DetalleGeneradorDTO[] = productos.map((prod: ProductoDTO) => {
           const hist = mapDatosAnteriores.get(prod.codigo);
           const impuestoCompra =
-            (prod.impuestos || []).find((i) => i.impuesto?.ambito === 0)?.impuesto || null;
+            (prod.impuestos || []).find((i) => i.impuesto?.ambito === "Compra")?.impuesto || null;
           return {
             codigo: prod.codigo,
             referencia: prod.referenciaInterna || '',
@@ -1022,6 +1022,7 @@ const GeneradorORCFormulario: React.FC = () => {
       }
 
       // Construir objeto compatible con handleProductoSeleccionado
+      const impuestoCompra = (producto.impuestos || []).find((i) => i.impuesto?.ambito === "Compra")?.impuesto || null;
       const productoCompacto = {
         codigo: producto.codigo,
         referencia: producto.referencia || '',
@@ -1029,7 +1030,14 @@ const GeneradorORCFormulario: React.FC = () => {
         medida: producto.unidadMedida
           ? { id: Number(producto.unidadMedida.idExterno) ?? 0, nombre: producto.unidadMedida.nombre || '' }
           : null,
-        impuesto: null,
+        impuesto: impuestoCompra
+          ? {
+              nombre: impuestoCompra.nombre || '',
+              porcentaje: impuestoCompra.porcentaje || 0,
+              codigo: impuestoCompra.codigo || '',
+              idExterno: impuestoCompra.idExterno || '',
+            }
+          : null,
         costo: producto.ultimoCosto || 0,
         margen: 0,
         precioSugerido: producto.precio || 0,
@@ -1144,7 +1152,7 @@ const GeneradorORCFormulario: React.FC = () => {
                   if (d.codigo) mapDatosAnteriores.set(d.codigo, d);
                 });
                 (productos || []).forEach((p: any) => {
-                  const impuestoCompra = (p.impuestos || []).find((i: any) => i.impuesto?.ambito === 0)?.impuesto || null;
+                  const impuestoCompra = (p.impuestos || []).find((i: any) => i.impuesto?.ambito === "Compra")?.impuesto || null;
                   if (impuestoCompra) mapImpuestos.set(p.codigo, impuestoCompra);
                   if (p.unidadMedida) {
                     mapMedidasFallback.set(p.codigo, {
@@ -1280,7 +1288,7 @@ const GeneradorORCFormulario: React.FC = () => {
             if (d.codigo) mapDatosAnteriores.set(d.codigo, d);
           });
           (productos || []).forEach((p: any) => {
-            const impuestoCompra = (p.impuestos || []).find((i: any) => i.impuesto?.ambito === 0)?.impuesto || null;
+            const impuestoCompra = (p.impuestos || []).find((i: any) => i.impuesto?.ambito === "Compra")?.impuesto || null;
             if (impuestoCompra) mapImpuestos.set(p.codigo, impuestoCompra);
             if (p.unidadMedida) {
               mapMedidas.set(p.codigo, {
@@ -1494,9 +1502,6 @@ const GeneradorORCFormulario: React.FC = () => {
               </div>
             );
           },
-          shouldCellUpdate: (record: DetalleGeneradorDTO, prev: DetalleGeneradorDTO) =>
-            record.cantidades?.[suc] !== prev.cantidades?.[suc] ||
-            record.existenciasFisicas?.[suc] !== prev.existenciasFisicas?.[suc],
         },
       ],
     });

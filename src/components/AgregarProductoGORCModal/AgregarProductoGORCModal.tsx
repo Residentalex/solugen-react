@@ -322,14 +322,17 @@ const AgregarProductoGORCModal: React.FC<AgregarProductoGORCModalProps> = ({
                       idExterno: record.unidadMedida.idExterno ?? 0,
                     }
                   : undefined,
-                impuesto: record.impuestoCompra
-                  ? {
-                      nombre: record.impuestoCompra.nombre || '',
-                      porcentaje: record.impuestoCompra.porcentaje || 0,
-                      codigo: '',
-                      idExterno: '',
-                    }
-                  : undefined,
+                impuesto: (() => {
+                  const ic = (record.impuestos || []).find((i: any) => i.impuesto?.ambito === "Compra")?.impuesto;
+                  return ic
+                    ? {
+                        nombre: ic.nombre || '',
+                        porcentaje: ic.porcentaje || 0,
+                        codigo: '',
+                        idExterno: '',
+                      }
+                    : undefined;
+                })(),
               };
               onSelectProducto(producto);
               onClose();

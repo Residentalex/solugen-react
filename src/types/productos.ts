@@ -69,7 +69,7 @@ export interface ImpuestoProductoDTO {
     nombre?: string;
     porcentaje?: number;
     tipo?: number;
-    ambito?: number;
+    ambito?: number | string;
     codigo?: string;
     noCuenta?: string;
     idExterno?: string;

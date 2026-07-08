@@ -36,8 +36,8 @@ export const productoApi = {
     return data.data;
   },
 
-  obtenerPorCodigo: async (sucursal: number, codigo: string): Promise<ProductoListaDTO> => {
-    const { data } = await apiClient.get<ApiResponse<ProductoListaDTO>>(`${BASE}/${sucursal}/${codigo}`);
+  obtenerPorCodigo: async (sucursal: number, codigo: string): Promise<ProductoDTO> => {
+    const { data } = await apiClient.get<ApiResponse<ProductoDTO>>(`${BASE}/${sucursal}/${codigo}`);
     return data.data;
   },
 
