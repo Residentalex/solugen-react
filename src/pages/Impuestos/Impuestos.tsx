@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Table, message, Card, Button, Modal, Form, Input, InputNumber, Select, Typography, Alert, Empty } from 'antd';
+import { Table, message, Card, Button, Modal, Form, Input, InputNumber, Select, Switch, Tag, Typography, Alert, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
@@ -95,7 +95,7 @@ const Impuestos: React.FC = () => {
     if (!modalVisible) return;
     if (editando) {
       form.setFieldsValue({
-        codigo: editando.codigo,
+        codigo: editando.idExterno,
         nombre: editando.nombre,
         porcentaje: editando.porcentaje,
         tipo: editando.tipo,
@@ -104,6 +104,7 @@ const Impuestos: React.FC = () => {
         baseCalculo: editando.baseCalculo,
         noCuenta: editando.noCuenta,
         indicadorDGII: editando.indicadorDGII,
+        asientos: editando.asientos,
       });
       setCuentaDisplay(editando.cuentaContable || '');
     } else {
@@ -114,6 +115,7 @@ const Impuestos: React.FC = () => {
         metodoCalculo: MetodoCalculoImpuesto.Porcentaje,
         baseCalculo: BaseCalculoImpuesto.Indefinido,
         noCuenta: '',
+        asientos: true,
       });
       setCuentaDisplay('');
     }
@@ -126,7 +128,7 @@ const Impuestos: React.FC = () => {
       setGuardando(true);
       const payload = { ...values };
       if (editando) {
-        await impuestoApi.actualizar(sucursalActiva, editando.codigo, payload);
+        await impuestoApi.actualizar(sucursalActiva, editando.idExterno, payload);
         message.success('Impuesto actualizado correctamente');
       } else {
         await impuestoApi.crear(sucursalActiva, payload);
@@ -191,6 +193,15 @@ const Impuestos: React.FC = () => {
       key: 'ambito',
       width: 100,
       render: (ambito: AmbitoImpuesto) => <Text>{AMBITO_LABEL[ambito] || 'Ninguno'}</Text>,
+    },
+    {
+      title: 'Afecta Asientos',
+      dataIndex: 'asientos',
+      key: 'asientos',
+      width: 130,
+      render: (val: boolean) => (
+        <Tag color={val ? 'green' : 'red'}>{val ? 'Sí' : 'No'}</Tag>
+      ),
     },
     {
       title: 'Cuenta Contable',
@@ -345,6 +356,9 @@ const Impuestos: React.FC = () => {
             label="Indicador DGII"
           >
             <InputNumber min={0} style={{ width: '100%' }} placeholder="0" />
+          </Form.Item>
+          <Form.Item name="asientos" label="Afecta Asientos" valuePropName="checked">
+            <Switch checkedChildren="Sí" unCheckedChildren="No" />
           </Form.Item>
         </Form>
         <BuscarCuentaContableModal

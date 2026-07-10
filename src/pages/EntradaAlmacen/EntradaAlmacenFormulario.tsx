@@ -403,7 +403,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         message.error(msg);
         setLoadingError(true);
         navigationConfirmedRef.current = true;
-        navigate('/FENP');
+        navigate('/FENP', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
@@ -470,7 +470,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         setAgregarFilaBloqueado(false);
         if (mode === 'crear') {
           navigationConfirmedRef.current = true;
-          navigate('/FENP');
+          navigate('/FENP', { replace: true });
         } else {
           if (id) {
             setLoading(true);
@@ -525,7 +525,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
               .finally(() => setLoading(false));
           }
           navigationConfirmedRef.current = true;
-          navigate(`/FENP/${id}`);
+          navigate(`/FENP/${id}`, { replace: true });
         }
       },
     });
@@ -694,9 +694,9 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
       navigationConfirmedRef.current = true;
       if (mode === 'crear') {
-        navigate(`/FENP/${entidadGuardada.id}`);
+        navigate(`/FENP/${entidadGuardada.id}`, { replace: true });
       } else {
-        navigate(`/FENP/${id}`);
+        navigate(`/FENP/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');

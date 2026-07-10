@@ -295,7 +295,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
         message.error(msg);
         setLoadingError(true);
         navigationConfirmedRef.current = true;
-        navigate('/FTRP');
+        navigate('/FTRP', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
@@ -339,7 +339,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
         setEditingField(null);
         if (mode === 'crear') {
           navigationConfirmedRef.current = true;
-          navigate('/FTRP');
+          navigate('/FTRP', { replace: true });
         } else {
           if (id) {
             setLoading(true);
@@ -372,7 +372,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
               .finally(() => setLoading(false));
           }
           navigationConfirmedRef.current = true;
-          navigate(`/FTRP/${id}`);
+          navigate(`/FTRP/${id}`, { replace: true });
         }
       },
     });
@@ -472,12 +472,12 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
         const result = await transferenciaAlmacenApi.crear(sucursalActiva, dto);
         message.success('Transferencia de almacén creada exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/FTRP/${result.id}`);
+        navigate(`/FTRP/${result.id}`, { replace: true });
       } else {
         await transferenciaAlmacenApi.actualizar(sucursalActiva, dto);
         message.success('Transferencia de almacén actualizada exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/FTRP/${id}`);
+        navigate(`/FTRP/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');

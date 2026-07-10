@@ -119,12 +119,12 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       setMontosPorFila({});
 
       cargar().then((docs) => {
-        // Una vez cargados los documentos, establecer selecciÃ³n inicial y montos
+        const montosIniciales: Record<string, number> = {};
+        let restante = montoTotal || 0;
+
         if (documentosIniciales && documentosIniciales.length > 0) {
+          // Precargar selección y montos desde documentosIniciales
           setSelectedRowKeys(documentosIniciales);
-          // Precargar montos respetando montoADistribuir
-          const montosIniciales: Record<string, number> = {};
-          let restante = montoTotal || 0;
           (documentosIniciales || []).forEach((id) => {
             const doc = docs.find((d: any) => d.id === id);
             if (!doc) return;
@@ -137,8 +137,10 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
             montosIniciales[String(id)] = asignar;
             restante -= asignar;
           });
-          setMontosPorFila(montosIniciales);
         }
+
+        setDistribuido(Object.values(montosIniciales).reduce((s: number, v: any) => s + (v || 0), 0));
+        setMontosPorFila(montosIniciales);
       });
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -163,8 +165,8 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
         const pendiente = calcularPendiente(doc);
         // Calcular cuÃ¡nto estÃ¡ ya asignado en TODAS las filas (incluyendo las ya existentes en 'nuevos')
         const yaAsignado = Object.values(nuevos).reduce((s, v) => s + v, 0);
-        const disponible = montoADistribuir - yaAsignado;
-        if (pendiente <= 0 || disponible <= 0.01) {
+        const disponible = montoADistribuir > 0 ? montoADistribuir - yaAsignado : pendiente;
+        if (pendiente <= 0 || (montoADistribuir > 0 && disponible <= 0.01)) {
           nuevos[String(key)] = 0;
           return;
         }

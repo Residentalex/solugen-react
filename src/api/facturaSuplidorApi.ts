@@ -55,7 +55,7 @@ export const facturaSuplidorApi = {
   },
 
   obtenerPorId: async (sucursal: number, id: number): Promise<TransaccionVistaDTO> => {
-    const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO>>(`${BASE}/${sucursal}/${id}`);
+    const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO>>(`/RDE/${sucursal}/${id}`);
     return data.data;
   },
 
@@ -80,7 +80,7 @@ export const facturaSuplidorApi = {
   },
 
   postear: async <T>(sucursal: number, transaccion: T): Promise<T> => {
-    const { data } = await apiClient.post<ApiResponse<T>>(`${BASE}/${sucursal}/postear`, transaccion);
+    const { data } = await apiClient.post<ApiResponse<T>>(`/RDE/${sucursal}/postear`, transaccion);
     return data.data;
   },
 
@@ -120,7 +120,7 @@ export const facturaSuplidorApi = {
 
   verificarNCF: async (sucursal: number, ncf: string, suplidorCodigo: string): Promise<boolean> => {
     const { data } = await apiClient.get<ApiResponse<boolean>>(
-      `${BASE}/${sucursal}/ncf-verificar?ncf=${encodeURIComponent(ncf)}&suplidor=${encodeURIComponent(suplidorCodigo)}`
+      `${BASE}/${sucursal}/ncf?ncf=${encodeURIComponent(ncf)}&idEntidad=${encodeURIComponent(suplidorCodigo)}`
     );
     return data.data;
   },
@@ -144,7 +144,7 @@ export const facturaSuplidorApi = {
   },
 
   generarAsientos: async (sucursal: number, transaccion: any): Promise<any[]> => {
-    const { data } = await apiClient.post<ApiResponse<any[]>>(`${BASE}/${sucursal}/generarAsiento`, transaccion);
+    const { data } = await apiClient.post<ApiResponse<any[]>>(`/RDE/${sucursal}/generarAsiento`, transaccion);
     return data.data;
   },
 

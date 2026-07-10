@@ -15,6 +15,8 @@ import { almacenApi } from '../../api/almacenApi';
 import type { MovimientoFiltros } from '../../api/movimientoApi';
 import type { MovimientoDTO } from '../../types/movimiento';
 import type { AlmacenDTO } from '../../types/entradaAlmacen';
+import ColumnVisibilityToggle from '../../components/ColumnVisibilityToggle';
+import type { ColumnConfig } from '../../components/ColumnVisibilityToggle';
 
 const { Text } = Typography;
 
@@ -29,6 +31,27 @@ const TIPO_DOC_OPTIONS = [
   { value: 'DVC', label: 'Devolución Compra' },
   { value: 'DEV', label: 'Devolución Venta' },
 ];
+
+// Configuración de columnas para el toggle de visibilidad
+const ALL_COLUMNS_CONFIG: ColumnConfig[] = [
+  { key: 'fecha', label: 'Fecha', defaultVisible: true },
+  { key: 'documento', label: 'Documento', defaultVisible: true },
+  { key: 'articulo', label: 'Artículo', defaultVisible: true },
+  { key: 'almacen', label: 'Almacén', defaultVisible: true },
+  { key: 'cantidad', label: 'Cantidad', defaultVisible: true },
+  { key: 'costo', label: 'Costo', defaultVisible: true },
+  { key: 'tipoDocumento', label: 'Tipo Doc.', defaultVisible: true },
+  { key: 'entidad', label: 'Entidad', defaultVisible: true },
+  { key: 'referencia', label: 'Referencia/Concepto', defaultVisible: false },
+  { key: 'usuario', label: 'Usuario', defaultVisible: false },
+  { key: 'costoUnitario', label: 'Costo Unitario', defaultVisible: false },
+];
+
+const DEFAULT_VISIBLE_KEYS = ALL_COLUMNS_CONFIG
+  .filter((c) => c.defaultVisible !== false)
+  .map((c) => c.key);
+
+const LS_VISIBLE_COLUMNS_KEY = 'movProd_visibleColumns';
 
 function formatDateParam(d: Date): string {
   const y = d.getFullYear();
@@ -97,6 +120,21 @@ const MovimientosProductos: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [loadingError, setLoadingError] = useState(false);
 
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(LS_VISIBLE_COLUMNS_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // ignorar error de parse
+    }
+    return DEFAULT_VISIBLE_KEYS;
+  });
+
   const rangoDefault = useMemo(() => ({
     desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
     hasta: formatDateParam(new Date()),
@@ -153,6 +191,14 @@ const MovimientosProductos: React.FC = () => {
   useEffect(() => {
     almacenApi.obtenerListado(sucursalActiva).then(setListaAlmacenes).catch(() => {});
   }, [sucursalActiva]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_VISIBLE_COLUMNS_KEY, JSON.stringify(visibleColumnKeys));
+    } catch {
+      // ignorar error de storage
+    }
+  }, [visibleColumnKeys]);
 
   const handleGenerar = () => {
     setPage(1);
@@ -361,12 +407,12 @@ const MovimientosProductos: React.FC = () => {
     </div>
   );
 
-  const columns: ColumnsType<MovimientoDTO> = [
+  const ALL_COLUMN_DEFS: ColumnsType<MovimientoDTO> = [
     {
       title: 'Fecha',
       dataIndex: 'fecha',
       key: 'fecha',
-      width: 100,
+      width: 130,
       render: (f: string) => <Text>{formatDate(f)}</Text>,
     },
     {
@@ -435,8 +481,40 @@ const MovimientosProductos: React.FC = () => {
       width: 180,
       render: (val: string) => <Text>{toTitleCase(val) || '-'}</Text>,
     },
-
+    {
+      title: 'Referencia/Concepto',
+      dataIndex: 'referencia',
+      key: 'referencia',
+      width: 200,
+      ellipsis: true,
+      render: (val: string) => <Text>{val || '-'}</Text>,
+    },
+    {
+      title: 'Usuario',
+      dataIndex: 'usuario',
+      key: 'usuario',
+      width: 120,
+      render: (val: string) => {
+        const display = val?.trim() || '-';
+        return <Text>{toTitleCase(display)}</Text>;
+      },
+    },
+    {
+      title: 'Costo Unitario',
+      key: 'costoUnitario',
+      width: 110,
+      align: 'right',
+      render: (_: unknown, record: MovimientoDTO) => {
+        const unitario = record.cantidad ? record.costo / record.cantidad : 0;
+        return <Text>{formatCurrency(unitario)}</Text>;
+      },
+    },
   ];
+
+  const columns = useMemo(() => {
+    const visibleSet = new Set(visibleColumnKeys);
+    return ALL_COLUMN_DEFS.filter((col) => visibleSet.has(col.key as string));
+  }, [visibleColumnKeys]);
 
   return (
     <>
@@ -488,6 +566,11 @@ const MovimientosProductos: React.FC = () => {
                 </Button>
               </Badge>
             </Popover>
+            <ColumnVisibilityToggle
+              columns={ALL_COLUMNS_CONFIG}
+              visibleKeys={visibleColumnKeys}
+              onChange={setVisibleColumnKeys}
+            />
             <Button type="primary" onClick={handleGenerar} style={{ minWidth: 100 }}>
               Generar
             </Button>
@@ -536,20 +619,38 @@ const MovimientosProductos: React.FC = () => {
               </div>
             ),
           }}
-          summary={generated ? () => (
-            <Table.Summary.Row>
-              <Table.Summary.Cell index={0} colSpan={4}>
-                <Text strong style={{ fontSize: 13 }}>Totales</Text>
-              </Table.Summary.Cell>
-              <Table.Summary.Cell index={4} align="right">
-                <Text strong>{formatNumber(totales.cantidad)}</Text>
-              </Table.Summary.Cell>
-              <Table.Summary.Cell index={5} align="right">
-                <Text strong>{formatCurrency(totales.costo)}</Text>
-              </Table.Summary.Cell>
-              <Table.Summary.Cell index={6} colSpan={2} />
-            </Table.Summary.Row>
-          ) : undefined}
+          summary={generated ? () => {
+            const visibleKeys = columns.map((c) => c.key as string);
+            return (
+              <Table.Summary.Row>
+                {columns.map((col, idx) => {
+                  const key = col.key as string;
+                  if (key === 'cantidad') {
+                    return (
+                      <Table.Summary.Cell key={key} index={idx} align="right">
+                        <Text strong>{formatNumber(totales.cantidad)}</Text>
+                      </Table.Summary.Cell>
+                    );
+                  }
+                  if (key === 'costo') {
+                    return (
+                      <Table.Summary.Cell key={key} index={idx} align="right">
+                        <Text strong>{formatCurrency(totales.costo)}</Text>
+                      </Table.Summary.Cell>
+                    );
+                  }
+                  if (idx === 0) {
+                    return (
+                      <Table.Summary.Cell key={key} index={idx}>
+                        <Text strong style={{ fontSize: 13 }}>Totales</Text>
+                      </Table.Summary.Cell>
+                    );
+                  }
+                  return <Table.Summary.Cell key={key} index={idx} />;
+                })}
+              </Table.Summary.Row>
+            );
+          } : undefined}
         />
       </Card>
     </>

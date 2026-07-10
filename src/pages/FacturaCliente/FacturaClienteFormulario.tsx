@@ -24,6 +24,7 @@ import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { facturaClienteApi } from '../../api/facturaClienteApi';
+import { conceptosApi } from '../../api/conceptosApi';
 import { productoApi } from '../../api/productoApi';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
@@ -49,7 +50,7 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
@@ -257,7 +258,7 @@ const FacturaClienteFormulario: React.FC = () => {
   const isLarge = screens.xxl === true;
 
   // ===== Determinar estado =====
-  const estado = data?.estado ?? 0;
+  const estado = toEstadoNum(data?.estado);
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -275,11 +276,8 @@ const FacturaClienteFormulario: React.FC = () => {
     // Cargar almacenes y tipos
     facturaClienteApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
     facturaClienteApi.obtenerTipos(sucursalActiva).then(setTiposCache).catch(() => {});
-    // Cargar sucursales desde el auth store
-    const authSucursales = useAuthStore.getState().sucursalesPermitidas;
-    if (authSucursales.length > 0) {
-      setSucursalesCache(authSucursales);
-    }
+    // Cargar sucursales desde la API
+    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch(() => {});
     // Cargar unidades de medida
     import('../../api/unidadMedidaApi').then(({ unidadMedidaApi }) => {
       unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => message.error('Error al cargar medidas'));
@@ -437,7 +435,7 @@ const FacturaClienteFormulario: React.FC = () => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
         setLoadingError(true);
-        navigate('/FFAC');
+        navigate('/FFAC', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
@@ -479,7 +477,7 @@ const FacturaClienteFormulario: React.FC = () => {
       onOk: () => {
         setEditingField(null);
         if (mode === 'crear') {
-          navigate('/FFAC');
+          navigate('/FFAC', { replace: true });
         } else {
           if (id) {
             setLoading(true);
@@ -552,7 +550,7 @@ const FacturaClienteFormulario: React.FC = () => {
               })
               .finally(() => setLoading(false));
           }
-          navigate(`/FFAC/${id}`);
+          navigate(`/FFAC/${id}`, { replace: true });
         }
       },
     });
@@ -655,7 +653,9 @@ const FacturaClienteFormulario: React.FC = () => {
       almacen: selectedAlmacen || { nombre: '', codigo: '' },
       cliente: clienteSel || { nombre: '', codigo: '', identificacion: '' },
       tipo: selectedTipo || null,
-      sucursal: selectedSucursal || base.sucursal || { nombre: '', codigo: '', identificacion: '' },
+      sucursal: selectedSucursal
+        ? { codigo: selectedSucursal.codigo, idExterno: selectedSucursal.idExterno, nombre: selectedSucursal.nombre || '' }
+        : base.sucursal || undefined,
       detalles: detalles.map((d) => calcularFila(d)),
       asientos: asientosLocales.length > 0 ? asientosLocales : (base.asientos || []),
       impuestosFactura: impuestosFactura,
@@ -676,11 +676,11 @@ const FacturaClienteFormulario: React.FC = () => {
       if (mode === 'crear') {
         const result = await facturaClienteApi.crear(sucursalActiva, dto);
         message.success('Factura de cliente creada exitosamente');
-        navigate(`/FFAC/${result.id}`);
+        navigate(`/FFAC/${result.id}`, { replace: true });
       } else {
         await facturaClienteApi.actualizar(sucursalActiva, dto);
         message.success('Factura de cliente actualizada exitosamente');
-        navigate(`/FFAC/${id}`);
+        navigate(`/FFAC/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');

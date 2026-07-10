@@ -85,12 +85,12 @@ export const salidaAlmacenApi = {
   },
 
   revisado: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/Revisado/${id}`);
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/${id}/revisado`);
     return data.data;
   },
 
   reversar: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/Reversar/${id}`);
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/${id}/reversar`);
     return data.data;
   },
 

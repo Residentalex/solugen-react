@@ -292,7 +292,7 @@ const UsuarioFormulario: React.FC = () => {
         await usuarioApi.actualizar(securitySucursal, payload);
         message.success('Usuario actualizado correctamente');
         navigationConfirmedRef.current = true;
-        navigate(`/MUsuario/${data.id}`);
+        navigate(`/MUsuario/${data.id}`, { replace: true });
       } else {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
         const pass = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
@@ -307,7 +307,7 @@ const UsuarioFormulario: React.FC = () => {
           ),
           onOk: () => {
             navigationConfirmedRef.current = true;
-            navigate('/MUsuario');
+            navigate('/MUsuario', { replace: true });
           },
         });
       }
@@ -329,8 +329,8 @@ const UsuarioFormulario: React.FC = () => {
       okButtonProps: { danger: true },
       onOk: () => {
         navigationConfirmedRef.current = true;
-        if (esEditar && data) navigate(`/MUsuario/${data.id}`);
-        else navigate('/MUsuario');
+        if (esEditar && data) navigate(`/MUsuario/${data.id}`, { replace: true });
+        else navigate('/MUsuario', { replace: true });
       },
     });
   };
@@ -342,7 +342,7 @@ const UsuarioFormulario: React.FC = () => {
     return (
       <div style={{ textAlign: 'center', padding: 60 }}>
         <Alert message="Error al cargar el usuario" type="error" showIcon style={{ marginBottom: 16 }} />
-        <Button onClick={() => navigate('/MUsuario')}>Volver a usuarios</Button>
+        <Button onClick={() => navigate('/MUsuario', { replace: true })}>Volver a usuarios</Button>
       </div>
     );
   }

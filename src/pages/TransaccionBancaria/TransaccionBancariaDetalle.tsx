@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Typography, Tooltip, Descriptions, Alert, Modal, App, Switch,
+  Card, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Typography, Tooltip, Descriptions, Alert, Switch, App,
 } from 'antd';
 import {
   LockFilled,
@@ -10,13 +10,11 @@ import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
-import { solicitudPagoApi } from '../../api/solicitudPagoApi';
+import { transaccionBancariaApi } from '../../api/transaccionBancariaApi';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard/TransaccionesAsociadasCard';
 import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
-import { useAplicar } from '../../hooks/useAplicar';
-import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
 import type { AsientoContableDTO, LogDTO } from '../../types/entradaAlmacen';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -25,6 +23,7 @@ import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../uti
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
+import type { TransaccionDTO } from '../../types/transaccion';
 
 const { Text } = Typography;
 
@@ -52,7 +51,35 @@ function strVal(val: any, fallback = '-'): string {
   return String(val);
 }
 
-const SolicitudPagoDetalle: React.FC = () => {
+// Normaliza TransaccionDTO a un objeto compatible con el template existente
+function normalizarTransaccion(t: TransaccionDTO): any {
+  const monedaSimbolo = t.codigoMoneda === 'DOP' ? 'RD$' : t.codigoMoneda === 'USD' ? 'US$' : '$';
+  const monedaNombre = t.codigoMoneda || '';
+  return {
+    ...t,
+    // Alias para compatibilidad con el template
+    fecha: t.fechaDocumento,
+    cuentaBancaria: t.ctaBancaria || '',
+    moneda: t.codigoMoneda ? { simbolo: monedaSimbolo, nombre: monedaNombre } : undefined,
+    // entidad: si es objeto {codigo, nombre}, usar el nombre como string; si ya es string, dejarlo
+    entidad:
+      typeof t.entidad === 'object' && t.entidad !== null
+        ? (t.entidad as any).nombre || (t.entidad as any).codigo || '-'
+        : t.entidad || '-',
+    // documento: normalizar a objeto {codigo, nombre}
+    documento:
+      typeof t.documento === 'object' && t.documento !== null
+        ? t.documento
+        : { codigo: t.documento || (t as any).codigoTipo || '', nombre: '' },
+    // concepto: normalizar a objeto {codigo, nombre}
+    concepto:
+      typeof t.concepto === 'object' && t.concepto !== null
+        ? t.concepto
+        : { codigo: '', nombre: t.concepto || '' },
+  };
+}
+
+const TransaccionBancariaDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
@@ -67,9 +94,6 @@ const SolicitudPagoDetalle: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const monedaDefault = getMonedaSucursalActiva();
-  const operacion = useAplicar();
-  const [operacionTitulo, setOperacionTitulo] = useState('');
-  const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
   const [mostrandoReverso, setMostrandoReverso] = useState(false);
   const [reversoData, setReversoData] = useState<any>(null);
 
@@ -83,19 +107,20 @@ const SolicitudPagoDetalle: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    solicitudPagoApi.obtenerPorId(sucursalActiva, parseInt(id))
+    transaccionBancariaApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         if (!res) {
           message.error('Documento no encontrado en la sucursal seleccionada.');
           setLoadingError(true);
           return;
         }
-        setData(res);
-        setPageTitleOverride(`SPA-${res.noDocumento || id}`);
-        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        const normalizado = normalizarTransaccion(res);
+        setData(normalizado);
+        setPageTitleOverride(`${strVal(normalizado.documento)}-${normalizado.noDocumento || id}`);
+        // Si el documento está anulado y tiene reversoID, cargar el reverso
         if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-          solicitudPagoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
-            .then((revRes) => setReversoData(revRes))
+          transaccionBancariaApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(normalizarTransaccion(revRes)))
             .catch(() => setReversoData(null));
         } else {
           setReversoData(null);
@@ -103,7 +128,7 @@ const SolicitudPagoDetalle: React.FC = () => {
         }
       })
       .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al cargar la solicitud de pago';
+        const msg = err?.response?.data?.errorMessage || 'Error al cargar la transacción bancaria';
         message.error(msg);
         setLoadingError(true);
       })
@@ -113,19 +138,19 @@ const SolicitudPagoDetalle: React.FC = () => {
   const handleRefresh = useCallback(() => {
     if (!id) return;
     setLoadingError(false);
-    solicitudPagoApi.obtenerPorId(sucursalActiva, parseInt(id))
+    transaccionBancariaApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         if (!res) {
           message.error('Documento no encontrado en la sucursal seleccionada.');
           setLoadingError(true);
           return;
         }
-        setData(res);
-        setPageTitleOverride(`SPA-${res.noDocumento || id}`);
-        // Si el documento está anulado y tiene reversoId, cargar el reverso
+        const normalizado = normalizarTransaccion(res);
+        setData(normalizado);
+        setPageTitleOverride(`${strVal(normalizado.documento)}-${normalizado.noDocumento || id}`);
         if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-          solicitudPagoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
-            .then((revRes) => setReversoData(revRes))
+          transaccionBancariaApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(normalizarTransaccion(revRes)))
             .catch(() => setReversoData(null));
         } else {
           setReversoData(null);
@@ -144,8 +169,13 @@ const SolicitudPagoDetalle: React.FC = () => {
     if (!id || !data) return;
     setSaving(true);
     try {
-      const documento = `${data.documento?.codigo || data.documento || ''}-${data.noDocumento}`;
-      await solicitudPagoApi.desaplicar(sucursalActiva, documento);
+      const docCodigo = data.documento?.codigo || (typeof data.documento === 'string' ? data.documento : '');
+      const documento = `${docCodigo}-${data.noDocumento}`;
+      await transaccionBancariaApi.desaplicarDocBancario(
+        sucursalActiva,
+        documento,
+        data.ctaBancaria || ''
+      );
       message.success('Documento desaplicado exitosamente');
       handleRefresh();
     } catch (err: any) {
@@ -156,23 +186,33 @@ const SolicitudPagoDetalle: React.FC = () => {
     }
   };
 
-  const handleAplicar = () => {
+  const handleAplicar = async () => {
     if (!id) return;
-    setOperacionTitulo(`Aplicando SPA-${data?.noDocumento || id}`);
-    operacion.ejecutar(`/SPA/${sucursalActiva}/aplicar/${id}`, handleRefresh);
+    setSaving(true);
+    try {
+      await transaccionBancariaApi.aplicar(sucursalActiva, parseInt(id));
+      message.success('Documento aplicado exitosamente');
+      handleRefresh();
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al aplicar');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleAnular = async () => {
     if (!data) return;
     setSaving(true);
     try {
-      await solicitudPagoApi.anular(sucursalActiva, data as any);
+      await transaccionBancariaApi.anular(sucursalActiva, data as any);
       message.success('Documento anulado exitosamente');
-      const res = await solicitudPagoApi.obtenerPorId(sucursalActiva, parseInt(id!));
-      setData(res);
+      const res = await transaccionBancariaApi.obtenerPorId(sucursalActiva, parseInt(id!));
+      const normalizado = normalizarTransaccion(res);
+      setData(normalizado);
       if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-        const revRes = await solicitudPagoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
-        setReversoData(revRes);
+        const revRes = await transaccionBancariaApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        setReversoData(normalizarTransaccion(revRes));
       } else {
         setReversoData(null);
       }
@@ -184,48 +224,15 @@ const SolicitudPagoDetalle: React.FC = () => {
     }
   };
 
-  const handlePostear = () => {
+  const handlePostear = async () => {
     if (!data) return;
-    setOperacionTitulo(`Posteando SPA-${data?.noDocumento || id}`);
-    operacion.ejecutar(
-      `/SPA/${sucursalActiva}/postear`,
-      handleRefresh,
-      data
-    );
-  };
-
-  const handleRevisado = async () => {
-    if (!id) return;
     setSaving(true);
     try {
-      await solicitudPagoApi.revisado(sucursalActiva, parseInt(id));
-      message.success('Documento marcado como revisado');
-      const res = await solicitudPagoApi.obtenerPorId(sucursalActiva, parseInt(id));
-      setData(res);
+      await transaccionBancariaApi.postear(sucursalActiva, data as any);
+      message.success('Documento posteado exitosamente');
+      handleRefresh();
     } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al marcar revisado');
-      message.error(msg);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleReversar = async () => {
-    if (!id) return;
-    setSaving(true);
-    try {
-      await solicitudPagoApi.reversar(sucursalActiva, parseInt(id));
-      message.success('Documento reversado exitosamente');
-      const res = await solicitudPagoApi.obtenerPorId(sucursalActiva, parseInt(id));
-      setData(res);
-      if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-        const revRes = await solicitudPagoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
-        setReversoData(revRes);
-      } else {
-        setReversoData(null);
-      }
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al reversar');
+      const msg = extraerMensajeError(err, 'Error al postear');
       message.error(msg);
     } finally {
       setSaving(false);
@@ -236,10 +243,10 @@ const SolicitudPagoDetalle: React.FC = () => {
   useEffect(() => {
     if (mostrandoReverso && reversoData) {
       const doc = reversoData as any;
-      setPageTitleOverride(`SPA-${doc.noDocumento || ''}`);
+      setPageTitleOverride(`${strVal(doc.documento)}-${doc.noDocumento || ''}`);
     } else if (data) {
       const doc = data as any;
-      setPageTitleOverride(`SPA-${doc.noDocumento || ''}`);
+      setPageTitleOverride(`${strVal(doc.documento)}-${doc.noDocumento || ''}`);
     }
   }, [mostrandoReverso, reversoData, data, setPageTitleOverride]);
 
@@ -248,12 +255,12 @@ const SolicitudPagoDetalle: React.FC = () => {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando solicitud de pago...</div>
+        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando transacción bancaria...</div>
       </div>
     );
   }
 
-  if (loadingError && !data) { return <ErrorDetalle rutaVolver="/FSOLP" onRecargar={handleRefresh} />; }
+  if (loadingError && !data) { return <ErrorDetalle rutaVolver="/FTransBanco" onRecargar={handleRefresh} />; }
 
   if (!data) return null;
 
@@ -262,13 +269,11 @@ const SolicitudPagoDetalle: React.FC = () => {
   const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(documentoActivo.estado)] || { label: 'Desconocido', color: 'default' };
   const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
 
-  // asientoColumns reemplazado por AsientosContableTable compartido
-
   return (
     <div>
       {loadingError && (
         <Alert
-          message="Error al cargar detalle de solicitud de pago"
+          message="Error al cargar detalle de transacción bancaria"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
@@ -281,20 +286,16 @@ const SolicitudPagoDetalle: React.FC = () => {
       )}
 
       <DetalleToolbar
-        modulo="FSPA"
+        modulo="FTransBanco"
         estado={documentoActivo.estado}
         periodo={documentoActivo.periodo}
-        revisado={documentoActivo.revisado}
         saving={saving}
-        operacionLoading={operacion?.loading}
-        onVolver={() => navigate(-1)}
-        onEditar={() => navigate(`/FSPA/${id}/editar`)}
+        onVolver={() => navigate('/FTransBanco')}
+        onEditar={() => navigate(`/FTransBanco/${id}/editar`)}
         onAplicar={handleAplicar}
         onAnular={handleAnular}
         onPostear={handlePostear}
-        onRevisado={handleRevisado}
         onDesaplicar={handleDesaplicar}
-        onReversar={handleReversar}
         showImprimir={false}
         extraButtons={id ? (
           <>
@@ -322,7 +323,7 @@ const SolicitudPagoDetalle: React.FC = () => {
       )}
 
       {isLarge ? (
-        /* === DESKTOP LAYOUT (≥ lg) === */
+        /* === DESKTOP LAYOUT (≥ xxl) === */
         <Row gutter={16}>
           <Col xxl={18}>
             {/* Datos Generales */}
@@ -340,19 +341,26 @@ const SolicitudPagoDetalle: React.FC = () => {
               </div>
             } style={{ marginBottom: 16 }}>
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
+                {/* Fila 1: Documento | Concepto | Cuenta Bancaria */}
                 <Descriptions.Item label="Documento">{strVal(documentoActivo.documento)}</Descriptions.Item>
-                <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fecha)}</Descriptions.Item>
                 <Descriptions.Item label="Concepto">{strVal(documentoActivo.concepto)}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
-                <Descriptions.Item label="Tipo">
-                  {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
+                <Descriptions.Item label="Cuenta Bancaria">
+                  <Text strong style={{ color: '#556ee6' }}>{documentoActivo.cuentaBancaria || '-'}</Text>
                 </Descriptions.Item>
+
+                {/* Fila 2: Fecha Doc | Entidad | Referencia */}
+                <Descriptions.Item label="Fecha Doc">{formatDate(documentoActivo.fecha)}</Descriptions.Item>
                 <Descriptions.Item label="Entidad">{strVal(documentoActivo.entidad)}</Descriptions.Item>
-                <Descriptions.Item label="Sucursal:">
+                <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
+
+                {/* Fila 3: Sucursal | Beneficiario */}
+                <Descriptions.Item label="Sucursal">
                   <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
                 </Descriptions.Item>
-                <Descriptions.Item label="Cuenta Bancaria">{documentoActivo.cuentaBancaria || '-'}</Descriptions.Item>
-                <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="No. Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Beneficiario">{(documentoActivo as any)?.nombreBeneficiario || '-'}</Descriptions.Item>
+                <Descriptions.Item label=""> </Descriptions.Item>
+
+                {/* Fila 4: Nota (span 3) */}
                 <Descriptions.Item label="Nota" span={3}>
                   <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
@@ -366,7 +374,7 @@ const SolicitudPagoDetalle: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Documentos Asociados (${(data as any)?.transaccionesAsociadas?.length || 0})`,
+                  label: `Documentos Relacionados (${(data as any)?.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <TransaccionesAsociadasCard
                       documentos={(data as any)?.transaccionesAsociadas || []}
@@ -405,7 +413,6 @@ const SolicitudPagoDetalle: React.FC = () => {
               impuestos={documentoActivo.impuestos ?? 0}
               retenciones={documentoActivo.retenciones ?? 0}
               total={documentoActivo.total ?? 0}
-              nota={documentoActivo.nota || ''}
               alignRight={false}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
@@ -414,7 +421,7 @@ const SolicitudPagoDetalle: React.FC = () => {
           </Col>
         </Row>
       ) : (
-        /* === MOBILE LAYOUT (< lg) === */
+        /* === MOBILE LAYOUT (< xxl) === */
         <div>
           <Card className="paces-card" size="small" title={
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -430,23 +437,22 @@ const SolicitudPagoDetalle: React.FC = () => {
               </div>
             } style={{ marginBottom: 16 }}>
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Documento">{strVal(documentoActivo.documento)}</Descriptions.Item>
-              <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fecha)}</Descriptions.Item>
-              <Descriptions.Item label="Concepto">{strVal(documentoActivo.concepto)}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
-              <Descriptions.Item label="Tipo">
-                {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
-              </Descriptions.Item>
-              <Descriptions.Item label="Entidad">{strVal(documentoActivo.entidad)}</Descriptions.Item>
-              <Descriptions.Item label="Sucursal:">
+                <Descriptions.Item label="Documento">{strVal(documentoActivo.documento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{strVal(documentoActivo.concepto)}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
+                <Descriptions.Item label="Cuenta Bancaria">
+                  <Text strong style={{ color: '#556ee6' }}>{documentoActivo.cuentaBancaria || '-'}</Text>
+                </Descriptions.Item>
+                <Descriptions.Item label="Fecha Doc">{formatDate(documentoActivo.fecha)}</Descriptions.Item>
+                <Descriptions.Item label="Entidad">{strVal(documentoActivo.entidad)}</Descriptions.Item>
+                <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Sucursal">
                   <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
                 </Descriptions.Item>
-              <Descriptions.Item label="Cuenta Bancaria">{documentoActivo.cuentaBancaria || '-'}</Descriptions.Item>
-              <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
-              <Descriptions.Item label="No. Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Nota">
-                <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
-              </Descriptions.Item>
-            </Descriptions>
+                <Descriptions.Item label="Beneficiario">{(documentoActivo as any)?.nombreBeneficiario || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Nota">
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                </Descriptions.Item>
+              </Descriptions>
           </Card>
 
           <Tabs
@@ -455,7 +461,7 @@ const SolicitudPagoDetalle: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Documentos Asociados (${(data as any)?.transaccionesAsociadas?.length || 0})`,
+                label: `Documentos Relacionados (${(data as any)?.transaccionesAsociadas?.length || 0})`,
                 children: (
                   <TransaccionesAsociadasCard
                     documentos={(data as any)?.transaccionesAsociadas || []}
@@ -487,7 +493,6 @@ const SolicitudPagoDetalle: React.FC = () => {
               impuestos={documentoActivo.impuestos ?? 0}
               retenciones={documentoActivo.retenciones ?? 0}
               total={documentoActivo.total ?? 0}
-              nota={documentoActivo.nota || ''}
               alignRight={true}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
@@ -496,17 +501,8 @@ const SolicitudPagoDetalle: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Modal de Progreso para Aplicar/Postear */}
-      <ModalProgreso
-        open={operacion.loading || !!operacion.completado}
-        titulo={operacionTitulo}
-        eventos={operacion.eventos}
-        completado={operacion.completado}
-        onClose={() => operacion.reset()}
-      />
     </div>
   );
 };
 
-export default SolicitudPagoDetalle;
+export default TransaccionBancariaDetalle;

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -12,6 +12,7 @@ import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats'
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { FacturaVistaDTO } from '../../types/facturacion';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
+import { useUIStore } from '../../stores/uiStore';
 
 const { Text } = Typography;
 
@@ -19,6 +20,11 @@ const DevolucionVenta: React.FC = () => {
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const { screenCode, documentCode } = useScreenConfig();
+  const setActiveModule = useUIStore((s) => s.setActiveModule);
+
+  useEffect(() => {
+    setActiveModule(screenCode);
+  }, [setActiveModule, screenCode]);
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<FacturaVistaDTO>({
     modulo: screenCode,

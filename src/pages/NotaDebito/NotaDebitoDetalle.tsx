@@ -16,6 +16,7 @@ import { notaDebitoApi } from '../../api/notaDebitoApi';
 import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
+import TablaImpuestosDetalle from '../../components/TablaImpuestosDetalle';
 import { useAplicar } from '../../hooks/useAplicar';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
@@ -482,6 +483,13 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
                   ),
                 },
                 {
+                  key: 'impuestos',
+                  label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
+                  children: (
+                    <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
+                  ),
+                },
+                {
                   key: 'asientos',
                   label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                   children: (
@@ -572,6 +580,13 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
                       documentos={documentoActivo?.transaccionesAsociadas || []}
                       readOnly={true}
                     />
+                  ),
+                },
+                {
+                  key: 'impuestos',
+                  label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
+                  children: (
+                    <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
                   ),
                 },
                 {

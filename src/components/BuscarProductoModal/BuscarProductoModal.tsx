@@ -55,8 +55,11 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
   }, [open]);
 
   const productosFiltrados = useMemo(() => {
-    if (!codigosPermitidos || codigosPermitidos.length === 0) return productos;
-    return productos.filter((p) => codigosPermitidos.includes(p.codigo));
+    let filtrados = productos;
+    if (codigosPermitidos && codigosPermitidos.length > 0) {
+      filtrados = filtrados.filter((p) => codigosPermitidos.includes(p.codigo));
+    }
+    return filtrados;
   }, [productos, codigosPermitidos]);
 
    const cargar = useCallback(async (filtro?: string, pagina?: number) => {

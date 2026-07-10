@@ -3,6 +3,7 @@ import type {
   ConceptoDTO, SuplidorDTO, MonedaDTO,
   AsientoContableDTO, LogDTO,
 } from './entradaAlmacen';
+import type { ImpuestoFacturaDTO } from './impuestos';
 
 export interface FacturaSuplidorDTO {
   id: number;
@@ -94,5 +95,5 @@ export interface FacturaSuplidorFullDTO {
   asientos?: AsientoContableDTO[];
   logs?: LogDTO[];
   sucursal?: any;
-  impuestosFactura?: any[];
+  impuestosFactura?: ImpuestoFacturaDTO[];
 }

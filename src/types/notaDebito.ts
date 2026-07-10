@@ -1,5 +1,6 @@
 import type { DocumentoDTO } from './documento';
 import type { ConceptoDTO, EntidadDTO, AsientoContableDTO, LogDTO } from './entradaAlmacen';
+import type { ImpuestoFacturaDTO } from './impuestos';
 
 export interface NotaDebitoDTO {
   id: number;
@@ -52,7 +53,7 @@ export interface NotaDebitoFullDTO {
   sucursal?: { codigo: string; nombre: string } | null;
   codigoSucursal?: string;
   transaccionesAsociadas?: DocumentoRelacionadoDTO[];
-  impuestosRetenciones?: ImpuestoRetencionDTO[];
+  impuestosFactura?: ImpuestoFacturaDTO[];
   asientos?: AsientoContableDTO[];
   logs?: LogDTO[];
 }
@@ -85,12 +86,4 @@ export interface DevolucionAsociadaDTO {
   generarPerdida?: boolean;
 }
 
-export interface ImpuestoRetencionDTO {
-  id?: number;
-  codigo?: string;
-  nombre?: string;
-  porcentaje?: number;
-  tipo?: string; // 'Impuesto' | 'Retencion' | 'Informativo' | 'Otro'
-  monto: number;
-  baseImponible?: number;
-}
+

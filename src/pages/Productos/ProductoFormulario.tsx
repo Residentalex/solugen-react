@@ -127,7 +127,7 @@ const ProductoFormulario: React.FC = () => {
       const prod = await productoApi.obtenerDetalle(sucursalProductos, prodCodigo);
       if (!prod) {
         message.error('Producto no encontrado');
-        navigate('/MProducto');
+        navigate('/MProducto', { replace: true });
         return;
       }
       setData(prod);
@@ -279,12 +279,12 @@ const ProductoFormulario: React.FC = () => {
         const creado = await productoApi.crear(sucursalProductos, dto);
         navigationConfirmedRef.current = true;
         message.success('Producto creado correctamente');
-        navigate('/MProducto/' + (creado.codigo || values.codigo));
+        navigate('/MProducto/' + (creado.codigo || values.codigo), { replace: true });
       } else {
         await productoApi.actualizar(sucursalProductos, dto);
         navigationConfirmedRef.current = true;
         message.success('Producto actualizado correctamente');
-        navigate('/MProducto/' + codigo);
+        navigate('/MProducto/' + codigo, { replace: true });
       }
     } catch (err: any) {
       if (err?.errorFields) return;
@@ -304,7 +304,7 @@ const ProductoFormulario: React.FC = () => {
       okButtonProps: { danger: true },
       onOk: () => {
         navigationConfirmedRef.current = true;
-        navigate('/MProducto');
+        navigate('/MProducto', { replace: true });
       },
     });
   };

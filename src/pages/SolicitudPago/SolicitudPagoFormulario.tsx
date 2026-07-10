@@ -29,6 +29,7 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber } from '../../utils/formats';
+import { toEstadoNum } from '../../utils/estadoDocumento';
 
 const { TextArea } = Input;
 
@@ -130,7 +131,7 @@ const SolicitudPagoFormulario: React.FC = () => {
         if (!res) {
           message.error('Documento no encontrado en la sucursal seleccionada.');
           setLoadingError(true);
-          navigate('/FSPA');
+          navigate('/FSPA', { replace: true });
           return;
         }
 
@@ -183,7 +184,7 @@ const SolicitudPagoFormulario: React.FC = () => {
         const msg = extraerMensajeError(err, 'Error al cargar la solicitud de pago');
         message.error(msg);
         setLoadingError(true);
-        navigate('/FSPA');
+        navigate('/FSPA', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate, cargarEntidades, message]);
@@ -284,9 +285,9 @@ const SolicitudPagoFormulario: React.FC = () => {
       onOk: () => {
         navigationConfirmedRef.current = true;
         if (mode === 'crear') {
-          navigate('/FSPA');
+          navigate('/FSPA', { replace: true });
         } else if (id) {
-          navigate(`/FSPA/${id}`);
+          navigate(`/FSPA/${id}`, { replace: true });
         }
       },
     });
@@ -353,12 +354,12 @@ const SolicitudPagoFormulario: React.FC = () => {
         const result = await solicitudPagoApi.crear(sucursalActiva, dto as SolicitudPagoCrearDTO);
         navigationConfirmedRef.current = true;
         message.success('Solicitud de pago creada exitosamente');
-        navigate(`/FSPA/${result.id}`);
+        navigate(`/FSPA/${result.id}`, { replace: true });
       } else {
         await solicitudPagoApi.actualizar(sucursalActiva, dto as SolicitudPagoActualizarDTO);
         navigationConfirmedRef.current = true;
         message.success('Solicitud de pago actualizada exitosamente');
-        navigate(`/FSPA/${id}`);
+        navigate(`/FSPA/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');
@@ -427,7 +428,7 @@ const SolicitudPagoFormulario: React.FC = () => {
   }
 
   // ===== Estado info =====
-  const estado = data?.estado ?? 0;
+  const estado = toEstadoNum(data?.estado);
   const periodo = data?.periodo;
 
   // ===== Encabezado del formulario =====

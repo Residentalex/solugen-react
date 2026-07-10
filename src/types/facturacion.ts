@@ -129,6 +129,7 @@ export interface FacturaVistaDTO {
   codigoSucursal?: string;
   cajero?: string;
   caja?: string;
+  montoConsumido?: number;
 }
 
 export interface FiltroFacturacion {

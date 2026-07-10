@@ -46,7 +46,7 @@ import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { Text } = Typography;
@@ -175,7 +175,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   const isLarge = screens.xxl === true;
 
   // Estado
-  const estado = data?.estado ?? 0;
+  const estado = toEstadoNum(data?.estado);
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -237,11 +237,8 @@ const ReciboIngresoFormulario: React.FC = () => {
       .then((tipos) => setTiposCache(tipos as any))
       .catch(() => {});
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
-    // Cargar sucursales desde el auth store
-    const authSucursales = useAuthStore.getState().sucursalesPermitidas;
-    if (authSucursales.length > 0) {
-      setSucursalesCache(authSucursales);
-    }
+    // Cargar sucursales desde la API
+    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch(() => {});
 
     if (mode === 'crear') {
       form.setFieldsValue({
@@ -316,7 +313,7 @@ const ReciboIngresoFormulario: React.FC = () => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
         setLoadingError(true);
-        navigate('/FRI');
+        navigate('/FRI', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
@@ -349,9 +346,9 @@ const ReciboIngresoFormulario: React.FC = () => {
       onOk: () => {
         setEditingField(null);
         if (mode === 'crear') {
-          navigate('/FRI');
+          navigate('/FRI', { replace: true });
         } else if (id) {
-          navigate(`/FRI/${id}`);
+          navigate(`/FRI/${id}`, { replace: true });
         }
       },
     });
@@ -375,7 +372,7 @@ const ReciboIngresoFormulario: React.FC = () => {
     // RI17 - Validar distribución vs total
     if (transaccionesAsociadas.length > 0) {
       const distribuido = transaccionesAsociadas.reduce((s, t) => s + (t.monto || 0), 0);
-      if (distribuido > (values.total || 0)) {
+      if (distribuido - (values.total || 0) > 0.01) {
         return 'El monto distribuido en las facturas no puede ser mayor al total del documento.';
       }
     }
@@ -457,7 +454,9 @@ const ReciboIngresoFormulario: React.FC = () => {
       entidad,
       moneda: base.moneda || getMonedaSucursalActiva(),
       codigoTipo: selectedTipo?.codigo || values.tipo || '',
-      sucursal: selectedSucursal || base.sucursal || { nombre: '', codigo: '', identificacion: '' },
+      sucursal: selectedSucursal
+        ? { codigo: selectedSucursal.codigo, idExterno: selectedSucursal.idExterno, nombre: selectedSucursal.nombre || '' }
+        : base.sucursal || undefined,
       // Colecciones
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
         ...t,
@@ -486,11 +485,11 @@ const ReciboIngresoFormulario: React.FC = () => {
       if (mode === 'crear') {
         const result = await reciboIngresoApi.crear(sucursalActiva, dto);
         message.success('Recibo de ingreso creado exitosamente');
-        navigate(`/FRI/${result.id}`);
+        navigate(`/FRI/${result.id}`, { replace: true });
       } else {
         await reciboIngresoApi.actualizar(sucursalActiva, dto);
         message.success('Recibo de ingreso actualizado exitosamente');
-        navigate(`/FRI/${id}`);
+        navigate(`/FRI/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');
@@ -501,14 +500,13 @@ const ReciboIngresoFormulario: React.FC = () => {
   };
 
   const handleGenerarAsientos = async () => {
-    if (!id) return;
+    if (sucursalActiva === undefined) return;
     setSaving(true);
     try {
-      const result = await reciboIngresoApi.recalcularPagos(sucursalActiva, parseInt(id)) as any;
-      if (result?.asientos) {
-        setAsientos(result.asientos);
-      }
-      message.success('Asientos generados automáticamente');
+      const dto = construirDTO();
+      const asientosGenerados = await reciboIngresoApi.generarAsientos(sucursalActiva, dto);
+      setAsientos(asientosGenerados);
+      message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
       message.error(msg);

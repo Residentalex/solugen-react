@@ -11,7 +11,6 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { distribucionBalanceApi } from '../../api/distribucionBalanceApi';
-import { transaccionApi } from '../../api/transaccionApi';
 import PermissionGate from '../../components/PermissionGate';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import LogTable from '../../components/LogTable';
@@ -87,10 +86,8 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
           setMostrandoReverso(false);
         }
 
-        // Cargar transacciones asociadas (débitos/créditos)
-        transaccionApi.obtenerAsociadas(sucursalActiva, parseInt(id), 'Debito', true)
-          .then((asoc) => setAsociadas(asoc || []))
-          .catch(() => setAsociadas([]));
+        // Cargar transacciones asociadas desde el DTO principal
+        setAsociadas(res.transaccionesAsociadas || []);
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al cargar el documento';
@@ -112,10 +109,10 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
   }, [mostrandoReverso, reversoData, data, setPageTitleOverride]);
 
   const debitos = (asociadas || []).filter(
-    (t: any) => t.origenCuenta === 0
+    (t: any) => t.origenCuenta?.toLowerCase() === 'debito' || t.origenCuenta === 'D' || t.origenCuenta === '0'
   );
   const creditos = (asociadas || []).filter(
-    (t: any) => t.origenCuenta === 1
+    (t: any) => t.origenCuenta?.toLowerCase() === 'credito' || t.origenCuenta === 'C' || t.origenCuenta === '1'
   );
 
   const debitosFiltrados = useMemo(() => {

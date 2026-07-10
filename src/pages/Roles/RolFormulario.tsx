@@ -150,7 +150,7 @@ const RolFormulario: React.FC = () => {
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
       setLoadingError(true);
-      if (id) navigate('/MROL');
+      if (id) navigate('/MROL', { replace: true });
     } finally {
       setLoading(false);
     }
@@ -240,7 +240,7 @@ const RolFormulario: React.FC = () => {
       }
 
       navigationConfirmedRef.current = true;
-      navigate('/MROL');
+      navigate('/MROL', { replace: true });
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar rol');
@@ -300,7 +300,7 @@ const RolFormulario: React.FC = () => {
               okButtonProps: { danger: true },
               onOk: () => {
                 navigationConfirmedRef.current = true;
-                navigate('/MROL');
+                navigate('/MROL', { replace: true });
               },
             });
           }}>

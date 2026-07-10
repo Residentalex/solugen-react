@@ -88,6 +88,14 @@ const DevolucionCompraDetalle: React.FC = () => {
           setLoadingError(true);
           return;
         }
+        // Si el concepto es NoImpuesto, solo limpiar impuestos, NO modificar Total
+        if (res.concepto?.noImpuesto && res.detalles) {
+          res.detalles = res.detalles.map((d: any) => ({
+            ...d,
+            impuestos: 0,
+          }));
+          res.impuestos = 0;
+        }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
@@ -181,6 +189,14 @@ const DevolucionCompraDetalle: React.FC = () => {
           messageApi.error('Documento no encontrado en la sucursal seleccionada.');
           setLoadingError(true);
           return;
+        }
+        // Si el concepto es NoImpuesto, solo limpiar impuestos, NO modificar Total
+        if (res.concepto?.noImpuesto && res.detalles) {
+          res.detalles = res.detalles.map((d: any) => ({
+            ...d,
+            impuestos: 0,
+          }));
+          res.impuestos = 0;
         }
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
@@ -478,7 +494,7 @@ const DevolucionCompraDetalle: React.FC = () => {
     if (!id) return;
     setSaving(true);
     try {
-      await devolucionCompraApi.revisar(sucursalActiva, parseInt(id));
+      await devolucionCompraApi.revisado(sucursalActiva, parseInt(id));
       messageApi.success('Documento marcado como revisado');
       const res = await devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
@@ -494,7 +510,7 @@ const DevolucionCompraDetalle: React.FC = () => {
     if (!id) return;
     setSaving(true);
     try {
-      await devolucionCompraApi.reversar(sucursalActiva, data as any);
+      await devolucionCompraApi.reversar(sucursalActiva, parseInt(id!));
       messageApi.success('Documento reversado exitosamente');
       const res = await devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);

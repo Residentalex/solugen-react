@@ -3,6 +3,11 @@ import { Card, Divider } from 'antd';
 import { formatNumber, toTitleCase } from '../utils/formats';
 import { getMonedaSucursalActiva } from '../utils/moneda';
 
+interface ImpuestoInformativo {
+  nombre: string;
+  monto: number;
+}
+
 interface TotalesCardProps {
   subTotal: number;
   descuento: number;
@@ -16,11 +21,13 @@ interface TotalesCardProps {
   tasa?: number;
   hideTitle?: boolean;
   children?: React.ReactNode;
+  impuestosInformativos?: ImpuestoInformativo[];
 }
 
 const TotalesCard: React.FC<TotalesCardProps> = ({
   subTotal, descuento, impuestos, total, retenciones, nota,
   alignRight = false, monedaSimbolo, monedaNombre, tasa, hideTitle = false,
+  impuestosInformativos = [],
   children,
 }) => {
   const monedaDefault = getMonedaSucursalActiva();
@@ -52,6 +59,18 @@ const TotalesCard: React.FC<TotalesCardProps> = ({
         {!alignRight && <span className="paces-text-secondary">Impuestos</span>}
         <span>{formatNumber(impuestos)}</span>
       </div>
+      {impuestosInformativos && impuestosInformativos.length > 0 && impuestosInformativos.map((imp) => (
+        <div key={imp.nombre} style={{
+          display: 'flex',
+          justifyContent: alignRight ? 'flex-end' : 'space-between',
+          gap: 16,
+          fontSize: 14,
+          paddingLeft: alignRight ? 0 : 24,
+        }}>
+          {!alignRight && <span className="paces-text-secondary">{imp.nombre}</span>}
+          <span>{formatNumber(imp.monto)}</span>
+        </div>
+      ))}
       {retenciones !== undefined && (
         <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
           {!alignRight && <span className="paces-text-secondary">Retenciones</span>}

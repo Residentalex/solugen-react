@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { Table, Select, Button, message, Card, Typography, DatePicker, InputNumber, Empty, Input } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SaveOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { SaveOutlined, SearchOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons';
+import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -196,6 +197,39 @@ const ActualizacionCostos: React.FC = () => {
     );
   };
 
+  const exportarExcel = () => {
+    if (datosFiltrados.length === 0) {
+      message.warning('No hay datos para exportar');
+      return;
+    }
+
+    const excelData = datosFiltrados.map((item) => ({
+      Fecha: formatDate(item.fecha),
+      Documento: item.documento || '',
+      Código: item.codigo || '',
+      Producto: (item.producto || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()),
+      'Costo Anterior': item.costoAntiguo || 0,
+      'Costo Nuevo': item.costoNuevo || 0,
+      '% Dif.': item.costoAntiguo
+        ? Number((((item.costoNuevo - item.costoAntiguo) / item.costoAntiguo) * 100).toFixed(2))
+        : 0,
+      'Doc. Origen': item.documentoReferencia || '-',
+      'Fec. Origen': item.fechaDocumento ? formatDate(item.fechaDocumento) : '-',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    worksheet['!cols'] = [
+      { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 30 },
+      { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 12 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Actualización Costos');
+
+    const fecha = dayjs().format('YYYYMMDD_HHmmss');
+    XLSX.writeFile(workbook, `ActualizacionCostos_${fecha}.xlsx`);
+  };
+
   // ===== Columnas =====
   const columns: ColumnsType<DetalleActualizacionCostoDTO> = [
     {
@@ -334,6 +368,11 @@ const ActualizacionCostos: React.FC = () => {
                 Actualizar
               </Button>
             </PermissionGate>
+          )}
+          {data.length > 0 && (
+            <Button icon={<DownloadOutlined />} onClick={exportarExcel}>
+              Exportar Excel
+            </Button>
           )}
           <div style={{ flex: 1 }} />
           <Select

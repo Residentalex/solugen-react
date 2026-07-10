@@ -144,6 +144,7 @@ const MainLayout: React.FC = () => {
   const sidebarCollapsed = useUIStore((s: any) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((s: any) => s.setSidebarCollapsed);
   const activeModule = useUIStore((s: any) => s.activeModule);
+  const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const pageTitleOverride = useUIStore((s: any) => s.pageTitleOverride);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
   const themeName = useUIStore((s: any) => s.themeName);
@@ -164,7 +165,7 @@ const MainLayout: React.FC = () => {
 
   useEffect(() => {
     if (isAuthenticated && !data.familias.length) {
-      fetchInitialConfig(sucursalActiva, Sucursal.Consolidado);
+      fetchInitialConfig(Sucursal.Compra, Sucursal.Consolidado);
     }
   }, [isAuthenticated, data.familias.length, fetchInitialConfig]);
 
@@ -176,6 +177,18 @@ const MainLayout: React.FC = () => {
   useEffect(() => {
     setPageTitleOverride('');
   }, [location.pathname, setPageTitleOverride]);
+
+  // Sincronizar activeModule desde la ruta actual
+  useEffect(() => {
+    const segmentos = location.pathname.split('/').filter(Boolean);
+    if (segmentos.length > 0) {
+      const codigo = segmentos[0];
+      // Solo sincronizar si es un código de módulo (no rutas tipo /saas, /store, /documentacion)
+      if (codigo && !['saas', 'store', 'documentacion'].includes(codigo)) {
+        setActiveModule(codigo);
+      }
+    }
+  }, [location.pathname, setActiveModule]);
 
   // Sincronizar securitySucursal desde companyStore a authStore
   useEffect(() => {

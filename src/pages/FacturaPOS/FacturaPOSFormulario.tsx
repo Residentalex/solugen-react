@@ -42,7 +42,7 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
@@ -196,7 +196,7 @@ const FacturaPOSFormulario: React.FC = () => {
   const isLarge = screens.xxl === true;
 
   // ===== Determinar estado =====
-  const estado = data?.estado ?? 0;
+  const estado = toEstadoNum(data?.estado);
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -301,7 +301,7 @@ const FacturaPOSFormulario: React.FC = () => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
         setLoadingError(true);
-        navigate('/FPV');
+        navigate('/FPV', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
@@ -318,9 +318,9 @@ const FacturaPOSFormulario: React.FC = () => {
       onOk: () => {
         setEditingField(null);
         if (mode === 'crear') {
-          navigate('/FPV');
+          navigate('/FPV', { replace: true });
         } else if (id) {
-          navigate(`/FPV/${id}`);
+          navigate(`/FPV/${id}`, { replace: true });
         }
       },
     });
@@ -407,11 +407,11 @@ const FacturaPOSFormulario: React.FC = () => {
       if (mode === 'crear') {
         const result = await facturaPOSApi.crear(sucursalActiva, dto);
         message.success('Factura POS creada exitosamente');
-        navigate(`/FPV/${result.id}`);
+        navigate(`/FPV/${result.id}`, { replace: true });
       } else {
         await facturaPOSApi.actualizar(sucursalActiva, dto);
         message.success('Factura POS actualizada exitosamente');
-        navigate(`/FPV/${id}`);
+        navigate(`/FPV/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');

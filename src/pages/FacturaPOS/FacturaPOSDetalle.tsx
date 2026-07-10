@@ -385,7 +385,7 @@ const FacturaPOSDetalle: React.FC = () => {
         periodo={data.periodo}
         saving={saving}
         imprimiendo={imprimiendo}
-        onVolver={() => navigate('/FPV')}
+        onVolver={() => navigate(-1)}
         onImprimirTicket={async () => {
           setImprimiendo(true);
           try {

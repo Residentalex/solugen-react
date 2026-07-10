@@ -589,7 +589,7 @@ const OrdenCompraDetalle: React.FC = () => {
         revisado={data.revisado}
         saving={saving}
         operacionLoading={operacion?.loading}
-        onVolver={() => navigate('/FORC')}
+        onVolver={() => navigate(-1)}
         onEditar={() => navigate(`/FORC/${id}/editar`)}
         onAplicar={handleAplicar}
         onAnular={handleAnular}

@@ -39,7 +39,7 @@ const ModuloFormulario: React.FC = () => {
           form.setFieldsValue({ nombre: modulo.nombre, orden: modulo.orden });
         } else {
           message.error('Módulo no encontrado');
-          navigate('/Modulos');
+          navigate('/Modulos', { replace: true });
         }
       }).catch(() => {
         message.error('Error al cargar módulo');
@@ -58,12 +58,12 @@ const ModuloFormulario: React.FC = () => {
         const result = await moduloApi.crear(sucursalActiva, values);
         message.success('Módulo creado correctamente');
         navigationConfirmedRef.current = true;
-        navigate(`/Modulos/${result.id}`);
+        navigate(`/Modulos/${result.id}`, { replace: true });
       } else {
         await moduloApi.actualizar(sucursalActiva, Number(id), values);
         message.success('Módulo actualizado correctamente');
         navigationConfirmedRef.current = true;
-        navigate(`/Modulos/${id}`);
+        navigate(`/Modulos/${id}`, { replace: true });
       }
     } catch (err: any) {
       if (err?.errorFields) return;
@@ -75,7 +75,7 @@ const ModuloFormulario: React.FC = () => {
 
   const handleCancelar = () => {
     navigationConfirmedRef.current = true;
-    navigate('/Modulos');
+    navigate('/Modulos', { replace: true });
   };
 
   return (

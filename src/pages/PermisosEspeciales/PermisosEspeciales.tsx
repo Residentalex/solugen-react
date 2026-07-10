@@ -145,7 +145,7 @@ const PermisosEspeciales: React.FC = () => {
 
   const columns: ColumnsType<AuthPermisoEspecialDTO> = [
     {
-      title: 'CÃ³digo',
+      title: 'Código',
       dataIndex: 'codigo',
       key: 'codigo',
       fixed: 'left',
@@ -249,8 +249,8 @@ const PermisosEspeciales: React.FC = () => {
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item
             name="codigo"
-            label="CÃ³digo"
-            rules={[{ required: true, message: 'El cÃ³digo es obligatorio' }]}
+            label="Código"
+            rules={[{ required: true, message: 'El código es obligatorio' }]}
           >
             <Input placeholder="Ej. PERMISO_ESPECIAL" maxLength={50} />
           </Form.Item>
@@ -271,7 +271,7 @@ const PermisosEspeciales: React.FC = () => {
           <Form.Item name="tipoValor" label="Tipo de valor" initialValue="BOOLEANO">
             <Select>
               <Select.Option value="BOOLEANO">BOOLEANO</Select.Option>
-              <Select.Option value="NUMERICO">NUMÃ‰RICO</Select.Option>
+              <Select.Option value="NUMERICO">NUMÉRICO</Select.Option>
             </Select>
           </Form.Item>
         </Form>
@@ -294,7 +294,7 @@ const PermisosEspeciales: React.FC = () => {
         <Spin spinning={cargandoDetalle}>
           {detalleItem && (
             <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
-              <Descriptions.Item label="CÃ³digo">{detalleItem.codigo}</Descriptions.Item>
+              <Descriptions.Item label="Código">{detalleItem.codigo}</Descriptions.Item>
               <Descriptions.Item label="Nombre">{detalleItem.nombre || '-'}</Descriptions.Item>
               <Descriptions.Item label="Activo">
                 <Tag color={detalleItem.activo ? 'green' : 'red'}>

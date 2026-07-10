@@ -88,6 +88,7 @@ const BuscarEntidadSelect: React.FC<BuscarEntidadSelectProps> = ({
         showSearch
         allowClear
         placeholder={placeholder}
+        style={{ width: '100%' }}
         optionFilterProp="children"
         value={value}
         onChange={handleChange}

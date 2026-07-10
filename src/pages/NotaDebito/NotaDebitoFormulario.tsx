@@ -32,7 +32,6 @@ import type {
   TipoDTO,
   DocumentoRelacionadoDTO,
   DevolucionAsociadaDTO,
-  ImpuestoRetencionDTO,
 } from '../../types/notaDebito';
 import type { ConceptoDTO, EntidadDTO, AsientoContableDTO } from '../../types/entradaAlmacen';
 import type { UnidadMedidaDTO } from '../../types/productos';
@@ -46,6 +45,8 @@ import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConc
 import BuscarTipoModal from '../../components/BuscarTipoModal/BuscarTipoModal';
 import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import BuscarEntidadSelect from '../../components/BuscarEntidadSelect/BuscarEntidadSelect';
+import BuscarCuentaContableModal from '../../components/BuscarCuentaContableModal/BuscarCuentaContableModal';
+import AsientosContableTable from '../../components/AsientosContableTable';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -54,7 +55,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import { NotaDebitoGuide } from './NotaDebitoGuide';
 
 const { Text } = Typography;
@@ -62,7 +63,7 @@ const { TextArea } = Input;
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 // ===== Calcular totales desde impuestos =====
-function calcularTotales(impuestos: ImpuestoRetencionDTO[], total: number, perdidas: number = 0) {
+function calcularTotales(impuestos: any[], total: number, perdidas: number = 0) {
   const retenciones = impuestos
     .filter((i) => i.tipo === 'Retencion')
     .reduce((s, i) => s + (i.monto || 0), 0);
@@ -84,7 +85,7 @@ function calcularTotales(impuestos: ImpuestoRetencionDTO[], total: number, perdi
 
 // ===== Sub-componente para mostrar totales =====
 const TotalesSection: React.FC<{
-  impuestosRetenciones: ImpuestoRetencionDTO[];
+  impuestosRetenciones: any[];
   montoTotal: number;
   perdidas?: number;
 }> = React.memo(({ impuestosRetenciones, montoTotal, perdidas = 0 }) => {
@@ -121,6 +122,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const location = useLocation();
   const cloneData = (location.state as any)?.cloneData;
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const usuario = useAuthStore((s: any) => s.usuario);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
@@ -129,6 +131,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
   const codigoPantalla = tipoEntidad === 'SUP' ? 'FNDSUP' : 'FNDCLI';
   const entidadLabel = tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente';
+  const pantallaActiva = usuario?.pantallas?.find((p: any) => p.codigo?.toUpperCase() === codigoPantalla?.toUpperCase());
+  const tienePermisoPostear = pantallaActiva?.acciones?.includes('POSTEAR') ?? false;
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -147,10 +151,13 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   // Estado para pestañas
   const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionadoDTO[]>([]);
   const [devoluciones, setDevoluciones] = useState<DevolucionAsociadaDTO[]>([]);
-  const [impuestosRetenciones, setImpuestosRetenciones] = useState<ImpuestoRetencionDTO[]>([]);
+  const [impuestosRetenciones, setImpuestosRetenciones] = useState<any[]>([]);
 
   // Modal de selección de impuestos
   const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
+
+  // Modal de búsqueda de cuenta contable para asientos manuales
+  const [cuentaModalAsientoOpen, setCuentaModalAsientoOpen] = useState(false);
 
   // Estado para total confirmado (se actualiza solo al salir del campo o presionar Enter)
   const [montoTotalConfirmado, setMontoTotalConfirmado] = useState<number>(0);
@@ -238,7 +245,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   };
 
   // ===== Estado info =====
-  const estado = data?.estado ?? 0;
+  const estado = toEstadoNum(data?.estado);
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -299,7 +306,16 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       }));
       setDocumentosRelacionados(docsPagoClone);
       setDevoluciones(devsMapeadasClone);
-      setImpuestosRetenciones(cloneData.impuestosRetenciones || []);
+      // Normalizar desde impuestosFactura (anidado) si viene de clon
+      setImpuestosRetenciones((cloneData.impuestosFactura || []).map((imp: any) => ({
+        codigo: imp.impuesto?.codigo,
+        idExterno: imp.impuesto?.idExterno,
+        nombre: imp.impuesto?.nombre,
+        porcentaje: imp.impuesto?.porcentaje,
+        tipo: imp.tipo,
+        monto: imp.monto,
+      })));
+
       setAsientos(cloneData.asientos || []);
       setDetallesMovimiento(cloneData.detallesMovimiento || cloneData.detalles || []);
       setNcfModificadoVal(cloneData.ncfModificado || '');
@@ -372,7 +388,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           entidad: res.entidad || null,
           moneda: res.moneda || null,
           transaccionesAsociadas: res.transaccionesAsociadas || [],
-          impuestosRetenciones: res.impuestosRetenciones || [],
+          impuestosFactura: res.impuestosFactura || [],
           asientos: res.asientos || [],
           logs: res.logs || [],
           sucursal: res.sucursal,
@@ -407,7 +423,15 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         }));
         setDocumentosRelacionados(docsPago);
         setDevoluciones(devsMapeadas);
-        setImpuestosRetenciones(full.impuestosRetenciones || []);
+        // Normalizar de estructura anidada → plana para la UI
+        setImpuestosRetenciones((full.impuestosFactura || []).map((imp: any) => ({
+          codigo: imp.impuesto?.codigo,
+          idExterno: imp.impuesto?.idExterno,
+          nombre: imp.impuesto?.nombre,
+          porcentaje: imp.impuesto?.porcentaje,
+          tipo: imp.tipo,
+          monto: imp.monto,
+        })));
         setAsientos(full.asientos || []);
         setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);
         setNcfModificadoVal(full.ncfModificado || '');
@@ -476,7 +500,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
         setLoadingError(true);
-        navigate(`/${codigoPantalla}`);
+        navigate(`/${codigoPantalla}`, { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate, codigoPantalla]);
@@ -492,9 +516,9 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       okButtonProps: { danger: true },
       onOk: () => {
         if (mode === 'crear') {
-          navigate(`/${codigoPantalla}`);
+          navigate(`/${codigoPantalla}`, { replace: true });
         } else {
-          navigate(`/${codigoPantalla}/${id}`);
+          navigate(`/${codigoPantalla}/${id}`, { replace: true });
         }
       },
     });
@@ -725,6 +749,19 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     }
   };
 
+  // ===== Handler para agregar asiento manual =====
+  const handleAgregarAsientoManual = (cuenta: any) => {
+    const nuevoAsiento = {
+      id: Date.now(),
+      cuentaContable: { noCuenta: cuenta.noCuenta, nombre: cuenta.nombre },
+      monto: 0,
+      tipoAsiento: 'D',
+      generado: false,
+      descripcion: '',
+    };
+    setAsientos((prev: any[]) => [...prev, nuevoAsiento]);
+  };
+
   // ===== Validación =====
   const validarFormulario = async (): Promise<string | null> => {
     const values = form.getFieldsValue();
@@ -827,9 +864,10 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
     // Asegurar entidad con tipoEntidad
     const tipoEntidadStr = tipoEntidad;
-    const entidadBaseObj = entidadSel || { nombre: '', codigo: '', identificacion: '' };
+    const entidadBaseObj = base.entidad || entidadSel || { nombre: '', codigo: '', identificacion: '' };
     const entidad = {
       ...entidadBaseObj,
+      cuentaContable: entidadBaseObj.cuentaContable,
       tipoEntidad: entidadBaseObj.tipoEntidad ?? {
         codigo: tipoEntidadStr,
         origenCuenta: docOrigenCuenta,
@@ -864,7 +902,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       codigoTipo: selectedTipo?.codigo || '',
       entidad,
       moneda: base.moneda || getMonedaSucursalActiva(),
-      sucursal: selectedSucursal ? { codigo: selectedSucursal.codigo || selectedSucursal.idExterno, nombre: selectedSucursal.nombre || '' } : undefined,
+      sucursal: selectedSucursal ? { codigo: selectedSucursal.codigo || selectedSucursal.idExterno, idExterno: selectedSucursal.idExterno, nombre: selectedSucursal.nombre || '' } : undefined,
       // Combinar pagos y devoluciones en transaccionesAsociadas (formato TransaccionAsociadaDTO)
       transaccionesAsociadas: [...documentosRelacionados, ...devoluciones.map((d: DevolucionAsociadaDTO) => ({
         transaccionAsociadaID: d.transaccionAsociadaID,
@@ -876,7 +914,17 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         esDocumentoInventario: true,
         tipoDocumento: 24,    // TipoDocumento.DVC = 24
       }))],
-      impuestosRetenciones,
+      // Transformar estructura plana → anidada para el backend
+      impuestosFactura: impuestosRetenciones.map((imp) => ({
+        monto: imp.monto || 0,
+        tipo: imp.tipo || 'Impuesto',
+        impuesto: {
+          codigo: imp.codigo || '',
+          idExterno: imp.idExterno || (imp.codigo || '').replace(/^IMP-0*/, '') || null,
+          nombre: imp.nombre || '',
+          porcentaje: imp.porcentaje || 0,
+        },
+      })),
       asientos: asientos || [],
       detallesMovimiento: tipoEntidad === 'CLI' ? detallesMovimiento : [],
       logs: base.logs || [],
@@ -897,11 +945,11 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       if (mode === 'crear') {
         const result = await notaDebitoApi.crear(sucursalActiva, dto);
         message.success('Nota de Débito creada exitosamente');
-        navigate(`/${codigoPantalla}/${result.id}`);
+        navigate(`/${codigoPantalla}/${result.id}`, { replace: true });
       } else {
         await notaDebitoApi.actualizar(sucursalActiva, dto);
         message.success('Nota de Débito actualizada exitosamente');
-        navigate(`/${codigoPantalla}/${id}`);
+        navigate(`/${codigoPantalla}/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');
@@ -912,14 +960,13 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   };
 
   const handleGenerarAsientos = async () => {
-    if (!id) return;
+    if (sucursalActiva === undefined) return;
     setSaving(true);
     try {
-      const result = await notaDebitoApi.recalcularPagos(sucursalActiva, parseInt(id)) as any;
-      if (result?.asientos) {
-        setAsientos(result.asientos);
-      }
-      message.success('Asientos generados automáticamente');
+      const dto = construirDTO();
+      const asientosGenerados = await notaDebitoApi.generarAsientos(sucursalActiva, dto);
+      setAsientos(asientosGenerados);
+      message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
       message.error(msg);
@@ -948,7 +995,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           documento: res.documento || { codigo: 'ND' }, concepto: res.concepto || null,
           tipo: res.tipo || null, entidad: res.entidad || null, moneda: res.moneda || null,
           transaccionesAsociadas: res.transaccionesAsociadas || [],
-          impuestosRetenciones: res.impuestosRetenciones || [],
+          impuestosFactura: res.impuestosFactura || [],
           asientos: res.asientos || [], logs: res.logs || [],
           sucursal: res.sucursal,
           bienes: res.bienes || 0,
@@ -980,7 +1027,15 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         }));
         setDocumentosRelacionados(docsPagoRefresh);
         setDevoluciones(devsMapeadasRefresh);
-        setImpuestosRetenciones(full.impuestosRetenciones || []);
+        // Normalizar de estructura anidada → plana para la UI
+        setImpuestosRetenciones((full.impuestosFactura || []).map((imp: any) => ({
+          codigo: imp.impuesto?.codigo,
+          idExterno: imp.impuesto?.idExterno,
+          nombre: imp.impuesto?.nombre,
+          porcentaje: imp.impuesto?.porcentaje,
+          tipo: imp.tipo,
+          monto: imp.monto,
+        })));
         setAsientos(full.asientos || []);
         setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);
         setNcfModificadoVal(full.ncfModificado || '');
@@ -1165,7 +1220,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       key: 'monto',
       width: 140,
       align: 'right' as const,
-      render: (_: any, record: ImpuestoRetencionDTO, idx: number) => (
+      render: (_: any, record: any, idx: number) => (
         <InputNumber
           size="small"
           style={{ width: 120 }}
@@ -1181,7 +1236,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       title: '',
       key: 'accion',
       width: 50,
-      render: (_: any, record: ImpuestoRetencionDTO) => (
+      render: (_: any, record: any) => (
         <Button
           type="text"
           danger
@@ -1600,14 +1655,27 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     {
       key: 'asientos',
       label: `Asientos (${asientos.length})`,
-      children: (
-        <AsientosContableEditables
+      children: (estado === 0 && tienePermisoPostear) ? (
+        <>
+          <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
+            <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)}>
+              Agregar asiento manual
+            </Button>
+          </div>
+          <AsientosContableEditables
+            asientos={asientos}
+            onChange={setAsientos}
+            editable={true}
+            onGenerar={handleGenerarAsientos}
+            generando={saving}
+            disableGenerar={!id}
+          />
+        </>
+      ) : (
+        <AsientosContableTable
           asientos={asientos}
-          onChange={setAsientos}
-          editable={estado === 0}
-          onGenerar={handleGenerarAsientos}
-          generando={saving}
-          disableGenerar={!id}
+          scroll={{ x: 600 }}
+          rowKey={(r: any) => r.id || r.asientoID}
         />
       ),
     },
@@ -1704,13 +1772,24 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         onConfirm={handleConfirmarImpuestos}
         tipoEntidad={tipoEntidad}
         sucursal={sucursalActiva}
-        existentes={impuestosRetenciones.map((i) => ({
+        existentes={impuestosRetenciones.map((i: any) => ({
           codigo: i.codigo || '',
           nombre: i.nombre || '',
           porcentaje: i.porcentaje || 0,
           tipo: i.tipo || 'Impuesto',
           monto: i.monto,
         }))}
+      />
+
+      {/* Modal de búsqueda de cuenta contable para asientos manuales */}
+      <BuscarCuentaContableModal
+        open={cuentaModalAsientoOpen}
+        onClose={() => setCuentaModalAsientoOpen(false)}
+        onSelect={(cuenta) => {
+          handleAgregarAsientoManual(cuenta);
+          setCuentaModalAsientoOpen(false);
+        }}
+        sucursal={sucursalActiva}
       />
 
       {/* Guía paso a paso (solo en modo crear o editar borrador) */}

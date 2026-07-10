@@ -40,7 +40,7 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
@@ -171,7 +171,7 @@ const CotizacionVentaFormulario: React.FC = () => {
   const isLarge = screens.xxl === true;
 
   // ===== Determinar estado =====
-  const estado = data?.estado ?? 0;
+  const estado = toEstadoNum(data?.estado);
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAnulado = estado === 3;
@@ -271,7 +271,7 @@ const CotizacionVentaFormulario: React.FC = () => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar la cotización';
         message.error(msg);
         setLoadingError(true);
-        navigate('/FCotizacion');
+        navigate('/FCotizacion', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
@@ -288,9 +288,9 @@ const CotizacionVentaFormulario: React.FC = () => {
       onOk: () => {
         setEditingField(null);
         if (mode === 'crear') {
-          navigate('/FCotizacion');
+          navigate('/FCotizacion', { replace: true });
         } else if (id) {
-          navigate(`/FCotizacion/${id}`);
+          navigate(`/FCotizacion/${id}`, { replace: true });
         }
       },
     });
@@ -379,11 +379,11 @@ const CotizacionVentaFormulario: React.FC = () => {
       if (mode === 'crear') {
         const result = await cotizacionVentaApi.crear(sucursalActiva, dto);
         message.success('Cotización creada exitosamente');
-        navigate(`/FCotizacion/${result.id}`);
+        navigate(`/FCotizacion/${result.id}`, { replace: true });
       } else {
         await cotizacionVentaApi.actualizar(sucursalActiva, parseInt(id!), dto);
         message.success('Cotización actualizada exitosamente');
-        navigate(`/FCotizacion/${id}`);
+        navigate(`/FCotizacion/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');

@@ -49,14 +49,17 @@ export function useDocumentosReporte(config: DocumentosReporteConfig) {
       const hasta = fechas[1].endOf('day').format('YYYYMMDDHHmmss');
 
       if (selectedIds && selectedIds.length > 0) {
-        // Mapear los objetos seleccionados desde la data en memoria (sin consultar BD)
-        const items = data
-          .filter((item) => selectedIds.includes(item.id))
+        // Mapear los objetos seleccionados desde la data en memoria,
+        // iterando sobre selectedIds para conservar el orden de selección
+        const dataMap = new Map(data.map((item) => [item.id, item]));
+        const items = selectedIds
+          .map((id) => dataMap.get(id))
+          .filter((item): item is MovimientoVistaDTO => item !== undefined)
           .map((item) => {
             const partes = (item.documento || '').split('-');
             return {
               fechaDocumento: item.fecha,
-              fechaEntrega: null,
+              fechaEntrega: item.fechaEntrega ?? null,
               tipoDocumento: partes.length > 0 ? partes[0] : '',
               noDocumento: partes.slice(1).join('-'),
               total: item.total ?? 0,

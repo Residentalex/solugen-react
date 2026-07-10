@@ -233,6 +233,19 @@ export const transaccionApi = {
     const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/devolucionesPV/${id}`);
     return data.data || [];
   },
+
+  /** Obtener documentos pendientes de una entidad */
+  obtenerDocumentosPendientes: async (
+    sucursal: number,
+    codEntidad: string,
+    tipoEntidad: string
+  ): Promise<TransaccionDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<TransaccionDTO[]>>(
+      `${BASE}/${sucursal}/pendiente/${codEntidad}`,
+      { params: { tipoEntidad } }
+    );
+    return data.data || [];
+  },
 };
 
 export { formatDateParam };

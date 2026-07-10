@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Button, Spin, Alert, Empty, Typography, Tag, Row, Col, Grid, message
 } from 'antd';
@@ -225,6 +225,7 @@ const CompactSummary: React.FC<CompactSummaryProps> = ({ cuenta }) => {
 
 const FTransBanco: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const screens = Grid.useBreakpoint();
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
@@ -509,6 +510,8 @@ const FTransBanco: React.FC = () => {
               onSearch={handleSearch}
               pageSize={pageSize}
               onPageSizeChange={handlePageSizeChange}
+              showCrear
+              onCrear={() => navigate('/FTransBanco/nuevo')}
               onRefresh={handleRefresh}
             />
             <div style={{ marginBottom: 8 }}>
@@ -533,6 +536,14 @@ const FTransBanco: React.FC = () => {
                 onChange: (page) => setCurrentPage(page),
               }}
               rowClassName="paces-row-hover"
+              onRow={(record) => ({
+                onClick: () => {
+                  if (record.id) {
+                    navigate(`/FTransBanco/${record.id}`, { state: { cuentaCodigo: cuentaActiva?.codigo } });
+                  }
+                },
+                style: { cursor: record.id ? 'pointer' : 'default' },
+              })}
               locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay movimientos para esta cuenta" /></div> }}
             />
           </div>

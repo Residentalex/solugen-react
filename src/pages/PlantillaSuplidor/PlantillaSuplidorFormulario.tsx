@@ -132,7 +132,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
         message.error(msg);
         setLoadingError(true);
         navigationConfirmedRef.current = true;
-        navigate('/mplantillasup');
+        navigate('/mplantillasup', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate, setPageTitleOverride]);
@@ -186,7 +186,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
       okButtonProps: { danger: true },
       onOk: () => {
         navigationConfirmedRef.current = true;
-        navigate('/mplantillasup');
+        navigate('/mplantillasup', { replace: true });
       },
     });
   };
@@ -239,12 +239,12 @@ const PlantillaSuplidorFormulario: React.FC = () => {
         const nuevoId = await plantillaSuplidorApi.crear(sucursalActiva, dto);
         message.success('Plantilla creada exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/mplantillasup/${nuevoId}`);
+        navigate(`/mplantillasup/${nuevoId}`, { replace: true });
       } else {
         await plantillaSuplidorApi.actualizar(sucursalActiva, dto);
         message.success('Plantilla actualizada exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/mplantillasup/${id}`);
+        navigate(`/mplantillasup/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');

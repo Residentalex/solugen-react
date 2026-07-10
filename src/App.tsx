@@ -100,6 +100,8 @@ import Bancos from './pages/Bancos/Bancos';
 import Ofertas from './pages/Ofertas/Ofertas';
 import CuentasBancarias from './pages/CuentasBancarias/CuentasBancarias';
 import FTransBanco from './pages/CuentasBancarias/CuentaBancariaDetalle';
+import TransaccionBancariaDetalle from './pages/TransaccionBancaria/TransaccionBancariaDetalle';
+import TransaccionBancariaFormulario from './pages/TransaccionBancaria/TransaccionBancariaFormulario';
 import UnidadesMedida from './pages/UnidadesMedida/UnidadesMedida';
 import CategoriasArticulo from './pages/CategoriasArticulo/CategoriasArticulo';
 import FamiliasArticulo from './pages/FamiliasArticulo/FamiliasArticulo';
@@ -347,6 +349,9 @@ const App: React.FC = () => {
             <Route path="FOfertas" element={<Ofertas />} />
             <Route path="MCuentaBanco" element={<CuentasBancarias />} />
             <Route path="FTransBanco" element={<FTransBanco />} />
+            <Route path="FTransBanco/nuevo" element={<TransaccionBancariaFormulario />} />
+            <Route path="FTransBanco/:id/editar" element={<TransaccionBancariaFormulario />} />
+            <Route path="FTransBanco/:id" element={<TransaccionBancariaDetalle />} />
             <Route path="MUnidadMedida" element={<UnidadesMedida />} />
             <Route path="MCategoria" element={<CategoriasArticulo />} />
             <Route path="MFamilia" element={<FamiliasArticulo />} />
@@ -562,6 +567,9 @@ const App: React.FC = () => {
             <Route path="FOfertas" element={<Ofertas />} />
             <Route path="MCuentaBanco" element={<CuentasBancarias />} />
             <Route path="FTransBanco" element={<FTransBanco />} />
+            <Route path="FTransBanco/nuevo" element={<TransaccionBancariaFormulario />} />
+            <Route path="FTransBanco/:id/editar" element={<TransaccionBancariaFormulario />} />
+            <Route path="FTransBanco/:id" element={<TransaccionBancariaDetalle />} />
             <Route path="MUnidadMedida" element={<UnidadesMedida />} />
             <Route path="MCategoria" element={<CategoriasArticulo />} />
             <Route path="MFamilia" element={<FamiliasArticulo />} />

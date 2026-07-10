@@ -199,9 +199,9 @@ export function useAplicar() {
       setLoading(false);
       if (completado.exito) {
         message.success('Operación completada exitosamente');
-        callbackRef.current?.();
-        callbackRef.current = null;
       }
+      callbackRef.current?.();
+      callbackRef.current = null;
       // El error se muestra en el ModalProgreso, no es necesario message.error()
     }
   }, [completado]);

@@ -31,18 +31,38 @@ interface BuscarCuentaInlineModalProps {
   open: boolean;
   onClose: () => void;
   onSelect: (cta: CuentaContableResumenDTO) => void;
-  cuentas: CuentaContableResumenDTO[];
+  buscarCuentas: (filtro: string) => Promise<CuentaContableResumenDTO[]>;
 }
 
-const BuscarCuentaInlineModal: React.FC<BuscarCuentaInlineModalProps> = ({ open, onClose, onSelect, cuentas }) => {
-  const [filtered, setFiltered] = useState<CuentaContableResumenDTO[]>(cuentas);
+const BuscarCuentaInlineModal: React.FC<BuscarCuentaInlineModalProps> = ({ open, onClose, onSelect, buscarCuentas }) => {
+  const [filtered, setFiltered] = useState<CuentaContableResumenDTO[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searchText, setSearchText] = useState('');
 
-  useEffect(() => { setFiltered(cuentas); }, [cuentas, open]);
+  const handleSearch = async (val: string) => {
+    const trimmed = (val || '').trim();
+    setSearchText(trimmed);
+    if (!trimmed) {
+      setFiltered([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const result = await buscarCuentas(trimmed);
+      setFiltered(result);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al buscar cuentas contables');
+      setFiltered([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleSearch = (val: string) => {
-    if (!val) { setFiltered(cuentas); return; }
-    const f = val.toLowerCase();
-    setFiltered(cuentas.filter(c => c.noCuenta.toLowerCase().includes(f) || c.nombre.toLowerCase().includes(f)));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.value) {
+      setSearchText('');
+      setFiltered([]);
+    }
   };
 
   const columnas = [
@@ -56,20 +76,27 @@ const BuscarCuentaInlineModal: React.FC<BuscarCuentaInlineModalProps> = ({ open,
         placeholder="Buscar por número o nombre..."
         allowClear
         onSearch={handleSearch}
+        onChange={handleChange}
         style={{ marginBottom: 16 }}
       />
-      <Table
-        dataSource={filtered}
-        columns={columnas}
-        rowKey="noCuenta"
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: () => { onSelect(record); },
-          style: { cursor: 'pointer' },
-        })}
-        locale={{ emptyText: <Empty description="No hay cuentas contables" /> }}
-      />
+      <Spin spinning={loading}>
+        <Table
+          dataSource={filtered}
+          columns={columnas}
+          rowKey="noCuenta"
+          size="small"
+          pagination={{ pageSize: 10, showSizeChanger: false }}
+          onRow={(record) => ({
+            onClick: () => { onSelect(record); },
+            style: { cursor: 'pointer' },
+          })}
+          locale={{
+            emptyText: !searchText
+              ? <Empty description="Escriba para buscar cuentas" />
+              : <Empty description="Sin resultados" />,
+          }}
+        />
+      </Spin>
     </Modal>
   );
 };
@@ -165,7 +192,6 @@ const ConceptoFormulario: React.FC = () => {
   const [conceptoReplicaModalOpen, setConceptoReplicaModalOpen] = useState(false);
   const [cuentaContableText, setCuentaContableText] = useState('');
   const [cuentaModalOpen, setCuentaModalOpen] = useState(false);
-  const [cuentasCache, setCuentasCache] = useState<CuentaContableResumenDTO[]>([]);
 
   // Entidades y Documentos del concepto
   const [entidades, setEntidades] = useState<TipoEntidadDTO[]>([]);
@@ -204,7 +230,6 @@ const ConceptoFormulario: React.FC = () => {
     conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenes).catch(() => {});
     conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursales).catch(() => {});
     documentosApi.obtenerListado(sucursalActiva).then(setDocumentos).catch(() => {});
-    cuentaContableApi.obtenerListadoPaginado(sucursalActiva, 99999, 0).then(r => setCuentasCache(r.data)).catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar cuentas contables'));
     tipoApi.obtenerTodo(sucursalActiva).then((tipos) => {
       const map: Record<string, string> = {};
       const docMap: Record<string, string> = {};
@@ -307,7 +332,7 @@ const ConceptoFormulario: React.FC = () => {
         message.error(msg);
         setLoadingError(true);
         navigationConfirmedRef.current = true;
-        navigate('/MConcepto');
+        navigate('/MConcepto', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, codigo, sucursalActiva, form, navigate, documentos, setPageTitleOverride, navigationConfirmedRef]);
@@ -388,12 +413,12 @@ const ConceptoFormulario: React.FC = () => {
         const result = await conceptosApi.crearConcepto(sucursalActiva, dto);
         message.success('Concepto creado exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/MConcepto/${result.codigo}`);
+        navigate(`/MConcepto/${result.codigo}`, { replace: true });
       } else {
         await conceptosApi.actualizarConcepto(sucursalActiva, codigo!, dto);
         message.success('Concepto actualizado exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/MConcepto/${codigo}`);
+        navigate(`/MConcepto/${codigo}`, { replace: true });
       }
     } catch (err: any) {
       if (err?.errorFields) return; // error de validación del form
@@ -416,18 +441,18 @@ const ConceptoFormulario: React.FC = () => {
         onOk: () => {
           navigationConfirmedRef.current = true;
           if (mode === 'editar' && codigo) {
-            navigate(`/MConcepto/${codigo}`);
+            navigate(`/MConcepto/${codigo}`, { replace: true });
           } else {
-            navigate('/MConcepto');
+            navigate('/MConcepto', { replace: true });
           }
         },
       });
     } else {
       navigationConfirmedRef.current = true;
       if (mode === 'editar' && codigo) {
-        navigate(`/MConcepto/${codigo}`);
+        navigate(`/MConcepto/${codigo}`, { replace: true });
       } else {
-        navigate('/MConcepto');
+        navigate('/MConcepto', { replace: true });
       }
     }
   };
@@ -516,7 +541,7 @@ const ConceptoFormulario: React.FC = () => {
           showIcon
           style={{ marginBottom: 16 }}
         />
-        <Button onClick={() => navigate('/MConcepto')}>Volver al listado</Button>
+        <Button onClick={() => navigate('/MConcepto', { replace: true })}>Volver al listado</Button>
       </div>
     );
   }
@@ -1446,7 +1471,7 @@ const ConceptoFormulario: React.FC = () => {
         open={cuentaModalOpen}
         onClose={() => setCuentaModalOpen(false)}
         onSelect={handleCuentaContableSelect}
-        cuentas={cuentasCache}
+        buscarCuentas={(filtro) => cuentaContableApi.obtenerListadoPaginado(sucursalActiva, 50, 0, filtro).then(r => r.data)}
       />
 
       {/* Modal Buscar Documento (doc a generar) */}

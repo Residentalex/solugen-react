@@ -4,6 +4,7 @@ import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Tooltip, Modal, Alert, App, QRCode, Input, Typography, Switch
 } from 'antd';
 import {
+  ExclamationCircleOutlined,
   LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
   FileTextOutlined, FileSearchOutlined, ReloadOutlined,
@@ -14,6 +15,7 @@ import PermissionGate from '../../components/PermissionGate';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
+import { dgiiApi } from '../../api/dgiiApi';
 import { notaCreditoApi } from '../../api/notaCreditoApi';
 import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
@@ -33,6 +35,7 @@ import ErrorDetalle from '../../components/ErrorDetalle';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
+import TablaImpuestosDetalle from '../../components/TablaImpuestosDetalle';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 
 interface NotaCreditoDetalleProps {
@@ -74,6 +77,19 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
   const { screenCode, documentCode } = useScreenConfig(codigoPantalla);
   const rutaBase = tipoEntidad === 'SUP' ? 'NCSUP' : 'NCCLI';
 
+  const rutasDocumentos: Record<string, string> = {
+    NC: tipoEntidad === 'CLI' ? '/FNCCLI' : '/FNCSUP',
+    ND: tipoEntidad === 'CLI' ? '/FNDCLI' : '/FNDSUP',
+    FAC: '/FFAC',
+    TRN: '/FTRN',
+    RDE: '/FRDE',
+    ENP: '/FENP',
+    DVC: '/FDVC',
+    SAP: '/FSAP',
+    DEV: '/FDEV',
+    PV: '/FPV',
+  };
+
   const operacion = useAplicar();
   const [operacionTitulo, setOperacionTitulo] = useState('');
 
@@ -109,9 +125,9 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
             .then((scanRes) => setTieneScan(scanRes.existe))
             .catch(() => setTieneScan(false)),
         ];
-        if (res.tipo?.envioDGII) {
+        if (res.ncf) {
           promises.push(
-            apiClient.get(`/EnvioDGII/${sucursalActiva}/${res.id}`)
+            apiClient.get(`/DGII/${sucursalActiva}/${res.id}`)
               .then(({ data: resp }: any) => { setEstadoDGII(resp?.data || null); })
               .catch(() => { setEstadoDGII(null); })
           );
@@ -166,9 +182,9 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
             .then(rel => setDocumentosRelacionados(rel || []))
             .catch(() => setDocumentosRelacionados([])),
         ];
-        if (res.tipo?.envioDGII) {
+        if (res.ncf) {
           promises.push(
-            apiClient.get(`/EnvioDGII/${sucursalActiva}/${res.id}`)
+            apiClient.get(`/DGII/${sucursalActiva}/${res.id}`)
               .then(({ data: resp }: any) => { setEstadoDGII(resp?.data || null); })
               .catch(() => { setEstadoDGII(null); })
           );
@@ -336,15 +352,54 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
     if (!id || !data) return;
     setEnviandoDGII(true);
     try {
-      await apiClient.put(`/EnvioDGII/${sucursalActiva}/MarcarEnviado`, null, {
-        params: { transaccionID: parseInt(id) }
-      });
+      await dgiiApi.cargarYEnviarFactura(sucursalActiva, parseInt(id), 'NC');
       message.success('Documento enviado a la DGII exitosamente');
-      const { data: resp } = await apiClient.get(`/EnvioDGII/${sucursalActiva}/${id}`);
+      const { data: resp } = await apiClient.get(`/DGII/${sucursalActiva}/${id}`);
       setEstadoDGII(resp?.data || null);
       handleRefresh();
     } catch (err: any) {
       const msg = err?.response?.data?.errorMessage || 'Error al enviar a la DGII';
+      message.error(msg);
+    } finally {
+      setEnviandoDGII(false);
+    }
+  };
+
+  const handleReasignarNCF = async () => {
+    if (!id || !data) return;
+    Modal.confirm({
+      title: 'Reasignar NCF',
+      icon: <ExclamationCircleOutlined />,
+      content: '¿Desea reasignar un nuevo NCF a esta nota de crédito?',
+      okText: 'Sí',
+      cancelText: 'No',
+      onOk: async () => {
+        setSaving(true);
+        try {
+          await apiClient.put(`/Transaccion/${sucursalActiva}/reasignarNCF/${id}`);
+          message.success('NCF reasignado correctamente');
+          handleRefresh();
+        } catch (err: any) {
+          const msg = err?.response?.data?.errorMessage || 'Error al reasignar NCF';
+          message.error(msg);
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
+  };
+
+  const handleMarcarEnviado = async () => {
+    if (!id || !data) return;
+    setEnviandoDGII(true);
+    try {
+      await dgiiApi.marcarEnviado(sucursalActiva, parseInt(id));
+      message.success('Documento marcado como enviado exitosamente');
+      const { data: resp } = await apiClient.get(`/DGII/${sucursalActiva}/${id}`);
+      setEstadoDGII(resp?.data || null);
+      handleRefresh();
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al marcar como enviado';
       message.error(msg);
     } finally {
       setEnviandoDGII(false);
@@ -370,7 +425,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
   const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
 
   const detallesFiltrados = detalleSearch
-    ? (documentoActivo?.detallesMovimiento || []).filter((d: DetalleMovimientoDTO) => {
+    ? (documentoActivo?.detalles || []).filter((d: DetalleMovimientoDTO) => {
         const q = detalleSearch.toLowerCase();
         return (
           (d.codigo || '').toLowerCase().includes(q) ||
@@ -378,7 +433,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
           (d.referencia || '').toLowerCase().includes(q)
         );
       })
-    : (documentoActivo?.detallesMovimiento || []);
+    : (documentoActivo?.detalles || []);
 
   const detalleColumns = [
     {
@@ -564,6 +619,33 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                 style={{ marginLeft: 8 }}
               />
             )}
+            {!data?.ncf ? (
+              <PermissionGate codigoPantalla={codigoPantalla} permisoEspecial="pe_preasignar_ncf">
+                <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF}
+                  disabled={toEstadoNum(data?.estado) !== 1}>
+                  Reasignar NCF
+                </Button>
+              </PermissionGate>
+            ) : !estadoDGII?.codigoQR ? (
+              <>
+                <PermissionGate codigoPantalla={codigoPantalla} permisoEspecial="pe_marcar_enviado">
+                  <Button icon={<SendOutlined />} size="small" onClick={handleEnviarDGII}
+                    loading={enviandoDGII}
+                    disabled={toEstadoNum(data?.estado) !== 1}>
+                    Enviar DGII
+                  </Button>
+                </PermissionGate>
+                <PermissionGate codigoPantalla={codigoPantalla} permisoEspecial="pe_preasignar_ncf">
+                  <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF}
+                    disabled={toEstadoNum(data?.estado) !== 1}>
+                    Reasignar NCF
+                  </Button>
+                </PermissionGate>
+              </>
+            ) : (
+              <Tag color="success" icon={<CheckCircleOutlined />}>DGII OK</Tag>
+            )}
+            <Divider type="vertical" />
             <PermissionGate permisoEspecial="pe_recalcular">
               <Button
                 icon={<ReloadOutlined />}
@@ -656,12 +738,20 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                     <TransaccionesAsociadasCard
                       documentos={documentoActivo?.transaccionesAsociadas || []}
                       readOnly={true}
+                      rutas={rutasDocumentos}
                     />
                   ),
                 },
                 {
+                  key: 'impuestos',
+                  label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
+                  children: (
+                    <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
+                  ),
+                },
+                {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detallesMovimiento?.length || 0}` : ''})`,
+                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detalles?.length || 0}` : ''})`,
                   children: (
                     <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
                   ),
@@ -770,12 +860,20 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                     <TransaccionesAsociadasCard
                       documentos={documentoActivo?.transaccionesAsociadas || []}
                       readOnly={true}
+                      rutas={rutasDocumentos}
                     />
                   ),
                 },
                 {
+                  key: 'impuestos',
+                  label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
+                  children: (
+                    <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
+                  ),
+                },
+                {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detallesMovimiento?.length || 0}` : ''})`,
+                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detalles?.length || 0}` : ''})`,
                   children: (
                     <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
                   ),

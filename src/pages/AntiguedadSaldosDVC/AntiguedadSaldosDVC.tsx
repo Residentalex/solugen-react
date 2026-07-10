@@ -399,7 +399,7 @@ const AntiguedadSaldosDVC: React.FC = () => {
   };
 
   const seleccionarSucursal = (item: CompaniaDTO) => {
-    setCodSucursalFiltro(item.codigo);
+    setCodSucursalFiltro(item.idExterno || item.codigo);
     setNomSucursalFiltro(item.nombre);
     setModalSucursalAbierto(false);
   };

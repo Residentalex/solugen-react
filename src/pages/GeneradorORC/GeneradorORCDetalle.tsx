@@ -606,7 +606,7 @@ const GeneradorORCDetalle: React.FC = () => {
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FGORC')}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
           Volver
         </Button>
         <SucursalDocumentoSelector value={sucursalDestino} onChange={setSucursalDestino} />

@@ -209,11 +209,11 @@ const EmpleadoFormulario: React.FC = () => {
         const nuevo = await empleadoApi.crear(sucursalActiva, payload);
         message.success('Empleado creado correctamente');
         if (nuevo?.codigo) {
-          navigate(`/MEMP/${nuevo.codigo}`);
+          navigate(`/MEMP/${nuevo.codigo}`, { replace: true });
           return;
         }
       }
-      navigate('/MEMP');
+      navigate('/MEMP', { replace: true });
     } catch (err: any) {
       if (err?.errorFields) return; // errores de validación del form
       message.error(extraerMensajeError(err, 'Error al guardar empleado'));

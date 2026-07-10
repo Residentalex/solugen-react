@@ -12,6 +12,7 @@ import {
   FileTextOutlined,
   FileSearchOutlined,
   RollbackOutlined,
+  ScanOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -45,6 +46,7 @@ import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocu
 import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
+import EscanerModal from '../../components/EscanerModal';
 
 const { Text } = Typography;
 
@@ -68,6 +70,7 @@ const EntradaAlmacenDetalle: React.FC = () => {
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
   const [scannerUrl, setScannerUrl] = useState<string | null>(null);
   const [scannerLoading, setScannerLoading] = useState(false);
+  const [escanerModalOpen, setEscanerModalOpen] = useState(false);
   const [ocDetallesData, setOcDetallesData] = useState<any[]>([]);
   const [ocLoading, setOcLoading] = useState(false);
   const [devolucionesData, setDevolucionesData] = useState<any[]>([]);
@@ -176,6 +179,10 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
     } finally {
       setScannerLoading(false);
     }
+  };
+
+  const handleEscaner = () => {
+    setEscanerModalOpen(true);
   };
 
   const handleFechaVencimiento = (date: dayjs.Dayjs | null) => {
@@ -709,7 +716,8 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         fechaDocumento: dataAnular.fecha,
         nota: `${data.nota || ''} Documento anulado por: ${dataAnular.motivo}.`,
       };
-      await entradaAlmacenApi.anular(sucursalActiva, dto);
+      const destinoContable = data?.concepto?.sucursalDestino?.sucursal ?? sucursalContableRef.current;
+      await entradaAlmacenApi.anular(sucursalActiva, dto, destinoContable);
       message.success('Documento anulado exitosamente');
       setModalAnularOpen(false);
       const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
@@ -912,7 +920,21 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                       />
                     </Tooltip>
                   )}
-                  {tieneScan === false && <Tag icon={<FileSearchOutlined />} color="warning" />}
+                  {tieneScan === false && (
+                    <>
+                      <Tag icon={<FileSearchOutlined />} color="warning" />
+                      <Tooltip title="Escanear factura">
+                        <Button
+                          type="dashed"
+                          size="small"
+                          icon={<ScanOutlined />}
+                          onClick={(e) => { e.stopPropagation(); handleEscaner(); }}
+                        >
+                          Escanear
+                        </Button>
+                      </Tooltip>
+                    </>
+                  )}
                 </Space>
               </div>
             } style={{ marginBottom: 16 }}>
@@ -1100,7 +1122,21 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                       />
                     </Tooltip>
                   )}
-                  {tieneScan === false && <Tag icon={<FileSearchOutlined />} color="warning" />}
+                  {tieneScan === false && (
+                    <>
+                      <Tag icon={<FileSearchOutlined />} color="warning" />
+                      <Tooltip title="Escanear factura">
+                        <Button
+                          type="dashed"
+                          size="small"
+                          icon={<ScanOutlined />}
+                          onClick={(e) => { e.stopPropagation(); handleEscaner(); }}
+                        >
+                          Escanear
+                        </Button>
+                      </Tooltip>
+                    </>
+                  )}
                 </Space>
               </div>
             } style={{ marginBottom: 16 }}>
@@ -1377,6 +1413,16 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
           </div>
         ))}
       </Modal>
+
+      {/* Modal de Escaner Documento */}
+      <EscanerModal
+        open={escanerModalOpen}
+        onClose={() => setEscanerModalOpen(false)}
+        onScanned={() => {
+          handleRefresh();
+        }}
+        filePath={`${data.documento.codigo}-${data.noDocumento}.pdf`}
+      />
 
       {/* Modal de Progreso para Aplicar/Postear */}
       <ModalProgreso

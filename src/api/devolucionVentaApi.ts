@@ -126,6 +126,11 @@ export const devolucionVentaApi = {
     await apiClient.post(`${BASE}/${sucursal}/${id}/Reversar`);
   },
 
+  generarND: async (sucursal: number, devolucionIds: number[]): Promise<any> => {
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/generar-nd`, devolucionIds);
+    return data.data;
+  },
+
   // ===== Scanner =====
   verificarScan: async (sucursal: number, id: number): Promise<{ existe: boolean }> => {
     const { data } = await apiClient.get<ApiResponse<{ existe: boolean }>>(`${BASE}/${sucursal}/${id}/scanner/verificar`);

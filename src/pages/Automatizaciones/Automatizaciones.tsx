@@ -113,25 +113,25 @@ function detectarFrecuencia(cron: string): { tipo: FrecuenciaTipo; valor: number
 
 function describirCron(cron: string): string {
   const parts = cron.trim().split(/\s+/);
-  if (parts.length !== 5) return 'ExpresiÃ³n personalizada';
+  if (parts.length !== 5) return 'Expresión personalizada';
 
   const [min, hour, dom, month, dow] = parts;
 
   // Cada X horas
   if (min === '0' && hour.startsWith('*/')) {
     const h = hour.replace('*/', '');
-    return `Cada ${h} horas, todos los dÃ­as`;
+    return `Cada ${h} horas, todos los días`;
   }
   // Cada X minutos
   if (hour === '*' && min.startsWith('*/')) {
     const m = min.replace('*/', '');
     return `Cada ${m} minutos`;
   }
-  // Una hora especÃ­fica cada dÃ­a
+  // Una hora específica cada día
   if (min === '0' && hour !== '*' && !hour.includes('/') && dom === '*' && month === '*' && dow === '*') {
-    return `A las ${hour.padStart(2, '0')}:00, todos los dÃ­as`;
+    return `A las ${hour.padStart(2, '0')}:00, todos los días`;
   }
-  return 'ExpresiÃ³n personalizada';
+  return 'Expresión personalizada';
 }
 
 function buildInitialFormState(template: JobTemplate): TemplateFormState {
@@ -343,7 +343,7 @@ const Automatizaciones: React.FC = () => {
 
   const handleTrigger = (job: JobHangfire) => {
     Modal.confirm({
-      title: 'Ejecutar automatizaciÃ³n',
+      title: 'Ejecutar automatización',
       content: `¿Está seguro de ejecutar "${job.nombre}" manualmente?`,
       okText: 'Ejecutar',
       cancelText: 'Cancelar',
@@ -501,7 +501,7 @@ const Automatizaciones: React.FC = () => {
         message: 'Job registrado correctamente',
         description: (
           <span>
-            <Text strong>{selectedTemplate.nombre}</Text> ya estÃ¡ activo
+            <Text strong>{selectedTemplate.nombre}</Text> ya está activo
           </span>
         ),
         duration: 4.5,
@@ -636,7 +636,7 @@ const Automatizaciones: React.FC = () => {
       ),
     },
     {
-      title: 'MÃ³dulo',
+      title: 'Módulo',
       dataIndex: 'modulo',
       key: 'modulo',
       width: 140,
@@ -674,7 +674,7 @@ const Automatizaciones: React.FC = () => {
       },
     },
     {
-      title: 'Ãšltima EjecuciÃ³n',
+      title: 'Última Ejecución',
       dataIndex: 'ultimaEjecucion',
       key: 'ultimaEjecucion',
       width: 160,
@@ -683,7 +683,7 @@ const Automatizaciones: React.FC = () => {
       ),
     },
     {
-      title: 'PrÃ³xima EjecuciÃ³n',
+      title: 'Próxima Ejecución',
       dataIndex: 'proximaEjecucion',
       key: 'proximaEjecucion',
       width: 160,
@@ -692,7 +692,7 @@ const Automatizaciones: React.FC = () => {
       ),
     },
     {
-      title: 'DuraciÃ³n',
+      title: 'Duración',
       dataIndex: 'duracionSegundos',
       key: 'duracionSegundos',
       width: 90,
@@ -707,7 +707,7 @@ const Automatizaciones: React.FC = () => {
       key: 'cron',
       width: 110,
       render: (cron: string) => (
-        <Tooltip title={`ExpresiÃ³n Cron: ${cron}`}>
+        <Tooltip title={`Expresión Cron: ${cron}`}>
           <Space size={4}>
             <ClockCircleOutlined style={{ fontSize: 12, color: 'var(--paces-text-secondary)' }} />
             <Text code className="paces-text-secondary" style={{ fontSize: 10 }}>
@@ -776,7 +776,7 @@ const Automatizaciones: React.FC = () => {
     >
       <Space>
         <PermissionGate accion="CREAR">
-          <Tooltip title="Re-registrar todos los jobs para incluir notificaciones automÃ¡ticas">
+            <Tooltip title="Re-registrar todos los jobs para incluir notificaciones automáticas">
             <Button icon={<SyncOutlined />} onClick={handleReRegistrarTodos}>
               Re-registrar Jobs
             </Button>
@@ -806,7 +806,7 @@ const Automatizaciones: React.FC = () => {
         key: 'exitosos' as const,
         icon: <CheckCircleOutlined />,
         value: resumenInfo.exitosos,
-        label: 'Ãºltimas ejecuciones',
+        label: 'últimas ejecuciones',
         color: '#34c38f',
         bgColor: 'rgba(52,195,143,0.08)',
       },
@@ -814,7 +814,7 @@ const Automatizaciones: React.FC = () => {
         key: 'fallidos' as const,
         icon: <AlertOutlined />,
         value: resumenInfo.fallidos,
-        label: 'Ãºltimas ejecuciones',
+        label: 'últimas ejecuciones',
         color: '#f46a6a',
         bgColor: 'rgba(244,106,106,0.08)',
       },
@@ -904,7 +904,7 @@ const Automatizaciones: React.FC = () => {
       filtros={
         <Select
           style={{ width: 160 }}
-          placeholder="Todos los mÃ³dulos"
+          placeholder="Todos los módulos"
           allowClear
           value={filtroModulo}
           onChange={(val) => setFiltroModulo(val)}
@@ -1021,7 +1021,7 @@ const Automatizaciones: React.FC = () => {
       {detalleJobModal.job && (
         <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
           <Descriptions.Item label="Nombre">{detalleJobModal.job.nombre}</Descriptions.Item>
-          <Descriptions.Item label="MÃ³dulo">{detalleJobModal.job.modulo || '-'}</Descriptions.Item>
+          <Descriptions.Item label="Módulo">{detalleJobModal.job.modulo || '-'}</Descriptions.Item>
           <Descriptions.Item label="Sucursal">{detalleJobModal.job.sucursal || '-'}</Descriptions.Item>
           <Descriptions.Item label="Cron">
             <Text code>{detalleJobModal.job.cron}</Text>
@@ -1030,9 +1030,9 @@ const Automatizaciones: React.FC = () => {
             <Badge status={ESTADO_BADGE[detalleJobModal.job.ultimoEstado]?.status || 'default'} />
             {ESTADO_BADGE[detalleJobModal.job.ultimoEstado]?.text || detalleJobModal.job.ultimoEstado}
           </Descriptions.Item>
-          <Descriptions.Item label="Ãšltima EjecuciÃ³n">{formatFecha(detalleJobModal.job.ultimaEjecucion)}</Descriptions.Item>
-          <Descriptions.Item label="PrÃ³xima EjecuciÃ³n">{formatFecha(detalleJobModal.job.proximaEjecucion)}</Descriptions.Item>
-          <Descriptions.Item label="DuraciÃ³n">{formatDuracion(detalleJobModal.job.duracionSegundos)}</Descriptions.Item>
+          <Descriptions.Item label="Última Ejecución">{formatFecha(detalleJobModal.job.ultimaEjecucion)}</Descriptions.Item>
+          <Descriptions.Item label="Próxima Ejecución">{formatFecha(detalleJobModal.job.proximaEjecucion)}</Descriptions.Item>
+          <Descriptions.Item label="Duración">{formatDuracion(detalleJobModal.job.duracionSegundos)}</Descriptions.Item>
           <Descriptions.Item label="Activo">
             <Switch size="small" checked={detalleJobModal.job.activo} disabled />
           </Descriptions.Item>
@@ -1089,13 +1089,13 @@ const Automatizaciones: React.FC = () => {
         <Row gutter={[24, 8]}>
           <Col span={12}>
             <Text className="paces-text-secondary" style={{ fontSize: 12, display: 'block' }}>
-              Ãšltima ejecuciÃ³n
+              Última ejecución
             </Text>
             <Text>{formatFecha(errorModal.job?.ultimaEjecucion || null)}</Text>
           </Col>
           <Col span={12}>
             <Text className="paces-text-secondary" style={{ fontSize: 12, display: 'block' }}>
-              DuraciÃ³n
+              Duración
             </Text>
             <Text>{formatDuracion(errorModal.job?.duracionSegundos || null)}</Text>
           </Col>
@@ -1158,7 +1158,7 @@ const Automatizaciones: React.FC = () => {
           />
           <Select
             style={{ width: '100%' }}
-            placeholder="Filtrar por mÃ³dulo"
+            placeholder="Filtrar por módulo"
             allowClear
             value={templateFiltroModulo}
             onChange={(val) => setTemplateFiltroModulo(val)}
@@ -1303,7 +1303,7 @@ const Automatizaciones: React.FC = () => {
         style={{ borderRadius: 8, height: '100%' }}
         styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' } }}
       >
-        {/* â”€â”€ Zona A: Header compacto + descripciÃ³n â”€â”€ */}
+        {/* â”€â”€ Zona A: Header compacto + descripción â”€â”€ */}
         <div
           style={{
             padding: '12px 24px',
@@ -1554,7 +1554,7 @@ const Automatizaciones: React.FC = () => {
                   loading={submitting}
                   onClick={handleRegistrar}
                 >
-                  Registrar automatizaciÃ³n
+                  Registrar automatización
                 </Button>
               </Tooltip>
             </PermissionGate>

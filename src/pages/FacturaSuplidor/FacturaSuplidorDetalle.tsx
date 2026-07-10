@@ -33,6 +33,7 @@ import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
+import TablaImpuestosDetalle from '../../components/TablaImpuestosDetalle';
 
 const FacturaSuplidorDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -186,7 +187,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
     }
   };
 
-  const handleAplicar = () => {
+  const handleAplicar = async () => {
     if (!id) return;
 
     // Validar FechaPermitida del documento
@@ -203,6 +204,19 @@ const FacturaSuplidorDetalle: React.FC = () => {
           messageApi.error('La fecha de entrega no puede ser mayor a la fecha del día.');
           return;
         }
+      }
+    }
+
+    // Validar NCF duplicado antes de aplicar
+    if (data?.ncf && data?.suplidor?.codigo) {
+      try {
+        const ncfExiste = await facturaSuplidorApi.verificarNCF(sucursalActiva, data.ncf, data.suplidor.codigo);
+        if (ncfExiste) {
+          messageApi.error(`El NCF "${data.ncf}" ya fue utilizado en otra factura de este suplidor.`);
+          return;
+        }
+      } catch {
+        // Si falla la verificación, continuar con la operación
       }
     }
 
@@ -225,7 +239,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
     }
     setOperacionTitulo(`Posteando RDE-${data?.noDocumento || id}`);
     operacion.ejecutar(
-      `/Transaccion/${sucursalActiva}/postear`,
+      `/RDE/${sucursalActiva}/postear`,
       handleRefresh,
       data
     );
@@ -434,7 +448,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
       ),
     },
     {
-      title: 'Precio',
+      title: 'Costo',
       key: 'costo',
       width: 110,
       align: 'right' as const,
@@ -463,7 +477,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div>{formatNumber(record.porcentajeDescuento || 0)}%</div>
           <div className="paces-text-secondary" style={{ fontSize: 12 }}>
-            {formatNumber(record.descuento || 0)}
+            {formatCurrency(record.descuento || 0)}
           </div>
         </div>
       ),
@@ -477,7 +491,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
-          <div>{formatNumber(record.impuestos || 0)}</div>
+          <div>{formatCurrency(record.impuestos || 0)}</div>
           {record.impuesto?.nombre && (
             <Tooltip title={record.impuesto.nombre}>
               <div className="paces-text-secondary" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -489,6 +503,27 @@ const FacturaSuplidorDetalle: React.FC = () => {
       ),
     },
     {
+      title: 'Otros',
+      key: 'otros',
+      width: 120,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
+      render: (_: any, record: any) => {
+        if (!record.impuesto?.porcentaje) return <span>{formatCurrency(0)}</span>;
+        // Calcular otros = base * suma porcentajes de impuestos tipo V
+        const base = (record.subTotal || 0) - (record.descuento || 0);
+        const otrosPct = data?.impuestosFactura
+          ?.filter((imp: any) => {
+            const tipo = imp.tipo || imp.impuesto?.tipo || '';
+            return tipo === 'V';
+          })
+          ?.reduce((sum: number, imp: any) => sum + (imp.impuesto?.porcentaje || 0), 0) || 0;
+        const otros = Math.round(base * (otrosPct / 100) * 100) / 100;
+        return <span>{formatCurrency(otros)}</span>;
+      },
+    },
+    {
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
@@ -496,9 +531,19 @@ const FacturaSuplidorDetalle: React.FC = () => {
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top', paddingRight: 16 } }),
       onHeaderCell: () => ({ style: { paddingRight: 16 } }),
-      render: (_: any, record: any) => (
-        <Typography.Text strong>{formatNumber(record.total || 0)}</Typography.Text>
-      ),
+      render: (_: any, record: any) => {
+        const base = (record.subTotal || 0) - (record.descuento || 0);
+        const otrosPct = data?.impuestosFactura
+          ?.filter((imp: any) => {
+            const tipo = imp.tipo || imp.impuesto?.tipo || '';
+            return tipo === 'V';
+          })
+          ?.reduce((sum: number, imp: any) => sum + (imp.impuesto?.porcentaje || 0), 0) || 0;
+        const otros = Math.round(base * (otrosPct / 100) * 100) / 100;
+        return (
+          <Typography.Text strong>{formatCurrency((record.total || 0) + otros)}</Typography.Text>
+        );
+      },
     },
   ];
 
@@ -525,7 +570,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
-        onVolver={() => navigate('/FRDE')}
+        onVolver={() => navigate(-1)}
         onImprimir={async () => {
           setImprimiendo(true);
           try {
@@ -624,18 +669,24 @@ const FacturaSuplidorDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+                {/* Fila 1 */}
+                <Descriptions.Item label="Entrada Ref">{documentoActivo.entradaAlmacen?.noDocumento || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="Tipo">
                   {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
+                {/* Fila 2 */}
+                <Descriptions.Item label="Fecha Doc. Suplidor">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
                 <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
+                {/* Fila 3 */}
+                <Descriptions.Item label="Fecha Recibo">{documentoActivo.entradaAlmacen?.fechaEntrega ? formatDate(documentoActivo.entradaAlmacen.fechaEntrega) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Almacén">{toTitleCase(documentoActivo.entradaAlmacen?.almacen?.nombre || documentoActivo.almacen?.nombre || '-')}</Descriptions.Item>
                 <Descriptions.Item label="Sucursal">{documentoActivo.sucursal?.nombre || documentoActivo.sucursal?.codigo || '-'}</Descriptions.Item>
-
-                <Descriptions.Item label="Tasa">{documentoActivo.tasa ? formatNumber(documentoActivo.tasa) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Tipo Compra">{documentoActivo.tipoCompra === 'C' ? 'Contado' : documentoActivo.tipoCompra === 'D' ? 'Crédito' : documentoActivo.tipoCompra || '-'}</Descriptions.Item>
+                {/* Fila 4 */}
+                <Descriptions.Item label="Nota" span={3}>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                </Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -680,20 +731,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
                   key: 'impuestos',
                   label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
                   children: (
-                    <Table
-                      dataSource={documentoActivo.impuestosFactura || []}
-                      rowKey={(r: any) => r.transactionID + (r.impuesto?.idExterno || '')}
-                      size="small"
-                      pagination={false}
-                      scroll={{ x: 600 }}
-                      columns={[
-                        { title: 'Impuesto / Retención', key: 'nombre', render: (_: any, r: any) => r.impuesto?.nombre || '-' },
-                        { title: 'Porcentaje', key: 'porcentaje', width: 100, align: 'right' as const, render: (_: any, r: any) => r.impuesto?.porcentaje != null ? `${r.impuesto.porcentaje}%` : '-' },
-                        { title: 'No. Cuenta', key: 'cuenta', width: 150, render: (_: any, r: any) => r.impuesto?.noCuenta || '-' },
-                        { title: 'Monto', key: 'monto', width: 140, align: 'right' as const, render: (_: any, r: any) => formatCurrency(r.monto || 0) },
-                        { title: 'Tipo', key: 'tipo', width: 120, render: (_: any, r: any) => r.tipo || (r.impuesto?.tipo === 1 ? 'Impuesto' : r.impuesto?.tipo === 2 ? 'Retención' : '-') },
-                      ]}
-                    />
+                    <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
                   ),
                 },
                 {
@@ -709,10 +747,18 @@ const FacturaSuplidorDetalle: React.FC = () => {
 
           <Col xxl={6}>
             <EntidadCard entidad={documentoActivo.suplidor} entidadSecundaria={documentoActivo.entidad} fallbackTitulo="Suplidor" />
-            <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones} total={documentoActivo.total} alignRight={false}
+            <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones ?? 0} total={documentoActivo.total} alignRight={false}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
               tasa={documentoActivo.tasa ?? 1}
+              impuestosInformativos={
+                (data?.impuestosFactura || [])
+                  .filter((imp: any) => imp.impuesto?.tipo === 'V')
+                  .map((imp: any) => ({
+                    nombre: imp.impuesto?.nombre || imp.nombre || '',
+                    monto: imp.monto || 0,
+                  }))
+              }
             />
             <DocumentosRelacionadosCard
               documentos={documentosRelacionados}
@@ -751,16 +797,24 @@ const FacturaSuplidorDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+                {/* Fila 1 */}
+                <Descriptions.Item label="Entrada Ref">{documentoActivo.entradaAlmacen?.noDocumento || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="Tipo">
                   {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
+                {/* Fila 2 */}
+                <Descriptions.Item label="Fecha Doc. Suplidor">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
                 <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
-
-                <Descriptions.Item label="Tasa">{documentoActivo.tasa ? formatNumber(documentoActivo.tasa) : '-'}</Descriptions.Item>
+                {/* Fila 3 */}
+                <Descriptions.Item label="Fecha Recibo">{documentoActivo.entradaAlmacen?.fechaEntrega ? formatDate(documentoActivo.entradaAlmacen.fechaEntrega) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Almacén">{toTitleCase(documentoActivo.entradaAlmacen?.almacen?.nombre || documentoActivo.almacen?.nombre || '-')}</Descriptions.Item>
+                <Descriptions.Item label="Sucursal">{documentoActivo.sucursal?.nombre || documentoActivo.sucursal?.codigo || '-'}</Descriptions.Item>
+                {/* Fila 4 */}
+                <Descriptions.Item label="Nota">
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                </Descriptions.Item>
               </Descriptions>
           </Card>
 
@@ -802,40 +856,35 @@ const FacturaSuplidorDetalle: React.FC = () => {
                 ),
               },
               {
-                key: 'impuestos',
-                label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
+              key: 'impuestos',
+              label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
+              children: (
+                <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
+              ),
+            },
+            {
+              key: 'historial',
+              label: `Historial (${documentoActivo.logs?.length || 0})`,
                 children: (
-                  <Table
-                    dataSource={documentoActivo.impuestosFactura || []}
-                    rowKey={(r: any) => r.transactionID + (r.impuesto?.idExterno || '')}
-                    size="small"
-                    pagination={false}
-                    scroll={{ x: 600 }}
-                    columns={[
-                      { title: 'Impuesto / Retención', key: 'nombre', render: (_: any, r: any) => r.impuesto?.nombre || '-' },
-                      { title: 'Porcentaje', key: 'porcentaje', width: 100, align: 'right' as const, render: (_: any, r: any) => r.impuesto?.porcentaje != null ? `${r.impuesto.porcentaje}%` : '-' },
-                      { title: 'No. Cuenta', key: 'cuenta', width: 150, render: (_: any, r: any) => r.impuesto?.noCuenta || '-' },
-                      { title: 'Monto', key: 'monto', width: 140, align: 'right' as const, render: (_: any, r: any) => formatCurrency(r.monto || 0) },
-                      { title: 'Tipo', key: 'tipo', width: 120, render: (_: any, r: any) => r.tipo || (r.impuesto?.tipo === 1 ? 'Impuesto' : r.impuesto?.tipo === 2 ? 'Retención' : '-') },
-                    ]}
-                  />
+                  <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                 ),
               },
-              {
-                key: 'historial',
-                label: `Historial (${documentoActivo.logs?.length || 0})`,
-                  children: (
-                    <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
-                  ),
-                },
-              ]}
-          />
+            ]}
+        />
 
-          <div style={{ marginTop: 24 }}>
-            <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones} total={documentoActivo.total} alignRight={true}
+        <div style={{ marginTop: 24 }}>
+          <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones ?? 0} total={documentoActivo.total} alignRight={true}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
               tasa={documentoActivo.tasa ?? 1}
+              impuestosInformativos={
+                (data?.impuestosFactura || [])
+                  .filter((imp: any) => imp.impuesto?.tipo === 'V')
+                  .map((imp: any) => ({
+                    nombre: imp.impuesto?.nombre || imp.nombre || '',
+                    monto: imp.monto || 0,
+                  }))
+              }
             />
           </div>
 

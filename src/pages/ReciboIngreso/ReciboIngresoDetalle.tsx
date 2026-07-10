@@ -293,7 +293,7 @@ const ReciboIngresoDetalle: React.FC = () => {
     }
     setOperacionTitulo(`Posteando RI-${data?.noDocumento || id}`);
     operacion.ejecutar(
-      `/RI/${sucursalActiva}/postear`,
+      `/Transaccion/${sucursalActiva}/postear`,
       handleRefresh,
       data
     );
@@ -394,7 +394,7 @@ const ReciboIngresoDetalle: React.FC = () => {
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
-        onVolver={() => navigate('/FRI')}
+        onVolver={() => navigate(-1)}
         onImprimir={async () => {
           if (!id || !data) return;
           setImprimiendo(true);

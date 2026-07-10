@@ -67,6 +67,7 @@ export interface TransaccionDTO {
   debitado?: number;
   acreditado?: number;
   ctaBancaria?: string;
+  nombreBeneficiario?: string;
   concepto?: TransaccionConceptoDTO;
   documento?: TransaccionDocumentoDTO;
   entidad?: TransaccionEntidadDTO;
@@ -85,6 +86,7 @@ export interface TransaccionConceptoDTO {
 export interface TransaccionDocumentoDTO {
   codigo: string;
   nombre?: string;
+  origenCuenta?: number;
 }
 
 export interface TransaccionEntidadDTO {

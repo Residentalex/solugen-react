@@ -3,6 +3,7 @@ import type {
   ConceptoDTO, EntidadDTO, MonedaDTO,
   AsientoContableDTO, LogDTO,
 } from './entradaAlmacen';
+import type { ImpuestoFacturaDTO as ImpuestoFacturaUnificadoDTO } from './impuestos';
 
 export interface NotaCreditoDTO {
   id: number;
@@ -30,6 +31,7 @@ export interface TransaccionAsociadaDTO {
   transaccionAsociadaID?: number;
   id?: number;
   documento: string;
+  tipoDocumento?: string;
   nCF?: string;
   fecha?: string;
   montoOriginal: number;
@@ -71,16 +73,8 @@ export interface DevolucionDTO {
   generarPerdida: boolean;
 }
 
-export interface ImpuestoFacturaDTO {
-  id: number;
-  nombre: string;
-  cuenta?: string;
-  monto: number;
-  tipo?: string;
-  codigo?: string;
-  porcentaje?: number;
-  cuentaContable?: { noCuenta: string; nombre: string };
-}
+/** @deprecated Usar ImpuestoFacturaDTO de ./impuestos */
+export type ImpuestoFacturaDTO = ImpuestoFacturaUnificadoDTO;
 
 export interface NotaCreditoFullDTO {
   id: number;

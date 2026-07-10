@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, DatePicker, message, Alert, Typography, Empty } from 'antd';
-import { ArrowLeftOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, DatePicker, message, Alert, Typography, Empty, Modal } from 'antd';
+import { ArrowLeftOutlined, SearchOutlined, ReloadOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { devolucionVentaApi } from '../../api/devolucionVentaApi';
@@ -32,37 +32,26 @@ const ReporteDevolucionVenta: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [fechas, setFechas] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>([dayjs().startOf('month'), dayjs()]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [generating, setGenerating] = useState(false);
 
   const cargar = useCallback(async () => {
     if (!fechas) return;
+    setSelectedRowKeys([]);
     setLoading(true);
     setLoadingError(false);
     try {
       const desde = fechas[0].format('YYYYMMDDHHmmss');
       const hasta = fechas[1].format('YYYYMMDDHHmmss');
-      const items = await devolucionVentaApi.obtenerVista(sucursalActiva, desde, hasta, 1000, 0);
-      setData(items || []);
+      const res = await devolucionVentaApi.obtenerVista(sucursalActiva, desde, hasta, 1000, 0);
+      const items = res.data || [];
+      setData(items);
 
       const consumidasList: FacturaVistaDTO[] = [];
       const noConsumidasList: FacturaVistaDTO[] = [];
 
-      const detalles = await Promise.all(
-        (items || [])
-          .filter((i) => i.estado === '1' || i.estado === '2')
-          .map((i) =>
-            devolucionVentaApi.obtenerPorId(sucursalActiva, i.id)
-              .then((full) => ({ id: i.id, asociadas: full.transaccionesAsociadas?.length || 0 }))
-              .catch(() => ({ id: i.id, asociadas: 0 }))
-          )
-      );
-
-      const mapAsociadas: Record<number, number> = {};
-      for (const d of detalles) {
-        mapAsociadas[d.id] = d.asociadas;
-      }
-
       for (const item of items || []) {
-        if ((mapAsociadas[item.id] || 0) > 0) {
+        if ((item.montoConsumido || 0) > 0) {
           consumidasList.push(item);
         } else {
           noConsumidasList.push(item);
@@ -84,6 +73,39 @@ const ReporteDevolucionVenta: React.FC = () => {
     setActiveModule('RDEV');
     cargar();
   }, [setActiveModule, cargar]);
+
+  const handleGenerarND = useCallback(async () => {
+    if (selectedRowKeys.length === 0) return;
+
+    const totalMonto = noConsumidas
+      .filter((item) => selectedRowKeys.includes(item.id))
+      .reduce((sum, item) => sum + (item.total || 0), 0);
+
+    Modal.confirm({
+      title: 'Generar Nota de Débito',
+      content: `Se generará una Nota de Débito por ${selectedRowKeys.length} devolución(es) por un monto total de ${formatCurrency(totalMonto)}. ¿Continuar?`,
+      okText: 'Sí, generar',
+      cancelText: 'Cancelar',
+      onOk: async () => {
+        setGenerating(true);
+        try {
+          const nd = await devolucionVentaApi.generarND(
+            sucursalActiva,
+            selectedRowKeys.map(Number)
+          );
+          message.success(`Nota de Débito ${nd.noDocumento} generada exitosamente`);
+          setSelectedRowKeys([]);
+          await cargar();
+          navigate(`/FNDCLI/${nd.id}`);
+        } catch (err: any) {
+          const msg = err?.response?.data?.errorMessage || 'Error al generar la Nota de Débito';
+          message.error(msg);
+        } finally {
+          setGenerating(false);
+        }
+      },
+    });
+  }, [selectedRowKeys, noConsumidas, sucursalActiva, cargar, navigate]);
 
   const columns = [
     {
@@ -156,6 +178,15 @@ const ReporteDevolucionVenta: React.FC = () => {
           format="YYYY-MM-DD"
           allowClear={false}
         />
+        <Button
+          type="primary"
+          icon={<FileTextOutlined />}
+          disabled={selectedRowKeys.length === 0}
+          loading={generating}
+          onClick={handleGenerarND}
+        >
+          Generar ND ({selectedRowKeys.length})
+        </Button>
         <Button type="primary" icon={<SearchOutlined />} onClick={cargar} loading={loading}>Consultar</Button>
         <Button icon={<ReloadOutlined />} onClick={cargar} />
       </div>
@@ -213,6 +244,10 @@ const ReporteDevolucionVenta: React.FC = () => {
                   columns={columns}
                   rowKey="id"
                   size="small"
+                  rowSelection={{
+                    selectedRowKeys,
+                    onChange: (keys) => setSelectedRowKeys(keys),
+                  }}
                   pagination={{ pageSize: 20, showTotal: (t) => `${t} registros` }}
                   scroll={{ x: 900 }}
                 />

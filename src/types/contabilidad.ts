@@ -103,6 +103,7 @@ export interface ImpuestoDTO {
   codigo: string;
   indicadorDGII?: number;
   baseCalculo?: BaseCalculoImpuesto;
+  asientos?: boolean;
 }
 
 // --- Asientos Contables / Transacciones ---

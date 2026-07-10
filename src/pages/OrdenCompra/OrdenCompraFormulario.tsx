@@ -198,7 +198,7 @@ const OrdenCompraFormulario: React.FC = () => {
         message.error(msg);
         setLoadingError(true);
         navigationConfirmedRef.current = true;
-        navigate('/FORC');
+        navigate('/FORC', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
@@ -221,9 +221,9 @@ const OrdenCompraFormulario: React.FC = () => {
       onOk: () => {
         navigationConfirmedRef.current = true;
         if (mode === 'crear') {
-          navigate('/FORC');
+          navigate('/FORC', { replace: true });
         } else if (id) {
-          navigate(`/FORC/${id}`);
+          navigate(`/FORC/${id}`, { replace: true });
         }
       },
     });
@@ -291,12 +291,12 @@ const OrdenCompraFormulario: React.FC = () => {
         const { data: result } = await apiClient.post(`/ORC/${sucursalActiva}?destino=${destino}`, dto);
         message.success('Orden de compra creada exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/FORC/${result.data?.id || result.id}`);
+        navigate(`/FORC/${result.data?.id || result.id}`, { replace: true });
       } else {
         await apiClient.put(`/ORC/${sucursalActiva}`, dto);
         message.success('Orden de compra actualizada exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/FORC/${id}`);
+        navigate(`/FORC/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');

@@ -72,6 +72,10 @@ export const transferenciaAlmacenApi = {
     return data.data;
   },
 
+  eliminar: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.delete(`${BASE}/${sucursal}/eliminar/${id}`);
+  },
+
   desaplicar: async (sucursal: number, documento: string): Promise<any> => {
     const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/desaplicar`, null, {
       params: { origen: sucursal, documento }
@@ -80,12 +84,12 @@ export const transferenciaAlmacenApi = {
   },
 
   revisado: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/revisado/${id}`);
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/${id}/revisado`);
     return data.data;
   },
 
   reversar: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/reversar/${id}`);
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/${id}/reversar`);
     return data.data;
   },
 

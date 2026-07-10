@@ -82,13 +82,13 @@ export const devolucionCompraApi = {
     return data.data;
   },
 
-  revisar: async (sucursal: number, id: number): Promise<any> => {
-    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/revisar/${id}`);
+  revisado: async (sucursal: number, id: number): Promise<any> => {
+    const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/${id}/revisado`);
     return data.data;
   },
 
-  reversar: async (sucursal: number, devolucion: any): Promise<any> => {
-    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/reversar`, devolucion);
+  reversar: async (sucursal: number, id: number): Promise<any> => {
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/${id}/reversar`);
     return data.data;
   },
 

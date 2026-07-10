@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Row, Col, Grid,
+  Card, Table, Tabs, Tag, Spin, Button, Grid, Divider,
   Descriptions, Alert, Typography, Space, Input, Select, DatePicker, Tooltip, message, Modal
 } from 'antd';
 import {
@@ -314,6 +314,8 @@ const TurnoDetalle: React.FC = () => {
   const loadingError = isError;
 
   const [filtrosActivos, setFiltrosActivos] = useState<Record<string, any>>({});
+  const [costosFiltrosActivos, setCostosFiltrosActivos] = useState<Record<string, any>>({});
+  const [ingresosFiltrosActivos, setIngresosFiltrosActivos] = useState<Record<string, any>>({});
   const [costosSearch, setCostosSearch] = useState('');
   const [ingresosSearch, setIngresosSearch] = useState('');
   const [posteando, setPosteando] = useState(false);
@@ -328,6 +330,22 @@ const TurnoDetalle: React.FC = () => {
 
   const limpiarTodosFiltros = React.useCallback(() => {
     setFiltrosActivos({});
+  }, []);
+
+  const limpiarFiltroCostos = React.useCallback((key: string) => {
+    setCostosFiltrosActivos(prev => { const n = { ...prev }; delete n[key]; return n; });
+  }, []);
+
+  const limpiarTodosFiltrosCostos = React.useCallback(() => {
+    setCostosFiltrosActivos({});
+  }, []);
+
+  const limpiarFiltroIngresos = React.useCallback((key: string) => {
+    setIngresosFiltrosActivos(prev => { const n = { ...prev }; delete n[key]; return n; });
+  }, []);
+
+  const limpiarTodosFiltrosIngresos = React.useCallback(() => {
+    setIngresosFiltrosActivos({});
   }, []);
 
   const documentosFiltrados = React.useMemo(() => {
@@ -370,24 +388,102 @@ const TurnoDetalle: React.FC = () => {
   }, [data?.facturas, filtrosActivos]);
 
   const costosFiltrados = React.useMemo(() => {
-    if (!costosSearch) return detalles;
-    const q = costosSearch.toLowerCase();
-    return detalles.filter((d: any) =>
-      (d.codigo?.toLowerCase() || '').includes(q) ||
-      (d.articulo?.toLowerCase() || '').includes(q) ||
-      (d.referencia?.toLowerCase() || '').includes(q)
-    );
-  }, [costosSearch, detalles]);
+    let result = detalles;
+
+    // Apply column filters
+    Object.entries(costosFiltrosActivos).forEach(([key, filtro]) => {
+      if (!filtro) return;
+      result = result.filter((d: any) => {
+        if (key === 'codigo') {
+          const val = (d.codigo || '').toLowerCase();
+          const search = (filtro.valor || '').toLowerCase();
+          if (filtro.operator === 'contains') return val.includes(search);
+          if (filtro.operator === 'startsWith') return val.startsWith(search);
+          if (filtro.operator === 'endsWith') return val.endsWith(search);
+          if (filtro.operator === 'equals') return val === search;
+          if (filtro.operator === 'notEquals') return val !== search;
+          return true;
+        }
+        if (key === 'articulo') {
+          const val = (d.articulo || '').toLowerCase();
+          const search = (filtro.valor || '').toLowerCase();
+          if (filtro.operator === 'contains') return val.includes(search);
+          if (filtro.operator === 'startsWith') return val.startsWith(search);
+          if (filtro.operator === 'endsWith') return val.endsWith(search);
+          if (filtro.operator === 'equals') return val === search;
+          if (filtro.operator === 'notEquals') return val !== search;
+          return true;
+        }
+        return true;
+      });
+    });
+
+    // Apply text search
+    if (costosSearch) {
+      const q = costosSearch.toLowerCase();
+      result = result.filter((d: any) =>
+        (d.codigo?.toLowerCase() || '').includes(q) ||
+        (d.articulo?.toLowerCase() || '').includes(q) ||
+        (d.referencia?.toLowerCase() || '').includes(q)
+      );
+    }
+
+    return result;
+  }, [costosSearch, detalles, costosFiltrosActivos]);
 
   const ingresosFiltrados = React.useMemo(() => {
-    if (!ingresosSearch) return detalles;
-    const q = ingresosSearch.toLowerCase();
-    return detalles.filter((d: any) =>
-      (d.codigo?.toLowerCase() || '').includes(q) ||
-      (d.articulo?.toLowerCase() || '').includes(q) ||
-      (d.referencia?.toLowerCase() || '').includes(q)
-    );
-  }, [ingresosSearch, detalles]);
+    let result = detalles;
+
+    // Apply column filters
+    Object.entries(ingresosFiltrosActivos).forEach(([key, filtro]) => {
+      if (!filtro) return;
+      result = result.filter((d: any) => {
+        if (key === 'codigo') {
+          const val = (d.codigo || '').toLowerCase();
+          const search = (filtro.valor || '').toLowerCase();
+          if (filtro.operator === 'contains') return val.includes(search);
+          if (filtro.operator === 'startsWith') return val.startsWith(search);
+          if (filtro.operator === 'endsWith') return val.endsWith(search);
+          if (filtro.operator === 'equals') return val === search;
+          if (filtro.operator === 'notEquals') return val !== search;
+          return true;
+        }
+        if (key === 'articulo') {
+          const val = (d.articulo || '').toLowerCase();
+          const search = (filtro.valor || '').toLowerCase();
+          if (filtro.operator === 'contains') return val.includes(search);
+          if (filtro.operator === 'startsWith') return val.startsWith(search);
+          if (filtro.operator === 'endsWith') return val.endsWith(search);
+          if (filtro.operator === 'equals') return val === search;
+          if (filtro.operator === 'notEquals') return val !== search;
+          return true;
+        }
+        if (key === 'impuesto') {
+          const val = (d.impuesto?.nombre || '').toLowerCase();
+          const search = (filtro.valor || '').toLowerCase();
+          if (filtro.operator === 'contains') return val.includes(search);
+          if (filtro.operator === 'startsWith') return val.startsWith(search);
+          if (filtro.operator === 'endsWith') return val.endsWith(search);
+          if (filtro.operator === 'equals') return val === search;
+          if (filtro.operator === 'notEquals') return val !== search;
+          return true;
+        }
+        return true;
+      });
+    });
+
+    // Apply text search
+    if (ingresosSearch) {
+      const q = ingresosSearch.toLowerCase();
+      result = result.filter((d: any) =>
+        (d.codigo?.toLowerCase() || '').includes(q) ||
+        (d.articulo?.toLowerCase() || '').includes(q) ||
+        (d.referencia?.toLowerCase() || '').includes(q)
+      );
+    }
+
+    return result;
+  }, [ingresosSearch, detalles, ingresosFiltrosActivos]);
 
   if (loading || (!data && !loadingError)) {
     return (
@@ -412,7 +508,7 @@ const TurnoDetalle: React.FC = () => {
             </Button>
           }
         />
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FTURNOS')}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
           Volver
         </Button>
       </div>
@@ -466,6 +562,23 @@ const TurnoDetalle: React.FC = () => {
           </Tag>
         </Descriptions.Item>
       </Descriptions>
+      <Divider plain style={{ margin: '8px 0', fontSize: 12 }}>Totales</Divider>
+      <div style={{ display: 'flex', flexDirection: isLarge ? 'row' : 'column', gap: 16, padding: '0 8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', flex: 1 }}>
+          <span className="paces-text-secondary">Total Facturado</span>
+          <Text strong>{formatCurrency(total)}</Text>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', flex: 1 }}>
+          <span className="paces-text-secondary">Cobrado</span>
+          <Text strong style={{ color: '#34c38f' }}>{formatCurrency(cobrado)}</Text>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', flex: 1 }}>
+          <span className="paces-text-secondary">Por Cobrar</span>
+          <Text strong style={{ color: porCobrar > 0 ? '#f46a6a' : '#595959' }}>
+            {formatCurrency(porCobrar)}
+          </Text>
+        </div>
+      </div>
     </Card>
   );
 
@@ -476,6 +589,19 @@ const TurnoDetalle: React.FC = () => {
       width: 120,
       fixed: 'left' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
+      filterDropdown: ({ confirm, clearFilters }: any) => (
+        <FiltroTextoDropdown
+          confirm={confirm}
+          clearFilters={clearFilters}
+          filtroKey="codigo"
+          placeholder="Buscar código..."
+          filtrosActivos={costosFiltrosActivos}
+          setFiltrosActivos={setCostosFiltrosActivos}
+        />
+      ),
+      filterIcon: () => costosFiltrosActivos.codigo
+        ? <FilterFilled style={{ color: '#556ee6', fontSize: 12 }} />
+        : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />,
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{record.codigo || '-'}</div>
@@ -494,6 +620,19 @@ const TurnoDetalle: React.FC = () => {
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
+      filterDropdown: ({ confirm, clearFilters }: any) => (
+        <FiltroTextoDropdown
+          confirm={confirm}
+          clearFilters={clearFilters}
+          filtroKey="articulo"
+          placeholder="Buscar artículo..."
+          filtrosActivos={costosFiltrosActivos}
+          setFiltrosActivos={setCostosFiltrosActivos}
+        />
+      ),
+      filterIcon: () => costosFiltrosActivos.articulo
+        ? <FilterFilled style={{ color: '#556ee6', fontSize: 12 }} />
+        : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />,
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -565,6 +704,19 @@ const TurnoDetalle: React.FC = () => {
       width: 120,
       fixed: 'left' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
+      filterDropdown: ({ confirm, clearFilters }: any) => (
+        <FiltroTextoDropdown
+          confirm={confirm}
+          clearFilters={clearFilters}
+          filtroKey="codigo"
+          placeholder="Buscar código..."
+          filtrosActivos={ingresosFiltrosActivos}
+          setFiltrosActivos={setIngresosFiltrosActivos}
+        />
+      ),
+      filterIcon: () => ingresosFiltrosActivos.codigo
+        ? <FilterFilled style={{ color: '#556ee6', fontSize: 12 }} />
+        : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />,
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{record.codigo || '-'}</div>
@@ -583,6 +735,19 @@ const TurnoDetalle: React.FC = () => {
       key: 'articulo',
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
+      filterDropdown: ({ confirm, clearFilters }: any) => (
+        <FiltroTextoDropdown
+          confirm={confirm}
+          clearFilters={clearFilters}
+          filtroKey="articulo"
+          placeholder="Buscar artículo..."
+          filtrosActivos={ingresosFiltrosActivos}
+          setFiltrosActivos={setIngresosFiltrosActivos}
+        />
+      ),
+      filterIcon: () => ingresosFiltrosActivos.articulo
+        ? <FilterFilled style={{ color: '#556ee6', fontSize: 12 }} />
+        : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />,
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{toTitleCase(record.articulo || '')}</div>
@@ -622,6 +787,49 @@ const TurnoDetalle: React.FC = () => {
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
           <div>{formatNumber(record.precio || 0)}</div>
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+        </div>
+      ),
+    },
+    {
+      title: 'Impuestos',
+      dataIndex: 'impuestos',
+      key: 'impuestos',
+      width: 180,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      filterDropdown: ({ confirm, clearFilters }: any) => (
+        <FiltroTextoDropdown
+          confirm={confirm}
+          clearFilters={clearFilters}
+          filtroKey="impuesto"
+          placeholder="Buscar impuesto..."
+          filtrosActivos={ingresosFiltrosActivos}
+          setFiltrosActivos={setIngresosFiltrosActivos}
+        />
+      ),
+      filterIcon: () => ingresosFiltrosActivos.impuesto
+        ? <FilterFilled style={{ color: '#556ee6', fontSize: 12 }} />
+        : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />,
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13 }}>
+          <div>{formatCurrency(record.impuestos || 0)}</div>
+          <div style={{ fontSize: 11, lineHeight: 1.5 }}>
+            {record.impuesto?.nombre || ''}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Descuentos',
+      dataIndex: 'descuento',
+      key: 'descuento',
+      width: 130,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13 }}>
+          <div>{formatCurrency(record.descuento || 0)}</div>
           <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
         </div>
       ),
@@ -681,7 +889,7 @@ const TurnoDetalle: React.FC = () => {
               showSizeChanger: false,
               showTotal: (total: number) => `${total} registros`,
             }}
-            scroll={{ x: 900, y: 400 }}
+            scroll={{ x: 900 }}
             locale={{ emptyText: 'Sin facturas registradas' }}
           />
         </div>
@@ -689,10 +897,28 @@ const TurnoDetalle: React.FC = () => {
     },
     {
       key: 'detallesCostos',
-      label: `Costos (${costosSearch ? `${costosFiltrados.length}/${detalles.length}` : detalles.length})`,
+      label: `Costos (${
+        costosSearch || Object.keys(costosFiltrosActivos).length > 0
+          ? `${costosFiltrados.length}/${detalles.length}`
+          : detalles.length
+      })`,
       children: (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, minHeight: 32 }}>
+            {Object.keys(costosFiltrosActivos).length > 0 && (
+              <>
+                <Text type="secondary" style={{ fontSize: 13 }}>Filtros:</Text>
+                {Object.entries(costosFiltrosActivos).map(([key, f]) => (
+                  <Tag key={key} closable onClose={() => limpiarFiltroCostos(key)}>
+                    {key === 'codigo' ? 'Código' : key === 'articulo' ? 'Artículo' : key}: {f?.valor || ''}
+                  </Tag>
+                ))}
+                <Button size="small" onClick={limpiarTodosFiltrosCostos} type="link" style={{ padding: 0 }}>
+                  Limpiar filtros
+                </Button>
+              </>
+            )}
+            <div style={{ flex: 1 }} />
             <Input.Search
               placeholder="Buscar producto..."
               allowClear
@@ -711,7 +937,7 @@ const TurnoDetalle: React.FC = () => {
               showSizeChanger: false,
               showTotal: (total: number) => `${total} registros`,
             }}
-            scroll={{ x: 900, y: 400 }}
+            scroll={{ x: 900 }}
             locale={{ emptyText: 'Sin detalles de costo' }}
           />
         </div>
@@ -719,10 +945,28 @@ const TurnoDetalle: React.FC = () => {
     },
     {
       key: 'detallesIngresos',
-      label: `Ingresos (${ingresosSearch ? `${ingresosFiltrados.length}/${detalles.length}` : detalles.length})`,
+      label: `Ingresos (${
+        ingresosSearch || Object.keys(ingresosFiltrosActivos).length > 0
+          ? `${ingresosFiltrados.length}/${detalles.length}`
+          : detalles.length
+      })`,
       children: (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, minHeight: 32 }}>
+            {Object.keys(ingresosFiltrosActivos).length > 0 && (
+              <>
+                <Text type="secondary" style={{ fontSize: 13 }}>Filtros:</Text>
+                {Object.entries(ingresosFiltrosActivos).map(([key, f]) => (
+                  <Tag key={key} closable onClose={() => limpiarFiltroIngresos(key)}>
+                    {key === 'codigo' ? 'Código' : key === 'articulo' ? 'Artículo' : key === 'impuesto' ? 'Impuesto' : key}: {f?.valor || ''}
+                  </Tag>
+                ))}
+                <Button size="small" onClick={limpiarTodosFiltrosIngresos} type="link" style={{ padding: 0 }}>
+                  Limpiar filtros
+                </Button>
+              </>
+            )}
+            <div style={{ flex: 1 }} />
             <Input.Search
               placeholder="Buscar producto..."
               allowClear
@@ -741,7 +985,7 @@ const TurnoDetalle: React.FC = () => {
               showSizeChanger: false,
               showTotal: (total: number) => `${total} registros`,
             }}
-            scroll={{ x: 900, y: 400 }}
+            scroll={{ x: 1100 }}
             locale={{ emptyText: 'Sin detalles de ingreso' }}
           />
         </div>
@@ -823,49 +1067,15 @@ const TurnoDetalle: React.FC = () => {
         estado={data.cerrado ? 1 : 0}
         periodo={data.periodo ?? 0}
         saving={posteando}
-        onVolver={() => navigate('/FTURNOS')}
+        onVolver={() => navigate(-1)}
         onPostear={handlePostear}
         extraButtons={<Button icon={<ReloadOutlined />} onClick={handleRefresh} />}
       />
 
-      {isLarge ? (
-        <Row gutter={16}>
-          <Col xxl={18}>
-            {contentCard}
-            <Tabs defaultActiveKey="documentos" type="card" items={tabsItems} />
-          </Col>
-          <Col xxl={6}>
-            <Card
-              className="paces-card"
-              size="small"
-              title={<span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-              style={{ marginBottom: 16 }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-                  <span className="paces-text-secondary">Total Facturado</span>
-                  <Text strong>{formatCurrency(total)}</Text>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-                  <span className="paces-text-secondary">Cobrado</span>
-                  <Text strong style={{ color: '#34c38f' }}>{formatCurrency(cobrado)}</Text>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-                  <span className="paces-text-secondary">Por Cobrar</span>
-                  <Text strong style={{ color: porCobrar > 0 ? '#f46a6a' : '#595959' }}>
-                    {formatCurrency(porCobrar)}
-                  </Text>
-                </div>
-              </div>
-            </Card>
-          </Col>
-        </Row>
-      ) : (
-        <div>
-          {contentCard}
-          <Tabs defaultActiveKey="documentos" type="card" items={tabsItems} />
-        </div>
-      )}
+      <div>
+        {contentCard}
+        <Tabs defaultActiveKey="documentos" type="card" items={tabsItems} />
+      </div>
     </div>
   );
 };

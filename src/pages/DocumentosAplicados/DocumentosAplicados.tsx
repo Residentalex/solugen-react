@@ -25,6 +25,13 @@ const columnas: ColumnsType<MovimientoVistaDTO> = [
     ),
   },
   {
+    title: 'Fecha Recibo',
+    width: 120,
+    render: (_, record) => (
+      <Text>{record.fechaEntrega ? formatDateRaw(record.fechaEntrega) : '-'}</Text>
+    ),
+  },
+  {
     title: 'Documento',
     width: 180,
     fixed: 'left',

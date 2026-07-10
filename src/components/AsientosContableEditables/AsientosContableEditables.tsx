@@ -32,17 +32,22 @@ const AsientosContableEditables: React.FC<AsientosContableEditablesProps> = ({
   const diferencia = Math.abs(totalDebitos - totalCreditos);
   const esCuadrado = diferencia < 0.01;
 
-  const handleMontoChange = (id: any, field: 'debito' | 'credito', value: number | null) => {
-    editValuesRef.current[`${id}_${field}`] = value || 0;
+  const handleMontoChange = (index: number, field: 'debito' | 'credito', value: number | null) => {
+    editValuesRef.current[`${index}_${field}`] = value || 0;
   };
 
-  const handleMontoCommit = (id: any, field: 'debito' | 'credito') => {
-    const val = editValuesRef.current[`${id}_${field}`];
+  const handleMontoCommit = (index: number, field: 'debito' | 'credito') => {
+    const val = editValuesRef.current[`${index}_${field}`];
     if (val === undefined) return;
     onChange(
-      (asientos || []).map((r: any) => {
-        if (r.id !== id && r.key !== id) return r;
-        return { ...r, monto: Math.round(val * 100) / 100 };
+      (asientos || []).map((r: any, i: number) => {
+        if (i !== index) return r;
+        const montoRedondeado = Math.round(val * 100) / 100;
+        const upd: any = { ...r, monto: montoRedondeado };
+        if (montoRedondeado > 0 && r.monto === 0) {
+          upd.tipoAsiento = field === 'debito' ? 'D' : 'C';
+        }
+        return upd;
       })
     );
   };
@@ -81,30 +86,34 @@ const AsientosContableEditables: React.FC<AsientosContableEditablesProps> = ({
       key: 'debito',
       width: 150,
       align: 'right' as const,
-      render: (_: any, r: any) => {
+      render: (_: any, r: any, index: number) => {
         const esD = esDebito(r.tipoAsiento);
-        if (!editable || !esD) {
-          return esD ? (
+        const mostrarInput = editable && (esD || r.monto === 0);
+        if (mostrarInput) {
+          return (
+            <InputNumber
+              size="small"
+              style={{ width: '100%' }}
+              styles={{ input: { textAlign: 'right' } }}
+              min={0}
+              step={0.01}
+              precision={2}
+              controls={false}
+              defaultValue={r.monto}
+              onChange={(val) => handleMontoChange(index, 'debito', val)}
+              onBlur={() => handleMontoCommit(index, 'debito')}
+              onPressEnter={() => handleMontoCommit(index, 'debito')}
+            />
+          );
+        }
+        if (esD) {
+          return (
             <Tooltip title={formatNumber(r.monto)} placement="left">
               <span style={{ color: '#f46a6a', fontWeight: 600 }}>{formatNumber(r.monto)}</span>
             </Tooltip>
-          ) : null;
+          );
         }
-        return (
-          <InputNumber
-            size="small"
-            style={{ width: '100%' }}
-            styles={{ input: { textAlign: 'right' } }}
-            min={0}
-            step={0.01}
-            precision={2}
-            controls={false}
-            defaultValue={r.monto}
-            onChange={(val) => handleMontoChange(r.id || r.key, 'debito', val)}
-            onBlur={() => handleMontoCommit(r.id || r.key, 'debito')}
-            onPressEnter={() => handleMontoCommit(r.id || r.key, 'debito')}
-          />
-        );
+        return null;
       },
     },
     {
@@ -112,30 +121,34 @@ const AsientosContableEditables: React.FC<AsientosContableEditablesProps> = ({
       key: 'credito',
       width: 150,
       align: 'right' as const,
-      render: (_: any, r: any) => {
+      render: (_: any, r: any, index: number) => {
         const esC = esCredito(r.tipoAsiento);
-        if (!editable || !esC) {
-          return esC ? (
+        const mostrarInput = editable && (esC || r.monto === 0);
+        if (mostrarInput) {
+          return (
+            <InputNumber
+              size="small"
+              style={{ width: '100%' }}
+              styles={{ input: { textAlign: 'right' } }}
+              min={0}
+              step={0.01}
+              precision={2}
+              controls={false}
+              defaultValue={r.monto}
+              onChange={(val) => handleMontoChange(index, 'credito', val)}
+              onBlur={() => handleMontoCommit(index, 'credito')}
+              onPressEnter={() => handleMontoCommit(index, 'credito')}
+            />
+          );
+        }
+        if (esC) {
+          return (
             <Tooltip title={formatNumber(r.monto)} placement="left">
               <span style={{ color: '#34c38f', fontWeight: 600 }}>{formatNumber(r.monto)}</span>
             </Tooltip>
-          ) : null;
+          );
         }
-        return (
-          <InputNumber
-            size="small"
-            style={{ width: '100%' }}
-            styles={{ input: { textAlign: 'right' } }}
-            min={0}
-            step={0.01}
-            precision={2}
-            controls={false}
-            defaultValue={r.monto}
-            onChange={(val) => handleMontoChange(r.id || r.key, 'credito', val)}
-            onBlur={() => handleMontoCommit(r.id || r.key, 'credito')}
-            onPressEnter={() => handleMontoCommit(r.id || r.key, 'credito')}
-          />
-        );
+        return null;
       },
     },
     {
@@ -155,12 +168,12 @@ const AsientosContableEditables: React.FC<AsientosContableEditablesProps> = ({
           key: 'acciones',
           width: 50,
           align: 'center' as const,
-          render: (_: any, r: any) => (
+          render: (_: any, r: any, index: number) => (
             <Popconfirm
               title="¿Eliminar este asiento?"
               onConfirm={() => {
                 const filtered = (asientos || []).filter(
-                  (item: any) => item.id !== r.id && item.key !== r.key
+                  (_: any, i: number) => i !== index
                 );
                 onChange(filtered);
               }}
@@ -226,13 +239,13 @@ const AsientosContableEditables: React.FC<AsientosContableEditablesProps> = ({
                   </Tag>
                 )}
               </Table.Summary.Cell>
-              <Table.Summary.Cell index={2} align="right">
+              <Table.Summary.Cell index={4} align="right">
                 <strong style={{ color: '#f46a6a' }}>{formatNumber(totalDebitos)}</strong>
               </Table.Summary.Cell>
-              <Table.Summary.Cell index={3} align="right">
+              <Table.Summary.Cell index={5} align="right">
                 <strong style={{ color: '#34c38f' }}>{formatNumber(totalCreditos)}</strong>
               </Table.Summary.Cell>
-              <Table.Summary.Cell index={editable ? 5 : 4} />
+              <Table.Summary.Cell index={editable ? 7 : 6} />
             </Table.Summary.Row>
           </Table.Summary>
         )}

@@ -320,7 +320,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
         setLoadingError(true);
-        navigate('/FSAP');
+        navigate('/FSAP', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
@@ -368,7 +368,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
         setEditingField(null);
         if (mode === 'crear') {
           navigationConfirmedRef.current = true;
-          navigate('/FSAP');
+          navigate('/FSAP', { replace: true });
         } else {
           if (id) {
             setLoading(true);
@@ -412,7 +412,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
               .finally(() => setLoading(false));
           }
           navigationConfirmedRef.current = true;
-          navigate(`/FSAP/${id}`);
+          navigate(`/FSAP/${id}`, { replace: true });
         }
       },
     });
@@ -530,12 +530,12 @@ const SalidaAlmacenFormulario: React.FC = () => {
         const result = await salidaAlmacenApi.crear(sucursalActiva, dto);
         message.success('Salida de almacén creada exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/FSAP/${result.id}`);
+        navigate(`/FSAP/${result.id}`, { replace: true });
       } else {
         await salidaAlmacenApi.actualizar(sucursalActiva, dto);
         message.success('Salida de almacén actualizada exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/FSAP/${id}`);
+        navigate(`/FSAP/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');

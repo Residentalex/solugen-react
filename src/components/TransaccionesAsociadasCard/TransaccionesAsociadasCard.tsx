@@ -67,8 +67,9 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
       width: 140,
       render: (_: any, record: DocumentoAsociadoItem) => {
         const label = record.documento || `${record.tipoDocumento || '?'}-${record.noDocumento || '?'}`;
-        if (readOnly) return <Text>{label}</Text>;
-        return <a className="paces-doc-link" style={{ cursor: 'pointer' }}>{label}</a>;
+        const tieneNavegacion = !readOnly || onDocumentoClick || rutas;
+        if (tieneNavegacion) return <a className="paces-doc-link" style={{ cursor: 'pointer' }}>{label}</a>;
+        return <Text>{label}</Text>;
       },
     },
     {
@@ -146,14 +147,14 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
         size="small"
         pagination={false}
         scroll={{ x: scrollX || 780 }}
-        onRow={!readOnly ? (record: DocumentoAsociadoItem) => ({
+        onRow={(!readOnly || onDocumentoClick || rutas) ? (record: DocumentoAsociadoItem) => ({
           onClick: () => {
             if (onDocumentoClick) {
               onDocumentoClick(record);
             } else {
               const rutasFinal = { ...RUTAS_DEFAULT, ...rutas };
               const ruta = rutasFinal[record.tipoDocumento || ''] || '/FTRN';
-              navigate(`${ruta}/${record.id}`);
+              navigate(`${ruta}/${record.transaccionAsociadaID ?? record.id}`);
             }
           },
           style: { cursor: 'pointer' },

@@ -93,6 +93,13 @@ export const distribucionBalanceApi = {
     return data.data;
   },
 
+  generarAsientos: async (sucursal: number, transaccion: any): Promise<any[]> => {
+    const { data } = await apiClient.post<ApiResponse<any[]>>(
+      `${BASE}/${sucursal}/generarAsiento`, transaccion
+    );
+    return data.data;
+  },
+
   revisado: async (sucursal: number, id: number): Promise<void> => {
     const { data } = await apiClient.put<ApiResponse<any>>(`${BASE}/${sucursal}/revisado/${id}`);
     return data.data;

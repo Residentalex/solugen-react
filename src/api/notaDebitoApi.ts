@@ -91,6 +91,13 @@ export const notaDebitoApi = {
     return data.data;
   },
 
+  generarAsientos: async (sucursal: number, transaccion: any): Promise<any[]> => {
+    const { data } = await apiClient.post<ApiResponse<any[]>>(
+      `${BASE}/${sucursal}/generarAsiento`, transaccion
+    );
+    return data.data;
+  },
+
   verificarScan: async (sucursal: number, id: number): Promise<{ existe: boolean }> => {
     const { data } = await apiClient.get<ApiResponse<{ existe: boolean }>>(`${BASE}/${sucursal}/${id}/scanner/verificar`);
     return data.data;

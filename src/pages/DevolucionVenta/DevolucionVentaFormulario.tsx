@@ -44,7 +44,7 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
@@ -208,7 +208,7 @@ const DevolucionVentaFormulario: React.FC = () => {
   const isLarge = screens.xxl === true;
 
   // ===== Determinar estado =====
-  const estado = data?.estado ?? 0;
+  const estado = toEstadoNum(data?.estado);
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -304,7 +304,7 @@ const DevolucionVentaFormulario: React.FC = () => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
         setLoadingError(true);
-        navigate('/FDEV');
+        navigate('/FDEV', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
@@ -321,7 +321,7 @@ const DevolucionVentaFormulario: React.FC = () => {
       onOk: () => {
         if (mode === 'crear') {
           navigationConfirmedRef.current = true;
-          navigate('/FDEV');
+          navigate('/FDEV', { replace: true });
         } else if (id) {
           setLoading(true);
           devolucionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
@@ -378,7 +378,7 @@ const DevolucionVentaFormulario: React.FC = () => {
             })
 .finally(() => setLoading(false));
            navigationConfirmedRef.current = true;
-           navigate(`/FDEV/${id}`);
+           navigate(`/FDEV/${id}`, { replace: true });
         }
       },
     });
@@ -466,12 +466,12 @@ const DevolucionVentaFormulario: React.FC = () => {
         const result = await devolucionVentaApi.crear(sucursalActiva, dto);
         message.success('Devolución de venta creada exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/FDEV/${result.id}`);
+        navigate(`/FDEV/${result.id}`, { replace: true });
       } else {
         await devolucionVentaApi.actualizar(sucursalActiva, dto);
         message.success('Devolución de venta actualizada exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/FDEV/${id}`);
+        navigate(`/FDEV/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');

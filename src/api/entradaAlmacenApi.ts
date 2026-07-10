@@ -78,8 +78,10 @@ export const entradaAlmacenApi = {
     return data.data;
   },
 
-  anular: async (sucursal: number, entrada: any): Promise<any> => {
-    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/anular`, entrada);
+  anular: async (sucursal: number, entrada: any, destino?: number): Promise<any> => {
+    const params: Record<string, number> = {};
+    if (destino !== undefined) params.destino = destino;
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/anular`, entrada, { params });
     return data.data;
   },
 
@@ -88,11 +90,11 @@ export const entradaAlmacenApi = {
   },
 
   revisado: async (sucursal: number, id: number): Promise<void> => {
-    await apiClient.post(`${BASE}/${sucursal}/${id}/Revisado`);
+    await apiClient.put(`${BASE}/${sucursal}/${id}/revisado`);
   },
 
   reversar: async (sucursal: number, id: number): Promise<void> => {
-    await apiClient.post(`${BASE}/${sucursal}/${id}/Reversar`);
+    await apiClient.post(`${BASE}/${sucursal}/${id}/reversar`);
   },
 
   verificarScan: async (sucursal: number, id: number): Promise<{ existe: boolean }> => {

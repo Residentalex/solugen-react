@@ -19,6 +19,7 @@ import {
   TeamOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
+import PermissionGate from '../../components/PermissionGate';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
@@ -172,6 +173,18 @@ const DevolucionVentaDetalle: React.FC = () => {
         setLoadingError(true);
       })
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  const handleGenerarND = useCallback(async () => {
+    if (!data?.id) return;
+    try {
+      const nd = await devolucionVentaApi.generarND(sucursalActiva, [data.id]);
+      messageApi.success(`Nota de Débito ${nd.noDocumento} generada exitosamente`);
+      navigate(`/FNDCLI/${nd.id}`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al generar la Nota de Débito';
+      messageApi.error(msg);
+    }
+  }, [data, sucursalActiva, navigate]);
 
   const handleVerScanner = async () => {
     if (!id) return;
@@ -484,7 +497,7 @@ const DevolucionVentaDetalle: React.FC = () => {
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
-        onVolver={() => navigate('/FDEV')}
+        onVolver={() => navigate(-1)}
         onImprimir={async () => {
           setImprimiendo(true);
           try {
@@ -517,6 +530,20 @@ const DevolucionVentaDetalle: React.FC = () => {
         onRevisado={handleRevisado}
         onDesaplicar={handleDesaplicar}
         onReversar={handleReversar}
+        extraButtons={
+          (data?.transaccionesAsociadas?.length ?? 0) === 0 &&
+          (toEstadoNum(data.estado) === 1 || toEstadoNum(data.estado) === 2) ? (
+            <PermissionGate permisoEspecial="pe_generar_ndcli">
+              <Button
+                type="primary"
+                icon={<FileTextOutlined />}
+                onClick={handleGenerarND}
+              >
+                Generar ND
+              </Button>
+            </PermissionGate>
+          ) : undefined
+        }
       />
 
       {isLarge ? (

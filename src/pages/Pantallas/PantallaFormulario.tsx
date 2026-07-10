@@ -206,7 +206,7 @@ const PantallaFormulario: React.FC = () => {
       await permisoEspecialApi.asignarAPantalla(securitySucursal, pantallaId, selectedPermisosEspeciales);
 
       navigationConfirmedRef.current = true;
-      navigate(`/MPantalla/${pantallaId}`);
+      navigate(`/MPantalla/${pantallaId}`, { replace: true });
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar pantalla');
@@ -225,8 +225,8 @@ const PantallaFormulario: React.FC = () => {
       okButtonProps: { danger: true },
       onOk: () => {
         navigationConfirmedRef.current = true;
-        if (esEditar && data) navigate(`/MPantalla/${data.id}`);
-        else navigate('/MPantalla');
+        if (esEditar && data) navigate(`/MPantalla/${data.id}`, { replace: true });
+        else navigate('/MPantalla', { replace: true });
       },
     });
   };
@@ -238,7 +238,7 @@ const PantallaFormulario: React.FC = () => {
     return (
       <div style={{ textAlign: 'center', padding: 60 }}>
         <Alert message="Error al cargar la pantalla" type="error" showIcon style={{ marginBottom: 16 }} />
-        <Button onClick={() => navigate('/MPantalla')}>Volver a pantallas</Button>
+        <Button onClick={() => navigate('/MPantalla', { replace: true })}>Volver a pantallas</Button>
       </div>
     );
   }

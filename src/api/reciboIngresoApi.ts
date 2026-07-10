@@ -91,6 +91,13 @@ export const reciboIngresoApi = {
     return data.data;
   },
 
+  generarAsientos: async (sucursal: number, transaccion: any): Promise<any[]> => {
+    const { data } = await apiClient.post<ApiResponse<any[]>>(
+      `${BASE}/${sucursal}/generarAsiento`, transaccion
+    );
+    return data.data;
+  },
+
   revisado: async (sucursal: number, id: number): Promise<void> => {
     await apiClient.post(`${BASE}/${sucursal}/${id}/Revisado`);
   },

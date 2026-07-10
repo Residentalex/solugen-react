@@ -11,6 +11,7 @@ export interface ImpuestoSeleccionado {
   porcentaje: number;
   tipo: string; // 'Impuesto' | 'Retencion' | 'Informativo' | 'Otro'
   monto: number;
+  noCuenta?: string;
 }
 
 interface Props {
@@ -42,7 +43,7 @@ const SeleccionarImpuestosModal: React.FC<Props> = ({
   useEffect(() => {
     if (!open) return;
     setLoading(true);
-    setSelectedKeys(new Set(existentes.map((e) => e.codigo)));
+    setSelectedKeys(new Set(existentes.map((e) => e.codigo || e.idExterno)));
 
     const cargar = async () => {
       try {
@@ -83,7 +84,7 @@ const SeleccionarImpuestosModal: React.FC<Props> = ({
 
   const handleConfirmar = useCallback(() => {
     const nuevos: ImpuestoSeleccionado[] = catalogo
-      .filter((imp) => selectedKeys.has(imp.idExterno || imp.codigo))
+      .filter((imp) => selectedKeys.has(imp.codigo || imp.idExterno))
       .map((imp) => ({
         codigo: imp.codigo,
         idExterno: imp.idExterno,
@@ -91,13 +92,14 @@ const SeleccionarImpuestosModal: React.FC<Props> = ({
         porcentaje: imp.porcentaje,
         tipo: mapTipoImpuesto(imp.tipo),
         monto: 0,
+        noCuenta: imp.noCuenta || '',
       }));
 
     // Mezclar con existentes: conservar montos previos
-    const mapaExistentes = new Map(existentes.map((e) => [e.idExterno || e.codigo, e.monto]));
+    const mapaExistentes = new Map(existentes.map((e) => [e.codigo || e.idExterno, e.monto]));
     for (const n of nuevos) {
-      if (mapaExistentes.has(n.idExterno || n.codigo)) {
-        n.monto = mapaExistentes.get(n.idExterno || n.codigo)!;
+      if (mapaExistentes.has(n.codigo || n.idExterno)) {
+        n.monto = mapaExistentes.get(n.codigo || n.idExterno)!;
       }
     }
 
@@ -134,7 +136,7 @@ const SeleccionarImpuestosModal: React.FC<Props> = ({
       ) : (
         <Table
           dataSource={catalogo}
-          rowKey={(r) => r.idExterno || r.codigo}
+          rowKey={(r) => r.codigo || r.idExterno}
           size="small"
           pagination={false}
           scroll={{ y: 400 }}
@@ -144,7 +146,7 @@ const SeleccionarImpuestosModal: React.FC<Props> = ({
               key: 'selection',
               width: 50,
               render: (_: any, record: ImpuestoDTO) => {
-                const key = record.idExterno || record.codigo;
+                const key = record.codigo || record.idExterno;
                 return (
                   <Checkbox
                     checked={selectedKeys.has(key)}

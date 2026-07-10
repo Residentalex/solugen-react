@@ -35,6 +35,7 @@ import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import { OrigenCuenta } from '../../types/contabilidad';
 
 import EntidadCard from '../../components/EntidadCard';
@@ -44,7 +45,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import { DistribucionBalanceGuide } from './DistribucionBalanceGuide';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
@@ -90,6 +91,11 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
   const [conceptoSearchText, setConceptoSearchText] = useState('');
 
+  // Documentos pendientes modal
+  const [pendientesModalOpen, setPendientesModalOpen] = useState(false);
+  const [pendientesOrigen, setPendientesOrigen] = useState<0 | 1>(1); // 0=Debito, 1=Credito
+  const [totalDistribucion, setTotalDistribucion] = useState<number>(0);
+
   const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
 
   // Refs para la guía
@@ -114,7 +120,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const isLarge = screens.xxl === true;
 
   // Estado
-  const estado = data?.estado ?? 0;
+  const estado = toEstadoNum(data?.estado);
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -189,6 +195,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
         fechaDocumento: dayjs(),
         tasa: 1,
       });
+      setTotalDistribucion(0);
     }
 
     return () => {
@@ -230,6 +237,8 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
           nota: res.nota || '',
         });
 
+        setTotalDistribucion(res.total || 0);
+
         // Cargar entidades según el concepto
         if (res.concepto?.codigo) {
           cargarEntidades(res.concepto.codigo);
@@ -239,7 +248,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
         setLoadingError(true);
-        navigate(`/${codigoPantalla}`);
+        navigate(`/${codigoPantalla}`, { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate, codigoPantalla]);
@@ -278,9 +287,9 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       onOk: () => {
         setEditingField(null);
         if (mode === 'crear') {
-          navigate(`/${codigoPantalla}`);
+          navigate(`/${codigoPantalla}`, { replace: true });
         } else if (id) {
-          navigate(`/${codigoPantalla}/${id}`);
+          navigate(`/${codigoPantalla}/${id}`, { replace: true });
         }
       },
     });
@@ -375,7 +384,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       referencia: values.referencia || '',
       nota: values.nota || '',
       tasa: values.tasa || 1,
-      total: totalDebitosDBA,
+      total: totalDistribucion,
       subTotal: base.subTotal || 0,
       descuento: base.descuento || 0,
       impuestos: base.impuestos || 0,
@@ -410,11 +419,11 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       if (mode === 'crear') {
         const result = await distribucionBalanceApi.crear(sucursalActiva, dto);
         message.success('Distribución de Balance creada exitosamente');
-        navigate(`/${codigoPantalla}/${result.id}`);
+        navigate(`/${codigoPantalla}/${result.id}`, { replace: true });
       } else {
         await distribucionBalanceApi.actualizar(sucursalActiva, dto);
         message.success('Distribución de Balance actualizada exitosamente');
-        navigate(`/${codigoPantalla}/${id}`);
+        navigate(`/${codigoPantalla}/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');
@@ -425,14 +434,13 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   };
 
   const handleGenerarAsientos = async () => {
-    if (!id) return;
+    if (sucursalActiva === undefined) return;
     setSaving(true);
     try {
-      const result = await distribucionBalanceApi.recalcular(sucursalActiva, parseInt(id)) as any;
-      if (result?.asientos) {
-        setAsientos(result.asientos);
-      }
-      message.success('Asientos generados automáticamente');
+      const dto = construirDTO();
+      const asientosGenerados = await distribucionBalanceApi.generarAsientos(sucursalActiva, dto);
+      setAsientos(asientosGenerados);
+      message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
       message.error(msg);
@@ -474,6 +482,39 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   };
 
   const handleConceptoSearchClick = () => setConceptoModalOpen(true);
+
+  // ===== Documentos pendientes =====
+  const handleOpenDocumentosPendientes = (origen: 0 | 1) => {
+    const entidadCodigo = selectedEntidad?.codigo || form.getFieldValue('entidad');
+    if (!entidadCodigo) {
+      message.warning(`Debe seleccionar un ${entidadLabel} primero`);
+      return;
+    }
+    setPendientesOrigen(origen);
+    setPendientesModalOpen(true);
+  };
+
+  const handleSelectDocumentosPendientes = (docs: any[]) => {
+    if (!docs || docs.length === 0) return;
+    // Asignar origenCuenta según el origen con que se abrió el modal
+    // Si origen=1 (Credito) → los docs seleccionados son DÉBITOS en la DBA
+    // Si origen=0 (Debito) → los docs seleccionados son CRÉDITOS en la DBA
+    const origenStr = pendientesOrigen === 1 ? 'Debito' : 'Credito';
+    const docsConOrigen = docs.map((d: any) => ({
+      ...d,
+      origenCuenta: d.origenCuenta ?? origenStr,
+    }));
+    setTransaccionesAsociadas((prev) => {
+      const existingIds = new Set(
+        prev.map((t) => t.transaccionAsociadaID || t.id)
+      );
+      const nuevos = docsConOrigen.filter(
+        (d: any) => !existingIds.has(d.transaccionAsociadaID || d.id)
+      );
+      return [...prev, ...nuevos];
+    });
+    setPendientesModalOpen(false);
+  };
 
   const handleConceptoClear = () => {
     setSelectedConcepto(null);
@@ -609,6 +650,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
           ncf: res.ncf || '', referencia: res.referencia || '',
           tasa: res.tasa || 1, nota: res.nota || '',
         });
+        setTotalDistribucion(res.total || 0);
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al recargar';
@@ -794,6 +836,19 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
                     <PlusOutlined /> Tasa
                   </Tag>
                 )}
+
+                {/* Total */}
+                <InputNumber
+                  size="small"
+                  style={{ width: 150 }}
+                  min={0}
+                  step={0.01}
+                  precision={2}
+                  placeholder="Total"
+                  value={totalDistribucion}
+                  onChange={(val) => setTotalDistribucion(val || 0)}
+                  addonBefore="Total"
+                />
               </Space>
             </div>
             <Form.Item name="ncf" hidden><Input /></Form.Item>
@@ -865,13 +920,17 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     label: `Débitos (${debitos.length})`,
     children: (
       <div>
-        {selectedDebitos.length > 0 && (
-          <div style={{ marginBottom: 8 }}>
+        <div style={{ marginBottom: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Button type="dashed" icon={<PlusOutlined />} onClick={() => handleOpenDocumentosPendientes(1)}>
+            Agregar documentos
+          </Button>
+          <div style={{ flex: 1 }} />
+          {selectedDebitos.length > 0 && (
             <Button danger icon={<DeleteOutlined />} onClick={() => handleEliminarSeleccionados('debito')}>
               Eliminar ({selectedDebitos.length})
             </Button>
-          </div>
-        )}
+          )}
+        </div>
         <Table
           dataSource={debitos}
           columns={asociadasColumns}
@@ -913,13 +972,17 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     label: `Créditos (${creditos.length})`,
     children: (
       <div>
-        {selectedCreditos.length > 0 && (
-          <div style={{ marginBottom: 8 }}>
+        <div style={{ marginBottom: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Button type="dashed" icon={<PlusOutlined />} onClick={() => handleOpenDocumentosPendientes(0)}>
+            Agregar documentos
+          </Button>
+          <div style={{ flex: 1 }} />
+          {selectedCreditos.length > 0 && (
             <Button danger icon={<DeleteOutlined />} onClick={() => handleEliminarSeleccionados('credito')}>
               Eliminar ({selectedCreditos.length})
             </Button>
-          </div>
-        )}
+          )}
+        </div>
         <Table
           dataSource={creditos}
           columns={asociadasColumns}
@@ -1006,6 +1069,21 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
         sucursal={sucursalActiva}
         documento="DBA"
         tipo={selectedTipo?.codigo}
+      />
+
+      <BuscarDocumentoModal
+        open={pendientesModalOpen}
+        onClose={() => setPendientesModalOpen(false)}
+        onSelect={handleSelectDocumentosPendientes}
+        tipoEntidad={tipoEntidad}
+        codEntidad={selectedEntidad?.codigo || form.getFieldValue('entidad') || ''}
+        origen={pendientesOrigen}  // 0=Debito, 1=Credito
+        montoTotal={totalDistribucion}
+        puedeAsignar={true}
+        documentosIniciales={transaccionesAsociadas
+          .map(t => t.id || t.transaccionAsociadaID)
+          .filter((id): id is number => id != null && id > 0)}
+        documentoEnviado={data?.noDocumento ? `DBA-${data.noDocumento}` : undefined}
       />
 
       {isLarge ? (

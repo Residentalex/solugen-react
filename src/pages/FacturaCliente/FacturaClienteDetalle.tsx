@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Tooltip, Typography, Modal, Alert, App, QRCode, Switch
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, message, Input, Tooltip, Typography, Modal, Alert, App, QRCode, Switch, DatePicker
 } from 'antd';
+import dayjs from 'dayjs';
 import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
@@ -25,6 +26,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
+import { dgiiApi } from '../../api/dgiiApi';
 import { facturaClienteApi } from '../../api/facturaClienteApi';
 import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
@@ -33,7 +35,7 @@ import { useAplicar } from '../../hooks/useAplicar';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
 import type { FacturaClienteDTO, AsientoContableDTO } from '../../types/facturaCliente';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
-import { transaccionApi } from '../../api/transaccionApi';
+
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import EntidadCard from '../../components/EntidadCard';
@@ -83,6 +85,10 @@ const FacturaClienteDetalle: React.FC = () => {
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
   const [mostrandoReverso, setMostrandoReverso] = useState(false);
   const [reversoData, setReversoData] = useState<any>(null);
+  const [modalNCCLIAbierto, setModalNCCLIAbierto] = useState(false);
+  const [generandoNCCLI, setGenerandoNCCLI] = useState(false);
+  const [fechaNC, setFechaNC] = useState<dayjs.Dayjs | null>(dayjs());
+  const [ncfNC, setNcfNC] = useState('');
 
   const handleRefresh = useCallback(() => {
     if (!id) return;
@@ -107,23 +113,17 @@ const FacturaClienteDetalle: React.FC = () => {
           setMostrandoReverso(false);
         }
 
-        // Parallelizar llamadas secundarias
-        const promises: Promise<any>[] = [
-          transaccionApi.obtenerAsociadasInventario(sucursalActiva, parseInt(id))
-            .then((transacciones) => { setPagosAsociados(transacciones || []); }),
-          documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva)
-            .then(rel => { setDocumentosRelacionados(rel || []); }),
-        ];
+        // Datos ya disponibles desde el DTO principal
+        setPagosAsociados(res.transaccionesAsociadas || []);
 
-        if (res.tipo?.envioDGII) {
-          promises.push(
-            apiClient.get(`/EnvioDGII/${sucursalActiva}/${res.id}`)
-              .then(({ data }: any) => { setEstadoDGII(data?.data || null); })
-              .catch(() => { setEstadoDGII(null); })
-          );
+        if (res.envioDGII) {
+          setEstadoDGII(res.envioDGII);
         }
 
-        Promise.all(promises).catch(() => {});
+        // Cargar documentos relacionados (única llamada extra necesaria)
+        documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva)
+          .then(rel => { setDocumentosRelacionados(rel || []); })
+          .catch(() => {});
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al recargar';
@@ -174,6 +174,7 @@ const FacturaClienteDetalle: React.FC = () => {
   const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(documentoActivo.estado)] || { label: 'Desconocido', color: 'default' };
   const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
   const tienePagos = pagosAsociados.length > 0;
+  const codigoQR = data?.envioDGII?.codigoQR || estadoDGII?.codigoQR;
 
   // ===== Detalles filtrados por búsqueda =====
   const detallesFiltrados = detalleSearch
@@ -372,12 +373,6 @@ const FacturaClienteDetalle: React.FC = () => {
   const handleAplicar = () => {
     if (!id) return;
 
-    // Validar DGII si el tipo lo requiere
-    if (data?.tipo?.envioDGII && !estadoDGII?.codigoQR) {
-      message.error('Debe enviar el documento a la DGII antes de aplicar.');
-      return;
-    }
-
     // FC15 - Validar FechaPermitida
     if (data?.documento?.fechaPermitida === 'MenorIgualFechaDia') {
       const hoy = new Date();
@@ -476,16 +471,30 @@ const FacturaClienteDetalle: React.FC = () => {
     }
   };
 
+  const handleMarcarEnviado = async () => {
+    if (!id || !data) return;
+    setEnviandoDGII(true);
+    try {
+      await dgiiApi.marcarEnviado(sucursalActiva, parseInt(id));
+      message.success('Documento marcado como enviado exitosamente');
+      const { data: resp } = await apiClient.get(`/DGII/${sucursalActiva}/${id}`);
+      setEstadoDGII(resp?.data || null);
+      handleRefresh();
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al marcar como enviado';
+      message.error(msg);
+    } finally {
+      setEnviandoDGII(false);
+    }
+  };
+
   const handleEnviarDGII = async () => {
     if (!id || !data) return;
     setEnviandoDGII(true);
     try {
-      await apiClient.put(`/EnvioDGII/${sucursalActiva}/MarcarEnviado`, null, {
-        params: { transaccionID: parseInt(id) }
-      });
+      const respuesta = await dgiiApi.cargarYEnviarFactura(sucursalActiva, parseInt(id), 'FAC');
       message.success('Documento enviado a la DGII exitosamente');
-      const { data: resp } = await apiClient.get(`/EnvioDGII/${sucursalActiva}/${id}`);
-      setEstadoDGII(resp?.data || null);
+      setEstadoDGII(respuesta || null);
       handleRefresh();
     } catch (err: any) {
       const msg = err?.response?.data?.errorMessage || 'Error al enviar a la DGII';
@@ -517,6 +526,33 @@ const FacturaClienteDetalle: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleGenerarNotaCredito = async (enviarDGII: boolean) => {
+    if (!id || !data) return;
+    if (!fechaNC) { message.warning('Debe seleccionar una fecha.'); return; }
+    setGenerandoNCCLI(true);
+    try {
+      const { data: resp } = await apiClient.post(`/FAC/${sucursalActiva}/${id}/generar-nota-credito`, {
+        esCompleta: true,
+        fecha: fechaNC.format('YYYY-MM-DD'),
+        ncf: ncfNC || null,
+        enviarDGII
+      });
+      const ncId = resp?.data;
+      if (ncId) {
+        message.success(enviarDGII ? 'Nota de Crédito generada y enviada a DGII exitosamente' : 'Nota de Crédito generada exitosamente');
+        setModalNCCLIAbierto(false);
+        setFechaNC(dayjs());
+        setNcfNC('');
+        navigate(`/FNCCLI/${ncId}`);
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al generar Nota de Crédito';
+      message.error(msg);
+    } finally {
+      setGenerandoNCCLI(false);
+    }
   };
 
   function extraerMensajeError(err: any, fallback: string): string {
@@ -558,11 +594,12 @@ const FacturaClienteDetalle: React.FC = () => {
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion.loading}
-        onVolver={() => navigate('/FFAC')}
+        onVolver={() => navigate(-1)}
         onImprimir={async () => {
           setImprimiendo(true);
           try {
-            const res = await apiClient.post('/reportes/contabilidad/factura-cliente', data, {
+            const dataToPrint = estadoDGII ? { ...data, envioDGII: estadoDGII } : data;
+            const res = await apiClient.post('/reportes/contabilidad/factura-cliente', dataToPrint, {
               responseType: 'blob',
             });
             const blobUrl = URL.createObjectURL(res.data);
@@ -602,15 +639,43 @@ const FacturaClienteDetalle: React.FC = () => {
                 style={{ marginLeft: 8 }}
               />
             )}
-            {documentoActivo?.tipo?.envioDGII ? (
-              <Space>
-                <PermissionGate codigoPantalla="FFAC" accion="APLICAR">
-                  <Button icon={<SendOutlined />} size="small" onClick={handleEnviarDGII} loading={enviandoDGII} disabled={toEstadoNum(documentoActivo.estado) !== 1}>Enviar DGII</Button>
-                  <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF} disabled={toEstadoNum(documentoActivo.estado) !== 1}>Reasignar NCF</Button>
+            <Space>
+              {!documentoActivo?.ncf ? (
+                <PermissionGate codigoPantalla="FFAC" permisoEspecial="pe_preasignar_ncf">
+                  <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF}
+                    disabled={toEstadoNum(documentoActivo.estado) !== 1}>
+                    Reasignar NCF
+                  </Button>
                 </PermissionGate>
-                {estadoDGII?.codigoQR && <Tag color="success" icon={<CheckCircleOutlined />}>DGII OK</Tag>}
-              </Space>
-            ) : undefined}
+              ) : !codigoQR ? (
+                <>
+                  <PermissionGate codigoPantalla="FFAC" permisoEspecial="pe_marcar_enviado">
+                    <Button icon={<SendOutlined />} size="small" onClick={handleEnviarDGII}
+                      loading={enviandoDGII}
+                      disabled={toEstadoNum(documentoActivo.estado) !== 1}>
+                      Enviar DGII
+                    </Button>
+                  </PermissionGate>
+                  <PermissionGate codigoPantalla="FFAC" permisoEspecial="pe_preasignar_ncf">
+                    <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF}
+                      disabled={toEstadoNum(documentoActivo.estado) !== 1}>
+                      Reasignar NCF
+                    </Button>
+                  </PermissionGate>
+                </>
+              ) : (
+                <Tag color="success" icon={<CheckCircleOutlined />}>DGII OK</Tag>
+              )}
+              <Divider type="vertical" />
+              {!data?.transaccionesAsociadas?.some(t => t.tipoDocumento === 'NC' || (t.documento && t.documento.startsWith('NC-'))) && (
+                <PermissionGate codigoPantalla="FFAC" permisoEspecial="pe_generar_nccli">
+                  <Button icon={<FileTextOutlined />} size="small" onClick={() => setModalNCCLIAbierto(true)}
+                    disabled={toEstadoNum(documentoActivo.estado) !== 1}>
+                    Nota Crédito
+                  </Button>
+                </PermissionGate>
+              )}
+            </Space>
           </>
         ) : undefined}
       />
@@ -736,9 +801,9 @@ const FacturaClienteDetalle: React.FC = () => {
               tasa={documentoActivo.tasa ?? 1}
             />
             <CobrosMinimal cobrosArray={data?.cobros} loading={loading} />
-            {estadoDGII?.codigoQR && (
+            {codigoQR && (
               <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                <QRCode value={estadoDGII.codigoQR} size={140} />
+                <QRCode value={codigoQR} size={140} />
               </div>
             )}
             <DocumentosRelacionadosCard
@@ -857,9 +922,9 @@ const FacturaClienteDetalle: React.FC = () => {
               tasa={documentoActivo.tasa ?? 1}
             />
             <CobrosMinimal cobrosArray={data?.cobros} loading={loading} />
-            {estadoDGII?.codigoQR && (
+            {codigoQR && (
               <div style={{ textAlign: 'center' }}>
-                <QRCode value={estadoDGII.codigoQR} size={140} />
+                <QRCode value={codigoQR} size={140} />
               </div>
             )}
           </div>
@@ -916,6 +981,66 @@ const FacturaClienteDetalle: React.FC = () => {
         completado={operacion.completado}
         onClose={() => operacion.reset()}
       />
+
+      {/* Modal para generar Nota de Crédito */}
+      <Modal
+        title="Generar Nota de Crédito"
+        open={modalNCCLIAbierto}
+        onCancel={() => {
+          if (!generandoNCCLI) {
+            setModalNCCLIAbierto(false);
+            setFechaNC(dayjs());
+            setNcfNC('');
+          }
+        }}
+        footer={[
+          <Button key="cancel" onClick={() => {
+            if (!generandoNCCLI) {
+              setModalNCCLIAbierto(false);
+              setFechaNC(dayjs());
+              setNcfNC('');
+            }
+          }} disabled={generandoNCCLI}>
+            Cancelar
+          </Button>,
+          <Button key="enviar" type="primary" loading={generandoNCCLI} onClick={() => handleGenerarNotaCredito(true)}>
+            Generar y Enviar a la DGII
+          </Button>,
+          <Button key="generar" loading={generandoNCCLI} onClick={() => handleGenerarNotaCredito(false)}>
+            Generar
+          </Button>,
+        ]}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <div style={{ marginBottom: 4 }}><Text strong>Fecha de la Nota de Crédito</Text></div>
+            <DatePicker
+              value={fechaNC}
+              onChange={(date) => setFechaNC(date)}
+              disabledDate={(current) => {
+                if (!data?.fechaDocumento) return false;
+                const facDate = dayjs(data.fechaDocumento);
+                const today = dayjs();
+                return current && (current.isBefore(facDate, 'day') || current.isAfter(today, 'day'));
+              }}
+              style={{ width: '100%' }}
+              format="YYYY-MM-DD"
+            />
+          </div>
+          <div>
+            <div style={{ marginBottom: 4 }}>
+              <Text strong>NCF</Text>
+              <Text style={{ fontSize: 12, color: '#999', marginLeft: 8 }}>(Opcional. Si se deja vacío, se genera automáticamente)</Text>
+            </div>
+            <Input
+              value={ncfNC}
+              onChange={(e) => setNcfNC(e.target.value)}
+              placeholder="E020000000001"
+              style={{ width: '100%' }}
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

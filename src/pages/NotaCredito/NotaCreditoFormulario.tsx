@@ -31,7 +31,7 @@ import type { UnidadMedidaDTO } from '../../types/productos';
 import type {
   NotaCreditoFullDTO,
   TransaccionAsociadaDTO,
-  DetalleMovimientoDTO, DevolucionDTO, ImpuestoFacturaDTO,
+  DetalleMovimientoDTO, DevolucionDTO,
   TipoNCSelectDTO,
 } from '../../types/notaCredito';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
@@ -44,6 +44,8 @@ import { OrigenCuenta } from '../../types/contabilidad';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import BuscarEntidadSelect from '../../components/BuscarEntidadSelect/BuscarEntidadSelect';
+import BuscarCuentaContableModal from '../../components/BuscarCuentaContableModal/BuscarCuentaContableModal';
+import AsientosContableTable from '../../components/AsientosContableTable';
 
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -53,7 +55,7 @@ import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
-import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import { NotaCreditoGuide } from './NotaCreditoGuide';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
@@ -120,6 +122,9 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   // Modal de selección de impuestos
   const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
 
+  // Modal de búsqueda de cuenta contable para asientos manuales
+  const [cuentaModalAsientoOpen, setCuentaModalAsientoOpen] = useState(false);
+
   // Concepto modal
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
   const [conceptoSearchText, setConceptoSearchText] = useState('');
@@ -155,7 +160,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   const isLarge = screens.xxl === true;
 
   // Estado
-  const estado = data?.estado ?? 0;
+  const estado = toEstadoNum(data?.estado);
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -212,7 +217,15 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       setTransaccionesAsociadas(cloneData.transaccionesAsociadas || []);
       setDetallesMovimiento(cloneData.detallesMovimiento || cloneData.detalles || []);
       setDevoluciones(cloneData.devoluciones || []);
-      setImpuestosFactura(cloneData.impuestosFactura || []);
+      // Normalizar desde impuestosFactura (anidado) si viene de clon
+      setImpuestosFactura((cloneData.impuestosFactura || []).map((imp: any) => ({
+        codigo: imp.impuesto?.codigo,
+        idExterno: imp.impuesto?.idExterno,
+        nombre: imp.impuesto?.nombre,
+        porcentaje: imp.impuesto?.porcentaje,
+        tipo: imp.tipo,
+        monto: imp.monto,
+      })));
       setAsientos(cloneData.asientos || []);
       setLogs(cloneData.logs || []);
       setNcfModificadoVal(cloneData.ncfModificado || '');
@@ -267,7 +280,15 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         setTransaccionesAsociadas(res.transaccionesAsociadas || []);
         setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);
         setDevoluciones(res.devoluciones || []);
-        setImpuestosFactura(res.impuestosFactura || []);
+        // Normalizar de estructura anidada → plana para la UI
+        setImpuestosFactura((res.impuestosFactura || []).map((imp: any) => ({
+          codigo: imp.impuesto?.codigo,
+          idExterno: imp.impuesto?.idExterno,
+          nombre: imp.impuesto?.nombre,
+          porcentaje: imp.impuesto?.porcentaje,
+          tipo: imp.tipo,
+          monto: imp.monto,
+        })));
         setAsientos(res.asientos || []);
         setLogs(res.logs || []);
         setNcfModificadoVal(res.ncfModificado || '');
@@ -311,7 +332,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
         message.error(msg);
         setLoadingError(true);
-        navigate(`/${codigoPantalla}`);
+        navigate(`/${codigoPantalla}`, { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate, codigoPantalla]);
@@ -350,9 +371,9 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       onOk: () => {
         setEditingField(null);
         if (mode === 'crear') {
-          navigate(`/${codigoPantalla}`);
+          navigate(`/${codigoPantalla}`, { replace: true });
         } else if (id) {
-          navigate(`/${codigoPantalla}/${id}`);
+          navigate(`/${codigoPantalla}/${id}`, { replace: true });
         }
       },
     });
@@ -492,9 +513,10 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
 
     // Asegurar entidad con tipoEntidad
     const tipoEntidadStr = tipoEntidad;
-    const entidadBase = entidadSel || { nombre: '', codigo: '', identificacion: '' };
+    const entidadBase = base.entidad || entidadSel || { nombre: '', codigo: '', identificacion: '' };
     const entidad = {
       ...entidadBase,
+      cuentaContable: entidadBase.cuentaContable,
       tipoEntidad: entidadBase.tipoEntidad ?? {
         codigo: tipoEntidadStr,
         origenCuenta: docOrigenCuenta,
@@ -535,7 +557,17 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       })),
       detallesMovimiento: tipoEntidad === 'CLI' ? detallesMovimiento : [],
       devoluciones: tipoEntidad === 'SUP' ? devoluciones : [],
-      impuestosFactura,
+      // Transformar estructura plana → anidada para el backend
+      impuestosFactura: impuestosFactura.map((imp: any) => ({
+        monto: imp.monto || 0,
+        tipo: imp.tipo || 'Impuesto',
+        impuesto: {
+          codigo: imp.codigo || '',
+          idExterno: imp.idExterno || (imp.codigo || '').replace(/^IMP-0*/, '') || null,
+          nombre: imp.nombre || '',
+          porcentaje: imp.porcentaje || 0,
+        },
+      })),
       asientos: asientos || [],
       logs: logs || [],
     };
@@ -555,11 +587,11 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       if (mode === 'crear') {
         const result = await notaCreditoApi.crear(sucursalActiva, dto);
         message.success('Nota de crédito creada exitosamente');
-        navigate(`/${codigoPantalla}/${result.id}`);
+        navigate(`/${codigoPantalla}/${result.id}`, { replace: true });
       } else {
         await notaCreditoApi.actualizar(sucursalActiva, dto);
         message.success('Nota de crédito actualizada exitosamente');
-        navigate(`/${codigoPantalla}/${id}`);
+        navigate(`/${codigoPantalla}/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');
@@ -570,14 +602,13 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   };
 
   const handleGenerarAsientos = async () => {
-    if (!id) return;
+    if (sucursalActiva === undefined) return;
     setSaving(true);
     try {
-      const result = await notaCreditoApi.recalcularPagos(sucursalActiva, parseInt(id)) as any;
-      if (result?.asientos) {
-        setAsientos(result.asientos);
-      }
-      message.success('Asientos generados automáticamente');
+      const dto = construirDTO();
+      const asientosGenerados = await notaCreditoApi.generarAsientos(sucursalActiva, dto);
+      setAsientos(asientosGenerados);
+      message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
       message.error(msg);
@@ -659,6 +690,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
           existentes.set(n.codigo, {
             id: Date.now() + Math.random(),
             codigo: n.codigo,
+            idExterno: n.idExterno,
             nombre: n.nombre,
             porcentaje: n.porcentaje,
             tipo: n.tipo,
@@ -676,6 +708,19 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     if (value === 'documento') setNcfModificadoVal('');
   };
 
+  // ===== Handler para agregar asiento manual =====
+  const handleAgregarAsientoManual = (cuenta: any) => {
+    const nuevoAsiento = {
+      id: Date.now(),
+      cuentaContable: { noCuenta: cuenta.noCuenta, nombre: cuenta.nombre },
+      monto: 0,
+      tipoAsiento: 'D',
+      generado: false,
+      descripcion: '',
+    };
+    setAsientos((prev: any[]) => [...prev, nuevoAsiento]);
+  };
+
   // ===== Handlers de tipo =====
   const handleTipoChange = (val: string) => {
     const t = tiposCache.find((tc) => tc.codigo === val);
@@ -689,11 +734,15 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   };
 
   // ===== Totales calculados =====
+  const totalImpuestosCalc = impuestosFactura
+    .filter((i) => i.tipo === 'I' || i.tipo === 'Impuesto' || i.tipo === 'V' || i.tipo === 'Informativo')
+    .reduce((s, i) => s + (i.monto || 0), 0);
+
   const totales = {
-    subTotal: detallesMovimiento.reduce((s, d) => s + (d.subTotal || 0), 0),
-    descuento: detallesMovimiento.reduce((s, d) => s + (d.descuento || 0), 0),
-    impuestos: detallesMovimiento.reduce((s, d) => s + (d.impuestos || 0), 0),
-    total: detallesMovimiento.reduce((s, d) => s + (d.total || 0), 0),
+    subTotal: (totalValue || 0) - totalImpuestosCalc,
+    descuento: 0,
+    impuestos: totalImpuestosCalc,
+    total: totalValue || 0,
   };
 
   // ===== Columnas =====
@@ -1266,14 +1315,27 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   tabItems.push({
     key: 'asientos',
     label: `Asientos Contables (${asientos.length})`,
-    children: (
-      <AsientosContableEditables
+    children: (estado === 0 && tienePermisoPostear) ? (
+      <>
+        <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
+          <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)}>
+            Agregar asiento manual
+          </Button>
+        </div>
+        <AsientosContableEditables
+          asientos={asientos}
+          onChange={setAsientos}
+          editable={true}
+          onGenerar={handleGenerarAsientos}
+          generando={saving}
+          disableGenerar={!id}
+        />
+      </>
+    ) : (
+      <AsientosContableTable
         asientos={asientos}
-        onChange={setAsientos}
-        editable={estado === 0 && tienePermisoPostear}
-        onGenerar={handleGenerarAsientos}
-        generando={saving}
-        disableGenerar={!id}
+        scroll={{ x: 600 }}
+        rowKey={(r: any) => r.id || r.asientoID}
       />
     ),
   });
@@ -1298,7 +1360,15 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         setTransaccionesAsociadas(res.transaccionesAsociadas || []);
         setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);
         setDevoluciones(res.devoluciones || []);
-        setImpuestosFactura(res.impuestosFactura || []);
+        // Normalizar de estructura anidada → plana para la UI
+        setImpuestosFactura((res.impuestosFactura || []).map((imp: any) => ({
+          codigo: imp.impuesto?.codigo,
+          idExterno: imp.impuesto?.idExterno,
+          nombre: imp.impuesto?.nombre,
+          porcentaje: imp.impuesto?.porcentaje,
+          tipo: imp.tipo,
+          monto: imp.monto,
+        })));
         setAsientos(res.asientos || []);
         setLogs(res.logs || []);
         setSelectedConcepto(res.concepto || null);
@@ -1375,11 +1445,23 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         sucursal={sucursalActiva}
         existentes={impuestosFactura.map((i) => ({
           codigo: i.codigo || '',
+          idExterno: i.idExterno || '',
           nombre: i.nombre || '',
           porcentaje: i.porcentaje || 0,
           tipo: i.tipo || 'Impuesto',
           monto: i.monto,
         }))}
+      />
+
+      {/* Modal de búsqueda de cuenta contable para asientos manuales */}
+      <BuscarCuentaContableModal
+        open={cuentaModalAsientoOpen}
+        onClose={() => setCuentaModalAsientoOpen(false)}
+        onSelect={(cuenta) => {
+          handleAgregarAsientoManual(cuenta);
+          setCuentaModalAsientoOpen(false);
+        }}
+        sucursal={sucursalActiva}
       />
 
       {isLarge ? (

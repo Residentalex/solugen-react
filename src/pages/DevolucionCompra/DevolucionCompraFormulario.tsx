@@ -351,7 +351,7 @@ const DevolucionCompraFormulario: React.FC = () => {
         message.error(msg);
         setLoadingError(true);
         navigationConfirmedRef.current = true;
-        navigate('/FDVC');
+        navigate('/FDVC', { replace: true });
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
@@ -437,14 +437,18 @@ const DevolucionCompraFormulario: React.FC = () => {
         setEditingField(null);
         if (mode === 'crear') {
           navigationConfirmedRef.current = true;
-          navigate('/FDVC');
+          navigate('/FDVC', { replace: true });
         } else {
           if (id) {
             setLoading(true);
             devolucionCompraApi.obtenerPorId(sucursalActiva, parseInt(id))
               .then((res) => {
                 setData(res);
-                setDetalles(res.detalles || []);
+        if (res.concepto?.noImpuesto) {
+          setDetalles((res.detalles || []).map((d: any) => calcularFila({ ...d, impuesto: undefined })));
+        } else {
+          setDetalles(res.detalles || []);
+        }
                 setSelectedTipo(res.tipo || null);
                 setSelectedConcepto(res.concepto || null);
                 setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
@@ -478,7 +482,7 @@ const DevolucionCompraFormulario: React.FC = () => {
               .finally(() => setLoading(false));
           }
           navigationConfirmedRef.current = true;
-          navigate(`/FDVC/${id}`);
+          navigate(`/FDVC/${id}`, { replace: true });
         }
       },
     });
@@ -589,12 +593,12 @@ const DevolucionCompraFormulario: React.FC = () => {
         const result = await devolucionCompraApi.crear(sucursalActiva, dto);
         message.success('Devolución de compra creada exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/FDVC/${result.id}`);
+        navigate(`/FDVC/${result.id}`, { replace: true });
       } else {
         await devolucionCompraApi.actualizar(sucursalActiva, dto);
         message.success('Devolución de compra actualizada exitosamente');
         navigationConfirmedRef.current = true;
-        navigate(`/FDVC/${id}`);
+        navigate(`/FDVC/${id}`, { replace: true });
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al guardar');
@@ -913,7 +917,7 @@ const DevolucionCompraFormulario: React.FC = () => {
           costo: producto.costo || 0,
           familia: producto.familia,
           medida: producto.medida,
-          impuesto: producto.impuesto,
+          impuesto: selectedConcepto?.noImpuesto ? undefined : producto.impuesto,
           tieneVencimiento: producto.tieneVencimiento,
           modificaPrecio: producto.modificaPrecio ?? false,
           modificaDescripcion: producto.modificaDescripcion ?? false,
@@ -932,7 +936,7 @@ const DevolucionCompraFormulario: React.FC = () => {
             costo: producto.costo || 0,
             familia: producto.familia,
             medida: producto.medida,
-            impuesto: producto.impuesto,
+            impuesto: selectedConcepto?.noImpuesto ? undefined : producto.impuesto,
             tieneVencimiento: producto.tieneVencimiento,
             modificaPrecio: producto.modificaPrecio ?? false,
             modificaDescripcion: producto.modificaDescripcion ?? false,
@@ -965,6 +969,7 @@ const DevolucionCompraFormulario: React.FC = () => {
         cantidad: producto.cantidad || 1,
         familia: producto.familia,
         medida: producto.medida,
+        impuesto: selectedConcepto?.noImpuesto ? undefined : producto.impuesto,
       };
       return [calcularFila(filled), ...prev];
     });

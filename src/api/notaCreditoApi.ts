@@ -91,6 +91,13 @@ export const notaCreditoApi = {
     return data.data;
   },
 
+  generarAsientos: async (sucursal: number, transaccion: any): Promise<any[]> => {
+    const { data } = await apiClient.post<ApiResponse<any[]>>(
+      `${BASE}/${sucursal}/generarAsiento`, transaccion
+    );
+    return data.data;
+  },
+
   recalcular: async (sucursal: number, id: number): Promise<any> => {
     const { data } = await apiClient.put(`/Transaccion/${sucursal}/recalcularPagos/${id}`);
     return data;
