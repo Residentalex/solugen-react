@@ -127,4 +127,11 @@ export const solicitudPagoApi = {
     });
     return data;
   },
+
+  generarPago: async (sucursal: number, id: number, postear?: boolean): Promise<number> => {
+    const params: Record<string, boolean> = {};
+    if (postear) params.postear = true;
+    const { data } = await apiClient.post<ApiResponse<number>>(`/SPA/${sucursal}/generar-pago/${id}`, null, { params });
+    return data.data;
+  },
 };

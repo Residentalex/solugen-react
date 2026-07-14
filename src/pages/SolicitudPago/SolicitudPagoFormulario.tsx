@@ -9,6 +9,7 @@ import {
   CloseOutlined,
   ExclamationCircleOutlined,
   SearchOutlined,
+  BankOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -32,6 +33,13 @@ import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber } from '../
 import { toEstadoNum } from '../../utils/estadoDocumento';
 
 const { TextArea } = Input;
+
+const TIPOS_PAGO = [
+  { codigo: 'CHK', nombre: 'Cheque' },
+  { codigo: 'TRB', nombre: 'Transferencia Bancaria' },
+  { codigo: 'DEP', nombre: 'Depósito Bancario' },
+  { codigo: 'DEC', nombre: 'Desembolso de Caja' },
+];
 
 // ===== Componente principal =====
 const SolicitudPagoFormulario: React.FC = () => {
@@ -60,6 +68,7 @@ const SolicitudPagoFormulario: React.FC = () => {
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
   const [selectedEntidad, setSelectedEntidad] = useState<EntidadDTO | null>(null);
   const [entidadesCache, setEntidadesCache] = useState<EntidadDTO[]>([]);
+  const [tipoPago, setTipoPago] = useState<string>('');
 
   // Concepto modal
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
@@ -154,6 +163,10 @@ const SolicitudPagoFormulario: React.FC = () => {
         const tipoRaw = resAny.tipo;
         setTipoValue(tipoRaw?.codigo || resAny.codigoTipo || '');
 
+        // Tipo Pago a Generar
+        const tipoPagoRaw = (res as any).tipoPagoCodigo;
+        if (tipoPagoRaw) setTipoPago(tipoPagoRaw);
+
         // Entidad
         const entidadRaw = resAny.entidad;
         const entidad = typeof entidadRaw === 'object' && entidadRaw !== null ? entidadRaw as EntidadDTO : null;
@@ -172,6 +185,7 @@ const SolicitudPagoFormulario: React.FC = () => {
           cuentaBancaria: res.cuentaBancaria || '',
           referencia: res.referencia || '',
           ncf: res.ncf || '',
+          tipoPago: (res as any).tipoPagoCodigo || '',
           nota: res.nota || '',
           subTotal: res.subTotal ?? 0,
           descuento: res.descuento ?? 0,
@@ -313,7 +327,7 @@ const SolicitudPagoFormulario: React.FC = () => {
       ? toISOFormat(values.fechaDocumento.toDate())
       : toISOFormat(new Date());
 
-    const dto: SolicitudPagoCrearDTO & { codigoTipo?: string } = {
+    const dto: SolicitudPagoCrearDTO & { codigoTipo?: string; tipoPagoCodigo?: string } = {
       fechaDocumento: fechaDoc,
       codigoTipo: tipoValue || '',
       conceptoCodigo: selectedConcepto?.codigo || '',
@@ -321,6 +335,7 @@ const SolicitudPagoFormulario: React.FC = () => {
       cuentaBancaria: values.cuentaBancaria || '',
       referencia: values.referencia || '',
       ncf: values.ncf || '',
+      tipoPagoCodigo: tipoPago || '',
       nota: values.nota || '',
       subTotal: subTotalValue,
       descuento: descuentoValue,
@@ -392,6 +407,8 @@ const SolicitudPagoFormulario: React.FC = () => {
         }
         const tipoRaw = resAny.tipo;
         setTipoValue(tipoRaw?.codigo || resAny.codigoTipo || '');
+        const tipoPagoRaw = (res as any).tipoPagoCodigo;
+        if (tipoPagoRaw) setTipoPago(tipoPagoRaw);
         const entidadRaw = resAny.entidad;
         const entidadH = typeof entidadRaw === 'object' && entidadRaw !== null ? entidadRaw as EntidadDTO : null;
         if (entidadH) {
@@ -406,6 +423,7 @@ const SolicitudPagoFormulario: React.FC = () => {
           cuentaBancaria: res.cuentaBancaria || '',
           referencia: res.referencia || '',
           ncf: res.ncf || '',
+          tipoPago: (res as any).tipoPagoCodigo || '',
           nota: res.nota || '',
           subTotal: res.subTotal ?? 0,
           descuento: res.descuento ?? 0,
@@ -528,8 +546,8 @@ const SolicitudPagoFormulario: React.FC = () => {
                 </Form.Item>
               </Col>
 
-              {/* Fila 2: Cuenta Bancaria + Referencia + NCF */}
-              <Col xs={24} sm={12} lg={8}>
+              {/* Fila 2: Cuenta Bancaria + Referencia + NCF + Tipo Pago */}
+              <Col xs={24} sm={12} lg={6}>
                 <Form.Item name="cuentaBancaria" style={{ marginBottom: 0 }}>
                   <FloatingField label="Cuenta Bancaria">
                     <Input placeholder="Número de cuenta" />
@@ -537,7 +555,7 @@ const SolicitudPagoFormulario: React.FC = () => {
                 </Form.Item>
               </Col>
 
-              <Col xs={24} sm={12} lg={8}>
+              <Col xs={24} sm={12} lg={6}>
                 <Form.Item name="referencia" style={{ marginBottom: 0 }}>
                   <FloatingField label="Referencia">
                     <Input placeholder="Referencia del documento" />
@@ -545,10 +563,30 @@ const SolicitudPagoFormulario: React.FC = () => {
                 </Form.Item>
               </Col>
 
-              <Col xs={24} sm={12} lg={8}>
+              <Col xs={24} sm={12} lg={6}>
                 <Form.Item name="ncf" style={{ marginBottom: 0 }}>
                   <FloatingField label="NCF">
                     <Input placeholder="NCF" maxLength={19} />
+                  </FloatingField>
+                </Form.Item>
+              </Col>
+
+              <Col xs={24} sm={12} lg={6}>
+                <Form.Item name="tipoPago" style={{ marginBottom: 0 }}>
+                  <FloatingField label="Tipo de Pago a Generar">
+                    <Select
+                      allowClear
+                      placeholder="Seleccione tipo de pago"
+                      value={tipoPago || undefined}
+                      onChange={(val) => setTipoPago(val || '')}
+                    >
+                      {TIPOS_PAGO.map((tp) => (
+                        <Select.Option key={tp.codigo} value={tp.codigo}>
+                          <BankOutlined style={{ marginRight: 6, color: '#556ee6' }} />
+                          {tp.nombre} ({tp.codigo})
+                        </Select.Option>
+                      ))}
+                    </Select>
                   </FloatingField>
                 </Form.Item>
               </Col>

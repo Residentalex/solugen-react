@@ -5,6 +5,7 @@ import {
 } from 'antd';
 import {
   LockFilled,
+  BankOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
@@ -232,6 +233,21 @@ const SolicitudPagoDetalle: React.FC = () => {
     }
   };
 
+  const handleGenerarPago = async () => {
+    if (!id) return;
+    setSaving(true);
+    try {
+      const idDocBancario = await solicitudPagoApi.generarPago(sucursalActiva, parseInt(id));
+      message.success('Pago generado exitosamente');
+      navigate(`/FTransBanco/${idDocBancario}`);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al generar pago');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Actualizar el título del header al alternar entre Original/Reverso
   useEffect(() => {
     if (mostrandoReverso && reversoData) {
@@ -306,6 +322,19 @@ const SolicitudPagoDetalle: React.FC = () => {
                 onChange={(checked) => setMostrandoReverso(checked)}
                 style={{ marginLeft: 8 }}
               />
+            )}
+            {toEstadoNum(data?.estado) === 2 && (data as any)?.tipoPagoCodigo && (
+              <>
+                <Divider type="vertical" />
+                <Button
+                  type="primary"
+                  icon={<BankOutlined />}
+                  onClick={handleGenerarPago}
+                  loading={saving}
+                >
+                  Generar {(data as any)?.tipoPagoCodigo}
+                </Button>
+              </>
             )}
           </>
         ) : undefined}
