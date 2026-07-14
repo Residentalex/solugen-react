@@ -326,10 +326,10 @@ const EntradaAlmacenFormulario: React.FC = () => {
     }
 
     // Cargar catálogos
-    conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
+    conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch((err) => { console.warn('Error al cargar almacenes cache en formulario entrada', err); });
     // Obtener fechas de cierre (contable e inventario)
-    parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch(() => {});
-    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch(() => {});
+    parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch((err) => { console.warn('Error al obtener fecha cierre inventario', err); });
+    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch((err) => { console.warn('Error al obtener fecha cierre fiscal', err); });
     // Cargar unidades de medida
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => {
       message.error(extraerMensajeError(err, 'Error al cargar unidades de medida'));
@@ -395,7 +395,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         if (res.concepto?.codigo) {
           conceptosApi.obtenerSuplidores(Sucursal.Compra)
             .then(setEntidadesCache)
-            .catch(() => {});
+            .catch((err) => { console.warn('Error al cargar suplidores cache por concepto (editar)', err); });
         }
       })
       .catch((err: any) => {
@@ -420,7 +420,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     // Cargar comodines
     productoApi.obtenerComodines(Sucursal.Compra)
       .then(setComodines)
-      .catch(() => console.warn('No se pudieron cargar los comodines'));
+      .catch((err) => { console.warn('Error al cargar comodines OC vinculada', err); });
   }, [data?.ordenCompra?.id, ocDetallesData.length]);
 
   // Cargar comodines cuando el documento tiene OC vinculada (independiente de ocDetallesData)
@@ -428,7 +428,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     if (!data?.ordenCompra?.id) return;
     productoApi.obtenerComodines(Sucursal.Compra)
       .then(setComodines)
-      .catch(() => console.warn('No se pudieron cargar los comodines'));
+      .catch((err) => { console.warn('Error al cargar comodines OC vinculada (efecto independiente)', err); });
   }, [data?.ordenCompra?.id]);
 
   // Cargar detalles de OC y comodines al abrir el modal si no se han cargado antes
@@ -439,7 +439,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     if (comodines.length === 0) {
       productoApi.obtenerComodines(Sucursal.Compra)
         .then(setComodines)
-        .catch(() => console.warn('No se pudieron cargar los comodines'));
+        .catch((err) => { console.warn('Error al cargar comodines al abrir modal productos OC', err); });
     }
 
     // Cargar detalles de OC solo si no se han cargado antes
@@ -515,7 +515,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 if (res.concepto?.codigo) {
                   conceptosApi.obtenerSuplidores(Sucursal.Compra)
                     .then(setEntidadesCache)
-                    .catch(() => {});
+                    .catch((err) => { console.warn('Error al recargar suplidores cache al cambiar concepto (modal OC)', err); });
                 }
               })
               .catch((err: any) => {
@@ -715,7 +715,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     // Cargar suplidores del concepto (desde Sucursal.Compra para que idExterno coincida)
     conceptosApi.obtenerSuplidores(Sucursal.Compra)
       .then((ents) => setEntidadesCache(ents))
-      .catch(() => {});
+      .catch((err) => { console.warn('Error al cargar suplidores cache al seleccionar concepto', err); });
 
     // === ValidarImpuestosProducto (con backup/restore) ===
     const prevNoImpuesto = selectedConcepto?.noImpuesto;
@@ -817,7 +817,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       // Cargar comodines para ProductosOrigenModal
       productoApi.obtenerComodines(Sucursal.Compra)
         .then(setComodines)
-        .catch(() => console.warn('No se pudieron cargar los comodines'));
+        .catch((err) => { console.warn('Error al cargar comodines al seleccionar OC', err); });
     } catch {
       // Si falla la carga, continuar sin detalles de OC
     }

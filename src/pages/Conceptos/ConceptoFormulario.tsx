@@ -227,9 +227,9 @@ const ConceptoFormulario: React.FC = () => {
     const pageTitle = mode === 'crear' ? 'Nuevo Concepto' : '';
     setPageTitleOverride(pageTitle);
 
-    conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenes).catch(() => {});
-    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursales).catch(() => {});
-    documentosApi.obtenerListado(sucursalActiva).then(setDocumentos).catch(() => {});
+    conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenes).catch((err) => console.warn('Error al cargar almacenes cache', err));
+    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursales).catch((err) => console.warn('Error al cargar sucursales cache', err));
+    documentosApi.obtenerListado(sucursalActiva).then(setDocumentos).catch((err) => console.warn('Error al cargar documentos cache', err));
     tipoApi.obtenerTodo(sucursalActiva).then((tipos) => {
       const map: Record<string, string> = {};
       const docMap: Record<string, string> = {};
@@ -240,7 +240,7 @@ const ConceptoFormulario: React.FC = () => {
       setTiposMap(map);
       setTiposDocMap(docMap);
       setTiposList(tipos);
-    }).catch(() => {});
+    }).catch((err) => console.warn('Error al cargar tipos cache', err));
 
     return () => {
       resetToolbar();

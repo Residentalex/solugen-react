@@ -82,13 +82,13 @@ const EmpleadoFormulario: React.FC = () => {
   useEffect(() => {
     apiClient.get(`/Departamento/${sucursalActiva}`)
       .then((res) => setDepartamentos(res.data?.data || []))
-      .catch(() => {});
+      .catch((err) => console.warn('Error al cargar departamentos', err));
     apiClient.get(`/Posicion/${sucursalActiva}`)
       .then((res) => setPosiciones(res.data?.data || []))
-      .catch(() => {});
+      .catch((err) => console.warn('Error al cargar posiciones', err));
     apiClient.get(`/categoriaentidad/${sucursalActiva}/tipo/CLI`)
       .then((res) => setCategorias(res.data?.data || []))
-      .catch(() => {});
+      .catch((err) => console.warn('Error al cargar categorias', err));
   }, [sucursalActiva]);
 
   // Cargar datos en edición

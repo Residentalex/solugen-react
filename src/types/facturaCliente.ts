@@ -11,8 +11,11 @@ import type {
   SecuenciaNCFDTO,
   AsientoContableDTO,
   LogDTO,
+  NotaSeguimientoDTO,
 } from './facturaPOS';
 import type { DocumentoDTO } from './documento';
+import type { DocumentoRelacionadoDTO } from './notaDebito';
+import type { ImpuestoFacturaDTO } from './impuestos';
 
 export interface FacturaClienteResumenDTO {
   id: number;
@@ -43,6 +46,7 @@ export type {
   SecuenciaNCFDTO,
   AsientoContableDTO,
   LogDTO,
+  NotaSeguimientoDTO,
 };
 
 // ===== Tipo de documento para Factura Cliente =====
@@ -123,8 +127,8 @@ export interface FacturaClienteDTO {
   logs: LogDTO[];
   cobros?: any[];
   transaccionNCF?: any;
-  transaccionesAsociadas?: any[];
-  notasSeguimiento?: any[];
+  transaccionesAsociadas?: DocumentoRelacionadoDTO[];
+  notasSeguimiento?: NotaSeguimientoDTO[];
 }
 
 // ===== FullDTO para formulario (crear/editar) con campos anulables =====
@@ -154,13 +158,13 @@ export interface FacturaClienteFullDTO {
   impuestos: number;
   total: number;
 
-  sucursal?: any;
+  sucursal?: EntidadDTO | null;
 
   detalles: DetalleFacturaClienteDTO[];
   asientos?: AsientoContableDTO[];
   logs?: LogDTO[];
   cobros?: any[];
-  notasSeguimiento?: any[];
-  transaccionesAsociadas?: any[];
-  impuestosFactura?: any[];
+  notasSeguimiento?: NotaSeguimientoDTO[];
+  transaccionesAsociadas?: DocumentoRelacionadoDTO[];
+  impuestosFactura?: ImpuestoFacturaDTO[];
 }

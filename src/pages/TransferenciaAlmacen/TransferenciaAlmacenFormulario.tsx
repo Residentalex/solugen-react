@@ -247,10 +247,10 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
     }
 
     // Cargar almacenes
-    transferenciaAlmacenApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
-    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
-    parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch(() => {});
-    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch(() => {});
+    transferenciaAlmacenApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch((err) => { console.warn('Error al cargar almacenes cache en formulario transferencia', err); });
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => { console.warn('Error al cargar medidas cache en formulario transferencia', err); });
+    parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch((err) => { console.warn('Error al obtener fecha cierre inventario en transferencia', err); });
+    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch((err) => { console.warn('Error al obtener fecha cierre fiscal en transferencia', err); });
 
     // Inicializar fecha en modo crear
     if (mode === 'crear') {

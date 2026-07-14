@@ -120,7 +120,6 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
     setLoadingError(false);
     entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
-        console.log('[DEBUG handleRefresh] logs recibidos:', res?.logs);
         if (!res) {
           message.error('Documento no encontrado en la sucursal seleccionada.');
           setLoadingError(true);
@@ -140,11 +139,11 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         if (res.ordenCompra?.id) {
           ordenCompraApi.obtenerPorId(Sucursal.Compra, res.ordenCompra.id)
             .then((oc: any) => setOcDetallesData(oc.detalles || []))
-            .catch(() => {});
+            .catch((err) => { console.warn('Error al cargar detalles OC en detalle entrada', err); });
         }
         devolucionCompraApi.obtenerPorIdEntrada(sucursalActiva, parseInt(id))
           .then((dvcs) => setDevolucionesData(dvcs))
-          .catch(() => {});
+          .catch((err) => { console.warn('Error al cargar devoluciones en detalle entrada', err); });
         // Cargar documentos relacionados desde DOCUMENTOS_RELACION
         documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva)
           .then(rel => setDocumentosRelacionados(rel || []))
@@ -154,7 +153,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
           const sucursalRDE = res.concepto?.sucursalDestino?.sucursal ?? sucursalContableRef.current;
           facturaSuplidorApi.obtenerPorDocumento(sucursalRDE, res.noDocumento)
             .then((factura) => setFacturaData(factura))
-            .catch(() => {});
+            .catch((err) => { console.warn('Error al cargar factura RDE en detalle entrada', err); });
         } else {
           setFacturaData(null);
         }
@@ -247,7 +246,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         if (res.ordenCompra?.id) {
           ordenCompraApi.obtenerPorId(Sucursal.Compra, res.ordenCompra.id)
             .then((oc: any) => setOcDetallesData(oc.detalles || []))
-            .catch(() => {});
+            .catch((err) => { console.warn('Error al cargar detalles OC en recarga detalle entrada', err); });
         }
         // Cargar devoluciones asociadas
         devolucionCompraApi.obtenerPorIdEntrada(sucursalActiva, parseInt(id))

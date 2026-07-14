@@ -16,7 +16,11 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   RedoOutlined,
+  HolderOutlined,
+  EditOutlined,
 } from '@ant-design/icons';
+import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -38,6 +42,7 @@ import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
+import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
@@ -197,12 +202,35 @@ const DevolucionVentaFormulario: React.FC = () => {
   const [facturaModalOpen, setFacturaModalOpen] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const editingOriginalValue = useRef<string | number>('');
+  const editingValueRef = useRef<string | number>('');
+  const fieldCloseHandledRef = useRef(false);
 
   const [form] = Form.useForm();
+
+  const ncfValue = Form.useWatch('ncf', form) || '';
+  const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
   const editValuesRef = useRef<Record<string, any>>({});
   const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
   const navigationConfirmedRef = useFormularioNavigation();
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
+  );
+
+  const [activeId, setActiveId] = useState<number | null>(null);
+
+  const detallesFiltrados = detalleSearch
+    ? detalles.filter((d) => {
+        const q = detalleSearch.toLowerCase();
+        return (d.codigo || '').toLowerCase().includes(q) ||
+          (d.articulo || '').toLowerCase().includes(q) ||
+          (d.referencia || '').toLowerCase().includes(q);
+      })
+    : detalles;
 
   const sinOC = true;
   const isLarge = screens.xxl === true;
@@ -221,8 +249,8 @@ const DevolucionVentaFormulario: React.FC = () => {
     setPageTitleOverride(pageTitle);
 
     // Cargar almacenes
-    devolucionVentaApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
-    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
+    devolucionVentaApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch((err) => console.warn('Error al cargar almacenes cache', err));
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => console.warn('Error al cargar medidas cache', err));
 
     // Inicializar fechas en modo crear
     if (mode === 'crear') {
@@ -297,7 +325,7 @@ const DevolucionVentaFormulario: React.FC = () => {
         if (res.concepto?.codigo) {
           devolucionVentaApi.obtenerClientes(sucursalActiva)
             .then(setClientesCache)
-            .catch(() => {});
+            .catch((err) => console.warn('Error al cargar clientes cache en editar', err));
         }
       })
       .catch((err: any) => {
@@ -452,6 +480,37 @@ const DevolucionVentaFormulario: React.FC = () => {
     };
   };
 
+  // ===== Handlers de campos rápidos =====
+  const openFieldEditor = (field: string) => {
+    const val = form.getFieldValue(field);
+    const defaultVal = field === 'tasa' ? 1 : '';
+    editingOriginalValue.current = val ?? defaultVal;
+    editingValueRef.current = val ?? defaultVal;
+    setEditingField(field);
+    fieldCloseHandledRef.current = false;
+  };
+
+  const commitFieldEditor = () => {
+    if (fieldCloseHandledRef.current) return;
+    fieldCloseHandledRef.current = true;
+    const field = editingField;
+    if (field) {
+      const newValue = editingValueRef.current;
+      form.setFieldsValue({ [field]: newValue });
+    }
+    setEditingField(null);
+  };
+
+  const cancelFieldEditor = () => {
+    if (fieldCloseHandledRef.current) return;
+    fieldCloseHandledRef.current = true;
+    const field = editingField;
+    if (field) {
+      form.setFieldsValue({ [field]: editingOriginalValue.current });
+    }
+    setEditingField(null);
+  };
+
   const handleGuardar = async () => {
     const error = validarFormulario();
     if (error) {
@@ -481,6 +540,21 @@ const DevolucionVentaFormulario: React.FC = () => {
     }
   };
 
+  const handleDragEnd = (event: any) => {
+    setActiveId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setDetalles((prev) => {
+      const oldIndex = prev.findIndex((d) => d.id === active.id);
+      const newIndex = prev.findIndex((d) => d.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      const updated = [...prev];
+      const [moved] = updated.splice(oldIndex, 1);
+      updated.splice(newIndex, 0, moved);
+      return updated;
+    });
+  };
+
   // ===== Handlers de concepto =====
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
@@ -501,7 +575,7 @@ const DevolucionVentaFormulario: React.FC = () => {
     // Cargar clientes
     devolucionVentaApi.obtenerClientes(sucursalActiva)
       .then((ents) => setClientesCache(ents))
-      .catch(() => {});
+      .catch((err) => console.warn('Error al cargar clientes cache al cambiar concepto', err));
 
     // === ValidarImpuestosProducto (con backup/restore) ===
     const prevNoImpuesto = selectedConcepto?.noImpuesto;
@@ -824,6 +898,13 @@ const DevolucionVentaFormulario: React.FC = () => {
   // ===== Grid de detalles editable =====
   const detalleColumns = [
     {
+      title: '',
+      key: 'sort',
+      width: 40,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: () => <DragHandle />,
+    },
+    {
       title: 'Código',
       key: 'codigo',
       width: 120,
@@ -1104,8 +1185,30 @@ const DevolucionVentaFormulario: React.FC = () => {
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
+          {/* Fila 1: Factura Referencia */}
+          <Col xs={24} sm={12} lg={9}>
+            <div>
+              <FloatingField label="Factura Referencia">
+                <Input
+                  placeholder=" "
+                  value={selectedFactura
+                    ? `${typeof selectedFactura.documento === 'object' ? (selectedFactura.documento?.codigo || '') + '-' + (selectedFactura.noDocumento || '') : selectedFactura.documento}`
+                    : ''}
+                  readOnly
+                  suffix={
+                    <Space size={4}>
+                      <SearchOutlined onClick={() => setFacturaModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
+                      {selectedFactura && <ClearOutlined onClick={handleFacturaClear} style={{ cursor: 'pointer' }} />}
+                    </Space>
+                  }
+                  onClick={() => setFacturaModalOpen(true)}
+                />
+              </FloatingField>
+            </div>
+          </Col>
+
           {/* Fila 1: Concepto */}
-          <Col xs={24} sm={12} lg={8}>
+          <Col xs={24} sm={12} lg={15}>
             <div>
               <FloatingField label="Concepto" required>
                 <Input
@@ -1126,8 +1229,8 @@ const DevolucionVentaFormulario: React.FC = () => {
             <Form.Item name="concepto" hidden><Input /></Form.Item>
           </Col>
 
-          {/* Fila 2: FechaDocumento */}
-          <Col xs={24} sm={12} lg={8}>
+          {/* Fila 2: Fecha Documento */}
+          <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Documento" required>
                 <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
@@ -1135,8 +1238,8 @@ const DevolucionVentaFormulario: React.FC = () => {
             </Form.Item>
           </Col>
 
-          {/* Cliente */}
-          <Col xs={24} sm={12} lg={8}>
+          {/* Fila 2: Cliente */}
+          <Col xs={24} sm={12} lg={15}>
             <Form.Item name="cliente" required style={{ marginBottom: 0 }}>
               <FloatingField label="Cliente" required>
                 <Select
@@ -1158,8 +1261,22 @@ const DevolucionVentaFormulario: React.FC = () => {
             </Form.Item>
           </Col>
 
+          {/* Fila 3: Fecha Factura */}
+          <Col xs={24} sm={12} lg={9}>
+            <div>
+              <FloatingField label="Fecha Factura">
+                <DatePicker
+                  style={{ width: '100%' }}
+                  format="YYYY-MM-DD"
+                  disabled
+                  value={selectedFactura?.fechaDocumento ? dayjs(selectedFactura.fechaDocumento) : null}
+                />
+              </FloatingField>
+            </div>
+          </Col>
+
           {/* Fila 3: Almacén */}
-          <Col xs={24} sm={12} lg={8}>
+          <Col xs={24} sm={12} lg={15}>
             <Form.Item name="almacen" required style={{ marginBottom: 0 }}>
               <FloatingField label="Almacén" required>
                 <Select
@@ -1181,28 +1298,51 @@ const DevolucionVentaFormulario: React.FC = () => {
             </Form.Item>
           </Col>
 
-          {/* Factura Origen */}
-          <Col xs={24} sm={12} lg={16}>
-            <div>
-              <FloatingField label="Factura Origen">
-                <Input
-                  placeholder=" "
-                  value={selectedFactura ? `${selectedFactura.documento} - ${toTitleCase(selectedFactura.entidad || '')}` : ''}
-                  readOnly
-                  suffix={
-                    <Space size={4}>
-                      <SearchOutlined onClick={() => setFacturaModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
-                      {selectedFactura && <ClearOutlined onClick={handleFacturaClear} style={{ cursor: 'pointer' }} />}
-                    </Space>
-                  }
-                  onClick={() => setFacturaModalOpen(true)}
-                />
-              </FloatingField>
+          {/* Fila 4: Botones rápidos NCF + Tasa */}
+          <Col xs={24}>
+            <div style={{ marginBottom: 16 }}>
+              <Space size={[8, 8]} wrap>
+                {/* NCF */}
+                <div>
+                  {editingField === 'ncf' ? (
+                    <Input size="small" style={{ width: 200 }} placeholder="NCF" maxLength={19}
+                      autoFocus defaultValue={editingValueRef.current as string}
+                      onChange={(e) => { editingValueRef.current = e.target.value; }}
+                      onPressEnter={() => commitFieldEditor()}
+                      onBlur={() => commitFieldEditor()}
+                      onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); } }}
+                    />
+                  ) : ncfValue ? (
+                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
+                      NCF: {ncfValue} <EditOutlined />
+                    </Tag>
+                  ) : (
+                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
+                      <PlusOutlined /> NCF
+                    </Tag>
+                  )}
+                </div>
+                {/* Tasa */}
+                <div>
+                  {editingField === 'tasa' ? (
+                    <InputNumber size="small" style={{ width: 120 }} min={0} step={0.01} precision={4}
+                      autoFocus defaultValue={editingValueRef.current as number}
+                      onChange={(val) => { editingValueRef.current = val ?? 0; }}
+                      onPressEnter={() => commitFieldEditor()}
+                      onBlur={() => commitFieldEditor()}
+                      onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); } }}
+                    />
+                  ) : (
+                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
+                      Tasa: {tasaValue} <EditOutlined />
+                    </Tag>
+                  )}
+                </div>
+              </Space>
             </div>
-            <Form.Item name="factura" hidden><Input /></Form.Item>
           </Col>
 
-          {/* Fila 4: Nota */}
+          {/* Fila 5: Nota */}
           <Col xs={24}>
             <Form.Item name="nota" style={{ marginBottom: 0 }}>
               <FloatingField label="Nota">
@@ -1221,6 +1361,9 @@ const DevolucionVentaFormulario: React.FC = () => {
               impuestos={totales.impuestos}
               total={totales.total}
               hideTitle
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+              tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </div>
         </Col>
@@ -1313,20 +1456,19 @@ const DevolucionVentaFormulario: React.FC = () => {
                           modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
                         />
                       )}
+                      <DndContext sensors={sensors} collisionDetection={closestCenter}
+                        onDragStart={(event) => setActiveId(event.active.id as number)}
+                        onDragEnd={handleDragEnd}
+                        onDragCancel={() => setActiveId(null)}>
+                        <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                       <Table
-                        dataSource={detalleSearch
-                          ? detalles.filter((d) => {
-                              const q = detalleSearch.toLowerCase();
-                              return (d.codigo || '').toLowerCase().includes(q) ||
-                                (d.articulo || '').toLowerCase().includes(q) ||
-                                (d.referencia || '').toLowerCase().includes(q);
-                            })
-                          : detalles}
+                        dataSource={detallesFiltrados}
                         columns={detalleColumns}
                         rowKey="id"
                         size="small"
                         pagination={false}
-                        scroll={{ x: 1200 }}
+                        scroll={{ x: 1300 }}
+                        components={{ body: { row: SortableRow } }}
                         locale={{
                           emptyText: (
                             <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1335,6 +1477,18 @@ const DevolucionVentaFormulario: React.FC = () => {
                           ),
                         }}
                       />
+                        </SortableContext>
+                        <DragOverlay>
+                          {activeId ? (
+                            <div style={{ padding: '8px 16px', background: '#fff', border: '2px solid #556ee6', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8, width: 300 }}>
+                              <HolderOutlined style={{ color: '#556ee6' }} />
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {detalles.find((d) => d.id === activeId)?.articulo || 'Arrastrando...'}
+                              </span>
+                            </div>
+                          ) : null}
+                        </DragOverlay>
+                      </DndContext>
                     </>
                   ),
                 },
@@ -1427,20 +1581,19 @@ const DevolucionVentaFormulario: React.FC = () => {
                         modificaDescripcion={documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion}
                       />
                     )}
+                    <DndContext sensors={sensors} collisionDetection={closestCenter}
+                      onDragStart={(event) => setActiveId(event.active.id as number)}
+                      onDragEnd={handleDragEnd}
+                      onDragCancel={() => setActiveId(null)}>
+                      <SortableContext items={detallesFiltrados.map((d) => d.id)} strategy={verticalListSortingStrategy}>
                     <Table
-                      dataSource={detalleSearch
-                        ? detalles.filter((d) => {
-                            const q = detalleSearch.toLowerCase();
-                            return (d.codigo || '').toLowerCase().includes(q) ||
-                              (d.articulo || '').toLowerCase().includes(q) ||
-                              (d.referencia || '').toLowerCase().includes(q);
-                          })
-                        : detalles}
+                      dataSource={detallesFiltrados}
                       columns={detalleColumns}
                       rowKey="id"
                       size="small"
                       pagination={false}
-                      scroll={{ x: 1200 }}
+                      scroll={{ x: 1300 }}
+                      components={{ body: { row: SortableRow } }}
                       locale={{
                         emptyText: (
                           <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1449,12 +1602,24 @@ const DevolucionVentaFormulario: React.FC = () => {
                         ),
                       }}
                     />
+                      </SortableContext>
+                      <DragOverlay>
+                        {activeId ? (
+                          <div style={{ padding: '8px 16px', background: '#fff', border: '2px solid #556ee6', borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.15)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8, width: 300 }}>
+                            <HolderOutlined style={{ color: '#556ee6' }} />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {detalles.find((d) => d.id === activeId)?.articulo || 'Arrastrando...'}
+                            </span>
+                          </div>
+                        ) : null}
+                      </DragOverlay>
+                    </DndContext>
                   </>
                 ),
-              },
-              {
-                key: 'consumo',
-                label: `Consumo (0)`,
+                },
+                {
+                  key: 'consumo',
+                  label: `Consumo (0)`,
                 children: (
                   <div style={{ padding: 24, textAlign: 'center' }} className="paces-text-secondary">
                     Documentos que han utilizado esta nota de crédito (disponible después de aplicar).

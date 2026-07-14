@@ -66,10 +66,6 @@ export interface PantallaDTO {
   entidades?: PantallaEntidadDTO[];
 }
 
-export interface PantallaConEntidadesDTO extends PantallaDTO {
-  entidades: PantallaEntidadDTO[];
-}
-
 export interface EntidadDocumentoDTO {
   entdocId: number;
   codigo: string;

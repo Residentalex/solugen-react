@@ -94,7 +94,7 @@ const ActualizacionCostos: React.FC = () => {
         const d = dayjs(fecha);
         if (d.isValid()) setFechaCierre(d);
       })
-      .catch(() => {});
+      .catch((err) => console.warn('Error al obtener fecha cierre inventario', err));
 
     return () => {
       resetToolbar();

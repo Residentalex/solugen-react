@@ -94,6 +94,6 @@ export interface FacturaSuplidorFullDTO {
   detalles: DetalleFacturaSuplidorDTO[];
   asientos?: AsientoContableDTO[];
   logs?: LogDTO[];
-  sucursal?: any;
+  sucursal?: { codigo?: string; nombre?: string } | null;
   impuestosFactura?: ImpuestoFacturaDTO[];
 }

@@ -45,7 +45,7 @@ export interface DetalleGeneradorDTO {
   referencia: string;
   producto: string;
   medida?: UnidadMedidaDTO | null;
-  impuesto: any | null;
+  impuesto: { nombre: string; porcentaje: number; codigo: string; idExterno: string } | null;
   cantidades: Record<string, number> | null;
   cantidadesBonificadas: Record<string, number> | null;
   existencias: Record<string, number> | null;

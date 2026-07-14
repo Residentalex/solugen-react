@@ -114,9 +114,9 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
     return () => {
       // Cleanup: desuscribir y desconectar SignalR
       if (jobIdRef.current) {
-        posteoHub.unsubscribeFromJob(jobIdRef.current).catch(() => {});
+        posteoHub.unsubscribeFromJob(jobIdRef.current).catch((err) => console.warn('Error al desuscribir SignalR en cleanup', err));
       }
-      posteoHub.disconnect().catch(() => {});
+      posteoHub.disconnect().catch((err) => console.warn('Error al desconectar SignalR en cleanup', err));
       document.title = 'Solugen ERP';
     };
   }, []);
@@ -235,8 +235,8 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
         wizard.fechaHasta
       );
       setTotal(totalPosteable);
-    } catch (err) {
-      console.warn('No se pudo obtener total posteable, se usará el de SignalR:', err);
+    } catch {
+      // Silencioso: se usará el total de SignalR
     }
 
     try {
@@ -532,9 +532,9 @@ const PasoProcesando: React.FC<Props> = ({ wizard, onTerminado, onReiniciar }) =
     canceladoRef.current = true;
     setCancelado(true);
     if (jobIdRef.current) {
-      await posteoHub.unsubscribeFromJob(jobIdRef.current).catch(() => {});
+      await posteoHub.unsubscribeFromJob(jobIdRef.current).catch((err) => console.warn('Error al desuscribir SignalR al cancelar', err));
     }
-    await posteoHub.disconnect().catch(() => {});
+    await posteoHub.disconnect().catch((err) => console.warn('Error al desconectar SignalR al cancelar', err));
     setProcesando(false);
   };
 

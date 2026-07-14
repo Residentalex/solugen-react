@@ -20,7 +20,7 @@ interface CatalogoListadoToolbarProps {
 
 const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
   onSearch,
-  placeholder = 'Buscar por código o nombre...',
+  placeholder = 'Buscar...',
   pageSize,
   onPageSizeChange,
   ocultarPageSize = false,
@@ -36,13 +36,7 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
           placeholder={placeholder}
           allowClear
           onSearch={onSearch}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              (e.target as HTMLInputElement).blur();
-              onSearch('');
-            }
-          }}
-          style={{ flex: 1, minWidth: 200, maxWidth: 400 }}
+          style={{ width: 400 }}
           prefix={<SearchOutlined className="paces-text-icon" />}
         />
         {filtros}

@@ -68,7 +68,7 @@ const ConceptoDetalle: React.FC = () => {
       });
       setTiposMap(map);
       setTiposDocMap(docMap);
-    }).catch(() => {});
+    }).catch((err) => console.warn('Error al cargar tipos en detalle', err));
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride, sucursalActiva]);
 

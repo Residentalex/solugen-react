@@ -76,7 +76,7 @@ export interface ReciboIngresoFullDTO {
   documento: DocumentoDTO;
   tipoDocumento: number;
   tipoEntidad?: string;
-  sucursal?: any;
+  sucursal?: { codigo?: string; nombre?: string } | null;
   codigoSucursal?: string;
 
   transaccionesAsociadas: TransaccionAsociadaDTO[];

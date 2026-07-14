@@ -579,15 +579,35 @@ const DevolucionVentaDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={data.concepto} /></Descriptions.Item>
-                <Descriptions.Item label="Tipo">—</Descriptions.Item>
-                <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Almacen" span={3}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Factura Ref.:">
+                  {data.factura?.documento?.codigo ? `${data.factura.documento.codigo}-${data.factura.noDocumento}` : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Concepto:">
+                  {data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : toTitleCase(data.concepto?.nombre || '-')}
+                  <ConceptoInfoLabel concepto={data.concepto} />
+                </Descriptions.Item>
+                <Descriptions.Item label="Tipo:">{(data as any).tipo?.codigo ? `${(data as any).tipo.codigo} - ${toTitleCase((data as any).tipo.nombre || '')}` : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha Doc.:">
+                  {formatDate(data.fechaDocumento)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Cliente:">
+                  {toTitleCase(data.cliente?.nombre || data.entidad?.nombre || '-')}
+                </Descriptions.Item>
+                <Descriptions.Item label="NCF:">
+                  {data.ncf || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Fecha Factura:">
+                  {data.factura?.fechaDocumento ? formatDate(data.factura.fechaDocumento) : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Almacén:">
+                  {toTitleCase(data.almacen?.nombre || '-')}
+                </Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
                   <SucursalField codigoSucursal={data.codigoSucursal} />
                 </Descriptions.Item>
-                <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+                <Descriptions.Item label="Nota:" span={3}>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+                </Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -750,15 +770,35 @@ const DevolucionVentaDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-              <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={data.concepto} /></Descriptions.Item>
-              <Descriptions.Item label="Tipo">—</Descriptions.Item>
-              <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
-              <Descriptions.Item label="Sucursal:">
-                <SucursalField codigoSucursal={data.codigoSucursal} />
-              </Descriptions.Item>
-              <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+                <Descriptions.Item label="Factura Ref.:">
+                  {data.factura?.documento?.codigo ? `${data.factura.documento.codigo}-${data.factura.noDocumento}` : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Concepto:">
+                  {data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : toTitleCase(data.concepto?.nombre || '-')}
+                  <ConceptoInfoLabel concepto={data.concepto} />
+                </Descriptions.Item>
+                <Descriptions.Item label="Tipo:">{(data as any).tipo?.codigo ? `${(data as any).tipo.codigo} - ${toTitleCase((data as any).tipo.nombre || '')}` : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha Doc.:">
+                  {formatDate(data.fechaDocumento)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Cliente:">
+                  {toTitleCase(data.cliente?.nombre || data.entidad?.nombre || '-')}
+                </Descriptions.Item>
+                <Descriptions.Item label="NCF:">
+                  {data.ncf || '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Fecha Factura:">
+                  {data.factura?.fechaDocumento ? formatDate(data.factura.fechaDocumento) : '-'}
+                </Descriptions.Item>
+                <Descriptions.Item label="Almacén:">
+                  {toTitleCase(data.almacen?.nombre || '-')}
+                </Descriptions.Item>
+                <Descriptions.Item label="Sucursal:">
+                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                </Descriptions.Item>
+                <Descriptions.Item label="Nota:">
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+                </Descriptions.Item>
               </Descriptions>
             </Card>
 

@@ -276,6 +276,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
           setDocumentosAsociados(res.transaccionesAsociadas.map((d: any) => ({
             id: d.transaccionAsociadaID ?? d.id ?? Math.random(),
             transaccionAsociadaID: d.transaccionAsociadaID ?? d.id,
+            transaccionID: d.id,
             fecha: d.fecha ? dayjs(d.fecha).format('YYYY-MM-DD') : '',
             documento: d.documento || '',
             nCF: d.nCF || d.ncf || '',
@@ -523,6 +524,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
         cuentaContable: selectedEntidad?.cuentaContable || data?.entidad?.cuentaContable || undefined,
       } : undefined,
       transaccionesAsociadas: documentosAsociados.map(d => ({
+        id: d.transaccionID ?? data?.id ?? 0,
         transaccionAsociadaID: d.transaccionAsociadaID ?? d.id,
         monto: d.monto ?? 0,
         montoOriginal: d.montoOriginal ?? 0,
@@ -595,6 +597,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
           setDocumentosAsociados(res.transaccionesAsociadas.map((d: any) => ({
             id: d.transaccionAsociadaID ?? d.id ?? Math.random(),
             transaccionAsociadaID: d.transaccionAsociadaID ?? d.id,
+            transaccionID: d.id,
             fecha: d.fecha ? dayjs(d.fecha).format('YYYY-MM-DD') : '',
             documento: d.documento || '',
             nCF: d.nCF || d.ncf || '',
@@ -691,6 +694,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
       return [...prev, ...nuevos.map((d: any) => ({
         id: d.transaccionAsociadaID ?? d.id,
         transaccionAsociadaID: d.transaccionAsociadaID ?? d.id,
+        transaccionID: d.transaccionID,
         fecha: d.fecha ? dayjs(d.fecha).format('YYYY-MM-DD') : '',
         documento: d.documento || '',
         nCF: d.ncf || d.nCF || '',

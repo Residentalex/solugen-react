@@ -74,7 +74,7 @@ const ProveedorDetalle: React.FC = () => {
 
   if (!data) return null;
 
-  const isLarge = screens.lg ?? true;
+  const isLarge = screens.xxl === true;
 
   return (
     <DetalleCatalogoLayout

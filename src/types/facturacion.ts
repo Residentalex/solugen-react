@@ -160,6 +160,17 @@ export interface ResumenTipoNcfSucursalDTO {
   cantidad: number;
 }
 
+/** DTO para información NCF de una transacción */
+export interface TransaccionNCFDTO {
+  id: number;
+  ncf: string;
+  ncfModificado: string;
+  nombreTipoComprobante: string;
+  tipoComprobante: string;
+  fechaVencimiento?: string;
+  idExterno: string;
+}
+
 // --- DTOs para tabs de ClienteDetalle (Fase 2) ---
 
 export interface PersonaAutorizadaDTO {

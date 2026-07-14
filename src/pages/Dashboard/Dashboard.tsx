@@ -148,7 +148,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
         const ncf = await dashboardApi.obtenerPendientesNCF(desde, hasta);
         setPendientesNCF(ncf);
       } catch {
-        console.warn('No se pudieron cargar los NCF pendientes');
+        // Silencioso: carga periférica
       }
 
       // Cargar docs no cuadrados
@@ -156,7 +156,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
         const nc = await dashboardApi.obtenerDocsNoCuadrados(sucursalActiva, desde, hasta);
         setDocsNoCuadrados(nc);
       } catch {
-        console.warn('No se pudieron cargar los docs no cuadrados');
+        // Silencioso: carga periférica
       }
 
       // Cargar sucursales activas por separado (no bloquea el dashboard si falla)
@@ -164,7 +164,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
       try {
         sucActivas = await dashboardApi.obtenerSucursalesActivas();
       } catch {
-        console.warn('No se pudieron cargar las sucursales activas');
+        // Silencioso: carga periférica
       }
       setSucursalesActivas(sucActivas);
       if (sucActivas.length > 0) {

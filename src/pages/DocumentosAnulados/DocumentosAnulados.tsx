@@ -60,7 +60,7 @@ const DocumentosAnulados: React.FC = () => {
     if (moduloID === undefined || sucursalSeguridad === undefined) return;
     apiClient.get<ApiResponse<DocumentoOption[]>>(`/Pantalla/${sucursalSeguridad}/modulo/${moduloID}/documentos`)
       .then((res) => setDocumentos(res.data.data || []))
-      .catch(() => {});
+      .catch((err) => console.warn('Error al cargar documentos para filtro', err));
   }, [sucursalSeguridad, moduloID]);
 
   const cargarDatos = useCallback(async () => {

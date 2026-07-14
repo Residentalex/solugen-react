@@ -79,6 +79,14 @@ Tres pantallas definen el canon visual del sistema. Cualquier pantalla nueva deb
 
 > **Estos tres archivos son el canon visual y estructural del sistema y no deben modificarse.** Cualquier ajuste visual, nuevo patrón o mejora debe implementarse en el módulo destino correspondiente, no alterando los archivos plantilla `EntradaAlmacen.tsx`, `EntradaAlmacenDetalle.tsx` ni `EntradaAlmacenFormulario.tsx`.
 
+## Tipos TypeScript (DTOs)
+
+- No definir interfaces DTO inline en componentes (`.tsx`). Usar las de `src/types/`.
+- Si se necesita un subset, usar `Pick<Tipo, 'prop1' | 'prop2'>` o `Partial<Tipo>`.
+- No duplicar tipos entre archivos de `src/types/` (ej: `ImpuestoDTO` solo en `contabilidad.ts`).
+- Los nombres de propiedades deben coincidir con el backend DTO en camelCase.
+- Referencia completa: `docs-ai/dto-mapeos.md`.
+
 ## Modulos protegidos (no modificar sin notificar)
 
 Los siguientes modulos completos (listado, detalle y formulario) estan protegidos y **no deben modificarse** sin notificar explicitamente al usuario y recibir confirmacion:

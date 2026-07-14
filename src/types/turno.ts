@@ -1,3 +1,5 @@
+import type { AsientoContableDTO, LogDTO } from './entradaAlmacen';
+
 export interface CompaniaTurnoDTO {
   id: number;
   nombre: string;
@@ -45,8 +47,8 @@ export interface TurnoDTO {
   facturas: FacturaTurnoDTO[];
   cobros: CobroDTO[];
   factura?: {
-    asientos?: any[];
-    logs?: any[];
+    asientos?: AsientoContableDTO[];
+    logs?: LogDTO[];
     [key: string]: any;
   };
   [key: string]: any;

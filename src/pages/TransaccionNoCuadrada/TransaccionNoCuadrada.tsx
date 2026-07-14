@@ -43,7 +43,7 @@ const TransaccionNoCuadrada: React.FC = () => {
   }), []);
 
   useEffect(() => {
-    documentosApi.obtenerListado(sucursalActiva).then(setDocumentos).catch(() => {});
+    documentosApi.obtenerListado(sucursalActiva).then(setDocumentos).catch((err) => console.warn('Error al cargar documentos para filtro', err));
   }, [sucursalActiva]);
 
   const cargarDatos = useCallback(async () => {

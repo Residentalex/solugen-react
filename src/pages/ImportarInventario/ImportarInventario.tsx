@@ -250,10 +250,10 @@ const ImportarInventario: React.FC = () => {
 
     importarInventarioApi.obtenerSuplidores(sucursalActiva)
       .then(setSuplidoresCache)
-      .catch(() => {});
+      .catch((err) => console.warn('Error al cargar suplidores cache', err));
     importarInventarioApi.obtenerAlmacenes(sucursalActiva)
       .then(setAlmacenesCache)
-      .catch(() => {});
+      .catch((err) => console.warn('Error al cargar almacenes cache', err));
 
     form.setFieldsValue({ fechaDocumento: dayjs() });
 

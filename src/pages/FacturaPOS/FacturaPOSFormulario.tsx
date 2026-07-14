@@ -212,8 +212,8 @@ const FacturaPOSFormulario: React.FC = () => {
     setPageTitleOverride(pageTitle);
 
     // Cargar almacenes
-    facturaPOSApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
-    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
+    facturaPOSApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch((err) => console.warn('Error al cargar almacenes cache', err));
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => console.warn('Error al cargar medidas cache', err));
 
     // Inicializar valores por defecto en modo crear
     if (mode === 'crear') {
@@ -294,7 +294,7 @@ const FacturaPOSFormulario: React.FC = () => {
         if (full.concepto?.codigo) {
           facturaPOSApi.obtenerClientes(sucursalActiva)
             .then(setClientesCache)
-            .catch(() => {});
+            .catch((err) => console.warn('Error al cargar clientes cache en editar', err));
         }
       })
       .catch((err: any) => {
@@ -442,7 +442,7 @@ const FacturaPOSFormulario: React.FC = () => {
     // Cargar clientes
     facturaPOSApi.obtenerClientes(sucursalActiva)
       .then((ents) => setClientesCache(ents))
-      .catch(() => {});
+      .catch((err) => console.warn('Error al cargar clientes cache al cambiar concepto', err));
 
     // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
     const prevNoImpuesto = selectedConcepto?.noImpuesto;

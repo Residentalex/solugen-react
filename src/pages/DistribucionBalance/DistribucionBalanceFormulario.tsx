@@ -186,9 +186,9 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     // Cargar tipos para DBA
     tipoApi.obtenerPorDocumento(sucursalActiva, 'DBA')
       .then((tipos) => setTiposCache(tipos as any))
-      .catch(() => {});
-    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
-    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch(() => {});
+      .catch((err) => console.warn('Error al cargar tipos cache', err));
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => console.warn('Error al cargar medidas cache', err));
+    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch((err) => console.warn('Error al obtener fecha cierre fiscal', err));
 
     if (mode === 'crear') {
       form.setFieldsValue({

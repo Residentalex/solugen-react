@@ -124,7 +124,7 @@ const AsientoContableDetalle: React.FC = () => {
   }
   if (!data) return null;
 
-  const isLarge = screens.lg ?? true;
+  const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(data.estado)] || { label: 'Desconocido', color: 'default' };
   const esCerrado = toPeriodoNum(data.periodo) === 6;
 

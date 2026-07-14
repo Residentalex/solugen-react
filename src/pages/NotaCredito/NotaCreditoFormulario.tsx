@@ -252,10 +252,10 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     // Cargar tipos para NC
     tipoApi.obtenerPorDocumento(sucursalActiva, 'NC')
       .then((tipos) => setTiposCache(tipos as any))
-      .catch(() => {});
-    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
-    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch(() => {});
-    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch(() => {});
+      .catch((err) => console.warn('Error al cargar tipos cache', err));
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => console.warn('Error al cargar medidas cache', err));
+    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch((err) => console.warn('Error al obtener fecha cierre fiscal', err));
+    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch((err) => console.warn('Error al cargar sucursales cache', err));
 
     if (mode === 'crear') {
       form.setFieldsValue({

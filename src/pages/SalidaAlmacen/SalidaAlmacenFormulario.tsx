@@ -259,11 +259,11 @@ const SalidaAlmacenFormulario: React.FC = () => {
     }
 
     // Cargar almacenes
-    salidaAlmacenApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
-    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
+    salidaAlmacenApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch((err) => { console.warn('Error al cargar almacenes cache en formulario salida', err); });
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => { console.warn('Error al cargar medidas cache en formulario salida', err); });
     // Obtener fechas de cierre (contable e inventario)
-    parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch(() => {});
-    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch(() => {});
+    parametrosApi.obtenerFechaCierreInventario(sucursalActiva).then(setFechaCierreInventario).catch((err) => { console.warn('Error al obtener fecha cierre inventario en salida', err); });
+    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch((err) => { console.warn('Error al obtener fecha cierre fiscal en salida', err); });
 
     // Inicializar fechas en modo crear
     if (mode === 'crear') {
@@ -313,7 +313,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
         if (res.concepto?.codigo) {
           salidaAlmacenApi.obtenerSuplidores(sucursalActiva)
             .then(setSuplidoresCache)
-            .catch(() => {});
+            .catch((err) => { console.warn('Error al cargar suplidores cache al editar salida', err); });
         }
       })
       .catch((err: any) => {
@@ -402,7 +402,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
                 if (res.concepto?.codigo) {
                   salidaAlmacenApi.obtenerSuplidores(sucursalActiva)
                     .then(setSuplidoresCache)
-                    .catch(() => {});
+                    .catch((err) => { console.warn('Error al recargar suplidores cache al cambiar concepto en salida', err); });
                 }
               })
               .catch((err: any) => {
@@ -554,7 +554,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
     // Cargar suplidores
     salidaAlmacenApi.obtenerSuplidores(sucursalActiva)
       .then((ents) => setSuplidoresCache(ents))
-      .catch(() => {});
+      .catch((err) => { console.warn('Error al cargar suplidores cache al seleccionar concepto en salida', err); });
 
     // === ValidarImpuestosProducto (con backup/restore) ===
     const prevNoImpuesto = selectedConcepto?.noImpuesto;

@@ -446,6 +446,7 @@ const GeneradorORCFormulario: React.FC = () => {
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
   const [conteoDetallesData, setConteoDetallesData] = useState<any[] | null>(null);
   const [maestroDetallesData, setMaestroDetallesData] = useState<any[] | null>(null);
+  const [suplidorProductos, setSuplidorProductos] = useState<any[]>([]);
   const [codigoInput, setCodigoInput] = useState('');
 
   // Selección múltiple
@@ -562,12 +563,12 @@ const GeneradorORCFormulario: React.FC = () => {
   useEffect(() => {
     parametrosApi.obtenerFechaCierre(sucursalActiva)
       .then((fecha) => setFechaCierreContable(dayjs(fecha)))
-      .catch(() => {});
+      .catch((err) => console.warn('Error al obtener fecha cierre', err));
     parametrosApi.obtenerFechaCierreInventario(sucursalActiva)
       .then((fecha) => {
         if (fecha) setFechaCierreContable(dayjs(fecha));
       })
-      .catch(() => {});
+      .catch((err) => console.warn('Error al obtener fecha cierre inventario', err));
   }, [sucursalActiva]);
 
   // ===== Carga inicial y título =====
@@ -576,7 +577,7 @@ const GeneradorORCFormulario: React.FC = () => {
     const pageTitle = mode === 'crear' ? 'Nuevo Generador ORC' : 'Editar Generador ORC';
     setPageTitleOverride(pageTitle);
 
-    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => console.warn('Error al cargar medidas cache', err));
 
     if (mode === 'crear') {
       form.setFieldsValue({ fecha: dayjs() });
@@ -929,8 +930,72 @@ const GeneradorORCFormulario: React.FC = () => {
     });
   }, [detalles]);
 
-  const handleAgregarProducto = () => {
-    setProductoModalOpen(true);
+  const handleAgregarProducto = async () => {
+    const suplidor = selectedSuplidorRef.current;
+    if (!suplidor) {
+      message.warning('Seleccione un suplidor primero');
+      return;
+    }
+    try {
+      const productos = await productoApi.obtenerProductosPorSuplidor(sucursalActiva, suplidor.codigo);
+
+      if (!productos || productos.length === 0) {
+        message.info('No se encontraron productos para este suplidor.');
+        setSuplidorProductos([]);
+        setProductoModalOpen(true);
+        return;
+      }
+
+      const codigos = productos.map((p) => p.codigo);
+
+      let datosAnteriores: any[] = [];
+      try {
+        datosAnteriores = await generadorOrcApi.obtenerDatosAnteriores(sucursalActiva, codigos);
+      } catch {}
+
+      const mapDatosAnteriores = new Map<string, any>();
+      (datosAnteriores || []).forEach((d) => {
+        if (d.codigo) mapDatosAnteriores.set(d.codigo, d);
+      });
+
+      const enriquecidos = productos.map((prod: ProductoDTO) => {
+        const hist = mapDatosAnteriores.get(prod.codigo);
+        const impuestoCompra =
+          (prod.impuestos || []).find((i) => i.impuesto?.ambito === "Compra")?.impuesto || null;
+        return {
+          codigo: prod.codigo,
+          articulo: prod.nombre || '',
+          referencia: prod.referenciaInterna || '',
+          _costo: hist?.costo ?? prod.ultimoCosto ?? 0,
+          _margen: hist?.margen ?? 0,
+          _precioSugerido: hist?.precioSugerido ?? prod.precio ?? 0,
+          _ultimaCompraFecha: hist?.fecha ?? undefined,
+          _porcentajeDescuento: hist?.porcientoDescuento ?? 0,
+          _impuesto: impuestoCompra,
+          _medida: (() => {
+            if (hist?.medidaId && hist.medidaId > 0) {
+              const histMedida = medidasCache.find(m => Number(m.idExterno) === Number(hist.medidaId));
+              if (histMedida) return { ...histMedida };
+            }
+            return prod.unidadMedida ? { ...prod.unidadMedida } : unidadBase || null;
+          })(),
+          ultimoCosto: hist?.costo ?? prod.ultimoCosto ?? 0,
+          medida: (() => {
+            if (hist?.medidaId && hist.medidaId > 0) {
+              const histMedida = medidasCache.find(m => Number(m.idExterno) === Number(hist.medidaId));
+              if (histMedida) return { ...histMedida };
+            }
+            return prod.unidadMedida ? { ...prod.unidadMedida } : unidadBase || null;
+          })(),
+        };
+      });
+
+      setSuplidorProductos(enriquecidos);
+      setProductoModalOpen(true);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al cargar productos del suplidor');
+      message.error(msg);
+    }
   };
 
   const handleProductoSeleccionado = useCallback(
@@ -1247,7 +1312,6 @@ const GeneradorORCFormulario: React.FC = () => {
         const conteo = await conteoApi.obtenerPorId(sucursalActiva, id);
         if (conteo && conteo.detalles) {
           const prefijoConteo = conteo.compania?.prefijo || '';
-          console.log('[GORC] Conteo ID:', id, 'prefijo:', prefijoConteo, 'detalles:', conteo.detalles?.length);
           for (const d of conteo.detalles) {
             const idx = todosDetalles.findIndex((item: any) => item.codigo === d.codigo);
             if (idx === -1) {
@@ -2143,10 +2207,11 @@ const GeneradorORCFormulario: React.FC = () => {
 
       <AgregarProductoGORCModal
         open={productoModalOpen}
-        onClose={() => setProductoModalOpen(false)}
+        onClose={() => { setProductoModalOpen(false); setSuplidorProductos([]); }}
         onSelectProducto={(producto) => {
           handleProductoSeleccionado(producto);
           setProductoModalOpen(false);
+          setSuplidorProductos([]);
         }}
         onSelectConteos={(productos) => {
           const filas = productos.map((p) => {
@@ -2156,22 +2221,18 @@ const GeneradorORCFormulario: React.FC = () => {
               codigo: p.codigo,
               referencia: p.referencia || '',
               producto: p.articulo || '',
-              medida: (p as any)._medida || p.medida || unidadBase || null,
-              impuesto: (p as any)._impuesto || p.impuesto || null,
+              medida: p._medida || p.medida || unidadBase || null,
+              impuesto: p._impuesto || p.impuesto || null,
               cantidades: { OP: 0, HR: 0, VH: 0 },
               cantidadesBonificadas: { OP: 0, HR: 0, VH: 0 },
               existencias: { OP: 0, HR: 0, VH: 0 },
-              existenciasFisicas: {
-                OP: (p as any)._cantidadesPorPrefijo?.OP || 0,
-                HR: (p as any)._cantidadesPorPrefijo?.HR || 0,
-                VH: (p as any)._cantidadesPorPrefijo?.VH || 0,
-              },
-              costo: (p as any)._costo || p.costo || 0,
-              ultimaCompraFecha: (p as any)._ultimaCompraFecha || undefined,
-              margen: (p as any)._margen || 0,
-              precioSugerido: (p as any)._precioSugerido || p.precio || 0,
+              existenciasFisicas: { OP: 0, HR: 0, VH: 0 },
+              costo: p._costo || p.costo || 0,
+              ultimaCompraFecha: p._ultimaCompraFecha || undefined,
+              margen: p._margen || 0,
+              precioSugerido: p._precioSugerido || p.precio || 0,
               subTotal: 0,
-              porcentajeDescuento: (p as any)._porcentajeDescuento || 0,
+              porcentajeDescuento: p._porcentajeDescuento || 0,
               descuento: 0,
               impuestos: 0,
               total: 0,
@@ -2182,9 +2243,9 @@ const GeneradorORCFormulario: React.FC = () => {
           setLoadVersion((v) => v + 1);
           message.success(`${filas.length} productos agregados`);
           setProductoModalOpen(false);
+          setSuplidorProductos([]);
         }}
-        conteoDetallesData={conteoDetallesData}
-        maestroDetallesData={maestroDetallesData}
+        suplidorProductos={suplidorProductos}
       />
 
       <ModosCargaModal

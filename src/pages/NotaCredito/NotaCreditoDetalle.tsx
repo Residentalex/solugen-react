@@ -132,7 +132,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
               .catch(() => { setEstadoDGII(null); })
           );
         }
-        Promise.all(promises).catch(() => {});
+        Promise.all(promises).catch((err) => console.warn('Error en cargas secundarias del detalle', err));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
@@ -189,7 +189,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
               .catch(() => { setEstadoDGII(null); })
           );
         }
-        Promise.all(promises).catch(() => {});
+        Promise.all(promises).catch((err) => console.warn('Error en cargas secundarias al recargar', err));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al recargar';

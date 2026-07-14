@@ -59,7 +59,7 @@ const PlantillaSuplidorDetalle: React.FC = () => {
   const [generando, setGenerando] = useState(false);
 
   const screens = Grid.useBreakpoint();
-  const isLarge = screens.lg ?? true;
+  const isLarge = screens.xxl === true;
 
   const handleRefresh = useCallback(() => {
     if (!id) return;

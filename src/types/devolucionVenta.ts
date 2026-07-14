@@ -27,6 +27,8 @@ export type {
 import type { FacturaPOSDTO } from './facturaPOS';
 export type { FacturaPOSDTO };
 
+import type { DocumentoRelacionadoDTO } from './notaDebito';
+
 import type { DocumentoDTO } from './documento';
 export type { DocumentoDTO };
 
@@ -94,7 +96,7 @@ export interface DevolucionVentaDTO {
   detalles: DetalleDevolucionVentaDTO[];
   asientos: AsientoContableDTO[];
   logs: LogDTO[];
-  transaccionesAsociadas?: any[];
+  transaccionesAsociadas?: DocumentoRelacionadoDTO[];
 }
 
 // ===== DTO completo para Devolucion Venta (FDEV) usado en formulario =====

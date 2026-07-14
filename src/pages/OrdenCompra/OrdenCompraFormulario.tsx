@@ -207,7 +207,7 @@ const OrdenCompraFormulario: React.FC = () => {
     // Cargar suplidores para el selector
     proveedorApi.obtenerListado(sucursalActiva)
       .then(setSuplidoresCache)
-      .catch(() => {});
+      .catch((err) => console.warn('Error al cargar suplidores cache', err));
   }, [sucursalActiva]);
 
   const handleCancelar = () => {

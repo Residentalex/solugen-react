@@ -94,6 +94,8 @@ import type {
 
 import type { EnvioDGIIDTO } from './facturacion';
 import type { DocumentoDTO } from './documento';
+import type { DocumentoRelacionadoDTO } from './notaDebito';
+import type { ImpuestoFacturaDTO } from './impuestos';
 
 export type { EntidadDTO, ConceptoDTO, MonedaDTO, AlmacenDTO, AsientoContableDTO, LogDTO };
 export type { EnvioDGIIDTO };
@@ -198,6 +200,6 @@ export interface FacturaPOSDTO {
   asientos: AsientoContableDTO[];
   logs: LogDTO[];
   cobros?: any[];
-  transaccionesAsociadas?: any[];
-  impuestosFactura?: any[];
+  transaccionesAsociadas?: DocumentoRelacionadoDTO[];
+  impuestosFactura?: ImpuestoFacturaDTO[];
 }

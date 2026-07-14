@@ -274,10 +274,10 @@ const FacturaClienteFormulario: React.FC = () => {
     setPageTitleOverride(pageTitle);
 
     // Cargar almacenes y tipos
-    facturaClienteApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
-    facturaClienteApi.obtenerTipos(sucursalActiva).then(setTiposCache).catch(() => {});
+    facturaClienteApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch((err) => console.warn('Error al cargar almacenes cache', err));
+    facturaClienteApi.obtenerTipos(sucursalActiva).then(setTiposCache).catch((err) => console.warn('Error al cargar tipos cache', err));
     // Cargar sucursales desde la API
-    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch(() => {});
+    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch((err) => console.warn('Error al cargar sucursales cache', err));
     // Cargar unidades de medida
     import('../../api/unidadMedidaApi').then(({ unidadMedidaApi }) => {
       unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => message.error('Error al cargar medidas'));
@@ -352,7 +352,7 @@ const FacturaClienteFormulario: React.FC = () => {
     if (cloneData.concepto?.codigo) {
       facturaClienteApi.obtenerClientes(sucursalActiva)
         .then(setClientesCache)
-        .catch(() => {});
+        .catch((err) => console.warn('Error al cargar clientes cache en clone', err));
     }
   }, [mode, cloneData, sucursalActiva, form]);
 
@@ -428,7 +428,7 @@ const FacturaClienteFormulario: React.FC = () => {
         if (full.concepto?.codigo) {
           facturaClienteApi.obtenerClientes(sucursalActiva)
             .then(setClientesCache)
-            .catch(() => {});
+            .catch((err) => console.warn('Error al cargar clientes cache en editar', err));
         }
       })
       .catch((err: any) => {
@@ -541,7 +541,7 @@ const FacturaClienteFormulario: React.FC = () => {
                 if (full.concepto?.codigo) {
                   facturaClienteApi.obtenerClientes(sucursalActiva)
                     .then(setClientesCache)
-                    .catch(() => {});
+                    .catch((err) => console.warn('Error al cargar clientes cache al recargar', err));
                 }
               })
               .catch((err: any) => {
@@ -711,7 +711,7 @@ const FacturaClienteFormulario: React.FC = () => {
     // Cargar clientes
     facturaClienteApi.obtenerClientes(sucursalActiva)
       .then((ents) => setClientesCache(ents))
-      .catch(() => {});
+      .catch((err) => console.warn('Error al cargar clientes cache al cambiar concepto', err));
 
     // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
     const prevNoImpuesto = selectedConcepto?.noImpuesto;

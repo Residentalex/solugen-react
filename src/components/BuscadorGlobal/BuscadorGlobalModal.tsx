@@ -198,19 +198,19 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
         promesas.push(
           productoApi.buscarPorCampo(suc, 'codigo', q, 10)
             .then(items => { items.forEach(i => agregarProducto(i, 'codigo')); actualizarResultados(); })
-            .catch(() => {})
+            .catch((err) => console.warn('Error al buscar producto por codigo', err))
         );
 
         promesas.push(
           productoApi.buscarPorCampo(suc, 'referencia', q, 10)
             .then(items => { items.forEach(i => agregarProducto(i, 'referencia')); actualizarResultados(); })
-            .catch(() => {})
+            .catch((err) => console.warn('Error al buscar producto por referencia', err))
         );
 
         promesas.push(
           productoApi.buscarPorCampo(suc, 'equival', q, 10)
             .then(items => { items.forEach(i => agregarProducto(i, 'equival')); actualizarResultados(); })
-            .catch(() => {})
+            .catch((err) => console.warn('Error al buscar producto por equival', err))
         );
       }
 
@@ -243,19 +243,19 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
         promesas.push(
           transaccionApi.buscarPorCampo(suc, 'documento', docPrefijoValor, 10, docPrefijoTipo || undefined)
             .then(items => { items.forEach(i => agregarDocumento(i, 'documento')); actualizarResultados(); })
-            .catch(() => {})
+            .catch((err) => console.warn('Error al buscar documento', err))
         );
 
         promesas.push(
           transaccionApi.buscarPorCampo(suc, 'ncf', q, 10)
             .then(items => { items.forEach(i => agregarDocumento(i, 'ncf')); actualizarResultados(); })
-            .catch(() => {})
+            .catch((err) => console.warn('Error al buscar por NCF', err))
         );
 
         promesas.push(
           transaccionApi.buscarPorCampo(suc, 'doc_ref', q, 10)
             .then(items => { items.forEach(i => agregarDocumento(i, 'doc_ref')); actualizarResultados(); })
-            .catch(() => {})
+            .catch((err) => console.warn('Error al buscar por doc_ref', err))
         );
       }
 
@@ -283,7 +283,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
         promesas.push(
           entidadApi.buscar(suc, q, 10)
             .then(items => { items.forEach(i => agregarEntidad(i)); actualizarResultados(); })
-            .catch(() => {})
+            .catch((err) => console.warn('Error al buscar entidades', err))
         );
       }
     }

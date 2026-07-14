@@ -209,7 +209,7 @@ export interface EntradaAlmacenDTO {
   moneda: MonedaDTO;
   almacen: AlmacenDTO;
   suplidor: SuplidorDTO;
-  sucursal: any;
+  sucursal: { codigo?: string; nombre?: string };
   codigoSucursal?: string;
   ordenCompra: OrdenCompraDTO;
   detalles: DetalleEntradaAlmacenDTO[];
@@ -224,6 +224,63 @@ export interface EntradaAlmacenDTO {
   fechaEntrega?: string;
   recibidoPor?: string;
   facturaAsociada?: Record<string, any>;
+}
+
+// ===== Tipos para consultas de inventario =====
+
+/** DTO para última entrada de un producto */
+export interface UltimaEntradaDTO {
+  codigo: string;
+  nombre: string;
+  fecha: string;
+  documento: string;
+  cantidad: number;
+  ventas: number;
+  ventasOP: number;
+  ventasHR: number;
+  ventasVH: number;
+}
+
+/** DTO para última entrada de un producto por sucursal */
+export interface UltimaEntradaSucursalDTO {
+  sucursal: number;
+  sucursalNombre: string;
+  codigo: string;
+  nombre: string;
+  fecha?: string;
+  documento: string;
+  cantidad: number;
+}
+
+/** DTO para resumen de movimientos posteriores a una fecha */
+export interface ResumenMovimientosPosterioresDTO {
+  ventasSinComponentes: number;
+  ventasConComponentes: number;
+  salidas: number;
+  devolucionesCompra: number;
+  devolucionesVenta: number;
+  ultimaVentaFecha?: string;
+}
+
+/** DTO para detalle de movimientos posteriores */
+export interface DetalleMovimientoPosteriorDTO {
+  transacid: number;
+  tipoDocumento: string;
+  fecha: string;
+  documento: string;
+  cantidad: number;
+  descripcion: string;
+}
+
+/** DTO para existencia de producto en inventario */
+export interface ExistenciaDTO {
+  fecha: string;
+  codigo: string;
+  producto: string;
+  cantidad: number;
+  costo: number;
+  almacen: string;
+  familia: string;
 }
 
 // ===== Tipos para Orden de Compra (ORC) =====

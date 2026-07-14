@@ -123,7 +123,7 @@ const FacturaClienteDetalle: React.FC = () => {
         // Cargar documentos relacionados (única llamada extra necesaria)
         documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva)
           .then(rel => { setDocumentosRelacionados(rel || []); })
-          .catch(() => {});
+          .catch((err) => console.warn('Error al cargar documentos relacionados', err));
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al recargar';

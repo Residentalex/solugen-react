@@ -345,20 +345,20 @@ const FacturaSuplidorFormulario: React.FC = () => {
     setPageTitleOverride(pageTitle);
 
     // Cargar catálogos iniciales
-    conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch(() => {});
-    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
+    conceptosApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch((err) => console.warn('Error al cargar almacenes cache', err));
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => console.warn('Error al cargar medidas cache', err));
 
     // Cargar sucursales desde la API (CompanioDTO con codigo/idExterno)
-    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch(() => {});
+    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch((err) => console.warn('Error al cargar sucursales cache', err));
 
     // Cargar tipos de documento
-    facturaSuplidorApi.obtenerTipos(sucursalActiva).then(setTiposCache).catch(() => {});
+    facturaSuplidorApi.obtenerTipos(sucursalActiva).then(setTiposCache).catch((err) => console.warn('Error al cargar tipos cache', err));
 
     // Cargar suplidores
-    facturaSuplidorApi.obtenerSuplidores(sucursalActiva).then(setSuplidoresCache).catch(() => {});
+    facturaSuplidorApi.obtenerSuplidores(sucursalActiva).then(setSuplidoresCache).catch((err) => console.warn('Error al cargar suplidores cache', err));
 
     // Cargar catálogo de impuestos para compras (usado al seleccionar producto)
-    impuestoApi.obtenerParaCompras(sucursalActiva).then(setImpuestosCache).catch(() => {});
+    impuestoApi.obtenerParaCompras(sucursalActiva).then(setImpuestosCache).catch((err) => console.warn('Error al cargar impuestos cache', err));
 
     // Inicializar fecha y monto en modo crear
     if (mode === 'crear') {
@@ -409,6 +409,10 @@ const FacturaSuplidorFormulario: React.FC = () => {
           tipo: res.tipo?.codigo || '',
         });
 
+        // Actualizar título con número de documento
+        const docTitle = `${res.documento?.codigo || 'FRDE'}-${res.noDocumento || ''}`;
+        setPageTitleOverride(`Editar - ${docTitle}`);
+
         // Cargar suplidores y actualizar selectedEntidad con datos completos
         facturaSuplidorApi.obtenerSuplidores(sucursalActiva)
           .then((suplidores) => {
@@ -419,7 +423,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
               if (match) setSelectedEntidad(match);
             }
           })
-          .catch(() => {});
+          .catch((err) => console.warn('Error al cargar suplidores en modo editar', err));
 
         // Restaurar sucursal
         if (res.sucursal) {
@@ -566,6 +570,9 @@ const FacturaSuplidorFormulario: React.FC = () => {
                   diasCredito: res.diasCredito ?? res.suplidor?.diasCredito ?? 0,
                 });
 
+                const docTitle = `${res.documento?.codigo || 'FRDE'}-${res.noDocumento || ''}`;
+                setPageTitleOverride(`Editar - ${docTitle}`);
+
                 facturaSuplidorApi.obtenerSuplidores(sucursalActiva)
                   .then((suplidores) => {
                     setSuplidoresCache(suplidores);
@@ -575,7 +582,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
                       if (match) setSelectedEntidad(match);
                     }
                   })
-                  .catch(() => {});
+                  .catch((err) => console.warn('Error al cargar suplidores al recargar', err));
               })
               .catch((err: any) => {
                 const msg = err?.response?.data?.errorMessage || 'Error al recargar el documento';
@@ -645,9 +652,9 @@ const FacturaSuplidorFormulario: React.FC = () => {
     const totalImp = detalles.reduce((s, d) => s + (d.impuestos || 0), 0);
     const nuevosDetalles = detalles.map((d) => calcularFila(d, calcularOtros(d)));
     const totalCalculado = nuevosDetalles.reduce((s, d) => s + (d.total || 0), 0);
-    const total = !detallesModificados && data?.total != null
-      ? data.total
-      : (values.monto != null ? Number(values.monto) : totalCalculado);
+    const total = detallesModificados || !data?.total
+      ? totalCalculado
+      : data.total;
 
     return {
       id: base.id || 0,
@@ -789,7 +796,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
           if (match) setSelectedEntidad(match);
         }
       })
-      .catch(() => {});
+      .catch((err) => console.warn('Error al cargar suplidores al cambiar concepto', err));
 
     // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos
     const prevNoImpuesto = selectedConcepto?.noImpuesto;
@@ -1040,8 +1047,8 @@ const FacturaSuplidorFormulario: React.FC = () => {
           }
         });
       }
-    } catch (err) {
-      console.warn('No se pudieron cargar los impuestos adicionales del producto', err);
+    } catch {
+      // Silencioso: carga periférica de impuestos adicionales
     }
 
     const filaVaciaIdx = detalles.findIndex((d) => !d.codigo);
@@ -1863,6 +1870,9 @@ const FacturaSuplidorFormulario: React.FC = () => {
           tasa: res.tasa || 1, nota: res.nota || '',
           diasCredito: res.diasCredito ?? res.suplidor?.diasCredito ?? 0,
         });
+
+        const docTitle = `${res.documento?.codigo || 'FRDE'}-${res.noDocumento || ''}`;
+        setPageTitleOverride(`Editar - ${docTitle}`);
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al recargar';

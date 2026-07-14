@@ -352,7 +352,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
         saving={saving}
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
-        onVolver={() => navigate(`/${codigoPantalla}`)}
+        onVolver={() => navigate(-1)}
         onImprimir={async () => {
           setImprimiendo(true);
           try {

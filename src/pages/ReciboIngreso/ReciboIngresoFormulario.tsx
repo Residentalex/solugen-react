@@ -235,10 +235,10 @@ const ReciboIngresoFormulario: React.FC = () => {
     // Cargar tipos para RI
     tipoApi.obtenerPorDocumento(sucursalActiva, 'RI')
       .then((tipos) => setTiposCache(tipos as any))
-      .catch(() => {});
-    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
+      .catch((err) => console.warn('Error al cargar tipos cache', err));
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => console.warn('Error al cargar medidas cache', err));
     // Cargar sucursales desde la API
-    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch(() => {});
+    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch((err) => console.warn('Error al cargar sucursales cache', err));
 
     if (mode === 'crear') {
       form.setFieldsValue({

@@ -84,7 +84,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
   const [form] = Form.useForm();
   const navigationConfirmedRef = useRef(false);
 
-  const isLarge = screens.lg ?? true;
+  const isLarge = screens.xxl === true;
 
   const pageTitle = mode === 'crear' ? 'Nueva Plantilla de Suplidor' : 'Editar Plantilla de Suplidor';
 
@@ -382,7 +382,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
 
       {isLarge ? (
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col xxl={18}>
             {/* Datos Generales */}
             <Card
               className="paces-card"
@@ -473,7 +473,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
             </Card>
           </Col>
 
-          <Col lg={6}>
+          <Col xxl={6}>
             <Card
               title={<span style={{ fontSize: 16, fontWeight: 600 }}>Información</span>}
               className="paces-card"

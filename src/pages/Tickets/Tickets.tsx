@@ -69,7 +69,7 @@ const Tickets: React.FC = () => {
 
   useEffect(() => {
     if (sucursal) {
-      usuarioApi.obtenerListado(sucursal).then(setUsuarios).catch(() => {});
+      usuarioApi.obtenerListado(sucursal).then(setUsuarios).catch((err) => console.warn('Error al cargar usuarios', err));
     }
   }, [sucursal]);
 

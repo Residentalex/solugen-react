@@ -294,10 +294,10 @@ const DevolucionCompraFormulario: React.FC = () => {
     }
 
     // Cargar catálogos iniciales
-    devolucionCompraApi.obtenerAlmacenes(sucursalActiva).then(r => setAlmacenesCache(r || [])).catch(() => {});
-    devolucionCompraApi.obtenerTipos(sucursalActiva).then(r => setTiposCache(r || [])).catch(() => {});
-    devolucionCompraApi.obtenerSuplidores(sucursalActiva).then(r => setSuplidoresCache(r || [])).catch(() => {});
-    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
+    devolucionCompraApi.obtenerAlmacenes(sucursalActiva).then(r => setAlmacenesCache(r || [])).catch((err) => { console.warn('Error al cargar almacenes cache en devolucion compra', err); });
+    devolucionCompraApi.obtenerTipos(sucursalActiva).then(r => setTiposCache(r || [])).catch((err) => { console.warn('Error al cargar tipos cache en devolucion compra', err); });
+    devolucionCompraApi.obtenerSuplidores(sucursalActiva).then(r => setSuplidoresCache(r || [])).catch((err) => { console.warn('Error al cargar suplidores cache en devolucion compra', err); });
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => { console.warn('Error al cargar medidas cache en devolucion compra', err); });
 
     // Inicializar fecha en modo crear
     if (mode === 'crear') {
@@ -344,7 +344,7 @@ const DevolucionCompraFormulario: React.FC = () => {
         // Cargar suplidores
         devolucionCompraApi.obtenerSuplidores(sucursalActiva)
           .then(r => setSuplidoresCache(r || []))
-          .catch(() => {});
+          .catch((err) => { console.warn('Error al cargar suplidores cache al editar devolucion', err); });
       })
       .catch((err: any) => {
         const msg = extraerMensajeError(err, 'Error al cargar el documento');
@@ -473,7 +473,7 @@ const DevolucionCompraFormulario: React.FC = () => {
 
                 devolucionCompraApi.obtenerSuplidores(sucursalActiva)
                   .then(r => setSuplidoresCache(r || []))
-                  .catch(() => {});
+                  .catch((err) => { console.warn('Error al recargar suplidores cache al cambiar concepto en devolucion', err); });
               })
               .catch((err: any) => {
                 const msg = extraerMensajeError(err, 'Error al recargar el documento');
@@ -633,7 +633,7 @@ const DevolucionCompraFormulario: React.FC = () => {
     // Cargar suplidores
     devolucionCompraApi.obtenerSuplidores(sucursalActiva)
       .then((ents) => setSuplidoresCache(ents))
-      .catch(() => {});
+      .catch((err) => { console.warn('Error al cargar suplidores cache al seleccionar concepto en devolucion', err); });
 
     // === ValidarImpuestosProducto (con backup/restore) ===
     const prevNoImpuesto = selectedConcepto?.noImpuesto;
@@ -710,7 +710,7 @@ const DevolucionCompraFormulario: React.FC = () => {
 
       // Guardar productos de la entrada en memoria para el modal compartido
       setEntradaDetallesData(detalleEntrada.detalles || []);
-      productoApi.obtenerComodines(sucursalActiva).then(setComodines).catch(() => {});
+      productoApi.obtenerComodines(sucursalActiva).then(setComodines).catch((err) => { console.warn('Error al cargar comodines al seleccionar entrada en devolucion', err); });
 
       // Auto-asignar entrada
       setSelectedEntrada({

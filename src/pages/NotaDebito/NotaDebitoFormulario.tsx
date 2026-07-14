@@ -262,8 +262,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       : `Editar Nota de Débito - ${entidadLabel}`;
     setPageTitleOverride(pageTitle);
 
-    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch(() => {});
-    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch(() => {});
+    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => console.warn('Error al cargar medidas cache', err));
+    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch((err) => console.warn('Error al obtener fecha cierre fiscal', err));
     conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch(() => message.error('Error al cargar sucursales'));
 
     // === Si viene de Clonar ===
@@ -531,7 +531,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     // Cargar entidades según el concepto
     entidadApi.obtenerEntidades(sucursalActiva, concepto.codigo, true, tipoEntidad)
       .then((ents) => setEntidadesCache(ents))
-      .catch(() => {});
+      .catch((err) => console.warn('Error al cargar entidades cache', err));
 
     // === ConfigurarMoneda ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
@@ -649,7 +649,6 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     const tipoCalienteCodigo = useCompanyStore.getState().tipoDevolucionCaliente?.codigo;
     docs.forEach((d: any) => {
       const noDoc = d.documento?.includes('-') ? d.documento.split('-').slice(1).join('-') : (d.documento || '');
-      console.warn('NotaDebito: devolucion seleccionada', { documento: d.documento, noDoc, sucursal: sucursalActiva });
       if (noDoc) {
         devolucionCompraApi.obtenerPorNoDocumento(sucursalActiva, noDoc)
           .then((devolucion: any) => {
@@ -688,8 +687,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
                 }
               }
             })
-            .catch((err: any) => {
-              console.warn('NotaDebito: error al cargar devolución para impuestos', err?.response?.data || err?.message || err);
+            .catch(() => {
+              message.warning('No se pudieron cargar los impuestos de la devolución seleccionada');
             });
         }
       });

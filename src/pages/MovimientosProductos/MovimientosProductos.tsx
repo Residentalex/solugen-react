@@ -189,7 +189,7 @@ const MovimientosProductos: React.FC = () => {
   }, [setActiveModule, resetToolbar]);
 
   useEffect(() => {
-    almacenApi.obtenerListado(sucursalActiva).then(setListaAlmacenes).catch(() => {});
+    almacenApi.obtenerListado(sucursalActiva).then(setListaAlmacenes).catch((err) => console.warn('Error al cargar lista de almacenes', err));
   }, [sucursalActiva]);
 
   useEffect(() => {

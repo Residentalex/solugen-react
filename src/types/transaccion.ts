@@ -1,3 +1,7 @@
+import type { LogDTO } from './entradaAlmacen';
+import type { DocumentoRelacionadoDTO } from './notaDebito';
+import type { CobroDTO } from './reciboIngreso';
+
 export interface TransaccionVistaDTO {
   id: number;
   fecha: string;
@@ -72,10 +76,10 @@ export interface TransaccionDTO {
   documento?: TransaccionDocumentoDTO;
   entidad?: TransaccionEntidadDTO;
   asientos?: TransaccionAsientoDTO[];
-  logs?: any[];
-  transaccionesAsociadas?: any[];
-  cobros?: any[];
-  sucursal?: { codigo?: string; nombre?: string } | null;
+  logs?: LogDTO[];
+  transaccionesAsociadas?: DocumentoRelacionadoDTO[];
+  cobros?: CobroDTO[];
+  sucursal?: SucursalSimpleDTO | null;
 }
 
 export interface TransaccionConceptoDTO {
@@ -101,6 +105,12 @@ export interface TransaccionAsientoDTO {
   tipoAsiento?: number;
   descripcion?: string;
   cuentaContable?: { noCuenta?: string; nombre?: string };
+}
+
+/** Sucursal simple con código y nombre */
+export interface SucursalSimpleDTO {
+  codigo?: string;
+  nombre?: string;
 }
 
 /** Resultado de postear un documento individual */
