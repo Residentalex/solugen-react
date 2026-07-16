@@ -451,9 +451,14 @@ const ReciboIngresoFormulario: React.FC = () => {
       tipoEntidad: base.tipoEntidad || selectedConcepto?.entidades?.[0]?.codigo || 'CLI',
       documento,
       concepto: selectedConcepto || { nombre: '', codigo: '' },
+      codigoTipo: selectedTipo?.codigo || values.tipo || '',
+      codigoEntidad: entidadSel?.codigo || selectedEntidad?.codigo || entidad.codigo || base.codigoEntidad || '',
+      codigoConcepto: selectedConcepto?.codigo || base.codigoConcepto || '',
+      codigoMoneda: (base.moneda || getMonedaSucursalActiva())?.codigo || base.codigoMoneda || '',
+      codigoSucursal: selectedSucursal?.idExterno || selectedSucursal?.codigo || base.codigoSucursal || '',
+      nombreEntidad: entidad.nombre || base.nombreEntidad || '',
       entidad,
       moneda: base.moneda || getMonedaSucursalActiva(),
-      codigoTipo: selectedTipo?.codigo || values.tipo || '',
       sucursal: selectedSucursal
         ? { codigo: selectedSucursal.codigo, idExterno: selectedSucursal.idExterno, nombre: selectedSucursal.nombre || '' }
         : base.sucursal || undefined,
@@ -536,7 +541,7 @@ const ReciboIngresoFormulario: React.FC = () => {
     // Cargar entidades según concepto
     cargarEntidades(concepto.codigo);
 
-    // === ConfigurarMoneda ===
+    // === ConfigurarMoneda (siempre desde concepto) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     // Actualizar data local para que la UI lo refleje
     setData((prev) => {
@@ -836,7 +841,9 @@ const ReciboIngresoFormulario: React.FC = () => {
                   required
                   tieneDocumentosAsociados={transaccionesAsociadas.length > 0}
                   conceptoSeleccionado={!!selectedConcepto}
-                  onChange={(codigo, entidad) => setSelectedEntidad(entidad || null)}
+                  onChange={(codigo, entidad) => {
+                    setSelectedEntidad(entidad || null);
+                  }}
                 />
               </Form.Item>
             </div>
@@ -897,6 +904,9 @@ const ReciboIngresoFormulario: React.FC = () => {
               impuestos={totales.impuestos}
               total={totales.total}
               hideTitle
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || getMonedaSucursalActiva().simbolo}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || getMonedaSucursalActiva().nombre}
+              tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </div>
           <Form.Item name="ncf" hidden><Input /></Form.Item>

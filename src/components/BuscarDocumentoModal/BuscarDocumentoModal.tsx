@@ -55,7 +55,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     return codigoTipo ? `${codigoTipo}-${num}` : num;
   }, []);
 
-  // ===== CÃ¡lculo de pendiente (misma lÃ³gica que desktop VTransaccionesPendientes) =====
+  // ===== Cálculo de pendiente (misma lógica que desktop VTransaccionesPendientes) =====
   // Para SUP: pendiente = total - (origen Credito ? creditos : debitos)
   // Para CLI: pendiente = total - (origen Credito ? debitos : creditos)
   // origen viene de las props (como el escritorio con vTransacciones.origen)
@@ -145,7 +145,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ===== Asignar montos automÃ¡ticamente al seleccionar/deseleccionar filas =====
+  // ===== Asignar montos automáticamente al seleccionar/deseleccionar filas =====
   const handleSelectionChange = (keys: React.Key[]) => {
     // Detectar filas agregadas y removidas
     const prevKeys = selectedRowKeys;
@@ -154,16 +154,16 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
 
     setMontosPorFila((prev) => {
       const nuevos = { ...prev };
-      // Filas removidas â†’ monto 0 (el disponible se recalcularÃ¡ automÃ¡ticamente con la suma)
+      // Filas removidas → monto 0 (el disponible se recalculará automáticamente con la suma)
       removed.forEach((key) => {
         nuevos[String(key)] = 0;
       });
-      // Filas agregadas â†’ asignar pendiente limitado por el disponible restante
+      // Filas agregadas → asignar pendiente limitado por el disponible restante
       added.forEach((key) => {
         const doc = documentos.find((d) => d.id === key);
         if (!doc) return;
         const pendiente = calcularPendiente(doc);
-        // Calcular cuÃ¡nto estÃ¡ ya asignado en TODAS las filas (incluyendo las ya existentes en 'nuevos')
+        // Calcular cuánto está ya asignado en TODAS las filas (incluyendo las ya existentes en 'nuevos')
         const yaAsignado = Object.values(nuevos).reduce((s, v) => s + v, 0);
         const disponible = montoADistribuir > 0 ? montoADistribuir - yaAsignado : pendiente;
         if (pendiente <= 0 || (montoADistribuir > 0 && disponible <= 0.01)) {
@@ -185,7 +185,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     setSelectedRowKeys(keys);
   };
 
-  // ===== Asignar montos automÃ¡ticamente =====
+  // ===== Asignar montos automáticamente =====
   const handleAsignar = () => {
     if (montoADistribuir <= 0) return;
     let restante = montoADistribuir;
@@ -267,7 +267,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     },
   ];
 
-  // ===== Confirmar selecciÃ³n =====
+  // ===== Confirmar selección =====
   const handleConfirm = () => {
     const selected = selectedRowKeys.map((key) => {
       const doc = documentos.find((d) => d.id === key);

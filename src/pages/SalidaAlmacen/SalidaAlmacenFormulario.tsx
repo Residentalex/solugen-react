@@ -510,6 +510,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
       entidad: entidadSel
         ? { nombre: entidadSel.nombre, codigo: entidadSel.codigo, identificacion: entidadSel.identificacion || '', telefono: entidadSel.telefono, direccion: entidadSel.direccion }
         : { nombre: '', codigo: '', identificacion: '' },
+      sucursal: base.sucursal || { nombre: '', codigo: '', identificacion: '' },
       detalles: detalles.map((d) => calcularFila(d)),
       asientos: base.asientos || [],
       logs: base.logs || [],

@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography, Tag } from 'antd';
+import { Typography, Tag, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { generadorOrcApi } from '../../api/generadorOrcApi';
+import { apiClient } from '../../api/client';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import type { GeneradorOrdenCompraDTO } from '../../types/generadorOrc';
@@ -41,6 +42,7 @@ const GeneradorORC: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
   const [selectedRow, setSelectedRow] = useState<GeneradorOrdenCompraDTO | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; title: string } | null>(null);
 
   const rangoDefault = useMemo(() => ({
     desde: '20000101000000',
@@ -166,8 +168,8 @@ const GeneradorORC: React.FC = () => {
       onRefresh={handleRefresh}
       onPageChange={setPage}
       onRowClick={(record) => setSelectedRow(record)}
-      pdfPreview={null}
-      onPdfClose={() => {}}
+      pdfPreview={pdfPreview}
+      onPdfClose={() => { setPdfPreview(null); }}
       selectedRowId={selectedRow?.idExterno}
       toolbarProps={{
         showFiltros: true,
@@ -184,6 +186,20 @@ const GeneradorORC: React.FC = () => {
         showEditar: true,
         editarDisabled: !selectedRow,
         onEditar: () => selectedRow && navigate(`/FGORC/${selectedRow.idExterno}/editar`),
+        showImprimir: true,
+        imprimirDisabled: !selectedRow,
+        onImprimir: async () => {
+          if (!selectedRow) return;
+          try {
+            const res = await apiClient.get(`/ReporteGeneradorOrdenCompra/${sucursalActiva}/${selectedRow.idExterno}`, {
+              responseType: 'blob',
+            });
+            const url = URL.createObjectURL(res.data);
+            setPdfPreview({ url, title: `GORC-${selectedRow.numero}` });
+          } catch (err: any) {
+            message.error(err?.response?.data?.errorMessage || 'Error al generar el reporte');
+          }
+        },
         onRefresh: handleRefresh,
       }}
     />

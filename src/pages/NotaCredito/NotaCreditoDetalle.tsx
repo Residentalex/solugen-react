@@ -376,7 +376,13 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
       onOk: async () => {
         setSaving(true);
         try {
-          await apiClient.put(`/Transaccion/${sucursalActiva}/reasignarNCF/${id}`);
+          const tipoNCF = (documentoActivo as any)?.transaccionNCF?.tipoComprobante;
+          if (!tipoNCF) {
+            message.error('No se pudo determinar el tipo de NCF');
+            setSaving(false);
+            return;
+          }
+          await apiClient.put(`/Transaccion/${sucursalActiva}/ncf?tipoNCF=${tipoNCF}&idTransaccion=${id}`);
           message.success('NCF reasignado correctamente');
           handleRefresh();
         } catch (err: any) {
@@ -708,7 +714,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
 
                 <Descriptions.Item label="Tipo:">{documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}</Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="NCF Modificado:">{(documentoActivo as any).ncfModificado || '-'}</Descriptions.Item>
 
@@ -830,7 +836,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
 
                 <Descriptions.Item label="Tipo:">{documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}</Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="NCF Modificado:">{(documentoActivo as any).ncfModificado || '-'}</Descriptions.Item>
 

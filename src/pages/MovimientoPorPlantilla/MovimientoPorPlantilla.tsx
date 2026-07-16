@@ -57,7 +57,7 @@ function calcularTiempo(ultimaVenta: string | null, ultimaCompra: string | null)
   const diffHoras = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffDias >= 1) return `${diffDias} dÃ­a${diffDias !== 1 ? 's' : ''}`;
+  if (diffDias >= 1) return `${diffDias} día${diffDias !== 1 ? 's' : ''}`;
   if (diffHoras >= 1) return `${diffHoras} hora${diffHoras !== 1 ? 's' : ''}`;
   return 'Hoy';
 }
@@ -81,7 +81,7 @@ function extraerMensajeError(err: any, fallback: string): string {
 
 
 // ---------------------------------------------------------------------------
-// Modal de bÃºsqueda de plantillas
+// Modal de búsqueda de plantillas
 // ---------------------------------------------------------------------------
 interface BuscarPlantillaModalProps {
   open: boolean;
@@ -128,7 +128,7 @@ const BuscarPlantillaModal: React.FC<BuscarPlantillaModalProps> = ({
 
   const columnas = [
     {
-      title: 'CÃ³digo',
+      title: 'Código',
       dataIndex: 'codigo',
       key: 'codigo',
       width: 150,
@@ -152,7 +152,7 @@ const BuscarPlantillaModal: React.FC<BuscarPlantillaModalProps> = ({
       destroyOnHidden
     >
       <Input.Search
-        placeholder="Buscar por cÃ³digo..."
+        placeholder="Buscar por código..."
         allowClear
         value={searchText}
         onChange={(e) => setSearchText(e.target.value)}
@@ -186,7 +186,7 @@ const BuscarPlantillaModal: React.FC<BuscarPlantillaModalProps> = ({
 
 
 // ---------------------------------------------------------------------------
-// PÃ¡gina principal: Movimiento por Plantilla
+// Página principal: Movimiento por Plantilla
 // ---------------------------------------------------------------------------
 const MovimientoPorPlantilla: React.FC = () => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
@@ -206,7 +206,7 @@ const MovimientoPorPlantilla: React.FC = () => {
   // Fecha seleccionada
   const [fechaSeleccionada, setFechaSeleccionada] = useState<Dayjs>(dayjs());
 
-  // BÃºsqueda local en resultados
+  // Búsqueda local en resultados
   const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
@@ -317,7 +317,7 @@ const MovimientoPorPlantilla: React.FC = () => {
   // Datos a mostrar (tal cual vienen del API, con sucursal)
   const displayData = useMemo(() => data ?? [], [data]);
 
-  // Datos filtrados por bÃºsqueda local
+  // Datos filtrados por búsqueda local
   const filteredData = useMemo(() => {
     if (!data) return [];
     if (!searchText.trim()) return data;
@@ -342,13 +342,13 @@ const MovimientoPorPlantilla: React.FC = () => {
       },
       
       {
-        title: 'CÃ³digo',
+        title: 'Código',
         key: 'codigo',
         width: 130,
         render: (_: any, record: MovimientoArticuloAgrupadoDTO) => record.codigo,
       },
       {
-        title: 'ArtÃ­culo',
+        title: 'Artículo',
         dataIndex: 'articulo',
         key: 'articulo',
         ellipsis: true,
@@ -379,14 +379,14 @@ const MovimientoPorPlantilla: React.FC = () => {
         render: (v: number) => formatNumber(v || 0),
       },
       {
-        title: 'Ãšltima Compra',
+        title: 'Última Compra',
         dataIndex: 'ultimaCompra',
         key: 'ultimaCompra',
         width: 120,
         render: (v: string | null) => formatDate(v),
       },
       {
-        title: 'Ãšltima Venta',
+        title: 'Última Venta',
         dataIndex: 'ultimaVenta',
         key: 'ultimaVenta',
         width: 120,
@@ -443,7 +443,7 @@ const MovimientoPorPlantilla: React.FC = () => {
             <Input
               disabled
               value={suplidorNombre ? toTitleCase(suplidorNombre) : ''}
-              placeholder="Se selecciona automÃ¡ticamente"
+              placeholder="Se selecciona automáticamente"
             />
           </Col>
 
@@ -508,7 +508,7 @@ const MovimientoPorPlantilla: React.FC = () => {
       >
         <div style={{ padding: '0 0 16px' }}>
           <Input.Search
-            placeholder="Buscar por cÃ³digo, artÃ­culo o sucursal..."
+            placeholder="Buscar por código, artículo o sucursal..."
             allowClear
             onSearch={(value) => setSearchText(value)}
             onKeyDown={(e) => {
@@ -527,9 +527,9 @@ const MovimientoPorPlantilla: React.FC = () => {
               description={
                 <span>
                   {!plantillaCodigo
-                    ? 'Seleccione una plantilla usando el botÃ³n ðŸ” y presione Generar'
+                    ? 'Seleccione una plantilla usando el botón ðŸ” y presione Generar'
                     : searchText.trim()
-                      ? 'No hay resultados que coincidan con la bÃºsqueda'
+                      ? 'No hay resultados que coincidan con la búsqueda'
                       : 'No se encontraron movimientos para esta plantilla'}
                 </span>
               }
@@ -553,7 +553,7 @@ const MovimientoPorPlantilla: React.FC = () => {
         )}
       </Card>
 
-      {/* Modal de bÃºsqueda de plantillas */}
+      {/* Modal de búsqueda de plantillas */}
       <BuscarPlantillaModal
         open={modalVisible}
         onClose={() => setModalVisible(false)}

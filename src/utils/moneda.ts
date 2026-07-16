@@ -12,3 +12,5 @@ export function getMonedaSucursalActiva(): { simbolo: string; nombre: string; co
     codigo: moneda?.codigo || 'DOP',
   };
 }
+
+

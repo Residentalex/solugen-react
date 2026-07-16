@@ -77,10 +77,10 @@ const CierreReaperturaModal: React.FC<CierreReaperturaModalProps> = ({
       const razon = 'Reapertura manual de cierre de inventario';
 
       await cierreInventarioApi.reaperturar(sucursal, fechaNuevaStr, fechaAnterior, razon, codigoUsuario);
-      message.success('PerÃ­odo reaperturado exitosamente');
+      message.success('Período reaperturado exitosamente');
       onSuccess();
     } catch (err: any) {
-      const msg = err?.response?.data?.errorMessage || 'Error al reaperturar perÃ­odo';
+      const msg = err?.response?.data?.errorMessage || 'Error al reaperturar período';
       setError(msg);
       message.error(msg);
     } finally {
@@ -154,7 +154,7 @@ const CierreReaperturaModal: React.FC<CierreReaperturaModalProps> = ({
           type="secondary"
           style={{ fontSize: 11, display: 'block', marginTop: 8, marginBottom: 16 }}
         >
-          La reapertura permitirÃ¡ modificar documentos en el perÃ­odo seleccionado.
+           La reapertura permitirá modificar documentos en el período seleccionado.
         </Text>
 
         {/* Acciones */}

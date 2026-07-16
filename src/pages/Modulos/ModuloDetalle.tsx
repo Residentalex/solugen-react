@@ -31,7 +31,7 @@ const ModuloDetalle: React.FC = () => {
   const [error, setError] = useState(false);
   const [configLoading, setConfigLoading] = useState(false);
 
-  // Modal de ediciÃ³n de config
+  // Modal de edición de config
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<ConfigModuloDTO | null>(null);
   const [configForm] = Form.useForm();
@@ -44,14 +44,14 @@ const ModuloDetalle: React.FC = () => {
       const modulos = await moduloApi.obtenerTodo(sucursalActiva);
       const found = modulos.find((m) => m.id === Number(id));
       if (!found) {
-        message.error('MÃ³dulo no encontrado');
+        message.error('Módulo no encontrado');
         navigate('/Modulos');
         return;
       }
       setModulo(found);
-      setPageTitleOverride(`MÃ³dulo: ${found.nombre}`);
+      setPageTitleOverride(`Módulo: ${found.nombre}`);
 
-      // Cargar configuraciones completas con tipo y descripciÃ³n
+      // Cargar configuraciones completas con tipo y descripción
       setConfigLoading(true);
       const configList = await configModuloApi.obtenerListaCompleta(sucursalActiva, found.nombre);
       setConfigs(configList);
@@ -93,7 +93,7 @@ const ModuloDetalle: React.FC = () => {
 
       if (editingConfig) {
         await configModuloApi.actualizar(sucursalActiva, moduloNombre, editingConfig.clave, values);
-        message.success('ConfiguraciÃ³n actualizada');
+        message.success('Configuración actualizada');
       } else {
         await configModuloApi.crear(sucursalActiva, {
           modulo: moduloNombre,
@@ -102,27 +102,27 @@ const ModuloDetalle: React.FC = () => {
           tipo: values.tipo || 'STRING',
           descripcion: values.descripcion || '',
         });
-        message.success('ConfiguraciÃ³n creada');
+        message.success('Configuración creada');
       }
       setConfigModalOpen(false);
       cargar();
     } catch (err: any) {
       if (err?.errorFields) return;
-      message.error(err?.response?.data?.errorMessage || 'Error al guardar configuraciÃ³n');
+      message.error(err?.response?.data?.errorMessage || 'Error al guardar configuración');
     }
   };
 
   const handleConfigEliminar = (cfg: ConfigModuloDTO) => {
     Modal.confirm({
-      title: 'Eliminar configuraciÃ³n',
+      title: 'Eliminar configuración',
       icon: <ExclamationCircleOutlined />,
-      content: `Â¿Eliminar "${cfg.clave}"?`,
+      content: `¿Eliminar "${cfg.clave}"?`,
       okText: 'Eliminar',
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
           await configModuloApi.eliminar(sucursalActiva, cfg.modulo, cfg.clave);
-          message.success('ConfiguraciÃ³n eliminada');
+          message.success('Configuración eliminada');
           cargar();
         } catch (err: any) {
           message.error(err?.response?.data?.errorMessage || 'Error al eliminar');
@@ -138,7 +138,7 @@ const ModuloDetalle: React.FC = () => {
       title: 'Tipo', dataIndex: 'tipo', key: 'tipo', width: 100,
       render: (v: string) => <Tag>{v}</Tag>,
     },
-    { title: 'DescripciÃ³n', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
+    { title: 'Descripción', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true },
     {
       title: 'Acciones', key: 'acciones', width: 120,
       render: (_: any, record: ConfigModuloDTO) => (
@@ -158,9 +158,9 @@ const ModuloDetalle: React.FC = () => {
     <DetalleCatalogoLayout
       rutaVolver="/Modulos"
       loading={loading}
-      mensajeLoading="Cargando mÃ³dulo..."
+      mensajeLoading="Cargando módulo..."
       loadingError={error}
-      mensajeError="Error al cargar el mÃ³dulo"
+      mensajeError="Error al cargar el módulo"
       onRecargar={cargar}
       dataDisponible={!!modulo}
       onEditar={() => navigate(`/Modulos/${modulo.id}/editar`)}
@@ -177,8 +177,8 @@ const ModuloDetalle: React.FC = () => {
         </Descriptions>
       </Card>
 
-      {/* ConfiguraciÃ³n del mÃ³dulo */}
-      <Card className="paces-card" title="ConfiguraciÃ³n del mÃ³dulo"
+      {/* Configuración del módulo */}
+      <Card className="paces-card" title="Configuración del módulo"
         extra={
           <PermissionGate accion="CREAR">
             <Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => openConfigModal()}>
@@ -193,13 +193,13 @@ const ModuloDetalle: React.FC = () => {
           loading={configLoading}
           size="small"
           pagination={false}
-          locale={{ emptyText: 'Sin configuraciones. Agregue una usando el botÃ³n superior.' }}
+          locale={{ emptyText: 'Sin configuraciones. Agregue una usando el botón superior.' }}
         />
       </Card>
 
-      {/* Modal crear/editar configuraciÃ³n */}
+      {/* Modal crear/editar configuración */}
       <Modal
-        title={editingConfig ? 'Editar configuraciÃ³n' : 'Nueva configuraciÃ³n'}
+        title={editingConfig ? 'Editar configuración' : 'Nueva configuración'}
         open={configModalOpen}
         onCancel={() => setConfigModalOpen(false)}
         onOk={handleConfigGuardar}
@@ -220,8 +220,8 @@ const ModuloDetalle: React.FC = () => {
               {TIPOS.map((t) => <Select.Option key={t} value={t}>{t}</Select.Option>)}
             </Select>
           </Form.Item>
-          <Form.Item name="descripcion" label="DescripciÃ³n">
-            <Input.TextArea rows={2} placeholder="DescripciÃ³n del parÃ¡metro" />
+          <Form.Item name="descripcion" label="Descripción">
+            <Input.TextArea rows={2} placeholder="Descripción del parámetro" />
           </Form.Item>
         </Form>
       </Modal>

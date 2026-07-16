@@ -466,7 +466,7 @@ const MayorAuxiliar: React.FC = () => {
               </Col>
               <Col xs={12} sm={6}>
                 <Statistic
-                  title="Total DÃ©bitos"
+                  title="Total Débitos"
                   value={kpi.totalDebe}
                   precision={2}
                   prefix={<ArrowDownOutlined style={{ color: '#f5222d' }} />}
@@ -475,7 +475,7 @@ const MayorAuxiliar: React.FC = () => {
               </Col>
               <Col xs={12} sm={6}>
                 <Statistic
-                  title="Total CrÃ©ditos"
+                  title="Total Créditos"
                   value={kpi.totalHaber}
                   precision={2}
                   prefix={<ArrowUpOutlined style={{ color: '#52c41a' }} />}
@@ -526,8 +526,8 @@ const MayorAuxiliar: React.FC = () => {
                   { title: 'No. Cuenta', dataIndex: 'cuentaContableNoCuenta', key: 'cuentaContableNoCuenta', width: 120 },
                   { title: 'Nombre Cuenta', dataIndex: 'cuentaContableNombre', key: 'cuentaContableNombre', width: 200 },
                   { title: 'Tipo', dataIndex: 'tipoAsiento', key: 'tipoAsiento', width: 80 },
-                  { title: 'Monto DÃ©bito', key: 'montoDebito', width: 130, align: 'right', render: (_: any, r: MayorAuxiliarItem) => r.tipoAsiento.trim() === 'Debito' ? r.montoAlterno.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-' },
-                  { title: 'Monto CrÃ©dito', key: 'montoCredito', width: 130, align: 'right', render: (_: any, r: MayorAuxiliarItem) => r.tipoAsiento.trim() === 'Credito' ? r.montoAlterno.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-' },
+                  { title: 'Monto Débito', key: 'montoDebito', width: 130, align: 'right', render: (_: any, r: MayorAuxiliarItem) => r.tipoAsiento.trim() === 'Debito' ? r.montoAlterno.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-' },
+                  { title: 'Monto Crédito', key: 'montoCredito', width: 130, align: 'right', render: (_: any, r: MayorAuxiliarItem) => r.tipoAsiento.trim() === 'Credito' ? r.montoAlterno.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-' },
                   { title: 'Balance', dataIndex: 'balance', key: 'balance', width: 130, align: 'right', render: (v: number) => v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
                 ]}
                 locale={{ emptyText: <Empty description="Sin resultados" /> }}
@@ -541,12 +541,12 @@ const MayorAuxiliar: React.FC = () => {
                 pagination={{ pageSize: 25, showTotal: (t) => `${t} documentos` }}
                 scroll={{ x: 1000 }}
                 columns={[
-                  { title: 'CÃ³digo', dataIndex: 'codigo', key: 'codigo', width: 80 },
+                  { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 80 },
                   { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', width: 200 },
                   { title: 'Desde', dataIndex: 'minFecha', key: 'minFecha', width: 100, render: (v: string) => dayjs(v).format('DD/MM/YYYY') },
                   { title: 'Hasta', dataIndex: 'maxFecha', key: 'maxFecha', width: 100, render: (v: string) => dayjs(v).format('DD/MM/YYYY') },
-                  { title: 'Total DÃ©bito', dataIndex: 'totalDebe', key: 'totalDebe', width: 130, align: 'right', render: (v: number) => v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
-                  { title: 'Total CrÃ©dito', dataIndex: 'totalHaber', key: 'totalHaber', width: 130, align: 'right', render: (v: number) => v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+                  { title: 'Total Débito', dataIndex: 'totalDebe', key: 'totalDebe', width: 130, align: 'right', render: (v: number) => v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+                  { title: 'Total Crédito', dataIndex: 'totalHaber', key: 'totalHaber', width: 130, align: 'right', render: (v: number) => v.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
                 ]}
                 locale={{ emptyText: <Empty description="Sin resultados" /> }}
               />
@@ -566,7 +566,7 @@ const MayorAuxiliar: React.FC = () => {
       >
         <Input.Search
           ref={cuentaSearchRef}
-          placeholder="Buscar por nÃºmero o nombre..."
+          placeholder="Buscar por número o nombre..."
           allowClear
           onSearch={buscarCuenta}
           style={{ marginBottom: 12 }}

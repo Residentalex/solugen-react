@@ -695,7 +695,7 @@ const FacturaClienteFormulario: React.FC = () => {
     setSelectedConcepto(concepto);
     setEditingField(null);
 
-    // === ConfigurarMoneda (unificado con conceptoNombre) ===
+    // === ConfigurarMoneda (siempre desde concepto) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
       concepto: concepto.codigo,
@@ -1593,7 +1593,7 @@ const FacturaClienteFormulario: React.FC = () => {
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
         sucursal={sucursalActiva}
-        documento="FFAC"
+        documento={documentCode}
         tipo={selectedTipo?.codigo}
         tipoEntidad="CLI"
       />

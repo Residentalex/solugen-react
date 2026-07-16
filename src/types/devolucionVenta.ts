@@ -42,6 +42,7 @@ export interface DetalleDevolucionVentaDTO {
   articulo: string;
   referencia: string;
   cantidad: number;
+  cantidadOriginal?: number; // Cantidad original de la PV (solo para referencia visual)
   costo: number;
   precio: number;
   precioNeto?: number;
@@ -52,7 +53,7 @@ export interface DetalleDevolucionVentaDTO {
   porcentajeImpuesto: number;
   impuestos: number;
   total: number;
-  devuelto?: boolean;
+  devuelto?: number;
   impuesto?: ImpuestoDTO;
   familia?: FamiliaArticuloDTO;
   medida?: UnidadMedidaDTO;
@@ -117,6 +118,7 @@ export interface DevolucionVentaFullDTO {
   almacen: AlmacenDTO | null;
   cliente: ClienteDTO | null;
   entidad?: EntidadDTO | null;
+  sucursal?: { codigo?: string; nombre?: string; identificacion?: string };
   factura?: FacturaPOSDTO | null;
   moneda: MonedaDTO | null;
   documento: DocumentoDTO;

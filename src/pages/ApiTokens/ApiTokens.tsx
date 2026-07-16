@@ -113,7 +113,7 @@ const ApiTokens: React.FC = () => {
       render: (val: string) => <Text>{formatFecha(val)}</Text>,
     },
     {
-      title: 'Ãšltimo uso',
+      title: 'Último uso',
       dataIndex: 'ultimoUso',
       key: 'ultimoUso',
       width: 180,
@@ -251,7 +251,7 @@ const ApiTokens: React.FC = () => {
         width={600}
       >
         <Alert
-          message="Guarde este token en un lugar seguro. No podrÃ¡ volver a verlo."
+          message="Guarde este token en un lugar seguro. No podrá volver a verlo."
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}

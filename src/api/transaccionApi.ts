@@ -234,6 +234,35 @@ export const transaccionApi = {
     return data.data || [];
   },
 
+  /** Crear una nueva transaccion */
+  crear: async (sucursal: number, dto: any): Promise<TransaccionDTO> => {
+    const { data } = await apiClient.post<ApiResponse<TransaccionDTO>>(`${BASE}/${sucursal}`, dto);
+    return data.data;
+  },
+
+  /** Actualizar una transaccion existente */
+  actualizar: async (sucursal: number, dto: any): Promise<TransaccionDTO> => {
+    const { data } = await apiClient.put<ApiResponse<TransaccionDTO>>(`${BASE}/${sucursal}`, dto);
+    return data.data;
+  },
+
+  /** Aplicar un documento por ID */
+  aplicar: async (sucursal: number, id: number): Promise<TransaccionDTO> => {
+    const { data } = await apiClient.put<ApiResponse<TransaccionDTO>>(`${BASE}/${sucursal}/aplicar/${id}`);
+    return data.data;
+  },
+
+  /** Desaplicar un documento */
+  desaplicar: async (sucursal: number, documento: string): Promise<void> => {
+    await apiClient.put(`${BASE}/desaplicar?origen=${sucursal}&documento=${encodeURIComponent(documento)}`);
+  },
+
+  /** Anular un documento */
+  anular: async (sucursal: number, transaccion: TransaccionDTO): Promise<TransaccionDTO> => {
+    const { data } = await apiClient.post<ApiResponse<TransaccionDTO>>(`${BASE}/${sucursal}/anular`, transaccion);
+    return data.data;
+  },
+
   /** Obtener documentos pendientes de una entidad */
   obtenerDocumentosPendientes: async (
     sucursal: number,

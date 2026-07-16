@@ -559,6 +559,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       impuestos: Math.round(totalImp * 100) / 100,
       total: Math.round(total * 100) / 100,
       retenciones: base.retenciones || 0,
+      sucursal: base.sucursal || { nombre: '', codigo: '', identificacion: '' },
       tasa: values.tasa || 1,
       diasCredito: entidadSel?.diasCredito || base.diasCredito || 0,
       tipoDocumento: base.tipoDocumento ?? 24,
@@ -672,7 +673,7 @@ const DevolucionCompraFormulario: React.FC = () => {
       }
     }
 
-    // === ConfigurarMoneda ===
+    // === ConfigurarMoneda (siempre desde concepto) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
       concepto: concepto.codigo,
@@ -731,7 +732,7 @@ const DevolucionCompraFormulario: React.FC = () => {
         form.setFieldsValue({ almacen: detalleEntrada.almacen.codigo });
       }
 
-      // Auto-asignar moneda y tasa desde la entrada
+      // Auto-asignar moneda y tasa desde la entrada (fallback si suplidor no tiene moneda)
       if (detalleEntrada.moneda?.codigo) {
         form.setFieldsValue({
           moneda: detalleEntrada.moneda.nombre,
@@ -1111,23 +1112,23 @@ const DevolucionCompraFormulario: React.FC = () => {
             <div ref={suplidorRef}>
               <Form.Item name="suplidor" required style={{ marginBottom: 0 }}>
                 <FloatingField label="Suplidor" required>
-                  <Select
-                    allowClear
-                    showSearch
-                    optionFilterProp="children"
-                    placeholder=" "
-                    value={selectedEntidad?.codigo || undefined}
-                    onChange={(val) => {
-                      const ent = suplidoresCache.find((e) => e.codigo === val);
-                      setSelectedEntidad(ent || null);
-                    }}
-                  >
-                    {suplidoresCache.map((ent) => (
-                      <Select.Option key={ent.codigo} value={ent.codigo}>
-                        {toTitleCase(ent.nombre)}{ent.identificacion ? ` (${ent.identificacion})` : ''}
-                      </Select.Option>
-                    ))}
-                  </Select>
+                    <Select
+                      allowClear
+                      showSearch
+                      optionFilterProp="children"
+                      placeholder=" "
+                      value={selectedEntidad?.codigo || undefined}
+                      onChange={(val) => {
+                        const ent = suplidoresCache.find((e) => e.codigo === val);
+                        setSelectedEntidad(ent || null);
+                      }}
+                    >
+                      {suplidoresCache.map((ent) => (
+                        <Select.Option key={ent.codigo} value={ent.codigo}>
+                          {toTitleCase(ent.nombre)}{ent.identificacion ? ` (${ent.identificacion})` : ''}
+                        </Select.Option>
+                      ))}
+                    </Select>
                 </FloatingField>
               </Form.Item>
             </div>

@@ -83,6 +83,7 @@ export interface SalidaAlmacenFullDTO {
   almacen: AlmacenDTO | null;
   suplidor: SuplidorDTO | null;
   entidad?: SuplidorDTO | null;
+  sucursal?: { codigo?: string; nombre?: string; identificacion?: string };
   moneda: MonedaDTO | null;
   documento: DocumentoDTO;
   creadoPor?: { id: number; nombre: string; nombreUsuario: string };

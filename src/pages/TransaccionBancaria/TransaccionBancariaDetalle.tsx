@@ -355,7 +355,7 @@ const TransaccionBancariaDetalle: React.FC = () => {
 
                 {/* Fila 3: Sucursal | Beneficiario */}
                 <Descriptions.Item label="Sucursal">
-                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Beneficiario">{(documentoActivo as any)?.nombreBeneficiario || '-'}</Descriptions.Item>
                 <Descriptions.Item label=""> </Descriptions.Item>
@@ -446,7 +446,7 @@ const TransaccionBancariaDetalle: React.FC = () => {
                 <Descriptions.Item label="Entidad">{strVal(documentoActivo.entidad)}</Descriptions.Item>
                 <Descriptions.Item label="Referencia">{documentoActivo.referencia || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Sucursal">
-                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Beneficiario">{(documentoActivo as any)?.nombreBeneficiario || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Nota">

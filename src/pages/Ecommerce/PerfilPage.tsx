@@ -81,11 +81,11 @@ const PerfilPage: React.FC = () => {
     confirmarPasswordNueva: string;
   }) => {
     if (values.passwordNueva !== values.confirmarPasswordNueva) {
-      message.error('Las contraseÃ±as no coinciden');
+      message.error('Las contraseñas no coinciden');
       return;
     }
     if (values.passwordNueva.length < 6) {
-      message.error('La contraseÃ±a nueva debe tener al menos 6 caracteres');
+      message.error('La contraseña nueva debe tener al menos 6 caracteres');
       return;
     }
 
@@ -106,11 +106,11 @@ const PerfilPage: React.FC = () => {
 
   const handleLogout = () => {
     logout();
-    message.info('SesiÃ³n cerrada');
+    message.info('Sesión cerrada');
     navigate('/store');
   };
 
-  // Proteger ruta: redirigir a login si no estÃ¡ autenticado
+  // Proteger ruta: redirigir a login si no está autenticado
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/store/login');
@@ -147,13 +147,13 @@ const PerfilPage: React.FC = () => {
 
         <Card className="paces-card-erp" style={{ borderRadius: 8, marginBottom: 24 }}>
           <Title level={5} style={{ marginBottom: 16 }}>
-            InformaciÃ³n de la cuenta
+            Información de la cuenta
           </Title>
           <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }}>
             <Descriptions.Item label="Nombre">{usuario?.nombre || '-'}</Descriptions.Item>
             <Descriptions.Item label="Email">{usuario?.email || '-'}</Descriptions.Item>
-            <Descriptions.Item label="TelÃ©fono">{usuario?.telefono || '-'}</Descriptions.Item>
-            <Descriptions.Item label="DirecciÃ³n">{usuario?.direccion || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Teléfono">{usuario?.telefono || '-'}</Descriptions.Item>
+            <Descriptions.Item label="Dirección">{usuario?.direccion || '-'}</Descriptions.Item>
             <Descriptions.Item label="Fecha de registro">
               {usuario?.fechaRegistro
                 ? new Date(usuario.fechaRegistro).toLocaleDateString('es-DO')
@@ -195,19 +195,19 @@ const PerfilPage: React.FC = () => {
               </Form.Item>
 
               <Form.Item
-                label="TelÃ©fono"
+                label="Teléfono"
                 name="telefono"
-                rules={[{ required: true, message: 'El telÃ©fono es obligatorio' }]}
+                rules={[{ required: true, message: 'El teléfono es obligatorio' }]}
               >
                 <Input placeholder="Ej. 809-555-1234" />
               </Form.Item>
 
               <Form.Item
-                label="DirecciÃ³n"
+                label="Dirección"
                 name="direccion"
-                rules={[{ required: true, message: 'La direcciÃ³n es obligatoria' }]}
+                rules={[{ required: true, message: 'La dirección es obligatoria' }]}
               >
-                <TextArea rows={3} placeholder="Calle, nÃºmero, sector, ciudad..." />
+                <TextArea rows={3} placeholder="Calle, número, sector, ciudad..." />
               </Form.Item>
 
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -231,18 +231,18 @@ const PerfilPage: React.FC = () => {
               Mis Pedidos
             </Button>
             <Button icon={<LockOutlined />} onClick={() => setModalClaveOpen(true)}>
-              Cambiar contraseÃ±a
+              Cambiar contraseña
             </Button>
             <Button danger icon={<LogoutOutlined />} onClick={handleLogout}>
-              Cerrar sesiÃ³n
+              Cerrar sesión
             </Button>
           </div>
         </Card>
       </div>
 
-      {/* Modal cambiar contraseÃ±a */}
+      {/* Modal cambiar contraseña */}
       <Modal
-        title="Cambiar contraseÃ±a"
+        title="Cambiar contraseña"
         open={modalClaveOpen}
         onCancel={() => {
           setModalClaveOpen(false);
@@ -258,40 +258,40 @@ const PerfilPage: React.FC = () => {
           autoComplete="off"
         >
           <Form.Item
-            label="ContraseÃ±a actual"
+            label="Contraseña actual"
             name="passwordActual"
-            rules={[{ required: true, message: 'Ingresa tu contraseÃ±a actual' }]}
+              rules={[{ required: true, message: 'Ingresa tu contraseña actual' }]}
           >
-            <Input.Password placeholder="ContraseÃ±a actual" />
+            <Input.Password placeholder="Contraseña actual" />
           </Form.Item>
 
           <Form.Item
-            label="Nueva contraseÃ±a"
+            label="Nueva contraseña"
             name="passwordNueva"
             rules={[
-              { required: true, message: 'Ingresa la nueva contraseÃ±a' },
-              { min: 6, message: 'MÃ­nimo 6 caracteres' },
+              { required: true, message: 'Ingresa la nueva contraseña' },
+              { min: 6, message: 'Mínimo 6 caracteres' },
             ]}
           >
-            <Input.Password placeholder="MÃ­nimo 6 caracteres" />
+            <Input.Password placeholder="Mínimo 6 caracteres" />
           </Form.Item>
 
           <Form.Item
-            label="Confirmar nueva contraseÃ±a"
+            label="Confirmar nueva contraseña"
             name="confirmarPasswordNueva"
             rules={[
-              { required: true, message: 'Confirma la nueva contraseÃ±a' },
+              { required: true, message: 'Confirma la nueva contraseña' },
               ({ getFieldValue }) => ({
                 validator(_, value) {
                   if (!value || getFieldValue('passwordNueva') === value) {
                     return Promise.resolve();
                   }
-                  return Promise.reject(new Error('Las contraseÃ±as no coinciden'));
+                  return Promise.reject(new Error('Las contraseñas no coinciden'));
                 },
               }),
             ]}
           >
-            <Input.Password placeholder="Repite la nueva contraseÃ±a" />
+            <Input.Password placeholder="Repite la nueva contraseña" />
           </Form.Item>
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -304,7 +304,7 @@ const PerfilPage: React.FC = () => {
               Cancelar
             </Button>
             <Button type="primary" htmlType="submit" loading={loadingClave}>
-              Cambiar contraseÃ±a
+              Cambiar contraseña
             </Button>
           </div>
         </Form>

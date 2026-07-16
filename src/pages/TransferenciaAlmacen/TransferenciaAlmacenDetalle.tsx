@@ -402,7 +402,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
           {documentoActivo.almacenDestino?.nombre ? toTitleCase(documentoActivo.almacenDestino.nombre) : '-'}
         </Descriptions.Item>
         <Descriptions.Item label="Sucursal:">
-          <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+          <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
         </Descriptions.Item>
 
         {/* Fila 3 */}

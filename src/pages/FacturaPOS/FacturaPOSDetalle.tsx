@@ -10,6 +10,7 @@ import {
   LockFilled,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -418,6 +419,17 @@ const FacturaPOSDetalle: React.FC = () => {
         confirmActions={false}
       />
 
+      {/* Botón "Crear Devolución" — navega al formulario de DEV con pvId */}
+      {data.estado !== 0 && data.estado !== 3 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+          <PermissionGate codigoPantalla="FPV" permisoEspecial="pe_crear_devolucion">
+            <Button type="primary" icon={<RollbackOutlined />} onClick={() => navigate(`/FDEV/nuevo?pvId=${data.id}`)}>
+              Crear Devolución
+            </Button>
+          </PermissionGate>
+        </div>
+      )}
+
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */
         <Row gutter={16}>
@@ -463,7 +475,7 @@ const FacturaPOSDetalle: React.FC = () => {
                   )}
                 </Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                  <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
@@ -653,7 +665,7 @@ const FacturaPOSDetalle: React.FC = () => {
                   )}
                 </Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                  <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>

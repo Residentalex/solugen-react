@@ -125,6 +125,7 @@ export interface SuplidorDTO {
 export interface OrdenCompraDTO {
   id: number;
   noDocumento: string;
+  documento?: { codigo: string };
 }
 
 export interface DetalleEntradaAlmacenDTO {

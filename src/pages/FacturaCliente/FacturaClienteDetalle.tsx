@@ -515,7 +515,13 @@ const FacturaClienteDetalle: React.FC = () => {
       onOk: async () => {
         setSaving(true);
         try {
-          await apiClient.put(`/Transaccion/${sucursalActiva}/reasignarNCF/${id}`);
+          const tipoNCF = documentoActivo?.transaccionNCF?.tipoComprobante;
+          if (!tipoNCF) {
+            message.error('No se pudo determinar el tipo de NCF');
+            setSaving(false);
+            return;
+          }
+          await apiClient.put(`/Transaccion/${sucursalActiva}/ncf?tipoNCF=${tipoNCF}&idTransaccion=${id}`);
           message.success('NCF reasignado correctamente');
           handleRefresh();
         } catch (err: any) {
@@ -723,7 +729,7 @@ const FacturaClienteDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Sucursal" span={3}><SucursalField codigoSucursal={documentoActivo.codigoSucursal} /></Descriptions.Item>
+                <Descriptions.Item label="Sucursal" span={3}><SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} /></Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
                 <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
@@ -844,7 +850,7 @@ const FacturaClienteDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Sucursal"><SucursalField codigoSucursal={documentoActivo.codigoSucursal} /></Descriptions.Item>
+              <Descriptions.Item label="Sucursal"><SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} /></Descriptions.Item>
               <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
               <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
               <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>

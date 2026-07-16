@@ -7,6 +7,7 @@ import {
 import {
   ArrowLeftOutlined,
   EditOutlined,
+  PrinterOutlined,
   SearchOutlined,
   EyeOutlined,
   ClockCircleOutlined,
@@ -20,6 +21,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { generadorOrcApi } from '../../api/generadorOrcApi';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
+import { apiClient } from '../../api/client';
 import type { GeneradorOrdenCompraDTO, DetalleGeneradorDTO } from '../../types/generadorOrc';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ErrorDetalle } from '../../components';
@@ -63,6 +65,7 @@ const GeneradorORCDetalle: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
+  const [generando, setGenerando] = useState(false);
 
   // Análisis / monitor
   const [analisisOpen, setAnalisisOpen] = useState(false);
@@ -121,6 +124,39 @@ const GeneradorORCDetalle: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  const handleGenerarOC = async () => {
+    if (!id) return;
+    Modal.confirm({
+      title: 'Generar Órdenes de Compra',
+      content: 'Se generarán Órdenes de Compra para las sucursales con cantidad > 0. ¿Continuar?',
+      onOk: async () => {
+        setGenerando(true);
+        try {
+          const ordenes = await generadorOrcApi.generarOC(sucursalActiva, id);
+          message.success(`Se generaron ${ordenes.length} Órdenes de Compra`);
+          handleRefresh();
+          const resumen = ordenes
+            .map((o) => `${o.documento?.codigo || 'ORC'}-${o.noDocumento}`)
+            .join(', ');
+          Modal.success({
+            title: 'Órdenes generadas',
+            content: (
+              <div>
+                <p>Se generaron {ordenes.length} orden(es):</p>
+                <p>{resumen}</p>
+              </div>
+            ),
+          });
+        } catch (err: any) {
+          const msg = err?.response?.data?.errorMessage || 'Error al generar OC';
+          message.error(msg);
+        } finally {
+          setGenerando(false);
+        }
+      },
+    });
+  };
 
   useEffect(() => {
     setActiveModule(screenCode);
@@ -616,6 +652,28 @@ const GeneradorORCDetalle: React.FC = () => {
             Editar
           </Button>
         </PermissionGate>
+        <PermissionGate accion="IMPRIMIR">
+          <Button icon={<PrinterOutlined />} onClick={async () => {
+            try {
+              const res = await apiClient.get(`/ReporteGeneradorOrdenCompra/${sucursalActiva}/${id}`, {
+                responseType: 'blob',
+              });
+              const url = URL.createObjectURL(res.data);
+              window.open(url, '_blank');
+            } catch {
+              message.error('Error al generar el reporte');
+            }
+          }}>
+            Imprimir
+          </Button>
+        </PermissionGate>
+        {data.estado === 0 && (
+          <PermissionGate accion="EDITAR">
+            <Button type="primary" icon={<ShopOutlined />} onClick={handleGenerarOC} loading={generando}>
+              Generar OC
+            </Button>
+          </PermissionGate>
+        )}
       </div>
 
       {isLarge ? (

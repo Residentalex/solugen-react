@@ -1,17 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Typography, Tooltip, Descriptions, Alert
 } from 'antd';
 import {
-  ArrowLeftOutlined,
-  PrinterOutlined,
   LockFilled,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { transaccionApi } from '../../api/transaccionApi';
+import DetalleToolbar from '../../components/DetalleToolbar';
 import type { TransaccionDTO, TransaccionAsientoDTO } from '../../types/transaccion';
 import { ErrorDetalle } from '../../components';
 import AsientosContableTable from '../../components/AsientosContableTable';
@@ -23,6 +22,9 @@ import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/est
 import { formatCurrency } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { obtenerNombreSucursal } from '../../utils/sucursalEnumMapper';
+
+import ModalAnular from '../../components/ModalAnular/ModalAnular';
+import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import SucursalField from '../../components/SucursalField';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import CobrosCard from '../../components/CobrosCard';
@@ -59,7 +61,10 @@ const AsientoContableDetalle: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [documentosRelacionados, setDocumentosRelacionados] = React.useState<DocumentoRelacionDTO[]>([]);
+  const [modalAnularOpen, setModalAnularOpen] = useState(false);
+  const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
 
   useEffect(() => {
     setActiveModule(screenCode);
@@ -111,6 +116,41 @@ const AsientoContableDetalle: React.FC = () => {
       },
     })), [data?.asientos]);
 
+  const handleRefresh = useCallback(() => {
+    if (!id) return;
+    setLoadingError(false);
+    setData(null);
+    setLoading(true);
+    const idNum = parseInt(id, 10);
+    if (isNaN(idNum)) {
+      message.error('ID de transacción inválido');
+      setLoading(false);
+      return;
+    }
+    transaccionApi.obtenerPorId(sucursalActiva, idNum)
+      .then((res) => {
+        if (!res) {
+          message.error('Documento no encontrado en la sucursal seleccionada.');
+          setLoadingError(true);
+          return;
+        }
+        setData(res);
+        setPageTitleOverride(`${res.noDocumento || `Transacción #${res.id}`}`);
+      })
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al cargar el detalle del asiento contable';
+        message.error(msg);
+        setLoadingError(true);
+      })
+      .finally(() => setLoading(false));
+  }, [id, sucursalActiva, setPageTitleOverride]);
+
+  const recargar = useCallback(async () => {
+    if (!data?.id) return;
+    const res = await transaccionApi.obtenerPorId(sucursalActiva, data.id);
+    if (res) setData(res);
+  }, [data?.id, sucursalActiva]);
+
   if (loading || (!data && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
@@ -120,13 +160,82 @@ const AsientoContableDetalle: React.FC = () => {
     );
   }
   if (loadingError && !data) {
-    return <ErrorDetalle mensaje="Error al cargar el documento" rutaVolver="/FAsientoContable" />;
+    return <ErrorDetalle mensaje="Error al cargar el documento" rutaVolver="/FAsientoContable" onRecargar={handleRefresh} />;
   }
   if (!data) return null;
 
   const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(data.estado)] || { label: 'Desconocido', color: 'default' };
   const esCerrado = toPeriodoNum(data.periodo) === 6;
+  const esReverso = data.reversoID != null && data.reversoID > 0;
+
+  const handlePostear = async () => {
+    if (!data) return;
+    setSaving(true);
+    try {
+      await transaccionApi.postear(sucursalActiva, data);
+      message.success('Documento posteado correctamente');
+      await recargar();
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al postear';
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAplicar = async () => {
+    if (!data) return;
+    setSaving(true);
+    try {
+      await transaccionApi.aplicar(sucursalActiva, data.id);
+      message.success('Documento aplicado correctamente');
+      await recargar();
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al aplicar';
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDesaplicarConfirm = async (motivo: string) => {
+    if (!data) return;
+    setSaving(true);
+    const documento = `${data.documento?.codigo || ''}-${data.noDocumento || ''}`;
+    try {
+      await transaccionApi.desaplicar(sucursalActiva, documento);
+      message.success('Documento desaplicado correctamente');
+      setModalDesaplicarOpen(false);
+      await recargar();
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al desaplicar';
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
+    if (!data) return;
+    setSaving(true);
+    try {
+      const dto = {
+        ...data,
+        fechaDocumento: dataAnular.fecha,
+        nota: `${data.nota || ''} Documento anulado por: ${dataAnular.motivo}.`,
+      };
+      await transaccionApi.anular(sucursalActiva, dto);
+      message.success('Documento anulado correctamente');
+      setModalAnularOpen(false);
+      await recargar();
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al anular';
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div>
@@ -137,32 +246,36 @@ const AsientoContableDetalle: React.FC = () => {
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={() => { setLoadingError(false); window.location.reload(); }}>
+            <Button size="small" onClick={handleRefresh}>
               Reintentar
             </Button>
           }
         />
       )}
 
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FAsientoContable')}>
-          Volver
-        </Button>
-        <div style={{ flex: 1 }} />
-        <Space>
-          <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={async () => {
-            setImprimiendo(true);
-            try {
-              message.info('Funcionalidad de impresión en desarrollo');
-            } catch {
-              message.error('Error al generar el PDF');
-            } finally {
-              setImprimiendo(false);
-            }
-          }} />
-        </Space>
-      </div>
+      <DetalleToolbar
+        modulo={screenCode}
+        estado={data.estado}
+        periodo={data.periodo}
+        saving={saving}
+        imprimiendo={imprimiendo}
+        onVolver={() => navigate(-1)}
+        onImprimir={async () => {
+          setImprimiendo(true);
+          try {
+            message.info('Funcionalidad de impresión en desarrollo');
+          } catch {
+            message.error('Error al generar el PDF');
+          } finally {
+            setImprimiendo(false);
+          }
+        }}
+        onEditar={() => navigate(`/FAsientoContable/${data.id}/editar`)}
+        onAplicar={handleAplicar}
+        onAnular={async () => setModalAnularOpen(true)}
+        onPostear={handlePostear}
+        onDesaplicar={async () => setModalDesaplicarOpen(true)}
+      />
 
       {isLarge ? (
         /* Desktop layout */
@@ -195,7 +308,7 @@ const AsientoContableDetalle: React.FC = () => {
                   {data.referencia || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                  <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="NCF Modificado:">
                   {data.ncfModificado || '-'}
@@ -279,7 +392,7 @@ const AsientoContableDetalle: React.FC = () => {
               <Descriptions.Item label="Concepto:">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : toTitleCase(data.concepto?.nombre || data.codigoConcepto || '-')}</Descriptions.Item>
               <Descriptions.Item label="NCF:">{data.ncf || '-'}</Descriptions.Item>
               <Descriptions.Item label="Referencia:">{data.referencia || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Sucursal:"><SucursalField codigoSucursal={data.codigoSucursal} /></Descriptions.Item>
+              <Descriptions.Item label="Sucursal:"><SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} /></Descriptions.Item>
               <Descriptions.Item label="NCF Modificado:">{data.ncfModificado || '-'}</Descriptions.Item>
               <Descriptions.Item label="Nota:"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
             </Descriptions>
@@ -333,6 +446,20 @@ const AsientoContableDetalle: React.FC = () => {
           />
         </div>
       )}
+
+      <ModalDesaplicar
+        open={modalDesaplicarOpen}
+        onClose={() => setModalDesaplicarOpen(false)}
+        onConfirm={handleDesaplicarConfirm}
+      />
+      <ModalAnular
+        open={modalAnularOpen}
+        onClose={() => setModalAnularOpen(false)}
+        onConfirm={handleAnularConfirm}
+        documento={`${data.documento?.codigo || ''}-${data.noDocumento || ''}`}
+        fechaDocumento={data.fechaDocumento}
+        periodoCerrado={esCerrado}
+      />
     </div>
   );
 };

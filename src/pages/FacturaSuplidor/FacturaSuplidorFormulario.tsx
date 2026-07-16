@@ -773,7 +773,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
     setConceptoSearchText(`${concepto.codigo || ''} - ${toTitleCase(concepto.nombre)}`);
     setEditingField(null);
 
-    // === ConfigurarMoneda (unificado con conceptoNombre) ===
+    // === ConfigurarMoneda (siempre desde concepto) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
       concepto: concepto.codigo,

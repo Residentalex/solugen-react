@@ -637,7 +637,7 @@ const OrdenCompraDetalle: React.FC = () => {
                   <ConceptoInfoLabel concepto={data.concepto} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Sucursal">
-                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                  <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
                 </Descriptions.Item>
                 {data.nota && (
                   <Descriptions.Item label="Nota" span={3}>
@@ -734,7 +734,7 @@ const OrdenCompraDetalle: React.FC = () => {
                 <ConceptoInfoLabel concepto={data.concepto} />
               </Descriptions.Item>
               <Descriptions.Item label="Sucursal">
-                <SucursalField codigoSucursal={data.codigoSucursal} />
+                <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
               </Descriptions.Item>
               {data.nota && (
                 <Descriptions.Item label="Nota" span={1}>

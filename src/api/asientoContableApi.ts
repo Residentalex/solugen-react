@@ -11,7 +11,8 @@ export const asientoContableApi = {
     hasta?: string,
     cantidad?: number,
     salto?: number,
-    estado?: number
+    estado?: number,
+    tipoDoc?: string
   ): Promise<{ data: TransaccionVistaDTO[]; total: number }> => {
     const params: Record<string, string | number> = {};
     if (desde) params.desde = desde;
@@ -19,6 +20,7 @@ export const asientoContableApi = {
     if (cantidad) params.cantidad = cantidad;
     if (salto) params.salto = salto;
     if (estado !== undefined) params.estado = estado;
+    if (tipoDoc) params.tipoDoc = tipoDoc;
 
     const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO[]>>(
       `${BASE}/${sucursal}/conAsientos/vista`, { params }
@@ -28,10 +30,13 @@ export const asientoContableApi = {
 
   filtrarConAsientos: async (
     sucursal: number,
-    params: Record<string, any>
+    params: Record<string, any>,
+    tipoDoc?: string
   ): Promise<{ data: TransaccionVistaDTO[]; total: number }> => {
+    const allParams = { ...params };
+    if (tipoDoc) allParams.tipoDoc = tipoDoc;
     const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO[]>>(
-      `${BASE}/${sucursal}/conAsientos/filtrar`, { params }
+      `${BASE}/${sucursal}/conAsientos/filtrar`, { params: allParams }
     );
     return { data: data.data || [], total: data.total ?? 0 };
   },

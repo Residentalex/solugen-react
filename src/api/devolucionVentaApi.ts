@@ -58,6 +58,11 @@ export const devolucionVentaApi = {
     return data.data;
   },
 
+  crearDesdePV: async (sucursal: number, pvId: number, body?: { detalles?: DetalleDevolucionVentaDTO[] }): Promise<DevolucionVentaDTO> => {
+    const { data } = await apiClient.post<ApiResponse<DevolucionVentaDTO>>(`${BASE}/${sucursal}/desde-pv/${pvId}`, body || {});
+    return data.data;
+  },
+
   actualizar: async (sucursal: number, devolucion: DevolucionVentaFullDTO): Promise<DevolucionVentaFullDTO> => {
     const { data } = await apiClient.put<ApiResponse<DevolucionVentaFullDTO>>(`${BASE}/${sucursal}`, devolucion);
     return data.data;

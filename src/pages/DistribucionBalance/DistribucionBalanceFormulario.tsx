@@ -392,10 +392,13 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       tipoEntidad,
       documento,
       concepto: selectedConcepto || { nombre: '', codigo: '' },
+      codigoTipo: selectedTipo?.codigo || values.tipo || '',
+      codigoEntidad: entidadSel?.codigo || selectedEntidad?.codigo || entidad.codigo || base.codigoEntidad || '',
+      codigoConcepto: selectedConcepto?.codigo || base.codigoConcepto || '',
+      codigoMoneda: (base.moneda || getMonedaSucursalActiva())?.codigo || base.codigoMoneda || '',
+      nombreEntidad: entidad.nombre || base.nombreEntidad || '',
       entidad,
       moneda: base.moneda || getMonedaSucursalActiva(),
-      codigoTipo: selectedTipo?.codigo || values.tipo || '',
-      // Colecciones
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
         ...t,
         transaccionAsociadaID: t.transaccionAsociadaID || t.id,

@@ -122,7 +122,7 @@ const ProductosOrigenModal: React.FC<ProductosOrigenModalProps> = ({
             children: (
               <>
                 <Input.Search
-                  placeholder="Buscar comodÃ­n..."
+                  placeholder="Buscar comodín..."
                   allowClear
                   style={{ marginBottom: 16 }}
                   onSearch={setComodinSearch}

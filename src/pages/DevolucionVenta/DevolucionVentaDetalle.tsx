@@ -603,7 +603,7 @@ const DevolucionVentaDetalle: React.FC = () => {
                   {toTitleCase(data.almacen?.nombre || '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                  <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:" span={3}>
                   <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
@@ -794,7 +794,7 @@ const DevolucionVentaDetalle: React.FC = () => {
                   {toTitleCase(data.almacen?.nombre || '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                  <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:">
                   <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>

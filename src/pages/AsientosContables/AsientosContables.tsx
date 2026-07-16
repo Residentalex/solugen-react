@@ -1,14 +1,18 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography, message } from 'antd';
+import { Typography, message, Select } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { asientoContableApi } from '../../api/asientoContableApi';
+import { documentosApi } from '../../api/documentosApi';
+import { pantallaApi } from '../../api/pantallaApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { useDocumentoListado } from '../../hooks/useDocumentoListado';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
+import { useAuthStore } from '../../stores/authStore';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import type { TransaccionVistaDTO } from '../../types/transaccion';
+import type { DocumentoDTO } from '../../types/documento';
 
 const { Text } = Typography;
 
@@ -22,17 +26,70 @@ const OPCIONES_ESTADO = [
 const AsientosContables: React.FC = () => {
   const navigate = useNavigate();
   const { screenCode } = useScreenConfig();
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
 
-  const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<TransaccionVistaDTO>({
+  const [documentos, setDocumentos] = useState<DocumentoDTO[]>([]);
+
+  /* Cargar todos los tipos de documento disponibles (para el Select) */
+  useEffect(() => {
+    if (sucursalActiva === undefined) return;
+    documentosApi.obtenerListado(sucursalActiva)
+      .then(setDocumentos)
+      .catch((err) => console.warn('Error al cargar documentos para filtro', err));
+  }, [sucursalActiva]);
+
+  /* Contador para evitar condiciones de carrera entre fetches */
+  const fetchIdRef = useRef(0);
+  const tipoDocRef = useRef<string>();
+
+  const { state, rangoDefault, puedeEditar, tipoDoc, actions } = useDocumentoListado<TransaccionVistaDTO>({
     modulo: screenCode,
-    fetchVista: (sucursal, desde, hasta, filas, salto, estado) =>
-      asientoContableApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado),
-    fetchFiltrar: (sucursal, params) =>
-      asientoContableApi.filtrarConAsientos(sucursal, params),
+    fetchVista: async (sucursal, desde, hasta, filas, salto, estado) => {
+      const id = ++fetchIdRef.current;
+      const result = await asientoContableApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado, tipoDocRef.current);
+      if (id !== fetchIdRef.current) return { data: [], total: 0 };
+      return result;
+    },
+    fetchFiltrar: async (sucursal, params) => {
+      const id = ++fetchIdRef.current;
+      const result = await asientoContableApi.filtrarConAsientos(sucursal, {
+        cantidad: params.cantidad,
+        salto: params.salto,
+        desde: params.desde,
+        hasta: params.hasta,
+        documento: params.documento,
+        tipoDoc: tipoDocRef.current,
+      });
+      if (id !== fetchIdRef.current) return { data: [], total: 0 };
+      return result;
+    },
     reporteUrl: () => '',
     tituloReporte: 'AsientoContable',
     tituloError: 'Error al cargar asientos contables',
   });
+
+  /* Sincronizar ref con el valor actual del hook */
+  tipoDocRef.current = tipoDoc;
+
+  /* Cargar el codigo de documento por defecto desde entidades si no viene ya en la URL */
+  const defaultLoadedRef = useRef(false);
+  useEffect(() => {
+    if (sucursalActiva === undefined) return;
+    pantallaApi.obtenerPantallasConEntidades(sucursalActiva).then((pantallas) => {
+      const pantalla = pantallas.find(
+        (p) => p.codigo?.toUpperCase() === screenCode.toUpperCase()
+      );
+      const codDoc = pantalla?.entidades?.[0]?.entidadCodigo;
+      if (codDoc && !defaultLoadedRef.current) {
+        defaultLoadedRef.current = true;
+        if (!tipoDoc) {
+          actions.handleSetTipoDoc(codDoc);
+        }
+      }
+    }).catch(() => {
+      defaultLoadedRef.current = true; /* marcar cargado aunque falle */
+    });
+  }, [sucursalActiva, screenCode, tipoDoc, actions]);
 
   const handleClonar = async () => {
     if (!state.selectedRow) return;
@@ -119,12 +176,27 @@ const AsientosContables: React.FC = () => {
       pdfPreview={state.pdfPreview}
       onPdfClose={actions.handlePdfClose}
       toolbarProps={{
+        extraLeft: (
+          <Select
+            placeholder="Tipo Documento"
+            allowClear
+            showSearch
+            style={{ minWidth: 250 }}
+            value={tipoDoc}
+            onChange={(val) => { actions.handleSetTipoDoc(val); }}
+            options={documentos.map((d) => ({ value: d.codigo, label: `${d.codigo} - ${d.nombre || ''}` }))}
+            size="small"
+            filterOption={(input, option) =>
+              (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
+            }
+          />
+        ),
         showFiltros: true,
         filtros: state.filtros,
         rangoDefault,
         opcionesEstado: OPCIONES_ESTADO,
         onFiltrosAplicar: actions.handleFiltrosAplicar,
-        searchPlaceholder: 'Buscar documento, entidad, concepto...',
+        searchPlaceholder: 'Buscar por número de documento...',
         onSearch: actions.handleSearch,
         searchDefaultValue: state.searchText,
         pageSize: state.pageSize,

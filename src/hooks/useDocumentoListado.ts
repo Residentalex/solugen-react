@@ -74,6 +74,8 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
     estado: searchParams.has('estado') ? Number(searchParams.get('estado')) : undefined,
   }), [searchParams]);
 
+  const tipoDoc = useMemo(() => searchParams.get('tipoDoc') || undefined, [searchParams]);
+
   const rangoDefault = useMemo(() =>
     configRef.current.rangoDefaultOverride ?? {
       desde: formatDateParam(new Date(Date.now() - 30 * 86400000)),
@@ -133,7 +135,7 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
 
   useEffect(() => {
     cargarDatos(page, pageSize, searchText);
-  }, [page, pageSize, searchText, refreshTrigger, filtros, cargarDatos]);
+  }, [page, pageSize, searchText, refreshTrigger, filtros, tipoDoc, cargarDatos]);
 
   useEffect(() => {
     const cfg = configRef.current;
@@ -197,6 +199,19 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
     if (nuevos.estado !== undefined && nuevos.estado !== null) params.set('estado', nuevos.estado.toString());
     const curBusqueda = searchParams.get('busqueda');
     if (curBusqueda) params.set('busqueda', curBusqueda);
+    const curTipoDoc = searchParams.get('tipoDoc');
+    if (curTipoDoc) params.set('tipoDoc', curTipoDoc);
+    setSearchParams(params, { replace: true });
+    setPage(1);
+  }, [searchParams, setSearchParams]);
+
+  const handleSetTipoDoc = useCallback((value: string | undefined) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) {
+      params.set('tipoDoc', value);
+    } else {
+      params.delete('tipoDoc');
+    }
     setSearchParams(params, { replace: true });
     setPage(1);
   }, [searchParams, setSearchParams]);
@@ -221,6 +236,7 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
     } as DocumentoListadoState<T>,
     rangoDefault,
     puedeEditar,
+    tipoDoc,
     actions: {
       cargarDatos,
       handleSearch,
@@ -230,6 +246,7 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
       handleRowClick,
       handlePageSizeChange,
       handleFiltrosAplicar,
+      handleSetTipoDoc,
       handlePdfClose,
       goToPage,
       setSelectedRow,

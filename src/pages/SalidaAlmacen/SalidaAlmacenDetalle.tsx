@@ -711,7 +711,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
                   {documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
 
                 {/* Fila 4 */}
@@ -825,7 +825,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
                   {documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:">
                   <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>

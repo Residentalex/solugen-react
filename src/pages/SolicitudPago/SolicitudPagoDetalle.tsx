@@ -377,7 +377,7 @@ const SolicitudPagoDetalle: React.FC = () => {
                 </Descriptions.Item>
                 <Descriptions.Item label="Entidad">{strVal(documentoActivo.entidad)}</Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Cuenta Bancaria">{documentoActivo.cuentaBancaria || '-'}</Descriptions.Item>
                 <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
@@ -467,7 +467,7 @@ const SolicitudPagoDetalle: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label="Entidad">{strVal(documentoActivo.entidad)}</Descriptions.Item>
               <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
               <Descriptions.Item label="Cuenta Bancaria">{documentoActivo.cuentaBancaria || '-'}</Descriptions.Item>
               <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>

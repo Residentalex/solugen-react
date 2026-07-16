@@ -85,7 +85,7 @@ const SolicitudPagoFormulario: React.FC = () => {
   // ===== Constantes =====
   const isLarge = screens.xxl === true;
 
-  // Moneda dinámica desde el concepto seleccionado
+  // Moneda dinámica (siempre desde concepto)
   const monedaSimbolo = selectedConcepto?.moneda?.simbolo || getMonedaSucursalActiva().simbolo;
   const monedaNombre = selectedConcepto?.moneda?.nombre || getMonedaSucursalActiva().nombre;
 
@@ -247,7 +247,7 @@ const SolicitudPagoFormulario: React.FC = () => {
       cargarEntidades(concepto.codigo);
     }
 
-    // === ConfigurarMoneda ===
+    // === ConfigurarMoneda (siempre desde concepto) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     setData((prev) => {
       if (!prev) return prev;

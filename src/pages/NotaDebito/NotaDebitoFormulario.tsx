@@ -88,7 +88,10 @@ const TotalesSection: React.FC<{
   impuestosRetenciones: any[];
   montoTotal: number;
   perdidas?: number;
-}> = React.memo(({ impuestosRetenciones, montoTotal, perdidas = 0 }) => {
+  monedaSimbolo?: string;
+  monedaNombre?: string;
+  tasa?: number;
+}> = React.memo(({ impuestosRetenciones, montoTotal, perdidas = 0, monedaSimbolo, monedaNombre, tasa }) => {
   const totales = calcularTotales(impuestosRetenciones, Number(montoTotal) || 0, perdidas);
   return (
     <div style={{ marginTop: 24 }}>
@@ -98,6 +101,9 @@ const TotalesSection: React.FC<{
         impuestos={totales.impuestos}
         total={Number(montoTotal) || 0}
         hideTitle
+        monedaSimbolo={monedaSimbolo}
+        monedaNombre={monedaNombre}
+        tasa={tasa}
       />
       {perdidas > 0 && (
         <div style={{ marginTop: 8, textAlign: 'right' }}>
@@ -533,7 +539,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       .then((ents) => setEntidadesCache(ents))
       .catch((err) => console.warn('Error al cargar entidades cache', err));
 
-    // === ConfigurarMoneda ===
+    // === ConfigurarMoneda (siempre desde concepto) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || getMonedaSucursalActiva().simbolo, codigo: monedaObj.codigo };
     // Actualizar data local para que la UI lo refleje
@@ -636,6 +642,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           documento: d.documento,
           fecha: d.fecha,
           montoOriginal: d.montoOriginal,
+          pagado: d.pagado,
           monto: d.monto,
           impuesto: d.impuesto || 0,
           esDocumentoInventario: true,
@@ -702,12 +709,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     setDevoluciones((prev) =>
       prev.map((d) =>
         d.transaccionAsociadaID === id
-          ? {
-              ...d,
-              monto,
-              perdida: ((d.montoOriginal || 0) + (d.impuesto || 0)) - monto,
-              generarPerdida: false,
-            }
+          ? { ...d, monto }
           : d
       )
     );
@@ -899,6 +901,11 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       documento,
       concepto: selectedConcepto || { codigo: '', nombre: '' },
       codigoTipo: selectedTipo?.codigo || '',
+      codigoEntidad: entidadSel?.codigo || selectedEntidad?.codigo || entidad.codigo || base.codigoEntidad || '',
+      codigoConcepto: selectedConcepto?.codigo || base.codigoConcepto || '',
+      codigoMoneda: (base.moneda || getMonedaSucursalActiva())?.codigo || base.codigoMoneda || '',
+      codigoSucursal: selectedSucursal?.idExterno || selectedSucursal?.codigo || base.codigoSucursal || '',
+      nombreEntidad: entidad.nombre || base.nombreEntidad || '',
       entidad,
       moneda: base.moneda || getMonedaSucursalActiva(),
       sucursal: selectedSucursal ? { codigo: selectedSucursal.codigo || selectedSucursal.idExterno, idExterno: selectedSucursal.idExterno, nombre: selectedSucursal.nombre || '' } : undefined,
@@ -1093,6 +1100,14 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
     { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 140, render: (v: string) => v || '-' },
     { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v) },
+    {
+      title: 'Pagado',
+      dataIndex: 'pagado',
+      key: 'pagado',
+      width: 120,
+      align: 'right' as const,
+      render: (v: number) => formatCurrency(v ?? 0),
+    },
     { title: 'Saldo', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
     {
       title: 'Monto a Debitar', dataIndex: 'monto', key: 'monto', width: 140, align: 'right' as const,
@@ -1124,6 +1139,14 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     {
       title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 140, align: 'right' as const,
       render: (_: any, record: DevolucionAsociadaDTO) => formatNumber((record.montoOriginal || 0) + (record.impuesto || 0)),
+    },
+    {
+      title: 'Pagado',
+      dataIndex: 'pagado',
+      key: 'pagado',
+      width: 120,
+      align: 'right' as const,
+      render: (v: number) => formatCurrency(v ?? 0),
     },
     {
       title: 'Monto Asignado', dataIndex: 'monto', key: 'monto', width: 220, align: 'right' as const,
@@ -1175,7 +1198,11 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           checked={record.generarPerdida}
           onChange={(checked) => {
             setDevoluciones((prev) =>
-              prev.map((d, i) => i === idx ? { ...d, generarPerdida: checked } : d)
+              prev.map((d, i) => i === idx ? {
+                ...d,
+                generarPerdida: checked,
+                perdida: checked ? ((d.montoOriginal || 0) + (d.impuesto || 0)) - (d.monto || 0) : 0,
+              } : d)
             );
           }}
         />
@@ -1332,7 +1359,9 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
                   required
                   tieneDocumentosAsociados={documentosRelacionados.length > 0 || devoluciones.length > 0}
                   conceptoSeleccionado={!!selectedConcepto}
-                  onChange={(codigo, entidad) => setSelectedEntidad(entidad || null)}
+                  onChange={(codigo, entidad) => {
+                    setSelectedEntidad(entidad || null);
+                  }}
                 />
               </Form.Item>
             </div>
@@ -1530,6 +1559,9 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
             impuestosRetenciones={impuestosRetenciones}
             montoTotal={montoTotalConfirmado}
             perdidas={devoluciones.reduce((s, d) => s + (d.perdida || 0), 0)}
+            monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || getMonedaSucursalActiva().simbolo}
+            monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || getMonedaSucursalActiva().nombre}
+            tasa={tasaValue ?? data?.tasa ?? 1}
           />
         </Col>
       </Row>
@@ -1607,7 +1639,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
             rowKey={(r) => r.transaccionAsociadaID || 0}
             size="small"
             pagination={false}
-            scroll={{ x: 600 }}
+            scroll={{ x: 900 }}
           />
         </>
       ),

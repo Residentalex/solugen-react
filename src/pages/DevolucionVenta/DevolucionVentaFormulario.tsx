@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Dropdown, Empty,
@@ -16,6 +16,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   RedoOutlined,
+  RollbackOutlined,
   HolderOutlined,
   EditOutlined,
 } from '@ant-design/icons';
@@ -207,6 +208,10 @@ const DevolucionVentaFormulario: React.FC = () => {
   const editingValueRef = useRef<string | number>('');
   const fieldCloseHandledRef = useRef(false);
 
+  const [searchParams] = useSearchParams();
+  const pvId = searchParams.get('pvId');
+  const [desdePV, setDesdePV] = useState(false);
+
   const [form] = Form.useForm();
 
   const ncfValue = Form.useWatch('ncf', form) || '';
@@ -337,6 +342,104 @@ const DevolucionVentaFormulario: React.FC = () => {
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva, form, navigate]);
 
+  // ===== Precarga desde PV (si viene query param pvId) =====
+  useEffect(() => {
+    if (mode !== 'crear' || !pvId) return;
+
+    const cargarDesdePV = async () => {
+      setLoading(true);
+      try {
+        const facturaFull = await devolucionVentaApi.obtenerFacturaPOS(sucursalActiva, parseInt(pvId));
+        if (!facturaFull) {
+          message.error('Factura POS no encontrada');
+          return;
+        }
+
+        setDesdePV(true);
+
+        // Crear objeto de factura simplificado para selectedFactura
+        const facturaObj = {
+          id: facturaFull.id,
+          documento: facturaFull.documento,
+          noDocumento: facturaFull.noDocumento,
+          fechaDocumento: facturaFull.fechaDocumento,
+        };
+        setSelectedFactura(facturaObj);
+
+        // Precargar concepto
+        if (facturaFull.concepto) {
+          setSelectedConcepto(facturaFull.concepto);
+        }
+
+        // Precargar cliente
+        if (facturaFull.cliente) {
+          setSelectedCliente(facturaFull.cliente);
+          // Cargar clientes cache para el Select
+          devolucionVentaApi.obtenerClientes(sucursalActiva)
+            .then(setClientesCache)
+            .catch(() => {});
+        }
+
+        // Precargar almacén
+        if (facturaFull.almacen) {
+          setSelectedAlmacen(facturaFull.almacen);
+        }
+
+        // Setear valores del formulario
+        form.setFieldsValue({
+          concepto: facturaFull.concepto?.codigo || '',
+          cliente: facturaFull.cliente?.codigo || '',
+          almacen: facturaFull.almacen?.codigo || '',
+          fechaDocumento: dayjs(),
+          moneda: facturaFull.moneda?.nombre || 'Peso Dominicano',
+          tasa: facturaFull.tasa || 1,
+        });
+
+        // Actualizar data para moneda en TotalesCard
+        setData((prev) => {
+          if (!prev) return prev;
+          return { ...prev, moneda: facturaFull.moneda || null };
+        });
+
+        // Precargar detalles desde la PV
+        if (facturaFull.detalles && facturaFull.detalles.length > 0) {
+          const nuevosDetalles: DetalleDevolucionVentaDTO[] = facturaFull.detalles.map((d: any, idx: number) => ({
+            id: -(idx + 1),
+            idTransaccion: 0,
+            idAsociado: d.id,
+            codigo: d.codigo || '',
+            articulo: d.articulo || '',
+            referencia: d.referencia || '',
+            cantidad: 0, // Default 0 — el usuario elige cuánto devolver
+            cantidadOriginal: d.cantidad || 0, // Guardar cantidad original de la PV
+            costo: d.costo || 0,
+            precio: d.precio || 0,
+            subTotal: 0,
+            porcentajeDescuento: d.porcentajeDescuento || 0,
+            descuento: 0,
+            porcentajeImpuesto: d.porcentajeImpuesto || 0,
+            impuestos: 0,
+            total: 0,
+            tipoArticulo: d.tipoArticulo || 'Producto',
+            tieneVencimiento: d.tieneVencimiento || false,
+            familia: d.familia,
+            medida: d.medida,
+            impuesto: d.impuesto,
+          }));
+          setDetalles(nuevosDetalles.map((d) => calcularFila(d)));
+          message.success(`Se cargaron ${nuevosDetalles.length} detalles de la factura POS`);
+        }
+      } catch (err: any) {
+        const msg = extraerMensajeError(err, 'Error al cargar la factura POS');
+        message.error(msg);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    cargarDesdePV();
+  }, [mode, pvId, sucursalActiva, form]);
+
   // ===== Handlers =====
   const handleCancelar = () => {
     Modal.confirm({
@@ -421,6 +524,14 @@ const DevolucionVentaFormulario: React.FC = () => {
     if (detalles.length === 0) return 'No se puede crear un documento de DEVOLUCIÓN VENTA sin detalle.';
     if (!detalles.some((d) => (d.cantidad || 0) > 0)) return 'Debe tener al menos un detalle con cantidad > 0';
 
+    // Si viene desde PV, validar que ninguna cantidad a devolver exceda la cantidad original
+    if (desdePV) {
+      const excedido = detalles.find((d) => (d.cantidadOriginal || 0) > 0 && (d.cantidad || 0) > (d.cantidadOriginal || 0));
+      if (excedido) {
+        return `La cantidad a devolver del artículo "${excedido.articulo}" (${excedido.cantidad}) excede la cantidad original de la factura (${excedido.cantidadOriginal})`;
+      }
+    }
+
     const fecha = values.fechaDocumento;
     if (fecha) {
       const f = typeof fecha === 'object' && fecha.toDate ? fecha.toDate() : new Date(fecha);
@@ -443,10 +554,22 @@ const DevolucionVentaFormulario: React.FC = () => {
         : values.fechaDocumento)
       : toISOFormat(new Date());
 
-    const totalSub = detalles.reduce((s, d) => s + (d.subTotal || 0), 0);
-    const totalDesc = detalles.reduce((s, d) => s + (d.descuento || 0), 0);
-    const totalImp = detalles.reduce((s, d) => s + (d.impuestos || 0), 0);
-    const total = detalles.reduce((s, d) => s + (d.total || 0), 0);
+    // Filtrar solo detalles con cantidad > 0 para enviar al backend
+    const detallesValidos = detalles
+      .filter((d) => (d.cantidad || 0) > 0)
+      .map((d) => {
+        const calculado = calcularFila(d);
+        // Cuando la devolución es desde PV, incluir devuelto (cantidad a devolver)
+        if (desdePV) {
+          return { ...calculado, devuelto: d.cantidad };
+        }
+        return calculado;
+      });
+
+    const totalSub = detallesValidos.reduce((s, d) => s + (d.subTotal || 0), 0);
+    const totalDesc = detallesValidos.reduce((s, d) => s + (d.descuento || 0), 0);
+    const totalImp = detallesValidos.reduce((s, d) => s + (d.impuestos || 0), 0);
+    const total = detallesValidos.reduce((s, d) => s + (d.total || 0), 0);
 
     return {
       id: base.id || 0,
@@ -474,7 +597,8 @@ const DevolucionVentaFormulario: React.FC = () => {
         ? { nombre: clienteSel.nombre, codigo: clienteSel.codigo, identificacion: clienteSel.identificacion || '', telefono: clienteSel.telefono, direccion: clienteSel.direccion }
         : { nombre: '', codigo: '', identificacion: '' },
       factura: selectedFactura || null,
-      detalles: detalles.map((d) => calcularFila(d)),
+      sucursal: base.sucursal || { nombre: '', codigo: '', identificacion: '' },
+      detalles: detallesValidos,
       asientos: base.asientos || [],
       logs: base.logs || [],
     };
@@ -520,13 +644,23 @@ const DevolucionVentaFormulario: React.FC = () => {
 
     setSaving(true);
     try {
-      const dto = construirDTO();
       if (mode === 'crear') {
-        const result = await devolucionVentaApi.crear(sucursalActiva, dto);
-        message.success('Devolución de venta creada exitosamente');
-        navigationConfirmedRef.current = true;
-        navigate(`/FDEV/${result.id}`, { replace: true });
+        if (desdePV && pvId) {
+          const dto = construirDTO();
+          const detallesValidos = dto.detalles || [];
+          const result = await devolucionVentaApi.crearDesdePV(sucursalActiva, parseInt(pvId), { detalles: detallesValidos });
+          message.success('Devolución de venta creada exitosamente');
+          navigationConfirmedRef.current = true;
+          navigate(`/FDEV/${result.id}`, { replace: true });
+        } else {
+          const dto = construirDTO();
+          const result = await devolucionVentaApi.crear(sucursalActiva, dto);
+          message.success('Devolución de venta creada exitosamente');
+          navigationConfirmedRef.current = true;
+          navigate(`/FDEV/${result.id}`, { replace: true });
+        }
       } else {
+        const dto = construirDTO();
         await devolucionVentaApi.actualizar(sucursalActiva, dto);
         message.success('Devolución de venta actualizada exitosamente');
         navigationConfirmedRef.current = true;
@@ -559,7 +693,7 @@ const DevolucionVentaFormulario: React.FC = () => {
   const handleConceptoSelect = (concepto: ConceptoDTO) => {
     setSelectedConcepto(concepto);
 
-    // === ConfigurarMoneda (unificado con conceptoNombre) ===
+    // === ConfigurarMoneda (siempre desde concepto) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
       concepto: concepto.codigo,
@@ -654,13 +788,16 @@ const DevolucionVentaFormulario: React.FC = () => {
             okText: 'Sí, reemplazar',
             cancelText: 'No',
             onOk: () => {
+              setDesdePV(true);
               const nuevosDetalles: DetalleDevolucionVentaDTO[] = facturaFull.detalles.map((d: any, idx: number) => ({
                 id: -(idx + 1),
                 idTransaccion: 0,
+                idAsociado: d.id,
                 codigo: d.codigo || '',
                 articulo: d.articulo || '',
                 referencia: d.referencia || '',
-                cantidad: d.cantidad || 0,
+                cantidad: 0, // Default 0 — el usuario elige cuánto devolver
+                cantidadOriginal: d.cantidad || 0, // Cantidad original de la PV
                 costo: d.costo || 0,
                 precio: d.precio || 0,
                 subTotal: 0,
@@ -673,20 +810,23 @@ const DevolucionVentaFormulario: React.FC = () => {
                 tieneVencimiento: d.tieneVencimiento || false,
                 familia: d.familia,
                 medida: d.medida,
-                impuesto: d.impuesto || d.impuestos?.[0]?.impuesto,
+                impuesto: d.impuesto,
               }));
               setDetalles(nuevosDetalles.map((d) => calcularFila(d)));
               message.success(`Se cargaron ${nuevosDetalles.length} detalles de la factura`);
             },
           });
         } else {
+          setDesdePV(true);
           const nuevosDetalles: DetalleDevolucionVentaDTO[] = facturaFull.detalles.map((d: any, idx: number) => ({
             id: -(idx + 1),
             idTransaccion: 0,
+            idAsociado: d.id,
             codigo: d.codigo || '',
             articulo: d.articulo || '',
             referencia: d.referencia || '',
-            cantidad: d.cantidad || 0,
+            cantidad: 0, // Default 0 — el usuario elige cuánto devolver
+            cantidadOriginal: d.cantidad || 0, // Cantidad original de la PV
             costo: d.costo || 0,
             precio: d.precio || 0,
             subTotal: 0,
@@ -699,7 +839,7 @@ const DevolucionVentaFormulario: React.FC = () => {
             tieneVencimiento: d.tieneVencimiento || false,
             familia: d.familia,
             medida: d.medida,
-            impuesto: d.impuesto || d.impuestos?.[0]?.impuesto,
+            impuesto: d.impuesto,
           }));
           setDetalles(nuevosDetalles.map((d) => calcularFila(d)));
           message.success(`Se cargaron ${nuevosDetalles.length} detalles de la factura`);
@@ -712,6 +852,7 @@ const DevolucionVentaFormulario: React.FC = () => {
 
   const handleFacturaClear = () => {
     setSelectedFactura(null);
+    setDesdePV(false);
     form.setFieldsValue({ referencia: '' });
   };
 
@@ -957,8 +1098,26 @@ const DevolucionVentaFormulario: React.FC = () => {
         );
       },
     },
+    // Columna "Cant. Original" — solo cuando la DEV viene desde PV
+    ...(desdePV ? [{
+      title: 'Cant. Original',
+      key: 'cantidadOriginal',
+      width: 100,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: DetalleDevolucionVentaDTO) => (
+        <div style={{ fontSize: 13 }}>
+          <span>{formatNumber(record.cantidadOriginal || 0)}</span>
+          {record.medida?.nombre && (
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right' }}>
+              {toTitleCase(record.medida.nombre)}
+            </div>
+          )}
+        </div>
+      ),
+    }] : []),
     {
-      title: 'Devuelto',
+      title: desdePV ? 'A Devolver' : 'Devuelto',
       dataIndex: 'cantidad',
       key: 'cantidad',
       width: 100,
@@ -972,7 +1131,7 @@ const DevolucionVentaFormulario: React.FC = () => {
             size="small"
             style={{ width: '100%' }}
             styles={{ input: { textAlign: 'right' } }}
-            min={0.01}
+            min={0}
             step={0.01}
             precision={2}
             controls={false}
@@ -1242,21 +1401,21 @@ const DevolucionVentaFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={15}>
             <Form.Item name="cliente" required style={{ marginBottom: 0 }}>
               <FloatingField label="Cliente" required>
-                <Select
-                  allowClear
-                  showSearch
-                  optionFilterProp="children"
-                  onChange={(val) => {
-                    const ent = clientesCache.find((e) => e.codigo === val);
-                    setSelectedCliente(ent || null);
-                  }}
-                >
-                  {clientesCache.map((ent) => (
-                    <Select.Option key={ent.codigo} value={ent.codigo}>
-                      {toTitleCase(ent.nombre)}{ent.identificacion ? ` (${ent.identificacion})` : ''}
-                    </Select.Option>
-                  ))}
-                </Select>
+                  <Select
+                    allowClear
+                    showSearch
+                    optionFilterProp="children"
+                    onChange={(val) => {
+                      const ent = clientesCache.find((e) => e.codigo === val);
+                      setSelectedCliente(ent || null);
+                    }}
+                  >
+                    {clientesCache.map((ent) => (
+                      <Select.Option key={ent.codigo} value={ent.codigo}>
+                        {toTitleCase(ent.nombre)}{ent.identificacion ? ` (${ent.identificacion})` : ''}
+                      </Select.Option>
+                    ))}
+                  </Select>
               </FloatingField>
             </Form.Item>
           </Col>
@@ -1351,6 +1510,8 @@ const DevolucionVentaFormulario: React.FC = () => {
             </Form.Item>
           </Col>
         </Row>
+            <Form.Item name="ncf" hidden><Input /></Form.Item>
+            <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
       </Form>
         </Col>
         <Col xs={24} xxl={6}>
@@ -1374,6 +1535,26 @@ const DevolucionVentaFormulario: React.FC = () => {
   return (
     <div>
       <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
+
+      {desdePV && selectedFactura && (
+        <Alert
+          message={
+            <span>
+              Devolución desde PV:{' '}
+              <Text strong>
+                {typeof selectedFactura.documento === 'object'
+                  ? `${selectedFactura.documento?.codigo || ''}-${selectedFactura.noDocumento || ''}`
+                  : selectedFactura.documento || `PV-${selectedFactura.noDocumento}`}
+              </Text>
+            </span>
+          }
+          type="info"
+          showIcon
+          icon={<RollbackOutlined />}
+          style={{ marginBottom: 16 }}
+          closable={false}
+        />
+      )}
 
       {loadingError && (
         <Alert

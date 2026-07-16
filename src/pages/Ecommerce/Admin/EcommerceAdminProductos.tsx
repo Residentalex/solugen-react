@@ -36,7 +36,7 @@ const EcommerceAdminProductos: React.FC = () => {
       const cats = await ecommerceApi.adminObtenerCategorias();
       setCategorias(cats.filter((c) => c.activo));
     } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar categorÃ­as');
+      message.error(err?.response?.data?.errorMessage || 'Error al cargar categorías');
     }
   }, []);
 
@@ -183,7 +183,7 @@ const EcommerceAdminProductos: React.FC = () => {
       ),
     },
     {
-      title: 'CÃ³digo',
+      title: 'Código',
       dataIndex: 'codPro',
       key: 'codPro',
       width: 120,
@@ -197,7 +197,7 @@ const EcommerceAdminProductos: React.FC = () => {
       render: (val: string) => <Text>{val}</Text>,
     },
     {
-      title: 'CategorÃ­a',
+      title: 'Categoría',
       dataIndex: 'categoriaNombre',
       key: 'categoriaNombre',
       width: 140,
@@ -243,7 +243,7 @@ const EcommerceAdminProductos: React.FC = () => {
       render: (val: number) => <Text>{val}</Text>,
     },
     {
-      title: 'En CatÃ¡logo',
+      title: 'En Catálogo',
       dataIndex: 'enCatalogo',
       key: 'enCatalogo',
       width: 110,
@@ -277,7 +277,7 @@ const EcommerceAdminProductos: React.FC = () => {
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
             <Select
-              placeholder="CategorÃ­a"
+              placeholder="Categoría"
               allowClear
               style={{ width: 180 }}
               value={categoriaFiltro || undefined}
@@ -285,13 +285,13 @@ const EcommerceAdminProductos: React.FC = () => {
               options={categorias.map((c) => ({ value: c.nombre, label: c.nombre }))}
             />
             <Select
-              placeholder="En CatÃ¡logo"
+              placeholder="En Catálogo"
               style={{ width: 140 }}
               value={catalogoFiltro}
               onChange={(v) => { setCatalogoFiltro(v); setPage(1); }}
               options={[
                 { value: 'todos', label: 'Todos' },
-                { value: 'si', label: 'SÃ­' },
+                { value: 'si', label: 'Sí' },
                 { value: 'no', label: 'No' },
               ]}
             />
@@ -302,7 +302,7 @@ const EcommerceAdminProductos: React.FC = () => {
               onChange={(v) => { setDestacadoFiltro(v); setPage(1); }}
               options={[
                 { value: 'todos', label: 'Todos' },
-                { value: 'si', label: 'SÃ­' },
+                { value: 'si', label: 'Sí' },
                 { value: 'no', label: 'No' },
               ]}
             />
@@ -355,7 +355,7 @@ const EcommerceAdminProductos: React.FC = () => {
               min={0}
               precision={2}
               prefix="$"
-              placeholder="Dejar vacÃ­o para quitar oferta"
+              placeholder="Dejar vacío para quitar oferta"
             />
           </Form.Item>
         </Form>

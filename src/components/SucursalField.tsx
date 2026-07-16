@@ -9,15 +9,18 @@ const { Text } = Typography;
 
 interface Props {
   codigoSucursal?: string | null;
+  /** Objeto sucursal completo como fallback cuando codigoSucursal es null */
+  sucursal?: { idExterno?: string } | null;
 }
 
-const SucursalField: React.FC<Props> = ({ codigoSucursal }) => {
+const SucursalField: React.FC<Props> = ({ codigoSucursal, sucursal }) => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const setSucursalActiva = useAuthStore((s) => s.setSucursalActiva);
   const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
 
-  const sucursalNumero = codigoSucursalANumero(codigoSucursal);
-  const nombre = obtenerNombreSucursal(codigoSucursal);
+  const codigo = codigoSucursal || sucursal?.idExterno;
+  const sucursalNumero = codigoSucursalANumero(codigo);
+  const nombre = obtenerNombreSucursal(codigo);
 
   if (sucursalNumero === null) return <>{'Consolidado'}</>;
 

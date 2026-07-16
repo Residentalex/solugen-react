@@ -659,7 +659,7 @@ const Automatizaciones: React.FC = () => {
         sucursal ? <Tag color="default">{sucursal}</Tag> : <Text className="paces-text-secondary">-</Text>,
     },
     {
-      title: 'Ãšltimo Estado',
+      title: 'Último Estado',
       dataIndex: 'ultimoEstado',
       key: 'ultimoEstado',
       width: 150,
@@ -914,7 +914,7 @@ const Automatizaciones: React.FC = () => {
       acciones={
         <Space size={8}>
           <Text className="paces-text-secondary" style={{ fontSize: 13 }}>
-            Auto Â· 30s
+            Auto · 30s
           </Text>
           <Switch
             size="small"
@@ -1026,7 +1026,7 @@ const Automatizaciones: React.FC = () => {
           <Descriptions.Item label="Cron">
             <Text code>{detalleJobModal.job.cron}</Text>
           </Descriptions.Item>
-          <Descriptions.Item label="Ãšltimo Estado">
+          <Descriptions.Item label="Último Estado">
             <Badge status={ESTADO_BADGE[detalleJobModal.job.ultimoEstado]?.status || 'default'} />
             {ESTADO_BADGE[detalleJobModal.job.ultimoEstado]?.text || detalleJobModal.job.ultimoEstado}
           </Descriptions.Item>
@@ -1374,10 +1374,10 @@ const Automatizaciones: React.FC = () => {
             />
           )}
 
-          {/* â”€â”€ Zona B: Â¿Donde se ejecuta? â”€â”€ */}
+          {/* ─── Zona B: ¿Donde se ejecuta? ─── */}
           <div style={{ marginBottom: 20 }}>
             <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
-              1. Â¿Donde se ejecuta?
+              1. ¿Donde se ejecuta?
             </Text>
             <Row gutter={16}>
               {selectedTemplate.parametros.map((param) => {
@@ -1432,10 +1432,10 @@ const Automatizaciones: React.FC = () => {
             </Row>
           </div>
 
-          {/* â”€â”€ Zona C: Â¿Con que frecuencia? â”€â”€ */}
+          {/* ─── Zona C: ¿Con que frecuencia? ─── */}
           <div>
             <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 12 }}>
-              2. Â¿Con que frecuencia?
+              2. ¿Con que frecuencia?
             </Text>
             <Segmented
               value={templateForm.frecuenciaTipo}
@@ -1495,7 +1495,7 @@ const Automatizaciones: React.FC = () => {
                     onClick={() => window.open('https://crontab.guru', '_blank')}
                     disabled={submitting}
                   >
-                    Â¿Ayuda?
+                    ¿Ayuda?
                   </Button>
                 </Tooltip>
               </div>

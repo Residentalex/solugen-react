@@ -967,7 +967,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                   {toTitleCase(documentoActivo.almacen?.nombre || '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:" span={3}>
                   <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
@@ -1163,7 +1163,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                   {toTitleCase(documentoActivo.suplidor?.nombre || documentoActivo.entidad?.nombre || '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} />
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Fecha Recibo:">
                   {documentoActivo.fechaEntrega ? formatDate(documentoActivo.fechaEntrega) : '-'}

@@ -68,7 +68,7 @@ export const ModalProgreso: React.FC<ModalProgresoProps> = ({
   completado,
   onClose,
 }) => {
-  // Mostrar solo los Ãºltimos 3 eventos
+  // Mostrar solo los últimos 3 eventos
   const eventosMostrados = (eventos || []).slice(-3);
 
   // Estado para animar entrada/salida de eventos
@@ -80,13 +80,13 @@ export const ModalProgreso: React.FC<ModalProgresoProps> = ({
     const prevLength = prevLengthRef.current;
 
     if (currentLength > 0) {
-      // El Ãºltimo item es el nuevo: animar entrada
+      // El último item es el nuevo: animar entrada
       const lastItem = eventosMostrados[currentLength - 1];
       const key = String(lastItem.jobId + lastItem.paso + currentLength);
       setAnimatingIds(prev => {
         const next = new Set(prev);
         next.add(key);
-        // Limpiar animaciones viejas despuÃ©s de 500ms
+        // Limpiar animaciones viejas después de 500ms
         setTimeout(() => {
           setAnimatingIds(old => {
             const cleaned = new Set(old);

@@ -111,6 +111,7 @@ export interface DevolucionCompraFullDTO {
   moneda: MonedaDTO | null;
   documento: DocumentoDTO;
 
+  sucursal?: { codigo?: string; nombre?: string; identificacion?: string };
   subTotal: number;
   descuento: number;
   impuestos: number;

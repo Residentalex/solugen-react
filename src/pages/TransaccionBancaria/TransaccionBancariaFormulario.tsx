@@ -544,6 +544,15 @@ const TransaccionBancariaFormulario: React.FC = () => {
       }
     }
 
+    const docCodigo = data?.documento?.codigo || selectedConcepto?.docAGenerar || '';
+    const docConfig = docCodigo ? useCompanyStore.getState().data.documentos?.find((d: any) => d.codigo === docCodigo) : undefined;
+    if (docCodigo) {
+      dto.documento = {
+        codigo: docCodigo,
+        origenCuenta: data?.documento?.origenCuenta ?? docConfig?.origenCuenta ?? OrigenCuenta.Desconocido,
+      };
+    }
+
     return dto;
   };
 

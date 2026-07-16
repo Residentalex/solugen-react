@@ -465,7 +465,7 @@ const ReciboIngresoDetalle: React.FC = () => {
                 <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={data.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
                 <Descriptions.Item label="Sucursal">
-                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                  <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
                 </Descriptions.Item>
               </Descriptions>
               {(data.nota) && (
@@ -577,7 +577,7 @@ const ReciboIngresoDetalle: React.FC = () => {
             <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={data.concepto} /></Descriptions.Item>
             <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
             <Descriptions.Item label="Sucursal">
-                  <SucursalField codigoSucursal={data.codigoSucursal} />
+                  <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
                 </Descriptions.Item>
             </Descriptions>
             {(data.nota) && (

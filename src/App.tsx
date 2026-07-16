@@ -24,6 +24,7 @@ import DevolucionVenta from './pages/DevolucionVenta/DevolucionVenta';
 import DevolucionVentaDetalle from './pages/DevolucionVenta/DevolucionVentaDetalle';
 import DevolucionVentaFormulario from './pages/DevolucionVenta/DevolucionVentaFormulario';
 import ReporteDevolucionVenta from './pages/ReporteDevolucionVenta/ReporteDevolucionVenta';
+import GeneradorOrdenCompraReporte from './pages/GeneradorOrdenCompraReporte/GeneradorOrdenCompraReporte';
 import CotizacionVenta from './pages/CotizacionVenta/CotizacionVenta';
 import CotizacionVentaFormulario from './pages/CotizacionVenta/CotizacionVentaFormulario';
 import FacturaPOS from './pages/FacturaPOS/FacturaPOS';
@@ -75,6 +76,7 @@ import CuentaContableDetalle from './pages/CuentasContables/CuentaContableDetall
 import Impuestos from './pages/Impuestos/Impuestos';
 import AsientosContables from './pages/AsientosContables/AsientosContables';
 import AsientoContableDetalle from './pages/AsientosContables/AsientoContableDetalle';
+import AsientoContableFormulario from './pages/AsientosContables/AsientoContableFormulario';
 import CFacturasElectronicas from './pages/DGII/CFacturasElectronicas';
 import CierreFiscal from './pages/CierreFiscal/CierreFiscal';
 import CierreFiscalDetalle from './pages/CierreFiscal/CierreFiscalDetalle';
@@ -129,6 +131,7 @@ import FacturasVencidas from './pages/FacturasVencidas/FacturasVencidas';
 import MayorAuxiliar from './pages/MayorAuxiliar/MayorAuxiliar';
 import TransaccionNoCuadrada from './pages/TransaccionNoCuadrada/TransaccionNoCuadrada';
 import IntegridadAsientos from './pages/IntegridadAsientos/IntegridadAsientos';
+import ReporteIntegridadAuxiliares from './pages/ReporteIntegridadAuxiliares/ReporteIntegridadAuxiliares';
 import DocumentosAnulados from './pages/DocumentosAnulados/DocumentosAnulados';
 import CierreInventario from './pages/CierreInventario/CierreInventario';
 import CierreDetalle from './pages/CierreInventario/CierreDetalle';
@@ -163,6 +166,8 @@ import EcommerceAdminConfig from './pages/Ecommerce/Admin/EcommerceAdminConfig';
 import ApiTokens from './pages/ApiTokens/ApiTokens';
 import DocumentosAutorizados from './pages/DocumentosAutorizados/DocumentosAutorizados';
 import DocumentosAplicados from './pages/DocumentosAplicados/DocumentosAplicados';
+import DocumentosCxPAutorizados from './pages/DocumentosCxPAutorizados/DocumentosCxPAutorizados';
+import DocumentosCxPAplicados from './pages/DocumentosCxPAplicados/DocumentosCxPAplicados';
 import TransferenciaSucursales from './pages/TransferenciaSucursales/TransferenciaSucursales';
 import Empresa from './pages/Configuracion/Empresa';
 
@@ -185,7 +190,7 @@ const PantallaGuard: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   // Si la ruta empieza con /saas/, ignorar ese prefijo
   const segmentos = location.pathname.split('/').filter(Boolean);
   const codigoRuta = segmentos[0] === 'saas' ? (segmentos[1] || '') : (segmentos[0] || '');
-  if (codigoRuta && !['dashboard', 'cambiar-clave', 'MPERFIL', 'MPerfil', 'notificaciones', 'MTicket', 'visualizar-consulta', 'MApiToken', 'Modulos'].includes(codigoRuta)) {
+  if (codigoRuta && !['dashboard', 'cambiar-clave', 'MPERFIL', 'MPerfil', 'notificaciones', 'MTicket', 'visualizar-consulta', 'MApiToken', 'Modulos', 'RGORC'].includes(codigoRuta)) {
     const tieneAcceso = pantallas.some((p) => p.codigo.toLowerCase() === codigoRuta.toLowerCase());
     if (!tieneAcceso) {
       return <Navigate to="/" replace />;
@@ -242,8 +247,11 @@ const App: React.FC = () => {
             <Route path="FDEV/:id/editar" element={<DevolucionVentaFormulario />} />
             <Route path="FDEV/:id" element={<DevolucionVentaDetalle />} />
             <Route path="RDEV" element={<ReporteDevolucionVenta />} />
+            <Route path="RGORC/:idExterno" element={<GeneradorOrdenCompraReporte />} />
             <Route path="RDocAutorizado" element={<DocumentosAutorizados />} />
             <Route path="RDocAplicado" element={<DocumentosAplicados />} />
+            <Route path="RDocCxPAutorizado" element={<DocumentosCxPAutorizados />} />
+            <Route path="RDocCxPAplicado" element={<DocumentosCxPAplicados />} />
             <Route path="RSAPENP" element={<TransferenciaSucursales />} />
             <Route path="FCotizacion" element={<CotizacionVenta />} />
             <Route path="FCotizacion/nuevo" element={<CotizacionVentaFormulario />} />
@@ -323,6 +331,8 @@ const App: React.FC = () => {
             <Route path="MCuentaContable/:noCuenta" element={<CuentaContableDetalle />} />
             <Route path="MImpuesto" element={<Impuestos />} />
             <Route path="FAsientoContable" element={<AsientosContables />} />
+            <Route path="FAsientoContable/nuevo" element={<AsientoContableFormulario />} />
+            <Route path="FAsientoContable/:id/editar" element={<AsientoContableFormulario />} />
             <Route path="FAsientoContable/:id" element={<AsientoContableDetalle />} />
             <Route path="CFacturasElectronicas" element={<CFacturasElectronicas />} />
             <Route path="MSecuenciaNCF" element={<SecuenciasNCF />} />
@@ -397,6 +407,7 @@ const App: React.FC = () => {
             <Route path="RMayorAux" element={<MayorAuxiliar />} />
             <Route path="RTransNoCuadrada" element={<TransaccionNoCuadrada />} />
             <Route path="RIntegridadAsientos" element={<IntegridadAsientos />} />
+            <Route path="RIntegridadAux" element={<ReporteIntegridadAuxiliares />} />
             <Route path="RDocumentosAnulados" element={<DocumentosAnulados />} />
             <Route path="ORepostear" element={<Repostear />} />
           <Route path="notificaciones" element={<Notificaciones />} />
@@ -460,8 +471,11 @@ const App: React.FC = () => {
             <Route path="FDEV/:id/editar" element={<DevolucionVentaFormulario />} />
             <Route path="FDEV/:id" element={<DevolucionVentaDetalle />} />
             <Route path="RDEV" element={<ReporteDevolucionVenta />} />
+            <Route path="RGORC/:idExterno" element={<GeneradorOrdenCompraReporte />} />
             <Route path="RDocAutorizado" element={<DocumentosAutorizados />} />
             <Route path="RDocAplicado" element={<DocumentosAplicados />} />
+            <Route path="RDocCxPAutorizado" element={<DocumentosCxPAutorizados />} />
+            <Route path="RDocCxPAplicado" element={<DocumentosCxPAplicados />} />
             <Route path="RSAPENP" element={<TransferenciaSucursales />} />
             <Route path="FCotizacion" element={<CotizacionVenta />} />
             <Route path="FCotizacion/nuevo" element={<CotizacionVentaFormulario />} />
@@ -541,6 +555,8 @@ const App: React.FC = () => {
             <Route path="MCuentaContable/:noCuenta" element={<CuentaContableDetalle />} />
             <Route path="MImpuesto" element={<Impuestos />} />
             <Route path="FAsientoContable" element={<AsientosContables />} />
+            <Route path="FAsientoContable/nuevo" element={<AsientoContableFormulario />} />
+            <Route path="FAsientoContable/:id/editar" element={<AsientoContableFormulario />} />
             <Route path="FAsientoContable/:id" element={<AsientoContableDetalle />} />
             <Route path="CFacturasElectronicas" element={<CFacturasElectronicas />} />
             <Route path="MSecuenciaNCF" element={<SecuenciasNCF />} />
@@ -615,6 +631,7 @@ const App: React.FC = () => {
             <Route path="RMayorAux" element={<MayorAuxiliar />} />
             <Route path="RTransNoCuadrada" element={<TransaccionNoCuadrada />} />
             <Route path="RIntegridadAsientos" element={<IntegridadAsientos />} />
+            <Route path="RIntegridadAux" element={<ReporteIntegridadAuxiliares />} />
             <Route path="RDocumentosAnulados" element={<DocumentosAnulados />} />
             <Route path="ORepostear" element={<Repostear />} />
           <Route path="notificaciones" element={<Notificaciones />} />

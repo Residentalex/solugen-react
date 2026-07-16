@@ -426,7 +426,7 @@ const FacturaPOSFormulario: React.FC = () => {
     setSelectedConcepto(concepto);
     setEditingField(null);
 
-    // === ConfigurarMoneda (unificado con conceptoNombre) ===
+    // === ConfigurarMoneda (siempre desde concepto) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
       concepto: concepto.codigo,
@@ -1150,6 +1150,9 @@ const FacturaPOSFormulario: React.FC = () => {
               impuestos={totales.impuestos}
               total={totales.total}
               hideTitle
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || getMonedaSucursalActiva().simbolo}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || getMonedaSucursalActiva().nombre}
+              tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </div>
         </Col>

@@ -546,9 +546,14 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       tipoEntidad,
       documento,
       concepto: selectedConcepto || { nombre: '', codigo: '' },
+      codigoTipo: selectedTipo?.codigo || values.tipo || '',
+      codigoEntidad: entidadSel?.codigo || selectedEntidad?.codigo || entidad.codigo || base.codigoEntidad || '',
+      codigoConcepto: selectedConcepto?.codigo || base.codigoConcepto || '',
+      codigoMoneda: (base.moneda || getMonedaSucursalActiva())?.codigo || base.codigoMoneda || '',
+      codigoSucursal: (selectedSucursal as any)?.idExterno || (selectedSucursal as any)?.codigo || base.codigoSucursal || '',
+      nombreEntidad: entidad.nombre || base.nombreEntidad || '',
       entidad,
       moneda: base.moneda || getMonedaSucursalActiva(),
-      codigoTipo: selectedTipo?.codigo || values.tipo || '',
       sucursal: selectedSucursal ?? undefined,
       // Colecciones
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
@@ -626,7 +631,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     // Cargar entidades según concepto
     cargarEntidades(concepto.codigo);
 
-    // === ConfigurarMoneda ===
+    // === ConfigurarMoneda (siempre desde concepto) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     const monedaFull = { nombre: monedaObj.nombre, simbolo: (monedaObj as any).simbolo || getMonedaSucursalActiva().simbolo, codigo: monedaObj.codigo };
     setData((prev: any) => {
@@ -978,7 +983,9 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
                   required
                   tieneDocumentosAsociados={transaccionesAsociadas.length > 0 || devoluciones.length > 0}
                   conceptoSeleccionado={!!selectedConcepto}
-                  onChange={(codigo, entidad) => setSelectedEntidad(entidad || null)}
+                  onChange={(codigo, entidad) => {
+                    setSelectedEntidad(entidad || null);
+                  }}
                 />
               </Form.Item>
             </div>
@@ -1174,6 +1181,9 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
               impuestos={totales.impuestos}
               total={totales.total}
               hideTitle
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || getMonedaSucursalActiva().simbolo}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || getMonedaSucursalActiva().nombre}
+              tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </div>
         </Col>

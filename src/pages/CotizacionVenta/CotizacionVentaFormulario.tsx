@@ -398,7 +398,7 @@ const CotizacionVentaFormulario: React.FC = () => {
     setSelectedConcepto(concepto);
     setEditingField(null);
 
-    // === ConfigurarMoneda (unificado con conceptoNombre) ===
+    // === ConfigurarMoneda (siempre desde concepto) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     form.setFieldsValue({
       concepto: concepto.codigo,
@@ -949,23 +949,23 @@ const CotizacionVentaFormulario: React.FC = () => {
           </Col>
           <Col xs={24} sm={12} lg={16}>
             <Form.Item name="cliente" required style={{ marginBottom: 0 }}>
-              <FloatingField label="Cliente" required>
-                <Select
-                  allowClear
-                  showSearch
-                  optionFilterProp="children"
-                  onChange={(val) => {
-                    const cli = clientesCache.find((e: any) => e.codigo === val);
-                    setSelectedCliente(cli || null);
-                  }}
-                >
-                  {clientesCache.map((cli: any) => (
-                    <Select.Option key={cli.codigo} value={cli.codigo}>
-                      {toTitleCase(cli.nombre)}{cli.identificacion ? ` (${cli.identificacion})` : ''}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </FloatingField>
+                  <FloatingField label="Cliente" required>
+                    <Select
+                      allowClear
+                      showSearch
+                      optionFilterProp="children"
+                      onChange={(val) => {
+                        const cli = clientesCache.find((e: any) => e.codigo === val);
+                        setSelectedCliente(cli || null);
+                      }}
+                    >
+                      {clientesCache.map((cli: any) => (
+                        <Select.Option key={cli.codigo} value={cli.codigo}>
+                          {toTitleCase(cli.nombre)}{cli.identificacion ? ` (${cli.identificacion})` : ''}
+                        </Select.Option>
+                      ))}
+                    </Select>
+                  </FloatingField>
             </Form.Item>
           </Col>
 
@@ -1080,6 +1080,9 @@ const CotizacionVentaFormulario: React.FC = () => {
               impuestos={totales.impuestos}
               total={totales.total}
               hideTitle
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || getMonedaSucursalActiva().simbolo}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || getMonedaSucursalActiva().nombre}
+              tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </div>
         </Col>

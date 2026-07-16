@@ -613,7 +613,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         ? { nombre: entidadSel.nombre, codigo: entidadSel.codigo, identificacion: entidadSel.identificacion || '', telefono: entidadSel.telefono, direccion: entidadSel.direccion }
         : { nombre: '', codigo: '', identificacion: '' },
       concepto: selectedConcepto || { nombre: '', codigo: '' },
-      moneda: selectedConcepto?.moneda || base.moneda || getMonedaSucursalActiva(),
+      moneda: base.moneda || selectedConcepto?.moneda || getMonedaSucursalActiva(),
       almacen: selectedAlmacen || { nombre: '', codigo: '' },
       suplidor: entidadSel || { nombre: '', codigo: '', identificacion: '' },
       sucursal: base.sucursal || { nombre: '', codigo: '', identificacion: '' },
@@ -754,8 +754,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       }
     }
 
-    // === ConfigurarMoneda ===
-    // Usar la moneda del concepto si viene, sino default a Peso Dominicano
+    // === ConfigurarMoneda (siempre desde concepto) ===
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     const monedaNombre = monedaObj.nombre;
     const tasaDefault = monedaObj.tasa ?? 1;
@@ -1863,14 +1862,14 @@ const EntradaAlmacenFormulario: React.FC = () => {
                         },
                       });
                     } else {
-                      setSelectedEntidad(ent || null);
-                      // Limpiar OC al cambiar de suplidor
-                      setSelectedOC(null);
-                      setOrdenCompraNoDoc('');
-                      form.setFieldsValue({ ordenCompra: '' });
-                      // Si requiere ORC, bloquear agregar fila; si no, desbloquear
-                      setAgregarFilaBloqueado(ent?.requiereORC === true);
-                    }
+                   setSelectedEntidad(ent || null);
+                        // Limpiar OC al cambiar de suplidor
+                       setSelectedOC(null);
+                       setOrdenCompraNoDoc('');
+                       form.setFieldsValue({ ordenCompra: '' });
+                       // Si requiere ORC, bloquear agregar fila; si no, desbloquear
+                       setAgregarFilaBloqueado(ent?.requiereORC === true);
+                     }
                   }}
                 >
                   {entidadesCache.map((ent) => (

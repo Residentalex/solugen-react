@@ -382,6 +382,8 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     return data.filter(
       (item) =>
         (item.noDocumento || '').toLowerCase().includes(term) ||
+        (item.tipoDocumento || '').toLowerCase().includes(term) ||
+        `${(item.tipoDocumento || '')}-${(item.noDocumento || '')}`.toLowerCase().includes(term) ||
         (item.ncf || '').toLowerCase().includes(term) ||
         (item.entidad?.nombre || item.nombreEntidad || '').toLowerCase().includes(term),
     );
@@ -483,7 +485,9 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     if (detallado) {
       headersParaExportar = ['Documento', 'NCF', 'Fecha', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
       excelData = agingData.map((item) => ({
-        [headersParaExportar[0]]: item.noDocumento || '',
+        [headersParaExportar[0]]: item.tipoDocumento && item.noDocumento
+          ? `${item.tipoDocumento}-${item.noDocumento}`
+          : item.noDocumento || '',
         [headersParaExportar[1]]: item.ncf || '',
         [headersParaExportar[2]]: formatDate(item.fechaDocumento),
         [headersParaExportar[3]]: item.total ?? 0,
@@ -538,10 +542,14 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
   const columnsDetallado: ColumnsType<AgingRow> = [
     {
       title: 'Documento',
-      dataIndex: 'noDocumento',
-      key: 'noDocumento',
-      width: 140,
-      render: (doc: string) => <Text strong>{toTitleCase(doc || '')}</Text>,
+      key: 'documento',
+      width: 180,
+      render: (_: any, record: TransaccionBalanceDTO) => {
+        const doc = record.tipoDocumento && record.noDocumento
+          ? `${record.tipoDocumento}-${record.noDocumento}`
+          : record.noDocumento || '';
+        return <Text strong>{doc}</Text>;
+      },
     },
     {
       title: 'NCF',

@@ -79,6 +79,7 @@ export interface DevolucionAsociadaDTO {
   documento?: string;
   fecha?: string;
   montoOriginal?: number;
+  pagado?: number;
   monto: number;         // monto asignado (subtotal)
   impuesto?: number;     // impuesto de la devolución
   esDocumentoInventario: boolean;

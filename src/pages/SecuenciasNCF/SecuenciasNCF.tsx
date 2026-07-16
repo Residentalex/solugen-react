@@ -107,7 +107,7 @@ const SecuenciasNCF: React.FC = () => {
   const filteredData = useMemo(() => {
     let result = [...(data || [])];
 
-    // BÃºsqueda por texto
+    // Búsqueda por texto
     if (searchText) {
       const q = searchText.toLowerCase();
       result = result.filter(
@@ -211,7 +211,7 @@ const SecuenciasNCF: React.FC = () => {
         return (
           <div>
             <Tooltip
-              title={`${usado.toLocaleString('es-DO')} de ${cantidad.toLocaleString('es-DO')} usados (${pct}%). Disponible: ${disponible.toLocaleString('es-DO')}. MÃ­nimo configurado: ${(record.minimo ?? 0).toLocaleString('es-DO')}.`}
+              title={`${usado.toLocaleString('es-DO')} de ${cantidad.toLocaleString('es-DO')} usados (${pct}%). Disponible: ${disponible.toLocaleString('es-DO')}. Mínimo configurado: ${(record.minimo ?? 0).toLocaleString('es-DO')}.`}
             >
               <Progress percent={pct} size="small" showInfo={false} strokeColor={color} />
             </Tooltip>
@@ -269,7 +269,7 @@ const SecuenciasNCF: React.FC = () => {
               <ClockCircleOutlined style={{ color: '#f1b44c' }} />
               <Text>{formatearFecha(val)}</Text>
               <Tag color="warning" style={{ marginLeft: 4 }}>
-                Vence en {dias} dÃ­a{dias !== 1 ? 's' : ''}
+                Vence en {dias} día{dias !== 1 ? 's' : ''}
               </Tag>
             </Space>
           );
@@ -279,7 +279,7 @@ const SecuenciasNCF: React.FC = () => {
             <Space>
               <Text>{formatearFecha(val)}</Text>
               <Text type="secondary" style={{ fontSize: 11 }}>
-                en {dias} dÃ­a{dias !== 1 ? 's' : ''}
+                en {dias} día{dias !== 1 ? 's' : ''}
               </Text>
             </Space>
           );
@@ -365,8 +365,8 @@ const SecuenciasNCF: React.FC = () => {
                 options={
                   [
                     { value: "todas", label: "Todas" },
-                    { value: "30", label: "Vence en 30 dÃ­as" },
-                    { value: "90", label: "Vence en 90 dÃ­as" },
+                    { value: "30", label: "Vence en 30 días" },
+                    { value: "90", label: "Vence en 90 días" },
                     { value: "vencida", label: "Vencida" },
                   ]
                 }
@@ -457,7 +457,7 @@ const SecuenciasNCF: React.FC = () => {
               </Text>
             </div>
 
-            {/* SecciÃ³n Consumo */}
+            {/* Sección Consumo */}
             <Divider>
               Consumo
             </Divider>
@@ -489,7 +489,7 @@ const SecuenciasNCF: React.FC = () => {
                     <Descriptions.Item label="Cantidad total">
                       {cantidad.toLocaleString('es-DO')}
                     </Descriptions.Item>
-                    <Descriptions.Item label="MÃ­nimo">
+                    <Descriptions.Item label="Mínimo">
                       <Space>
                         <span>{minimo.toLocaleString('es-DO')}</span>
                         {disponible > minimo ? (
@@ -504,7 +504,7 @@ const SecuenciasNCF: React.FC = () => {
               );
             })()}
 
-            {/* SecciÃ³n Rango */}
+            {/* Sección Rango */}
             <Divider>
               Rango de secuencia
             </Divider>
@@ -515,12 +515,12 @@ const SecuenciasNCF: React.FC = () => {
               <Descriptions.Item label="Final">
                 <Text style={{ fontFamily: 'monospace' }}>{detalleItem.secuenciaFinal}</Text>
               </Descriptions.Item>
-              <Descriptions.Item label="DÃ­gitos">
+              <Descriptions.Item label="Dígitos">
                 <Text style={{ fontFamily: 'monospace' }}>{detalleItem.digitos}</Text>
               </Descriptions.Item>
             </Descriptions>
 
-            {/* SecciÃ³n Vigencia */}
+            {/* Sección Vigencia */}
             <Divider>
               Vigencia
             </Divider>
@@ -536,7 +536,7 @@ const SecuenciasNCF: React.FC = () => {
                       if (dias <= 30)
                         return (
                           <Tag color="warning">
-                            Vence en {dias} dÃ­a{dias !== 1 ? 's' : ''}
+                            Vence en {dias} día{dias !== 1 ? 's' : ''}
                           </Tag>
                         );
                       return null;
@@ -563,11 +563,11 @@ const SecuenciasNCF: React.FC = () => {
         }
       >
         <p>
-          La funcionalidad de registro de secuencias NCF estÃ¡ en desarrollo.
+          La funcionalidad de registro de secuencias NCF está en desarrollo.
         </p>
         <p>
-          Mientras tanto, las secuencias se gestionan desde el mÃ³dulo Desktop o
-          mediante importaciÃ³n desde DGII.
+          Mientras tanto, las secuencias se gestionan desde el módulo Desktop o
+          mediante importación desde DGII.
         </p>
       </Modal>
     </>

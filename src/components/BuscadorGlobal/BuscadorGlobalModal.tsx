@@ -29,27 +29,27 @@ const CHIPS_ACCESO_RAPIDO = [
   { label: 'ðŸ‘¤  Clientes', key: 'MCliente' as const },
   { label: 'ðŸ¢  Entidades', key: 'entidades' as const },
   { label: 'ðŸ“„  Documentos', key: 'documentos' as const },
-  { label: 'ðŸ”—  MÃ³dulos', key: '' as const },
+  { label: '🔗  Módulos', key: '' as const },
 ];
 
 const PREFIJOS_DOC = ['ENP', 'SAP', 'FAC', 'PV', 'RDE', 'ORC', 'DVC', 'TRP', 'DEV', 'COTV', 'NCSUP', 'NCCLI', 'NDSUP', 'NDCLI', 'DBA', 'RI', 'SPA'];
 
 const DOC_PREFIX_ROUTE: Record<string, string> = {
-  ENP: 'FENP',   // Entrada de AlmacÃ©n
-  SAP: 'FSAP',   // Salida de AlmacÃ©n
+  ENP: 'FENP',   // Entrada de Almacén
+  SAP: 'FSAP',   // Salida de Almacén
   FAC: 'FFAC',   // Factura Cliente
   PV: 'FPV',     // Factura POS
   RDE: 'FRDE',   // Factura Suplidor
   ORC: 'FORC',   // Orden de Compra
-  DVC: 'FDVC',   // DevoluciÃ³n de Compra
-  TRP: 'FTRP',   // Transferencia de AlmacÃ©n
-  DEV: 'FDEV',   // DevoluciÃ³n de Venta
+  DVC: 'FDVC',   // Devolución de Compra
+  TRP: 'FTRP',   // Transferencia de Almacén
+  DEV: 'FDEV',   // Devolución de Venta
   COTV: 'FCotizacion', // Cotizaciones
-  NCSUP: 'FNCSUP', // Nota CrÃ©dito CXP
-  NCCLI: 'FNCCLI', // Nota CrÃ©dito CXC
-  NDSUP: 'FNDSUP', // Nota DÃ©bito CXP
-  NDCLI: 'FNDCLI', // Nota DÃ©bito CXC
-  DBA: 'FDBASUP',  // DistribuciÃ³n Balance
+  NCSUP: 'FNCSUP', // Nota Crédito CXP
+  NCCLI: 'FNCCLI', // Nota Crédito CXC
+  NDSUP: 'FNDSUP', // Nota Débito CXP
+  NDCLI: 'FNDCLI', // Nota Débito CXC
+  DBA: 'FDBASUP',  // Distribución Balance
   RI: 'FRI',      // Recibo Ingreso
   SPA: 'FSPA',   // Solicitud de Pago
 };
@@ -101,12 +101,12 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // BÃºsqueda real contra APIs con resultados incrementales y agrupados por entidad
+  // Búsqueda real contra APIs con resultados incrementales y agrupados por entidad
   const handleSearch = React.useCallback(async (texto: string) => {
     const q = texto.trim().replace(/\*/g, '%');
     const tieneFiltros = filtrosActivos.size > 0;
 
-    // Detectar prefijo de tipo de documento (ej: "enp-89603" â†’ tipoDoc=ENP, valor=89603)
+    // Detectar prefijo de tipo de documento (ej: "enp-89603" → tipoDoc=ENP, valor=89603)
     let docPrefijoTipo = '';
     let docPrefijoValor = q;
     const prefijoMatch = q.match(/^([a-z]+)-(.*)/i);
@@ -120,7 +120,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
 
     if (q.length < 2 && !tieneFiltros) return;
 
-    // Cancelar bÃºsqueda anterior
+    // Cancelar búsqueda anterior
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = new AbortController();
 
@@ -138,13 +138,13 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
     const entidadesMap = new Map<string, any>();
     const promesas: Promise<void>[] = [];
 
-    // Determinar quÃ© tipos buscar segÃºn filtros activos
+    // Determinar qué tipos buscar según filtros activos
     const buscarTodo = filtrosActivos.size === 0;
     const buscarProductos = buscarTodo || filtrosActivos.has('productos');
     const buscarDocumentos = buscarTodo || filtrosActivos.has('documentos');
     const buscarEntidades = buscarTodo || filtrosActivos.has('entidades');
 
-    // Helper para convertir maps a record y actualizar estado (mÃ¡x. 10 total)
+    // Helper para convertir maps a record y actualizar estado (máx. 10 total)
     const actualizarResultados = () => {
       const r: Record<string, any[]> = {};
       let count = 0;
@@ -178,7 +178,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
             if (!existing.sucursales.includes(sucNombre)) existing.sucursales.push(sucNombre);
           } else {
             const subtitulo = origen === 'codigo'
-              ? `CÃ³digo: ${key}`
+              ? `Código: ${key}`
               : origen === 'referencia'
                 ? `Ref: ${item.referencia || item.refFabricante || 'N/A'}`
                 : `Equiv: ${q}`;
@@ -223,10 +223,10 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
             if (!existing.sucursales.includes(sucNombre)) existing.sucursales.push(sucNombre);
           } else {
             const subtitulo = origen === 'documento'
-              ? `${item.concepto || ''} Â· ${item.entidad || ''} Â· ${item.fecha ? new Date(item.fecha).toLocaleDateString('es-DO') : ''}`
+              ? `${item.concepto || ''} · ${item.entidad || ''} · ${item.fecha ? new Date(item.fecha).toLocaleDateString('es-DO') : ''}`
               : origen === 'ncf'
-                ? `NCF: ${item.ncf || 'N/A'} Â· ${item.concepto || ''}`
-                : `Doc Ref: ${item.referencia || 'N/A'} Â· ${item.entidad || ''}`;
+                ? `NCF: ${item.ncf || 'N/A'} · ${item.concepto || ''}`
+                : `Doc Ref: ${item.referencia || 'N/A'} · ${item.entidad || ''}`;
             documentosMap.set(key, {
               id: `doc-${key}`,
               titulo: item.documento,
@@ -270,7 +270,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
             entidadesMap.set(key, {
               id: `ent-${key}`,
               titulo: item.nombre || '',
-              subtitulo: `RNC: ${item.identificacion || 'N/A'} Â· ${item.descripcion || item.entidad || ''}`,
+              subtitulo: `RNC: ${item.identificacion || 'N/A'} · ${item.descripcion || item.entidad || ''}`,
               tag: item.codigo || '',
               tagColor: 'orange',
               tipo: 'entidad',
@@ -290,7 +290,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
 
     await Promise.allSettled(promesas);
 
-    // Limitar a mÃ¡ximo 10 resultados en total
+    // Limitar a máximo 10 resultados en total
     const MAX_TOTAL = 10;
     let totalCount = 0;
     const productosArray = Array.from(productosMap.values());
@@ -317,7 +317,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
     setSearching(false);
   }, [sucursalesPermitidas, filtrosActivos]);
 
-  // Lista plana para navegaciÃ³n con teclado
+  // Lista plana para navegación con teclado
   const allResults = React.useMemo(() => {
     if (!resultados) return [];
     const items: Array<{ id: string; section: string }> = [];
@@ -329,7 +329,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
     return items;
   }, [resultados]);
 
-  // Calcular contadores por secciÃ³n
+  // Calcular contadores por sección
   const contadores = React.useMemo(() => {
     if (!resultados) return {};
     const c: Record<string, number> = {};
@@ -355,12 +355,12 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
   };
 
   const handleItemClick = (item: any) => {
-    // Validar permisos: Â¿tiene acceso a la pantalla?
+    // Validar permisos: ¿tiene acceso a la pantalla?
     const tieneAcceso = (codigoPantalla: string): boolean => {
       return usuario?.pantallas?.some((p: any) => p.codigo?.toUpperCase() === codigoPantalla?.toUpperCase()) ?? false;
     };
 
-    // Cambiar a la sucursal donde se encontrÃ³
+    // Cambiar a la sucursal donde se encontró
     if (item.sucursalCodigo !== undefined) {
       setSucursalActiva(item.sucursalCodigo);
     }
@@ -411,7 +411,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
       style={{ top: 80 }}
     >
       <Input
-        placeholder="Â¿QuÃ© estÃ¡s buscando?"
+        placeholder="¿Qué estás buscando?"
         size="large"
         variant="borderless"
         prefix={<SearchOutlined style={{ color: 'var(--paces-text-secondary)', fontSize: 20 }} />}
@@ -481,7 +481,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
         </div>
       )}
 
-      {/* Estado vacÃ­o: sin texto */}
+      {/* Estado vacío: sin texto */}
       {searchText.length === 0 && !searched && (
         <>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 20 }}>
@@ -500,7 +500,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
                   } : {}),
                 }}
                 onClick={() => {
-                  // Toggle filtro sin ejecutar bÃºsqueda
+                  // Toggle filtro sin ejecutar búsqueda
                   if (item.key === 'productos' || item.key === 'entidades' || item.key === 'documentos') {
                     setFiltrosActivos((prev) => {
                       const next = new Set(prev);
@@ -535,7 +535,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
         </div>
       )}
 
-      {/* Spinner de bÃºsqueda - compacto */}
+      {/* Spinner de búsqueda - compacto */}
       {searching && (
         <div style={{ textAlign: 'center', padding: '20px 0' }}>
           <Spin size="small" />
@@ -554,7 +554,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
           <Text type="secondary">Sin resultados para &quot;{searchText}&quot;</Text>
           <br />
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Revisa la ortografÃ­a o prueba con tÃ©rminos mÃ¡s generales
+            Revisa la ortografía o prueba con términos más generales
           </Text>
         </div>
       )}

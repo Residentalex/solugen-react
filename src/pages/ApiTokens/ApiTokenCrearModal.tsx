@@ -26,9 +26,9 @@ const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, 
   const handleClose = useCallback(() => {
     if (modalState === 'created' && !copied && !closingConfirmed) {
       Modal.confirm({
-        title: 'Â¿Copiaste el token?',
-        content: 'El token solo se muestra una vez. Si no lo copiaste, tendrÃ¡s que generar uno nuevo.',
-        okText: 'SÃ­, cerrar',
+        title: '¿Copiaste el token?',
+        content: 'El token solo se muestra una vez. Si no lo copiaste, tendrás que generar uno nuevo.',
+        okText: 'Sí, cerrar',
         cancelText: 'Cancelar',
         onOk: () => {
           setClosingConfirmed(true);
@@ -136,7 +136,7 @@ const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, 
             label="Nombre del token"
             rules={[{ required: true, message: 'El nombre es obligatorio' }]}
           >
-            <Input placeholder="Ej. IntegraciÃ³n POS" maxLength={100} />
+            <Input placeholder="Ej. Integración POS" maxLength={100} />
           </Form.Item>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -153,7 +153,7 @@ const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, 
           <Alert
             type="warning"
             showIcon
-            message="Guarda este token. No podrÃ¡s verlo de nuevo."
+            message="Guarda este token. No podrás verlo de nuevo."
             style={{ marginBottom: 16 }}
           />
 
