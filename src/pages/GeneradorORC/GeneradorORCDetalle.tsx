@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Row, Col, Divider, Grid, message, Typography, Descriptions, Alert, Input, Tooltip, Space,
-  Modal, Drawer, Avatar, Skeleton, Empty,
+  Modal, Drawer, Avatar, Skeleton, Empty, Dropdown,
 } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import {
   ArrowLeftOutlined,
   EditOutlined,
@@ -14,6 +15,8 @@ import {
   BarChartOutlined,
   ShopOutlined,
   ReloadOutlined,
+  DownOutlined,
+  FilePdfOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -23,6 +26,7 @@ import { generadorOrcApi } from '../../api/generadorOrcApi';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { apiClient } from '../../api/client';
 import type { GeneradorOrdenCompraDTO, DetalleGeneradorDTO } from '../../types/generadorOrc';
+import type { OrdenCompraVistaDTO } from '../../types/entradaAlmacen';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ErrorDetalle } from '../../components';
 import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
@@ -66,6 +70,8 @@ const GeneradorORCDetalle: React.FC = () => {
   const [detalleSearch, setDetalleSearch] = useState('');
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
   const [generando, setGenerando] = useState(false);
+  const [ordenesGeneradas, setOrdenesGeneradas] = useState<OrdenCompraVistaDTO[]>([]);
+  const [ordenesLoading, setOrdenesLoading] = useState(false);
 
   // Análisis / monitor
   const [analisisOpen, setAnalisisOpen] = useState(false);
@@ -183,6 +189,19 @@ const GeneradorORCDetalle: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  // Efecto: cargar ORCs generadas
+  useEffect(() => {
+    if (!id || !data) return;
+    setOrdenesLoading(true);
+    generadorOrcApi.obtenerOrdenes(sucursalActiva, id)
+      .then(setOrdenesGeneradas)
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al cargar órdenes de compra';
+        message.error(msg);
+      })
+      .finally(() => setOrdenesLoading(false));
+  }, [id, sucursalActiva, data]);
 
   // Efecto: cargar análisis cuando se abre el Drawer
   useEffect(() => {
@@ -616,11 +635,55 @@ const GeneradorORCDetalle: React.FC = () => {
     )
   );
 
+  const orcColumns: ColumnsType<OrdenCompraVistaDTO> = [
+    { title: 'Documento', dataIndex: 'noDocumento', key: 'noDocumento', width: 160,
+      render: (doc: string, record: OrdenCompraVistaDTO) => (
+        <Link to={`/FORC/${record.id}`} className="paces-doc-link"><Text strong>{doc}</Text></Link>
+      ),
+    },
+    { title: 'Fecha', dataIndex: 'fechaDocumento', key: 'fechaDocumento', width: 110,
+      render: (f: string) => formatDate(f),
+    },
+    { title: 'Suplidor', key: 'suplidor', render: (_, r: OrdenCompraVistaDTO) => r.suplidor?.nombre || '-' },
+    { title: 'Concepto', key: 'concepto', render: (_, r: OrdenCompraVistaDTO) => r.concepto?.nombre || '-' },
+    { title: 'Total', dataIndex: 'total', key: 'total', width: 130, align: 'right' as const,
+      render: (t: number) => <Text strong>{formatCurrency(t)}</Text>,
+    },
+    { title: 'Estado', dataIndex: 'estado', key: 'estado', width: 110,
+      render: (estado: any) => {
+        const estadoNum = typeof estado === 'string'
+          ? ({ Borrador: 0, Validado: 1, Anulado: 3 } as Record<string, number>)[estado] ?? -1
+          : estado;
+        const info = estadoNum === 0 ? { label: 'Borrador', color: 'default' }
+          : estadoNum === 1 ? { label: 'Aplicado', color: 'success' }
+          : estadoNum === 3 ? { label: 'Anulado', color: 'error' }
+          : { label: 'Desconocido', color: 'default' };
+        return <Tag color={info.color}>{info.label}</Tag>;
+      },
+    },
+  ];
+
   const tabsItems = [
     {
       key: 'detalles',
       label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
       children: detallesTabContent,
+    },
+    {
+      key: 'ordenes',
+      label: `Órdenes de compra (${ordenesGeneradas.length})`,
+      children: (
+        <Table<OrdenCompraVistaDTO>
+          dataSource={ordenesGeneradas}
+          columns={orcColumns}
+          rowKey="id"
+          size="small"
+          pagination={false}
+          loading={ordenesLoading}
+          scroll={{ x: 800 }}
+          locale={{ emptyText: <Empty description="No hay órdenes de compra generadas" /> }}
+        />
+      ),
     },
   ];
 
@@ -653,21 +716,66 @@ const GeneradorORCDetalle: React.FC = () => {
           </Button>
         </PermissionGate>
         <PermissionGate accion="IMPRIMIR">
-          <Button icon={<PrinterOutlined />} onClick={async () => {
-            try {
-              const res = await apiClient.get(`/ReporteGeneradorOrdenCompra/${sucursalActiva}/${id}`, {
-                responseType: 'blob',
-              });
-              const url = URL.createObjectURL(res.data);
-              window.open(url, '_blank');
-            } catch {
-              message.error('Error al generar el reporte');
-            }
-          }}>
-            Imprimir
-          </Button>
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: 'generador',
+                  icon: <FilePdfOutlined />,
+                  label: 'Generador ORC',
+                  onClick: async () => {
+                    try {
+                      const res = await apiClient.get(`/ReporteGeneradorOrdenCompra/${sucursalActiva}/${id}`, {
+                        responseType: 'blob',
+                      });
+                      const url = URL.createObjectURL(res.data);
+                      window.open(url, '_blank');
+                    } catch {
+                      message.error('Error al generar el reporte');
+                    }
+                  },
+                },
+                {
+                  key: 'externas',
+                  icon: <FilePdfOutlined />,
+                  label: 'Ordenes Externas',
+                  onClick: async () => {
+                    try {
+                      const res = await apiClient.get(`/ReporteOrdenCompra/${sucursalActiva}/${id}`, {
+                        responseType: 'blob',
+                      });
+                      const url = URL.createObjectURL(res.data);
+                      window.open(url, '_blank');
+                    } catch {
+                      message.error('Error al generar el reporte');
+                    }
+                  },
+                },
+                {
+                  key: 'internas',
+                  icon: <FilePdfOutlined />,
+                  label: 'Ordenes Internas',
+                  onClick: async () => {
+                    try {
+                      const res = await apiClient.get(`/ReporteOrdenCompra/${sucursalActiva}/${id}`, {
+                        responseType: 'blob',
+                      });
+                      const url = URL.createObjectURL(res.data);
+                      window.open(url, '_blank');
+                    } catch {
+                      message.error('Error al generar el reporte');
+                    }
+                  },
+                },
+              ],
+            }}
+          >
+            <Button icon={<PrinterOutlined />}>
+              Imprimir <DownOutlined />
+            </Button>
+          </Dropdown>
         </PermissionGate>
-        {data.estado === 0 && (
+        {(data.estado === 0 || data.estado === 1) && (
           <PermissionGate accion="EDITAR">
             <Button type="primary" icon={<ShopOutlined />} onClick={handleGenerarOC} loading={generando}>
               Generar OC

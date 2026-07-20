@@ -1,7 +1,8 @@
-﻿import React, { useState, useMemo, useRef, useEffect } from 'react';
+﻿import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Modal, Table, Input, Alert, Tag, Typography, Empty, Button } from 'antd';
 import { WarningOutlined, SearchOutlined, DownloadOutlined } from '@ant-design/icons';
-import * as XLSX from 'xlsx';
+import { useAuthStore } from '../../stores/authStore';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 
@@ -23,6 +24,7 @@ const ExistenciasNegativasModal: React.FC<ExistenciasNegativasModalProps> = ({
   onClose,
   datos,
 }) => {
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const [searchText, setSearchText] = useState('');
   const searchRef = useRef<any>(null);
 
@@ -89,33 +91,28 @@ const ExistenciasNegativasModal: React.FC<ExistenciasNegativasModalProps> = ({
     },
   ];
 
-  const handleExportExcel = () => {
-    // Preparar datos para Excel
-    const data = datos.map((d) => ({
-      Código: d.codPro,
-      Artículo: d.articulo,
-      Almacén: d.codAlmacen,
-      Existencia: d.cantidad,
-    }));
-
-    // Crear libro y hoja
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(data);
-
-    // Ajustar ancho de columnas
-    worksheet['!cols'] = [
-      { wch: 14 }, // Código
-      { wch: 50 }, // Artículo
-      { wch: 10 }, // Almacén
-      { wch: 12 }, // Existencia
-    ];
-
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Existencias Negativas');
-
-    // Generar archivo y descargar
-    const timestamp = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(workbook, `existencias-negativas-${timestamp}.xlsx`);
-  };
+  const handleExportExcel = useCallback(async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const columnHeaders = ['Código', 'Artículo', 'Almacén', 'Existencia'];
+    const dataRows = datos.map((d) => [
+      d.codPro,
+      d.articulo,
+      d.codAlmacen,
+      d.cantidad,
+    ]);
+    exportToExcel({
+      companyName,
+      columnHeaders,
+      dataRows,
+      sheetName: 'Existencias Negativas',
+      columnWidths: [
+        { wch: 14 },
+        { wch: 50 },
+        { wch: 10 },
+        { wch: 12 },
+      ],
+    });
+  }, [sucursalActiva, datos]);
 
   return (
     <Modal

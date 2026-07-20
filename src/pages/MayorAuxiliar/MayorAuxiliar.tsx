@@ -4,7 +4,6 @@ import {
   Modal, Space, Row, Col, Table, Empty, Statistic,
 } from 'antd';
 import { PrinterOutlined, SearchOutlined, CloseOutlined, TableOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined, FileExcelOutlined } from '@ant-design/icons';
-import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -12,9 +11,11 @@ import { mayorAuxiliarApi } from '../../api/mayorAuxiliarApi';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
 import { companiaApi } from '../../api/companiaApi';
 import { formatDateParam } from '../../utils/formats';
+import { exportToExcel } from '../../utils/exportToExcel';
 import type { CuentaContableResumenDTO } from '../../types/contabilidad';
 
 const { Text } = Typography;
+const { RangePicker } = DatePicker;
 
 interface MayorAuxiliarItem {
   fechaDocumento: string;
@@ -42,8 +43,7 @@ const MayorAuxiliar: React.FC = () => {
   /* â”€â”€â”€â”€â”€ Estados â”€â”€â”€â”€â”€ */
 
   // Filtros
-  const [fechaDesde, setFechaDesde] = useState<dayjs.Dayjs>(dayjs().subtract(30, 'day'));
-  const [fechaHasta, setFechaHasta] = useState<dayjs.Dayjs>(dayjs());
+  const [fechas, setFechas] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().startOf('month'), dayjs()]);
   const [noCuenta, setNoCuenta] = useState('');
   const [nomCuenta, setNomCuenta] = useState('');
   const [tipoDocumento, setTipoDocumento] = useState('');
@@ -52,7 +52,7 @@ const MayorAuxiliar: React.FC = () => {
 
   // Datos de tabla
   const [datos, setDatos] = useState<MayorAuxiliarItem[]>([]);
-  const [balances, setBalances] = useState<{ balanceInicial: number; balanceInicialAlterno: number; balanceFinal: number; balanceFinalAlterno: number } | null>(null);
+  const [balances, setBalances] = useState<{ balanceInicial: number; balanceInicialAlterno: number; balanceInicialDebito: number; balanceInicialCredito: number; balanceFinal: number; balanceFinalAlterno: number } | null>(null);
   const [consultando, setConsultando] = useState(false);
   const [busquedaTabla, setBusquedaTabla] = useState('');
 
@@ -91,11 +91,15 @@ const MayorAuxiliar: React.FC = () => {
   /* â”€â”€â”€â”€â”€ Handlers â”€â”€â”€â”€â”€ */
 
   const handlePrint = useCallback(async () => {
+    if (!noCuenta) {
+      message.warning('Debe seleccionar una cuenta contable');
+      return;
+    }
     setGenerando(true);
     try {
       const filtros = {
-        fechaInicial: formatDateParam(fechaDesde.toDate()),
-        fechaFinal: formatDateParam(fechaHasta.toDate()),
+        fechaInicial: formatDateParam(fechas[0].toDate()),
+        fechaFinal: formatDateParam(fechas[1].toDate()),
         noCuenta: noCuenta || undefined,
         tipoDocumento: tipoDocumento || undefined,
         balanceAnterior,
@@ -122,15 +126,19 @@ const MayorAuxiliar: React.FC = () => {
     } finally {
       setGenerando(false);
     }
-  }, [sucursalActiva, fechaDesde, fechaHasta, noCuenta, tipoDocumento, balanceAnterior, detallado, datos, balances]);
+  }, [sucursalActiva, fechas, noCuenta, tipoDocumento, balanceAnterior, detallado, datos, balances]);
 
   const handleConsultar = useCallback(async () => {
+    if (!noCuenta) {
+      message.warning('Debe seleccionar una cuenta contable');
+      return;
+    }
     setConsultando(true);
     setDatos([]);
     try {
       const filtros = {
-        fechaInicial: formatDateParam(fechaDesde.toDate()),
-        fechaFinal: formatDateParam(fechaHasta.toDate()),
+        fechaInicial: formatDateParam(fechas[0].toDate()),
+        fechaFinal: formatDateParam(fechas[1].toDate()),
         noCuenta: noCuenta || undefined,
         tipoDocumento: tipoDocumento || undefined,
         balanceAnterior,
@@ -147,6 +155,8 @@ const MayorAuxiliar: React.FC = () => {
       setBalances({
         balanceInicial: Array.isArray(res) ? 0 : (res.balanceInicial ?? 0),
         balanceInicialAlterno: Array.isArray(res) ? 0 : (res.balanceInicialAlterno ?? 0),
+        balanceInicialDebito: Array.isArray(res) ? 0 : (res.balanceInicialDebito ?? 0),
+        balanceInicialCredito: Array.isArray(res) ? 0 : (res.balanceInicialCredito ?? 0),
         balanceFinal: Array.isArray(res) ? 0 : (res.balanceFinal ?? 0),
         balanceFinalAlterno: Array.isArray(res) ? 0 : (res.balanceFinalAlterno ?? 0),
       });
@@ -155,7 +165,7 @@ const MayorAuxiliar: React.FC = () => {
     } finally {
       setConsultando(false);
     }
-  }, [sucursalActiva, fechaDesde, fechaHasta, noCuenta, tipoDocumento, balanceAnterior, detallado]);
+  }, [sucursalActiva, fechas, noCuenta, tipoDocumento, balanceAnterior, detallado]);
 
   /* â”€â”€â”€â”€â”€ KPIs y filtro de tabla â”€â”€â”€â”€â”€ */
 
@@ -168,7 +178,7 @@ const MayorAuxiliar: React.FC = () => {
     }));
     const totalDebe = items.filter((r) => r.tipoAsiento === 'Debito').reduce((s, r) => s + r.montoAlterno, 0);
     const totalHaber = items.filter((r) => r.tipoAsiento === 'Credito').reduce((s, r) => s + r.montoAlterno, 0);
-    return { totalDebe, totalHaber, balanceInicial: balances.balanceInicial, balanceFinal: balances.balanceFinal };
+    return { totalDebe, totalHaber, balanceInicial: balances.balanceInicial, balanceInicialDebito: balances.balanceInicialDebito, balanceInicialCredito: balances.balanceInicialCredito, balanceFinal: balances.balanceFinal };
   }, [datos, balances]);
 
   const datosFiltrados = useMemo(() => {
@@ -208,87 +218,76 @@ const MayorAuxiliar: React.FC = () => {
   }, [datosFiltrados]);
 
   const handleExportExcel = useCallback(async () => {
-    let c = { nombre: 'SOLUGEN S.R.L.', direccion: '', telefono: '', rnc: '' };
+    let companyInfo = { nombre: 'SOLUGEN S.R.L.', direccion: '', telefono: '', rnc: '' };
     try {
       const lista = await companiaApi.obtenerTodas(sucursalActiva);
       if (lista.length > 0) {
-        c.nombre = lista[0].nombre ?? c.nombre;
-        c.direccion = lista[0].direccion ?? '';
-        c.telefono = lista[0].telefono ?? '';
-        c.rnc = lista[0].rnc ?? '';
+        companyInfo.nombre = lista[0].nombre ?? companyInfo.nombre;
+        companyInfo.direccion = lista[0].direccion ?? '';
+        companyInfo.telefono = lista[0].telefono ?? '';
+        companyInfo.rnc = lista[0].rnc ?? '';
       }
     } catch { /* ignora */ }
 
-    const desdeStr = dayjs(fechaDesde).format('DD/MM/YYYY');
-    const hastaStr = dayjs(fechaHasta).format('DD/MM/YYYY');
+    const desdeStr = dayjs(fechas[0]).format('DD/MM/YYYY');
+    const hastaStr = dayjs(fechas[1]).format('DD/MM/YYYY');
     const filtroCta = nomCuenta || 'Todas';
     const filtroDoc = tipoDocumento || 'Todos';
 
-    // Header rows (array of arrays)
-    const aoa: any[][] = [
-      [c.nombre],
-      [c.direccion],
-      [`Tel.: ${c.telefono}`],
-      [`RNC: ${c.rnc}`],
-      ['REPORTE MAYOR AUXILIAR'],
-      [`Periodo: ${desdeStr} - ${hastaStr}  |  Cuenta: ${filtroCta}  |  Doc: ${filtroDoc}`],
-      [],
-    ];
-
     if (detallado) {
-      aoa.push(['Fecha', 'Documento', 'No. Cuenta', 'Nombre Cuenta', 'Tipo', 'Debito', 'Credito', 'Balance']);
-      for (const r of datosFiltrados) {
-        aoa.push([
-          dayjs(r.fechaDocumento).format('DD/MM/YYYY'),
-          `${r.documentoCodigo}-${r.documentoNoDocumento}`,
-          r.cuentaContableNoCuenta,
-          r.cuentaContableNombre,
-          r.tipoAsiento.trim(),
-          r.tipoAsiento.trim() === 'Debito' ? r.montoAlterno : 0,
-          r.tipoAsiento.trim() === 'Credito' ? r.montoAlterno : 0,
-          r.balance,
-        ]);
-      }
+      const columnHeaders = ['Fecha', 'Documento', 'No. Cuenta', 'Nombre Cuenta', 'Tipo', 'Debito', 'Credito', 'Balance'];
+      const dataRows = datosFiltrados.map((r) => [
+        dayjs(r.fechaDocumento).format('DD/MM/YYYY'),
+        `${r.documentoCodigo}-${r.documentoNoDocumento}`,
+        r.cuentaContableNoCuenta,
+        r.cuentaContableNombre,
+        r.tipoAsiento.trim(),
+        r.tipoAsiento.trim() === 'Debito' ? r.montoAlterno : 0,
+        r.tipoAsiento.trim() === 'Credito' ? r.montoAlterno : 0,
+        r.balance,
+      ]);
+      exportToExcel({
+        companyName: companyInfo.nombre,
+        extraHeaderRows: [
+          [companyInfo.direccion],
+          [`Tel.: ${companyInfo.telefono}`],
+          [`RNC: ${companyInfo.rnc}`],
+          ['REPORTE MAYOR AUXILIAR'],
+          [`Periodo: ${desdeStr} - ${hastaStr}  |  Cuenta: ${filtroCta}  |  Doc: ${filtroDoc}`],
+          [],
+        ],
+        columnHeaders,
+        dataRows,
+        sheetName: 'MayorAuxiliar',
+        columnWidths: [{ wch: 12 }, { wch: 18 }, { wch: 14 }, { wch: 22 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 16 }],
+      });
     } else {
-      aoa.push(['Codigo', 'Nombre', 'Desde', 'Hasta', 'Total Debito', 'Total Credito']);
-      for (const g of gruposDocumento) {
-        aoa.push([g.codigo, g.nombre, dayjs(g.minFecha).format('DD/MM/YYYY'), dayjs(g.maxFecha).format('DD/MM/YYYY'), g.totalDebe, g.totalHaber]);
-      }
+      const columnHeaders = ['Codigo', 'Nombre', 'Desde', 'Hasta', 'Total Debito', 'Total Credito'];
+      const dataRows = gruposDocumento.map((g) => [
+        g.codigo,
+        g.nombre,
+        dayjs(g.minFecha).format('DD/MM/YYYY'),
+        dayjs(g.maxFecha).format('DD/MM/YYYY'),
+        g.totalDebe,
+        g.totalHaber,
+      ]);
+      exportToExcel({
+        companyName: companyInfo.nombre,
+        extraHeaderRows: [
+          [companyInfo.direccion],
+          [`Tel.: ${companyInfo.telefono}`],
+          [`RNC: ${companyInfo.rnc}`],
+          ['REPORTE MAYOR AUXILIAR'],
+          [`Periodo: ${desdeStr} - ${hastaStr}  |  Cuenta: ${filtroCta}  |  Doc: ${filtroDoc}`],
+          [],
+        ],
+        columnHeaders,
+        dataRows,
+        sheetName: 'MayorAuxiliar',
+        columnWidths: [{ wch: 8 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }],
+      });
     }
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-    // Column widths
-    ws['!cols'] = detallado
-      ? [{ wch: 12 }, { wch: 18 }, { wch: 14 }, { wch: 22 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 16 }]
-      : [{ wch: 8 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }];
-
-    // Merge header cells: rows 0-5 span all columns
-    const ncols = detallado ? 8 : 6;
-    ws['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: ncols - 1 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: ncols - 1 } },
-      { s: { r: 2, c: 0 }, e: { r: 2, c: ncols - 1 } },
-      { s: { r: 3, c: 0 }, e: { r: 3, c: ncols - 1 } },
-      { s: { r: 4, c: 0 }, e: { r: 4, c: ncols - 1 } },
-      { s: { r: 5, c: 0 }, e: { r: 5, c: ncols - 1 } },
-    ];
-
-    // Bold company name (row 0)
-    if (ws['!rows'] === undefined) ws['!rows'] = [];
-    ws['!rows'][0] = { hpx: 20 };
-
-    // Apply bold via cell styles (XLSX supports rich text via s)
-    for (let c = 0; c < ncols; c++) {
-      const addr = XLSX.utils.encode_cell({ r: 0, c });
-      if (!ws[addr]) continue;
-      ws[addr].s = { font: { bold: true, sz: 14 } };
-    }
-
-    XLSX.utils.book_append_sheet(wb, ws, 'MayorAuxiliar');
-    XLSX.writeFile(wb, `MayorAuxiliar_${dayjs().format('YYYYMMDD')}.xlsx`);
-  }, [sucursalActiva, datosFiltrados, gruposDocumento, detallado, kpi, fechaDesde, fechaHasta, nomCuenta, tipoDocumento]);
+  }, [sucursalActiva, datosFiltrados, gruposDocumento, detallado, fechas, nomCuenta, tipoDocumento]);
 
   /* â”€â”€â”€â”€â”€ Handlers de busqueda de cuenta â”€â”€â”€â”€â”€ */
 
@@ -352,25 +351,16 @@ const MayorAuxiliar: React.FC = () => {
           <Row gutter={[16, 12]}>
             <Col xs={24} sm={12} md={6}>
               <div style={{ marginBottom: 4 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Fecha Desde</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>Rango de Fechas</Text>
               </div>
-              <DatePicker
-                value={fechaDesde}
-                onChange={(d) => d && setFechaDesde(d)}
+              <RangePicker
+                value={fechas}
+                onChange={(dates) => {
+                  if (dates && dates[0] && dates[1]) setFechas([dates[0], dates[1]]);
+                }}
+                format="YYYY-MM-DD"
+                allowClear={false}
                 style={{ width: '100%' }}
-                format="DD/MM/YYYY"
-              />
-            </Col>
-
-            <Col xs={24} sm={12} md={6}>
-              <div style={{ marginBottom: 4 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Fecha Hasta</Text>
-              </div>
-              <DatePicker
-                value={fechaHasta}
-                onChange={(d) => d && setFechaHasta(d)}
-                style={{ width: '100%' }}
-                format="DD/MM/YYYY"
               />
             </Col>
 
@@ -455,7 +445,7 @@ const MayorAuxiliar: React.FC = () => {
           {/* KPIs */}
           <Card className="paces-card" style={{ marginBottom: 16 }}>
             <Row gutter={[16, 16]}>
-              <Col xs={12} sm={6}>
+              <Col xs={12} sm={8} md={4}>
                 <Statistic
                   title="Balance Inicial"
                   value={kpi.balanceInicial}
@@ -464,7 +454,25 @@ const MayorAuxiliar: React.FC = () => {
                   valueStyle={{ color: '#556ee6', fontSize: 18, fontWeight: 600 }}
                 />
               </Col>
-              <Col xs={12} sm={6}>
+              <Col xs={12} sm={8} md={4}>
+                <Statistic
+                  title="Sdo. Anterior Débito"
+                  value={kpi.balanceInicialDebito}
+                  precision={2}
+                  prefix={<ArrowDownOutlined style={{ color: kpi.balanceInicialDebito < 0 ? '#f5222d' : '#52c41a' }} />}
+                  valueStyle={{ color: kpi.balanceInicialDebito < 0 ? '#f5222d' : '#52c41a', fontSize: 18 }}
+                />
+              </Col>
+              <Col xs={12} sm={8} md={4}>
+                <Statistic
+                  title="Sdo. Anterior Crédito"
+                  value={kpi.balanceInicialCredito}
+                  precision={2}
+                  prefix={<ArrowUpOutlined style={{ color: kpi.balanceInicialCredito < 0 ? '#f5222d' : '#52c41a' }} />}
+                  valueStyle={{ color: kpi.balanceInicialCredito < 0 ? '#f5222d' : '#52c41a', fontSize: 18 }}
+                />
+              </Col>
+              <Col xs={12} sm={8} md={4}>
                 <Statistic
                   title="Total Débitos"
                   value={kpi.totalDebe}
@@ -473,7 +481,7 @@ const MayorAuxiliar: React.FC = () => {
                   valueStyle={{ color: '#f5222d', fontSize: 18 }}
                 />
               </Col>
-              <Col xs={12} sm={6}>
+              <Col xs={12} sm={8} md={4}>
                 <Statistic
                   title="Total Créditos"
                   value={kpi.totalHaber}
@@ -482,7 +490,7 @@ const MayorAuxiliar: React.FC = () => {
                   valueStyle={{ color: '#52c41a', fontSize: 18 }}
                 />
               </Col>
-              <Col xs={12} sm={6}>
+              <Col xs={12} sm={8} md={4}>
                 <Statistic
                   title="Balance Final"
                   value={kpi.balanceFinal}

@@ -30,6 +30,8 @@ export interface MayorAuxiliarDatosResponse {
   items: MayorAuxiliarItem[];
   balanceInicial: number;
   balanceInicialAlterno: number;
+  balanceInicialDebito: number;
+  balanceInicialCredito: number;
   balanceFinal: number;
   balanceFinalAlterno: number;
 }
@@ -60,13 +62,13 @@ export const mayorAuxiliarApi = {
     const { data } = await apiClient.get<ApiResponse<MayorAuxiliarDatosResponse>>(
       `/reportes/mayor-auxiliar/${sucursal}/datos?${params.toString()}`
     );
-    return data.data ?? { items: [], balanceInicial: 0, balanceInicialAlterno: 0, balanceFinal: 0, balanceFinalAlterno: 0 };
+    return data.data ?? { items: [], balanceInicial: 0, balanceInicialAlterno: 0, balanceInicialDebito: 0, balanceInicialCredito: 0, balanceFinal: 0, balanceFinalAlterno: 0 };
   },
 
-  imprimir: async (sucursal: number, filtros: MayorAuxiliarFiltros, items: MayorAuxiliarItem[], balances: { balanceInicial: number; balanceInicialAlterno: number; balanceFinal: number; balanceFinalAlterno: number }): Promise<Blob> => {
+  imprimir: async (sucursal: number, filtros: MayorAuxiliarFiltros, items: MayorAuxiliarItem[], balances: { balanceInicial: number; balanceInicialAlterno: number; balanceInicialDebito: number; balanceInicialCredito: number; balanceFinal: number; balanceFinalAlterno: number }): Promise<Blob> => {
     const { data } = await apiClient.post<Blob>(
       `/reportes/mayor-auxiliar/${sucursal}/imprimir`,
-      { items, balanceInicial: balances.balanceInicial, balanceInicialAlterno: balances.balanceInicialAlterno, balanceFinal: balances.balanceFinal, balanceFinalAlterno: balances.balanceFinalAlterno, fechaInicial: filtros.fechaInicial, fechaFinal: filtros.fechaFinal, noCuenta: filtros.noCuenta ?? '', tipoDocumento: filtros.tipoDocumento ?? '', balanceAnterior: filtros.balanceAnterior ?? true, detallado: filtros.detallado ?? true },
+      { items, balanceInicial: balances.balanceInicial, balanceInicialAlterno: balances.balanceInicialAlterno, balanceInicialDebito: balances.balanceInicialDebito, balanceInicialCredito: balances.balanceInicialCredito, balanceFinal: balances.balanceFinal, balanceFinalAlterno: balances.balanceFinalAlterno, fechaInicial: filtros.fechaInicial, fechaFinal: filtros.fechaFinal, noCuenta: filtros.noCuenta ?? '', tipoDocumento: filtros.tipoDocumento ?? '', balanceAnterior: filtros.balanceAnterior ?? true, detallado: filtros.detallado ?? true },
       { responseType: 'blob' }
     );
     return data;

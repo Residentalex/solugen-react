@@ -51,6 +51,15 @@ function formatDate(val: string): string {
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+function formatDateTime(val: string): string {
+  if (!val) return '-';
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return val;
+  const date = d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const time = d.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${date} ${time}`;
+}
+
 const FacturaPOSDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -452,11 +461,13 @@ const FacturaPOSDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Fecha">{formatDateTime(data.fechaDocumento)}</Descriptions.Item>
                 <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={data.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="Tipo">—</Descriptions.Item>
                 <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Hora">{data.fechaDocumento ? new Date(data.fechaDocumento).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Sucursal">
+                  <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
+                </Descriptions.Item>
                 <Descriptions.Item label="Almacen" span={2}>{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Cajero">{data.cajero ? toTitleCase(data.cajero) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Punto de Venta">{data.caja || '-'}</Descriptions.Item>
@@ -473,9 +484,6 @@ const FacturaPOSDetalle: React.FC = () => {
                       <Tag style={{ background: '#d9d9d9', borderColor: '#d9d9d9', color: '#595959', marginRight: 0 }}>Local</Tag>
                     </div>
                   )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
@@ -642,11 +650,13 @@ const FacturaPOSDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Fecha">{formatDate(data.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="Fecha">{formatDateTime(data.fechaDocumento)}</Descriptions.Item>
               <Descriptions.Item label="Concepto">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : (data.concepto?.nombre ? toTitleCase(data.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={data.concepto} /></Descriptions.Item>
               <Descriptions.Item label="Tipo">—</Descriptions.Item>
               <Descriptions.Item label="NCF">{data.ncf || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Hora">{data.fechaDocumento ? new Date(data.fechaDocumento).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', hour12: false }) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Sucursal">
+                  <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
+                </Descriptions.Item>
               <Descriptions.Item label="Almacen">{data.almacen?.nombre ? toTitleCase(data.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Cajero">{data.cajero ? toTitleCase(data.cajero) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Punto de Venta">{data.caja || '-'}</Descriptions.Item>
@@ -663,9 +673,6 @@ const FacturaPOSDetalle: React.FC = () => {
                       <Tag style={{ background: '#d9d9d9', borderColor: '#d9d9d9', color: '#595959', marginRight: 0 }}>Local</Tag>
                     </div>
                   )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>

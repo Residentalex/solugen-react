@@ -58,4 +58,23 @@ export const chatApi = {
     });
     return data.data;
   },
+
+  subirAdjunto: async (conversacionId: number, file: File): Promise<ChatMensajeDTO> => {
+    const formData = new FormData();
+    formData.append('archivo', file);
+    const { data } = await apiClient.post<ApiResponse<ChatMensajeDTO>>(
+      `${BASE}/conversaciones/${conversacionId}/adjuntos`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return data.data;
+  },
+
+  descargarAdjunto: async (adjuntoId: number): Promise<Blob> => {
+    const { data } = await apiClient.get<Blob>(
+      `${BASE}/adjuntos/${adjuntoId}/descargar`,
+      { responseType: 'blob' },
+    );
+    return data;
+  },
 };

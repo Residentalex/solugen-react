@@ -8,12 +8,12 @@ import {
   SearchOutlined, ReloadOutlined, FileExcelOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import * as XLSX from 'xlsx';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { integridadApi } from '../../api/integridadApi';
 import { companiaApi } from '../../api/companiaApi';
 import { formatCurrency, formatDateRaw } from '../../utils/formats';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import type { AuxiliarIntegridadDTO } from '../../types/integridad';
 
 const { Text } = Typography;
@@ -292,72 +292,47 @@ const ReporteIntegridadAuxiliares: React.FC = () => {
 
   /* ───── Exportar Excel ───── */
 
-  const handleExportExcel = useCallback(() => {
+  const handleExportExcel = useCallback(async () => {
     if (data.length === 0) {
       message.warning('No hay datos para exportar');
       return;
     }
 
+    const companyName = await getCompanyName(sucursalActiva);
     const desdeStr = fechas[0].format('DD/MM/YYYY');
     const hastaStr = fechas[1].format('DD/MM/YYYY');
     const filtroDoc = tipoDoc ? TIPOS_DOCUMENTO.find((d) => d.value === tipoDoc)?.label || tipoDoc : 'Todos';
 
-    // Header rows
-    const aoa: any[][] = [
-      ['REPORTE INTEGRIDAD AUXILIARES'],
-      [`Periodo: ${desdeStr} - ${hastaStr}  |  Tipo Doc: ${filtroDoc}`],
-      [],
-      ['Tipo Doc', 'No. Documento', 'Fecha', 'Entidad', 'Concepto', 'Sucursal', 'Total', 'Total Detalle', 'Diferencia', 'Observaciones'],
-    ];
-
-    for (const r of filteredData) {
-      aoa.push([
-        r.tipoDocumento || '',
-        r.noDocumento || '',
-        dayjs(r.fecha).format('DD/MM/YYYY'),
-        r.entidad || '',
-        r.concepto || '',
-        r.sucursalDocumento || '',
-        r.total || 0,
-        r.totalDetalle || 0,
-        r.diferencia || 0,
-        r.observaciones || '',
-      ]);
-    }
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-    ws['!cols'] = [
-      { wch: 10 }, { wch: 16 }, { wch: 12 }, { wch: 24 },
-      { wch: 24 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
-      { wch: 14 }, { wch: 30 },
-    ];
-
-    const ncols = 10;
-    ws['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: ncols - 1 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: ncols - 1 } },
-    ];
-
-    if (ws['!rows'] === undefined) ws['!rows'] = [];
-    ws['!rows'][0] = { hpx: 24 };
-
-    for (let c = 0; c < ncols; c++) {
-      const addr = XLSX.utils.encode_cell({ r: 0, c });
-      if (!ws[addr]) continue;
-      ws[addr].s = { font: { bold: true, sz: 14 } };
-    }
-    // Bold header row
-    for (let c = 0; c < ncols; c++) {
-      const addr = XLSX.utils.encode_cell({ r: 3, c });
-      if (!ws[addr]) continue;
-      ws[addr].s = { font: { bold: true } };
-    }
-
-    XLSX.utils.book_append_sheet(wb, ws, 'IntegridadAuxiliares');
-    XLSX.writeFile(wb, `IntegridadAuxiliares_${dayjs().format('YYYYMMDD')}.xlsx`);
-  }, [data, filteredData, fechas, tipoDoc]);
+    const columnHeaders = ['Tipo Doc', 'No. Documento', 'Fecha', 'Entidad', 'Concepto', 'Sucursal', 'Total', 'Total Detalle', 'Diferencia', 'Observaciones'];
+    const dataRows = filteredData.map((r) => [
+      r.tipoDocumento || '',
+      r.noDocumento || '',
+      dayjs(r.fecha).format('DD/MM/YYYY'),
+      r.entidad || '',
+      r.concepto || '',
+      r.sucursalDocumento || '',
+      r.total || 0,
+      r.totalDetalle || 0,
+      r.diferencia || 0,
+      r.observaciones || '',
+    ]);
+    exportToExcel({
+      companyName,
+      extraHeaderRows: [
+        [`REPORTE INTEGRIDAD AUXILIARES`],
+        [`Periodo: ${desdeStr} - ${hastaStr}  |  Tipo Doc: ${filtroDoc}`],
+        [],
+      ],
+      columnHeaders,
+      dataRows,
+      sheetName: 'IntegridadAuxiliares',
+      columnWidths: [
+        { wch: 10 }, { wch: 16 }, { wch: 12 }, { wch: 24 },
+        { wch: 24 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+        { wch: 14 }, { wch: 30 },
+      ],
+    });
+  }, [sucursalActiva, data, filteredData, fechas, tipoDoc]);
 
   /* ───── Opciones de sucursal ───── */
 

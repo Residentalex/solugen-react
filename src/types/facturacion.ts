@@ -266,3 +266,33 @@ export interface EntidadDireccionDTO {
   sector: string;
   principal: boolean;
 }
+
+export interface Reporte606DTO {
+  linea: number;
+  rnc: string;
+  tipoID: number;
+  clasCgncf: string;
+  ncf: string;
+  ncfModificado: string;
+  fechaComprobante: string;
+  fechaPago: string;
+  montoServicio: number;
+  montoBienes: number;
+  totalFacturado: number;
+  itbisFacturado: number;
+  itbisRetenido: number;
+  itbisProporcional: number;
+  itbisCostos: number;
+  itbisAdelantar: number;
+  itbisPercibido: number;
+  tipoRetencionISR: string;
+  montoRetencionRenta: number;
+  isrPercibido: number;
+  isc: number;
+  otrosImpuestos: number;
+  propinaLegal: number;
+  formaPago: string;
+  razonSocial: string;
+  documento: string;
+  sucursal: string;
+}

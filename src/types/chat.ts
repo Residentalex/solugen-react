@@ -10,6 +10,15 @@ export interface ChatConversacionListDTO {
   participantes: ChatParticipanteDTO[];
 }
 
+export interface ChatAdjuntoDTO {
+  id: number;
+  mensajeID: number;
+  nombreArchivo: string;
+  tipoMime: string | null;
+  tamano: number | null;
+  fechaCreacion: string;
+}
+
 export interface ChatMensajeDTO {
   id: number;
   conversacionID: number;
@@ -20,6 +29,10 @@ export interface ChatMensajeDTO {
   editado: boolean;
   fechaEdicion: string | null;
   eliminado: boolean;
+  adjuntos: ChatAdjuntoDTO[];
+  mensajePadreID: number | null;
+  mensajePadreContenido: string | null;
+  mensajePadreRemitente: string | null;
 }
 
 export interface ChatParticipanteDTO {
@@ -29,6 +42,7 @@ export interface ChatParticipanteDTO {
 
 export interface ChatEnviarMensajeRequest {
   contenido: string;
+  mensajePadreID?: number | null;
 }
 
 export interface ChatCrearConversacionRequest {

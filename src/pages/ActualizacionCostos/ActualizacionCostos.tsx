@@ -2,11 +2,11 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { Table, Select, Button, message, Card, Typography, DatePicker, InputNumber, Empty, Input } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SaveOutlined, SearchOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons';
-import * as XLSX from 'xlsx';
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import PermissionGate from '../../components/PermissionGate';
 import { actualizacionCostoApi } from '../../api/actualizacionCostoApi';
 import { parametrosApi } from '../../api/parametrosApi';
@@ -197,38 +197,38 @@ const ActualizacionCostos: React.FC = () => {
     );
   };
 
-  const exportarExcel = () => {
+  const exportarExcel = useCallback(async () => {
     if (datosFiltrados.length === 0) {
       message.warning('No hay datos para exportar');
       return;
     }
 
-    const excelData = datosFiltrados.map((item) => ({
-      Fecha: formatDate(item.fecha),
-      Documento: item.documento || '',
-      Código: item.codigo || '',
-      Producto: (item.producto || '').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()),
-      'Costo Anterior': item.costoAntiguo || 0,
-      'Costo Nuevo': item.costoNuevo || 0,
-      '% Dif.': item.costoAntiguo
+    const companyName = await getCompanyName(sucursalActiva);
+    const columnHeaders = ['Fecha', 'Documento', 'Código', 'Producto', 'Costo Anterior', 'Costo Nuevo', '% Dif.', 'Doc. Origen', 'Fec. Origen'];
+    const dataRows = datosFiltrados.map((item) => [
+      formatDate(item.fecha),
+      item.documento || '',
+      item.codigo || '',
+      toTitleCase(item.producto),
+      item.costoAntiguo || 0,
+      item.costoNuevo || 0,
+      item.costoAntiguo
         ? Number((((item.costoNuevo - item.costoAntiguo) / item.costoAntiguo) * 100).toFixed(2))
         : 0,
-      'Doc. Origen': item.documentoReferencia || '-',
-      'Fec. Origen': item.fechaDocumento ? formatDate(item.fechaDocumento) : '-',
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-    worksheet['!cols'] = [
-      { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 30 },
-      { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 12 },
-    ];
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Actualización Costos');
-
-    const fecha = dayjs().format('YYYYMMDD_HHmmss');
-    XLSX.writeFile(workbook, `ActualizacionCostos_${fecha}.xlsx`);
-  };
+      item.documentoReferencia || '-',
+      item.fechaDocumento ? formatDate(item.fechaDocumento) : '-',
+    ]);
+    exportToExcel({
+      companyName,
+      columnHeaders,
+      dataRows,
+      sheetName: 'Actualización Costos',
+      columnWidths: [
+        { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 30 },
+        { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 12 },
+      ],
+    });
+  }, [sucursalActiva, datosFiltrados]);
 
   // ===== Columnas =====
   const columns: ColumnsType<DetalleActualizacionCostoDTO> = [

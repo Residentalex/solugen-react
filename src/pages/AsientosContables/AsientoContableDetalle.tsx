@@ -88,7 +88,7 @@ const AsientoContableDetalle: React.FC = () => {
           return;
         }
         setData(res);
-        setPageTitleOverride(`${res.noDocumento || `Transacción #${res.id}`}`);
+        setPageTitleOverride(`${res.documento?.codigo || ''}-${res.noDocumento || `Transacción #${res.id}`}`);
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el detalle del asiento contable';
@@ -135,7 +135,7 @@ const AsientoContableDetalle: React.FC = () => {
           return;
         }
         setData(res);
-        setPageTitleOverride(`${res.noDocumento || `Transacción #${res.id}`}`);
+        setPageTitleOverride(`${res.documento?.codigo || ''}-${res.noDocumento || `Transacción #${res.id}`}`);
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el detalle del asiento contable';

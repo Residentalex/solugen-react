@@ -87,6 +87,12 @@ Tres pantallas definen el canon visual del sistema. Cualquier pantalla nueva deb
 - Los nombres de propiedades deben coincidir con el backend DTO en camelCase.
 - Referencia completa: `docs-ai/dto-mapeos.md`.
 
+## Exportación a Excel
+
+### Exportación a Excel con nombre de compañía
+
+Toda exportación a Excel debe incluir una fila de encabezado con el nombre de la compañía con las primeras 3 columnas fusionadas (A+B+C). Usar el util compartido `src/utils/exportToExcel.ts` (`exportToExcel()` + `getCompanyName()`) en lugar de llamar directamente a `XLSX.*`. No importar `* as XLSX from 'xlsx'` directamente en páginas; centralizar toda la lógica de exportación en el util.
+
 ## Modulos protegidos (no modificar sin notificar)
 
 Los siguientes modulos completos (listado, detalle y formulario) estan protegidos y **no deben modificarse** sin notificar explicitamente al usuario y recibir confirmacion:

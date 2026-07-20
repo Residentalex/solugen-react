@@ -73,8 +73,8 @@ class ChatHubService {
     await this.invokeBestEffort('SalirDeConversacion', conversacionId);
   }
 
-  async enviarMensaje(conversacionId: number, contenido: string): Promise<void> {
-    await this.invokeOrThrow('EnviarMensaje', conversacionId, contenido);
+  async enviarMensaje(conversacionId: number, contenido: string, mensajePadreId?: number | null): Promise<void> {
+    await this.invokeOrThrow('EnviarMensaje', conversacionId, contenido, mensajePadreId ?? null);
   }
 
   async escribir(conversacionId: number): Promise<void> {

@@ -74,7 +74,7 @@ const DocumentosFormulario: React.FC = () => {
   const [guardado, setGuardado] = useState(false);
   const [idGuardado, setIdGuardado] = useState<number | null>(null);
   const sucursalActiva = useAuthStore((s: any) => s.securitySucursal);
-  const sucursalesPermitidas = useAuthStore((s: any) => s.sucursalesPermitidas);
+
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
 
   // ----- Form state -----
@@ -214,41 +214,21 @@ const DocumentosFormulario: React.FC = () => {
         idExterno: idExterno || undefined,
       };
 
-      // Determinar las sucursales destino: securitySucursal + sucursalesPermitidas
-      const sucursalesDestino = sucursalesPermitidas.map((s: any) => s.sucursal);
-      const sucursalesAProcesar = sucursalesDestino.length > 0
-        ? [...new Set([sucursalActiva, ...sucursalesDestino])]
-        : [sucursalActiva];
-
+      // Solo modificar en la sucursal activa (no replicar a otras sucursales)
       let primerResultado: DocumentoDTO | null = null;
-      const errores: string[] = [];
 
-      for (const suc of sucursalesAProcesar) {
-        try {
-          // Buscar si ya existe el documento por código
-          const existente = await documentosApi.obtenerPorCodigo(suc, codigo.trim());
+      const existente = await documentosApi.obtenerPorCodigo(sucursalActiva, codigo.trim());
 
-          if (existente) {
-            // Actualizar
-            const payloadActualizar = { ...payload, id: existente.id };
-            await documentosApi.actualizar(suc, existente.id, payloadActualizar);
-            if (!primerResultado) primerResultado = existente;
-          } else {
-            // Crear
-            const resultado = await documentosApi.crear(suc, payload);
-            if (!primerResultado) primerResultado = resultado;
-          }
-        } catch (err: any) {
-          const msg = extraerMensajeError(err, `Error en sucursal ${suc}`);
-          errores.push(msg);
-        }
-      }
-
-      if (errores.length > 0) {
-        message.warning(`Documento procesado con ${errores.length} error(es)`);
+      if (existente) {
+        const payloadActualizar = { ...payload, id: existente.id };
+        await documentosApi.actualizar(sucursalActiva, existente.id, payloadActualizar);
+        primerResultado = existente;
       } else {
-        message.success('Tipo de documento guardado en todas las sucursales');
+        const resultado = await documentosApi.crear(sucursalActiva, payload);
+        primerResultado = resultado;
       }
+
+      message.success('Tipo de documento guardado');
 
       if (primerResultado) {
         setIdGuardado(primerResultado.id);

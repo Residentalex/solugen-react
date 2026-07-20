@@ -131,6 +131,7 @@ import FacturasVencidas from './pages/FacturasVencidas/FacturasVencidas';
 import MayorAuxiliar from './pages/MayorAuxiliar/MayorAuxiliar';
 import TransaccionNoCuadrada from './pages/TransaccionNoCuadrada/TransaccionNoCuadrada';
 import IntegridadAsientos from './pages/IntegridadAsientos/IntegridadAsientos';
+import DocumentoSinAsiento from './pages/DocumentoSinAsiento/DocumentoSinAsiento';
 import ReporteIntegridadAuxiliares from './pages/ReporteIntegridadAuxiliares/ReporteIntegridadAuxiliares';
 import DocumentosAnulados from './pages/DocumentosAnulados/DocumentosAnulados';
 import CierreInventario from './pages/CierreInventario/CierreInventario';
@@ -165,6 +166,7 @@ import EcommerceAdminOrdenes from './pages/Ecommerce/Admin/EcommerceAdminOrdenes
 import EcommerceAdminConfig from './pages/Ecommerce/Admin/EcommerceAdminConfig';
 import ApiTokens from './pages/ApiTokens/ApiTokens';
 import DocumentosAutorizados from './pages/DocumentosAutorizados/DocumentosAutorizados';
+import Reporte606 from './pages/Reporte606/Reporte606';
 import DocumentosAplicados from './pages/DocumentosAplicados/DocumentosAplicados';
 import DocumentosCxPAutorizados from './pages/DocumentosCxPAutorizados/DocumentosCxPAutorizados';
 import DocumentosCxPAplicados from './pages/DocumentosCxPAplicados/DocumentosCxPAplicados';
@@ -247,6 +249,7 @@ const App: React.FC = () => {
             <Route path="FDEV/:id/editar" element={<DevolucionVentaFormulario />} />
             <Route path="FDEV/:id" element={<DevolucionVentaDetalle />} />
             <Route path="RDEV" element={<ReporteDevolucionVenta />} />
+            <Route path="R606" element={<Reporte606 />} />
             <Route path="RGORC/:idExterno" element={<GeneradorOrdenCompraReporte />} />
             <Route path="RDocAutorizado" element={<DocumentosAutorizados />} />
             <Route path="RDocAplicado" element={<DocumentosAplicados />} />
@@ -407,6 +410,7 @@ const App: React.FC = () => {
             <Route path="RMayorAux" element={<MayorAuxiliar />} />
             <Route path="RTransNoCuadrada" element={<TransaccionNoCuadrada />} />
             <Route path="RIntegridadAsientos" element={<IntegridadAsientos />} />
+            <Route path="RDocumentoSinAsiento" element={<DocumentoSinAsiento />} />
             <Route path="RIntegridadAux" element={<ReporteIntegridadAuxiliares />} />
             <Route path="RDocumentosAnulados" element={<DocumentosAnulados />} />
             <Route path="ORepostear" element={<Repostear />} />
@@ -471,6 +475,7 @@ const App: React.FC = () => {
             <Route path="FDEV/:id/editar" element={<DevolucionVentaFormulario />} />
             <Route path="FDEV/:id" element={<DevolucionVentaDetalle />} />
             <Route path="RDEV" element={<ReporteDevolucionVenta />} />
+            <Route path="R606" element={<Reporte606 />} />
             <Route path="RGORC/:idExterno" element={<GeneradorOrdenCompraReporte />} />
             <Route path="RDocAutorizado" element={<DocumentosAutorizados />} />
             <Route path="RDocAplicado" element={<DocumentosAplicados />} />
@@ -631,6 +636,7 @@ const App: React.FC = () => {
             <Route path="RMayorAux" element={<MayorAuxiliar />} />
             <Route path="RTransNoCuadrada" element={<TransaccionNoCuadrada />} />
             <Route path="RIntegridadAsientos" element={<IntegridadAsientos />} />
+            <Route path="RDocumentoSinAsiento" element={<DocumentoSinAsiento />} />
             <Route path="RIntegridadAux" element={<ReporteIntegridadAuxiliares />} />
             <Route path="RDocumentosAnulados" element={<DocumentosAnulados />} />
             <Route path="ORepostear" element={<Repostear />} />
@@ -660,7 +666,7 @@ const App: React.FC = () => {
            <Route path="EConfig" element={<EcommerceAdminConfig />} />
            </Route>
 
-         {/* Rutas de documentación (sin autenticación, fuera de MainLayout) */}
+        {/* Rutas de documentación (sin autenticación, fuera de MainLayout) */}
         <Route path="/documentacion" element={<DocumentacionPage />} />
         <Route path="/documentacion/:modulo/:doc" element={<DocumentacionPage />} />
 

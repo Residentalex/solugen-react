@@ -18,6 +18,8 @@ interface FiltrosDocumentoProps {
   opcionesEstado: { value: string | number; label: string }[];
   /** Rango de fechas por defecto (para no contarlo como filtro activo) */
   rangoDefault?: { desde: string; hasta: string };
+  /** Filtros adicionales que se renderizan debajo del periodo */
+  extraFiltros?: React.ReactNode;
 }
 
 function parseDateParam(val: string): dayjs.Dayjs | null {
@@ -50,6 +52,7 @@ const FiltrosDocumento: React.FC<FiltrosDocumentoProps> = ({
   onAplicar,
   opcionesEstado,
   rangoDefault,
+  extraFiltros,
 }) => {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<{ desde?: string; hasta?: string; estado?: string | number }>({});
@@ -148,6 +151,8 @@ const FiltrosDocumento: React.FC<FiltrosDocumentoProps> = ({
               )}
             />
           </div>
+
+          {extraFiltros}
 
           <div style={{ marginBottom: 16 }}>
             <div style={{ marginBottom: 4, color: '#666', fontSize: 13 }}>Estado</div>

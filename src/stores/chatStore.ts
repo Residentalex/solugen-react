@@ -42,16 +42,21 @@ interface ChatState {
   noLeidos: number;
   conectado: boolean;
   cargando: boolean;
+  subiendoAdjunto: boolean;
+  respondiendoA: { id: number; contenido: string; remitente: string } | null;
 
   abrir: () => void;
   cerrar: () => void;
   seleccionarConversacion: (id: number) => Promise<void>;
   volverALista: () => void;
-  enviarMensaje: (contenido: string) => Promise<void>;
+  enviarMensaje: (contenido: string, mensajePadreID?: number | null) => Promise<void>;
+  subirAdjunto: (conversacionId: number, file: File) => Promise<void>;
   conectarSignalR: () => Promise<void>;
   desconectarSignalR: () => void;
   agregarMensajeTiempoReal: (mensaje: ChatMensajeDTO) => void;
   cargarConversaciones: () => Promise<void>;
+  responderAMensaje: (mensaje: { id: number; contenido: string; remitente: string }) => void;
+  cancelarRespuesta: () => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -62,6 +67,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   noLeidos: 0,
   conectado: false,
   cargando: false,
+  subiendoAdjunto: false,
+  respondiendoA: null,
 
   abrir: () => {
     // Solicitar permiso de notificaciones (disparado por click del usuario en la burbuja)
@@ -122,15 +129,40 @@ export const useChatStore = create<ChatState>((set, get) => ({
     get().cargarConversaciones();
   },
 
-  enviarMensaje: async (contenido: string) => {
+  enviarMensaje: async (contenido: string, mensajePadreID?: number | null) => {
     const convId = get().conversacionActiva;
     if (!convId || !contenido.trim()) return;
 
     try {
-      await chatHub.enviarMensaje(convId, contenido);
+      await chatHub.enviarMensaje(convId, contenido, mensajePadreID);
+      set({ respondiendoA: null });
     } catch (err: any) {
       const msg = typeof err === 'string' ? err : err?.message || 'Error al enviar mensaje';
       message.error(msg);
+    }
+  },
+
+  subirAdjunto: async (conversacionId: number, file: File) => {
+    set({ subiendoAdjunto: true });
+    try {
+      const mensaje = await chatApi.subirAdjunto(conversacionId, file);
+      set((state) => {
+        const existentes = state.mensajes[conversacionId] || [];
+        // No duplicar si SignalR ya lo entregó
+        if (existentes.some(m => m.id === mensaje.id)) {
+          return { subiendoAdjunto: false };
+        }
+        return {
+          mensajes: {
+            ...state.mensajes,
+            [conversacionId]: [...existentes, mensaje],
+          },
+          subiendoAdjunto: false,
+        };
+      });
+    } catch (err: any) {
+      set({ subiendoAdjunto: false });
+      message.error(err?.response?.data?.errorMessage || 'Error al subir archivo');
     }
   },
 
@@ -148,7 +180,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           set({ conectado: true });
           return;
         } catch (err) {
-          console.error(`[SignalR Chat] Intento ${i + 1}/${intentos} fallido:`, err);
+          console.warn(`[SignalR Chat] Intento ${i + 1}/${intentos} fallido:`, err);
           if (i < intentos - 1) await new Promise((r) => setTimeout(r, 5000));
         }
       }
@@ -214,6 +246,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (currentUser !== mensaje.remitenteID && !isActive) {
       mostrarNotificacionChat(mensaje.remitenteNombre, mensaje.contenido, convId);
     }
+  },
+
+  responderAMensaje: (mensaje) => {
+    set({ respondiendoA: mensaje });
+  },
+
+  cancelarRespuesta: () => {
+    set({ respondiendoA: null });
   },
 
   cargarConversaciones: async () => {

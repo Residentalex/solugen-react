@@ -8,11 +8,11 @@ import {
   SearchOutlined, ReloadOutlined, DownloadOutlined, CloseOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import * as XLSX from 'xlsx';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { proveedorApi } from '../../api/proveedorApi';
 import { formatCurrency, formatDateParam } from '../../utils/formats';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import { facturasVencidasApi } from '../../api/facturasVencidasApi';
 import type { FacturaVencidaDTO } from '../../api/facturasVencidasApi';
 import type { SuplidorDTO } from '../../types/entradaAlmacen';
@@ -202,36 +202,36 @@ const FacturasVencidas: React.FC = () => {
 
   /* ───── Exportar Excel ───── */
 
-  const exportarCSV = () => {
+  const exportarExcel = useCallback(async () => {
     if (filteredData.length === 0) {
       message.warning('No hay datos para exportar');
       return;
     }
 
-    const workbook = XLSX.utils.book_new();
-    const headers = ['Documento', 'Fecha Doc.', 'Suplidor', 'Días Crédito', 'Fecha Vence', 'Días Vencidos', 'Total', 'Saldo Pendiente', 'NCF'];
-    const excelData = filteredData.map((item) => ({
-      [headers[0]]: item.noDocumento || '',
-      [headers[1]]: formatDate(item.fechaDocumento),
-      [headers[2]]: item.nombreSuplidor || '',
-      [headers[3]]: item.diasCredito ?? 0,
-      [headers[4]]: formatDate(item.fechaVence),
-      [headers[5]]: item.diasVencidos ?? 0,
-      [headers[6]]: item.total ?? 0,
-      [headers[7]]: item.saldoPendiente ?? 0,
-      [headers[8]]: item.ncf || '',
-    }));
-    excelData.push({
-      [headers[0]]: 'Totales',
-      [headers[6]]: summaryTotals.total,
-      [headers[7]]: summaryTotals.saldo,
+    const companyName = await getCompanyName(sucursalActiva);
+    const columnHeaders = ['Documento', 'Fecha Doc.', 'Suplidor', 'Días Crédito', 'Fecha Vence', 'Días Vencidos', 'Total', 'Saldo Pendiente', 'NCF'];
+    const dataRows = filteredData.map((item) => [
+      item.noDocumento || '',
+      formatDate(item.fechaDocumento),
+      item.nombreSuplidor || '',
+      item.diasCredito ?? 0,
+      formatDate(item.fechaVence),
+      item.diasVencidos ?? 0,
+      item.total ?? 0,
+      item.saldoPendiente ?? 0,
+      item.ncf || '',
+    ]);
+    dataRows.push([
+      'Totales', '', '', '', '', '', summaryTotals.total, summaryTotals.saldo, '',
+    ]);
+    exportToExcel({
+      companyName,
+      columnHeaders,
+      dataRows,
+      sheetName: 'Facturas Vencidas',
+      columnWidths: columnHeaders.map(() => ({ wch: 18 })),
     });
-
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-    worksheet['!cols'] = headers.map(() => ({ wch: 18 }));
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Facturas Vencidas');
-    XLSX.writeFile(workbook, `FacturasVencidas_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
-  };
+  }, [sucursalActiva, filteredData, summaryTotals]);
 
   /* ───── Columnas ───── */
 
@@ -457,7 +457,7 @@ const FacturasVencidas: React.FC = () => {
                 ]}
               />
               <div style={{ flex: 1 }} />
-              <Button icon={<DownloadOutlined />} onClick={exportarCSV}>
+              <Button icon={<DownloadOutlined />} onClick={exportarExcel}>
                 Exportar
               </Button>
               <Button icon={<ReloadOutlined />} onClick={handleRefresh} />

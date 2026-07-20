@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
 import type { TransaccionDTO, TransaccionVistaDTO, FiltroTransaccion } from '../types/transaccion';
+import type { DocumentoSinAsientoDTO } from '../types/integridad';
 
 const BASE = '/Transaccion';
 
@@ -261,6 +262,27 @@ export const transaccionApi = {
   anular: async (sucursal: number, transaccion: TransaccionDTO): Promise<TransaccionDTO> => {
     const { data } = await apiClient.post<ApiResponse<TransaccionDTO>>(`${BASE}/${sucursal}/anular`, transaccion);
     return data.data;
+  },
+
+  /** Obtener documentos registrados que deberian tener asientos pero no tienen */
+  obtenerDocumentosSinAsiento: async (
+    sucursal: number,
+    desde: string,
+    hasta: string,
+    tipoDoc?: string,
+    modulo?: number,
+    sucursalId?: string
+  ): Promise<DocumentoSinAsientoDTO[]> => {
+    const params: Record<string, string> = { desde, hasta };
+    if (tipoDoc) params.tipoDoc = tipoDoc;
+    if (modulo !== undefined) params.modulo = String(modulo);
+    if (sucursalId) params.sucursalId = sucursalId;
+
+    const { data } = await apiClient.get<ApiResponse<DocumentoSinAsientoDTO[]>>(
+      `/Integridad/documentos-sin-asiento/${sucursal}`,
+      { params }
+    );
+    return data.data || [];
   },
 
   /** Obtener documentos pendientes de una entidad */

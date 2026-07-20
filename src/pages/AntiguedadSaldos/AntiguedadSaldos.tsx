@@ -8,7 +8,6 @@ import {
   SearchOutlined, ReloadOutlined, PrinterOutlined, DownloadOutlined, CloseOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import * as XLSX from 'xlsx';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { antiguedadSaldosApi } from '../../api/antiguedadSaldosApi';
@@ -17,6 +16,7 @@ import { proveedorApi } from '../../api/proveedorApi';
 import { clienteApi } from '../../api/clienteApi';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { toTitleCase, formatCurrency } from '../../utils/formats';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import type { TransaccionBalanceDTO, ResumenAgingDTO, CategoriaEntidadDTO } from '../../types/antiguedadSaldos';
 import type { SuplidorDTO, CompaniaDTO } from '../../types/entradaAlmacen';
 import type { ClienteDTO } from '../../types/facturacion';
@@ -471,69 +471,68 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
 
   /* ───── Exportar Excel ───── */
 
-  const exportarCSV = () => {
+  const exportarExcel = useCallback(async () => {
     const items = detallado ? agingData : resumenData;
     if (items.length === 0) {
       message.warning('No hay datos para exportar');
       return;
     }
 
-    const workbook = XLSX.utils.book_new();
-    let headersParaExportar: string[];
-    let excelData: Record<string, any>[];
+    const companyName = await getCompanyName(sucursalActiva);
 
     if (detallado) {
-      headersParaExportar = ['Documento', 'NCF', 'Fecha', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
-      excelData = agingData.map((item) => ({
-        [headersParaExportar[0]]: item.tipoDocumento && item.noDocumento
+      const columnHeaders = ['Documento', 'NCF', 'Fecha', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
+      const dataRows = agingData.map((item) => [
+        item.tipoDocumento && item.noDocumento
           ? `${item.tipoDocumento}-${item.noDocumento}`
           : item.noDocumento || '',
-        [headersParaExportar[1]]: item.ncf || '',
-        [headersParaExportar[2]]: formatDate(item.fechaDocumento),
-        [headersParaExportar[3]]: item.total ?? 0,
-        [headersParaExportar[4]]: item.monto0_30 ?? 0,
-        [headersParaExportar[5]]: item.monto31_60 ?? 0,
-        [headersParaExportar[6]]: item.monto61_90 ?? 0,
-        [headersParaExportar[7]]: item.monto91_120 ?? 0,
-        [headersParaExportar[8]]: item.montoMas120 ?? 0,
-      }));
-      excelData.push({
-        [headersParaExportar[0]]: 'Totales',
-        [headersParaExportar[3]]: summaryTotals.total,
-        [headersParaExportar[4]]: summaryTotals.m0_30,
-        [headersParaExportar[5]]: summaryTotals.m31_60,
-        [headersParaExportar[6]]: summaryTotals.m61_90,
-        [headersParaExportar[7]]: summaryTotals.m91_120,
-        [headersParaExportar[8]]: summaryTotals.mMas120,
+        item.ncf || '',
+        formatDate(item.fechaDocumento),
+        item.total ?? 0,
+        item.monto0_30 ?? 0,
+        item.monto31_60 ?? 0,
+        item.monto61_90 ?? 0,
+        item.monto91_120 ?? 0,
+        item.montoMas120 ?? 0,
+      ]);
+      dataRows.push([
+        'Totales', '', '', summaryTotals.total,
+        summaryTotals.m0_30, summaryTotals.m31_60, summaryTotals.m61_90,
+        summaryTotals.m91_120, summaryTotals.mMas120,
+      ]);
+      exportToExcel({
+        companyName,
+        columnHeaders,
+        dataRows,
+        sheetName: 'Antigüedad',
+        columnWidths: columnHeaders.map(() => ({ wch: 18 })),
       });
     } else {
-      headersParaExportar = [entidadLabel, 'Código', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
-      excelData = resumenData.map((item) => ({
-        [headersParaExportar[0]]: item.nombreEntidad,
-        [headersParaExportar[1]]: item.codigoEntidad,
-        [headersParaExportar[2]]: item.total,
-        [headersParaExportar[3]]: item.monto0_30,
-        [headersParaExportar[4]]: item.monto31_60,
-        [headersParaExportar[5]]: item.monto61_90,
-        [headersParaExportar[6]]: item.monto91_120,
-        [headersParaExportar[7]]: item.montoMas120,
-      }));
-      excelData.push({
-        [headersParaExportar[0]]: 'Totales',
-        [headersParaExportar[2]]: summaryTotals.total,
-        [headersParaExportar[3]]: summaryTotals.m0_30,
-        [headersParaExportar[4]]: summaryTotals.m31_60,
-        [headersParaExportar[5]]: summaryTotals.m61_90,
-        [headersParaExportar[6]]: summaryTotals.m91_120,
-        [headersParaExportar[7]]: summaryTotals.mMas120,
+      const columnHeaders = [entidadLabel, 'Código', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
+      const dataRows = resumenData.map((item) => [
+        item.nombreEntidad,
+        item.codigoEntidad,
+        item.total,
+        item.monto0_30,
+        item.monto31_60,
+        item.monto61_90,
+        item.monto91_120,
+        item.montoMas120,
+      ]);
+      dataRows.push([
+        'Totales', '', summaryTotals.total,
+        summaryTotals.m0_30, summaryTotals.m31_60, summaryTotals.m61_90,
+        summaryTotals.m91_120, summaryTotals.mMas120,
+      ]);
+      exportToExcel({
+        companyName,
+        columnHeaders,
+        dataRows,
+        sheetName: 'Antigüedad',
+        columnWidths: columnHeaders.map(() => ({ wch: 18 })),
       });
     }
-
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-    worksheet['!cols'] = headersParaExportar.map(() => ({ wch: 18 }));
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Antigüedad');
-    XLSX.writeFile(workbook, `${titulo.replace(/\s+/g, '_')}_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
-  };
+  }, [sucursalActiva, detallado, agingData, resumenData, summaryTotals, titulo, entidadLabel]);
 
   /* ───── Columnas vista detallada ───── */
 
@@ -911,7 +910,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
               <Button icon={<PrinterOutlined />} onClick={handlePrint} loading={imprimiendo}>
                 Imprimir PDF
               </Button>
-              <Button icon={<DownloadOutlined />} onClick={exportarCSV}>
+              <Button icon={<DownloadOutlined />} onClick={exportarExcel}>
                 Exportar
               </Button>
               <Button icon={<ReloadOutlined />} onClick={handleRefresh} />

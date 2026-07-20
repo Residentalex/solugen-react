@@ -184,7 +184,7 @@ const AsientosContables: React.FC = () => {
             style={{ minWidth: 250 }}
             value={tipoDoc}
             onChange={(val) => { actions.handleSetTipoDoc(val); }}
-            options={documentos.map((d) => ({ value: d.codigo, label: `${d.codigo} - ${d.nombre || ''}` }))}
+            options={documentos.map((d) => ({ value: d.codigo, label: `${d.codigo} - ${toTitleCase(d.nombre || '')}` }))}
             size="small"
             filterOption={(input, option) =>
               (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())

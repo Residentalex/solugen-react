@@ -527,7 +527,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 {comparativo.length > 0 ? (
                   <Table
                     dataSource={comparativo}
-                    rowKey="sucursal"
+                    rowKey={(r) => r.sucursal || `comp-${Math.random()}`}
                     pagination={false}
                     size="small"
                     className="paces-list-table"
@@ -612,7 +612,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 {pendientesNCF.length > 0 ? (
                   <Table
                     dataSource={pendientesNCF}
-                    rowKey="id"
+                    rowKey={(r) => r.id ?? `ncf-${r.transaccionID ?? Math.random()}`}
                     pagination={false}
                     size="small"
                     className="paces-list-table"
@@ -650,7 +650,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 {docsNoCuadrados.length > 0 ? (
                   <Table
                     dataSource={docsNoCuadrados}
-                    rowKey="id"
+                    rowKey={(r) => r.id ?? `doc-${Math.random()}`}
                     pagination={{ pageSize: 5, showSizeChanger: false }}
                     size="small"
                     className="paces-list-table"
