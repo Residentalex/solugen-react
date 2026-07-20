@@ -96,12 +96,12 @@ const Roles: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Administrar Roles</h4>
         <Space>
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           <PermissionGate accion="CREAR">
             <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MROL/nuevo')}>
               Nuevo Rol
             </Button>
           </PermissionGate>
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </Space>
       </div>
 
@@ -109,7 +109,7 @@ const Roles: React.FC = () => {
         <Input.Search
           placeholder="Buscar roles..."
           allowClear
-          style={{ flex: 1, minWidth: 200, maxWidth: 400 }}
+          style={{ width: 400 }}
           prefix={<SearchOutlined className="paces-text-icon" />}
           onSearch={(value) => setSearchText(value)}
           onKeyDown={(e) => {

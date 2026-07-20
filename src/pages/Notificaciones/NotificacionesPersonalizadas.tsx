@@ -266,14 +266,14 @@ const NotificacionesPersonalizadas: React.FC = () => {
         />
       )}
 
-      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
+      <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '16px 24px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
             <Input.Search
               placeholder="Buscar por nombre o tipo..."
               allowClear
               onSearch={handleSearch}
-              style={{ flex: 1, minWidth: 200, maxWidth: 400 }}
+              style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
             <Select

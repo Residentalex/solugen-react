@@ -922,7 +922,7 @@ const AntiguedadSaldosDVC: React.FC = () => {
                     handleSearch('');
                   }
                 }}
-                style={{ flex: 1, minWidth: 200, maxWidth: 400 }}
+                style={{ width: 400 }}
                 prefix={<SearchOutlined className="paces-text-icon" />}
               />
               <Select
