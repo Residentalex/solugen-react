@@ -29,7 +29,7 @@ export interface CobroDTO {
   notaCredito: number;
   pago: number;
   devuelta: number;
-  facturaId: number;
+  facturaID: number;
 }
 
 export interface TurnoDTO {

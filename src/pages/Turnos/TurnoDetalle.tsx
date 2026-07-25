@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Grid, Divider,
-  Descriptions, Alert, Typography, Space, Input, Select, DatePicker, Tooltip, message, Modal
+  Descriptions, Alert, Typography, Space, Input, DatePicker, Tooltip, message, Modal
 } from 'antd';
 import {
   ArrowLeftOutlined, ReloadOutlined, FilterOutlined, FilterFilled
@@ -16,67 +16,11 @@ import { formatCurrency, formatDate, formatDateTime, toTitleCase, formatNumber }
 import DetalleToolbar from '../../components/DetalleToolbar';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import LogTable from '../../components/LogTable';
+import FiltroSeleccionDropdown from '../../components/FiltroSeleccionDropdown';
 
 const { Text } = Typography;
 
-// ─── Componentes de filtro por columna (tipo Excel) ───────────────────────────
-const FiltroTextoDropdown: React.FC<{
-  confirm: () => void;
-  clearFilters: () => void;
-  filtroKey: string;
-  placeholder: string;
-  filtrosActivos: Record<string, any>;
-  setFiltrosActivos: React.Dispatch<React.SetStateAction<Record<string, any>>>;
-}> = ({ confirm, clearFilters, filtroKey, placeholder, filtrosActivos, setFiltrosActivos }) => {
-  const filtroActual = filtrosActivos[filtroKey];
-  const [operator, setOperator] = React.useState(filtroActual?.operator || 'contains');
-  const [valor, setValor] = React.useState(filtroActual?.valor || '');
-
-  const handleAplicar = () => {
-    if (valor) {
-      setFiltrosActivos(prev => ({ ...prev, [filtroKey]: { operator, valor } }));
-    } else {
-      setFiltrosActivos(prev => { const n = { ...prev }; delete n[filtroKey]; return n; });
-    }
-    confirm();
-  };
-
-  const handleLimpiar = () => {
-    setOperator('contains');
-    setValor('');
-    clearFilters?.();
-    setFiltrosActivos(prev => { const n = { ...prev }; delete n[filtroKey]; return n; });
-    confirm();
-  };
-
-  return (
-    <div style={{ padding: 12, width: 260 }}>
-      <Select
-        value={operator}
-        onChange={setOperator}
-        style={{ width: '100%', marginBottom: 8 }}
-        options={[
-          { value: 'contains', label: 'Contiene' },
-          { value: 'startsWith', label: 'Empieza con' },
-          { value: 'endsWith', label: 'Termina con' },
-          { value: 'equals', label: 'Igual a' },
-          { value: 'notEquals', label: 'No igual a' },
-        ]}
-      />
-      <Input
-        placeholder={placeholder}
-        value={valor}
-        onChange={e => setValor(e.target.value)}
-        style={{ marginBottom: 8 }}
-      />
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Button size="small" onClick={handleLimpiar}>Limpiar</Button>
-        <Button type="primary" size="small" onClick={handleAplicar}>Aplicar</Button>
-      </div>
-    </div>
-  );
-};
-
+// ─── Componente de filtro por rango de fechas ─────────────────────────────────
 const FiltroFechaDropdown: React.FC<{
   confirm: () => void;
   clearFilters: () => void;
@@ -183,7 +127,7 @@ const TurnoDetalle: React.FC = () => {
     if (!data?.cobros?.length) return {
       efectivo: 0, cheque: 0, transferencia: 0,
       tarjetaCredito: 0, tarjetaDebito: 0, bono: 0,
-      tarjetaRegalo: 0, notaCredito: 0, pago: 0, devuelta: 0, facturaId: 0,
+      tarjetaRegalo: 0, notaCredito: 0, pago: 0, devuelta: 0, facturaID: 0,
     };
     return data.cobros.reduce((acc: CobroDTO, c: CobroDTO) => ({
       efectivo: acc.efectivo + (c.efectivo || 0),
@@ -196,8 +140,8 @@ const TurnoDetalle: React.FC = () => {
       notaCredito: acc.notaCredito + (c.notaCredito || 0),
       pago: acc.pago + (c.pago || 0),
       devuelta: acc.devuelta + (c.devuelta || 0),
-      facturaId: 0,
-    }), { efectivo: 0, cheque: 0, transferencia: 0, tarjetaCredito: 0, tarjetaDebito: 0, bono: 0, tarjetaRegalo: 0, notaCredito: 0, pago: 0, devuelta: 0, facturaId: 0 });
+      facturaID: 0,
+    }), { efectivo: 0, cheque: 0, transferencia: 0, tarjetaCredito: 0, tarjetaDebito: 0, bono: 0, tarjetaRegalo: 0, notaCredito: 0, pago: 0, devuelta: 0, facturaID: 0 });
   }, [data?.cobros]);
 
   const cobrado = data?.cobros?.reduce((sum, c) => sum +
@@ -207,6 +151,29 @@ const TurnoDetalle: React.FC = () => {
   const total = data?.total ?? 0;
   const porCobrar = total - cobrado;
 
+  // Mapa de pagos por factura
+  const pagosPorFactura: Record<number, { metodos: Array<{ key: string; label: string; monto: number }>; totalPagado: number }> = React.useMemo(() => {
+    const mapa: Record<number, { metodos: Array<{ key: string; label: string; monto: number }>; totalPagado: number }> = {};
+    if (!data?.cobros) return mapa;
+    data.cobros.forEach((c: CobroDTO) => {
+      if (!mapa[c.facturaID]) {
+        mapa[c.facturaID] = { metodos: [], totalPagado: 0 };
+      }
+      const metodos: Array<{ key: string; label: string; monto: number }> = [];
+      if (c.efectivo > 0) metodos.push({ key: 'efectivo', label: 'Efvo.', monto: c.efectivo });
+      if (c.cheque > 0) metodos.push({ key: 'cheque', label: 'Cheque', monto: c.cheque });
+      if (c.transferencia > 0) metodos.push({ key: 'transferencia', label: 'Transf.', monto: c.transferencia });
+      if (c.tarjetaCredito > 0) metodos.push({ key: 'tarjetaCredito', label: 'T.Créd.', monto: c.tarjetaCredito });
+      if (c.tarjetaDebito > 0) metodos.push({ key: 'tarjetaDebito', label: 'T.Déb.', monto: c.tarjetaDebito });
+      if (c.bono > 0) metodos.push({ key: 'bono', label: 'Bono', monto: c.bono });
+      if (c.tarjetaRegalo > 0) metodos.push({ key: 'tarjetaRegalo', label: 'T.Reg.', monto: c.tarjetaRegalo });
+      if (c.notaCredito > 0) metodos.push({ key: 'notaCredito', label: 'N.Créd.', monto: c.notaCredito });
+      mapa[c.facturaID].metodos.push(...metodos);
+      mapa[c.facturaID].totalPagado += metodos.reduce((sum, m) => sum + m.monto, 0);
+    });
+    return mapa;
+  }, [data?.cobros]);
+
   // Columnas de facturas con filtro tipo Excel
   const facturaColumns = [
     {
@@ -214,13 +181,16 @@ const TurnoDetalle: React.FC = () => {
       key: 'noDocumento',
       width: 160,
       filterDropdown: ({ confirm, clearFilters }: any) => (
-        <FiltroTextoDropdown
-          confirm={confirm}
-          clearFilters={clearFilters}
-          filtroKey="noDocumento"
+        <FiltroSeleccionDropdown
+          dataSource={data?.facturas || []}
+          dataIndex="noDocumento"
+          render={(r: any) => r.noDocumento || r.documento || ''}
           placeholder="Buscar documento..."
+          filtroKey="noDocumento"
           filtrosActivos={filtrosActivos}
           setFiltrosActivos={setFiltrosActivos}
+          confirm={confirm}
+          clearFilters={clearFilters}
         />
       ),
       filterIcon: () => filtrosActivos.noDocumento
@@ -257,13 +227,16 @@ const TurnoDetalle: React.FC = () => {
       width: 250,
       ellipsis: true,
       filterDropdown: ({ confirm, clearFilters }: any) => (
-        <FiltroTextoDropdown
-          confirm={confirm}
-          clearFilters={clearFilters}
-          filtroKey="cliente"
+        <FiltroSeleccionDropdown
+          dataSource={data?.facturas || []}
+          dataIndex="cliente"
+          render={(r: any) => r.cliente?.nombre || ''}
           placeholder="Buscar cliente..."
+          filtroKey="cliente"
           filtrosActivos={filtrosActivos}
           setFiltrosActivos={setFiltrosActivos}
+          confirm={confirm}
+          clearFilters={clearFilters}
         />
       ),
       filterIcon: () => filtrosActivos.cliente
@@ -272,6 +245,36 @@ const TurnoDetalle: React.FC = () => {
       render: (_: any, record: any) => (
         <Text>{record.cliente?.nombre || '-'}</Text>
       ),
+    },
+    {
+      title: 'Pagos',
+      key: 'pagos',
+      width: 220,
+      render: (_: any, record: any) => {
+        const pagos = pagosPorFactura[record.id];
+        if (!pagos || pagos.metodos.length === 0) {
+          return <Text type="secondary" style={{ fontSize: 12 }}>Sin pago</Text>;
+        }
+        const colorMap: Record<string, string> = {
+          efectivo: 'green',
+          cheque: 'blue',
+          transferencia: 'purple',
+          tarjetaCredito: 'cyan',
+          tarjetaDebito: 'geekblue',
+          bono: 'gold',
+          tarjetaRegalo: 'orange',
+          notaCredito: 'volcano',
+        };
+        return (
+          <Space size={[4, 4]} wrap>
+            {pagos.metodos.map((m) => (
+              <Tooltip key={m.key} title={formatCurrency(m.monto)}>
+                <Tag color={colorMap[m.key]} style={{ margin: 0 }}>{m.label}</Tag>
+              </Tooltip>
+            ))}
+          </Space>
+        );
+      },
     },
     {
       title: 'Total',
@@ -355,24 +358,12 @@ const TurnoDetalle: React.FC = () => {
       if (!filtro) return;
       result = result.filter((doc: any) => {
         if (key === 'noDocumento') {
-          const val = (doc.noDocumento || doc.documento || '').toLowerCase();
-          const search = (filtro.valor || '').toLowerCase();
-          if (filtro.operator === 'contains') return val.includes(search);
-          if (filtro.operator === 'startsWith') return val.startsWith(search);
-          if (filtro.operator === 'endsWith') return val.endsWith(search);
-          if (filtro.operator === 'equals') return val === search;
-          if (filtro.operator === 'notEquals') return val !== search;
-          return true;
+          const val = doc.noDocumento || doc.documento || '';
+          return Array.isArray(filtro.valor) ? filtro.valor.includes(val) : true;
         }
         if (key === 'cliente') {
-          const val = (doc.cliente?.nombre || '').toLowerCase();
-          const search = (filtro.valor || '').toLowerCase();
-          if (filtro.operator === 'contains') return val.includes(search);
-          if (filtro.operator === 'startsWith') return val.startsWith(search);
-          if (filtro.operator === 'endsWith') return val.endsWith(search);
-          if (filtro.operator === 'equals') return val === search;
-          if (filtro.operator === 'notEquals') return val !== search;
-          return true;
+          const val = doc.cliente?.nombre || '';
+          return Array.isArray(filtro.valor) ? filtro.valor.includes(val) : true;
         }
         if (key === 'fechaDocumento') {
           const docFecha = doc.fechaDocumento ? new Date(doc.fechaDocumento).getTime() : 0;
@@ -395,24 +386,12 @@ const TurnoDetalle: React.FC = () => {
       if (!filtro) return;
       result = result.filter((d: any) => {
         if (key === 'codigo') {
-          const val = (d.codigo || '').toLowerCase();
-          const search = (filtro.valor || '').toLowerCase();
-          if (filtro.operator === 'contains') return val.includes(search);
-          if (filtro.operator === 'startsWith') return val.startsWith(search);
-          if (filtro.operator === 'endsWith') return val.endsWith(search);
-          if (filtro.operator === 'equals') return val === search;
-          if (filtro.operator === 'notEquals') return val !== search;
-          return true;
+          const val = d.codigo || '';
+          return Array.isArray(filtro.valor) ? filtro.valor.includes(val) : true;
         }
         if (key === 'articulo') {
-          const val = (d.articulo || '').toLowerCase();
-          const search = (filtro.valor || '').toLowerCase();
-          if (filtro.operator === 'contains') return val.includes(search);
-          if (filtro.operator === 'startsWith') return val.startsWith(search);
-          if (filtro.operator === 'endsWith') return val.endsWith(search);
-          if (filtro.operator === 'equals') return val === search;
-          if (filtro.operator === 'notEquals') return val !== search;
-          return true;
+          const val = d.articulo || '';
+          return Array.isArray(filtro.valor) ? filtro.valor.includes(val) : true;
         }
         return true;
       });
@@ -439,34 +418,16 @@ const TurnoDetalle: React.FC = () => {
       if (!filtro) return;
       result = result.filter((d: any) => {
         if (key === 'codigo') {
-          const val = (d.codigo || '').toLowerCase();
-          const search = (filtro.valor || '').toLowerCase();
-          if (filtro.operator === 'contains') return val.includes(search);
-          if (filtro.operator === 'startsWith') return val.startsWith(search);
-          if (filtro.operator === 'endsWith') return val.endsWith(search);
-          if (filtro.operator === 'equals') return val === search;
-          if (filtro.operator === 'notEquals') return val !== search;
-          return true;
+          const val = d.codigo || '';
+          return Array.isArray(filtro.valor) ? filtro.valor.includes(val) : true;
         }
         if (key === 'articulo') {
-          const val = (d.articulo || '').toLowerCase();
-          const search = (filtro.valor || '').toLowerCase();
-          if (filtro.operator === 'contains') return val.includes(search);
-          if (filtro.operator === 'startsWith') return val.startsWith(search);
-          if (filtro.operator === 'endsWith') return val.endsWith(search);
-          if (filtro.operator === 'equals') return val === search;
-          if (filtro.operator === 'notEquals') return val !== search;
-          return true;
+          const val = d.articulo || '';
+          return Array.isArray(filtro.valor) ? filtro.valor.includes(val) : true;
         }
         if (key === 'impuesto') {
-          const val = (d.impuesto?.nombre || '').toLowerCase();
-          const search = (filtro.valor || '').toLowerCase();
-          if (filtro.operator === 'contains') return val.includes(search);
-          if (filtro.operator === 'startsWith') return val.startsWith(search);
-          if (filtro.operator === 'endsWith') return val.endsWith(search);
-          if (filtro.operator === 'equals') return val === search;
-          if (filtro.operator === 'notEquals') return val !== search;
-          return true;
+          const val = d.impuesto?.nombre || '';
+          return Array.isArray(filtro.valor) ? filtro.valor.includes(val) : true;
         }
         return true;
       });
@@ -590,13 +551,15 @@ const TurnoDetalle: React.FC = () => {
       fixed: 'left' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       filterDropdown: ({ confirm, clearFilters }: any) => (
-        <FiltroTextoDropdown
-          confirm={confirm}
-          clearFilters={clearFilters}
-          filtroKey="codigo"
+        <FiltroSeleccionDropdown
+          dataSource={detalles}
+          dataIndex="codigo"
           placeholder="Buscar código..."
+          filtroKey="codigo"
           filtrosActivos={costosFiltrosActivos}
           setFiltrosActivos={setCostosFiltrosActivos}
+          confirm={confirm}
+          clearFilters={clearFilters}
         />
       ),
       filterIcon: () => costosFiltrosActivos.codigo
@@ -621,13 +584,15 @@ const TurnoDetalle: React.FC = () => {
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       filterDropdown: ({ confirm, clearFilters }: any) => (
-        <FiltroTextoDropdown
-          confirm={confirm}
-          clearFilters={clearFilters}
-          filtroKey="articulo"
+        <FiltroSeleccionDropdown
+          dataSource={detalles}
+          dataIndex="articulo"
           placeholder="Buscar artículo..."
+          filtroKey="articulo"
           filtrosActivos={costosFiltrosActivos}
           setFiltrosActivos={setCostosFiltrosActivos}
+          confirm={confirm}
+          clearFilters={clearFilters}
         />
       ),
       filterIcon: () => costosFiltrosActivos.articulo
@@ -705,13 +670,15 @@ const TurnoDetalle: React.FC = () => {
       fixed: 'left' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       filterDropdown: ({ confirm, clearFilters }: any) => (
-        <FiltroTextoDropdown
-          confirm={confirm}
-          clearFilters={clearFilters}
-          filtroKey="codigo"
+        <FiltroSeleccionDropdown
+          dataSource={detalles}
+          dataIndex="codigo"
           placeholder="Buscar código..."
+          filtroKey="codigo"
           filtrosActivos={ingresosFiltrosActivos}
           setFiltrosActivos={setIngresosFiltrosActivos}
+          confirm={confirm}
+          clearFilters={clearFilters}
         />
       ),
       filterIcon: () => ingresosFiltrosActivos.codigo
@@ -736,13 +703,15 @@ const TurnoDetalle: React.FC = () => {
       ellipsis: true,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       filterDropdown: ({ confirm, clearFilters }: any) => (
-        <FiltroTextoDropdown
-          confirm={confirm}
-          clearFilters={clearFilters}
-          filtroKey="articulo"
+        <FiltroSeleccionDropdown
+          dataSource={detalles}
+          dataIndex="articulo"
           placeholder="Buscar artículo..."
+          filtroKey="articulo"
           filtrosActivos={ingresosFiltrosActivos}
           setFiltrosActivos={setIngresosFiltrosActivos}
+          confirm={confirm}
+          clearFilters={clearFilters}
         />
       ),
       filterIcon: () => ingresosFiltrosActivos.articulo
@@ -799,13 +768,16 @@ const TurnoDetalle: React.FC = () => {
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       filterDropdown: ({ confirm, clearFilters }: any) => (
-        <FiltroTextoDropdown
-          confirm={confirm}
-          clearFilters={clearFilters}
-          filtroKey="impuesto"
+        <FiltroSeleccionDropdown
+          dataSource={detalles}
+          dataIndex="impuesto"
+          render={(r: any) => r.impuesto?.nombre || ''}
           placeholder="Buscar impuesto..."
+          filtroKey="impuesto"
           filtrosActivos={ingresosFiltrosActivos}
           setFiltrosActivos={setIngresosFiltrosActivos}
+          confirm={confirm}
+          clearFilters={clearFilters}
         />
       ),
       filterIcon: () => ingresosFiltrosActivos.impuesto
@@ -869,7 +841,7 @@ const TurnoDetalle: React.FC = () => {
                 <Text type="secondary" style={{ fontSize: 13 }}>Filtros:</Text>
                 {Object.entries(filtrosActivos).map(([key, f]) => (
                   <Tag key={key} closable onClose={() => limpiarFiltro(key)}>
-                    {key === 'noDocumento' ? 'No. Documento' : key === 'cliente' ? 'Entidad/Cliente' : key === 'fechaDocumento' ? 'Fecha' : key}: {f?.valor || `${f?.value?.[0] || ''} - ${f?.value?.[1] || ''}`}
+                    {key === 'noDocumento' ? 'No. Documento' : key === 'cliente' ? 'Entidad/Cliente' : key === 'fechaDocumento' ? 'Fecha' : key}: {Array.isArray(f?.valor) ? f.valor.join(', ') : f?.valor || `${f?.value?.[0] || ''} - ${f?.value?.[1] || ''}`}
                   </Tag>
                 ))}
                 <Button size="small" onClick={limpiarTodosFiltros} type="link" style={{ padding: 0 }}>
@@ -889,7 +861,7 @@ const TurnoDetalle: React.FC = () => {
               showSizeChanger: false,
               showTotal: (total: number) => `${total} registros`,
             }}
-            scroll={{ x: 900 }}
+            scroll={{ x: 1100 }}
             locale={{ emptyText: 'Sin facturas registradas' }}
           />
         </div>
@@ -910,7 +882,7 @@ const TurnoDetalle: React.FC = () => {
                 <Text type="secondary" style={{ fontSize: 13 }}>Filtros:</Text>
                 {Object.entries(costosFiltrosActivos).map(([key, f]) => (
                   <Tag key={key} closable onClose={() => limpiarFiltroCostos(key)}>
-                    {key === 'codigo' ? 'Código' : key === 'articulo' ? 'Artículo' : key}: {f?.valor || ''}
+                    {key === 'codigo' ? 'Código' : key === 'articulo' ? 'Artículo' : key}: {Array.isArray(f?.valor) ? f.valor.join(', ') : f?.valor || ''}
                   </Tag>
                 ))}
                 <Button size="small" onClick={limpiarTodosFiltrosCostos} type="link" style={{ padding: 0 }}>
@@ -958,7 +930,7 @@ const TurnoDetalle: React.FC = () => {
                 <Text type="secondary" style={{ fontSize: 13 }}>Filtros:</Text>
                 {Object.entries(ingresosFiltrosActivos).map(([key, f]) => (
                   <Tag key={key} closable onClose={() => limpiarFiltroIngresos(key)}>
-                    {key === 'codigo' ? 'Código' : key === 'articulo' ? 'Artículo' : key === 'impuesto' ? 'Impuesto' : key}: {f?.valor || ''}
+                    {key === 'codigo' ? 'Código' : key === 'articulo' ? 'Artículo' : key === 'impuesto' ? 'Impuesto' : key}: {Array.isArray(f?.valor) ? f.valor.join(', ') : f?.valor || ''}
                   </Tag>
                 ))}
                 <Button size="small" onClick={limpiarTodosFiltrosIngresos} type="link" style={{ padding: 0 }}>
