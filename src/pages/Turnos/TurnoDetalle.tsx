@@ -2,10 +2,14 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Grid, Divider,
-  Descriptions, Alert, Typography, Space, Input, DatePicker, Tooltip, message, Modal
+  Descriptions, Alert, Typography, Space, Input, DatePicker, Tooltip, message, Modal,
+  Checkbox
 } from 'antd';
 import {
-  ArrowLeftOutlined, ReloadOutlined, FilterOutlined, FilterFilled
+  ArrowLeftOutlined, ReloadOutlined, FilterOutlined, FilterFilled,
+  DollarCircleOutlined, FileTextOutlined, SwapOutlined,
+  CreditCardOutlined, CreditCardFilled, GiftOutlined,
+  TagOutlined, RollbackOutlined
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../../stores/authStore';
@@ -174,6 +178,24 @@ const TurnoDetalle: React.FC = () => {
     return mapa;
   }, [data?.cobros]);
 
+  // Mapas para iconos y labels de métodos de pago
+  const METODO_PAGO_LABELS: Record<string, string> = {
+    efectivo: 'Efectivo', cheque: 'Cheque', transferencia: 'Transferencia',
+    tarjetaCredito: 'T. Crédito', tarjetaDebito: 'T. Débito',
+    bono: 'Bono', tarjetaRegalo: 'T. Regalo', notaCredito: 'N. Crédito',
+  };
+
+  const ICONO_MAP: Record<string, React.ReactNode> = {
+    efectivo: <DollarCircleOutlined style={{ fontSize: 16, color: '#52c41a' }} />,
+    cheque: <FileTextOutlined style={{ fontSize: 16, color: '#1890ff' }} />,
+    transferencia: <SwapOutlined style={{ fontSize: 16, color: '#722ed1' }} />,
+    tarjetaCredito: <CreditCardOutlined style={{ fontSize: 16, color: '#13c2c2' }} />,
+    tarjetaDebito: <CreditCardFilled style={{ fontSize: 16, color: '#2f54eb' }} />,
+    bono: <GiftOutlined style={{ fontSize: 16, color: '#faad14' }} />,
+    tarjetaRegalo: <TagOutlined style={{ fontSize: 16, color: '#fa8c16' }} />,
+    notaCredito: <RollbackOutlined style={{ fontSize: 16, color: '#ff4d4f' }} />,
+  };
+
   // Columnas de facturas con filtro tipo Excel
   const facturaColumns = [
     {
@@ -197,7 +219,11 @@ const TurnoDetalle: React.FC = () => {
         ? <FilterFilled style={{ color: '#556ee6', fontSize: 12 }} />
         : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />,
       render: (_: any, record: any) => (
-        <Text className="paces-doc-link">
+        <Text
+          className="paces-doc-link"
+          onClick={() => navigate(`/FPV/${record.id}`)}
+          style={{ cursor: 'pointer' }}
+        >
           {record.noDocumento || record.documento || '-'}
         </Text>
       ),
@@ -249,31 +275,85 @@ const TurnoDetalle: React.FC = () => {
     {
       title: 'Pagos',
       key: 'pagos',
-      width: 220,
+      width: 160,
+      filterDropdown: ({ confirm, clearFilters }: any) => {
+        const metodosSet = new Set<string>();
+        (data?.facturas || []).forEach((fac: any) => {
+          const pagos = pagosPorFactura[fac.id];
+          if (pagos?.metodos?.length) {
+            pagos.metodos.forEach((m: any) => metodosSet.add(m.key));
+          } else {
+            metodosSet.add('sin_pago');
+          }
+        });
+        const options = Array.from(metodosSet).map(key => ({
+          label: key === 'sin_pago' ? 'Sin pago' : (METODO_PAGO_LABELS[key] || key),
+          value: key,
+        }));
+        return (
+          <div style={{ padding: 8, minWidth: 180 }}>
+            <Checkbox.Group
+              value={filtrosActivos.pagos?.valor || []}
+              onChange={(checkedValues) => {
+                setFiltrosActivos(prev => {
+                  if (checkedValues.length > 0) {
+                    return { ...prev, pagos: { valor: checkedValues as string[] } };
+                  }
+                  const n = { ...prev };
+                  delete n.pagos;
+                  return n;
+                });
+              }}
+            >
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {options.map(opt => (
+                  <Checkbox key={opt.value} value={opt.value}>{opt.label}</Checkbox>
+                ))}
+              </Space>
+            </Checkbox.Group>
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between' }}>
+              <Button size="small" onClick={() => {
+                setFiltrosActivos(prev => { const n = { ...prev }; delete n.pagos; return n; });
+                clearFilters?.();
+                confirm();
+              }}>Limpiar</Button>
+              <Button type="primary" size="small" onClick={() => confirm()}>Aceptar</Button>
+            </div>
+          </div>
+        );
+      },
+      filterIcon: () => filtrosActivos.pagos
+        ? <FilterFilled style={{ color: '#556ee6', fontSize: 12 }} />
+        : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />,
       render: (_: any, record: any) => {
         const pagos = pagosPorFactura[record.id];
         if (!pagos || pagos.metodos.length === 0) {
-          return <Text type="secondary" style={{ fontSize: 12 }}>Sin pago</Text>;
+          return <Text type="secondary" style={{ fontSize: 12 }}>—</Text>;
         }
-        const colorMap: Record<string, string> = {
-          efectivo: 'green',
-          cheque: 'blue',
-          transferencia: 'purple',
-          tarjetaCredito: 'cyan',
-          tarjetaDebito: 'geekblue',
-          bono: 'gold',
-          tarjetaRegalo: 'orange',
-          notaCredito: 'volcano',
-        };
         return (
-          <Space size={[4, 4]} wrap>
+          <Space size={[2, 0]}>
             {pagos.metodos.map((m) => (
-              <Tooltip key={m.key} title={formatCurrency(m.monto)}>
-                <Tag color={colorMap[m.key]} style={{ margin: 0 }}>{m.label}</Tag>
+              <Tooltip key={m.key} title={`${METODO_PAGO_LABELS[m.key] || m.label}: ${formatCurrency(m.monto)}`}>
+                {ICONO_MAP[m.key]}
               </Tooltip>
             ))}
           </Space>
         );
+      },
+    },
+    {
+      title: 'Pendiente',
+      key: 'pendiente',
+      width: 130,
+      align: 'right' as const,
+      render: (_: any, record: any) => {
+        const pagos = pagosPorFactura[record.id];
+        const cobrado = pagos?.totalPagado || 0;
+        const pendiente = record.total - cobrado;
+        if (pendiente <= 0.01) {
+          return <Text style={{ color: '#52c41a' }}>Pagado</Text>;
+        }
+        return <Text strong style={{ color: '#ff4d4f' }}>{formatCurrency(pendiente)}</Text>;
       },
     },
     {
@@ -370,6 +450,15 @@ const TurnoDetalle: React.FC = () => {
           const desde = filtro.value?.[0] ? new Date(filtro.value[0]).getTime() : 0;
           const hasta = filtro.value?.[1] ? new Date(filtro.value[1]).getTime() : Infinity;
           return docFecha >= desde && docFecha <= hasta;
+        }
+        if (key === 'pagos') {
+          const seleccionados: string[] = filtro.valor || [];
+          if (seleccionados.length === 0) return true;
+          const pagos = pagosPorFactura[doc.id];
+          const metodosDoc = pagos?.metodos?.map((m: any) => m.key) || [];
+          if (metodosDoc.length === 0 && seleccionados.includes('sin_pago')) return true;
+          if (metodosDoc.length > 0) return seleccionados.some((m: string) => metodosDoc.includes(m));
+          return false;
         }
         return true;
       });
@@ -841,7 +930,7 @@ const TurnoDetalle: React.FC = () => {
                 <Text type="secondary" style={{ fontSize: 13 }}>Filtros:</Text>
                 {Object.entries(filtrosActivos).map(([key, f]) => (
                   <Tag key={key} closable onClose={() => limpiarFiltro(key)}>
-                    {key === 'noDocumento' ? 'No. Documento' : key === 'cliente' ? 'Entidad/Cliente' : key === 'fechaDocumento' ? 'Fecha' : key}: {Array.isArray(f?.valor) ? f.valor.join(', ') : f?.valor || `${f?.value?.[0] || ''} - ${f?.value?.[1] || ''}`}
+                    {key === 'noDocumento' ? 'No. Documento' : key === 'cliente' ? 'Entidad/Cliente' : key === 'fechaDocumento' ? 'Fecha' : key === 'pagos' ? 'Pagos' : key}: {Array.isArray(f?.valor) ? f.valor.map((v: string) => v === 'sin_pago' ? 'Sin pago' : METODO_PAGO_LABELS[v] || v).join(', ') : f?.valor || `${f?.value?.[0] || ''} - ${f?.value?.[1] || ''}`}
                   </Tag>
                 ))}
                 <Button size="small" onClick={limpiarTodosFiltros} type="link" style={{ padding: 0 }}>
@@ -855,6 +944,13 @@ const TurnoDetalle: React.FC = () => {
             dataSource={documentosFiltrados}
             columns={facturaColumns}
             rowKey="id"
+            rowClassName={(record: any) => {
+              const pagos = pagosPorFactura[record.id];
+              const cobrado = pagos?.totalPagado || 0;
+              const pendiente = record.total - cobrado;
+              if (pendiente > 0.01) return 'paces-row-pendiente';
+              return '';
+            }}
             size="small"
             pagination={{
               pageSize: 25,
@@ -1020,6 +1116,14 @@ const TurnoDetalle: React.FC = () => {
 
   return (
     <div>
+      <style>{`
+  .paces-row-pendiente {
+    background-color: #fff1f0 !important;
+  }
+  .paces-row-pendiente:hover td {
+    background-color: #ffccc7 !important;
+  }
+`}</style>
       {loadingError && (
         <Alert
           message="Error al cargar detalle del turno"
