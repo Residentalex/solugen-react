@@ -132,6 +132,13 @@ export const facturaPOSApi = {
     return data.data;
   },
 
+  generarPVC: async (sucursal: number, id: number, destino?: number): Promise<FacturaPOSDTO> => {
+    const params: Record<string, number> = {};
+    if (destino !== undefined) params.destino = destino;
+    const { data } = await apiClient.post<ApiResponse<FacturaPOSDTO>>(`${BASE}/${sucursal}/generar-pvc/${id}`, null, { params });
+    return data.data;
+  },
+
   // ===== Catálogos =====
   obtenerConceptos: async (sucursal: number, tipoDocumento?: string): Promise<any[]> => {
     const url = tipoDocumento ? `/Concepto/${sucursal}/documento/${tipoDocumento}` : `/Concepto/${sucursal}`;

@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  Card, Spin, Button, Space, Row, Col, Grid, Divider,
-  Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, App,
+  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid,
+  Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Empty, App,
 } from 'antd';
 import {
   SaveOutlined,
@@ -10,6 +10,8 @@ import {
   ExclamationCircleOutlined,
   SearchOutlined,
   BankOutlined,
+  PlusOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -17,21 +19,28 @@ import { useUIStore } from '../../stores/uiStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
 import { conceptosApi } from '../../api/conceptosApi';
+import { cuentaBancariaApi } from '../../api/cuentaBancariaApi';
 import CampoTipo from '../../components/CampoTipo/CampoTipo';
 import type { SolicitudPagoDTO, SolicitudPagoCrearDTO, SolicitudPagoActualizarDTO } from '../../types/solicitudPago';
-import type { ConceptoDTO, EntidadDTO } from '../../types/entradaAlmacen';
+import type { ConceptoDTO, EntidadDTO, AsientoContableDTO, LogDTO } from '../../types/entradaAlmacen';
+import type { TransaccionAsociadaDTO } from '../../types/reciboIngreso';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import BuscarCuentaBancariaModal from '../../components/BuscarCuentaBancariaModal/BuscarCuentaBancariaModal';
+import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import AsientosContableTable from '../../components/AsientosContableTable';
+import LogTable from '../../components/LogTable';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
-import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber } from '../../utils/formats';
+import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber, formatDate } from '../../utils/formats';
 import { toEstadoNum } from '../../utils/estadoDocumento';
 
+const { Text } = Typography;
 const { TextArea } = Input;
 
 const TIPOS_PAGO = [
@@ -75,12 +84,41 @@ const SolicitudPagoFormulario: React.FC = () => {
   const [conceptoSearchText, setConceptoSearchText] = useState('');
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
 
-  // ===== Watchers =====
-  const subTotalValue = Form.useWatch('subTotal', form) ?? 0;
-  const descuentoValue = Form.useWatch('descuento', form) ?? 0;
-  const impuestosValue = Form.useWatch('impuestos', form) ?? 0;
-  const retencionesValue = Form.useWatch('retenciones', form) ?? 0;
+  // Cuenta Bancaria
+  const [selectedCuenta, setSelectedCuenta] = useState<{ nombre: string; noCuenta: string; banco: string } | null>(null);
+  const [cuentaModalOpen, setCuentaModalOpen] = useState(false);
+
+  // Documentos relacionados
+  const [transaccionesAsociadas, setTransaccionesAsociadas] = useState<TransaccionAsociadaDTO[]>([]);
+  const [documentoModalOpen, setDocumentoModalOpen] = useState(false);
+
+  // Asientos e historial
+  const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
+  const [logs, setLogs] = useState<LogDTO[]>([]);
+
+  // ===== Totales calculados desde documentos seleccionados =====
+  const totalesDocs = React.useMemo(() => ({
+    subTotal: transaccionesAsociadas.reduce((s, t) => s + (t.monto || 0), 0),
+    descuento: transaccionesAsociadas.reduce((s, t) => s + (t.descuento || 0), 0),
+    impuestos: transaccionesAsociadas.reduce((s, t) => s + (t.impuesto || 0), 0),
+    retenciones: transaccionesAsociadas.reduce((s, t) => s + (t.retencion || 0), 0),
+  }), [transaccionesAsociadas]);
+
+  const totalCalculado = Math.round(
+    (totalesDocs.subTotal - totalesDocs.descuento + totalesDocs.impuestos - totalesDocs.retenciones) * 100
+  ) / 100;
+
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
+
+  // Sincronizar form fields para submission del DTO
+  useEffect(() => {
+    form.setFieldsValue({
+      subTotal: totalesDocs.subTotal,
+      descuento: totalesDocs.descuento,
+      impuestos: totalesDocs.impuestos,
+      retenciones: totalesDocs.retenciones,
+    });
+  }, [totalesDocs, form]);
 
   // ===== Constantes =====
   const isLarge = screens.xxl === true;
@@ -88,11 +126,6 @@ const SolicitudPagoFormulario: React.FC = () => {
   // Moneda dinámica (siempre desde concepto)
   const monedaSimbolo = selectedConcepto?.moneda?.simbolo || getMonedaSucursalActiva().simbolo;
   const monedaNombre = selectedConcepto?.moneda?.nombre || getMonedaSucursalActiva().nombre;
-
-  // Total auto-calculado
-  const totalCalculado = Math.round(
-    (subTotalValue - descuentoValue + impuestosValue - retencionesValue) * 100
-  ) / 100;
 
   // ===== Carga inicial =====
   useEffect(() => {
@@ -122,7 +155,7 @@ const SolicitudPagoFormulario: React.FC = () => {
   // ===== Cargar entidades según concepto =====
   const cargarEntidades = useCallback(async (conceptoCodigo?: string) => {
     try {
-      const res = await conceptosApi.obtenerEntidades(sucursalActiva, conceptoCodigo, true);
+      const res = await conceptosApi.obtenerEntidadesActivas(sucursalActiva, conceptoCodigo);
       setEntidadesCache(res || []);
     } catch {
       message.error('Error al cargar entidades');
@@ -136,7 +169,7 @@ const SolicitudPagoFormulario: React.FC = () => {
 
     setLoading(true);
     solicitudPagoApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
+      .then(async (res) => {
         if (!res) {
           message.error('Documento no encontrado en la sucursal seleccionada.');
           setLoadingError(true);
@@ -145,17 +178,21 @@ const SolicitudPagoFormulario: React.FC = () => {
         }
 
         setData(res);
+        setAsientos(res.asientos || []);
+        setLogs(res.logs || []);
+        setTransaccionesAsociadas(res.transaccionesAsociadas || []);
 
         // Concepto
         const resAny = res as any;
         const conceptoRaw = resAny.concepto;
         const concepto = typeof conceptoRaw === 'object' && conceptoRaw !== null ? conceptoRaw as ConceptoDTO : null;
+        const conceptoCodigo = concepto?.codigo || res.codigoConcepto || '';
         if (concepto) {
-          setSelectedConcepto(concepto);
-          setConceptoSearchText(`${concepto.codigo || ''} - ${concepto.nombre || ''}`);
+          setSelectedConcepto({ ...concepto, codigo: conceptoCodigo });
+          setConceptoSearchText(`${conceptoCodigo} - ${concepto.nombre || ''}`);
           // Cargar entidades según concepto
-          if (concepto.codigo) {
-            cargarEntidades(concepto.codigo);
+          if (conceptoCodigo) {
+            cargarEntidades(conceptoCodigo);
           }
         }
 
@@ -167,21 +204,36 @@ const SolicitudPagoFormulario: React.FC = () => {
         const tipoPagoRaw = (res as any).tipoPagoCodigo;
         if (tipoPagoRaw) setTipoPago(tipoPagoRaw);
 
+        // Cuenta Bancaria — resolver datos completos desde el API
+        if (res.cuentaBancaria) {
+          try {
+            const cuentas = await cuentaBancariaApi.obtenerListado(sucursalActiva);
+            const encontrada = cuentas.find((c) => c.noCuenta === res.cuentaBancaria);
+            if (encontrada) {
+              setSelectedCuenta({ nombre: encontrada.nombre, noCuenta: encontrada.noCuenta, banco: encontrada.banco });
+            } else {
+              setSelectedCuenta({ nombre: '', noCuenta: res.cuentaBancaria, banco: '—' });
+            }
+          } catch {
+            setSelectedCuenta({ nombre: '', noCuenta: res.cuentaBancaria, banco: '' });
+          }
+        }
+
         // Entidad
         const entidadRaw = resAny.entidad;
         const entidad = typeof entidadRaw === 'object' && entidadRaw !== null ? entidadRaw as EntidadDTO : null;
         if (entidad) {
-          setSelectedEntidad(entidad);
+          setSelectedEntidad({ ...entidad, codigo: entidad.codigo || res.codigoEntidad || '' });
         }
 
-        // Fecha
-        const fechaDoc = res.fecha ? dayjs(res.fecha) : null;
+        // Fecha (forzar interpretación local para evitar desplazamiento UTC)
+        const fechaDoc = res.fechaDocumento ? dayjs(res.fechaDocumento.substring(0, 10)) : null;
 
         form.setFieldsValue({
           fechaDocumento: fechaDoc,
           tipo: tipoRaw?.codigo || resAny.codigoTipo || '',
-          concepto: concepto?.codigo || (typeof res.concepto === 'string' ? res.concepto : ''),
-          entidad: entidad?.codigo || '',
+          concepto: concepto?.codigo || res.codigoConcepto || '',
+          entidad: entidad?.codigo || res.codigoEntidad || '',
           cuentaBancaria: res.cuentaBancaria || '',
           referencia: res.referencia || '',
           ncf: res.ncf || '',
@@ -287,6 +339,136 @@ const SolicitudPagoFormulario: React.FC = () => {
     form.setFieldsValue({ concepto: '', entidad: undefined });
   };
 
+  // ===== Handlers de Cuenta Bancaria =====
+  const handleCuentaSelect = (cuenta: any) => {
+    setSelectedCuenta({ nombre: cuenta.nombre, noCuenta: cuenta.noCuenta, banco: cuenta.banco });
+    form.setFieldsValue({ cuentaBancaria: cuenta.noCuenta });
+  };
+
+  const handleCuentaClear = () => {
+    setSelectedCuenta(null);
+    form.setFieldsValue({ cuentaBancaria: '' });
+  };
+
+  const handleMontoChange = (id: number | undefined, nuevoMonto: number | null) => {
+    if (!id) return;
+    setTransaccionesAsociadas((prev) =>
+      prev.map((t) =>
+        (t.transaccionAsociadaID || t.id) === id ? { ...t, monto: nuevoMonto || 0 } : t
+      )
+    );
+  };
+
+  const handleDescuentoChange = (id: number | undefined, nuevoDescuento: number | null) => {
+    if (!id) return;
+    setTransaccionesAsociadas((prev) =>
+      prev.map((t) =>
+        (t.transaccionAsociadaID || t.id) === id ? { ...t, descuento: nuevoDescuento || 0 } : t
+      )
+    );
+  };
+
+  // ===== Handler para documentos relacionados =====
+  const handleAgregarDocumentos = (docs: any[]) => {
+    setTransaccionesAsociadas((prev) => {
+      const idsExistentes = new Set(
+        prev.map((t) => t.transaccionAsociadaID || t.id)
+      );
+      const nuevos = docs.filter(
+        (d) => !idsExistentes.has(d.transaccionAsociadaID || d.id)
+      );
+      return [...prev, ...nuevos];
+    });
+  };
+
+  const handleDocRelacionadoRemove = (id?: number) => {
+    setTransaccionesAsociadas((prev) =>
+      prev.filter((t) => (t.transaccionAsociadaID || t.id) !== id)
+    );
+  };
+
+
+
+  // ===== Generar asientos =====
+  /** Construye un objeto tipo TransaccionDTO (con objetos anidados) para el endpoint generarAsiento */
+  const construirDTOGenerarAsientos = useCallback(() => {
+    const values = form.getFieldsValue();
+    const base: any = data || {};
+    const fechaDoc = values.fechaDocumento
+      ? dayjs(values.fechaDocumento).format('YYYY-MM-DDTHH:mm:ss')
+      : dayjs().format('YYYY-MM-DDTHH:mm:ss');
+
+    // Documento desde pantalla
+    const documento = base.documento?.codigo
+      ? { ...base.documento }
+      : { codigo: documentCode };
+
+    // Concepto
+    const concepto = selectedConcepto || { nombre: '', codigo: '' };
+
+    // Entidad
+    const entidad = selectedEntidad || { nombre: '', codigo: '', identificacion: '' };
+
+    // Moneda
+    const moneda = base.moneda || (selectedConcepto?.moneda) || getMonedaSucursalActiva();
+
+    return {
+      id: base.id || 0,
+      fechaDocumento: fechaDoc,
+      noDocumento: base.noDocumento || '',
+      estado: base.estado || 0,
+      periodo: base.periodo || new Date().getMonth() + 1,
+      ncf: values.ncf || '',
+      referencia: values.referencia || '',
+      nota: values.nota || '',
+      tasa: tasaValue,
+      total: totalCalculado,
+      subTotal: totalesDocs.subTotal,
+      descuento: totalesDocs.descuento,
+      impuestos: totalesDocs.impuestos,
+      retenciones: totalesDocs.retenciones,
+      tipoDocumento: base.tipoDocumento ?? 0,
+      documento,
+      concepto,
+      entidad,
+      moneda,
+      cuentaBancaria: values.cuentaBancaria || '',
+      codigoTipo: tipoValue || '',
+      codigoEntidad: entidad.codigo || base.codigoEntidad || '',
+      codigoConcepto: concepto.codigo || base.codigoConcepto || '',
+      codigoMoneda: moneda.codigo || '',
+      nombreEntidad: entidad.nombre || base.nombreEntidad || '',
+      transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
+        ...t,
+        transaccionAsociadaID: t.transaccionAsociadaID || t.id,
+      })),
+      asientos: asientos || [],
+      logs: logs || [],
+    };
+  }, [data, form, documentCode, selectedConcepto, selectedEntidad,
+      tasaValue, totalCalculado, totalesDocs, tipoValue, transaccionesAsociadas, asientos, logs]);
+
+  const handleGenerarAsientos = async () => {
+    if (sucursalActiva === undefined) return;
+    setSaving(true);
+    try {
+      const dto = construirDTOGenerarAsientos();
+      const asientosGenerados = await solicitudPagoApi.generarAsientos(sucursalActiva, dto);
+      setAsientos(asientosGenerados);
+      message.success(`Se generaron ${asientosGenerados.length} asientos`);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al generar asientos');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ===== Totales calculados para documentos relacionados =====
+  const totalDistribuido = totalesDocs.subTotal;
+  const totalRetencionesDocs = transaccionesAsociadas.reduce((s, t) => s + (t.retencion || 0), 0);
+  const porDistribuir = totalCalculado - totalDistribuido;
+
   // ===== Handlers de navegación =====
   const handleCancelar = () => {
     Modal.confirm({
@@ -311,10 +493,11 @@ const SolicitudPagoFormulario: React.FC = () => {
   const validarFormulario = (): string | null => {
     if (!selectedConcepto) return 'Debe seleccionar un Concepto';
     if (!selectedEntidad) return 'Debe seleccionar una Entidad';
+    if (!selectedEntidad?.codigo) return 'La entidad seleccionada no tiene un código válido';
 
     const values = form.getFieldsValue();
     if (!values.cuentaBancaria) return 'Debe ingresar una Cuenta Bancaria';
-    if (subTotalValue < 0) return 'SubTotal no puede ser negativo';
+    if (totalesDocs.subTotal < 0) return 'SubTotal no puede ser negativo';
 
     return null;
   };
@@ -324,34 +507,42 @@ const SolicitudPagoFormulario: React.FC = () => {
     const values = form.getFieldsValue();
 
     const fechaDoc = values.fechaDocumento
-      ? toISOFormat(values.fechaDocumento.toDate())
-      : toISOFormat(new Date());
+      ? dayjs(values.fechaDocumento).format('YYYYMMDDHHmmss')
+      : dayjs().format('YYYYMMDDHHmmss');
 
     const dto: SolicitudPagoCrearDTO & { codigoTipo?: string; tipoPagoCodigo?: string } = {
       fechaDocumento: fechaDoc,
       codigoTipo: tipoValue || '',
       conceptoCodigo: selectedConcepto?.codigo || '',
-      entidadId: selectedEntidad?.codigo || selectedEntidad?.identificacion || '',
+      entidadId: selectedEntidad?.codigo || '',
       cuentaBancaria: values.cuentaBancaria || '',
       referencia: values.referencia || '',
       ncf: values.ncf || '',
       tipoPagoCodigo: tipoPago || '',
       nota: values.nota || '',
-      subTotal: subTotalValue,
-      descuento: descuentoValue,
-      impuestos: impuestosValue,
-      retenciones: retencionesValue,
+      subTotal: totalesDocs.subTotal,
+      descuento: totalesDocs.descuento,
+      impuestos: totalesDocs.impuestos,
+      retenciones: totalesDocs.retenciones,
       total: totalCalculado,
       tasa: tasaValue,
       simboloMoneda: monedaSimbolo,
       nombreMoneda: monedaNombre,
     };
 
+    const dtoConAsociadas = {
+      ...dto,
+      transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
+        ...t,
+        transaccionAsociadaID: t.transaccionAsociadaID || t.id,
+      })),
+    };
+
     if (mode === 'editar' && id && data) {
-      return { ...dto, id: data.id || parseInt(id) };
+      return { ...dtoConAsociadas, id: data.id || parseInt(id), asientos: asientos || [] };
     }
 
-    return dto;
+    return dtoConAsociadas;
   };
 
   // ===== Guardar =====
@@ -398,12 +589,19 @@ const SolicitudPagoFormulario: React.FC = () => {
           return;
         }
         setData(res);
+        setAsientos(res.asientos || []);
+        setLogs(res.logs || []);
+        setTransaccionesAsociadas(res.transaccionesAsociadas || []);
         const resAny = res as any;
         const conceptoRaw = resAny.concepto;
         const conceptoH = typeof conceptoRaw === 'object' && conceptoRaw !== null ? conceptoRaw as ConceptoDTO : null;
+        const conceptoCodigoH = conceptoH?.codigo || res.codigoConcepto || '';
         if (conceptoH) {
-          setSelectedConcepto(conceptoH);
-          setConceptoSearchText(`${conceptoH.codigo || ''} - ${conceptoH.nombre || ''}`);
+          setSelectedConcepto({ ...conceptoH, codigo: conceptoCodigoH });
+          setConceptoSearchText(`${conceptoCodigoH} - ${conceptoH.nombre || ''}`);
+          if (conceptoCodigoH) {
+            cargarEntidades(conceptoCodigoH);
+          }
         }
         const tipoRaw = resAny.tipo;
         setTipoValue(tipoRaw?.codigo || resAny.codigoTipo || '');
@@ -412,14 +610,15 @@ const SolicitudPagoFormulario: React.FC = () => {
         const entidadRaw = resAny.entidad;
         const entidadH = typeof entidadRaw === 'object' && entidadRaw !== null ? entidadRaw as EntidadDTO : null;
         if (entidadH) {
-          setSelectedEntidad(entidadH);
+          setSelectedEntidad({ ...entidadH, codigo: entidadH.codigo || res.codigoEntidad || '' });
         }
-        const fechaDoc = res.fecha ? dayjs(res.fecha) : null;
+        // Fecha (forzar interpretación local para evitar desplazamiento UTC)
+        const fechaDoc = res.fechaDocumento ? dayjs(res.fechaDocumento.substring(0, 10)) : null;
         form.setFieldsValue({
           fechaDocumento: fechaDoc,
           tipo: tipoRaw?.codigo || resAny.codigoTipo || '',
-          concepto: conceptoH?.codigo || '',
-          entidad: entidadH?.codigo || '',
+          concepto: conceptoH?.codigo || res.codigoConcepto || '',
+          entidad: entidadH?.codigo || res.codigoEntidad || '',
           cuentaBancaria: res.cuentaBancaria || '',
           referencia: res.referencia || '',
           ncf: res.ncf || '',
@@ -438,7 +637,7 @@ const SolicitudPagoFormulario: React.FC = () => {
         setLoadingError(true);
       })
       .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form, mode, message]);
+  }, [id, sucursalActiva, form, mode, message, cargarEntidades]);
 
   // ===== Loading state =====
   if (loading) {
@@ -461,41 +660,40 @@ const SolicitudPagoFormulario: React.FC = () => {
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
             <Row gutter={[16, 24]}>
-              {/* Fila 1: Tipo + Fecha + Concepto + Entidad */}
-              <Col xs={24} sm={12} lg={6}>
-                <Form.Item name="tipo" style={{ marginBottom: 0 }}>
-                  <CampoTipo
-                    tipoDocumento="SP"
-                    sucursal={sucursalActiva}
-                    value={tipoValue}
-                    onChange={(val) => setTipoValue(val || '')}
+              {/* Fila 1: Cuenta Bancaria + Concepto + Referencia */}
+              <Col xs={24} sm={12} lg={8}>
+                <Form.Item name="cuentaBancaria" hidden>
+                  <Input />
+                </Form.Item>
+                <FloatingField label="Cuenta Bancaria" required>
+                  <Input
+                    placeholder=" "
+                    readOnly
+                    value={
+                      selectedCuenta
+                        ? `${selectedCuenta.noCuenta}`
+                        : ''
+                    }
+                    onClick={() => setCuentaModalOpen(true)}
+                    suffix={
+                      <Space size={4}>
+                        <SearchOutlined
+                          style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }}
+                          onClick={() => setCuentaModalOpen(true)}
+                        />
+                        {selectedCuenta && (
+                          <CloseOutlined
+                            onClick={(e) => { e.stopPropagation(); handleCuentaClear(); }}
+                            style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }}
+                          />
+                        )}
+                      </Space>
+                    }
                   />
-                </Form.Item>
+                </FloatingField>
               </Col>
 
-              <Col xs={24} sm={12} lg={6}>
-                <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
-                  <FloatingField label="Fecha" required>
-                    <DatePicker
-                      style={{ width: '100%' }}
-                      format="YYYY-MM-DD"
-                      disabledDate={(current) => {
-                        if (!current) return false;
-                        if ((data as any)?.documento?.fechaPermitida === 'MenorIgualFechaDia') {
-                          if (current.isAfter(dayjs(), 'day')) return true;
-                        }
-                        const cierre = fechasCierre?.[sucursalActiva];
-                        if (cierre && current.isBefore(dayjs(cierre).startOf('day'), 'day')) return true;
-                        const cierreInv = fechasCierreInv?.[sucursalActiva];
-                        if (cierreInv && current.isBefore(dayjs(cierreInv).startOf('day'), 'day')) return true;
-                        return false;
-                      }}
-                    />
-                  </FloatingField>
-                </Form.Item>
-              </Col>
-
-              <Col xs={24} sm={12} lg={6}>
+              <Col xs={24} sm={12} lg={8}>
                 <div>
                   <FloatingField label="Concepto" required>
                     <Input
@@ -517,7 +715,38 @@ const SolicitudPagoFormulario: React.FC = () => {
                 <ConceptoInfoLabel concepto={selectedConcepto} />
               </Col>
 
-              <Col xs={24} sm={12} lg={6}>
+              <Col xs={24} sm={12} lg={8}>
+                <Form.Item name="referencia" style={{ marginBottom: 0 }}>
+                  <FloatingField label="Referencia">
+                    <Input placeholder="Referencia del documento" />
+                  </FloatingField>
+                </Form.Item>
+              </Col>
+
+              {/* Fila 2: Fecha + Entidad + Tipo Doc a Generar */}
+              <Col xs={24} sm={12} lg={8}>
+                <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
+                  <FloatingField label="Fecha" required>
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format="YYYY-MM-DD"
+                      disabledDate={(current) => {
+                        if (!current) return false;
+                        if ((data as any)?.documento?.fechaPermitida === 'MenorIgualFechaDia') {
+                          if (current.isAfter(dayjs(), 'day')) return true;
+                        }
+                        const cierre = fechasCierre?.[sucursalActiva];
+                        if (cierre && current.isBefore(dayjs(cierre).startOf('day'), 'day')) return true;
+                        const cierreInv = fechasCierreInv?.[sucursalActiva];
+                        if (cierreInv && current.isBefore(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                        return false;
+                      }}
+                    />
+                  </FloatingField>
+                </Form.Item>
+              </Col>
+
+              <Col xs={24} sm={12} lg={8}>
                 <Form.Item name="entidad" required style={{ marginBottom: 0 }}>
                   <FloatingField label="Entidad" required>
                     <Select
@@ -546,32 +775,7 @@ const SolicitudPagoFormulario: React.FC = () => {
                 </Form.Item>
               </Col>
 
-              {/* Fila 2: Cuenta Bancaria + Referencia + NCF + Tipo Pago */}
-              <Col xs={24} sm={12} lg={6}>
-                <Form.Item name="cuentaBancaria" style={{ marginBottom: 0 }}>
-                  <FloatingField label="Cuenta Bancaria">
-                    <Input placeholder="Número de cuenta" />
-                  </FloatingField>
-                </Form.Item>
-              </Col>
-
-              <Col xs={24} sm={12} lg={6}>
-                <Form.Item name="referencia" style={{ marginBottom: 0 }}>
-                  <FloatingField label="Referencia">
-                    <Input placeholder="Referencia del documento" />
-                  </FloatingField>
-                </Form.Item>
-              </Col>
-
-              <Col xs={24} sm={12} lg={6}>
-                <Form.Item name="ncf" style={{ marginBottom: 0 }}>
-                  <FloatingField label="NCF">
-                    <Input placeholder="NCF" maxLength={19} />
-                  </FloatingField>
-                </Form.Item>
-              </Col>
-
-              <Col xs={24} sm={12} lg={6}>
+              <Col xs={24} sm={12} lg={8}>
                 <Form.Item name="tipoPago" style={{ marginBottom: 0 }}>
                   <FloatingField label="Tipo de Pago a Generar">
                     <Select
@@ -605,74 +809,170 @@ const SolicitudPagoFormulario: React.FC = () => {
 
         <Col xs={24} xxl={6}>
           <div style={{ marginTop: 24 }}>
-            <Card
-              className="paces-card"
-              size="small"
-              title={<span style={{ fontSize: 14, fontWeight: 600 }}>Totales</span>}
-              style={{ marginBottom: 16 }}
-            >
-              <Form form={form} layout="vertical" size="small">
-                <Form.Item name="subTotal" style={{ marginBottom: 8 }}>
-                  <FloatingField label="SubTotal" required>
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      min={0}
-                      step={0.01}
-                      precision={2}
-                    />
-                  </FloatingField>
-                </Form.Item>
-                <Form.Item name="descuento" style={{ marginBottom: 8 }}>
-                  <FloatingField label="Descuento">
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      min={0}
-                      step={0.01}
-                      precision={2}
-                    />
-                  </FloatingField>
-                </Form.Item>
-                <Form.Item name="impuestos" style={{ marginBottom: 8 }}>
-                  <FloatingField label="Impuestos">
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      min={0}
-                      step={0.01}
-                      precision={2}
-                    />
-                  </FloatingField>
-                </Form.Item>
-                <Form.Item name="retenciones" style={{ marginBottom: 8 }}>
-                  <FloatingField label="Retenciones">
-                    <InputNumber
-                      style={{ width: '100%' }}
-                      min={0}
-                      step={0.01}
-                      precision={2}
-                    />
-                  </FloatingField>
-                </Form.Item>
-              </Form>
-              <Divider style={{ margin: '8px 0' }} />
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: 16,
-                  fontWeight: 700,
-                }}
-              >
-                <span>Total</span>
-                <span style={{ color: 'var(--paces-primary)' }}>
-                  {monedaSimbolo} {formatNumber(totalCalculado)}
-                </span>
-              </div>
-            </Card>
+            <TotalesCard
+              subTotal={totalesDocs.subTotal}
+              descuento={totalesDocs.descuento}
+              impuestos={totalesDocs.impuestos}
+              retenciones={totalesDocs.retenciones}
+              total={totalCalculado}
+              hideTitle
+              monedaSimbolo={monedaSimbolo}
+              monedaNombre={monedaNombre}
+              tasa={tasaValue ?? 1}
+            />
           </div>
         </Col>
       </Row>
     </Card>
   );
+
+  // ===== Columnas de documentos relacionados (mismo formato que TransaccionBancaria) =====
+  const asociadasColumns = [
+    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => v ? formatDate(v) : '-' },
+    { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 160 },
+    { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 130, render: (v: string) => v || '-' },
+    { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v ?? 0) },
+    {
+      title: 'Acreditado/Abonado',
+      key: 'pagado',
+      width: 150,
+      align: 'right' as const,
+      render: (_: any, record: TransaccionAsociadaDTO) => (
+        <Text type="secondary">{formatNumber(record.pagado ?? 0)}</Text>
+      ),
+    },
+    {
+      title: 'Pendiente',
+      key: 'pendiente',
+      width: 130,
+      align: 'right' as const,
+      render: (_: any, record: TransaccionAsociadaDTO) => (
+        <Text style={{ color: record.saldoPendiente > 0 ? '#fa8c16' : undefined }}>
+          {formatNumber(record.saldoPendiente ?? 0)}
+        </Text>
+      ),
+    },
+    {
+      title: 'Retenciones',
+      key: 'retencion',
+      width: 120,
+      align: 'right' as const,
+      render: (_: any, record: TransaccionAsociadaDTO) => formatNumber(record.retencion ?? 0),
+    },
+    {
+      title: 'Descuento',
+      key: 'descuento',
+      width: 140,
+      align: 'right' as const,
+      render: (_: any, record: TransaccionAsociadaDTO) => (
+        <InputNumber
+          size="small"
+          style={{ width: '100%' }}
+          className="input-number-right"
+          min={0}
+          step={0.01}
+          precision={2}
+          value={record.descuento}
+          onChange={(val) => handleDescuentoChange(record.transaccionAsociadaID || record.id, val)}
+        />
+      ),
+    },
+    {
+      title: 'Monto',
+      key: 'monto',
+      width: 140,
+      align: 'right' as const,
+      render: (_: any, record: TransaccionAsociadaDTO) => (
+        <InputNumber
+          size="small"
+          style={{ width: '100%' }}
+          className="input-number-right"
+          min={0}
+          step={0.01}
+          precision={2}
+          value={record.monto}
+          onChange={(val) => handleMontoChange(record.transaccionAsociadaID || record.id, val)}
+        />
+      ),
+    },
+    {
+      title: '', key: 'accion', width: 50,
+      render: (_: any, record: TransaccionAsociadaDTO) => (
+        <Button type="text" danger size="small" icon={<DeleteOutlined />}
+          onClick={() => handleDocRelacionadoRemove(record.transaccionAsociadaID || record.id)} />
+      ),
+    },
+  ];
+
+  // ===== Tabs =====
+  const tabItems = [
+    {
+      key: 'documentos',
+      label: `Documentos Relacionados (${transaccionesAsociadas.length})`,
+      children: (
+        <div>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Space>
+              <span className="paces-text-secondary">
+                Total: {formatNumber(totalCalculado)} | Distribuido: {formatNumber(totalDistribuido)} |
+                Por distribuir: <span style={{ color: porDistribuir > 0 ? '#faad14' : '#52c41a', fontWeight: 600 }}>{formatNumber(porDistribuir)}</span>
+              </span>
+            </Space>
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlusOutlined />}
+              disabled={!selectedEntidad}
+              onClick={() => setDocumentoModalOpen(true)}
+            >
+              Agregar
+            </Button>
+          </div>
+          <Table
+            dataSource={transaccionesAsociadas}
+            columns={asociadasColumns}
+            rowKey={(r) => r.transaccionAsociadaID || r.id || Math.random()}
+            size="small"
+            pagination={false}
+            scroll={{ x: 800 }}
+            locale={{
+              emptyText: (
+                <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Empty description="Sin registros" />
+                </div>
+              ),
+            }}
+          />
+        </div>
+      ),
+    },
+    {
+      key: 'asientos',
+      label: `Asientos Contables (${asientos.length})`,
+      children: (
+        <div>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              icon={<ExclamationCircleOutlined />}
+              onClick={handleGenerarAsientos}
+              loading={saving}
+              disabled={!id}
+            >
+              GENERAR
+            </Button>
+          </div>
+          <AsientosContableTable asientos={asientos} scroll={{ x: 700 }} rowKey={(r: any) => r.id || Math.random()} />
+        </div>
+      ),
+    },
+    {
+      key: 'historial',
+      label: `Historial (${logs.length})`,
+      children: (
+        <LogTable dataSource={logs} scroll={{ x: 900 }} />
+      ),
+    },
+  ];
 
   // ===== Render principal =====
   return (
@@ -708,17 +1008,48 @@ const SolicitudPagoFormulario: React.FC = () => {
         documento={documentCode}
       />
 
+      <BuscarCuentaBancariaModal
+        open={cuentaModalOpen}
+        onClose={() => setCuentaModalOpen(false)}
+        onSelect={handleCuentaSelect}
+        sucursal={sucursalActiva}
+      />
+
+      <BuscarDocumentoModal
+        open={documentoModalOpen}
+        onClose={() => setDocumentoModalOpen(false)}
+        onSelect={handleAgregarDocumentos}
+        tipoEntidad="SUP"
+        codEntidad={selectedEntidad?.codigo || ''}
+        montoTotal={totalCalculado}
+        documentosIniciales={transaccionesAsociadas
+          .map(t => t.id || t.transaccionAsociadaID)
+          .filter((id): id is number => id != null && id > 0)}
+      />
+
       {isLarge ? (
         /* === DESKTOP === */
         <Row gutter={16}>
           <Col xxl={24}>
             {renderEncabezado()}
+            <Tabs
+              defaultActiveKey="documentos"
+              type="card"
+              style={{ borderRadius: 8, padding: '0 16px' }}
+              items={tabItems}
+            />
           </Col>
         </Row>
       ) : (
         /* === MOBILE === */
         <div>
           {renderEncabezado()}
+          <Tabs
+            defaultActiveKey="documentos"
+            type="card"
+            style={{ borderRadius: 8, padding: '0 16px' }}
+            items={tabItems}
+          />
         </div>
       )}
     </div>

@@ -10,8 +10,10 @@ export interface TransaccionBalanceDTO {
   creditos: number;
   codigoEntidad: string;
   nombreEntidad: string;
-  entidad: { codigo: string; nombre: string };
+  entidad: { codigo: string; nombre: string; categoria?: { codigo: string; nombre: string } };
   moneda: { nombre: string; codigo: string };
+  tipo?: { codigo?: string; nombre?: string };
+  sucursal?: { id?: number; codigo?: string; nombre?: string };
 }
 
 /** Agrupación por entidad para vista resumida (original) */
@@ -29,6 +31,7 @@ export interface ResumenAgingDTO {
   key: string;
   codigoEntidad: string;
   nombreEntidad: string;
+  categoriaNombre?: string;
   total: number;
   monto0_30: number;
   monto31_60: number;

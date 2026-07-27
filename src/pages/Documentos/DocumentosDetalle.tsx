@@ -138,6 +138,11 @@ const DocumentosDetalle: React.FC = () => {
           <br />
           <Tag color={data.modificaDescripcion ? 'blue' : 'default'}>{data.modificaDescripcion ? 'Sí' : 'No'}</Tag>
         </div>
+        <div>
+          <Text type="secondary" style={{ fontSize: 12 }}>Trabajar en Unidad</Text>
+          <br />
+          <Tag color={data.trabajarEnUnidad ? 'green' : 'default'}>{data.trabajarEnUnidad ? 'Sí' : 'No'}</Tag>
+        </div>
       </div>
     </Card>
   );

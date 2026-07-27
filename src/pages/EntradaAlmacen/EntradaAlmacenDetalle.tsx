@@ -40,15 +40,38 @@ import { useAplicar } from '../../hooks/useAplicar';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
-import { formatCurrency, formatNumber, toTitleCase, formatDate, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import type { EntradaAlmacenDTO, AsientoContableDTO, SuplidorDTO, EntidadDTO } from '../../types/entradaAlmacen';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import EscanerModal from '../../components/EscanerModal';
+import ColumnVisibilityToggle from '../../components/ColumnVisibilityToggle';
+import type { ColumnConfig } from '../../components/ColumnVisibilityToggle';
 
 const { Text } = Typography;
+
+const DETALLE_COLUMNS_CONFIG: ColumnConfig[] = [
+  { key: 'codigo', label: 'Código', defaultVisible: true },
+  { key: 'articulo', label: 'Artículo', defaultVisible: true },
+  { key: 'cantidad', label: 'Cantidad', defaultVisible: true },
+  { key: 'costo', label: 'Costo', defaultVisible: true },
+  { key: 'descuento', label: 'Descuento', defaultVisible: true },
+  { key: 'impuestos', label: 'Impuestos', defaultVisible: true },
+  { key: 'total', label: 'Total', defaultVisible: true },
+  { key: 'subTotal', label: 'SubTotal', defaultVisible: false },
+  { key: 'flete', label: 'Flete', defaultVisible: false },
+  { key: 'cantidadBonificable', label: 'Cant. Bonificable', defaultVisible: false },
+  { key: 'factor', label: 'Factor', defaultVisible: false },
+  { key: 'tipoArticulo', label: 'Tipo Artículo', defaultVisible: false },
+];
+
+const DETALLE_DEFAULT_VISIBLE_KEYS = DETALLE_COLUMNS_CONFIG
+  .filter((c) => c.defaultVisible !== false)
+  .map((c) => c.key);
+
+const LS_DETALLE_VISIBLE_COLUMNS_KEY = 'fenp_detalle_visibleColumns';
 
 const EntradaAlmacenDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -85,6 +108,22 @@ const [vencimientoFechas, setVencimientoFechas] = useState<Record<number, dayjs.
 const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
   const [mostrandoReverso, setMostrandoReverso] = useState(false);
   const [reversoData, setReversoData] = useState<any>(null);
+  const [visibleDetalleKeys, setVisibleDetalleKeys] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(LS_DETALLE_VISIBLE_COLUMNS_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch { /* ignorar */ }
+    return DETALLE_DEFAULT_VISIBLE_KEYS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_DETALLE_VISIBLE_COLUMNS_KEY, JSON.stringify(visibleDetalleKeys));
+    } catch { /* ignorar */ }
+  }, [visibleDetalleKeys]);
 
   const sucursalContableRef = useRef<number>(Sucursal.Consolidado);
 
@@ -114,6 +153,9 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       });
   }, [data?.id, sucursalActiva]);
 
+  const operacion = useAplicar();
+  const [operacionTitulo, setOperacionTitulo] = useState('');
+
   const handleRefresh = useCallback(() => {
     if (!id) return;
     setFacturaData(null);
@@ -126,10 +168,16 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
           return;
         }
         setData(res);
+        // Calcular balance de asientos contables
+        const totalDeb = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 0 || r.tipoAsiento === 'D') ? (r.monto || 0) : 0), 0);
+        const totalCred = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 1 || r.tipoAsiento === 'C') ? (r.monto || 0) : 0), 0);
+        operacion.setBalanceInfo({ debitos: totalDeb, creditos: totalCred });
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
         if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-          entradaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+          transaccionApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
         } else {
@@ -236,7 +284,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
         if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-          entradaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+          transaccionApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
         } else {
@@ -364,9 +412,6 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
   const tieneDetalleConAumentoPrecio = React.useMemo(() => {
     return (data?.detalles || []).some((d) => (d.familia?.aumentoPrecioMaximo ?? 0) > 0);
   }, [data?.detalles]);
-
-  const operacion = useAplicar();
-  const [operacionTitulo, setOperacionTitulo] = useState('');
 
   if (loading || (!data && !loadingError)) {
     return (
@@ -585,7 +630,64 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         </div>
       ),
     },
+    {
+      title: 'SubTotal',
+      dataIndex: 'subTotal',
+      key: 'subTotal',
+      width: 110,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div>{formatNumber(record.subTotal || 0)}</div>
+      ),
+    },
+    {
+      title: 'Flete',
+      dataIndex: 'flete',
+      key: 'flete',
+      width: 100,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div>{formatNumber(record.flete || 0)}</div>
+      ),
+    },
+    {
+      title: 'Cant. Bonificable',
+      dataIndex: 'cantidadBonificable',
+      key: 'cantidadBonificable',
+      width: 120,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div>{formatNumber(record.cantidadBonificable || 0)}</div>
+      ),
+    },
+    {
+      title: 'Factor',
+      dataIndex: 'medida.factor',
+      key: 'factor',
+      width: 80,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div>{formatNumber(record.medida?.factor || 1)}</div>
+      ),
+    },
+    {
+      title: 'Tipo Artículo',
+      dataIndex: 'tipoArticulo',
+      key: 'tipoArticulo',
+      width: 110,
+      ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (val: string) => <Text>{val || ''}</Text>,
+    },
   ];
+
+  const detalleColumnsFiltered = detalleColumns.filter(
+    (col) => col.key === 'codigo' || visibleDetalleKeys.includes(col.key as string)
+  );
 
   // asientoColumns reemplazado por AsientosContableTable compartido
 
@@ -722,7 +824,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
       if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-        const revRes = await entradaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        const revRes = await transaccionApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
         setReversoData(null);
@@ -779,7 +881,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
       const res = await entradaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
       if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-        const revRes = await entradaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        const revRes = await transaccionApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
         setReversoData(null);
@@ -979,20 +1081,28 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
               defaultActiveKey="detalles"
               type="card"
               tabBarExtraContent={
-                <Input.Search
-                  placeholder="Buscar detalle..."
-                  allowClear
-                  style={{ width: 320 }}
-                  onSearch={(value) => setDetalleSearch(value)}
-                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                />
+                <Space>
+                  <Input.Search
+                    placeholder="Buscar detalle..."
+                    allowClear
+                    style={{ width: 320 }}
+                    onSearch={(value) => setDetalleSearch(value)}
+                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                  />
+                  <ColumnVisibilityToggle
+                    columns={DETALLE_COLUMNS_CONFIG}
+                    visibleKeys={visibleDetalleKeys}
+                    onChange={setVisibleDetalleKeys}
+                    iconOnly
+                  />
+                </Space>
               }
               items={[
                 {
                   key: 'detalles',
                   label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                   children: (
-                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
+                    <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1200 }} />
                   ),
                 },
                 ...(devolucionesData.length > 0 ? [{
@@ -1051,7 +1161,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                           width: 120,
                           align: 'right',
                           render: (_: any, record: any) => (
-                            <Typography.Text strong>{formatCurrency(record.total || 0)}</Typography.Text>
+                            <Typography.Text strong>{formatNumber(record.total || 0)}</Typography.Text>
                           ),
                         },
                         {
@@ -1181,20 +1291,28 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
             defaultActiveKey="detalles"
             type="card"
             tabBarExtraContent={
-              <Input.Search
-                placeholder="Buscar detalle..."
-                allowClear
-                style={{ width: 320 }}
-                onSearch={(value) => setDetalleSearch(value)}
-                onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-              />
+              <Space>
+                <Input.Search
+                  placeholder="Buscar detalle..."
+                  allowClear
+                  style={{ width: 320 }}
+                  onSearch={(value) => setDetalleSearch(value)}
+                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                />
+                <ColumnVisibilityToggle
+                  columns={DETALLE_COLUMNS_CONFIG}
+                  visibleKeys={visibleDetalleKeys}
+                  onChange={setVisibleDetalleKeys}
+                  iconOnly
+                />
+              </Space>
             }
             items={[
               {
                 key: 'detalles',
                 label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                 children: (
-                  <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
+                  <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1200 }} />
                 ),
               },
               {
@@ -1261,7 +1379,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                         width: 120,
                         align: 'right',
                         render: (_: any, record: any) => (
-                          <Typography.Text strong>{formatCurrency(record.total || 0)}</Typography.Text>
+                          <Typography.Text strong>{formatNumber(record.total || 0)}</Typography.Text>
                         ),
                       },
                       {
@@ -1429,6 +1547,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         titulo={operacionTitulo}
         eventos={operacion.eventos}
         completado={operacion.completado}
+        balanceInfo={operacion.balanceInfo}
         onClose={() => operacion.reset()}
       />
     </div>

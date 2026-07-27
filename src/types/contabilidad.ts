@@ -134,7 +134,7 @@ export interface DocumentoConfigDTO {
   recibePagos?: boolean;
   metodoPosteo?: number;
   fechaPermitida?: string;
-  documentoContable?: boolean;
+  excluirEstadoContable?: boolean;
   documentoReverso?: string;
   codigo: string;
   idExterno?: string;

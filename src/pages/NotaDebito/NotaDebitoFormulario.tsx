@@ -488,7 +488,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
         // Cargar entidades según el concepto
         if (full.concepto?.codigo) {
-          entidadApi.obtenerEntidades(sucursalActiva, full.concepto.codigo, true, tipoEntidad)
+          entidadApi.obtenerActivos(sucursalActiva, full.concepto.codigo, tipoEntidad)
             .then((ents: any[]) => {
               if (full.entidad && !ents.find((e: any) => e.codigo === entidadCodigo)) {
                 ents = [entidadNormalizada as any, ...ents];
@@ -535,7 +535,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     setSelectedConcepto(concepto);
 
     // Cargar entidades según el concepto
-    entidadApi.obtenerEntidades(sucursalActiva, concepto.codigo, true, tipoEntidad)
+    entidadApi.obtenerActivos(sucursalActiva, concepto.codigo, tipoEntidad)
       .then((ents) => setEntidadesCache(ents))
       .catch((err) => console.warn('Error al cargar entidades cache', err));
 
@@ -1106,7 +1106,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       key: 'pagado',
       width: 120,
       align: 'right' as const,
-      render: (v: number) => formatCurrency(v ?? 0),
+      render: (v: number) => formatNumber(v ?? 0),
     },
     { title: 'Saldo', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
     {
@@ -1146,30 +1146,22 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       key: 'pagado',
       width: 120,
       align: 'right' as const,
-      render: (v: number) => formatCurrency(v ?? 0),
+render: (v: number) => formatNumber(v ?? 0),
     },
     {
-      title: 'Monto Asignado', dataIndex: 'monto', key: 'monto', width: 220, align: 'right' as const,
-      render: (_: any, record: DevolucionAsociadaDTO, idx: number) => {
-        const montoSub = devoluciones[idx]?.monto || 0;
-        const imp = record.impuesto || 0;
-        return (
-          <Space size={4}>
-            <InputNumber
-              size="small"
-              style={{ width: 120 }}
-              min={0}
-              step={0.01}
-              precision={2}
-              value={montoSub}
-              onChange={(val) => handleDevMontoChange(record.transaccionAsociadaID, val || 0)}
-            />
-            <Text type="secondary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-              Total: {formatNumber(montoSub + imp)}
-            </Text>
-          </Space>
-        );
-      },
+      title: 'Monto a Debitar', dataIndex: 'monto', key: 'monto', width: 140, align: 'right' as const,
+      render: (_: any, record: DevolucionAsociadaDTO, idx: number) => (
+        <InputNumber
+          size="small"
+          style={{ width: 120 }}
+          min={0}
+          max={(record.montoOriginal || 0) + (record.impuesto || 0)}
+          step={0.01}
+          precision={2}
+          value={devoluciones[idx]?.monto}
+          onChange={(val) => handleDevMontoChange(record.transaccionAsociadaID, val || 0)}
+        />
+      ),
     },
     {
       title: 'Pérdida',
@@ -1182,7 +1174,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         if (val === 0) return <Text style={{ color: '#8c8c8c' }}>-</Text>;
         return (
           <Text style={{ color: val > 0 ? '#ff4d4f' : '#52c41a', fontWeight: 600 }}>
-            {val > 0 ? '− ' : '+ '}{formatCurrency(Math.abs(val))}
+            {val > 0 ? '− ' : '+ '}{formatNumber(Math.abs(val))}
           </Text>
         );
       },

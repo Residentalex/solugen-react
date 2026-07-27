@@ -29,6 +29,20 @@ export interface TipoDTO {
   requiereReferencia: boolean;
 }
 
+export interface ImpuestoDetalleDTO {
+  impuestoID?: number;
+  total: number;
+  tasa: number;
+  tipo?: string;
+  impuesto?: {
+    nombre?: string;
+    porcentaje?: number;
+    codigo?: string;
+    idExterno?: string;
+    tipo?: string;
+  };
+}
+
 export interface EntradaReferenciaDTO {
   id: number;
   noDocumento: string;
@@ -59,6 +73,7 @@ export interface DetalleFacturaSuplidorDTO {
   fechaVencimiento?: string;
   modificaPrecio?: boolean;
   modificaDescripcion?: boolean;
+  impuestosDetalle?: ImpuestoDetalleDTO[];
 }
 
 export interface FacturaSuplidorFullDTO {

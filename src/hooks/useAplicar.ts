@@ -21,6 +21,7 @@ export function useAplicar() {
   const [loading, setLoading] = useState(false);
   const [eventos, setEventos] = useState<ProgresoEvento[]>([]);
   const [completado, setCompletado] = useState<{ exito: boolean; error?: string } | null>(null);
+  const [balanceInfo, setBalanceInfo] = useState<{ debitos: number; creditos: number } | null>(null);
   const connectionRef = useRef<signalR.HubConnection | null>(null);
   const [conectado, setConectado] = useState(false);
   const callbackRef = useRef<(() => void) | null>(null);
@@ -32,6 +33,10 @@ export function useAplicar() {
   useEffect(() => {
     loadingRef.current = loading;
   }, [loading]);
+
+  const setBalanceInfoCallback = useCallback((info: { debitos: number; creditos: number } | null) => {
+    setBalanceInfo(info);
+  }, []);
 
   // Limpiar timeout de seguridad
   const limpiarTimeout = useCallback(() => {
@@ -133,6 +138,7 @@ export function useAplicar() {
     loadingRef.current = true;
     setEventos([]);
     setCompletado(null);
+    setBalanceInfo(null);
     completadoRef.current = false;
     callbackRef.current = onCompletado || null;
 
@@ -209,11 +215,12 @@ export function useAplicar() {
   const reset = useCallback(() => {
     setEventos([]);
     setCompletado(null);
+    setBalanceInfo(null);
     setLoading(false);
     completadoRef.current = false;
     callbackRef.current = null;
     limpiarTimeout();
   }, [limpiarTimeout]);
 
-  return { loading, eventos, completado, ejecutar, reset };
+  return { loading, eventos, completado, balanceInfo, setBalanceInfo: setBalanceInfoCallback, ejecutar, reset };
 }

@@ -1,8 +1,11 @@
 import { create } from 'zustand';
 import { notificacionesApi } from '../api/notificacionesApi';
-import { notificacionesHub } from '../api/notificacionesHub';
+import { notificationClient } from '../services/NotificationClientService';
 import { useAuthStore } from './authStore';
 import type { NotificacionVista } from '../types/notificaciones';
+
+// Referencia al callback para poder limpiarlo en desconectarSignalR
+let _onNuevaCallback: ((notificacion: NotificacionVista) => void) | null = null;
 
 interface NotificacionesState {
   pendientes: NotificacionVista[];
@@ -59,18 +62,29 @@ export const useNotificacionesStore = create<NotificacionesState>((set, get) => 
     if (!usuarioID || get().conectado) return;
 
     try {
-      await notificacionesHub.connect(usuarioID);
-      notificacionesHub.onNuevaNotificacion((notificacion) => {
+      // Suscribirse a eventos del servicio unificado
+      _onNuevaCallback = (notificacion: NotificacionVista) => {
         get().agregarNotificacionTiempoReal(notificacion);
-      });
+      };
+      notificationClient.on('nueva', _onNuevaCallback);
+
+      await notificationClient.connect(usuarioID);
       set({ conectado: true });
+
+      // Cargar pendientes iniciales tras conectar
+      await get().cargarPendientes();
     } catch (err) {
       console.error('Error al conectar SignalR:', err);
     }
   },
 
   desconectarSignalR: () => {
-    notificacionesHub.disconnect();
+    // Limpiar callback del service para evitar duplicados en reconexión
+    if (_onNuevaCallback) {
+      notificationClient.off('nueva', _onNuevaCallback);
+      _onNuevaCallback = null;
+    }
+    notificationClient.disconnect();
     set({ conectado: false });
   },
 

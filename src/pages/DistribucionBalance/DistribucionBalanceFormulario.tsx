@@ -43,7 +43,7 @@ import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
-import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import { DistribucionBalanceGuide } from './DistribucionBalanceGuide';
@@ -257,7 +257,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const cargarEntidades = async (conceptoCodigo?: string) => {
     try {
       // Cargar desde el endpoint de entidades
-      const res = await conceptosApi.obtenerEntidades(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo, true);
+      const res = await conceptosApi.obtenerEntidadesActivas(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo);
       setEntidadesCache(res || []);
     } catch {
       // Fallback
@@ -395,6 +395,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       codigoTipo: selectedTipo?.codigo || values.tipo || '',
       codigoEntidad: entidadSel?.codigo || selectedEntidad?.codigo || entidad.codigo || base.codigoEntidad || '',
       codigoConcepto: selectedConcepto?.codigo || base.codigoConcepto || '',
+      codigoSucursal: base.codigoSucursal || (data?.sucursal?.sucursal !== undefined ? String(data.sucursal.sucursal) : String(sucursalActiva)),
       codigoMoneda: (base.moneda || getMonedaSucursalActiva())?.codigo || base.codigoMoneda || '',
       nombreEntidad: entidad.nombre || base.nombreEntidad || '',
       entidad,

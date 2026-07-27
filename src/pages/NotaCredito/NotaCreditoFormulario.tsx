@@ -53,7 +53,7 @@ import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
-import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import { NotaCreditoGuide } from './NotaCreditoGuide';
@@ -341,7 +341,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   const cargarEntidades = async (conceptoCodigo?: string) => {
     try {
       // Cargar desde el endpoint de entidades
-      const res = await entidadApi.obtenerEntidades(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo, true, tipoEntidad);
+      const res = await entidadApi.obtenerActivos(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo, tipoEntidad);
       setEntidadesCache(res || []);
     } catch {
       // Fallback: cargar clientes o suplidores
@@ -826,8 +826,8 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
 
   const devolucionesColumns = [
     { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 150 },
-    { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 130, align: 'right' as const, render: (v: number) => formatCurrency(v) },
-    { title: 'Pérdida', dataIndex: 'perdida', key: 'perdida', width: 130, align: 'right' as const, render: (v: number) => formatCurrency(v) },
+{ title: 'Monto', dataIndex: 'monto', key: 'monto', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v) },
+{ title: 'Pérdida', dataIndex: 'perdida', key: 'perdida', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v) },
     {
       title: 'Generar Pérdida', dataIndex: 'generarPerdida', key: 'generarPerdida', width: 130,
       render: (_: any, record: DevolucionDTO, idx: number) => (

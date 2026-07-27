@@ -15,6 +15,7 @@ export interface MayorAuxiliarItem {
   documentoCodigo: string;
   documentoNoDocumento: string;
   documentoNombre: string;
+  entidadNombre: string;
   cuentaContableNoCuenta: string;
   cuentaContableNombre: string;
   tipoAsiento: string;

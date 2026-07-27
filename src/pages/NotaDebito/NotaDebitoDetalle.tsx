@@ -24,7 +24,7 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
-import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import PermissionGate from '../../components/PermissionGate';
@@ -141,6 +141,12 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
           return;
         }
         setData(res);
+        // Calcular balance de asientos contables
+        const totalDeb = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 0 || r.tipoAsiento === 'D') ? (r.monto || 0) : 0), 0);
+        const totalCred = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 1 || r.tipoAsiento === 'C') ? (r.monto || 0) : 0), 0);
+        operacion.setBalanceInfo({ debitos: totalDeb, creditos: totalCred });
         setPageTitleOverride(`${(res as any).documento.codigo}-${(res as any).noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
         if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
@@ -477,7 +483,10 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
                   label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <TransaccionesAsociadasCard
-                      documentos={documentoActivo?.transaccionesAsociadas || []}
+                      documentos={(documentoActivo?.transaccionesAsociadas || []).map((d: any) => ({
+                        ...d,
+                        esDocumentoInventario: d.esDocumentoInventario ?? false,
+                      }))}
                       readOnly={true}
                     />
                   ),
@@ -577,7 +586,10 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
                   label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <TransaccionesAsociadasCard
-                      documentos={documentoActivo?.transaccionesAsociadas || []}
+                      documentos={(documentoActivo?.transaccionesAsociadas || []).map((d: any) => ({
+                        ...d,
+                        esDocumentoInventario: d.esDocumentoInventario ?? false,
+                      }))}
                       readOnly={true}
                     />
                   ),
@@ -650,6 +662,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
         titulo={operacionTitulo}
         eventos={operacion.eventos}
         completado={operacion.completado}
+        balanceInfo={operacion.balanceInfo}
         onClose={() => operacion.reset()}
       />
 

@@ -1,12 +1,14 @@
 ﻿import React, { useRef, useEffect, useState } from 'react';
-import { Modal, Steps, Typography } from 'antd';
+import { Modal, Steps, Typography, Tag } from 'antd';
 import {
   LoadingOutlined,
   CheckCircleFilled,
   CloseCircleFilled,
   ClockCircleFilled,
+  WarningFilled,
 } from '@ant-design/icons';
 import type { ProgresoEvento } from '../../hooks/useAplicar';
+import { formatCurrency } from '../../utils/formats';
 
 const { Text } = Typography;
 
@@ -16,6 +18,7 @@ interface ModalProgresoProps {
   eventos: ProgresoEvento[];
   completado: { exito: boolean; error?: string } | null;
   onClose: () => void;
+  balanceInfo?: { debitos: number; creditos: number } | null;
 }
 
 const ESTADO_ICONO = {
@@ -67,6 +70,7 @@ export const ModalProgreso: React.FC<ModalProgresoProps> = ({
   eventos,
   completado,
   onClose,
+  balanceInfo,
 }) => {
   // Mostrar solo los últimos 3 eventos
   const eventosMostrados = (eventos || []).slice(-3);
@@ -156,6 +160,23 @@ export const ModalProgreso: React.FC<ModalProgresoProps> = ({
           <Text type="danger" style={{ marginTop: 16, display: 'block' }}>
             {completado.error}
           </Text>
+        )}
+        {completado?.exito && balanceInfo && (
+          <div style={{ marginTop: 16 }}>
+            {(() => {
+              const diff = Math.abs(balanceInfo.debitos - balanceInfo.creditos);
+              const esCuadrado = diff < 0.01;
+              return esCuadrado ? (
+                <Tag icon={<CheckCircleFilled />} color="success">
+                  Asientos cuadrados ✓
+                </Tag>
+              ) : (
+                <Tag icon={<WarningFilled />} color="warning">
+                  Asientos NO cuadrados - Diferencia: {formatCurrency(diff)}
+                </Tag>
+              );
+            })()}
+          </div>
         )}
       </Modal>
     </>

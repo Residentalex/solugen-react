@@ -50,7 +50,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
-import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
@@ -967,7 +967,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         }
       }
       setDetalles((prev) => [
-        {
+        calcularFila({
           ...filaVacia(),
           id: -(prev.length + 1),
           codigo: producto.codigo,
@@ -981,7 +981,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
           porcentajeImpuesto: producto.impuesto?.porcentaje ?? 0,
           modificaPrecio: producto.modificaPrecio ?? false,
           modificaDescripcion: producto.modificaDescripcion ?? false,
-        },
+        }),
         ...prev,
       ]);
     };
@@ -1002,7 +1002,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         }
       }
       setDetalles((prev) => [
-        {
+        calcularFila({
           ...filaVacia(),
           id: -(prev.length + 1),
           codigo: producto.codigo,
@@ -1015,7 +1015,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
           medida: producto.medida || { nombre: '', codigo: '', factor: 1, idExterno: 0 },
           impuesto: producto.impuesto,
           porcentajeImpuesto: producto.impuesto?.porcentaje ?? 0,
-        },
+        }),
         ...prev,
       ]);
     };
@@ -1416,7 +1416,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         }
         return (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
-            <div style={{ textAlign: 'right', fontWeight: 500 }}>{formatCurrency(costoBase)}</div>
+            <div style={{ textAlign: 'right', fontWeight: 500 }}>{formatNumber(costoBase)}</div>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
               {formatNumber(costoUnitario)} × {factor}
             </div>
@@ -2388,7 +2388,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                                 <Typography.Text className="paces-text-secondary">Total estimado a devolver:</Typography.Text>
                                 <Typography.Text strong style={{ fontSize: 14 }}>
-                                  {formatCurrency(detallesDevolucion.reduce((s: number, d: any) => s + (d.total || 0), 0))}
+                                  {formatNumber(detallesDevolucion.reduce((s: number, d: any) => s + (d.total || 0), 0))}
                                 </Typography.Text>
                               </div>
                             )}
@@ -2612,7 +2612,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                               <Typography.Text className="paces-text-secondary">Total estimado a devolver:</Typography.Text>
                               <Typography.Text strong style={{ fontSize: 14 }}>
-                                {formatCurrency(detallesDevolucion.reduce((s: number, d: any) => s + (d.total || 0), 0))}
+                                {formatNumber(detallesDevolucion.reduce((s: number, d: any) => s + (d.total || 0), 0))}
                               </Typography.Text>
                             </div>
                           )}

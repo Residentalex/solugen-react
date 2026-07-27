@@ -19,7 +19,7 @@ import type { AsientoContableDTO, LogDTO } from '../../types/entradaAlmacen';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
-import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';

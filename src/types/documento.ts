@@ -8,7 +8,7 @@ export interface DocumentoDTO {
   recibePagos?: boolean;
   metodoPosteo?: number;
   fechaPermitida?: number;
-  documentoContable?: boolean;
+  excluirEstadoContable?: boolean;
   documentoReverso?: string;
   origenCuenta?: number;
   tipoImpuesto?: number;
@@ -19,6 +19,7 @@ export interface DocumentoDTO {
   requiereAsiento?: boolean;
   modificaPrecio?: boolean;
   modificaDescripcion?: boolean;
+  trabajarEnUnidad?: boolean;
   tipoNumeracion?: number;
   metodoAplicar?: number;
 }

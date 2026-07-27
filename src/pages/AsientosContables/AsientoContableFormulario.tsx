@@ -177,7 +177,7 @@ const AsientoContableFormulario: React.FC = () => {
   // ===== Cargar entidades al seleccionar concepto =====
   useEffect(() => {
     if (!selectedConcepto?.codigo) return;
-    conceptosApi.obtenerEntidades(sucursalActiva, selectedConcepto.codigo, true)
+    conceptosApi.obtenerEntidadesActivas(sucursalActiva, selectedConcepto.codigo)
       .then(setEntidadesCache)
       .catch((err: any) => {
         console.warn('Error al cargar entidades para concepto', err);
@@ -343,7 +343,7 @@ const AsientoContableFormulario: React.FC = () => {
     setEditingField(null);
 
     // Cargar entidades del concepto
-    conceptosApi.obtenerEntidades(sucursalActiva, concepto.codigo, true)
+    conceptosApi.obtenerEntidadesActivas(sucursalActiva, concepto.codigo)
       .then(setEntidadesCache)
       .catch((err: any) => {
         console.warn('Error al cargar entidades para concepto', err);

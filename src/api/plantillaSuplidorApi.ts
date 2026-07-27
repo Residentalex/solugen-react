@@ -27,4 +27,12 @@ export const plantillaSuplidorApi = {
   eliminar: async (sucursal: number, id: string): Promise<void> => {
     await apiClient.delete(`${BASE}/${sucursal}/${id}`);
   },
+
+  imprimir: async (sucursal: number, id: string): Promise<Blob> => {
+    const { data } = await apiClient.get<Blob>(
+      `/reportes/compras/plantilla-suplidor/${sucursal}/${id}`,
+      { responseType: 'blob' }
+    );
+    return data;
+  },
 };

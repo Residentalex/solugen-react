@@ -27,7 +27,7 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
-import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import type { NotaCreditoFullDTO, DetalleMovimientoDTO } from '../../types/notaCredito';
@@ -163,6 +163,12 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
           return;
         }
         setData(res);
+        // Calcular balance de asientos contables
+        const totalDeb = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 0 || r.tipoAsiento === 'D') ? (r.monto || 0) : 0), 0);
+        const totalCred = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 1 || r.tipoAsiento === 'C') ? (r.monto || 0) : 0), 0);
+        operacion.setBalanceInfo({ debitos: totalDeb, creditos: totalCred });
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
         if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
@@ -352,10 +358,12 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
     if (!id || !data) return;
     setEnviandoDGII(true);
     try {
-      await dgiiApi.cargarYEnviarFactura(sucursalActiva, parseInt(id), 'NC');
+      const respuesta = await dgiiApi.cargarYEnviarFactura(sucursalActiva, parseInt(id), 'NC');
       message.success('Documento enviado a la DGII exitosamente');
-      const { data: resp } = await apiClient.get(`/DGII/${sucursalActiva}/${id}`);
-      setEstadoDGII(resp?.data || null);
+      setEstadoDGII({
+        ...respuesta,
+        codigoQR: respuesta?.urlCodigoQr,
+      });
       handleRefresh();
     } catch (err: any) {
       const msg = err?.response?.data?.errorMessage || 'Error al enviar a la DGII';
@@ -719,7 +727,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                 <Descriptions.Item label="NCF Modificado:">{(documentoActivo as any).ncfModificado || '-'}</Descriptions.Item>
 
                 <Descriptions.Item label="Nota:" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{toTitleCase(documentoActivo.nota || '') || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -841,7 +849,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                 <Descriptions.Item label="NCF Modificado:">{(documentoActivo as any).ncfModificado || '-'}</Descriptions.Item>
 
                 <Descriptions.Item label="Nota:" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{toTitleCase(documentoActivo.nota || '') || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
           </Card>
@@ -950,6 +958,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
         titulo={operacionTitulo}
         eventos={operacion.eventos}
         completado={operacion.completado}
+        balanceInfo={operacion.balanceInfo}
         onClose={() => operacion.reset()}
       />
 

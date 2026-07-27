@@ -510,13 +510,16 @@ const AntiguedadSaldosDVC: React.FC = () => {
     const companyName = await getCompanyName(sucursalActiva);
 
     if (detallado) {
-      const columnHeaders = ['Documento', 'NCF', 'Fecha', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
+      const columnHeaders = ['Suplidor', 'Documento', 'NCF', 'Fecha', 'Tipo DVC', 'Sucursal', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
       const dataRows = agingData.map((item) => [
+        item.entidad?.nombre || item.nombreEntidad || '',
         item.tipoDocumento
           ? `${item.tipoDocumento}-${item.noDocumento}`
           : (item.noDocumento || ''),
         item.ncf || '',
         formatDate(item.fechaDocumento),
+        (item as any).tipo?.nombre || '',
+        (item as any).sucursal?.nombre || '',
         item.total ?? 0,
         item.monto0_30 ?? 0,
         item.monto31_60 ?? 0,
@@ -525,7 +528,7 @@ const AntiguedadSaldosDVC: React.FC = () => {
         item.montoMas120 ?? 0,
       ]);
       dataRows.push([
-        'Totales', '', '', summaryTotals.total,
+        'Totales', '', '', '', '', '', summaryTotals.total,
         summaryTotals.m0_30, summaryTotals.m31_60, summaryTotals.m61_90,
         summaryTotals.m91_120, summaryTotals.mMas120,
       ]);

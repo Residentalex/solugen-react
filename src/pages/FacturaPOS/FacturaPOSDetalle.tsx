@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, message, Tooltip, Typography, QRCode, Badge
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, message, Modal, Tooltip, Typography, QRCode, Badge
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -10,6 +10,7 @@ import {
   LockFilled,
   CheckCircleOutlined,
   CloseCircleOutlined,
+  CreditCardOutlined,
   RollbackOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -23,7 +24,7 @@ import { transaccionApi } from '../../api/transaccionApi';
 import type { FacturaPOSDTO } from '../../types/facturaPOS';
 import PermissionGate from '../../components/PermissionGate';
 import LogTable from '../../components/LogTable';
-import { formatCurrency } from '../../utils/formats';
+import { formatNumber } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import EntidadCard from '../../components/EntidadCard';
@@ -35,10 +36,6 @@ import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLa
 import SucursalField from '../../components/SucursalField';
 
 const { Text } = Typography;
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
 
 function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -126,6 +123,29 @@ const FacturaPOSDetalle: React.FC = () => {
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
+  const handleGenerarPVC = React.useCallback(async () => {
+    if (!id || !data) return;
+    Modal.confirm({
+      title: 'Generar PVC',
+      content: `¿Generar PVC para ${data.documento?.codigo}-${data.noDocumento}?`,
+      okText: 'Generar',
+      cancelText: 'Cancelar',
+      onOk: async () => {
+        setSaving(true);
+        try {
+          await facturaPOSApi.generarPVC(sucursalActiva, parseInt(id));
+          message.success('PVC creado exitosamente');
+          handleRefresh();
+        } catch (err: any) {
+          const msg = err?.response?.data?.errorMessage || 'Error al generar PVC';
+          message.error(msg);
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
+  }, [id, data, sucursalActiva, handleRefresh]);
+
   useEffect(() => {
     handleRefresh();
   }, [handleRefresh]);
@@ -151,6 +171,9 @@ const FacturaPOSDetalle: React.FC = () => {
 
   const estadoInfo = resolveEstado(data.estado);
   const esCerrado = toPeriodoNum(data.periodo) === 6;
+
+  const totalPagado = (data.cobros || []).reduce((sum: number, c: any) => sum + (Number(c.pago) || 0), 0);
+  const saldoPendiente = (data.total || 0) - totalPagado;
 
   const detallesFiltrados = detalleSearch
     ? (data.detalles || []).filter((d) => {
@@ -426,18 +449,23 @@ const FacturaPOSDetalle: React.FC = () => {
         onAnular={handleAnular}
         onPostear={handlePostear}
         confirmActions={false}
+        extraButtons={
+          <>
+            {data.documento?.codigo === 'PV' && data.estado !== 0 && data.estado !== 3 && saldoPendiente > 0.01 && (
+              <Button icon={<CreditCardOutlined />} onClick={handleGenerarPVC}>
+                Generar PVC
+              </Button>
+            )}
+            {data.estado !== 0 && data.estado !== 3 && dtransasocDevueltos.size < (data.detalles?.length || 0) && (
+              <PermissionGate codigoPantalla="FPV" permisoEspecial="pe_crear_devolucion">
+                <Button type="primary" icon={<RollbackOutlined />} onClick={() => navigate(`/FDEV/nuevo?pvId=${data.id}`)}>
+                  Crear Devolución
+                </Button>
+              </PermissionGate>
+            )}
+          </>
+        }
       />
-
-      {/* Botón "Crear Devolución" — navega al formulario de DEV con pvId */}
-      {data.estado !== 0 && data.estado !== 3 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-          <PermissionGate codigoPantalla="FPV" permisoEspecial="pe_crear_devolucion">
-            <Button type="primary" icon={<RollbackOutlined />} onClick={() => navigate(`/FDEV/nuevo?pvId=${data.id}`)}>
-              Crear Devolución
-            </Button>
-          </PermissionGate>
-        </div>
-      )}
 
       {isLarge ? (
         /* === DESKTOP LAYOUT (≥ lg) === */
@@ -527,9 +555,9 @@ const FacturaPOSDetalle: React.FC = () => {
                       pagination={false}
                       scroll={{ x: 500 }}
                       columns={[
-                        { title: 'Impuesto', key: 'nombre', render: (_: any, r: any) => r.impuesto?.nombre || '-' },
+                        { title: 'Impuesto', key: 'nombre', render: (_: any, r: any) => toTitleCase(r.impuesto?.nombre || '-') },
                         { title: 'Porcentaje', key: 'porcentaje', width: 110, align: 'right' as const, render: (_: any, r: any) => r.impuesto?.porcentaje != null ? `${r.impuesto.porcentaje}%` : '-' },
-                        { title: 'Monto', key: 'monto', width: 130, align: 'right' as const, render: (_: any, r: any) => <Text strong>{formatCurrency(r.monto || 0)}</Text> },
+                        { title: 'Monto', key: 'monto', width: 130, align: 'right' as const, render: (_: any, r: any) => <Text strong>{formatNumber(r.monto || 0)}</Text> },
                         { title: 'Tipo', key: 'tipo', width: 110, render: (_: any, r: any) => r.tipo || '-' },
                       ]}
                     />
@@ -557,7 +585,7 @@ const FacturaPOSDetalle: React.FC = () => {
                             <a className="paces-doc-link"
                               onClick={() => navigate(`/FDEV/${rec.id}`)}
                               style={{ cursor: 'pointer' }}>
-                              {rec.documento || `DEV-${rec.noDocumento}`}
+                              {`${rec.documento}-${rec.noDocumento}`}
                             </a>
                           ),
                         },
@@ -604,7 +632,7 @@ const FacturaPOSDetalle: React.FC = () => {
                           render: (v: string) => v || '-',
                         },
                         { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const,
-                          render: (v: number) => <Text strong>{formatCurrency(v || 0)}</Text>,
+                          render: (v: number) => <Text strong>{formatNumber(v || 0)}</Text>,
                         },
                       ]}
                     />
@@ -718,9 +746,9 @@ const FacturaPOSDetalle: React.FC = () => {
                     pagination={false}
                     scroll={{ x: 500 }}
                     columns={[
-                      { title: 'Impuesto', key: 'nombre', render: (_: any, r: any) => r.impuesto?.nombre || '-' },
+                      { title: 'Impuesto', key: 'nombre', render: (_: any, r: any) => toTitleCase(r.impuesto?.nombre || '-') },
                       { title: 'Porcentaje', key: 'porcentaje', width: 110, align: 'right' as const, render: (_: any, r: any) => r.impuesto?.porcentaje != null ? `${r.impuesto.porcentaje}%` : '-' },
-                      { title: 'Monto', key: 'monto', width: 130, align: 'right' as const, render: (_: any, r: any) => <Text strong>{formatCurrency(r.monto || 0)}</Text> },
+                      { title: 'Monto', key: 'monto', width: 130, align: 'right' as const, render: (_: any, r: any) => <Text strong>{formatNumber(r.monto || 0)}</Text> },
                       { title: 'Tipo', key: 'tipo', width: 110, render: (_: any, r: any) => r.tipo || '-' },
                     ]}
                   />
@@ -748,9 +776,9 @@ const FacturaPOSDetalle: React.FC = () => {
                           <a className="paces-doc-link"
                             onClick={() => navigate(`/FDEV/${rec.id}`)}
                             style={{ cursor: 'pointer' }}>
-                            {rec.documento || `DEV-${rec.noDocumento}`}
-                          </a>
-                        ),
+                            {`${rec.documento}-${rec.noDocumento}`}
+                            </a>
+                          ),
                       },
                       { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110,
                         render: (v: string) => formatDate(v),
@@ -795,7 +823,7 @@ const FacturaPOSDetalle: React.FC = () => {
                         render: (v: string) => v || '-',
                       },
                       { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const,
-                        render: (v: number) => <Text strong>{formatCurrency(v || 0)}</Text>,
+                        render: (v: number) => <Text strong>{formatNumber(v || 0)}</Text>,
                       },
                     ]}
                   />

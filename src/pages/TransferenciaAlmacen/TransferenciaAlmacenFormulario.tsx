@@ -49,7 +49,7 @@ import { DragHandle, SortableRow, DragListenersContext } from '../../components/
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
-import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';

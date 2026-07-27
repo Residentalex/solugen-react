@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Card, Table, Typography, Empty, Space, Skeleton } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { formatCurrency } from '../../utils/formats';
+import { formatNumber } from '../../utils/formats';
 
 const { Text } = Typography;
 
@@ -20,6 +20,7 @@ export interface DocumentoAsociadoItem {
   fecha?: string;
   estado?: number;
   perdida?: number;
+  esDocumentoInventario?: boolean;
 }
 
 export interface TransaccionesAsociadasCardProps {
@@ -56,7 +57,7 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
   const navigate = useNavigate();
 
   const docsNormalizados = useMemo(() =>
-    documentos.map((d: any) => ({ ...d, nCF: d.nCF || d.ncf || '', perdida: d.perdida || 0 })),
+    documentos.map((d: any) => ({ ...d, nCF: d.nCF || d.ncf || '', perdida: d.perdida || 0, esDocumentoInventario: d.esDocumentoInventario ?? false })),
     [documentos]
   );
 
@@ -68,8 +69,18 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
       render: (_: any, record: DocumentoAsociadoItem) => {
         const label = record.documento || `${record.tipoDocumento || '?'}-${record.noDocumento || '?'}`;
         const tieneNavegacion = !readOnly || onDocumentoClick || rutas;
-        if (tieneNavegacion) return <a className="paces-doc-link" style={{ cursor: 'pointer' }}>{label}</a>;
-        return <Text>{label}</Text>;
+        const content = tieneNavegacion
+          ? <a className="paces-doc-link" style={{ cursor: 'pointer' }}>{label}</a>
+          : <Text>{label}</Text>;
+
+        if (record.esDocumentoInventario) {
+          return (
+            <div style={{ borderLeft: '3px solid #fa8c16', paddingLeft: 8 }}>
+              {content}
+            </div>
+          );
+        }
+        return content;
       },
     },
     {
@@ -85,7 +96,7 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
       key: 'montoOriginal',
       width: 130,
       align: 'right' as const,
-      render: (v: number) => formatCurrency(v ?? 0),
+      render: (v: number) => formatNumber(v ?? 0),
     },
     {
       title: 'Pagado',
@@ -93,7 +104,7 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
       key: 'pagado',
       width: 120,
       align: 'right' as const,
-      render: (v: number) => formatCurrency(v ?? 0),
+      render: (v: number) => formatNumber(v ?? 0),
     },
     {
       title: 'Saldo',
@@ -101,7 +112,7 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
       key: 'saldoPendiente',
       width: 120,
       align: 'right' as const,
-      render: (v: number) => <Text strong>{formatCurrency(v ?? 0)}</Text>,
+      render: (v: number) => <Text strong>{formatNumber(v ?? 0)}</Text>,
     },
     {
       title: 'Monto',
@@ -109,7 +120,7 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
       key: 'monto',
       width: 120,
       align: 'right' as const,
-      render: (v: number) => <Text strong>{formatCurrency(v ?? 0)}</Text>,
+      render: (v: number) => <Text strong>{formatNumber(v ?? 0)}</Text>,
     },
     {
       title: 'Pérdida',
@@ -117,7 +128,7 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
       key: 'perdida',
       width: 110,
       align: 'right' as const,
-      render: (v: number) => <Text>{formatCurrency(v ?? 0)}</Text>,
+      render: (v: number) => <Text>{formatNumber(v ?? 0)}</Text>,
     },
   ];
 

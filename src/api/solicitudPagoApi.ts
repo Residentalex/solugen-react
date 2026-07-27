@@ -134,4 +134,11 @@ export const solicitudPagoApi = {
     const { data } = await apiClient.post<ApiResponse<number>>(`/SPA/${sucursal}/generar-pago/${id}`, null, { params });
     return data.data;
   },
+
+  generarAsientos: async (sucursal: number, transaccion: any): Promise<any[]> => {
+    const { data } = await apiClient.post<ApiResponse<any[]>>(
+      `/SPA/${sucursal}/generarAsiento`, transaccion
+    );
+    return data.data;
+  },
 };

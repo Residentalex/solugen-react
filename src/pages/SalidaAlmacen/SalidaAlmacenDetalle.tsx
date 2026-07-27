@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, Typography, Tooltip, Modal, Alert, App, DatePicker, Dropdown, Switch,
 } from 'antd';
+import ColumnVisibilityToggle from '../../components/ColumnVisibilityToggle';
+import type { ColumnConfig } from '../../components/ColumnVisibilityToggle';
 import type { MenuProps } from 'antd';
 import dayjs from 'dayjs';
 
@@ -37,12 +39,30 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import SucursalField from '../../components/SucursalField';
-import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import { productoApi } from '../../api/productoApi';
+import { transaccionApi } from '../../api/transaccionApi';
 
 const { Text } = Typography;
+
+const DETALLE_COLUMNS_CONFIG: ColumnConfig[] = [
+  { key: 'codigo', label: 'Código', defaultVisible: true },
+  { key: 'articulo', label: 'Artículo', defaultVisible: true },
+  { key: 'cantidad', label: 'Cantidad', defaultVisible: true },
+  { key: 'costo', label: 'Costo', defaultVisible: true },
+  { key: 'descuento', label: 'Descuento', defaultVisible: true },
+  { key: 'impuestos', label: 'Impuestos', defaultVisible: true },
+  { key: 'total', label: 'Total', defaultVisible: true },
+  { key: 'factor', label: 'Factor', defaultVisible: false },
+];
+
+const DETALLE_DEFAULT_VISIBLE_KEYS = DETALLE_COLUMNS_CONFIG
+  .filter((c) => c.defaultVisible !== false)
+  .map((c) => c.key);
+
+const LS_DETALLE_VISIBLE_COLUMNS_KEY = 'sap_detalle_visibleColumns';
 
 function extraerMensajeError(err: any, fallback: string): string {
   const data = err?.response?.data;
@@ -90,6 +110,22 @@ const SalidaAlmacenDetalle: React.FC = () => {
   const [vencimientoModalOpen, setVencimientoModalOpen] = useState(false);
   const [vencimientoFechas, setVencimientoFechas] = useState<Record<number, dayjs.Dayjs>>({});
   const monedaDefault = getMonedaSucursalActiva();
+  const [visibleDetalleKeys, setVisibleDetalleKeys] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(LS_DETALLE_VISIBLE_COLUMNS_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch { /* ignorar */ }
+    return DETALLE_DEFAULT_VISIBLE_KEYS;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_DETALLE_VISIBLE_COLUMNS_KEY, JSON.stringify(visibleDetalleKeys));
+    } catch { /* ignorar */ }
+  }, [visibleDetalleKeys]);
 
   const { message } = App.useApp();
   const operacion = useAplicar();
@@ -101,10 +137,16 @@ const SalidaAlmacenDetalle: React.FC = () => {
     salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
+        // Calcular balance de asientos contables
+        const totalDeb = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 0 || r.tipoAsiento === 'D') ? (r.monto || 0) : 0), 0);
+        const totalCred = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 1 || r.tipoAsiento === 'C') ? (r.monto || 0) : 0), 0);
+        operacion.setBalanceInfo({ debitos: totalDeb, creditos: totalCred });
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
         if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-          salidaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+          transaccionApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
         } else {
@@ -145,8 +187,8 @@ const SalidaAlmacenDetalle: React.FC = () => {
         setData(res);
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
-        if (res.estado === 3 && (res as any).reversoID) {
-          salidaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
+          transaccionApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
         } else {
@@ -396,7 +438,22 @@ const SalidaAlmacenDetalle: React.FC = () => {
         </div>
       ),
     },
+    {
+      title: 'Factor',
+      dataIndex: 'medida.factor',
+      key: 'factor',
+      width: 80,
+      align: 'right' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div>{formatNumber(record.medida?.factor || 1)}</div>
+      ),
+    },
   ];
+
+  const detalleColumnsFiltered = detalleColumns.filter(
+    (col) => col.key === 'codigo' || visibleDetalleKeys.includes(col.key as string)
+  );
 
   // ===== Asientos e Historial =====
   // asientoColumns reemplazado por AsientosContableTable compartido
@@ -488,8 +545,8 @@ const SalidaAlmacenDetalle: React.FC = () => {
       setModalAnularOpen(false);
       const res = await salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
-      if (res.estado === 3 && (res as any).reversoID) {
-        const revRes = await salidaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+      if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
+        const revRes = await transaccionApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
         setReversoData(null);
@@ -535,8 +592,8 @@ const SalidaAlmacenDetalle: React.FC = () => {
       message.success('Documento reversado exitosamente');
       const res = await salidaAlmacenApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
-      if (res.estado === 3 && (res as any).reversoID) {
-        const revRes = await salidaAlmacenApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+      if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
+        const revRes = await transaccionApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
         setReversoData(null);
@@ -725,20 +782,28 @@ const SalidaAlmacenDetalle: React.FC = () => {
               defaultActiveKey="detalles"
               type="card"
               tabBarExtraContent={
-                <Input.Search
-                  placeholder="Buscar detalle..."
-                  allowClear
-                  style={{ width: 320 }}
-                  onSearch={(value) => setDetalleSearch(value)}
-                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                />
+                <Space>
+                  <Input.Search
+                    placeholder="Buscar detalle..."
+                    allowClear
+                    style={{ width: 320 }}
+                    onSearch={(value) => setDetalleSearch(value)}
+                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                  />
+                  <ColumnVisibilityToggle
+                    columns={DETALLE_COLUMNS_CONFIG}
+                    visibleKeys={visibleDetalleKeys}
+                    onChange={setVisibleDetalleKeys}
+                    iconOnly
+                  />
+                </Space>
               }
               items={[
                 {
                   key: 'detalles',
                   label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                   children: (
-                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
+                    <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} />
                   ),
                 },
                 {
@@ -837,20 +902,28 @@ const SalidaAlmacenDetalle: React.FC = () => {
               defaultActiveKey="detalles"
               type="card"
               tabBarExtraContent={
-                <Input.Search
-                  placeholder="Buscar detalle..."
-                  allowClear
-                  style={{ width: 320 }}
-                  onSearch={(value) => setDetalleSearch(value)}
-                  onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
-                />
+                <Space>
+                  <Input.Search
+                    placeholder="Buscar detalle..."
+                    allowClear
+                    style={{ width: 320 }}
+                    onSearch={(value) => setDetalleSearch(value)}
+                    onChange={(e) => { if (!e.target.value) setDetalleSearch(''); }}
+                  />
+                  <ColumnVisibilityToggle
+                    columns={DETALLE_COLUMNS_CONFIG}
+                    visibleKeys={visibleDetalleKeys}
+                    onChange={setVisibleDetalleKeys}
+                    iconOnly
+                  />
+                </Space>
               }
               items={[
                 {
                   key: 'detalles',
                   label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                   children: (
-                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
+                    <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} />
                   ),
                 },
                 {
@@ -997,6 +1070,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
         titulo={operacionTitulo}
         eventos={operacion.eventos}
         completado={operacion.completado}
+        balanceInfo={operacion.balanceInfo}
         onClose={() => operacion.reset()}
       />
     </div>

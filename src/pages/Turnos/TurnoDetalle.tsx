@@ -333,7 +333,7 @@ const TurnoDetalle: React.FC = () => {
         return (
           <Space size={[2, 0]}>
             {pagos.metodos.map((m) => (
-              <Tooltip key={m.key} title={`${METODO_PAGO_LABELS[m.key] || m.label}: ${formatCurrency(m.monto)}`}>
+              <Tooltip key={m.key} title={`${METODO_PAGO_LABELS[m.key] || m.label}: ${formatNumber(m.monto)}`}>
                 {ICONO_MAP[m.key]}
               </Tooltip>
             ))}
@@ -346,6 +346,27 @@ const TurnoDetalle: React.FC = () => {
       key: 'pendiente',
       width: 130,
       align: 'right' as const,
+      filterDropdown: ({ confirm, clearFilters }: any) => (
+        <FiltroSeleccionDropdown
+          dataSource={data?.facturas || []}
+          dataIndex="pendiente"
+          render={(record: any) => {
+            const pagos = pagosPorFactura[record.id];
+            const cobrado = pagos?.totalPagado || 0;
+            const pendiente = record.total - cobrado;
+            return pendiente <= 0.01 ? 'Pagado' : 'Con pendiente';
+          }}
+          placeholder="Buscar..."
+          filtroKey="pendiente"
+          filtrosActivos={filtrosActivos}
+          setFiltrosActivos={setFiltrosActivos}
+          confirm={confirm}
+          clearFilters={clearFilters}
+        />
+      ),
+      filterIcon: () => filtrosActivos.pendiente
+        ? <FilterFilled style={{ color: '#556ee6', fontSize: 12 }} />
+        : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />,
       render: (_: any, record: any) => {
         const pagos = pagosPorFactura[record.id];
         const cobrado = pagos?.totalPagado || 0;
@@ -353,7 +374,7 @@ const TurnoDetalle: React.FC = () => {
         if (pendiente <= 0.01) {
           return <Text style={{ color: '#52c41a' }}>Pagado</Text>;
         }
-        return <Text strong style={{ color: '#ff4d4f' }}>{formatCurrency(pendiente)}</Text>;
+        return <Text strong style={{ color: '#ff4d4f' }}>{formatNumber(pendiente)}</Text>;
       },
     },
     {
@@ -362,7 +383,7 @@ const TurnoDetalle: React.FC = () => {
       key: 'total',
       width: 140,
       align: 'right' as const,
-      render: (val: number) => <Text strong>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text strong>{formatNumber(val)}</Text>,
     },
   ];
 
@@ -378,7 +399,7 @@ const TurnoDetalle: React.FC = () => {
       key: 'monto',
       align: 'right' as const,
       width: 160,
-      render: (_: any, record: any) => <Text strong>{formatCurrency(record.monto)}</Text>,
+      render: (_: any, record: any) => <Text strong>{formatNumber(record.monto)}</Text>,
     },
   ];
 
@@ -459,6 +480,13 @@ const TurnoDetalle: React.FC = () => {
           if (metodosDoc.length === 0 && seleccionados.includes('sin_pago')) return true;
           if (metodosDoc.length > 0) return seleccionados.some((m: string) => metodosDoc.includes(m));
           return false;
+        }
+        if (key === 'pendiente') {
+          const pagos = pagosPorFactura[doc.id];
+          const cobrado = pagos?.totalPagado || 0;
+          const pendiente = doc.total - cobrado;
+          const estado = pendiente <= 0.01 ? 'Pagado' : 'Con pendiente';
+          return Array.isArray(filtro.valor) ? filtro.valor.includes(estado) : true;
         }
         return true;
       });
@@ -874,7 +902,7 @@ const TurnoDetalle: React.FC = () => {
         : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />,
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
-          <div>{formatCurrency(record.impuestos || 0)}</div>
+          <div>{formatNumber(record.impuestos || 0)}</div>
           <div style={{ fontSize: 11, lineHeight: 1.5 }}>
             {record.impuesto?.nombre || ''}
           </div>
@@ -890,7 +918,7 @@ const TurnoDetalle: React.FC = () => {
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
         <div style={{ fontSize: 13 }}>
-          <div>{formatCurrency(record.descuento || 0)}</div>
+          <div>{formatNumber(record.descuento || 0)}</div>
           <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
         </div>
       ),
@@ -930,7 +958,7 @@ const TurnoDetalle: React.FC = () => {
                 <Text type="secondary" style={{ fontSize: 13 }}>Filtros:</Text>
                 {Object.entries(filtrosActivos).map(([key, f]) => (
                   <Tag key={key} closable onClose={() => limpiarFiltro(key)}>
-                    {key === 'noDocumento' ? 'No. Documento' : key === 'cliente' ? 'Entidad/Cliente' : key === 'fechaDocumento' ? 'Fecha' : key === 'pagos' ? 'Pagos' : key}: {Array.isArray(f?.valor) ? f.valor.map((v: string) => v === 'sin_pago' ? 'Sin pago' : METODO_PAGO_LABELS[v] || v).join(', ') : f?.valor || `${f?.value?.[0] || ''} - ${f?.value?.[1] || ''}`}
+                    {key === 'noDocumento' ? 'No. Documento' : key === 'cliente' ? 'Entidad/Cliente' : key === 'fechaDocumento' ? 'Fecha' : key === 'pagos' ? 'Pagos' : key === 'pendiente' ? 'Pendiente' : key}: {Array.isArray(f?.valor) ? f.valor.map((v: string) => v === 'sin_pago' ? 'Sin pago' : METODO_PAGO_LABELS[v] || v).join(', ') : f?.valor || `${f?.value?.[0] || ''} - ${f?.value?.[1] || ''}`}
                   </Tag>
                 ))}
                 <Button size="small" onClick={limpiarTodosFiltros} type="link" style={{ padding: 0 }}>
@@ -1081,20 +1109,20 @@ const TurnoDetalle: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
                 <span className="paces-text-secondary">Total Facturado</span>
-                <Text strong>{formatCurrency(total)}</Text>
+                <Text strong>{formatNumber(total)}</Text>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
                 <span className="paces-text-secondary">Cobrado</span>
-                <Text strong style={{ color: '#34c38f' }}>{formatCurrency(cobrado)}</Text>
+                <Text strong style={{ color: '#34c38f' }}>{formatNumber(cobrado)}</Text>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
                 <span className="paces-text-secondary">Devuelta</span>
-                <Text strong>{formatCurrency(cobrosTotales.devuelta)}</Text>
+                <Text strong>{formatNumber(cobrosTotales.devuelta)}</Text>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
                 <span className="paces-text-secondary">Por Cobrar</span>
                 <Text strong style={{ color: porCobrar > 0 ? '#f46a6a' : '#595959' }}>
-                  {formatCurrency(porCobrar)}
+                  {formatNumber(porCobrar)}
                 </Text>
               </div>
             </div>

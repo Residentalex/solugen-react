@@ -5,7 +5,7 @@ import {
   message, Typography, Descriptions, Modal,
 } from 'antd';
 import {
-  ExclamationCircleOutlined, CheckCircleOutlined,
+  ExclamationCircleOutlined, CheckCircleOutlined, PrinterOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -57,6 +57,7 @@ const PlantillaSuplidorDetalle: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generando, setGenerando] = useState(false);
+  const [imprimiendo, setImprimiendo] = useState(false);
 
   const screens = Grid.useBreakpoint();
   const isLarge = screens.xxl === true;
@@ -165,6 +166,29 @@ const PlantillaSuplidorDetalle: React.FC = () => {
     });
   };
 
+  const handleImprimir = async () => {
+    setImprimiendo(true);
+    try {
+      const res = await plantillaSuplidorApi.imprimir(sucursalActiva, id!);
+      const blobUrl = URL.createObjectURL(res);
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = blobUrl;
+      document.body.appendChild(iframe);
+      setTimeout(() => {
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          document.body.removeChild(iframe);
+          URL.revokeObjectURL(blobUrl);
+        }, 30000);
+      }, 2000);
+    } catch {
+      message.error('Error al generar el PDF');
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
   if (!data) return null;
 
   const detalleColumns = [
@@ -220,17 +244,22 @@ const PlantillaSuplidorDetalle: React.FC = () => {
       onEliminar={handleEliminar}
       eliminando={saving}
       extraActions={
-        <PermissionGate accion="PROCESAR">
-          <Button
-            type="primary"
-            icon={<CheckCircleOutlined />}
-            loading={generando}
-            onClick={handleGenerarAnalisis}
-            style={{ background: '#389e0d', borderColor: '#389e0d' }}
-          >
-            Generar Análisis
-          </Button>
-        </PermissionGate>
+        <>
+          <PermissionGate accion="PROCESAR">
+            <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={handleImprimir} />
+          </PermissionGate>
+          <PermissionGate accion="PROCESAR">
+            <Button
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              loading={generando}
+              onClick={handleGenerarAnalisis}
+              style={{ background: '#389e0d', borderColor: '#389e0d' }}
+            >
+              Generar Análisis
+            </Button>
+          </PermissionGate>
+        </>
       }
     >
       {isLarge ? (

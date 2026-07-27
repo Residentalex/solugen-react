@@ -1,3 +1,7 @@
+// @deprecated Usar NotificationClientService en src/services/NotificationClientService.ts
+// Este archivo se mantiene temporalmente para no romver imports existentes.
+// NotificationClientService unifica SignalR lifecycle, Browser Notification API,
+// Visibility API (badge en título) y event emitter.
 import * as signalR from '@microsoft/signalr';
 import { useAuthStore } from '../stores/authStore';
 import type { NotificacionSignalR } from '../types/notificaciones';

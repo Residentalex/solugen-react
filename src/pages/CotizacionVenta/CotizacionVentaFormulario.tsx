@@ -38,7 +38,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
-import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
@@ -791,7 +791,7 @@ const CotizacionVentaFormulario: React.FC = () => {
         }
         return (
           <div>
-            <Text>{formatCurrency(precioBase)}</Text>
+            <Text>{formatNumber(precioBase)}</Text>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
               {formatNumber(precioUnitario)} × {factor}
             </div>

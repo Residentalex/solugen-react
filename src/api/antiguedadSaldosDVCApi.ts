@@ -43,7 +43,7 @@ export const antiguedadSaldosDVCApi = {
 
   obtenerTipos: async (sucursal: number): Promise<any[]> => {
     const { data } = await apiClient.get<ApiResponse<any[]>>(
-      `/Tipo/${sucursal}?entdoc=DVC`
+      `/Tipo/${sucursal}/Documento/DVC`
     );
     return data.data;
   },

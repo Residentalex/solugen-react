@@ -44,7 +44,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import GuidePopover from '../../components/GuidePopover/GuidePopover';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
-import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
@@ -321,7 +321,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   // ===== Cargar entidades (clientes o suplidores) =====
   const cargarEntidades = async (conceptoCodigo?: string) => {
     try {
-      const res = await conceptosApi.obtenerEntidades(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo);
+      const res = await conceptosApi.obtenerEntidadesActivas(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo);
       setEntidadesCache((res || []).filter((e) => e.activo !== false));
     } catch {
       // Fallback: cargar clientes
@@ -1018,8 +1018,8 @@ const ReciboIngresoFormulario: React.FC = () => {
         <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Space>
             <Text className="paces-text-secondary">
-              Total: {formatCurrency(totalValue || 0)} | Distribuido: {formatCurrency(totalDistribuido)} | 
-              Por distribuir: <span style={{ color: porDistribuir > 0 ? '#faad14' : '#52c41a', fontWeight: 600 }}>{formatCurrency(porDistribuir)}</span>
+              Total: {formatNumber(totalValue || 0)} | Distribuido: {formatNumber(totalDistribuido)} | 
+              Por distribuir: <span style={{ color: porDistribuir > 0 ? '#faad14' : '#52c41a', fontWeight: 600 }}>{formatNumber(porDistribuir)}</span>
             </Text>
           </Space>
           <Button
@@ -1068,20 +1068,20 @@ const ReciboIngresoFormulario: React.FC = () => {
             <Table.Summary.Row>
               <Table.Summary.Cell index={0}><strong>Totales</strong></Table.Summary.Cell>
               <Table.Summary.Cell index={1} align="right">
-                <strong>{formatCurrency(totalCobrado)}</strong>
+                <strong>{formatNumber(totalCobrado)}</strong>
               </Table.Summary.Cell>
               <Table.Summary.Cell index={2} />
             </Table.Summary.Row>
             <Table.Summary.Row>
               <Table.Summary.Cell index={0} className="paces-text-secondary">Total Documento</Table.Summary.Cell>
-              <Table.Summary.Cell index={1} align="right">{formatCurrency(totalValue || 0)}</Table.Summary.Cell>
+              <Table.Summary.Cell index={1} align="right">{formatNumber(totalValue || 0)}</Table.Summary.Cell>
               <Table.Summary.Cell index={2} />
             </Table.Summary.Row>
             <Table.Summary.Row>
               <Table.Summary.Cell index={0} className="paces-text-secondary">Cuenta por Cobrar</Table.Summary.Cell>
               <Table.Summary.Cell index={1} align="right">
                 <span style={{ color: cuentasPorCobrar > 0 ? '#ff4d4f' : '#52c41a', fontWeight: 600 }}>
-                  {formatCurrency(cuentasPorCobrar)}
+                  {formatNumber(cuentasPorCobrar)}
                 </span>
               </Table.Summary.Cell>
               <Table.Summary.Cell index={2} />
@@ -1090,7 +1090,7 @@ const ReciboIngresoFormulario: React.FC = () => {
               <Table.Summary.Cell index={0} className="paces-text-secondary">Diferencia</Table.Summary.Cell>
               <Table.Summary.Cell index={1} align="right">
                 <span style={{ color: Math.abs(diferencia) > 0.01 ? '#ff4d4f' : '#52c41a', fontWeight: 600 }}>
-                  {formatCurrency(diferencia)}
+                  {formatNumber(diferencia)}
                 </span>
               </Table.Summary.Cell>
               <Table.Summary.Cell index={2} />

@@ -25,7 +25,7 @@ import { apiClient } from '../../api/client';
 import type { SuplidorDTO, ConceptoDTO } from '../../types/entradaAlmacen';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
-import { formatCurrency } from '../../utils/formats';
+import { formatNumber } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
@@ -34,10 +34,6 @@ import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLa
 
 const { Text } = Typography;
 const { TextArea } = Input;
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
 
 function toTitleCase(str: string): string {
   if (!str) return str;

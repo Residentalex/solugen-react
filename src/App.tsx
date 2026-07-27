@@ -118,6 +118,8 @@ import Automatizaciones from './pages/Automatizaciones/Automatizaciones';
 import MiPerfil from './pages/MiPerfil/MiPerfil';
 import Servicios from './pages/Servicios/Servicios';
 import ActualizacionPrecio from './pages/ActualizacionPrecio/ActualizacionPrecio';
+import ActualizacionPrecioDetalle from './pages/ActualizacionPrecio/ActualizacionPrecioDetalle';
+import ActualizacionPrecioFormulario from './pages/ActualizacionPrecio/ActualizacionPrecioFormulario';
 import Turnos from './pages/Turnos/Turnos';
 import TurnoDetalle from './pages/Turnos/TurnoDetalle';
 import Conteos from './pages/Conteos/Conteos';
@@ -129,6 +131,7 @@ import AntiguedadSaldos from './pages/AntiguedadSaldos/AntiguedadSaldos';
 import AntiguedadSaldosDVC from './pages/AntiguedadSaldosDVC/AntiguedadSaldosDVC';
 import FacturasVencidas from './pages/FacturasVencidas/FacturasVencidas';
 import MayorAuxiliar from './pages/MayorAuxiliar/MayorAuxiliar';
+import DiarioGeneral from './pages/DiarioGeneral/DiarioGeneral';
 import TransaccionNoCuadrada from './pages/TransaccionNoCuadrada/TransaccionNoCuadrada';
 import IntegridadAsientos from './pages/IntegridadAsientos/IntegridadAsientos';
 import DocumentoSinAsiento from './pages/DocumentoSinAsiento/DocumentoSinAsiento';
@@ -172,6 +175,11 @@ import DocumentosCxPAutorizados from './pages/DocumentosCxPAutorizados/Documento
 import DocumentosCxPAplicados from './pages/DocumentosCxPAplicados/DocumentosCxPAplicados';
 import TransferenciaSucursales from './pages/TransferenciaSucursales/TransferenciaSucursales';
 import Empresa from './pages/Configuracion/Empresa';
+import ConciliacionBancaria from './pages/ConciliacionBancaria/ConciliacionBancaria';
+import ConciliacionBancariaDetalle from './pages/ConciliacionBancaria/ConciliacionBancariaDetalle';
+import ConciliacionBancariaFormulario from './pages/ConciliacionBancaria/ConciliacionBancariaFormulario';
+import ConfigPedidosYa from './pages/ConfigPedidosYa/ConfigPedidosYa';
+import ReportesModulo from './pages/ReportesModulo/ReportesModulo';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -188,12 +196,18 @@ const PantallaGuard: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-  // Extraer el código de la pantalla desde el primer segmento de la ruta
+  // Extraer el código de la pantalla desde la ruta
   // Si la ruta empieza con /saas/, ignorar ese prefijo
   const segmentos = location.pathname.split('/').filter(Boolean);
-  const codigoRuta = segmentos[0] === 'saas' ? (segmentos[1] || '') : (segmentos[0] || '');
-  if (codigoRuta && !['dashboard', 'cambiar-clave', 'MPERFIL', 'MPerfil', 'notificaciones', 'MTicket', 'visualizar-consulta', 'MApiToken', 'Modulos', 'RGORC'].includes(codigoRuta)) {
-    const tieneAcceso = pantallas.some((p) => p.codigo.toLowerCase() === codigoRuta.toLowerCase());
+  const segmentosSinSaas = segmentos[0] === 'saas' ? segmentos.slice(1) : segmentos;
+  const codigoRuta = segmentosSinSaas[0] || '';
+  // Para rutas multi-segmento (ej: FConcil), también verificar el path completo
+  const codigoRutaCompleto = segmentosSinSaas.join('/');
+  if (codigoRuta && !['dashboard', 'cambiar-clave', 'MPERFIL', 'MPerfil', 'notificaciones', 'MTicket', 'visualizar-consulta', 'MApiToken', 'Modulos', 'RGORC', 'Reportes'].includes(codigoRuta) && !codigoRuta.startsWith('Reportes_')) {
+    const tieneAcceso =
+      pantallas.some((p) => p.codigo.toLowerCase() === codigoRuta.toLowerCase()) ||
+      pantallas.some((p) => p.codigo.toLowerCase() === codigoRutaCompleto.toLowerCase()) ||
+      pantallas.some((p) => p.ruta && p.ruta.toLowerCase() === ('/' + codigoRutaCompleto).toLowerCase());
     if (!tieneAcceso) {
       return <Navigate to="/" replace />;
     }
@@ -227,6 +241,7 @@ const App: React.FC = () => {
         >
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
+            <Route path="Reportes/:modulo" element={<ReportesModulo />} />
             <Route path="FENP" element={<EntradaAlmacen />} />
             <Route path="FENP/nuevo" element={<EntradaAlmacenFormulario />} />
             <Route path="FENP/:id/editar" element={<EntradaAlmacenFormulario />} />
@@ -244,6 +259,10 @@ const App: React.FC = () => {
             <Route path="FTRP/nuevo" element={<TransferenciaAlmacenFormulario />} />
             <Route path="FTRP/:id/editar" element={<TransferenciaAlmacenFormulario />} />
             <Route path="FTRP/:id" element={<TransferenciaAlmacenDetalle />} />
+            <Route path="FConcil" element={<ConciliacionBancaria />} />
+            <Route path="FConcil/nuevo" element={<ConciliacionBancariaFormulario />} />
+            <Route path="FConcil/:id/editar" element={<ConciliacionBancariaFormulario />} />
+            <Route path="FConcil/:id" element={<ConciliacionBancariaDetalle />} />
             <Route path="FDEV" element={<DevolucionVenta />} />
             <Route path="FDEV/nuevo" element={<DevolucionVentaFormulario />} />
             <Route path="FDEV/:id/editar" element={<DevolucionVentaFormulario />} />
@@ -348,6 +367,9 @@ const App: React.FC = () => {
             <Route path="FDenominacion" element={<Denominaciones />} />
             <Route path="MServicio" element={<Servicios />} />
             <Route path="FActPrecio" element={<ActualizacionPrecio />} />
+            <Route path="FActPrecio/nuevo" element={<ActualizacionPrecioFormulario />} />
+            <Route path="FActPrecio/:id/editar" element={<ActualizacionPrecioFormulario />} />
+            <Route path="FActPrecio/:id" element={<ActualizacionPrecioDetalle />} />
             <Route path="FTarifas" element={<Proximamente modulo="Tarifas" codigo="FTarifas" />} />
             <Route path="CCUADRECAJA" element={<Proximamente modulo="Cuadre de Caja" codigo="CCUADRECAJA" />} />
             <Route path="CCENTRALSUPERVISION" element={<Proximamente modulo="Central de Supervisión" codigo="CCENTRALSUPERVISION" />} />
@@ -408,6 +430,7 @@ const App: React.FC = () => {
           <Route path="RAntiguedadSaldoDVC" element={<AntiguedadSaldosDVC />} />
           <Route path="RFACVEN" element={<FacturasVencidas />} />
             <Route path="RMayorAux" element={<MayorAuxiliar />} />
+            <Route path="RDiarioGeneral" element={<DiarioGeneral />} />
             <Route path="RTransNoCuadrada" element={<TransaccionNoCuadrada />} />
             <Route path="RIntegridadAsientos" element={<IntegridadAsientos />} />
             <Route path="RDocumentoSinAsiento" element={<DocumentoSinAsiento />} />
@@ -429,6 +452,7 @@ const App: React.FC = () => {
           <Route path="MPermiso" element={<PermisosEspeciales />} />
           <Route path="MAuditoria" element={<Proximamente modulo="Historial y Auditoría" codigo="MAuditoria" />} />
           <Route path="OConfig" element={<Empresa />} />
+          <Route path="MConfigPedidosYa" element={<ConfigPedidosYa />} />
           <Route path="MTerminal" element={<Proximamente modulo="Terminales" codigo="MTerminal" />} />
           <Route path="MSincronizacion" element={<Proximamente modulo="Sincronización" codigo="MSincronizacion" />} />
            <Route path="MApiToken" element={<ApiTokens />} />
@@ -453,6 +477,7 @@ const App: React.FC = () => {
         >
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
+            <Route path="Reportes/:modulo" element={<ReportesModulo />} />
             <Route path="FENP" element={<EntradaAlmacen />} />
             <Route path="FENP/nuevo" element={<EntradaAlmacenFormulario />} />
             <Route path="FENP/:id/editar" element={<EntradaAlmacenFormulario />} />
@@ -470,6 +495,10 @@ const App: React.FC = () => {
             <Route path="FTRP/nuevo" element={<TransferenciaAlmacenFormulario />} />
             <Route path="FTRP/:id/editar" element={<TransferenciaAlmacenFormulario />} />
             <Route path="FTRP/:id" element={<TransferenciaAlmacenDetalle />} />
+            <Route path="FConcil" element={<ConciliacionBancaria />} />
+            <Route path="FConcil/nuevo" element={<ConciliacionBancariaFormulario />} />
+            <Route path="FConcil/:id/editar" element={<ConciliacionBancariaFormulario />} />
+            <Route path="FConcil/:id" element={<ConciliacionBancariaDetalle />} />
             <Route path="FDEV" element={<DevolucionVenta />} />
             <Route path="FDEV/nuevo" element={<DevolucionVentaFormulario />} />
             <Route path="FDEV/:id/editar" element={<DevolucionVentaFormulario />} />
@@ -574,6 +603,9 @@ const App: React.FC = () => {
             <Route path="FDenominacion" element={<Denominaciones />} />
             <Route path="MServicio" element={<Servicios />} />
             <Route path="FActPrecio" element={<ActualizacionPrecio />} />
+            <Route path="FActPrecio/nuevo" element={<ActualizacionPrecioFormulario />} />
+            <Route path="FActPrecio/:id/editar" element={<ActualizacionPrecioFormulario />} />
+            <Route path="FActPrecio/:id" element={<ActualizacionPrecioDetalle />} />
             <Route path="FTarifas" element={<Proximamente modulo="Tarifas" codigo="FTarifas" />} />
             <Route path="CCUADRECAJA" element={<Proximamente modulo="Cuadre de Caja" codigo="CCUADRECAJA" />} />
             <Route path="CCENTRALSUPERVISION" element={<Proximamente modulo="Central de Supervisión" codigo="CCENTRALSUPERVISION" />} />
@@ -634,6 +666,7 @@ const App: React.FC = () => {
           <Route path="RAntiguedadSaldoDVC" element={<AntiguedadSaldosDVC />} />
           <Route path="RFACVEN" element={<FacturasVencidas />} />
             <Route path="RMayorAux" element={<MayorAuxiliar />} />
+            <Route path="RDiarioGeneral" element={<DiarioGeneral />} />
             <Route path="RTransNoCuadrada" element={<TransaccionNoCuadrada />} />
             <Route path="RIntegridadAsientos" element={<IntegridadAsientos />} />
             <Route path="RDocumentoSinAsiento" element={<DocumentoSinAsiento />} />
@@ -655,6 +688,7 @@ const App: React.FC = () => {
           <Route path="MPermiso" element={<PermisosEspeciales />} />
           <Route path="MAuditoria" element={<Proximamente modulo="Historial y Auditoría" codigo="MAuditoria" />} />
           <Route path="OConfig" element={<Empresa />} />
+          <Route path="MConfigPedidosYa" element={<ConfigPedidosYa />} />
           <Route path="MTerminal" element={<Proximamente modulo="Terminales" codigo="MTerminal" />} />
           <Route path="MSincronizacion" element={<Proximamente modulo="Sincronización" codigo="MSincronizacion" />} />
            <Route path="MApiToken" element={<ApiTokens />} />

@@ -194,3 +194,60 @@ Reglas:
 - No usar estilos inline repetidos que puedan reemplazarse con clases CSS existentes
 - Todo modal de busqueda o seleccion (BuscarConcepto, BuscarDocumento, BuscarEntidad, etc.) debe ser un componente compartido en `src/components/`, no definido dentro de la misma pagina donde se usa.
 - La unica excepcion son modales especificos de una sola pantalla que no se reutilizan en ningun otro modulo.
+
+## Filtros tipo Excel en columnas
+
+Existe un componente compartido `src/components/FiltroSeleccionDropdown.tsx` que implementa filtros estilo Excel en columnas de tablas:
+
+- Muestra valores únicos extraídos del `dataSource` con checkboxes
+- Incluye `Input.Search` dentro del dropdown para filtrar opciones
+- Botones Aceptar y Limpiar
+- Icono de filtro que cambia de color (azul si activo, gris si no)
+- Tags mostrando filtros activos arriba de la tabla
+
+### Cómo usar
+
+```tsx
+import FiltroSeleccionDropdown from '../../components/FiltroSeleccionDropdown';
+
+// En la definición de columnas:
+{
+  title: 'Columna',
+  key: 'miColumna',
+  filterDropdown: ({ confirm, clearFilters }: any) => (
+    <FiltroSeleccionDropdown
+      dataSource={miDataSource}
+      dataIndex="miPropiedad"        // Para propiedades directas
+      // render={(r) => r.objeto?.propiedad || ''}  // Para propiedades anidadas
+      filtroKey="miColumna"
+      filtrosActivos={stateFiltros}
+      setFiltrosActivos={setStateFiltros}
+      confirm={confirm}
+      clearFilters={clearFilters}
+    />
+  ),
+  filterIcon: () => stateFiltros.miColumna
+    ? <FilterFilled style={{ color: '#556ee6', fontSize: 12 }} />
+    : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />,
+}
+```
+
+### Lógica de filtrado (useMemo)
+Los valores seleccionados llegan como `filtro.valor` (array de strings). Filtrar así:
+```tsx
+const datosFiltrados = useMemo(() => {
+  let result = datosOriginales;
+  Object.entries(filtrosActivos).forEach(([key, filtro]) => {
+    if (filtro?.valor?.length > 0) {
+      result = result.filter((item: any) => {
+        const val = item[key]?.toString() || '';
+        return filtro.valor.includes(val);
+      });
+    }
+  });
+  return result;
+}, [datosOriginales, filtrosActivos]);
+```
+
+### Proyecto actual
+- `src/pages/Turnos/TurnoDetalle.tsx` (7 filtros: noDocumento, cliente, codigo x2, articulo x2, impuesto)

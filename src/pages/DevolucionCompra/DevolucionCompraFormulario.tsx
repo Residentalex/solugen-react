@@ -46,6 +46,7 @@ import type { UnidadMedidaDTO } from '../../types/productos';
 import type {
   DetalleDevolucionCompraDTO, DevolucionCompraFullDTO, TipoDTO,
 } from '../../types/devolucionCompra';
+import type { DocumentoDTO } from '../../types/documento';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
 
@@ -57,7 +58,7 @@ import { DragHandle, SortableRow, DragListenersContext } from '../../components/
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
-import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
@@ -156,6 +157,7 @@ const DevolucionCompraFormulario: React.FC = () => {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
+  const [documento, setDocumento] = useState<DocumentoDTO | null>(null);
 
   const editValuesRef = useRef<Record<string, any>>({});
   const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
@@ -248,6 +250,7 @@ const DevolucionCompraFormulario: React.FC = () => {
 
   const sinOC = entradaDetallesData.length === 0;
   const isLarge = screens.xl ?? true;
+  const trabajarEnUnidad = (documento ?? data?.documento)?.trabajarEnUnidad === true;
 
   // ===== Determinar estado =====
   const estado = data?.estado ?? 0;
@@ -359,10 +362,13 @@ const DevolucionCompraFormulario: React.FC = () => {
   // ===== Pre-cargar entrada si viene de EntradaAlmacenDetalle =====
   useEffect(() => {
     if (mode !== 'crear' || !entradaId) return;
+    if (!documentoConfig) return;
 
     const loadFromEntrada = async () => {
       try {
         const detalleEntrada = await devolucionCompraApi.obtenerDetalleEntrada(sucursalActiva, entradaId);
+
+        setEntradaDetallesData(detalleEntrada.detalles || []);
 
         setSelectedEntrada({
           id: detalleEntrada.id,
@@ -414,6 +420,14 @@ const DevolucionCompraFormulario: React.FC = () => {
           impuesto: d.impuesto,
           tieneVencimiento: d.tieneVencimiento,
         }));
+        // Cuando trabajarEnUnidad es true, convertir a unidad base genérica
+        if (documentoConfig?.trabajarEnUnidad === true) {
+          nuevosDetalles.forEach((d: any) => {
+            if (d.medida) {
+              d.medida = { ...d.medida, nombre: 'Unidad(es)' };
+            }
+          });
+        }
         setDetalles(nuevosDetalles.map((d: DetalleDevolucionCompraDTO) => calcularFila(d)));
       } catch (err: any) {
         const msg = extraerMensajeError(err, 'Error al cargar la entrada seleccionada');
@@ -422,7 +436,16 @@ const DevolucionCompraFormulario: React.FC = () => {
     };
 
     loadFromEntrada();
-  }, [mode, entradaId, sucursalActiva, form]);
+  }, [mode, entradaId, sucursalActiva, form, documentoConfig]);
+
+  // ===== Sincronizar documento desde data (edición) o documentoConfig (creación) =====
+  useEffect(() => {
+    if (data?.documento) {
+      setDocumento(data.documento);
+    } else if (documentoConfig) {
+      setDocumento(documentoConfig);
+    }
+  }, [data, documentoConfig]);
 
   // ===== Handlers =====
   const handleCancelar = () => {
@@ -754,25 +777,33 @@ const DevolucionCompraFormulario: React.FC = () => {
           });
         });
 
-        if (shouldReplace) {
-          const nuevosDetalles = (detalleEntrada.detalles || []).map((d: any, idx: number) => ({
-            ...filaVacia(),
-            id: -(idx + 1),
-            idExterno: d.idExterno || d.id,
-            codigo: d.codigo || '',
-            articulo: d.articulo || '',
-            referencia: d.referencia || '',
-            cantidad: d.cantidad || 0,
-            devuelto: d.devuelto || 0,
-            costo: d.costo || 0,
-            porcentajeDescuento: d.porcentajeDescuento || 0,
-            familia: d.familia,
-            medida: d.medida,
-            impuesto: d.impuesto,
-            tieneVencimiento: d.tieneVencimiento,
-          }));
-          setDetalles(nuevosDetalles.map((d: DetalleDevolucionCompraDTO) => calcularFila(d)));
-        }
+          if (shouldReplace) {
+            const nuevosDetalles = (detalleEntrada.detalles || []).map((d: any, idx: number) => ({
+              ...filaVacia(),
+              id: -(idx + 1),
+              idExterno: d.idExterno || d.id,
+              codigo: d.codigo || '',
+              articulo: d.articulo || '',
+              referencia: d.referencia || '',
+              cantidad: d.cantidad || 0,
+              devuelto: d.devuelto || 0,
+              costo: d.costo || 0,
+              porcentajeDescuento: d.porcentajeDescuento || 0,
+              familia: d.familia,
+              medida: d.medida,
+              impuesto: d.impuesto,
+              tieneVencimiento: d.tieneVencimiento,
+            }));
+            // Cuando trabajarEnUnidad es true, convertir a unidad base genérica
+            if ((documento ?? documentoConfig)?.trabajarEnUnidad === true) {
+              nuevosDetalles.forEach((d: any) => {
+                if (d.medida) {
+                  d.medida = { ...d.medida, nombre: 'Unidad(es)' };
+                }
+              });
+            }
+            setDetalles(nuevosDetalles.map((d: DetalleDevolucionCompraDTO) => calcularFila(d)));
+          }
       } else {
         Modal.confirm({
           title: '¿Desea Cargar todos los registros?',
@@ -797,6 +828,14 @@ const DevolucionCompraFormulario: React.FC = () => {
               impuesto: d.impuesto,
               tieneVencimiento: d.tieneVencimiento,
             }));
+            // Cuando trabajarEnUnidad es true, convertir a unidad base genérica
+            if ((documento ?? documentoConfig)?.trabajarEnUnidad === true) {
+              nuevosDetalles.forEach((d: any) => {
+                if (d.medida) {
+                  d.medida = { ...d.medida, nombre: 'Unidad(es)' };
+                }
+              });
+            }
             setDetalles(nuevosDetalles.map((d: DetalleDevolucionCompraDTO) => calcularFila(d)));
           },
         });
@@ -1400,15 +1439,15 @@ const DevolucionCompraFormulario: React.FC = () => {
             onBlur={() => { const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? (detalles[idx]?.cantidad || 0); handleDetalleCalculate(detalles[idx].id, 'cantidad', val); }}
             onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_cantidad`] ?? (detalles[idx]?.cantidad || 0); handleDetalleCalculate(detalles[idx].id, 'cantidad', val); }}
           />
-          {detalles[idx]?.medida?.nombre && !sinOC && (
+          {detalles[idx]?.medida?.nombre && (!sinOC || trabajarEnUnidad) && (
             <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 2 }}>
-              {toTitleCase(detalles[idx].medida!.nombre)}
+              {trabajarEnUnidad ? 'Unidad(es)' : toTitleCase(detalles[idx].medida!.nombre)}
             </div>
           )}
         </div>
       ),
     },
-    ...(sinOC ? [{
+    ...(sinOC && !trabajarEnUnidad ? [{
       title: 'Medida',
       key: 'medida',
       width: 160,
@@ -1485,7 +1524,7 @@ const DevolucionCompraFormulario: React.FC = () => {
         }
         return (
           <div>
-            <div style={{ textAlign: 'right', fontWeight: 500 }}>{formatCurrency(costoBase)}</div>
+            <div style={{ textAlign: 'right', fontWeight: 500 }}>{formatNumber(costoBase)}</div>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
               {formatNumber(costoUnitario)} × {factor}
             </div>

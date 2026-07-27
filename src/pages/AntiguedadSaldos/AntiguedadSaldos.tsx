@@ -434,6 +434,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
           key,
           codigoEntidad: key,
           nombreEntidad: nombre,
+          categoriaNombre: item.entidad?.categoria?.nombre || '',
           total: (item.creditos || 0) - (item.debitos || 0),
           monto0_30: aging.monto0_30,
           monto31_60: aging.monto31_60,
@@ -481,8 +482,11 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     const companyName = await getCompanyName(sucursalActiva);
 
     if (detallado) {
-      const columnHeaders = ['Documento', 'NCF', 'Fecha', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
+      const columnHeaders = ['Código', entidadLabel, 'Categoría', 'Documento', 'NCF', 'Fecha', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
       const dataRows = agingData.map((item) => [
+        item.entidad?.codigo || item.codigoEntidad || '',
+        item.entidad?.nombre || item.nombreEntidad || '',
+        item.entidad?.categoria?.nombre || '',
         item.tipoDocumento && item.noDocumento
           ? `${item.tipoDocumento}-${item.noDocumento}`
           : item.noDocumento || '',
@@ -496,7 +500,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
         item.montoMas120 ?? 0,
       ]);
       dataRows.push([
-        'Totales', '', '', summaryTotals.total,
+        'Totales', '', '', '', '', '', summaryTotals.total,
         summaryTotals.m0_30, summaryTotals.m31_60, summaryTotals.m61_90,
         summaryTotals.m91_120, summaryTotals.mMas120,
       ]);
@@ -508,10 +512,11 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
         columnWidths: columnHeaders.map(() => ({ wch: 18 })),
       });
     } else {
-      const columnHeaders = [entidadLabel, 'Código', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
+      const columnHeaders = ['Código', entidadLabel, 'Categoría', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
       const dataRows = resumenData.map((item) => [
-        item.nombreEntidad,
         item.codigoEntidad,
+        item.nombreEntidad,
+        item.categoriaNombre || '',
         item.total,
         item.monto0_30,
         item.monto31_60,
@@ -520,7 +525,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
         item.montoMas120,
       ]);
       dataRows.push([
-        'Totales', '', summaryTotals.total,
+        'Totales', '', '', summaryTotals.total,
         summaryTotals.m0_30, summaryTotals.m31_60, summaryTotals.m61_90,
         summaryTotals.m91_120, summaryTotals.mMas120,
       ]);

@@ -15,6 +15,7 @@ import {
   EditOutlined,
   MoreOutlined,
   BarcodeOutlined,
+  CreditCardOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -30,6 +31,8 @@ import type {
   AsientoContableDTO, DetalleFacturaPOSDTO, FacturaPOSFormularioDTO, CobroDTO,
 } from '../../types/facturaPOS';
 import type { UnidadMedidaDTO } from '../../types/productos';
+import type { VisanetResponseDTO } from '../../types/visanet';
+import { visanetApi } from '../../api/visanetApi';
 import LogTable from '../../components/LogTable';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 
@@ -143,6 +146,9 @@ const FacturaPOSFormulario: React.FC = () => {
   const [productoModalOpen, setProductoModalOpen] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
+  const [visanetModalOpen, setVisanetModalOpen] = useState(false);
+  const [visanetProcessing, setVisanetProcessing] = useState(false);
+  const [visanetResult, setVisanetResult] = useState<VisanetResponseDTO | null>(null);
 
   // Refs para la guía
   const conceptoRef = useRef<HTMLDivElement>(null);
@@ -586,6 +592,51 @@ const FacturaPOSFormulario: React.FC = () => {
     setCobros((prev) => ({ ...prev, [field]: value || 0 }));
   };
 
+  // ===== Handler para pago con tarjeta Visanet ECRT =====
+  const handlePagarConTarjeta = async () => {
+    const dto = construirDTO();
+    if (!dto.id && mode !== 'editar') {
+      message.warning('Debe guardar la factura primero antes de procesar el pago con tarjeta');
+      return;
+    }
+
+    const idFactura = dto.id || 0;
+    if (!idFactura) {
+      message.warning('La factura debe estar creada para procesar el pago');
+      return;
+    }
+
+    setVisanetResult(null);
+    setVisanetModalOpen(true);
+    setVisanetProcessing(true);
+
+    try {
+      // El monto va como entero (150000 = 1,500.00)
+      const montoEntero = Math.round(totales.total * 100);
+
+      const response = await visanetApi.vender(sucursalActiva, idFactura, montoEntero);
+      setVisanetResult(response);
+
+      if (response.exitoso) {
+        // Si la transacción fue exitosa, llenar el cobro con tarjeta
+        const montoPagado = parseFloat(response.totalAmount || '0') / 100;
+        setCobros((prev) => ({
+          ...prev,
+          tarjetaCredito: (prev.tarjetaCredito || 0) + montoPagado,
+        }));
+        message.success(`Pago aprobado: ${response.autorizacion}`);
+      } else {
+        message.error(response.mensajeRespuesta || 'Transacción rechazada');
+      }
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al comunicar con el terminal');
+      message.error(msg);
+      setVisanetResult({ exitoso: false, mensajeRespuesta: msg });
+    } finally {
+      setVisanetProcessing(false);
+    }
+  };
+
   // ===== Totales calculados =====
   const totales = {
     subTotal: detalles.reduce((s, d) => s + (d.subTotal || 0), 0),
@@ -833,7 +884,7 @@ const FacturaPOSFormulario: React.FC = () => {
         }
         return (
           <div>
-            <Text>{formatCurrency(precioBase)}</Text>
+            <Text>{formatNumber(precioBase)}</Text>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
               {formatNumber(precioUnitario)} × {factor}
             </div>
@@ -1199,13 +1250,26 @@ const FacturaPOSFormulario: React.FC = () => {
           </Col>
         ))}
       </Row>
+      <Col xs={24}>
+        <Button
+          type="primary"
+          icon={<CreditCardOutlined />}
+          onClick={handlePagarConTarjeta}
+          disabled={esAnulado || esCerrado || detalles.length === 0 || totales.total <= 0}
+          size="large"
+          block
+          style={{ marginTop: 8 }}
+        >
+          Pagar con Tarjeta
+        </Button>
+      </Col>
       <Divider />
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 32, fontSize: 15 }}>
         <span>
-          <strong>Cobrado:</strong> {formatCurrency(cobradoTotal)}
+          <strong>Cobrado:</strong> {formatNumber(cobradoTotal)}
         </span>
         <span style={{ color: diferencia > 0 ? '#ff4d4f' : '#52c41a' }}>
-          <strong>Diferencia:</strong> {formatCurrency(diferencia)}
+          <strong>Diferencia:</strong> {formatNumber(diferencia)}
         </span>
       </div>
     </div>
@@ -1242,6 +1306,71 @@ const FacturaPOSFormulario: React.FC = () => {
         onSelect={handleProductoSelect}
         mode="venta"
       />
+
+      <Modal
+        title="Pago con Tarjeta"
+        open={visanetModalOpen}
+        onCancel={() => {
+          if (!visanetProcessing) {
+            setVisanetModalOpen(false);
+          }
+        }}
+        footer={[
+          <Button key="cerrar" onClick={() => setVisanetModalOpen(false)} disabled={visanetProcessing}>
+            Cerrar
+          </Button>,
+        ]}
+        closable={!visanetProcessing}
+        maskClosable={false}
+      >
+        {visanetProcessing ? (
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <Spin size="large" />
+            <p style={{ marginTop: 16, fontSize: 16 }}>
+              Procesando pago en el terminal POS...
+            </p>
+            <p style={{ color: '#999' }}>
+              Inserte la tarjeta en el terminal o acérquela al lector NFC
+            </p>
+            <p style={{ fontSize: 13, color: '#666' }}>
+              Monto: {formatCurrency(totales.total)}
+            </p>
+          </div>
+        ) : visanetResult ? (
+          <div style={{ padding: '16px 0' }}>
+            {visanetResult.exitoso ? (
+              <>
+                <Alert
+                  type="success"
+                  showIcon
+                  message="Transacción Aprobada"
+                  description={
+                    <div>
+                      <p><strong>Autorización:</strong> {visanetResult.autorizacion}</p>
+                      <p><strong>Tarjeta:</strong> {visanetResult.panMasked}</p>
+                      <p><strong>Titular:</strong> {visanetResult.cardHolderName || 'N/A'}</p>
+                      <p><strong>Monto:</strong> {visanetResult.totalAmount ? (parseInt(visanetResult.totalAmount) / 100).toFixed(2) : '0.00'}</p>
+                      <p><strong>Voucher:</strong> {visanetResult.stan}</p>
+                      <p><strong>RRN:</strong> {visanetResult.rrn}</p>
+                      <p><strong>Lote:</strong> {visanetResult.batchNumber}</p>
+                      {visanetResult.isDcc && (
+                        <p><strong>DCC:</strong> {visanetResult.exchangeRate} - {visanetResult.totalTransactionAmount} {visanetResult.transactionCurrency}</p>
+                      )}
+                    </div>
+                  }
+                />
+              </>
+            ) : (
+              <Alert
+                type="error"
+                showIcon
+                message="Transacción Rechazada"
+                description={visanetResult.mensajeRespuesta || 'Error desconocido'}
+              />
+            )}
+          </div>
+        ) : null}
+      </Modal>
 
       {isLarge ? (
         /* === DESKTOP LAYOUT (>= lg) === */

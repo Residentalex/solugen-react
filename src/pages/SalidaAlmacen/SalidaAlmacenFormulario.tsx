@@ -52,7 +52,7 @@ import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
-import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
@@ -1034,7 +1034,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
         }
         return (
           <div>
-            <div style={{ textAlign: 'right', fontWeight: 500 }}>{formatCurrency(costoBase)}</div>
+            <div style={{ textAlign: 'right', fontWeight: 500 }}>{formatNumber(costoBase)}</div>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
               {formatNumber(costoUnitario)} × {factor}
             </div>

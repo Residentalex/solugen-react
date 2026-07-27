@@ -43,7 +43,7 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
-import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import DetalleToolbar from '../../components/DetalleToolbar';
@@ -102,6 +102,12 @@ const FacturaClienteDetalle: React.FC = () => {
           return;
         }
         setData(res);
+        // Calcular balance de asientos contables
+        const totalDeb = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 0 || r.tipoAsiento === 'D') ? (r.monto || 0) : 0), 0);
+        const totalCred = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 1 || r.tipoAsiento === 'C') ? (r.monto || 0) : 0), 0);
+        operacion.setBalanceInfo({ debitos: totalDeb, creditos: totalCred });
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
         if (res.estado === 3 && (res as any).reversoID) {
@@ -494,7 +500,10 @@ const FacturaClienteDetalle: React.FC = () => {
     try {
       const respuesta = await dgiiApi.cargarYEnviarFactura(sucursalActiva, parseInt(id), 'FAC');
       message.success('Documento enviado a la DGII exitosamente');
-      setEstadoDGII(respuesta || null);
+      setEstadoDGII({
+        ...respuesta,
+        codigoQR: respuesta?.urlCodigoQr,
+      });
       handleRefresh();
     } catch (err: any) {
       const msg = err?.response?.data?.errorMessage || 'Error al enviar a la DGII';
@@ -729,7 +738,6 @@ const FacturaClienteDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Sucursal" span={3}><SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} /></Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
                 <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
@@ -737,6 +745,7 @@ const FacturaClienteDetalle: React.FC = () => {
                   {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Almacen">{documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="Sucursal" span={3}><SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} /></Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
@@ -850,7 +859,6 @@ const FacturaClienteDetalle: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Sucursal"><SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} /></Descriptions.Item>
               <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
               <Descriptions.Item label="Concepto">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : (documentoActivo.concepto?.nombre ? toTitleCase(documentoActivo.concepto.nombre) : '-')}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
               <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
@@ -858,6 +866,7 @@ const FacturaClienteDetalle: React.FC = () => {
                 {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
               </Descriptions.Item>
               <Descriptions.Item label="Almacen">{documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}</Descriptions.Item>
+              <Descriptions.Item label="Sucursal"><SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} /></Descriptions.Item>
               <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
@@ -985,6 +994,7 @@ const FacturaClienteDetalle: React.FC = () => {
         titulo={operacionTitulo}
         eventos={operacion.eventos}
         completado={operacion.completado}
+        balanceInfo={operacion.balanceInfo}
         onClose={() => operacion.reset()}
       />
 

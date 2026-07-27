@@ -69,6 +69,21 @@ export const conceptosApi = {
     return data.data;
   },
 
+  obtenerEntidadesActivas: async (
+    sucursal: number,
+    conceptoCodigo?: string,
+    tipo?: string
+  ): Promise<EntidadDTO[]> => {
+    const params: Record<string, string> = {};
+    if (conceptoCodigo) params.concepto = conceptoCodigo;
+    if (tipo) params.tipo = tipo;
+    const { data } = await apiClient.get<ApiResponse<EntidadDTO[]>>(
+      `/Entidad/${sucursal}/Activos`,
+      { params }
+    );
+    return data.data;
+  },
+
   obtenerSuplidores: async (sucursal: number): Promise<SuplidorDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<SuplidorDTO[]>>(
       `${PROVEEDORES_BASE}/${sucursal}?activo=true`

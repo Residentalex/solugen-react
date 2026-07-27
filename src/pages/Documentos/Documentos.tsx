@@ -26,7 +26,7 @@ const Documentos: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
-  const sucursalActiva = useAuthStore((s: any) => s.securitySucursal);
+  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
   const usuario = useAuthStore((s: any) => s.usuario);
   const pantallaActual = usuario?.pantallas.find((p: any) => p.codigo === 'MDocumento');
   const puedeEditar = pantallaActual?.acciones.includes('EDITAR') ?? false;

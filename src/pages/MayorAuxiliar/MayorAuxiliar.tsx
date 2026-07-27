@@ -22,6 +22,7 @@ interface MayorAuxiliarItem {
   documentoCodigo: string;
   documentoNoDocumento: string;
   documentoNombre: string;
+  entidadNombre: string;
   cuentaContableNoCuenta: string;
   cuentaContableNombre: string;
   tipoAsiento: string;
@@ -32,6 +33,9 @@ interface MayorAuxiliarItem {
   balanceDocumento: number;
   origenCuenta: string;
 }
+
+const toTitleCase = (str: string): string =>
+  str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
 
 const MayorAuxiliar: React.FC = () => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
@@ -235,10 +239,11 @@ const MayorAuxiliar: React.FC = () => {
     const filtroDoc = tipoDocumento || 'Todos';
 
     if (detallado) {
-      const columnHeaders = ['Fecha', 'Documento', 'No. Cuenta', 'Nombre Cuenta', 'Tipo', 'Debito', 'Credito', 'Balance'];
+      const columnHeaders = ['Fecha', 'Documento', 'Entidad', 'No. Cuenta', 'Nombre Cuenta', 'Tipo', 'Debito', 'Credito', 'Balance'];
       const dataRows = datosFiltrados.map((r) => [
         dayjs(r.fechaDocumento).format('DD/MM/YYYY'),
-        `${r.documentoCodigo}-${r.documentoNoDocumento}`,
+        r.documentoCodigo === 'Existencia' ? 'Balance Anterior' : `${r.documentoCodigo}-${r.documentoNoDocumento}`,
+        r.entidadNombre,
         r.cuentaContableNoCuenta,
         r.cuentaContableNombre,
         r.tipoAsiento.trim(),
@@ -259,13 +264,13 @@ const MayorAuxiliar: React.FC = () => {
         columnHeaders,
         dataRows,
         sheetName: 'MayorAuxiliar',
-        columnWidths: [{ wch: 12 }, { wch: 18 }, { wch: 14 }, { wch: 22 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 16 }],
+        columnWidths: [{ wch: 12 }, { wch: 18 }, { wch: 22 }, { wch: 14 }, { wch: 22 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 16 }],
       });
     } else {
       const columnHeaders = ['Codigo', 'Nombre', 'Desde', 'Hasta', 'Total Debito', 'Total Credito'];
       const dataRows = gruposDocumento.map((g) => [
         g.codigo,
-        g.nombre,
+        g.codigo === 'Existencia' ? 'Balance Anterior' : g.nombre,
         dayjs(g.minFecha).format('DD/MM/YYYY'),
         dayjs(g.maxFecha).format('DD/MM/YYYY'),
         g.totalDebe,
@@ -323,7 +328,7 @@ const MayorAuxiliar: React.FC = () => {
 
   const seleccionarCuenta = (item: CuentaContableResumenDTO) => {
     setNoCuenta(item.noCuenta);
-    setNomCuenta(`${item.noCuenta} - ${item.nombre}`);
+    setNomCuenta(`${item.noCuenta} - ${toTitleCase(item.nombre)}`);
     setModalCuentaAbierto(false);
   };
 
@@ -530,9 +535,9 @@ const MayorAuxiliar: React.FC = () => {
                 scroll={{ x: 1400 }}
                 columns={[
                   { title: 'Fecha', dataIndex: 'fechaDocumento', key: 'fechaDocumento', width: 100, render: (v: string) => dayjs(v).format('DD/MM/YYYY') },
-                  { title: 'Documento', key: 'documento', width: 140, render: (_: any, r: MayorAuxiliarItem) => `${r.documentoCodigo}-${r.documentoNoDocumento}` },
+                  { title: 'Documento', key: 'documento', width: 140, render: (_: any, r: MayorAuxiliarItem) => r.documentoCodigo === 'Existencia' ? 'Balance Anterior' : `${r.documentoCodigo}-${r.documentoNoDocumento}` },
                   { title: 'No. Cuenta', dataIndex: 'cuentaContableNoCuenta', key: 'cuentaContableNoCuenta', width: 120 },
-                  { title: 'Nombre Cuenta', dataIndex: 'cuentaContableNombre', key: 'cuentaContableNombre', width: 200 },
+                  { title: 'Nombre Cuenta', key: 'cuentaContableNombre', width: 200, render: (_: any, r: MayorAuxiliarItem) => toTitleCase(r.cuentaContableNombre) },
                   { title: 'Tipo', dataIndex: 'tipoAsiento', key: 'tipoAsiento', width: 80 },
                   { title: 'Monto Débito', key: 'montoDebito', width: 130, align: 'right', render: (_: any, r: MayorAuxiliarItem) => r.tipoAsiento.trim() === 'Debito' ? r.montoAlterno.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-' },
                   { title: 'Monto Crédito', key: 'montoCredito', width: 130, align: 'right', render: (_: any, r: MayorAuxiliarItem) => r.tipoAsiento.trim() === 'Credito' ? r.montoAlterno.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-' },
@@ -582,7 +587,7 @@ const MayorAuxiliar: React.FC = () => {
         <Table
           columns={[
             { title: 'No. Cuenta', dataIndex: 'noCuenta', key: 'noCuenta', width: 140 },
-            { title: 'Nombre', dataIndex: 'nombre', key: 'nombre' },
+            { title: 'Nombre', key: 'nombre', render: (_: any, r: CuentaContableResumenDTO) => toTitleCase(r.nombre) },
           ]}
           dataSource={cuentas}
           rowKey="noCuenta"

@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Table, Button, Tag, Typography, Alert, Empty } from 'antd';
+import { Card, Table, Button, Tag, Typography, Alert, Empty, Space, Popconfirm, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { denominacionApi } from '../../api/denominacionApi';
 import type { DenominacionDTO } from '../../types/denominacion';
+import { DeleteOutlined } from '@ant-design/icons';
 import { toTitleCase, formatNumber } from '../../utils/formats';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import DenominacionFormulario from './DenominacionFormulario';
@@ -26,6 +27,7 @@ const Denominaciones: React.FC = () => {
   const [pageSize, setPageSize] = useState(25);
   const [formularioVisible, setFormularioVisible] = useState(false);
   const [editItem, setEditItem] = useState<DenominacionDTO | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<number | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['denominaciones', sucursalActiva],
@@ -76,6 +78,19 @@ const Denominaciones: React.FC = () => {
 
   const handleGuardar = () => {
     refetch();
+  };
+
+  const handleEliminar = async (id: number) => {
+    setEliminandoId(id);
+    try {
+      await denominacionApi.eliminar(sucursalActiva, id);
+      message.success('Denominación eliminada correctamente');
+      refetch();
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al eliminar denominación');
+    } finally {
+      setEliminandoId(null);
+    }
   };
 
   const columns: ColumnsType<DenominacionDTO> = [
@@ -140,6 +155,33 @@ const Denominaciones: React.FC = () => {
       width: 80,
       align: 'center',
       render: (val: number) => <Text>{val}</Text>,
+    },
+    {
+      title: '',
+      key: 'acciones',
+      width: 60,
+      align: 'center',
+      fixed: 'right',
+      render: (_: unknown, record: DenominacionDTO) => (
+        <Space size={0}>
+          <Popconfirm
+            title="Eliminar denominación"
+            description={`¿Estás seguro de eliminar ${record.descripcion}?`}
+            onConfirm={() => handleEliminar(record.id!)}
+            okText="Eliminar"
+            cancelText="Cancelar"
+            okButtonProps={{ danger: true }}
+          >
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              loading={eliminandoId === record.id}
+            />
+          </Popconfirm>
+        </Space>
+      ),
     },
   ];
 

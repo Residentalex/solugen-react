@@ -1,13 +1,14 @@
 ﻿import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Table, Input, Select, Tag, Button, Card, Typography, Modal, Descriptions, DatePicker, Alert, Empty } from 'antd';
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { Table, Input, Tag, Button, Card, Typography, DatePicker, Alert, Empty } from 'antd';
+import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { actualizacionPrecioApi } from '../../api/actualizacionPrecioApi';
 import type { ActualizacionPrecioDTO } from '../../types/actualizacionPrecio';
-import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import PermissionGate from '../../components/PermissionGate';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -17,8 +18,11 @@ const FILAS_POR_PAGINA = 25;
 
 const ESTADO_TAG: Record<string, { color: string; label: string }> = {
   Pendiente: { color: 'warning', label: 'Pendiente' },
+  P: { color: 'warning', label: 'Pendiente' },
   Aplicado: { color: 'success', label: 'Aplicado' },
+  A: { color: 'success', label: 'Aplicado' },
   Anulado: { color: 'error', label: 'Anulado' },
+  N: { color: 'error', label: 'Anulado' },
 };
 
 function formatDate(dateStr: string): string {
@@ -47,6 +51,7 @@ function formatDateParam(d: Date): string {
 }
 
 const ActualizacionPrecio: React.FC = () => {
+  const navigate = useNavigate();
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
@@ -55,8 +60,6 @@ const ActualizacionPrecio: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
-  const [detalleItem, setDetalleItem] = useState<ActualizacionPrecioDTO | null>(null);
-  const [detalleOpen, setDetalleOpen] = useState(false);
 
   const dateParamsRef = useRef({
     desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
@@ -88,13 +91,20 @@ const ActualizacionPrecio: React.FC = () => {
         );
       }
 
-      const total = resultados.length < pageSize
-        ? (page - 1) * pageSize + resultados.length
-        : page * pageSize + 1;
-      return { datos: resultados, total };
+      return { datos: resultados };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
+  });
+
+  const { data: totalData } = useQuery({
+    queryKey: ['actualizacionPrecioTotal', sucursalActiva, dateTrigger, searchText],
+    queryFn: () => actualizacionPrecioApi.obtenerTotal(
+      sucursalActiva,
+      dateParamsRef.current.desde,
+      dateParamsRef.current.hasta
+    ),
+    enabled: sucursalActiva !== undefined,
   });
 
   useEffect(() => {
@@ -138,10 +148,8 @@ const ActualizacionPrecio: React.FC = () => {
         <Text
           strong
           className="paces-doc-link"
-          onClick={() => {
-            setDetalleItem(record);
-            setDetalleOpen(true);
-          }}
+          style={{ cursor: 'pointer' }}
+          onClick={() => navigate(`/FActPrecio/${record.idExterno}`)}
         >
           {val}
         </Text>
@@ -161,7 +169,6 @@ const ActualizacionPrecio: React.FC = () => {
       width: 120,
       render: (val: string) => <Text>{formatDate(val)}</Text>,
     },
-
     {
       title: 'Doc. Referencia',
       dataIndex: 'docReferencia',
@@ -195,7 +202,7 @@ const ActualizacionPrecio: React.FC = () => {
       key: 'autorizado',
       width: 100,
       render: (val: boolean) => (
-        <Tag color="blue">{val ? 'SÃ­' : 'No'}</Tag>
+        <Tag color="blue">{val ? 'Sí' : 'No'}</Tag>
       ),
     },
   ];
@@ -215,38 +222,46 @@ const ActualizacionPrecio: React.FC = () => {
           }
         />
       )}
-      <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
-        <CatalogoListadoToolbar
-          onSearch={handleSearch}
-          pageSize={pageSize}
-          onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
-          onReload={handleRefresh}
-          filtros={
+      <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
+        <div style={{ padding: '16px 24px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+            <Input.Search
+              placeholder="Buscar documento..."
+              allowClear
+              onSearch={handleSearch}
+              style={{ width: 400 }}
+              prefix={<SearchOutlined className="paces-text-icon" />}
+            />
             <RangePicker
               style={{ width: 220 }}
               format="YYYY-MM-DD"
               onChange={handleDateChange}
               placeholder={["Desde", "Hasta"]}
             />
-          }
-        />
+            <div style={{ flex: 1 }} />
+            <PermissionGate accion="CREAR">
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FActPrecio/nuevo')}>
+                Nuevo
+              </Button>
+            </PermissionGate>
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+          </div>
+        </div>
         <Table<ActualizacionPrecioDTO>
+          className="paces-border-top paces-list-table"
           columns={columns}
           dataSource={data?.datos || []}
-          rowKey="documento"
+          rowKey="idExterno"
           loading={isLoading}
           scroll={{ x: 1200 }}
           size="middle"
           locale={{
             emptyText: isLoading ? ' ' : <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No se encontraron actualizaciones de precio" /></div>,
           }}
-          onRow={() => ({
-            style: { cursor: 'default' },
-          })}
           pagination={{
             current: page,
             pageSize: pageSize,
-            total: data?.total || 0,
+            total: totalData || 0,
             onChange: (newPage, newPageSize) => {
               if (newPageSize !== pageSize) {
                 setPageSize(newPageSize);
@@ -260,44 +275,6 @@ const ActualizacionPrecio: React.FC = () => {
           }}
         />
       </Card>
-
-      <Modal
-        title={`ActualizaciÃ³n: ${detalleItem?.documento || ''}`}
-        open={detalleOpen}
-        onCancel={() => setDetalleOpen(false)}
-        footer={null}
-        width={600}
-      >
-        {detalleItem && (
-          <Descriptions column={1} bordered size="small">
-            <Descriptions.Item label="Documento">{detalleItem.documento}</Descriptions.Item>
-            <Descriptions.Item label="Fecha">{formatDate(detalleItem.fecha)}</Descriptions.Item>
-            <Descriptions.Item label="Fecha para Aplicar">
-              {formatDate(detalleItem.fechaParaAplicar)}
-            </Descriptions.Item>
-
-            <Descriptions.Item label="Doc. Referencia">
-              {detalleItem.docReferencia || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Ajuste">{detalleItem.ajuste}</Descriptions.Item>
-            <Descriptions.Item label="Redondear">
-              {detalleItem.redondear ? 'SÃ­' : 'No'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Estado">
-              <Tag
-                color={
-                  (ESTADO_TAG[detalleItem.estado] || { color: 'default' }).color
-                }
-              >
-                {detalleItem.estado}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="Autorizado">
-              <Tag color="blue">{detalleItem.autorizado ? 'SÃ­' : 'No'}</Tag>
-            </Descriptions.Item>
-          </Descriptions>
-        )}
-      </Modal>
     </>
   );
 };

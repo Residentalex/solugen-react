@@ -5,12 +5,14 @@ import {
 } from 'antd';
 import {
   ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined,
-  BankOutlined, CalendarOutlined, SettingOutlined,
+  BankOutlined, CalendarOutlined, SettingOutlined, ShoppingCartOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { configuracionApi, type ConfiguracionEmpresa } from '../../api/configuracionApi';
+import { configPedidosYaApi } from '../../api/configPedidosYaApi';
+import type { ConfigPedidosYaDTO } from '../../types/configPedidosYa';
 import { extraerMensajeError } from '../../utils/formats';
 
 const Empresa: React.FC = () => {
@@ -21,6 +23,8 @@ const Empresa: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [modoEdicion, setModoEdicion] = useState(false);
   const [data, setData] = useState<ConfiguracionEmpresa | null>(null);
+  const [pedidosYaConfig, setPedidosYaConfig] = useState<ConfigPedidosYaDTO | null>(null);
+  const [loadingPedidosYa, setLoadingPedidosYa] = useState(false);
   const screens = Grid.useBreakpoint();
   const isLarge = screens.xxl === true;
 
@@ -44,7 +48,19 @@ const Empresa: React.FC = () => {
     }
   }, [sucursalActiva, form]);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  const cargarPedidosYa = useCallback(async () => {
+    setLoadingPedidosYa(true);
+    try {
+      const config = await configPedidosYaApi.obtener(sucursalActiva);
+      setPedidosYaConfig(config);
+    } catch {
+      setPedidosYaConfig(null);
+    } finally {
+      setLoadingPedidosYa(false);
+    }
+  }, [sucursalActiva]);
+
+  useEffect(() => { cargar(); cargarPedidosYa(); }, [cargar, cargarPedidosYa]);
 
   const handleGuardar = async () => {
     try {
@@ -311,6 +327,44 @@ const Empresa: React.FC = () => {
                       {data?.orcEnUnidades ? 'Si' : 'No'}
                     </Descriptions.Item>
                   </Descriptions>
+                </Card>
+
+                {/* Seccion 4: PedidosYa - Detalle */}
+                <Card className="paces-card" size="small" title={
+                  <Space>
+                    <ShoppingCartOutlined className="paces-text-icon" />
+                    <span style={{ fontWeight: 600 }}>PedidosYa</span>
+                  </Space>
+                }
+                  extra={
+                    <Button type="primary" size="small" icon={<EditOutlined />}
+                      onClick={() => navigate('/MConfigPedidosYa')}>
+                      Configurar
+                    </Button>
+                  }
+                  style={{ marginBottom: 16 }}>
+                  {loadingPedidosYa ? (
+                    <Spin />
+                  ) : pedidosYaConfig ? (
+                    <Descriptions
+                      bordered
+                      size="small"
+                      column={isLarge ? 3 : 1}
+                      styles={{ content: { background: 'transparent' } }}
+                    >
+                      <Descriptions.Item label="Servidor">{pedidosYaConfig.servidor}</Descriptions.Item>
+                      <Descriptions.Item label="Puerto">{pedidosYaConfig.puerto}</Descriptions.Item>
+                      <Descriptions.Item label="Usuario">{pedidosYaConfig.usuario}</Descriptions.Item>
+                      <Descriptions.Item label="Margen beneficio">{pedidosYaConfig.margenBeneficio}%</Descriptions.Item>
+                      <Descriptions.Item label="Ruta remota">{pedidosYaConfig.rutaRemota || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="Prefijo archivo">{pedidosYaConfig.prefijoArchivo || '-'}</Descriptions.Item>
+                      <Descriptions.Item label="Vendor ID">{pedidosYaConfig.vendorID || '-'}</Descriptions.Item>
+                    </Descriptions>
+                  ) : (
+                    <div className="paces-text-secondary" style={{ padding: '8px 0' }}>
+                      No hay configuracion de PedidosYa para esta sucursal.
+                    </div>
+                  )}
                 </Card>
               </div>
             )}

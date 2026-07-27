@@ -41,7 +41,7 @@ import type {
 } from '../../types/entradaAlmacen';
 import type { UnidadMedidaDTO } from '../../types/productos';
 import type {
-  DetalleFacturaSuplidorDTO, FacturaSuplidorFullDTO, TipoDTO,
+  DetalleFacturaSuplidorDTO, FacturaSuplidorFullDTO, TipoDTO, ImpuestoDetalleDTO,
 } from '../../types/facturaSuplidor';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
@@ -59,7 +59,7 @@ import GuidePopover from '../../components/GuidePopover/GuidePopover';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
-import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
@@ -95,6 +95,7 @@ function calcularFila(fila: DetalleFacturaSuplidorDTO, otros = 0): DetalleFactur
 function filaVacia(): DetalleFacturaSuplidorDTO {
   return {
     id: 0,
+    idExterno: 0,
     codigo: '',
     articulo: '',
     referencia: '',
@@ -199,6 +200,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const [generandoAsientos, setGenerandoAsientos] = useState(false);
   const [cuentaModalAsientoOpen, setCuentaModalAsientoOpen] = useState(false);
   const [detallesModificados, setDetallesModificados] = useState(false);
+  const [modoDescuento, setModoDescuento] = useState<'porcentaje' | 'pesos'>('porcentaje');
 
   // Refs para la guía
   const entradaRef = useRef<HTMLDivElement>(null);
@@ -384,7 +386,15 @@ const FacturaSuplidorFormulario: React.FC = () => {
       .then((_res) => {
         const res = _res as any;
         setData(res);
-        setDetalles(res.detalles || []);
+        const detallesNormalizados = (res.detalles || []).map((d: any) => ({
+          ...d,
+          impuestosDetalle: d.impuestosDetalle?.length > 0
+            ? d.impuestosDetalle
+            : d.impuesto?.codigo
+              ? [{ total: 0, tasa: d.impuesto.porcentaje || 0, tipo: d.impuesto.tipo || 'I', impuesto: { ...d.impuesto } }]
+              : [],
+        }));
+        setDetalles(detallesNormalizados);
         setAsientosLocales(res.asientos || []);
         setImpuestosFactura(normalizarImpuestos(res.impuestosFactura));
         setSelectedConcepto(res.concepto || null);
@@ -503,21 +513,33 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const recalcularMontosImpuestosFactura = useCallback(() => {
     setImpuestosFactura((prev) => prev.map((imp: any) => {
       const tipo = imp.tipo || imp.impuesto?.tipo;
-      const esItbis = tipo === 'I';
+      const esItbis = tipo === 'I' || tipo === 'Impuesto';
+      const pct = imp.porcentaje || 0;
+
+      // Sumar solo sobre detalles que tienen este impuesto
+      let sumaDesdeDetalles = 0;
+      let detallesMatch: any[] = [];
+      (detalles || []).forEach((d: any) => {
+      const base = (d.subTotal || 0) - (d.descuento || 0);
+      let tiene = false;
       if (esItbis) {
-        // ITBIS: sumar el campo impuestos de los detalles que coincidan por porcentaje
-        const montoCalculado = (detalles || [])
-          .filter((d: any) => d.impuesto?.porcentaje === imp.porcentaje)
-          .reduce((sum: number, d: any) => sum + (d.impuestos || 0), 0);
-        return { ...imp, monto: montoCalculado };
+        tiene = d.impuesto?.porcentaje === pct;
       } else {
-        // Otros impuestos (V, R, L): calcular desde base * porcentaje
-        const baseTotal = (detalles || []).reduce((sum: number, d: any) => {
-          return sum + ((d.subTotal || 0) - (d.descuento || 0));
-        }, 0);
-        const monto = Math.round(baseTotal * ((imp.porcentaje || 0) / 100) * 100) / 100;
-        return { ...imp, monto };
+      tiene = d.impuestosDetalle?.some((idt: any) => {
+      const idtCodigo = idt.impuesto?.codigo || idt.impuesto?.idExterno;
+      const impCodigo = imp.codigo || imp.idExterno;
+        return idtCodigo === impCodigo;
+        });
       }
+      if (tiene) {
+        sumaDesdeDetalles += Math.round(base * (pct / 100) * 100) / 100;
+          detallesMatch.push({ id: d.id, cod: d.codigo, base, detImp: d.impuestosDetalle?.map((x: any) => x.impuesto?.codigo || x.tasa) });
+      }
+      });
+    if (!esItbis) {
+      console.log('[DEBUG] imp=' + imp.codigo + ' pct=' + pct + ' suma=' + sumaDesdeDetalles + ' detallesMatch=' + detallesMatch.length + ' totalDetalles=' + (detalles||[]).length);
+    }
+    return { ...imp, monto: sumaDesdeDetalles };
     }));
   }, [detalles]);
 
@@ -548,7 +570,15 @@ const FacturaSuplidorFormulario: React.FC = () => {
               .then((_res) => {
                 const res = _res as any;
                 setData(res);
-                setDetalles(res.detalles || []);
+                const detallesNormalizados = (res.detalles || []).map((d: any) => ({
+                  ...d,
+                  impuestosDetalle: d.impuestosDetalle?.length > 0
+                    ? d.impuestosDetalle
+                    : d.impuesto?.codigo
+                      ? [{ total: 0, tasa: d.impuesto.porcentaje || 0, tipo: d.impuesto.tipo || 'I', impuesto: { ...d.impuesto } }]
+                      : [],
+                }));
+                setDetalles(detallesNormalizados);
                 setAsientosLocales(res.asientos || []);
                 setImpuestosFactura(normalizarImpuestos(res.impuestosFactura));
                 setSelectedConcepto(res.concepto || null);
@@ -703,14 +733,27 @@ const FacturaSuplidorFormulario: React.FC = () => {
       detalles: nuevosDetalles,
       asientos: asientosLocales.length > 0 ? asientosLocales : (base.asientos || []),
       impuestosFactura: impuestosFactura.map((imp: any) => {
-        // Calcular monto automático desde los detalles que tengan este impuesto
-        const montoCalculado = detalles
-          .filter((d) => d.impuesto?.codigo === imp.codigo || d.impuesto?.idExterno === imp.idExterno)
-          .reduce((sum, d) => sum + (d.impuestos || 0), 0);
-        return {
-          ...imp,
-          monto: montoCalculado > 0 ? montoCalculado : (imp.monto ?? 0),
-        };
+        const tipo = imp.tipo || imp.impuesto?.tipo;
+        const esItbis = tipo === 'I' || tipo === 'Impuesto';
+        const pct = imp.porcentaje || 0;
+
+        let suma = 0;
+        detalles.forEach((d) => {
+          const base = (d.subTotal || 0) - (d.descuento || 0);
+        let tiene = false;
+        if (esItbis) {
+          tiene = d.impuesto?.porcentaje === pct;
+        } else if (d.impuestosDetalle) {
+          tiene = d.impuestosDetalle.some((idt) => {
+          const idtCod = idt.impuesto?.codigo || idt.impuesto?.idExterno;
+        const impCod = imp.codigo || imp.idExterno;
+        return idtCod === impCod;
+        });
+        }
+        if (tiene) { suma += Math.round(base * (pct / 100) * 100) / 100; }
+        });
+
+  return { ...imp, monto: suma > 0 ? suma : (imp.monto ?? 0) };
       }),
       logs: base.logs || [],
     };
@@ -1012,7 +1055,13 @@ const FacturaSuplidorFormulario: React.FC = () => {
     setDetallesModificados(true);
     const nuevosDetalles = detalles.map((d) => {
       if (d.id !== idFila) return d;
-      const updated = { ...d, [field]: value };
+      let updated = { ...d, [field]: value };
+      // Si el descuento se ingreso en pesos, calcular el porcentaje equivalente
+      if (field === 'descuento') {
+        const subTotal = Math.round((d.cantidad || 0) * (d.costo || 0) * 100) / 100;
+        const pctCalculado = subTotal > 0 ? Math.round((value / subTotal) * 100 * 100) / 100 : 0;
+        updated = { ...updated, porcentajeDescuento: pctCalculado };
+      }
       return calcularFila(updated);
     });
     setDetalles(nuevosDetalles);
@@ -1021,12 +1070,31 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const handleProductoSelect = async (producto: any) => {
     setDetallesModificados(true);
 
+    // Construir impuestosDetalle del detalle
+    const impuestosDetalle: ImpuestoDetalleDTO[] = [];
+
+    // Impuesto principal del producto
+    if (producto.impuesto?.codigo) {
+      impuestosDetalle.push({
+        impuestoID: Number(producto.impuesto.idExterno) || 0,
+        total: 0,
+        tasa: producto.impuesto.porcentaje || 0,
+        tipo: producto.impuesto.tipo || 'I',
+        impuesto: {
+          nombre: producto.impuesto.nombre,
+          porcentaje: producto.impuesto.porcentaje,
+          codigo: producto.impuesto.codigo,
+          idExterno: producto.impuesto.idExterno,
+          tipo: producto.impuesto.tipo || 'I',
+        },
+      });
+    }
+
     // Cargar impuestos adicionales del producto
     try {
       const detalleProducto = await productoApi.obtenerDetalle(sucursalActiva, producto.codigo);
       if (detalleProducto?.impuestos && detalleProducto.impuestos.length > 0) {
         detalleProducto.impuestos.forEach((imp: any) => {
-          // Buscar el impuesto real en el cache por nombre para obtener codigo/idExterno
           const impuestoReal = impuestosCache.find(
             (i: any) => i.nombre?.toLowerCase() === imp.impuesto?.nombre?.toLowerCase()
           );
@@ -1035,12 +1103,26 @@ const FacturaSuplidorFormulario: React.FC = () => {
           if (impCodigo && impCodigo !== mainCodigo) {
             const impIdExterno = impuestoReal?.idExterno || imp.impuesto?.idExterno || impCodigo;
             const impTipo = impuestoReal?.tipo || imp.impuesto?.tipo || 'Informativo';
+            const pct = imp.impuesto?.porcentaje || 0;
+            // Agregar a impuestosDetalle del detalle
+            impuestosDetalle.push({
+              impuestoID: Number(impIdExterno) || 0,
+              total: 0,
+              tasa: pct,
+              tipo: impTipo,
+              impuesto: {
+                nombre: imp.impuesto?.nombre || '',
+                porcentaje: pct,
+                codigo: impCodigo,
+                idExterno: impIdExterno,
+                tipo: impTipo,
+              },
+            });
+            // Agregar a impuestosFactura (nivel factura)
             agregarImpuestoAFactura(
-              impCodigo,
-              impIdExterno,
+              impCodigo, impIdExterno,
               imp.impuesto?.nombre || '',
-              imp.impuesto?.porcentaje || 0,
-              impTipo,
+              pct, impTipo,
               impuestoReal?.asientos ?? imp.impuesto?.asientos ?? true,
               impuestoReal?.noCuenta || imp.impuesto?.noCuenta || '',
             );
@@ -1048,9 +1130,25 @@ const FacturaSuplidorFormulario: React.FC = () => {
         });
       }
     } catch {
-      // Silencioso: carga periférica de impuestos adicionales
+      // Silencioso
     }
 
+    // Sincronizar impuesto principal con impuestosFactura
+    if (producto.impuesto?.codigo) {
+    agregarImpuestoAFactura(
+    producto.impuesto.codigo,
+    producto.impuesto.idExterno,
+    producto.impuesto.nombre,
+    producto.impuesto.porcentaje,
+    producto.impuesto.tipo || 'Impuesto',
+    producto.impuesto.asientos ?? true,
+    producto.impuesto.noCuenta || '',
+    );
+    }
+
+    console.log('[DEBUG] impuestosDetalle para ' + producto.codigo + ':', JSON.stringify(impuestosDetalle.map(i => ({ cod: i.impuesto?.codigo, pct: i.impuesto?.porcentaje, nom: i.impuesto?.nombre }))));
+
+  // Crear el detalle
     const filaVaciaIdx = detalles.findIndex((d) => !d.codigo);
     if (filaVaciaIdx === -1) {
       const nuevaFila = filaVacia();
@@ -1058,6 +1156,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       const filled: DetalleFacturaSuplidorDTO = {
         ...nuevaFila,
         id: nuevoId,
+        idExterno: nuevoId,
         codigo: producto.codigo,
         articulo: producto.articulo,
         referencia: producto.referencia || '',
@@ -1067,26 +1166,12 @@ const FacturaSuplidorFormulario: React.FC = () => {
         medida: producto.medida,
         impuesto: producto.impuesto,
         porcentajeImpuesto: producto.impuesto?.porcentaje ?? 0,
+        impuestosDetalle,
         tieneVencimiento: producto.tieneVencimiento,
         modificaPrecio: producto.modificaPrecio ?? false,
         modificaDescripcion: producto.modificaDescripcion ?? false,
       };
-      const otros = calcularOtros(filled);
-      setDetalles((prev) => {
-        return [calcularFila(filled, otros), ...prev];
-      });
-      // Sincronizar impuesto del producto con impuestosFactura
-      if (producto.impuesto?.codigo) {
-        agregarImpuestoAFactura(
-          producto.impuesto.codigo,
-          producto.impuesto.idExterno,
-          producto.impuesto.nombre,
-          producto.impuesto.porcentaje,
-          producto.impuesto.tipo || 'Impuesto',
-          producto.impuesto.asientos ?? true,
-          producto.impuesto.noCuenta || '',
-        );
-      }
+      setDetalles((prev) => [calcularFila(filled, 0), ...prev]);
     } else {
       setDetalles((prev) =>
         prev.map((d) => {
@@ -1102,26 +1187,15 @@ const FacturaSuplidorFormulario: React.FC = () => {
             medida: producto.medida,
             impuesto: producto.impuesto,
             porcentajeImpuesto: producto.impuesto?.porcentaje ?? 0,
+            impuestosDetalle,
             tieneVencimiento: producto.tieneVencimiento,
             modificaPrecio: producto.modificaPrecio ?? false,
             modificaDescripcion: producto.modificaDescripcion ?? false,
+            idExterno: d.id || nuevoId,
           };
-          const otros = calcularOtros(filled);
-          return calcularFila(filled, otros);
+          return calcularFila(filled, 0);
         })
       );
-      // Sincronizar impuesto del producto con impuestosFactura
-      if (producto.impuesto?.codigo) {
-        agregarImpuestoAFactura(
-          producto.impuesto.codigo,
-          producto.impuesto.idExterno,
-          producto.impuesto.nombre,
-          producto.impuesto.porcentaje,
-          producto.impuesto.tipo || 'Impuesto',
-          producto.impuesto.asientos ?? true,
-          producto.impuesto.noCuenta || '',
-        );
-      }
     }
   };
 
@@ -1184,11 +1258,23 @@ const FacturaSuplidorFormulario: React.FC = () => {
     });
   };
 
-  // ===== Calcular "Otros" impuestos por detalle (solo tipo 'V' informativos) =====
+  // ===== Calcular "Otros" impuestos por detalle (solo tipo 'V'/'Informativo') =====
+  function esImpuestoInformativo(imp: any): boolean {
+    const t = imp.tipo ?? imp.impuesto?.tipo;
+    return t === 'V' || t === 'Informativo' || t === 3;
+  }
+
   const calcularOtros = useCallback((detalle: DetalleFacturaSuplidorDTO): number => {
     const baseImponible = (detalle.subTotal || 0) - (detalle.descuento || 0);
+    // Solo sumar impuestos informativos que el detalle tenga en impuestosDetalle
     const otrosPct = impuestosFactura
-      .filter((imp: any) => (imp.tipo || imp.impuesto?.tipo) === 'V')
+      .filter((imp: any) => esImpuestoInformativo(imp))
+      .filter((imp: any) => {
+        if (!detalle.impuestosDetalle || detalle.impuestosDetalle.length === 0) return false;
+        return detalle.impuestosDetalle.some((idt: any) => {
+          return idt.impuestoID > 0 && idt.impuestoID === Number(imp.idExterno || imp.impuesto?.idExterno);
+        });
+      })
       .reduce((sum: number, imp: any) => sum + (imp.porcentaje || 0), 0);
     if (otrosPct <= 0) return 0;
     return Math.round(baseImponible * (otrosPct / 100) * 100) / 100;
@@ -1197,7 +1283,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
   // ===== Impuestos informativos para TotalesCard =====
   const impuestosInformativos = React.useMemo(() =>
     impuestosFactura
-      .filter((imp: any) => (imp.tipo || imp.impuesto?.tipo) === 'V')
+      .filter((imp: any) => esImpuestoInformativo(imp))
       .map((imp: any) => ({ nombre: imp.nombre || '', monto: imp.monto || 0 })),
     [impuestosFactura]
   );
@@ -1654,10 +1740,18 @@ const FacturaSuplidorFormulario: React.FC = () => {
                 step={0.01}
                 precision={4}
                 controls={false}
-                value={fila.costo}
-                onChange={(val) => handleDetalleUpdateValue(fila.id, 'costo', val || 0)}
-                onBlur={() => handleDetalleCalculate(fila.id, 'costo', fila.costo || 0)}
-                onPressEnter={() => handleDetalleCalculate(fila.id, 'costo', fila.costo || 0)}
+                defaultValue={fila.costo}
+                onChange={(val) => {
+                  editValuesRef.current[`${fila.id}_costo`] = val || 0;
+                }}
+                onBlur={() => {
+                  const val = editValuesRef.current[`${fila.id}_costo`] ?? fila.costo;
+                  handleDetalleCalculate(fila.id, 'costo', val);
+                }}
+                onPressEnter={() => {
+                  const val = editValuesRef.current[`${fila.id}_costo`] ?? fila.costo;
+                  handleDetalleCalculate(fila.id, 'costo', val);
+                }}
               />
               <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>&nbsp;</div>
             </div>
@@ -1678,35 +1772,75 @@ const FacturaSuplidorFormulario: React.FC = () => {
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
-      render: (_: any, _record: DetalleFacturaSuplidorDTO, idx: number) => (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
-          <InputNumber
-            size="small"
-            style={{ width: '100%' }}
-            styles={{ input: { textAlign: 'right' } }}
-            min={0}
-            max={100}
-            step={0.01}
-            precision={2}
-            controls={false}
-            defaultValue={detalles[idx]?.porcentajeDescuento}
-            onChange={(val) => {
-              editValuesRef.current[`${detalles[idx].id}_descuento`] = val || 0;
-            }}
-            onBlur={() => {
-              const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
-              handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
-            }}
-            onPressEnter={() => {
-              const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
-              handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
-            }}
-          />
-          <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto' }}>
-            {formatNumber(detalles[idx]?.descuento || 0)}
+      render: (_: any, _record: DetalleFacturaSuplidorDTO, idx: number) =>
+        modoDescuento === 'porcentaje' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber
+                key={`pct_${detalles[idx].id}_${modoDescuento}`}
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                max={100}
+                step={0.01}
+                precision={2}
+                controls={false}
+                defaultValue={detalles[idx]?.porcentajeDescuento}
+                onChange={(val) => {
+                  editValuesRef.current[`${detalles[idx].id}_descuento`] = val || 0;
+                }}
+                onBlur={() => {
+                  const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
+                  handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
+                }}
+                onPressEnter={() => {
+                  const val = editValuesRef.current[`${detalles[idx].id}_descuento`] ?? detalles[idx]?.porcentajeDescuento;
+                  handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val);
+                }}
+              />
+              <span onClick={() => setModoDescuento('pesos')} style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                <Input size="small" placeholder="%" disabled style={{ width: 36, textAlign: 'center', borderLeft: 'none', pointerEvents: 'none' }} />
+              </span>
+            </Space.Compact>
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto' }}>
+              {formatNumber(detalles[idx]?.descuento || 0)}
+            </div>
           </div>
-        </div>
-      ),
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 4 }}>
+            <Space.Compact style={{ width: '100%' }}>
+              <InputNumber
+                key={`pesos_${detalles[idx].id}_${modoDescuento}`}
+                size="small"
+                style={{ width: '100%' }}
+                styles={{ input: { textAlign: 'right' } }}
+                min={0}
+                step={0.01}
+                precision={2}
+                controls={false}
+                defaultValue={detalles[idx]?.descuento}
+                onChange={(val) => {
+                  editValuesRef.current[`${detalles[idx].id}_descuento_pesos`] = val || 0;
+                }}
+                onBlur={() => {
+                  const val = editValuesRef.current[`${detalles[idx].id}_descuento_pesos`] ?? detalles[idx]?.descuento;
+                  handleDetalleCalculate(detalles[idx].id, 'descuento', val);
+                }}
+                onPressEnter={() => {
+                  const val = editValuesRef.current[`${detalles[idx].id}_descuento_pesos`] ?? detalles[idx]?.descuento;
+                  handleDetalleCalculate(detalles[idx].id, 'descuento', val);
+                }}
+              />
+              <span onClick={() => setModoDescuento('porcentaje')} style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                <Input size="small" placeholder="$" disabled style={{ width: 36, textAlign: 'center', borderLeft: 'none', pointerEvents: 'none' }} />
+              </span>
+            </Space.Compact>
+            <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto' }}>
+              {formatNumber(detalles[idx]?.porcentajeDescuento || 0)}%
+            </div>
+          </div>
+        ),
     },
     {
       title: 'SubTotal',
@@ -1734,7 +1868,11 @@ const FacturaSuplidorFormulario: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div>{formatNumber(record.impuestos || 0)}</div>
           <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, marginTop: 'auto', minHeight: 18 }}>
-            {record.impuesto?.nombre ? toTitleCase(record.impuesto.nombre) : ''}
+            {record.impuestosDetalle && record.impuestosDetalle.length > 0
+              ? record.impuestosDetalle.map((idt) => idt.impuesto?.nombre || '').filter(Boolean).join(', ')
+              : record.impuesto?.nombre
+                ? toTitleCase(record.impuesto.nombre)
+                : ''}
           </div>
         </div>
       ),
@@ -1853,7 +1991,16 @@ const FacturaSuplidorFormulario: React.FC = () => {
     facturaSuplidorApi.obtenerPorId(sucursalActiva, parseInt(id))
       .then((_res) => {
         const res = _res as any;
-        setData(res); setDetalles(res.detalles || []);
+        setData(res);
+        const detallesNormalizados = (res.detalles || []).map((d: any) => ({
+          ...d,
+          impuestosDetalle: d.impuestosDetalle?.length > 0
+            ? d.impuestosDetalle
+            : d.impuesto?.codigo
+              ? [{ total: 0, tasa: d.impuesto.porcentaje || 0, tipo: d.impuesto.tipo || 'I', impuesto: { ...d.impuesto } }]
+              : [],
+        }));
+        setDetalles(detallesNormalizados);
         setAsientosLocales(res.asientos || []);
         setImpuestosFactura(normalizarImpuestos(res.impuestosFactura));
         setSelectedConcepto(res.concepto || null);

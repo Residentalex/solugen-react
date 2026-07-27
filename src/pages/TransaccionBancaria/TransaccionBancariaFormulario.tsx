@@ -41,7 +41,7 @@ import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLa
 import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import LogTable from '../../components/LogTable';
-import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber, formatCurrency } from '../../utils/formats';
+import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber } from '../../utils/formats';
 import { toEstadoNum } from '../../utils/estadoDocumento';
 
 const { TextArea } = Input;
@@ -247,7 +247,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
   // ===== Cargar entidades según concepto =====
   const cargarEntidades = useCallback(async (conceptoCodigo?: string) => {
     try {
-      const res = await conceptosApi.obtenerEntidades(sucursalActiva, conceptoCodigo, true);
+      const res = await conceptosApi.obtenerEntidadesActivas(sucursalActiva, conceptoCodigo);
       setEntidadesCache(res || []);
     } catch {
       message.error('Error al cargar entidades');
@@ -1117,7 +1117,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
                         key: 'montoOriginal',
                         width: 130,
                         align: 'right' as const,
-                        render: (v: number) => formatCurrency(v ?? 0),
+                        render: (v: number) => formatNumber(v ?? 0),
                       },
                       {
                         title: 'Acreditado/Abonado',
@@ -1126,7 +1126,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
                         align: 'right' as const,
                         render: (_: any, record: any) => (
                           <Text type="secondary">
-                            {formatCurrency(record.pagado ?? 0)}
+                            {formatNumber(record.pagado ?? 0)}
                           </Text>
                         ),
                       },
@@ -1137,7 +1137,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
                         align: 'right' as const,
                         render: (_: any, record: any) => (
                           <Text style={{ color: record.pendiente > 0 ? '#fa8c16' : undefined }}>
-                            {formatCurrency(record.pendiente ?? 0)}
+                            {formatNumber(record.pendiente ?? 0)}
                           </Text>
                         ),
                       },
@@ -1146,7 +1146,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
                         key: 'retencion',
                         width: 120,
                         align: 'right' as const,
-                        render: (_: any, record: any) => formatCurrency(record.retencion ?? 0),
+                        render: (_: any, record: any) => formatNumber(record.retencion ?? 0),
                       },
                       {
                         title: 'Descuento',

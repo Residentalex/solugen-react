@@ -20,7 +20,7 @@ export const importarInventarioApi = {
   },
 
   obtenerSuplidores: async (sucursal: number): Promise<SuplidorDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<SuplidorDTO[]>>(`/Proveedor/${sucursal}`);
+    const { data } = await apiClient.get<ApiResponse<SuplidorDTO[]>>(`/Proveedor/${sucursal}?activo=true`);
     return data.data;
   },
 };

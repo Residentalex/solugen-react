@@ -130,24 +130,35 @@ const Sidebar: React.FC = () => {
 const makeKey = (codigo: string) => `${moduloNombre}__${codigo}`;
 
       for (const [grupoNombre, grupoPantallas] of sortedGrupos) {
-        children.push({
-          key: `submenu_${moduloNombre}_${grupoNombre}`,
-          label: <span className="menu-group-label">{grupoNombre}</span>,
-          children: grupoPantallas.map((p) => {
-            const subItems = childMap.get(p.id);
-            if (subItems && subItems.length > 0) {
-              return {
-                key: makeKey(p.codigo),
-                label: p.nombre,
-                children: subItems.map((child) => ({
-                  key: makeKey(child.codigo),
-                  label: child.nombre,
-                })),
-              };
-            }
-            return { key: makeKey(p.codigo), label: p.nombre };
-          }),
-        });
+        if (grupoNombre.toLowerCase() === 'reportes') {
+          // Grupo de reportes → un solo item que lleva a la página consolidada
+          if (grupoPantallas.length > 0) {
+            children.push({
+              key: makeKey(`Reportes_${moduloNombre}`),
+              label: '📊 Reportes',
+            });
+          }
+        } else {
+          children.push({
+            key: `submenu_${moduloNombre}_${grupoNombre}`,
+            label: <span className="menu-group-label">{grupoNombre}</span>,
+            className: grupoPantallas.length > 5 ? 'menu-sub-scroll' : undefined,
+            children: grupoPantallas.map((p) => {
+              const subItems = childMap.get(p.id);
+              if (subItems && subItems.length > 0) {
+                return {
+                  key: makeKey(p.codigo),
+                  label: p.nombre,
+                  children: subItems.map((child) => ({
+                    key: makeKey(child.codigo),
+                    label: child.nombre,
+                  })),
+                };
+              }
+              return { key: makeKey(p.codigo), label: p.nombre };
+            }),
+          });
+        }
       }
 
       for (const p of sinGrupo) {
@@ -195,6 +206,14 @@ const makeKey = (codigo: string) => `${moduloNombre}__${codigo}`;
     if (key.startsWith('_grupo_') || key.startsWith('submenu_')) return;
     const codigo = key.includes('__') ? key.split('__')[1] : key;
     const moduloNombre = key.includes('__') ? key.split('__')[0] : undefined;
+
+    // Reportes consolidados: navegar con ruta amigable
+    if (moduloNombre && codigo.startsWith('Reportes_')) {
+      setActiveModule(codigo);
+      navigate(`/Reportes/${moduloNombre}`);
+      return;
+    }
+
     setActiveModule(codigo);
     if (codigo === 'dashboard') {
       navigate('/');

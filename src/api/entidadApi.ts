@@ -22,6 +22,21 @@ export const entidadApi = {
     );
     return data.data;
   },
+
+  obtenerActivos: async (
+    sucursal: number,
+    conceptoCodigo?: string,
+    tipo?: string
+  ): Promise<EntidadDTO[]> => {
+    const params: Record<string, string> = {};
+    if (conceptoCodigo) params.concepto = conceptoCodigo;
+    if (tipo) params.tipo = tipo;
+    const { data } = await apiClient.get<ApiResponse<EntidadDTO[]>>(
+      `${ENTIDADES_BASE}/${sucursal}/Activos`,
+      { params }
+    );
+    return data.data;
+  },
 };
 
 export default entidadApi;

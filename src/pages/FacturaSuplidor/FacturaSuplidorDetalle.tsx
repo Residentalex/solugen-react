@@ -28,7 +28,7 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
-import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
@@ -86,6 +86,12 @@ const FacturaSuplidorDetalle: React.FC = () => {
           return;
         }
         setData(res);
+        // Calcular balance de asientos contables
+        const totalDeb = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 0 || r.tipoAsiento === 'D') ? (r.monto || 0) : 0), 0);
+        const totalCred = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 1 || r.tipoAsiento === 'C') ? (r.monto || 0) : 0), 0);
+        operacion.setBalanceInfo({ debitos: totalDeb, creditos: totalCred });
         const data = res as any;
         setPageTitleOverride(`${data.documento.codigo}-${data.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
@@ -380,8 +386,14 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
   const tienePagos = pagosAsociados.length > 0;
 
+  const detallesFuente = documentoActivo?.entradaAlmacen?.detalles?.length
+    ? documentoActivo.entradaAlmacen.detalles
+    : (documentoActivo?.detalles || []);
+
+  const usandoEntrada = !!(documentoActivo?.entradaAlmacen?.detalles?.length);
+
   const detallesFiltrados = detalleSearch
-    ? (documentoActivo?.detalles || []).filter((d: any) => {
+    ? detallesFuente.filter((d: any) => {
         const q = detalleSearch.toLowerCase();
         return (
           (d.codigo || '').toLowerCase().includes(q) ||
@@ -389,7 +401,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
           (d.referencia || '').toLowerCase().includes(q)
         );
       })
-    : (documentoActivo?.detalles || []);
+    : detallesFuente;
 
   // asientoColumns reemplazado por AsientosContableTable compartido
 
@@ -477,7 +489,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <div>{formatNumber(record.porcentajeDescuento || 0)}%</div>
           <div className="paces-text-secondary" style={{ fontSize: 12 }}>
-            {formatCurrency(record.descuento || 0)}
+            {formatNumber(record.descuento || 0)}
           </div>
         </div>
       ),
@@ -491,7 +503,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => (
         <div>
-          <div>{formatCurrency(record.impuestos || 0)}</div>
+          <div>{formatNumber(record.impuestos || 0)}</div>
           {record.impuesto?.nombre && (
             <Tooltip title={record.impuesto.nombre}>
               <div className="paces-text-secondary" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -510,17 +522,20 @@ const FacturaSuplidorDetalle: React.FC = () => {
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => {
-        if (!record.impuesto?.porcentaje) return <span>{formatCurrency(0)}</span>;
-        // Calcular otros = base * suma porcentajes de impuestos tipo V
         const base = (record.subTotal || 0) - (record.descuento || 0);
+        // Sumar solo impuestos informativos que el detalle tenga en impuestosDetalle
         const otrosPct = data?.impuestosFactura
           ?.filter((imp: any) => {
-            const tipo = imp.tipo || imp.impuesto?.tipo || '';
-            return tipo === 'V';
+            const t = imp.tipo || imp.impuesto?.tipo || '';
+            const esInfo = t === 'V' || t === 'Informativo' || t === 3;
+            if (!esInfo || !record.impuestosDetalle) return false;
+            return record.impuestosDetalle.some((idt: any) => {
+              return idt.impuestoID > 0 && idt.impuestoID === Number(imp.idExterno || imp.impuesto?.idExterno);
+            });
           })
           ?.reduce((sum: number, imp: any) => sum + (imp.impuesto?.porcentaje || 0), 0) || 0;
         const otros = Math.round(base * (otrosPct / 100) * 100) / 100;
-        return <span>{formatCurrency(otros)}</span>;
+        return <span>{formatNumber(otros)}</span>;
       },
     },
     {
@@ -533,15 +548,20 @@ const FacturaSuplidorDetalle: React.FC = () => {
       onHeaderCell: () => ({ style: { paddingRight: 16 } }),
       render: (_: any, record: any) => {
         const base = (record.subTotal || 0) - (record.descuento || 0);
+        // Sumar solo impuestos informativos que el detalle tenga en impuestosDetalle
         const otrosPct = data?.impuestosFactura
           ?.filter((imp: any) => {
-            const tipo = imp.tipo || imp.impuesto?.tipo || '';
-            return tipo === 'V';
+            const t = imp.tipo || imp.impuesto?.tipo || '';
+            const esInfo = t === 'V' || t === 'Informativo' || t === 3;
+            if (!esInfo || !record.impuestosDetalle) return false;
+            return record.impuestosDetalle.some((idt: any) => {
+              return idt.impuestoID > 0 && idt.impuestoID === Number(imp.idExterno || imp.impuesto?.idExterno);
+            });
           })
           ?.reduce((sum: number, imp: any) => sum + (imp.impuesto?.porcentaje || 0), 0) || 0;
         const otros = Math.round(base * (otrosPct / 100) * 100) / 100;
         return (
-          <Typography.Text strong>{formatCurrency((record.total || 0) + otros)}</Typography.Text>
+          <Typography.Text strong>{formatNumber((record.total || 0) + otros)}</Typography.Text>
         );
       },
     },
@@ -705,9 +725,26 @@ const FacturaSuplidorDetalle: React.FC = () => {
               items={[
                 {
                   key: 'articulos',
-                  label: `Artículos (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detalles?.length || 0}` : ''})`,
+                  label: `Artículos (${detallesFiltrados.length}${usandoEntrada ? '' : (detalleSearch ? `/${detallesFuente.length}` : '')})`,
                   children: (
-                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
+                    <>
+                      {usandoEntrada && (
+                        <Alert
+                          type="info"
+                          showIcon
+                          style={{ marginBottom: 12 }}
+                          message={
+                            <span>
+                              Mostrando detalles desde{' '}
+                              <a className="paces-doc-link" onClick={() => navigate(`/FENP/${documentoActivo.entradaAlmacen.id}`)}>
+                                ENP-{documentoActivo.entradaAlmacen.noDocumento}
+                              </a>
+                            </span>
+                          }
+                        />
+                      )}
+                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
+                    </>
                   ),
                 },
                 {
@@ -753,7 +790,10 @@ const FacturaSuplidorDetalle: React.FC = () => {
               tasa={documentoActivo.tasa ?? 1}
               impuestosInformativos={
                 (data?.impuestosFactura || [])
-                  .filter((imp: any) => imp.impuesto?.tipo === 'V')
+                  .filter((imp: any) => {
+                    const t = imp.tipo || imp.impuesto?.tipo || '';
+                    return t === 'V' || t === 'Informativo' || t === 3;
+                  })
                   .map((imp: any) => ({
                     nombre: imp.impuesto?.nombre || imp.nombre || '',
                     monto: imp.monto || 0,
@@ -833,9 +873,26 @@ const FacturaSuplidorDetalle: React.FC = () => {
             items={[
               {
                 key: 'articulos',
-                label: `Artículos (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detalles?.length || 0}` : ''})`,
+                label: `Artículos (${detallesFiltrados.length}${usandoEntrada ? '' : (detalleSearch ? `/${detallesFuente.length}` : '')})`,
                 children: (
-                  <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
+                  <>
+                    {usandoEntrada && (
+                      <Alert
+                        type="info"
+                        showIcon
+                        style={{ marginBottom: 12 }}
+                        message={
+                          <span>
+                            Mostrando detalles desde{' '}
+                            <a className="paces-doc-link" onClick={() => navigate(`/FENP/${documentoActivo.entradaAlmacen.id}`)}>
+                              ENP-{documentoActivo.entradaAlmacen.noDocumento}
+                            </a>
+                          </span>
+                        }
+                      />
+                    )}
+                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 800 }} />
+                  </>
                 ),
               },
               {
@@ -879,7 +936,10 @@ const FacturaSuplidorDetalle: React.FC = () => {
               tasa={documentoActivo.tasa ?? 1}
               impuestosInformativos={
                 (data?.impuestosFactura || [])
-                  .filter((imp: any) => imp.impuesto?.tipo === 'V')
+                  .filter((imp: any) => {
+                    const t = imp.tipo || imp.impuesto?.tipo || '';
+                    return t === 'V' || t === 'Informativo' || t === 3;
+                  })
                   .map((imp: any) => ({
                     nombre: imp.impuesto?.nombre || imp.nombre || '',
                     monto: imp.monto || 0,
@@ -942,6 +1002,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
         titulo={operacionTitulo}
         eventos={operacion.eventos}
         completado={operacion.completado}
+        balanceInfo={operacion.balanceInfo}
         onClose={() => operacion.reset()}
       />
     </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card } from 'antd';
+import { Card, Tag } from 'antd';
 import { IdcardOutlined, PhoneOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { toTitleCase } from '../utils/formats';
 
@@ -8,6 +8,8 @@ interface EntidadCardData {
   identificacion?: string;
   telefono?: string;
   direccion?: string;
+  cuentaContable?: { noCuenta?: string; nombre?: string };
+  noCuenta?: string;
 }
 
 interface EntidadCardProps {
@@ -29,11 +31,16 @@ const EntidadCard: React.FC<EntidadCardProps> = ({ titulo, entidad, entidadSecun
 
   return (
     <Card
-      title={<span style={{ fontSize: 16, fontWeight: 600 }}>{titulo || toTitleCase(nombre) || 'Entidad'}</span>}
+      title={<span style={{ fontSize: 16, fontWeight: 600 }}>{nombre ? toTitleCase(nombre) : (titulo || fallbackTitulo || 'Entidad')}</span>}
       className="paces-card"
       style={{ marginBottom: 16 }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {titulo ? (
+          <Tag color="blue" style={{ marginBottom: 4 }}>{titulo}</Tag>
+        ) : fallbackTitulo && entidad?.nombre ? (
+          <Tag style={{ marginBottom: 4 }}>{fallbackTitulo}</Tag>
+        ) : null}
         {identificacion && identificacion !== '-' && (
           <div style={{ fontSize: 13 }}>
             <IdcardOutlined style={{ color: '#556ee6', marginRight: 8 }} />
@@ -50,6 +57,13 @@ const EntidadCard: React.FC<EntidadCardProps> = ({ titulo, entidad, entidadSecun
           <div style={{ fontSize: 13, color: '#595959' }}>
             <EnvironmentOutlined style={{ color: '#556ee6', marginRight: 8 }} />
             {direccion}
+          </div>
+        )}
+
+        {(entidad?.cuentaContable?.noCuenta || entidad?.noCuenta) && (
+          <div style={{ fontSize: 13 }}>
+            <span style={{ marginRight: 8 }}>🏦</span>
+            Cuenta: {entidad?.cuentaContable?.noCuenta || entidad?.noCuenta}
           </div>
         )}
       </div>

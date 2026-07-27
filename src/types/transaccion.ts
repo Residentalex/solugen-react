@@ -1,6 +1,7 @@
 import type { LogDTO } from './entradaAlmacen';
 import type { DocumentoRelacionadoDTO } from './notaDebito';
 import type { CobroDTO } from './reciboIngreso';
+import type { DetalleMovimientoDTO } from './notaCredito';
 
 export interface TransaccionVistaDTO {
   id: number;
@@ -79,6 +80,7 @@ export interface TransaccionDTO {
   logs?: LogDTO[];
   transaccionesAsociadas?: DocumentoRelacionadoDTO[];
   cobros?: CobroDTO[];
+  detalles?: DetalleMovimientoDTO[];
   sucursal?: SucursalSimpleDTO | null;
 }
 

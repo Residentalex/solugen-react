@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Typography, Tooltip, Descriptions, Alert
+  Card, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Typography, Tooltip, Descriptions, Alert, Table, Switch
 } from 'antd';
 import {
   LockFilled,
@@ -19,7 +19,7 @@ import TotalesCard from '../../components/TotalesCard';
 import LogTable from '../../components/LogTable';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
-import { formatCurrency } from '../../utils/formats';
+import { formatNumber } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { obtenerNombreSucursal } from '../../utils/sucursalEnumMapper';
 
@@ -31,10 +31,6 @@ import CobrosCard from '../../components/CobrosCard';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 
 const { Text } = Typography;
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
 
 function toTitleCase(str: string): string {
   if (!str) return '';
@@ -65,6 +61,8 @@ const AsientoContableDetalle: React.FC = () => {
   const [documentosRelacionados, setDocumentosRelacionados] = React.useState<DocumentoRelacionDTO[]>([]);
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
+  const [mostrandoReverso, setMostrandoReverso] = useState(false);
+  const [reversoData, setReversoData] = useState<any>(null);
 
   useEffect(() => {
     setActiveModule(screenCode);
@@ -89,6 +87,14 @@ const AsientoContableDetalle: React.FC = () => {
         }
         setData(res);
         setPageTitleOverride(`${res.documento?.codigo || ''}-${res.noDocumento || `Transacción #${res.id}`}`);
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
+          transaccionApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el detalle del asiento contable';
@@ -107,14 +113,16 @@ const AsientoContableDetalle: React.FC = () => {
       });
   }, [data?.id, sucursalActiva]);
 
+  const documentoActivo = mostrandoReverso && reversoData ? reversoData : data;
+
   const asientosMapeados = React.useMemo(() =>
-    (data?.asientos || []).map(a => ({
+    (documentoActivo?.asientos || []).map(a => ({
       ...a,
       cuentaContable: {
         noCuenta: (a as any).cuentaContable?.noCuenta || a.noCuenta || '',
         nombre: (a as any).cuentaContable?.nombre || '',
       },
-    })), [data?.asientos]);
+    })), [documentoActivo?.asientos]);
 
   const handleRefresh = useCallback(() => {
     if (!id) return;
@@ -136,6 +144,14 @@ const AsientoContableDetalle: React.FC = () => {
         }
         setData(res);
         setPageTitleOverride(`${res.documento?.codigo || ''}-${res.noDocumento || `Transacción #${res.id}`}`);
+        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
+          transaccionApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+            .then((revRes) => setReversoData(revRes))
+            .catch(() => setReversoData(null));
+        } else {
+          setReversoData(null);
+          setMostrandoReverso(false);
+        }
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el detalle del asiento contable';
@@ -151,6 +167,15 @@ const AsientoContableDetalle: React.FC = () => {
     if (res) setData(res);
   }, [data?.id, sucursalActiva]);
 
+  // Actualizar el título al alternar entre Original/Reverso
+  useEffect(() => {
+    if (mostrandoReverso && reversoData) {
+      setPageTitleOverride(`${reversoData.documento?.codigo || ''}-${reversoData.noDocumento || `Reverso #${reversoData.id}`}`);
+    } else if (data) {
+      setPageTitleOverride(`${data.documento?.codigo || ''}-${data.noDocumento || `Transacción #${data.id}`}`);
+    }
+  }, [mostrandoReverso, reversoData, data, setPageTitleOverride]);
+
   if (loading || (!data && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
@@ -165,8 +190,8 @@ const AsientoContableDetalle: React.FC = () => {
   if (!data) return null;
 
   const isLarge = screens.xxl === true;
-  const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(data.estado)] || { label: 'Desconocido', color: 'default' };
-  const esCerrado = toPeriodoNum(data.periodo) === 6;
+  const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(documentoActivo.estado)] || { label: 'Desconocido', color: 'default' };
+  const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
   const esReverso = data.reversoID != null && data.reversoID > 0;
 
   const handlePostear = async () => {
@@ -237,6 +262,94 @@ const AsientoContableDetalle: React.FC = () => {
     }
   };
 
+  const detalleColumns = [
+    {
+      title: 'Código',
+      key: 'codigo',
+      width: 100,
+      fixed: 'left' as const,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <span>{record.codigo || '-'}</span>
+          {record.referencia && (
+            <Tooltip title={record.referencia}>
+              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                {record.referencia}
+              </div>
+            </Tooltip>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: 'Artículo',
+      key: 'articulo',
+      ellipsis: true,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (_: any, record: any) => (
+        <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <span>{toTitleCase(record.articulo || '')}</span>
+          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between', marginTop: 'auto' }}>
+            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: 'Cantidad',
+      dataIndex: 'cantidad',
+      key: 'cantidad',
+      width: 100,
+      align: 'right' as const,
+      render: (val: number) => formatNumber(val || 0),
+    },
+    {
+      title: 'Costo',
+      dataIndex: 'costo',
+      key: 'costo',
+      width: 110,
+      align: 'right' as const,
+      responsive: ['md' as const],
+      render: (val: number) => formatNumber(val || 0),
+    },
+    {
+      title: 'SubTotal',
+      dataIndex: 'subTotal',
+      key: 'subTotal',
+      width: 110,
+      align: 'right' as const,
+      responsive: ['lg' as const],
+      render: (val: number) => formatNumber(val || 0),
+    },
+    {
+      title: 'Descuento',
+      dataIndex: 'descuento',
+      key: 'descuento',
+      width: 100,
+      align: 'right' as const,
+      responsive: ['lg' as const],
+      render: (val: number) => formatNumber(val || 0),
+    },
+    {
+      title: 'Impuestos',
+      dataIndex: 'impuestos',
+      key: 'impuestos',
+      width: 120,
+      align: 'right' as const,
+      responsive: ['lg' as const],
+      render: (val: number) => formatNumber(val || 0),
+    },
+    {
+      title: 'Total',
+      dataIndex: 'total',
+      key: 'total',
+      width: 110,
+      align: 'right' as const,
+      render: (val: number) => <Text strong>{formatNumber(val || 0)}</Text>,
+    },
+  ];
+
   return (
     <div>
       {loadingError && (
@@ -275,6 +388,19 @@ const AsientoContableDetalle: React.FC = () => {
         onAnular={async () => setModalAnularOpen(true)}
         onPostear={handlePostear}
         onDesaplicar={async () => setModalDesaplicarOpen(true)}
+        extraButtons={id ? (
+          <>
+            {toEstadoNum(data?.estado) === 3 && reversoData && (
+              <Switch
+                checked={mostrandoReverso}
+                checkedChildren="Reverso"
+                unCheckedChildren="Original"
+                onChange={(checked) => setMostrandoReverso(checked)}
+                style={{ marginLeft: 8 }}
+              />
+            )}
+          </>
+        ) : undefined}
       />
 
       {isLarge ? (
@@ -296,25 +422,25 @@ const AsientoContableDetalle: React.FC = () => {
             } style={{ marginBottom: 16 }}>
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="Fecha:">
-                  {formatDate(data.fechaDocumento)}
+                  {formatDate(documentoActivo.fechaDocumento)}
                 </Descriptions.Item>
                 <Descriptions.Item label="Concepto:">
-                  {data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : toTitleCase(data.concepto?.nombre || data.codigoConcepto || '-')}
+                  {documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : toTitleCase(documentoActivo.concepto?.nombre || documentoActivo.codigoConcepto || '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="NCF:">
-                  {data.ncf || '-'}
+                  {documentoActivo.ncf || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Referencia:">
-                  {data.referencia || '-'}
+                  {documentoActivo.referencia || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Sucursal:">
-                  <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
+                  <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="NCF Modificado:">
-                  {data.ncfModificado || '-'}
+                  {documentoActivo.ncfModificado || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -325,30 +451,37 @@ const AsientoContableDetalle: React.FC = () => {
               items={[
                 {
                   key: 'asientos',
-                  label: `Asientos (${data.asientos?.length || 0})`,
+                  label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                   children: (
 <AsientosContableTable asientos={asientosMapeados} scroll={{ x: 600 }} rowKey={(r) => `${r.id || ''}`} />
                   ),
                 },
                 {
-                  key: 'documentos',
-                  label: `Documentos Asociados (${data.transaccionesAsociadas?.length || 0})`,
+                  key: 'detalles',
+                  label: `Detalles (${documentoActivo.detalles?.length || 0})`,
                   children: (
-                    <TransaccionesAsociadasCard documentos={data.transaccionesAsociadas || []} readOnly />
+                    <Table dataSource={documentoActivo.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} />
+                  ),
+                },
+                {
+                  key: 'documentos',
+                  label: `Documentos Asociados (${documentoActivo.transaccionesAsociadas?.length || 0})`,
+                  children: (
+                    <TransaccionesAsociadasCard documentos={documentoActivo.transaccionesAsociadas || []} readOnly />
                   ),
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${data.logs?.length || 0})`,
+                  label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
-                    <LogTable dataSource={data.logs || []} scroll={{ x: 800 }} />
+                    <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 800 }} />
                   ),
                 },
                 {
                   key: 'cobros',
-                  label: `Cobros (${data.cobros?.length || 0})`,
+                  label: `Cobros (${documentoActivo.cobros?.length || 0})`,
                   children: (
-                    <CobrosCard cobros={data.cobros || []} />
+                    <CobrosCard cobros={documentoActivo.cobros || []} />
                   ),
                 },
               ]}
@@ -356,18 +489,18 @@ const AsientoContableDetalle: React.FC = () => {
           </Col>
 
           <Col lg={6}>
-            <EntidadCard entidad={data.entidad as any} fallbackTitulo="Entidad" />
+            <EntidadCard entidad={documentoActivo.entidad as any} fallbackTitulo="Entidad" />
             <DocumentosRelacionadosCard
               documentos={documentosRelacionados}
               currentId={data?.id}
             />
             <TotalesCard
-              subTotal={data.subTotal}
-              descuento={data.descuento}
-              impuestos={data.impuestos}
-              total={data.total}
-              monedaSimbolo={data.codigoMoneda || getMonedaSucursalActiva().codigo}
-              tasa={data.tasa ?? 1}
+              subTotal={documentoActivo.subTotal}
+              descuento={documentoActivo.descuento}
+              impuestos={documentoActivo.impuestos}
+              total={documentoActivo.total}
+              monedaSimbolo={documentoActivo.codigoMoneda || getMonedaSucursalActiva().codigo}
+              tasa={documentoActivo.tasa ?? 1}
             />
           </Col>
         </Row>
@@ -388,24 +521,24 @@ const AsientoContableDetalle: React.FC = () => {
             </div>
           } style={{ marginBottom: 16 }}>
             <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Fecha:">{formatDate(data.fechaDocumento)}</Descriptions.Item>
-              <Descriptions.Item label="Concepto:">{data.concepto?.codigo ? `${data.concepto.codigo} - ${toTitleCase(data.concepto.nombre || '')}` : toTitleCase(data.concepto?.nombre || data.codigoConcepto || '-')}</Descriptions.Item>
-              <Descriptions.Item label="NCF:">{data.ncf || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Referencia:">{data.referencia || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Sucursal:"><SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} /></Descriptions.Item>
-              <Descriptions.Item label="NCF Modificado:">{data.ncfModificado || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Nota:"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+              <Descriptions.Item label="Fecha:">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="Concepto:">{documentoActivo.concepto?.codigo ? `${documentoActivo.concepto.codigo} - ${toTitleCase(documentoActivo.concepto.nombre || '')}` : toTitleCase(documentoActivo.concepto?.nombre || documentoActivo.codigoConcepto || '-')}</Descriptions.Item>
+              <Descriptions.Item label="NCF:">{documentoActivo.ncf || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Referencia:">{documentoActivo.referencia || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Sucursal:"><SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} /></Descriptions.Item>
+              <Descriptions.Item label="NCF Modificado:">{documentoActivo.ncfModificado || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Nota:"><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
             </Descriptions>
           </Card>
 
           <div style={{ marginTop: 24 }}>
             <TotalesCard
-              subTotal={data.subTotal}
-              descuento={data.descuento}
-              impuestos={data.impuestos}
-              total={data.total}
-              monedaSimbolo={data.codigoMoneda || getMonedaSucursalActiva().codigo}
-              tasa={data.tasa ?? 1}
+              subTotal={documentoActivo.subTotal}
+              descuento={documentoActivo.descuento}
+              impuestos={documentoActivo.impuestos}
+              total={documentoActivo.total}
+              monedaSimbolo={documentoActivo.codigoMoneda || getMonedaSucursalActiva().codigo}
+              tasa={documentoActivo.tasa ?? 1}
               alignRight
             />
           </div>
@@ -416,30 +549,37 @@ const AsientoContableDetalle: React.FC = () => {
             items={[
               {
                 key: 'asientos',
-                label: `Asientos (${data.asientos?.length || 0})`,
+                label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                 children: (
                   <AsientosContableTable asientos={asientosMapeados} scroll={{ x: 600 }} rowKey={(r) => `${r.id || ''}`} />
                 ),
               },
               {
-                key: 'documentos',
-                label: `Documentos Asociados (${data.transaccionesAsociadas?.length || 0})`,
+                key: 'detalles',
+                label: `Detalles (${documentoActivo.detalles?.length || 0})`,
                 children: (
-                  <TransaccionesAsociadasCard documentos={data.transaccionesAsociadas || []} readOnly />
+                  <Table dataSource={documentoActivo.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} />
+                ),
+              },
+              {
+                key: 'documentos',
+                label: `Documentos Asociados (${documentoActivo.transaccionesAsociadas?.length || 0})`,
+                children: (
+                  <TransaccionesAsociadasCard documentos={documentoActivo.transaccionesAsociadas || []} readOnly />
                 ),
               },
               {
                 key: 'historial',
-                label: `Historial (${data.logs?.length || 0})`,
+                label: `Historial (${documentoActivo.logs?.length || 0})`,
                 children: (
-                  <LogTable dataSource={data.logs || []} scroll={{ x: 800 }} />
+                  <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 800 }} />
                 ),
               },
               {
                 key: 'cobros',
-                label: `Cobros (${data.cobros?.length || 0})`,
+                label: `Cobros (${documentoActivo.cobros?.length || 0})`,
                 children: (
-                  <CobrosCard cobros={data.cobros || []} />
+                  <CobrosCard cobros={documentoActivo.cobros || []} />
                 ),
               },
             ]}

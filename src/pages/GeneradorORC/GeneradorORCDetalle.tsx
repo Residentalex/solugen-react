@@ -31,6 +31,7 @@ import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../uti
 import { ErrorDetalle } from '../../components';
 import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 import PermissionGate from '../../components/PermissionGate';
+import LogTable from '../../components/LogTable';
 
 const { Text } = Typography;
 
@@ -72,6 +73,9 @@ const GeneradorORCDetalle: React.FC = () => {
   const [generando, setGenerando] = useState(false);
   const [ordenesGeneradas, setOrdenesGeneradas] = useState<OrdenCompraVistaDTO[]>([]);
   const [ordenesLoading, setOrdenesLoading] = useState(false);
+
+  const [adpList, setAdpList] = useState<any[]>([]);
+  const [adpLoading, setAdpLoading] = useState(false);
 
   // Análisis / monitor
   const [analisisOpen, setAnalisisOpen] = useState(false);
@@ -202,6 +206,22 @@ const GeneradorORCDetalle: React.FC = () => {
       })
       .finally(() => setOrdenesLoading(false));
   }, [id, sucursalActiva, data]);
+
+  // Efecto: cargar ADP vinculados al GORC
+  useEffect(() => {
+    if (!data?.numero) return;
+    setAdpLoading(true);
+    apiClient.get(`/ADP/${sucursalActiva}/filtrar`, {
+      params: { docReferencia: data.numero, cantidad: 20 }
+    })
+      .then((res) => setAdpList(res.data?.data || []))
+      .catch((err: any) => {
+        const msg = err?.response?.data?.errorMessage || 'Error al cargar actualizaciones de precio';
+        message.error(msg);
+        setAdpList([]);
+      })
+      .finally(() => setAdpLoading(false));
+  }, [data?.numero, sucursalActiva]);
 
   // Efecto: cargar análisis cuando se abre el Drawer
   useEffect(() => {
@@ -405,9 +425,23 @@ const GeneradorORCDetalle: React.FC = () => {
           ),
         },
         {
-          title: 'Costo', dataIndex: 'costo', key: 'costo', width: 90, align: 'right' as const,
+          title: 'Costo', key: 'costo', width: 110, align: 'right' as const,
           onCell: () => ({ style: { verticalAlign: 'top' } }),
-          render: (costo: number) => formatNumber(costo || 0),
+          render: (_: any, record: DetalleGeneradorDTO) => {
+            const costoBase = Number(record.costo) || 0;
+            const pctDesc = Number(record.porcentajeDescuento) || 0;
+            const factor = Number(record.medida?.factor) || 1;
+            const costoConDescuento = costoBase - ((costoBase * pctDesc) / 100);
+            const costoUnitario = costoConDescuento / factor;
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <div>{formatNumber(costoBase)}</div>
+                <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999', marginTop: 'auto' }}>
+                  {formatNumber(costoUnitario)} × {factor}
+                </div>
+              </div>
+            );
+          },
         },
         {
           title: 'Margen %', dataIndex: 'margen', key: 'margen', width: 100, align: 'right' as const,
@@ -553,11 +587,11 @@ const GeneradorORCDetalle: React.FC = () => {
               <Table.Summary.Cell index={0} colSpan={colsAntes}>
                 <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
               </Table.Summary.Cell>
-              <Table.Summary.Cell index={colsAntes} align="right">{formatCurrency(sumSubTotal)}</Table.Summary.Cell>
-              <Table.Summary.Cell index={colsAntes + 1} align="right">{formatCurrency(sumDescuento)}</Table.Summary.Cell>
-              <Table.Summary.Cell index={colsAntes + 2} align="right">{formatCurrency(sumImpuestos)}</Table.Summary.Cell>
+              <Table.Summary.Cell index={colsAntes} align="right">{formatNumber(sumSubTotal)}</Table.Summary.Cell>
+              <Table.Summary.Cell index={colsAntes + 1} align="right">{formatNumber(sumDescuento)}</Table.Summary.Cell>
+              <Table.Summary.Cell index={colsAntes + 2} align="right">{formatNumber(sumImpuestos)}</Table.Summary.Cell>
               <Table.Summary.Cell index={colsAntes + 3} align="right">
-                <Text strong style={{ color: 'var(--paces-primary)' }}>{formatCurrency(sumTotal)}</Text>
+                <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(sumTotal)}</Text>
               </Table.Summary.Cell>
             </Table.Summary.Row>
           </Table.Summary>
@@ -647,7 +681,7 @@ const GeneradorORCDetalle: React.FC = () => {
     { title: 'Suplidor', key: 'suplidor', render: (_, r: OrdenCompraVistaDTO) => r.suplidor?.nombre || '-' },
     { title: 'Concepto', key: 'concepto', render: (_, r: OrdenCompraVistaDTO) => r.concepto?.nombre || '-' },
     { title: 'Total', dataIndex: 'total', key: 'total', width: 130, align: 'right' as const,
-      render: (t: number) => <Text strong>{formatCurrency(t)}</Text>,
+      render: (t: number) => <Text strong>{formatNumber(t)}</Text>,
     },
     { title: 'Estado', dataIndex: 'estado', key: 'estado', width: 110,
       render: (estado: any) => {
@@ -682,6 +716,39 @@ const GeneradorORCDetalle: React.FC = () => {
           loading={ordenesLoading}
           scroll={{ x: 800 }}
           locale={{ emptyText: <Empty description="No hay órdenes de compra generadas" /> }}
+        />
+      ),
+    },
+    {
+      key: 'historial',
+      label: `Historial (${data.logs?.length || 0})`,
+      children: (
+        <LogTable dataSource={data.logs || []} scroll={{ x: 800 }} />
+      ),
+    },
+    {
+      key: 'adp',
+      label: `Actualizaciones de Precio (${adpList.length})`,
+      children: (
+        <Table
+          dataSource={adpList}
+          rowKey="idExterno"
+          size="small"
+          pagination={false}
+          loading={adpLoading}
+          scroll={{ x: 800 }}
+          columns={[
+            { title: 'Tipo', key: 'tipo', width: 90,
+              render: (_: any, record: any) => {
+                const esN = (record.idExterno || record.documento || '').endsWith('N');
+                return <Tag color={esN ? 'red' : 'green'}>{esN ? 'Bajada' : 'Subida'}</Tag>;
+              },
+            },
+            { title: 'Documento', dataIndex: 'documento', width: 160 },
+            { title: 'Fecha', dataIndex: 'fecha', width: 120, render: (v: string) => formatDate(v) },
+            { title: 'Estado', dataIndex: 'estado', width: 100 },
+          ]}
+          locale={{ emptyText: <Empty description="No hay actualizaciones de precio" /> }}
         />
       ),
     },
@@ -741,7 +808,7 @@ const GeneradorORCDetalle: React.FC = () => {
                   label: 'Ordenes Externas',
                   onClick: async () => {
                     try {
-                      const res = await apiClient.get(`/ReporteOrdenCompra/${sucursalActiva}/${id}`, {
+                      const res = await apiClient.get(`/ReporteOrdenCompra/${sucursalActiva}/${id}?tipo=externo`, {
                         responseType: 'blob',
                       });
                       const url = URL.createObjectURL(res.data);
@@ -757,7 +824,7 @@ const GeneradorORCDetalle: React.FC = () => {
                   label: 'Ordenes Internas',
                   onClick: async () => {
                     try {
-                      const res = await apiClient.get(`/ReporteOrdenCompra/${sucursalActiva}/${id}`, {
+                      const res = await apiClient.get(`/ReporteOrdenCompra/${sucursalActiva}/${id}?tipo=interno`, {
                         responseType: 'blob',
                       });
                       const url = URL.createObjectURL(res.data);

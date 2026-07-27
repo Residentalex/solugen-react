@@ -48,13 +48,15 @@ const BuscarEntidadSelect: React.FC<BuscarEntidadSelectProps> = ({
   onOpenChange,
   conceptoSeleccionado = true,
 }) => {
+  const entidadesActivas = entidades.filter((e) => e.activo !== false);
+
   const handleChange = (val: string | undefined) => {
     if (!val) {
       onChange?.(undefined, null);
       return;
     }
 
-    const ent = entidades.find((e: any) => e.codigo === val);
+    const ent = entidadesActivas.find((e: any) => e.codigo === val);
     if (!ent) return;
 
     if (tieneDocumentosAsociados && value && value !== val) {
@@ -99,7 +101,7 @@ const BuscarEntidadSelect: React.FC<BuscarEntidadSelectProps> = ({
           (option?.label as string)?.toLowerCase()?.includes(input.toLowerCase()) ?? false
         }
       >
-        {entidades.map((ent) => (
+        {entidadesActivas.map((ent) => (
           <Select.Option
             key={ent.codigo}
             value={ent.codigo}

@@ -1,7 +1,7 @@
 /** SolicitudPagoDTO extiende TransaccionDTO - vista resumida para listado */
 export interface SolicitudPagoVistaDTO {
   id: number;
-  fecha: string;
+  fechaDocumento: string;
   documento: string;
   entidad: string;
   concepto: string;
@@ -19,7 +19,7 @@ export interface SolicitudPagoVistaDTO {
 /** DTO completo para detalle de Solicitud de Pago */
 export interface SolicitudPagoDTO {
   id: number;
-  fecha: string;
+  fechaDocumento: string;
   documento: { codigo: string; nombre?: string };
   entidad: string;
   concepto: { nombre: string; codigo?: string };
@@ -39,6 +39,7 @@ export interface SolicitudPagoDTO {
   revisado?: boolean;
   tasa: number;
   moneda?: { simbolo: string; nombre: string };
+  transaccionesAsociadas: import('./reciboIngreso').TransaccionAsociadaDTO[];
   asientos: import('./entradaAlmacen').AsientoContableDTO[];
   logs: import('./entradaAlmacen').LogDTO[];
 }
@@ -60,6 +61,7 @@ export interface SolicitudPagoCrearDTO {
   tasa: number;
   simboloMoneda: string;
   nombreMoneda: string;
+  transaccionesAsociadas?: import('./reciboIngreso').TransaccionAsociadaDTO[];
 }
 
 /** DTO para actualizar una Solicitud de Pago */

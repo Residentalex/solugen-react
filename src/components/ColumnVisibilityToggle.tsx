@@ -12,12 +12,14 @@ interface ColumnVisibilityToggleProps {
   columns: ColumnConfig[];
   visibleKeys: string[];
   onChange: (keys: string[]) => void;
+  iconOnly?: boolean;
 }
 
 const ColumnVisibilityToggle: React.FC<ColumnVisibilityToggleProps> = ({
   columns,
   visibleKeys,
   onChange,
+  iconOnly,
 }) => {
   const [open, setOpen] = useState(false);
 
@@ -69,7 +71,7 @@ const ColumnVisibilityToggle: React.FC<ColumnVisibilityToggleProps> = ({
       content={content}
     >
       <Button icon={<TableOutlined />}>
-        Columnas
+        {iconOnly ? '' : 'Columnas'}
       </Button>
     </Popover>
   );

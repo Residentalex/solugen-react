@@ -22,7 +22,7 @@ import type { AsientoContableDTO, LogDTO } from '../../types/entradaAlmacen';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
-import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
@@ -122,6 +122,12 @@ const SolicitudPagoDetalle: React.FC = () => {
           return;
         }
         setData(res);
+        // Calcular balance de asientos contables
+        const totalDeb = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 0 || r.tipoAsiento === 'D') ? (r.monto || 0) : 0), 0);
+        const totalCred = (res?.asientos || []).reduce((s: number, r: any) =>
+          s + ((r.tipoAsiento === 1 || r.tipoAsiento === 'C') ? (r.monto || 0) : 0), 0);
+        operacion.setBalanceInfo({ debitos: totalDeb, creditos: totalCred });
         setPageTitleOverride(`SPA-${res.noDocumento || id}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
         if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
@@ -369,21 +375,18 @@ const SolicitudPagoDetalle: React.FC = () => {
               </div>
             } style={{ marginBottom: 16 }}>
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
-                <Descriptions.Item label="Documento">{strVal(documentoActivo.documento)}</Descriptions.Item>
-                <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fecha)}</Descriptions.Item>
-                <Descriptions.Item label="Concepto">{strVal(documentoActivo.concepto)}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
+                <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+                <Descriptions.Item label="Concepto">{toTitleCase(strVal(documentoActivo.concepto))}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
                 <Descriptions.Item label="Tipo">
                   {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Entidad">{strVal(documentoActivo.entidad)}</Descriptions.Item>
-                <Descriptions.Item label="Sucursal:">
+                <Descriptions.Item label="Sucursal">
                   <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
-                <Descriptions.Item label="Cuenta Bancaria">{documentoActivo.cuentaBancaria || '-'}</Descriptions.Item>
-                <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
-                <Descriptions.Item label="No. Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Cta. Bancaria">{toTitleCase(documentoActivo.cuentaBancaria || '') || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Doc. a Generar">{toTitleCase((data as any)?.tipoPagoCodigo || '') || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{toTitleCase(documentoActivo.nota || '') || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -459,21 +462,18 @@ const SolicitudPagoDetalle: React.FC = () => {
               </div>
             } style={{ marginBottom: 16 }}>
               <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
-              <Descriptions.Item label="Documento">{strVal(documentoActivo.documento)}</Descriptions.Item>
-              <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fecha)}</Descriptions.Item>
-              <Descriptions.Item label="Concepto">{strVal(documentoActivo.concepto)}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
+              <Descriptions.Item label="Fecha">{formatDate(documentoActivo.fechaDocumento)}</Descriptions.Item>
+              <Descriptions.Item label="Concepto">{toTitleCase(strVal(documentoActivo.concepto))}<ConceptoInfoLabel concepto={documentoActivo.concepto} /></Descriptions.Item>
               <Descriptions.Item label="Tipo">
                 {documentoActivo.tipo ? `${documentoActivo.tipo.codigo} - ${toTitleCase(documentoActivo.tipo.nombre)}` : '—'}
               </Descriptions.Item>
-              <Descriptions.Item label="Entidad">{strVal(documentoActivo.entidad)}</Descriptions.Item>
-              <Descriptions.Item label="Sucursal:">
+              <Descriptions.Item label="Sucursal">
                   <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
-              <Descriptions.Item label="Cuenta Bancaria">{documentoActivo.cuentaBancaria || '-'}</Descriptions.Item>
-              <Descriptions.Item label="NCF">{documentoActivo.ncf || '-'}</Descriptions.Item>
-              <Descriptions.Item label="No. Documento">{documentoActivo.noDocumento || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Cta. Bancaria">{toTitleCase(documentoActivo.cuentaBancaria || '') || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Doc. a Generar">{toTitleCase((data as any)?.tipoPagoCodigo || '') || '-'}</Descriptions.Item>
               <Descriptions.Item label="Nota">
-                <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                <span style={{ whiteSpace: 'pre-wrap' }}>{toTitleCase(documentoActivo.nota || '') || '-'}</span>
               </Descriptions.Item>
             </Descriptions>
           </Card>
@@ -532,6 +532,7 @@ const SolicitudPagoDetalle: React.FC = () => {
         titulo={operacionTitulo}
         eventos={operacion.eventos}
         completado={operacion.completado}
+        balanceInfo={operacion.balanceInfo}
         onClose={() => operacion.reset()}
       />
     </div>

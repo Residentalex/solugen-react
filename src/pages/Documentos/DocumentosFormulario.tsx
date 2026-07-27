@@ -73,7 +73,7 @@ const DocumentosFormulario: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [guardado, setGuardado] = useState(false);
   const [idGuardado, setIdGuardado] = useState<number | null>(null);
-  const sucursalActiva = useAuthStore((s: any) => s.securitySucursal);
+  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
 
   const mode: 'crear' | 'editar' = id ? 'editar' : 'crear';
 
@@ -90,7 +90,7 @@ const DocumentosFormulario: React.FC = () => {
   const [recibePagos, setRecibePagos] = useState(false);
   const [metodoPosteo, setMetodoPosteo] = useState<number>(0);
   const [fechaPermitida, setFechaPermitida] = useState<number>(0);
-  const [documentoContable, setDocumentoContable] = useState(false);
+  const [excluirEstadoContable, setExcluirEstadoContable] = useState(false);
   const [documentoReverso, setDocumentoReverso] = useState('');
   const [idExterno, setIdExterno] = useState('');
 
@@ -101,6 +101,7 @@ const DocumentosFormulario: React.FC = () => {
   const [requiereAsiento, setRequiereAsiento] = useState(true);
   const [modPrecio, setModPrecio] = useState(false);
   const [modDescripcion, setModDescripcion] = useState(true);
+  const [trabajarEnUnidad, setTrabajarEnUnidad] = useState(false);
 
   // ----- Numeración -----
   const [tipoNumeracion, setTipoNumeracion] = useState<number>(0);
@@ -138,13 +139,14 @@ const DocumentosFormulario: React.FC = () => {
         setRequiereAsiento(doc.requiereAsiento ?? true);
         setModPrecio(doc.modificaPrecio ?? false);
         setModDescripcion(doc.modificaDescripcion ?? true);
+        setTrabajarEnUnidad(doc.trabajarEnUnidad ?? false);
         setOrigenCuenta(toEnum(doc.origenCuenta, { Debito: 0, Credito: 1, Desconocido: 2 }, 0));
         setTipoImpuesto(toEnum(doc.tipoImpuesto, { Venta: 0, Compra: 1, Ninguno: 2 }, 0));
         setPuedeReimprimir(doc.puedeReimprimir ?? false);
         setRecibePagos(doc.recibePagos ?? false);
         setMetodoPosteo(toEnum(doc.metodoPosteo, { Manualmente: 0, Guardar: 1, Imprimir: 2, Aplicar: 3 }, 0));
         setFechaPermitida(toEnum(doc.fechaPermitida, { None: 0, Todas: 1, MayorCierre: 2, MayorDocAplicado: 3, FechaDia: 4, MenorIgualFechaDia: 5 }, 0));
-        setDocumentoContable(doc.documentoContable ?? false);
+        setExcluirEstadoContable(doc.excluirEstadoContable ?? false);
         setDocumentoReverso(doc.documentoReverso ?? '');
         setIdExterno(doc.idExterno ?? '');
         setTipoNumeracion(toEnum(doc.tipoNumeracion, { Manual: 0, Automatica: 1 }, 0));
@@ -201,6 +203,7 @@ const DocumentosFormulario: React.FC = () => {
         requiereAsiento,
         modificaPrecio: modPrecio,
         modificaDescripcion: modDescripcion,
+        trabajarEnUnidad,
         tipoNumeracion,
         metodoAplicar,
         origenCuenta,
@@ -209,7 +212,7 @@ const DocumentosFormulario: React.FC = () => {
         recibePagos,
         metodoPosteo,
         fechaPermitida,
-        documentoContable,
+        excluirEstadoContable,
         documentoReverso: documentoReverso || undefined,
         idExterno: idExterno || undefined,
       };
@@ -560,6 +563,12 @@ const DocumentosFormulario: React.FC = () => {
                     <Switch checked={modDescripcion} onChange={setModDescripcion} disabled={guardado} />
                   </div>
               </Col>
+              <Col xs={12}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Trabajar en unidad</Text>
+                    <Switch checked={trabajarEnUnidad} onChange={setTrabajarEnUnidad} disabled={guardado} />
+                  </div>
+              </Col>
             </Row>
           </HoverableCard>
 
@@ -729,8 +738,8 @@ const DocumentosFormulario: React.FC = () => {
               </Col>
               <Col xs={8}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Documento contable</Text>
-                  <Switch checked={documentoContable} onChange={setDocumentoContable} disabled={guardado} />
+                  <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Excluir estados contables</Text>
+                  <Switch checked={excluirEstadoContable} onChange={setExcluirEstadoContable} disabled={guardado} />
                 </div>
               </Col>
             </Row>

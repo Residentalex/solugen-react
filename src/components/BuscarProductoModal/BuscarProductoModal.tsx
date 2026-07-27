@@ -169,9 +169,9 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
                 precio: detalle.precio || record.precio || 0,
                 familia: detalle.familia || record.familia,
                 medida: detalle.unidadMedida
-                  ? { nombre: detalle.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: detalle.unidadMedida.idExterno || 0 }
+                  ? { nombre: detalle.unidadMedida.nombre || '', codigo: '', factor: detalle.unidadMedida.factor ?? 1, idExterno: detalle.unidadMedida.idExterno || 0 }
                   : record.unidadMedida
-                    ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: record.unidadMedida.idExterno || 0 }
+                    ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: record.unidadMedida.factor ?? 1, idExterno: record.unidadMedida.idExterno || 0 }
                     : undefined,
                 impuesto: (detalle.impuestos?.[0]?.impuesto as any) || undefined,
                 tieneVencimiento: detalle.pesado || false,
@@ -187,7 +187,7 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
                 precio: record.precio || 0,
                 familia: record.familia,
                 medida: record.unidadMedida
-                  ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: record.unidadMedida.idExterno || 0 }
+                  ? { nombre: record.unidadMedida.nombre || '', codigo: '', factor: record.unidadMedida.factor ?? 1, idExterno: record.unidadMedida.idExterno || 0 }
                   : undefined,
                 impuesto: undefined,
                 tieneVencimiento: false,

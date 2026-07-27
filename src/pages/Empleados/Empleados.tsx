@@ -8,6 +8,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { empleadoApi, type EmpleadoDTO } from '../../api/empleadoApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import EntidadImagen from '../../components/EntidadImagen';
+import { toTitleCase } from '../../utils/formats';
 
 const { Text } = Typography;
 
@@ -95,7 +96,7 @@ const Empleados: React.FC = () => {
               {record.codigo}
             </Text>
             <br />
-            <Text type="secondary" style={{ lineHeight: 1.3 }}>{record.nombre}</Text>
+            <Text type="secondary" style={{ lineHeight: 1.3 }}>{toTitleCase(record.nombre)}</Text>
           </div>
         </div>
       ),

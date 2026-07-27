@@ -1394,6 +1394,7 @@ a:hover {
 /* ===== Utilidades para vistas ERP ===== */
 .paces-row-selected { background: var(--paces-selected-bg) !important; transition: background 0.15s; }
 .paces-row-hover:hover { background: var(--paces-hover-bg) !important; }
+.paces-row-inventario { box-shadow: inset 3px 0 0 0 var(--paces-primary); }
 .paces-text-total { color: var(--paces-text-heading) !important; }
 .paces-text-primary { color: var(--paces-primary) !important; }
 .paces-text-muted { color: var(--paces-text-secondary) !important; }
@@ -1813,6 +1814,15 @@ body.theme-liga .doc-content code {
   max-width: 280px !important;
 }
 
+/* Fila activa para navegación por teclado en GORC */
+.gorc-row-active {
+  background-color: #eef1ff !important;
+  border-left: 3px solid #556ee6 !important;
+}
+.gorc-row-active > .ant-table-cell {
+  background-color: #eef1ff !important;
+}
+
 /* ===== TOC (Table of Contents) ===== */
 .doc-toc-column {
   width: 220px;
@@ -1969,6 +1979,26 @@ body.theme-liga .doc-content code {
   background: var(--paces-bg-container);
   padding: 20px;
   height: 100%;
+}
+
+/* ===== Scroll en submenús del sidebar con más de 5 items ===== */
+.menu-sub-scroll > .ant-menu-sub {
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.menu-sub-scroll > .ant-menu-sub::-webkit-scrollbar {
+  width: 4px;
+}
+
+.menu-sub-scroll > .ant-menu-sub::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+
+.menu-sub-scroll > .ant-menu-sub::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 

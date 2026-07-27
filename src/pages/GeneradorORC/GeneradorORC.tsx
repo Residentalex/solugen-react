@@ -64,7 +64,7 @@ const GeneradorORC: React.FC = () => {
           desde,
           hasta,
           documento: busqueda,
-          estado: filtros.estado ?? 0,
+          ...(filtros.estado !== undefined ? { estado: filtros.estado } : {}),
         });
       } else {
         resultados = await generadorOrcApi.obtenerVista(sucursalActiva, desde, hasta, filas, (pagina - 1) * filas, busqueda, filtros.estado);

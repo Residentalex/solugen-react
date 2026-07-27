@@ -55,7 +55,7 @@ import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
-import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { Text } = Typography;
@@ -452,6 +452,9 @@ const GeneradorORCFormulario: React.FC = () => {
   // Selección múltiple
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  // Navegación por teclado entre filas de la tabla de detalles
+  const [activeRowIndex, setActiveRowIndex] = useState<number | null>(0);
 
   // Análisis / monitor
   const [analisisOpen, setAnalisisOpen] = useState(false);
@@ -1020,7 +1023,8 @@ const GeneradorORCFormulario: React.FC = () => {
         margen: producto.margen || 0,
         precioSugerido: producto.precioSugerido || 0,
         subTotal: 0,
-        porcentajeDescuento: 0,
+        porcentajeDescuento: producto.porcentajeDescuento ?? 0,
+        ultimaCompraFecha: producto.ultimaCompraFecha ?? undefined,
         descuento: 0,
         impuestos: 0,
         total: 0,
@@ -1048,6 +1052,15 @@ const GeneradorORCFormulario: React.FC = () => {
         setCodigoInput('');
         codigoInputRef.current?.focus();
         return;
+      }
+
+      // Obtener datos históricos de última compra
+      let hist: any = null;
+      try {
+        const datosAnteriores = await generadorOrcApi.obtenerDatosAnteriores(sucursalActiva, [codigo]);
+        hist = (datosAnteriores || [])[0] ?? null;
+      } catch {
+        // Silencioso - se usan datos del maestro como fallback
       }
 
       // Obtener existencias reales por sucursal usando el prefijo de cada compañía
@@ -1088,13 +1101,26 @@ const GeneradorORCFormulario: React.FC = () => {
 
       // Construir objeto compatible con handleProductoSeleccionado
       const impuestoCompra = (producto.impuestos || []).find((i) => i.impuesto?.ambito === "Compra")?.impuesto || null;
+
+      // Determinar medida: priorizar la de la última compra si existe
+      let medidaFinal = null;
+      if (hist?.medidaId && Number(hist.medidaId) > 0) {
+        const histMedida = medidasCache.find(m => Number(m.idExterno) === Number(hist.medidaId));
+        if (histMedida) {
+          medidaFinal = { ...histMedida };
+        }
+      }
+      if (!medidaFinal) {
+        medidaFinal = producto.unidadMedida
+          ? { id: Number(producto.unidadMedida.idExterno) ?? 0, nombre: producto.unidadMedida.nombre || '' }
+          : null;
+      }
+
       const productoCompacto = {
         codigo: producto.codigo,
         referencia: producto.referencia || '',
         articulo: producto.nombre || '',
-        medida: producto.unidadMedida
-          ? { id: Number(producto.unidadMedida.idExterno) ?? 0, nombre: producto.unidadMedida.nombre || '' }
-          : null,
+        medida: medidaFinal,
         impuesto: impuestoCompra
           ? {
               nombre: impuestoCompra.nombre || '',
@@ -1103,9 +1129,11 @@ const GeneradorORCFormulario: React.FC = () => {
               idExterno: impuestoCompra.idExterno || '',
             }
           : null,
-        costo: producto.ultimoCosto || 0,
-        margen: 0,
-        precioSugerido: producto.precio || 0,
+        costo: hist?.costo ?? producto.ultimoCosto ?? 0,
+        margen: hist?.margen ?? 0,
+        precioSugerido: hist?.precioSugerido ?? producto.precio ?? 0,
+        ultimaCompraFecha: hist?.fecha ?? undefined,
+        porcentajeDescuento: hist?.porcientoDescuento ?? 0,
         existenciasFisicas,
       };
 
@@ -1510,6 +1538,26 @@ const GeneradorORCFormulario: React.FC = () => {
         : detalles,
     [detalles, detalleSearch]
   );
+
+  // Scroll a fila activa en la tabla de detalles
+  useEffect(() => {
+    if (activeRowIndex === null || activeRowIndex < 0) return;
+    const fila = detallesFiltrados[activeRowIndex];
+    if (!fila) return;
+    const el = document.querySelector(`.gorc-table tr[data-row-key="${fila.codigo}"]`);
+    if (el) {
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [activeRowIndex, detallesFiltrados]);
+
+  // Mantener activeRowIndex válido cuando cambian los detalles (agregar/quitar filas)
+  useEffect(() => {
+    setActiveRowIndex((prev) => {
+      if (detallesFiltrados.length === 0) return null;
+      if (prev === null || prev >= detallesFiltrados.length) return 0;
+      return prev;
+    });
+  }, [detallesFiltrados]);
 
   // ===== Columnas de la tabla =====
   const detalleColumns = useMemo(() => {
@@ -2079,7 +2127,33 @@ const GeneradorORCFormulario: React.FC = () => {
             size="small"
             pagination={false}
             scroll={{ x: 1920, y: 'calc(100vh - 480px)' }}
-            onRow={() => ({})}
+            rowClassName={(_record, index) => index === activeRowIndex ? 'gorc-row-active' : ''}
+            onRow={(record, index) => ({
+              onClick: () => {
+                setActiveRowIndex(index ?? 0);
+              },
+              onKeyDown: (e) => {
+                // No navegar si el foco está dentro de un InputNumber (input nativo)
+                if ((e.target as HTMLElement).tagName === 'INPUT') return;
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setActiveRowIndex((prev) => {
+                    if (prev === null || prev <= 0) return 0;
+                    return prev - 1;
+                  });
+                } else if (e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setActiveRowIndex((prev) => {
+                    if (prev === null) return 0;
+                    const max = detallesFiltrados.length - 1;
+                    if (prev >= max) return max;
+                    return prev + 1;
+                  });
+                }
+              },
+              tabIndex: 0,
+              style: { cursor: 'pointer' },
+            })}
             summary={() => {
               const COLS_ANTES_TOTALES = 8; // articulo(0) + medida(1) + costo(2) + margen(3) + p.sugerido(4) + OP(5) + HR(6) + VH(7)
               return (
@@ -2099,7 +2173,7 @@ const GeneradorORCFormulario: React.FC = () => {
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={COLS_ANTES_TOTALES + 3} align="right">
                       <Text strong style={{ color: 'var(--paces-primary)', fontSize: 13 }}>
-                        {formatCurrency(totalesGenerales.total)}
+                        {formatNumber(totalesGenerales.total)}
                       </Text>
                     </Table.Summary.Cell>
                     <Table.Summary.Cell index={COLS_ANTES_TOTALES + 4} />
