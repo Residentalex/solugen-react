@@ -854,7 +854,11 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
           checked={record.generarPerdida}
           onChange={(checked) => {
             setDevoluciones((prev) =>
-              prev.map((d, i) => i === idx ? { ...d, generarPerdida: checked } : d)
+              prev.map((d, i) => i === idx ? { 
+                ...d, 
+                generarPerdida: checked,
+                perdida: checked ? ((d.montoOriginal || 0) - ((d.pagado || 0) + (d.monto || 0))) : 0 
+              } : d)
             );
           }}
         />

@@ -69,6 +69,8 @@ export interface DevolucionDTO {
   id: number;
   documento: string;
   monto: number;
+  montoOriginal?: number;
+  pagado?: number;
   perdida: number;
   generarPerdida: boolean;
 }

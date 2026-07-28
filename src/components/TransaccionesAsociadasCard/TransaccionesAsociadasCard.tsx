@@ -107,12 +107,11 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
       render: (v: number) => formatNumber(v ?? 0),
     },
     {
-      title: 'Saldo',
-      dataIndex: 'saldoPendiente',
-      key: 'saldoPendiente',
+      title: 'Pendiente',
+      key: 'pendienteCalc',
       width: 120,
       align: 'right' as const,
-      render: (v: number) => <Text strong>{formatNumber(v ?? 0)}</Text>,
+      render: (_: any, record: DocumentoAsociadoItem) => <Text strong>{formatNumber(Math.max(0, (record.montoOriginal || 0) - (record.pagado || 0)))}</Text>,
     },
     {
       title: 'Monto',

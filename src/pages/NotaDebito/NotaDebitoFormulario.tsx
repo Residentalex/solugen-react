@@ -305,6 +305,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         fecha: x.fecha,
         montoOriginal: x.montoOriginal,
         monto: x.monto,
+        pagado: x.pagado || 0,
         impuesto: x.impuesto || 0,
         esDocumentoInventario: true,
         perdida: x.perdida || 0,
@@ -422,6 +423,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           fecha: x.fecha,
           montoOriginal: x.montoOriginal,
           monto: x.monto,
+          pagado: x.pagado || 0,
           impuesto: x.impuesto || 0,
           esDocumentoInventario: true,
           perdida: x.perdida || 0,
@@ -1027,6 +1029,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           fecha: x.fecha,
           montoOriginal: x.montoOriginal,
           monto: x.monto,
+          pagado: x.pagado || 0,
           impuesto: x.impuesto || 0,
           esDocumentoInventario: true,
           perdida: x.perdida || 0,
@@ -1109,7 +1112,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       align: 'right' as const,
       render: (v: number) => formatNumber(v ?? 0),
     },
-    { title: 'Saldo', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
+    { title: 'Pendiente', key: 'pendienteCalc', width: 120, align: 'right' as const, render: (_: any, record: any) => <strong>{formatNumber(Math.max(0, (record.montoOriginal || 0) - (record.pagado || 0)))}</strong> },
     {
       title: 'Monto a Debitar', dataIndex: 'monto', key: 'monto', width: 140, align: 'right' as const,
       render: (_: any, record: DocumentoRelacionadoDTO, idx: number) => (
@@ -1117,7 +1120,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           size="small"
           style={{ width: 120 }}
           min={0}
-          max={record.saldoPendiente || record.montoOriginal || 0}
+          max={Math.max(0, (record.montoOriginal || 0) - (record.pagado || 0))}
           step={0.01}
           precision={2}
           value={documentosRelacionados[idx]?.monto}
@@ -1151,11 +1154,10 @@ render: (v: number) => formatNumber(v ?? 0),
     },
     {
       title: 'Pendiente',
-      dataIndex: 'saldoPendiente',
-      key: 'saldoPendiente',
+      key: 'pendienteCalc',
       width: 120,
       align: 'right' as const,
-      render: (v: number) => <strong>{formatNumber(v ?? 0)}</strong>,
+      render: (_: any, record: any) => <strong>{formatNumber(Math.max(0, (record.montoOriginal || 0) - (record.pagado || 0)))}</strong>,
     },
     {
       title: 'Monto a Debitar', dataIndex: 'monto', key: 'monto', width: 140, align: 'right' as const,
@@ -1201,7 +1203,7 @@ render: (v: number) => formatNumber(v ?? 0),
               prev.map((d, i) => i === idx ? {
                 ...d,
                 generarPerdida: checked,
-                perdida: checked ? ((d.montoOriginal || 0) + (d.impuesto || 0)) - (d.monto || 0) : 0,
+                perdida: checked ? ((d.montoOriginal || 0) - ((d.pagado || 0) + (d.monto || 0))) : 0,
               } : d)
             );
           }}
