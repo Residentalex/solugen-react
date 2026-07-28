@@ -173,7 +173,7 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
         responseType: 'blob',
       });
       const blobUrl = URL.createObjectURL(res.data);
-      setPdfPreview({ url: blobUrl, title: `${cfg.tituloReporte}-${selectedRow.documento}` });
+      window.open(blobUrl, '_blank');
     } catch {
       message.error('Error al generar el PDF');
     }

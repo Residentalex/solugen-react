@@ -132,8 +132,6 @@ const ConciliacionBancaria: React.FC = () => {
       onRefresh={actions.handleRefresh}
       onRowClick={actions.handleRowClick}
       onPageChange={(p) => actions.setPage(p)}
-      pdfPreview={state.pdfPreview}
-      onPdfClose={actions.handlePdfClose}
       toolbarProps={{
         showFiltros: true,
         filtros: state.filtros,

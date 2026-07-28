@@ -169,8 +169,6 @@ const Empleados: React.FC = () => {
       onRefresh={handleRefresh}
       onRowClick={(record) => navigate(`/MEMP/${record.codigo}`)}
       onPageChange={handlePageChange}
-      pdfPreview={null}
-      onPdfClose={() => {}}
       toolbarProps={{
         searchPlaceholder: 'Buscar empleado...',
         onSearch: handleSearch,

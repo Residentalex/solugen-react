@@ -317,8 +317,13 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ onBack }) => {
                 )}
               </div>
               </div>
-              <div style={{ fontSize: 10, color: 'var(--paces-text-secondary)', textAlign: esPropio ? 'right' : 'left', padding: '2px 4px 0' }}>
-                {formatFecha(m.fechaEnvio)}
+              <div style={{ fontSize: 10, color: 'var(--paces-text-secondary)', textAlign: esPropio ? 'right' : 'left', padding: '2px 4px 0', display: 'flex', alignItems: 'center', justifyContent: esPropio ? 'flex-end' : 'flex-start', gap: 2 }}>
+                <span>{formatFecha(m.fechaEnvio)}</span>
+                {esPropio && (
+                  <span style={{ fontSize: 11, color: m.leido ? '#53bdeb' : 'var(--paces-text-secondary)' }}>
+                    {m.leido ? '✓✓' : '✓'}
+                  </span>
+                )}
               </div>
               {tieneRespuestas && (
                 <div style={{ fontSize: 10, color: '#556ee6', marginTop: 1, paddingLeft: 4, fontWeight: 500, cursor: 'pointer' }}

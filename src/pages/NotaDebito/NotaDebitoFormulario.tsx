@@ -643,6 +643,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           fecha: d.fecha,
           montoOriginal: d.montoOriginal,
           pagado: d.pagado,
+          saldoPendiente: d.saldoPendiente,
           monto: d.monto,
           impuesto: d.impuesto || 0,
           esDocumentoInventario: true,
@@ -1149,13 +1150,20 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 render: (v: number) => formatNumber(v ?? 0),
     },
     {
+      title: 'Pendiente',
+      dataIndex: 'saldoPendiente',
+      key: 'saldoPendiente',
+      width: 120,
+      align: 'right' as const,
+      render: (v: number) => <strong>{formatNumber(v ?? 0)}</strong>,
+    },
+    {
       title: 'Monto a Debitar', dataIndex: 'monto', key: 'monto', width: 140, align: 'right' as const,
       render: (_: any, record: DevolucionAsociadaDTO, idx: number) => (
         <InputNumber
           size="small"
           style={{ width: 120 }}
           min={0}
-          max={(record.montoOriginal || 0) + (record.impuesto || 0)}
           step={0.01}
           precision={2}
           value={devoluciones[idx]?.monto}

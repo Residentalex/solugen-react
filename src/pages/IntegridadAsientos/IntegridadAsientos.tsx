@@ -197,8 +197,6 @@ const IntegridadAsientos: React.FC = () => {
       onRefresh={handleRefresh}
       onRowClick={handleRowClick}
       onPageChange={setPage}
-      pdfPreview={null}
-      onPdfClose={() => {}}
       toolbarProps={{
         showFiltros: true,
         filtros,

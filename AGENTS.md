@@ -251,3 +251,9 @@ const datosFiltrados = useMemo(() => {
 
 ### Proyecto actual
 - `src/pages/Turnos/TurnoDetalle.tsx` (7 filtros: noDocumento, cliente, codigo x2, articulo x2, impuesto)
+
+## Reglas de impresión de reportes
+
+- Todos los reportes PDF deben abrirse en una nueva pestaña del navegador usando `window.open(blobUrl, '_blank')`.
+- No usar iframes ocultos, Drawers ni `print()` programático para previsualizar reportes.
+- El componente `PdfPreviewDrawer` existe como adaptador legacy pero su uso directo está deprecated para nuevos reportes.

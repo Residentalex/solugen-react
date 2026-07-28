@@ -42,7 +42,6 @@ const GeneradorORC: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
   const [selectedRow, setSelectedRow] = useState<GeneradorOrdenCompraDTO | null>(null);
-  const [pdfPreview, setPdfPreview] = useState<{ url: string; title: string } | null>(null);
 
   const rangoDefault = useMemo(() => ({
     desde: '20000101000000',
@@ -168,8 +167,6 @@ const GeneradorORC: React.FC = () => {
       onRefresh={handleRefresh}
       onPageChange={setPage}
       onRowClick={(record) => setSelectedRow(record)}
-      pdfPreview={pdfPreview}
-      onPdfClose={() => { setPdfPreview(null); }}
       selectedRowId={selectedRow?.idExterno}
       toolbarProps={{
         showFiltros: true,

@@ -17,6 +17,7 @@ import {
   ReloadOutlined,
   DownOutlined,
   FilePdfOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -71,6 +72,7 @@ const GeneradorORCDetalle: React.FC = () => {
   const [detalleSearch, setDetalleSearch] = useState('');
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
   const [generando, setGenerando] = useState(false);
+  const [aplicando, setAplicando] = useState(false);
   const [ordenesGeneradas, setOrdenesGeneradas] = useState<OrdenCompraVistaDTO[]>([]);
   const [ordenesLoading, setOrdenesLoading] = useState(false);
 
@@ -163,6 +165,27 @@ const GeneradorORCDetalle: React.FC = () => {
           message.error(msg);
         } finally {
           setGenerando(false);
+        }
+      },
+    });
+  };
+
+  const handleAplicarADP = async () => {
+    if (!id) return;
+    Modal.confirm({
+      title: 'Generar Actualizaciones de Precio',
+      content: 'Se generarán actualizaciones de precio para las sucursales con productos que tengan cambios de precio. ¿Continuar?',
+      onOk: async () => {
+        setAplicando(true);
+        try {
+          await apiClient.post(`/GORC/${sucursalActiva}/aplicar/${id}`);
+          message.success('Actualizaciones de precio generadas correctamente');
+          handleRefresh();
+        } catch (err: any) {
+          const msg = err?.response?.data?.errorMessage || 'Error al aplicar el generador';
+          message.error(msg);
+        } finally {
+          setAplicando(false);
         }
       },
     });
@@ -777,11 +800,6 @@ const GeneradorORCDetalle: React.FC = () => {
         </Button>
         <SucursalDocumentoSelector value={sucursalDestino} onChange={setSucursalDestino} />
         <div style={{ flex: 1 }} />
-        <PermissionGate accion="EDITAR">
-          <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FGORC/${id}/editar`)}>
-            Editar
-          </Button>
-        </PermissionGate>
         <PermissionGate accion="IMPRIMIR">
           <Dropdown
             menu={{
@@ -842,6 +860,23 @@ const GeneradorORCDetalle: React.FC = () => {
             </Button>
           </Dropdown>
         </PermissionGate>
+        <PermissionGate accion="EDITAR">
+          <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FGORC/${id}/editar`)}>
+            Editar
+          </Button>
+        </PermissionGate>
+        {data.estado === 0 && (
+          <PermissionGate accion="APLICAR">
+            <Button
+              style={{ background: '#389e0d', borderColor: '#389e0d', color: '#fff' }}
+              icon={<CheckCircleOutlined />}
+              onClick={handleAplicarADP}
+              loading={aplicando}
+            >
+              Aplicar
+            </Button>
+          </PermissionGate>
+        )}
         {(data.estado === 0 || data.estado === 1) && (
           <PermissionGate accion="EDITAR">
             <Button type="primary" icon={<ShopOutlined />} onClick={handleGenerarOC} loading={generando}>

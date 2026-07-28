@@ -248,17 +248,7 @@ const AntiguedadSaldosDVC: React.FC = () => {
         codEntidad || undefined, codTipo || undefined, codSucursalFiltro || undefined
       );
       const blobUrl = URL.createObjectURL(blob);
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = blobUrl;
-      document.body.appendChild(iframe);
-      setTimeout(() => {
-        iframe.contentWindow?.print();
-        setTimeout(() => {
-          document.body.removeChild(iframe);
-          URL.revokeObjectURL(blobUrl);
-        }, 30000);
-      }, 2000);
+      window.open(blobUrl, '_blank');
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al generar el PDF');
     } finally {

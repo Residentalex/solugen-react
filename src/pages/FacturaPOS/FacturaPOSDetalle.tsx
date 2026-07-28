@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, message, Modal, Tooltip, Typography, QRCode, Badge
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Input, message, Modal, Tooltip, Typography, QRCode, Badge, Dropdown
 } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   ArrowLeftOutlined,
   PrinterOutlined,
@@ -410,40 +411,61 @@ const FacturaPOSDetalle: React.FC = () => {
     return fallback;
   }
 
+  const printMenuItems: MenuProps['items'] = [
+    { key: 'ticket', label: 'Ticket' },
+    { key: 'factura-cliente', label: 'Factura Cliente' },
+  ];
+
+  const handlePrintMenuClick: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'ticket') {
+      handlePrintTicket();
+    } else if (key === 'factura-cliente') {
+      handlePrintFacturaCliente();
+    }
+  };
+
+  const handlePrintTicket = async () => {
+    setImprimiendo(true);
+    try {
+      const res = await apiClient.post(`/reportes/facturacion/pos/${sucursalActiva}`, data, {
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(res.data);
+      window.open(blobUrl, '_blank');
+    } catch (err: any) {
+      const msg = err?.response?.data?.ErrorMessage || 'Error al generar el PDF';
+      message.error(msg);
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
+  const handlePrintFacturaCliente = async () => {
+    setImprimiendo(true);
+    try {
+      const res = await apiClient.post(`/reportes/facturacion/pos/factura-cliente`, data, {
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(res.data);
+      window.open(blobUrl, '_blank');
+    } catch (err: any) {
+      const msg = err?.response?.data?.ErrorMessage || 'Error al generar el PDF';
+      message.error(msg);
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
   return (
     <div>
       <DetalleToolbar
         modulo={screenCode}
+        showImprimir={false}
         estado={data.estado}
         periodo={data.periodo}
         saving={saving}
         imprimiendo={imprimiendo}
         onVolver={() => navigate(-1)}
-        onImprimirTicket={async () => {
-          setImprimiendo(true);
-          try {
-            const res = await apiClient.post(`/reportes/facturacion/pos/${sucursalActiva}`, data, {
-              responseType: 'blob',
-            });
-            const blobUrl = URL.createObjectURL(res.data);
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = blobUrl;
-            document.body.appendChild(iframe);
-            setTimeout(() => {
-              iframe.contentWindow?.print();
-              setTimeout(() => {
-                document.body.removeChild(iframe);
-                URL.revokeObjectURL(blobUrl);
-              }, 30000);
-            }, 2000);
-          } catch (err: any) {
-            const msg = err?.response?.data?.ErrorMessage || 'Error al generar el PDF';
-            message.error(msg);
-          } finally {
-            setImprimiendo(false);
-          }
-        }}
         onEditar={() => navigate(`/FPV/${id}/editar`)}
         onAplicar={handleAplicar}
         onAnular={handleAnular}
@@ -451,6 +473,11 @@ const FacturaPOSDetalle: React.FC = () => {
         confirmActions={false}
         extraButtons={
           <>
+            <PermissionGate codigoPantalla={screenCode} accion="IMPRIMIR">
+              <Dropdown menu={{ items: printMenuItems, onClick: handlePrintMenuClick }} trigger={['click']}>
+                <Button icon={<PrinterOutlined />} loading={imprimiendo} />
+              </Dropdown>
+            </PermissionGate>
             {data.documento?.codigo === 'PV' && data.estado !== 0 && data.estado !== 3 && saldoPendiente > 0.01 && (
               <Button icon={<CreditCardOutlined />} onClick={handleGenerarPVC}>
                 Generar PVC

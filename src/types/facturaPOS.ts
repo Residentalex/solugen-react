@@ -101,6 +101,13 @@ export type { EntidadDTO, ConceptoDTO, MonedaDTO, AlmacenDTO, AsientoContableDTO
 export type { EnvioDGIIDTO };
 
 // ===== Tipos para Cobros POS =====
+export interface DocumentoAsociadoRequest {
+  transaccionID: number;
+  tipoDocumento: string;   // "DEV" o "NC"
+  noDocumento: string;     // "DEV-00001"
+  monto: number;
+}
+
 export interface CobroDTO {
   efectivo: number;
   cheque: number;
@@ -110,6 +117,7 @@ export interface CobroDTO {
   bono: number;
   tarjetaRegalo: number;
   notaCredito: number;
+  documentosAsociados?: DocumentoAsociadoRequest[];
 }
 
 // ===== FullDTO para formulario Factura POS (crear/editar) =====

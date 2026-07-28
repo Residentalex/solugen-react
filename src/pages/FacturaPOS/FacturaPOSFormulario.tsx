@@ -16,12 +16,16 @@ import {
   MoreOutlined,
   BarcodeOutlined,
   CreditCardOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
+import { devolucionVentaApi } from '../../api/devolucionVentaApi';
 import { productoApi } from '../../api/productoApi';
+import type { FacturaVistaDTO } from '../../types/facturacion';
+import type { DocumentoAsociadoRequest } from '../../types/facturaPOS';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
@@ -111,6 +115,7 @@ function cobrosVacios(): CobroDTO {
     bono: 0,
     tarjetaRegalo: 0,
     notaCredito: 0,
+    documentosAsociados: [],
   };
 }
 
@@ -149,6 +154,15 @@ const FacturaPOSFormulario: React.FC = () => {
   const [visanetModalOpen, setVisanetModalOpen] = useState(false);
   const [visanetProcessing, setVisanetProcessing] = useState(false);
   const [visanetResult, setVisanetResult] = useState<VisanetResponseDTO | null>(null);
+
+  // ===== Estados para selección NC/DEV =====
+  const [ncModalOpen, setNcModalOpen] = useState(false);
+  const [ncDocumentosDisponibles, setNcDocumentosDisponibles] = useState<FacturaVistaDTO[]>([]);
+  const [ncDocsSeleccionados, setNcDocsSeleccionados] = useState<{
+    record: FacturaVistaDTO;
+    montoAplicar: number;
+  }[]>([]);
+  const [loadingNC, setLoadingNC] = useState(false);
 
   // Refs para la guía
   const conceptoRef = useRef<HTMLDivElement>(null);
@@ -589,7 +603,13 @@ const FacturaPOSFormulario: React.FC = () => {
 
   // ===== Handlers de cobros =====
   const handleCobroChange = (field: keyof CobroDTO, value: number | null) => {
-    setCobros((prev) => ({ ...prev, [field]: value || 0 }));
+    setCobros((prev) => {
+      // Si se edita notaCredito manualmente, limpiar documentos asociados
+      if (field === 'notaCredito') {
+        return { ...prev, notaCredito: value || 0, documentosAsociados: [] };
+      }
+      return { ...prev, [field]: value || 0 };
+    });
   };
 
   // ===== Handler para pago con tarjeta Visanet ECRT =====
@@ -634,6 +654,34 @@ const FacturaPOSFormulario: React.FC = () => {
       setVisanetResult({ exitoso: false, mensajeRespuesta: msg });
     } finally {
       setVisanetProcessing(false);
+    }
+  };
+
+  // ===== Handler para seleccionar NC / Devoluciones =====
+  const handleAbrirSelectorNC = async () => {
+    if (!selectedCliente?.codigo) {
+      message.warning('Debe seleccionar un cliente primero');
+      return;
+    }
+    try {
+      setLoadingNC(true);
+      const result = await devolucionVentaApi.filtrar(sucursalActiva, {
+        cliente: selectedCliente.codigo,
+        cantidad: 50,
+        salto: 0,
+      });
+      // Filtrar solo documentos no anulados
+      const disponibles = (result.data || []).filter(
+        (d) => (d.estado || '').toUpperCase() !== 'ANULADO'
+      );
+      setNcDocumentosDisponibles(disponibles);
+      setNcDocsSeleccionados([]);
+      setNcModalOpen(true);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al cargar NC disponibles');
+      message.error(msg);
+    } finally {
+      setLoadingNC(false);
     }
   };
 
@@ -1250,19 +1298,33 @@ const FacturaPOSFormulario: React.FC = () => {
           </Col>
         ))}
       </Row>
-      <Col xs={24}>
-        <Button
-          type="primary"
-          icon={<CreditCardOutlined />}
-          onClick={handlePagarConTarjeta}
-          disabled={esAnulado || esCerrado || detalles.length === 0 || totales.total <= 0}
-          size="large"
-          block
-          style={{ marginTop: 8 }}
-        >
-          Pagar con Tarjeta
-        </Button>
-      </Col>
+      <Row gutter={[16, 16]}>
+        <Col xs={24}>
+          <Button
+            type="primary"
+            icon={<CreditCardOutlined />}
+            onClick={handlePagarConTarjeta}
+            disabled={esAnulado || esCerrado || detalles.length === 0 || totales.total <= 0}
+            size="large"
+            block
+            style={{ marginTop: 8 }}
+          >
+            Pagar con Tarjeta
+          </Button>
+        </Col>
+        <Col xs={24}>
+          <Button
+            type="default"
+            icon={<FileTextOutlined />}
+            onClick={handleAbrirSelectorNC}
+            disabled={esAnulado || esCerrado || !selectedCliente?.codigo}
+            block
+            style={{ marginTop: 8 }}
+          >
+            Seleccionar NC / Devoluciones
+          </Button>
+        </Col>
+      </Row>
       <Divider />
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 32, fontSize: 15 }}>
         <span>
@@ -1370,6 +1432,84 @@ const FacturaPOSFormulario: React.FC = () => {
             )}
           </div>
         ) : null}
+      </Modal>
+
+      {/* Modal selección NC / Devoluciones */}
+      <Modal
+        title="Seleccionar Notas de Crédito / Devoluciones disponibles"
+        open={ncModalOpen}
+        onCancel={() => { setNcDocsSeleccionados([]); setNcModalOpen(false); }}
+        onOk={() => {
+          // Sumar montos
+          const totalNC = ncDocsSeleccionados.reduce((s, d) => s + (d.montoAplicar || 0), 0);
+          // Actualizar cobros
+          setCobros((prev) => ({
+            ...prev,
+            notaCredito: totalNC,
+            documentosAsociados: ncDocsSeleccionados.map((d) => ({
+              transaccionID: d.record.id,
+              tipoDocumento: d.record.documento?.startsWith('DEV') ? 'DEV' : 'NC',
+              noDocumento: d.record.documento || '',
+              monto: d.montoAplicar,
+            })),
+          }));
+          setNcModalOpen(false);
+        }}
+        width={700}
+      >
+        <Table
+          dataSource={ncDocumentosDisponibles}
+          rowKey="id"
+          rowSelection={{
+            type: 'checkbox',
+            onChange: (selectedRowKeys, selectedRows) => {
+              // Inicializar montos al seleccionar
+              setNcDocsSeleccionados(
+                selectedRows.map((r) => ({
+                  record: r,
+                  montoAplicar: ncDocsSeleccionados.find(
+                    (d) => d.record.id === r.id
+                  )?.montoAplicar || r.total,
+                }))
+              );
+            },
+          }}
+          columns={[
+            { title: 'Documento', dataIndex: 'documento', width: 140 },
+            { title: 'Fecha', dataIndex: 'fecha', width: 110 },
+            {
+              title: 'Total', dataIndex: 'total', width: 120, align: 'right' as const,
+              render: (v: number) => formatNumber(v),
+            },
+            {
+              title: 'Monto a Aplicar', key: 'monto', width: 150,
+              render: (_: any, record: FacturaVistaDTO) => {
+                const item = ncDocsSeleccionados.find((d) => d.record.id === record.id);
+                return (
+                  <InputNumber
+                    size="small"
+                    min={0}
+                    max={record.total}
+                    step={0.01}
+                    precision={2}
+                    value={item?.montoAplicar || 0}
+                    onChange={(val) => {
+                      setNcDocsSeleccionados((prev) =>
+                        prev.map((d) =>
+                          d.record.id === record.id
+                            ? { ...d, montoAplicar: val || 0 }
+                            : d
+                        )
+                      );
+                    }}
+                  />
+                );
+              },
+            },
+          ]}
+          pagination={false}
+          size="small"
+        />
       </Modal>
 
       {isLarge ? (

@@ -3,7 +3,6 @@ import { Card, Table, Typography, Empty } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import ListadoErrorAlert from '../components/ListadoErrorAlert';
 import DocumentListadoToolbar from '../components/DocumentListadoToolbar';
-import PdfPreviewDrawer from '../components/PdfPreviewDrawer';
 
 const { Text } = Typography;
 
@@ -24,9 +23,6 @@ interface DocumentListadoLayoutProps<T> {
 
   onRowClick: (record: T) => void;
   onPageChange: (page: number) => void;
-
-  pdfPreview: { url: string; title: string } | null;
-  onPdfClose: () => void;
 
   toolbarProps?: {
     showFiltros?: boolean;
@@ -67,7 +63,6 @@ function DocumentListadoLayout<T extends { id?: number | string }>(
     selectedRowId,
     loadingError, errorMessage, onRefresh,
     onRowClick, onPageChange,
-    pdfPreview, onPdfClose,
     toolbarProps,
     extraFooter,
     emptyText,
@@ -127,8 +122,6 @@ function DocumentListadoLayout<T extends { id?: number | string }>(
           </div>
         )}
       </Card>
-
-      <PdfPreviewDrawer pdfPreview={pdfPreview} onClose={onPdfClose} />
     </>
   );
 }

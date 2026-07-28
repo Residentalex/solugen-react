@@ -161,8 +161,6 @@ const CierreFiscal: React.FC = () => {
       onRefresh={handleRefresh}
       onRowClick={handleRowClick}
       onPageChange={handlePageChange}
-      pdfPreview={null}
-      onPdfClose={() => {}}
       toolbarProps={{
         showFiltros: false,
         searchPlaceholder: 'Buscar número de documento...',

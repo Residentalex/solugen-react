@@ -173,8 +173,6 @@ const AsientosContables: React.FC = () => {
       onRefresh={actions.handleRefresh}
       onRowClick={actions.handleRowClick}
       onPageChange={actions.goToPage}
-      pdfPreview={state.pdfPreview}
-      onPdfClose={actions.handlePdfClose}
       toolbarProps={{
         extraLeft: (
           <Select

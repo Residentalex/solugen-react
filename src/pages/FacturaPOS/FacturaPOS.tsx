@@ -148,8 +148,6 @@ const FacturaPOS: React.FC = () => {
       onRefresh={actions.handleRefresh}
       onRowClick={actions.handleRowClick}
       onPageChange={actions.goToPage}
-      pdfPreview={state.pdfPreview}
-      onPdfClose={actions.handlePdfClose}
       emptyText={customEmptyText}
       toolbarProps={{
         opcionesEstado: ESTADO_OPCIONES,

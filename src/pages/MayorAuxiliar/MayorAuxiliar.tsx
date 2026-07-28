@@ -114,17 +114,7 @@ const MayorAuxiliar: React.FC = () => {
         ? await mayorAuxiliarApi.imprimir(sucursalActiva, filtros, datos, balances)
         : await mayorAuxiliarApi.generarPDF(sucursalActiva, filtros);
       const blobUrl = URL.createObjectURL(blob);
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = blobUrl;
-      document.body.appendChild(iframe);
-      setTimeout(() => {
-        iframe.contentWindow?.print();
-        setTimeout(() => {
-          document.body.removeChild(iframe);
-          URL.revokeObjectURL(blobUrl);
-        }, 30000);
-      }, 2000);
+      window.open(blobUrl, '_blank');
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al generar el PDF');
     } finally {
@@ -152,9 +142,12 @@ const MayorAuxiliar: React.FC = () => {
       const res = await mayorAuxiliarApi.obtenerDatos(sucursalActiva, filtros);
       // Compatible con formato nuevo { items, balanceInicial } y antiguo (array plano)
       const items = Array.isArray(res) ? res : (res.items ?? []);
-      const sorted = [...items].sort((a, b) =>
-        a.fechaDocumento.localeCompare(b.fechaDocumento)
-      );
+      const sorted = [...items].sort((a, b) => {
+        // Balance Anterior siempre primero
+        if (a.documentoCodigo === 'Existencia' && b.documentoCodigo !== 'Existencia') return -1;
+        if (a.documentoCodigo !== 'Existencia' && b.documentoCodigo === 'Existencia') return 1;
+        return a.fechaDocumento.localeCompare(b.fechaDocumento);
+      });
       setDatos(sorted);
       setBalances({
         balanceInicial: Array.isArray(res) ? 0 : (res.balanceInicial ?? 0),

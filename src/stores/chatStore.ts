@@ -57,6 +57,7 @@ interface ChatState {
   cargarConversaciones: () => Promise<void>;
   responderAMensaje: (mensaje: { id: number; contenido: string; remitente: string }) => void;
   cancelarRespuesta: () => void;
+  marcarMensajesLeidos: (conversacionId: number) => void;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -177,6 +178,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
           chatHub.onMensajeRecibido((mensaje) => {
             get().agregarMensajeTiempoReal(mensaje);
           });
+          chatHub.onMensajesLeidos((data) => {
+            get().marcarMensajesLeidos(data.conversacionId);
+          });
           set({ conectado: true });
           return;
         } catch (err) {
@@ -254,6 +258,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   cancelarRespuesta: () => {
     set({ respondiendoA: null });
+  },
+
+  marcarMensajesLeidos: (conversacionId: number) => {
+    set((state) => {
+      const msgs = state.mensajes[conversacionId];
+      if (!msgs) return state;
+      const currentUser = useAuthStore.getState().usuario?.id;
+      const ahora = new Date().toISOString();
+      return {
+        mensajes: {
+          ...state.mensajes,
+          [conversacionId]: msgs.map((m) =>
+            m.remitenteID === currentUser && !m.leido
+              ? { ...m, leido: true, fechaLectura: ahora }
+              : m
+          ),
+        },
+      };
+    });
   },
 
   cargarConversaciones: async () => {

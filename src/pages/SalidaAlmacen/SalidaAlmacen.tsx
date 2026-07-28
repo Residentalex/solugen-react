@@ -135,8 +135,6 @@ const SalidaAlmacen: React.FC = () => {
       onRefresh={actions.handleRefresh}
       onRowClick={actions.handleRowClick}
       onPageChange={actions.goToPage}
-      pdfPreview={state.pdfPreview}
-      onPdfClose={actions.handlePdfClose}
       toolbarProps={{
         showFiltros: true,
         filtros: state.filtros,

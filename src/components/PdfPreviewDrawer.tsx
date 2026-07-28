@@ -1,5 +1,4 @@
-import React from 'react';
-import { Drawer } from 'antd';
+import React, { useEffect } from 'react';
 
 interface PdfPreviewDrawerProps {
   pdfPreview: { url: string; title: string } | null;
@@ -7,20 +6,14 @@ interface PdfPreviewDrawerProps {
 }
 
 const PdfPreviewDrawer: React.FC<PdfPreviewDrawerProps> = ({ pdfPreview, onClose }) => {
-  return (
-    <Drawer
-      title={pdfPreview?.title}
-      open={!!pdfPreview}
-      onClose={onClose}
-      size="70%"
-    >
-      {pdfPreview && (
-        <div style={{ width: '100%', height: '100%', overflow: 'auto', transform: 'scale(1.1)', transformOrigin: 'top left' }}>
-          <iframe src={pdfPreview.url} style={{ width: '100%', height: '90vh', border: 'none' }} title="PDF" />
-        </div>
-      )}
-    </Drawer>
-  );
+  useEffect(() => {
+    if (pdfPreview?.url) {
+      window.open(pdfPreview.url, '_blank');
+      onClose();
+    }
+  }, [pdfPreview, onClose]);
+
+  return null;
 };
 
 export default PdfPreviewDrawer;

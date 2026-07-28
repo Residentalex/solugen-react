@@ -97,6 +97,39 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
     return new Date().toLocaleDateString('es-DO', { day: 'numeric', month: 'long', year: 'numeric' });
   }, []);
 
+  const nombreCortoUsuario = useMemo(() => {
+    return usuario?.nombre?.trim().split(/\s+/)[0] || 'Usuario';
+  }, [usuario?.nombre]);
+
+  const nombreSucursalActiva = useMemo(() => {
+    const sucursalEmpresa = companyData?.sucursales?.find(
+      (s: any) => String(s?.codigo ?? s?.id ?? '') === String(sucursalActiva ?? ''),
+    );
+    return sucursalEmpresa?.nombre || `Sucursal ${sucursalActiva ?? '-'}`;
+  }, [companyData?.sucursales, sucursalActiva]);
+
+  const totalPendientesOperativos = useMemo(() => {
+    return (
+      (resumen?.documentosPendientes ?? 0)
+      + pendientesNCF.length
+      + docsNoCuadrados.length
+      + totalStock
+    );
+  }, [docsNoCuadrados.length, pendientesNCF.length, resumen?.documentosPendientes, totalStock]);
+
+  const etiquetaPeriodo = useMemo(() => {
+    switch (periodo) {
+      case 'dia':
+        return 'Hoy';
+      case 'semana':
+        return 'Ultimos 7 dias';
+      case 'ano':
+        return 'Ultimos 12 meses';
+      default:
+        return 'Ultimos 30 dias';
+    }
+  }, [periodo]);
+
   // ── Carga de datos ──────────────────────────────────────
   const cargarDatos = useCallback(async () => {
     setLoading(true);
@@ -392,13 +425,36 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
   return (
     <div style={{ animation: 'fadeIn 0.3s ease' }}>
       {/* ========== HEADER ========== */}
-      <div className="dashboard-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Tag icon={<SyncOutlined spin={loading} />} color={loading ? 'processing' : 'default'}>
-            {todayStr}
+      <div className="dashboard-hero">
+        <div className="dashboard-hero-copy">
+          <Tag className="dashboard-hero-badge" color="processing">
+            Dashboard operativo
           </Tag>
+          <h1 className="dashboard-hero-title">Hola, {nombreCortoUsuario}</h1>
+          <p className="dashboard-hero-subtitle">
+            Vista ejecutiva de {nombreSucursalActiva} para {etiquetaPeriodo.toLowerCase()}.
+          </p>
+          <div className="dashboard-hero-meta">
+            <span>{todayStr}</span>
+            <span>{companyData?.sucursales?.length ?? 0} sucursales visibles</span>
+            <span>{totalPendientesOperativos} alertas operativas</span>
+          </div>
         </div>
-        <Space wrap>
+        <div className="dashboard-hero-actions">
+          <div className="dashboard-hero-actions-top">
+            <Tag icon={<SyncOutlined spin={loading} />} color={loading ? 'processing' : 'default'}>
+              {loading ? 'Actualizando datos' : 'Datos al dia'}
+            </Tag>
+            <Tooltip title="Recargar datos">
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={cargarDatos}
+                loading={loading}
+              >
+                Actualizar
+              </Button>
+            </Tooltip>
+          </div>
           <Segmented
             value={periodo}
             onChange={(val) => setPeriodo(val as typeof periodo)}
@@ -409,14 +465,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
               { value: 'ano', label: 'Año' },
             ]}
           />
-          <Tooltip title="Recargar datos">
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={cargarDatos}
-              loading={loading}
-            />
-          </Tooltip>
-        </Space>
+        </div>
       </div>
 
       {loading && !resumen ? (
@@ -451,41 +500,43 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                   style={{ '--kpi-accent': kpi.color } as React.CSSProperties}
                   onClick={() => navegarKPI(kpi.path)}
                 >
-                  <div
-                    className="dashboard-kpi-icon"
-                    style={{ background: kpi.bg, color: kpi.color }}
-                  >
-                    {kpi.icon}
+                  <div className="dashboard-kpi-top">
+                    <div
+                      className="dashboard-kpi-icon"
+                      style={{ background: kpi.bg, color: kpi.color }}
+                    >
+                      {kpi.icon}
+                    </div>
+                    <span className="dashboard-kpi-chip">
+                      {kpi.kind === 'currency' ? 'Monto' : 'Conteo'}
+                    </span>
                   </div>
                   <div className="dashboard-kpi-value">
                     {formatKPIValue(kpi.valor, kpi.kind)}
                   </div>
                   <p className="dashboard-kpi-label">{kpi.label}</p>
-                  <div
-                    className="dashboard-kpi-change"
-                    style={{ color: kpi.changeUp ? '#34c38f' : '#f46a6a' }}
-                  >
-                    {kpi.changeUp ? (
-                      <RiseOutlined style={{ fontSize: 11 }} />
-                    ) : (
-                      <WarningOutlined style={{ fontSize: 11 }} />
-                    )}
-                    {' '}{kpi.change}
-                  </div>
-                  {'variacion' in kpi && kpi.variacion !== undefined && (
-                    <div style={{
-                      fontSize: 11,
-                      color: kpi.variacion >= 0 ? '#34c38f' : '#f46a6a',
-                      fontWeight: 500,
-                      marginTop: 2,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 2,
-                    }}>
-                      {kpi.variacion >= 0 ? <ArrowUpOutlined style={{ fontSize: 10 }} /> : <ArrowDownOutlined style={{ fontSize: 10 }} />}
-                      {' '}{Math.abs(kpi.variacion).toFixed(1)}% vs período anterior
+                  <div className="dashboard-kpi-footer">
+                    <div
+                      className="dashboard-kpi-change"
+                      style={{ color: kpi.changeUp ? '#34c38f' : '#f46a6a' }}
+                    >
+                      {kpi.changeUp ? (
+                        <RiseOutlined style={{ fontSize: 11 }} />
+                      ) : (
+                        <WarningOutlined style={{ fontSize: 11 }} />
+                      )}
+                      {kpi.change}
                     </div>
-                  )}
+                    {'variacion' in kpi && kpi.variacion !== undefined && (
+                      <div
+                        className="dashboard-kpi-variation"
+                        style={{ color: kpi.variacion >= 0 ? '#34c38f' : '#f46a6a' }}
+                      >
+                        {kpi.variacion >= 0 ? <ArrowUpOutlined style={{ fontSize: 10 }} /> : <ArrowDownOutlined style={{ fontSize: 10 }} />}
+                        {Math.abs(kpi.variacion).toFixed(1)}% vs período anterior
+                      </div>
+                    )}
+                  </div>
                 </div>
               </Col>
             ))}

@@ -29,6 +29,8 @@ export interface ChatMensajeDTO {
   editado: boolean;
   fechaEdicion: string | null;
   eliminado: boolean;
+  leido: boolean;
+  fechaLectura: string | null;
   adjuntos: ChatAdjuntoDTO[];
   mensajePadreID: number | null;
   mensajePadreContenido: string | null;

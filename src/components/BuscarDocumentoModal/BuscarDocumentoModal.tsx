@@ -55,17 +55,32 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     return codigoTipo ? `${codigoTipo}-${num}` : num;
   }, []);
 
-  // ===== Cálculo de pendiente (misma lógica que desktop VTransaccionesPendientes) =====
-  // Para SUP: pendiente = total - (origen Credito ? creditos : debitos)
-  // Para CLI: pendiente = total - (origen Credito ? debitos : creditos)
-  // origen viene de las props (como el escritorio con vTransacciones.origen)
+  // ===== Helper: obtener pendiente real (puede ser negativo en caso de sobrepago) =====
+  // Infiere el tipo de documento desde los valores numéricos sin depender de documento.origenCuenta
+  const _obtenerPendienteReal = useCallback((doc: any): number => {
+    const total = doc?.total || 0;
+    const creditos = doc?.creditos || 0;
+    const debitos = doc?.debitos || 0;
+
+    const diffCred = total - creditos;
+    const diffDeb = total - debitos;
+
+    // Sobrepago en crédito (doc débito donde pagaron de más)
+    if (diffCred < 0) return diffCred;
+    // Sobrepago en débito (doc crédito donde pagaron de más)
+    if (diffDeb < 0) return diffDeb;
+    // Pendiente normal por crédito
+    if (diffCred > 0) return diffCred;
+    // Pendiente normal por débito
+    if (diffDeb > 0) return diffDeb;
+    // Sin saldo
+    return 0;
+  }, []);
+
+  // ===== Cálculo de pendiente para UI (nunca negativo) =====
   const calcularPendiente = useCallback((doc: any): number => {
-    if (tipoEntidad === 'SUP') {
-      return Math.max(0, (doc?.total || 0) - ((origen ?? 0) === 1 ? (doc?.creditos || 0) : (doc?.debitos || 0)));
-    } else {
-      return Math.max(0, (doc?.total || 0) - ((origen ?? 0) === 1 ? (doc?.debitos || 0) : (doc?.creditos || 0)));
-    }
-  }, [tipoEntidad, origen]);
+    return Math.abs(_obtenerPendienteReal(doc));
+  }, [_obtenerPendienteReal]);
 
   // ===== Cargar documentos pendientes =====
   const cargar = useCallback(async (): Promise<any[]> => {
@@ -82,18 +97,8 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       const { data: respData } = await apiClient.get<any>(endpoint, { params });
       let docs = respData?.data || [];
 
-      // Filtrar solo documentos con pendiente > 0
-      docs = docs.filter((d: any) => calcularPendiente(d) > 0);
-
-      // ===== Filtrar por origenCuenta opuesto (igual que VTransaccionesPendientes del escritorio) =====
-      // Si recibimos origen, mostrar SOLO documentos con OrigenCuenta opuesto al del RI
-      if (origen !== undefined) {
-        docs = docs.filter((d: any) => {
-          const docOrigen = d.documento?.origenCuenta ?? d.origenCuenta;
-          if (docOrigen === undefined) return true;
-          return docOrigen !== origen;
-        });
-      }
+      // ===== Filtrar documentos con pendiente real != 0 (tanto saldo como sobrepago) =====
+      docs = docs.filter((d: any) => _obtenerPendienteReal(d) !== 0);
 
       // ===== Filtrar documentoEnviado =====
       if (documentoEnviado) {
@@ -108,7 +113,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva, tipoEntidad, codEntidad, esDocumentoInventario, documentoEnviado, obtenerCodigoCompleto, calcularPendiente]);
+  }, [sucursalActiva, tipoEntidad, codEntidad, esDocumentoInventario, documentoEnviado, obtenerCodigoCompleto, _obtenerPendienteReal]);
 
   // ===== Pre-seleccionar filas y precargar montos al abrir el modal =====
   useEffect(() => {
@@ -128,7 +133,15 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
           (documentosIniciales || []).forEach((id) => {
             const doc = docs.find((d: any) => d.id === id);
             if (!doc) return;
+            const pendienteReal = _obtenerPendienteReal(doc);
             const pendiente = calcularPendiente(doc);
+            if (pendienteReal < 0) {
+              // Sobrepago: asignar valor absoluto
+              const asignar = Math.min(Math.abs(pendienteReal), restante);
+              montosIniciales[String(id)] = asignar;
+              restante -= asignar;
+              return;
+            }
             if (pendiente <= 0 || restante <= 0) {
               montosIniciales[String(id)] = 0;
               return;
@@ -162,10 +175,17 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       added.forEach((key) => {
         const doc = documentos.find((d) => d.id === key);
         if (!doc) return;
+        const pendienteReal = _obtenerPendienteReal(doc);
         const pendiente = calcularPendiente(doc);
         // Calcular cuánto está ya asignado en TODAS las filas (incluyendo las ya existentes en 'nuevos')
         const yaAsignado = Object.values(nuevos).reduce((s, v) => s + v, 0);
-        const disponible = montoADistribuir > 0 ? montoADistribuir - yaAsignado : pendiente;
+        const disponible = montoADistribuir > 0 ? montoADistribuir - yaAsignado : Math.abs(pendienteReal);
+
+        if (pendienteReal < 0) {
+          // Sobrepago: asignar valor absoluto
+          nuevos[String(key)] = Math.min(Math.abs(pendienteReal), Math.max(0, disponible));
+          return;
+        }
         if (pendiente <= 0 || (montoADistribuir > 0 && disponible <= 0.01)) {
           nuevos[String(key)] = 0;
           return;
@@ -178,7 +198,12 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     // Sincronizar state distribuido con el total calculado
     const totalNuevo = keys.reduce<number>((s, id) => {
       const doc = documentos.find((d) => d.id === id);
-      const p = doc ? calcularPendiente(doc) : 0;
+      if (!doc) return s;
+      const pendienteReal = _obtenerPendienteReal(doc);
+      if (pendienteReal < 0) {
+        return s + Math.abs(pendienteReal);
+      }
+      const p = calcularPendiente(doc);
       return s + Math.min(p, Math.max(0, montoADistribuir - s));
     }, 0);
     setDistribuido(totalNuevo);
@@ -197,7 +222,14 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       const key = String(id);
       if (restante <= 0) { nuevosMontos[key] = 0; continue; }
       const doc = documentos.find(d => d.id === id);
+      const pendienteReal = _obtenerPendienteReal(doc);
       const pendiente = calcularPendiente(doc);
+      if (pendienteReal < 0) {
+        const asignar = Math.min(Math.abs(pendienteReal), restante);
+        nuevosMontos[key] = asignar;
+        restante -= asignar;
+        continue;
+      }
       if (pendiente <= 0) { nuevosMontos[key] = 0; continue; }
       const asignar = Math.min(restante, pendiente);
       nuevosMontos[key] = asignar;
@@ -229,15 +261,18 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     {
       title: 'Abonado', key: 'abonado', width: 120, align: 'right' as const,
       render: (_: any, r: any) => {
-        const abonado = tipoEntidad === 'SUP'
-          ? ((origen ?? 0) === 1 ? (r.creditos || 0) : (r.debitos || 0))
-          : ((origen ?? 0) === 1 ? (r.debitos || 0) : (r.creditos || 0));
-        return formatNumber(abonado);
+        const total = r?.total || 0;
+        const pendienteReal = _obtenerPendienteReal(r);
+        const abonado = total - pendienteReal;
+        return formatNumber(Math.max(0, abonado));
       },
     },
     {
       title: 'Saldo Pendiente', key: 'saldo', width: 120, align: 'right' as const,
-      render: (_: any, r: any) => <strong>{formatNumber(calcularPendiente(r))}</strong>,
+      render: (_: any, r: any) => {
+        const pendienteReal = _obtenerPendienteReal(r);
+        return <strong>{formatNumber(Math.abs(pendienteReal))}</strong>;
+      },
     },
     {
       title: 'Monto a Asignar',
@@ -245,19 +280,21 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       width: 130,
       align: 'right' as const,
       render: (_: any, record: any) => {
+        const pendienteReal = _obtenerPendienteReal(record);
         const pendiente = calcularPendiente(record);
         const estaSeleccionado = selectedRowKeys.includes(record.id);
+        const maxMonto = pendienteReal < 0 ? Math.abs(pendienteReal) : pendiente;
         return (
           <InputNumber
             size="small"
             style={{ width: '100%' }}
             min={0}
-            max={pendiente}
+            max={maxMonto}
             step={0.01}
             precision={2}
             controls={false}
             disabled={!puedeAsignar || !estaSeleccionado}
-            value={montosPorFila[String(record.id)] ?? (estaSeleccionado ? pendiente : 0)}
+            value={montosPorFila[String(record.id)] ?? (estaSeleccionado ? maxMonto : 0)}
             onChange={(val) => {
               setMontosPorFila(prev => ({ ...prev, [String(record.id)]: val || 0 }));
             }}
@@ -271,8 +308,10 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   const handleConfirm = () => {
     const selected = selectedRowKeys.map((key) => {
       const doc = documentos.find((d) => d.id === key);
+      const pendienteReal = _obtenerPendienteReal(doc);
       const pendiente = calcularPendiente(doc);
       const montoFila = montosPorFila[String(key)] ?? pendiente;
+      const esSobrepago = pendienteReal < 0;
       return {
         transaccionAsociadaID: doc?.id,
         id: doc?.id,
@@ -280,9 +319,9 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
         nCF: doc?.ncf,
         ncf: doc?.ncf,
         montoOriginal: doc?.total || 0,
-        pagado: (doc?.total || 0) - pendiente,
+        pagado: (doc?.total || 0) - pendienteReal,
         saldoPendiente: pendiente,
-        monto: Math.min(montoFila, pendiente),
+        monto: Math.min(montoFila, esSobrepago ? Math.abs(pendienteReal) : pendiente),
         fecha: doc?.fechaDocumento,
         tipoDocumento: doc?.tipoDocumento,
         codigoSucursal: doc?.codigoSucursal,

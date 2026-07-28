@@ -159,8 +159,6 @@ const HorarioEmpleado: React.FC = () => {
       onRefresh={handleRefresh}
       onRowClick={handleRowClick}
       onPageChange={handlePageChange}
-      pdfPreview={null}
-      onPdfClose={() => {}}
       toolbarProps={{
         searchPlaceholder: 'Buscar empleado...',
         onSearch: () => {},

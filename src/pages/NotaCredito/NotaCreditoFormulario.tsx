@@ -750,6 +750,11 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     total: totalValue || 0,
   };
 
+  // ===== Handlers =====
+  const handleRemoveDocumento = (idx: number) => {
+    setTransaccionesAsociadas((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   // ===== Columnas =====
   const asociadasColumns = [
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => formatDate(v) },
@@ -779,6 +784,20 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       ),
     },
     { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 140, render: (v: string) => v || '-' },
+    {
+      title: 'Acciones',
+      key: 'acciones',
+      width: 60,
+      fixed: 'right' as const,
+      render: (_: any, _record: any, idx: number) => (
+        <Button
+          type="text"
+          danger
+          icon={<DeleteOutlined />}
+          onClick={() => handleRemoveDocumento(idx)}
+        />
+      ),
+    },
   ];
 
   const detalleMovimientoColumns = [

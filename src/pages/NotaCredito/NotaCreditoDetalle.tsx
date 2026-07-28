@@ -597,17 +597,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
               responseType: 'blob',
             });
             const blobUrl = URL.createObjectURL(res.data);
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = blobUrl;
-            document.body.appendChild(iframe);
-            setTimeout(() => {
-              iframe.contentWindow?.print();
-              setTimeout(() => {
-                document.body.removeChild(iframe);
-                URL.revokeObjectURL(blobUrl);
-              }, 30000);
-            }, 2000);
+            window.open(blobUrl, '_blank');
           } catch {
             message.error('Error al generar el PDF');
           } finally {
