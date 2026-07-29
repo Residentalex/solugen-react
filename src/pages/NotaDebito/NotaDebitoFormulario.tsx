@@ -129,6 +129,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const cloneData = (location.state as any)?.cloneData;
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const usuario = useAuthStore((s: any) => s.usuario);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
@@ -275,11 +276,24 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     // === Si viene de Clonar ===
     if (cloneData) {
       setSelectedConcepto(cloneData.concepto || null);
+      setSelectedTipo(cloneData.tipo || null);
       const entidadCloneNorm = cloneData.entidad ? {
         ...cloneData.entidad,
         codigo: cloneData.entidad.codigo || cloneData.entidad.idExterno || '',
       } : null;
       setSelectedEntidad(entidadCloneNorm);
+      // Cargar entidades para el select
+      if (cloneData.concepto?.codigo) {
+        entidadApi.obtenerActivos(sucursalActiva, cloneData.concepto.codigo, tipoEntidad)
+          .then((ents) => {
+            if (ents && ents.length > 0) setEntidadesCache(ents);
+          })
+          .catch(() => {});
+      }
+      if (entidadCloneNorm) {
+        setEntidadesCache([entidadCloneNorm as any]);
+        console.log('[DEBUG ND] entidadCloneNorm', entidadCloneNorm);
+      }
       // Normalizar sucursal (clonado)
       const sucursalCloneNorm = cloneData.sucursal ? {
         ...cloneData.sucursal,
@@ -344,6 +358,12 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         servicios: cloneData.servicios || 0,
       });
       setMontoTotalConfirmado(Number(cloneData.total) || 0);
+      console.log('[DEBUG ND] selectedEntidad', selectedEntidad);
+      console.log('[DEBUG ND] entidadesCache', entidadesCache);
+
+      // Cargar sucursales cache
+      conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch(() => {});
+
       return () => { resetToolbar(); setPageTitleOverride(''); };
     }
 
@@ -360,6 +380,19 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       setPageTitleOverride('');
     };
   }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, codigoPantalla, entidadLabel, form, sucursalActiva, cloneData]);
+
+  // Seleccionar sucursal activa por defecto en modo crear
+  useEffect(() => {
+    if (mode === 'crear' && sucursalesCache.length > 0 && !selectedSucursal) {
+      const match = sucursalesCache.find((s: any) =>
+        String(s.sucursal ?? s.codigo ?? s.idExterno) === String(sucursalActiva)
+      );
+      if (match) {
+        setSelectedSucursal(match);
+        form.setFieldsValue({ sucursal: match.codigo || match.idExterno });
+      }
+    }
+  }, [sucursalesCache, mode, sucursalActiva, selectedSucursal, form]);
 
   // ===== Cargar datos si es modo editar =====
   useEffect(() => {
@@ -1112,21 +1145,28 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       align: 'right' as const,
       render: (v: number) => formatNumber(v ?? 0),
     },
-    { title: 'Pendiente', key: 'pendienteCalc', width: 120, align: 'right' as const, render: (_: any, record: any) => <strong>{formatNumber(Math.max(0, (record.montoOriginal || 0) - (record.pagado || 0)))}</strong> },
+    { title: 'Pendiente', key: 'pendienteCalc', width: 120, align: 'right' as const, render: (_: any, record: any) => <strong>{formatNumber(Math.max(0, Math.round(((record.montoOriginal || 0) - (record.pagado || 0)) * 100) / 100))}</strong> },
     {
       title: 'Monto a Debitar', dataIndex: 'monto', key: 'monto', width: 140, align: 'right' as const,
-      render: (_: any, record: DocumentoRelacionadoDTO, idx: number) => (
+      render: (_: any, record: DocumentoRelacionadoDTO, idx: number) => {
+        const montoOriginal = record.montoOriginal || 0;
+        const pagado = record.pagado || 0;
+        const saldoPendiente = record.saldoPendiente || 0;
+        const maxCalculado = Math.max(0, montoOriginal - pagado);
+        console.log('[DEBUG monto] idx:', idx, 'montoOriginal:', montoOriginal, 'pagado:', pagado, 'saldoPendiente:', saldoPendiente, 'max:', maxCalculado, 'value:', documentosRelacionados[idx]?.monto);
+        return (
         <InputNumber
           size="small"
           style={{ width: 120 }}
           min={0}
-          max={Math.max(0, (record.montoOriginal || 0) - (record.pagado || 0))}
+          max={Math.max(0, Math.round(((record.montoOriginal || 0) - (record.pagado || 0)) * 100) / 100)}
           step={0.01}
           precision={2}
           value={documentosRelacionados[idx]?.monto}
           onChange={(val) => handleDocMontoChange(record.transaccionAsociadaID || record.id, val || 0)}
         />
-      ),
+        );
+      },
     },
     {
       title: '', key: 'accion', width: 50,
@@ -1157,7 +1197,7 @@ render: (v: number) => formatNumber(v ?? 0),
       key: 'pendienteCalc',
       width: 120,
       align: 'right' as const,
-      render: (_: any, record: any) => <strong>{formatNumber(Math.max(0, (record.montoOriginal || 0) - (record.pagado || 0)))}</strong>,
+      render: (_: any, record: any) => <strong>{formatNumber(Math.max(0, Math.round(((record.montoOriginal || 0) - (record.pagado || 0)) * 100) / 100))}</strong>,
     },
     {
       title: 'Monto a Debitar', dataIndex: 'monto', key: 'monto', width: 140, align: 'right' as const,
@@ -1300,7 +1340,15 @@ render: (v: number) => formatNumber(v ?? 0),
           <Col xs={24} sm={12} lg={6}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                  disabledDate={(current) => {
+                    if (!current) return false;
+                    const cierre = fechasCierre?.[sucursalActiva];
+                    if (cierre && current.isBefore(dayjs(cierre).startOf('day'), 'day')) return true;
+                    const cierreInv = fechasCierreInv?.[sucursalActiva];
+                    if (cierreInv && current.isBefore(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                    return false;
+                  }} />
               </FloatingField>
             </Form.Item>
           </Col>

@@ -82,6 +82,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   const cloneData = (location.state as any)?.cloneData;
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
   const usuario = useAuthStore((s: any) => s.usuario);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
@@ -211,9 +212,19 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
 
     // === Si viene de Clonar ===
     if (cloneData) {
+      console.log('[DEBUG cloneData]', cloneData);
+      console.log('[DEBUG entidad]', cloneData.entidad);
+      console.log('[DEBUG entidad.codigo]', cloneData.entidad?.codigo);
       setSelectedConcepto(cloneData.concepto || null);
-      setSelectedEntidad(cloneData.entidad || null);
+      const entidadCloneNorm = cloneData.entidad ? {
+        ...cloneData.entidad,
+        codigo: cloneData.entidad.codigo || cloneData.entidad.idExterno || '',
+      } : null;
+      setSelectedEntidad(entidadCloneNorm);
       setSelectedSucursal(cloneData.sucursal || null);
+      if (cloneData.tipo) {
+        setSelectedTipo(cloneData.tipo);
+      }
       setTransaccionesAsociadas(cloneData.transaccionesAsociadas || []);
       setDetallesMovimiento(cloneData.detallesMovimiento || cloneData.detalles || []);
       setDevoluciones(cloneData.devoluciones || []);
@@ -231,10 +242,29 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       setNcfModificadoVal(cloneData.ncfModificado || '');
       setNcfTipo(cloneData.ncfModificado ? 'modificado' : 'documento');
 
+      // Cargar entidades para el select de entidad
+      if (cloneData.concepto?.codigo) {
+        cargarEntidades(cloneData.concepto.codigo);
+      }
+      // Si la entidad viene en cloneData, agregarla al cache directamente
+      if (cloneData.entidad?.codigo) {
+        // Forzar la entidad en el cache inmediatamente
+        setEntidadesCache([cloneData.entidad as any]);
+        console.log('[DEBUG entidadesCache set]', cloneData.entidad);
+        // También intentar cargar las demás entidades desde la API
+        if (cloneData.concepto?.codigo) {
+          entidadApi.obtenerActivos(sucursalActiva, cloneData.concepto.codigo, tipoEntidad)
+            .then((res) => {
+              if (res && res.length > 0) setEntidadesCache(res as any);
+            })
+            .catch(() => {});
+        }
+      }
+
       const fechaDoc = cloneData.fechaDocumento ? parseDateRaw(cloneData.fechaDocumento) : null;
       form.setFieldsValue({
         concepto: cloneData.concepto?.codigo || '',
-        entidad: cloneData.entidad?.codigo || '',
+        entidad: entidadCloneNorm?.codigo || '',
         sucursal: cloneData.sucursal?.codigo || '',
         fechaDocumento: fechaDoc ? dayjs(fechaDoc) : dayjs(),
         ncf: cloneData.ncf || '',
@@ -246,16 +276,21 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         bienes: cloneData.bienes || 0,
         servicios: cloneData.servicios || 0,
       });
+
+      // Cargar caches necesarios
+      console.log('[DEBUG NC] tipo en cloneData:', cloneData.tipo);
+      tipoApi.obtenerPorDocumento(sucursalActiva, 'NC')
+        .then((tipos) => {
+          console.log('[DEBUG NC] tipos cargados:', tipos);
+          setTiposCache(tipos as any);
+        })
+        .catch((err) => console.warn('Error al cargar tipos cache', err));
+      unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => console.warn('Error al cargar medidas cache', err));
+      parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch((err) => console.warn('Error al obtener fecha cierre fiscal', err));
+      conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch((err) => console.warn('Error al cargar sucursales cache', err));
+
       return cleanup;
     }
-
-    // Cargar tipos para NC
-    tipoApi.obtenerPorDocumento(sucursalActiva, 'NC')
-      .then((tipos) => setTiposCache(tipos as any))
-      .catch((err) => console.warn('Error al cargar tipos cache', err));
-    unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => console.warn('Error al cargar medidas cache', err));
-    parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch((err) => console.warn('Error al obtener fecha cierre fiscal', err));
-    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch((err) => console.warn('Error al cargar sucursales cache', err));
 
     if (mode === 'crear') {
       form.setFieldsValue({
@@ -267,6 +302,19 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
 
     return cleanup;
   }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form, codigoPantalla, entidadLabel, cloneData]);
+
+  // Seleccionar sucursal activa por defecto en modo crear
+  useEffect(() => {
+    if (mode === 'crear' && sucursalesCache.length > 0 && !selectedSucursal) {
+      const match = sucursalesCache.find((s: any) =>
+        String(s.sucursal ?? s.codigo ?? s.idExterno) === String(sucursalActiva)
+      );
+      if (match) {
+        setSelectedSucursal(match);
+        form.setFieldsValue({ sucursal: match.codigo || match.idExterno });
+      }
+    }
+  }, [sucursalesCache, mode, sucursalActiva, selectedSucursal, form]);
 
   // ===== Cargar datos en modo editar =====
   useEffect(() => {
@@ -944,7 +992,15 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
           <Col xs={24} sm={12} lg={6}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                  disabledDate={(current) => {
+                    if (!current) return false;
+                    const cierre = fechasCierre?.[sucursalActiva];
+                    if (cierre && current.isBefore(dayjs(cierre).startOf('day'), 'day')) return true;
+                    const cierreInv = fechasCierreInv?.[sucursalActiva];
+                    if (cierreInv && current.isBefore(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                    return false;
+                  }} />
               </FloatingField>
             </Form.Item>
           </Col>
@@ -983,6 +1039,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
                     allowClear
                     showSearch
                     optionFilterProp="children"
+                    value={selectedTipo?.codigo}
                     onChange={handleTipoChange}
                   >
                     {tiposCache.map((tc) => (
@@ -1464,7 +1521,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         onClose={() => setBuscarDocModalOpen(false)}
         onSelect={handleDocRelacionadoSelect}
         tipoEntidad={tipoEntidad}
-        codEntidad={selectedEntidad?.codigo || ''}
+        codEntidad={selectedEntidad?.idExterno || selectedEntidad?.codigo || ''}
         origen={(() => { const { documentos } = useCompanyStore.getState().data; const docConfig = documentos.find((d: any) => d.codigo === 'NC'); const docOrigen = docConfig?.origenCuenta ?? OrigenCuenta.Desconocido; return typeof docOrigen === 'number' ? docOrigen : (docOrigen === 'Credito' ? OrigenCuenta.Credito : OrigenCuenta.Debito); })()}
         montoTotal={Number(form.getFieldValue('total') || 0)}
       />

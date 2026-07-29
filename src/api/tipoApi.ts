@@ -23,4 +23,10 @@ export const tipoApi = {
     );
     return data.data || [];
   },
+
+  obtenerPorCodigo: async (sucursal: number, documento: string, codigo: string): Promise<any> => {
+    const { data } = await apiClient.get<any>(`${BASE}/${sucursal}/Documento/${documento}`);
+    const tipos = data?.data || [];
+    return tipos.find((t: any) => t.codigo === codigo) || null;
+  },
 };

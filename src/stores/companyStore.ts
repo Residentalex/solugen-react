@@ -68,9 +68,10 @@ export const useCompanyStore = create<CompanyState>((set) => ({
       const fechasCierreFiscal: Record<number, any> = {};
       if (config.configuracionesSucursales) {
         for (const cs of config.configuracionesSucursales) {
-          if (cs.fechaCierre) fechasCierre[cs.sucursal] = cs.fechaCierre;
-          if (cs.fechaCierreInventario) fechasCierreInv[cs.sucursal] = cs.fechaCierreInventario;
-          if (cs.fechaCierreFiscal) fechasCierreFiscal[cs.sucursal] = cs.fechaCierreFiscal;
+          const sucursalNum = Sucursal[cs.sucursal as keyof typeof Sucursal];
+          if (cs.fechaCierre && sucursalNum !== undefined) fechasCierre[sucursalNum] = cs.fechaCierre;
+          if (cs.fechaCierreInventario && sucursalNum !== undefined) fechasCierreInv[sucursalNum] = cs.fechaCierreInventario;
+          if (cs.fechaCierreFiscal && sucursalNum !== undefined) fechasCierreFiscal[sucursalNum] = cs.fechaCierreFiscal;
         }
       }
 

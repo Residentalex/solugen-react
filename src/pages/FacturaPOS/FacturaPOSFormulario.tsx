@@ -20,6 +20,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
 import { devolucionVentaApi } from '../../api/devolucionVentaApi';
@@ -127,6 +128,7 @@ const FacturaPOSFormulario: React.FC = () => {
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const authUser = useAuthStore((s) => s.usuario);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
@@ -1084,7 +1086,15 @@ const FacturaPOSFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={8}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Documento" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                  disabledDate={(current) => {
+                    if (!current) return false;
+                    const cierre = fechasCierre?.[sucursalActiva];
+                    if (cierre && current.isBefore(dayjs(cierre).startOf('day'), 'day')) return true;
+                    const cierreInv = fechasCierreInv?.[sucursalActiva];
+                    if (cierreInv && current.isBefore(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                    return false;
+                  }} />
               </FloatingField>
             </Form.Item>
           </Col>

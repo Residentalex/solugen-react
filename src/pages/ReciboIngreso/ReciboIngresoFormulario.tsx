@@ -114,6 +114,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
@@ -254,6 +255,18 @@ const ReciboIngresoFormulario: React.FC = () => {
       setPageTitleOverride('');
     };
   }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form]);
+
+  // Seleccionar sucursal activa por defecto en modo crear
+  useEffect(() => {
+    if (mode === 'crear' && sucursalesCache.length > 0 && !selectedSucursal) {
+      const match = sucursalesCache.find((s: any) =>
+        String(s.sucursal ?? s.codigo ?? s.idExterno) === String(sucursalActiva)
+      );
+      if (match) {
+        setSelectedSucursal(match);
+      }
+    }
+  }, [sucursalesCache, mode, sucursalActiva, selectedSucursal]);
 
   // ===== Cargar datos en modo editar =====
   useEffect(() => {
@@ -827,7 +840,15 @@ const ReciboIngresoFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                  disabledDate={(current) => {
+                    if (!current) return false;
+                    const cierre = fechasCierre?.[sucursalActiva];
+                    if (cierre && current.isBefore(dayjs(cierre).startOf('day'), 'day')) return true;
+                    const cierreInv = fechasCierreInv?.[sucursalActiva];
+                    if (cierreInv && current.isBefore(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                    return false;
+                  }} />
               </FloatingField>
             </Form.Item>
           </Col>

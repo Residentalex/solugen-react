@@ -27,6 +27,7 @@ import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSens
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 import { productoApi } from '../../api/productoApi';
@@ -119,6 +120,7 @@ const DevolucionCompraFormulario: React.FC = () => {
   const entradaId = (location.state as any)?.entradaId;
   const cloneData = (location.state as any)?.cloneData;
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
@@ -1221,7 +1223,15 @@ const DevolucionCompraFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Documento" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                  disabledDate={(current) => {
+                    if (!current) return false;
+                    const cierre = fechasCierre?.[sucursalActiva];
+                    if (cierre && current.isBefore(dayjs(cierre).startOf('day'), 'day')) return true;
+                    const cierreInv = fechasCierreInv?.[sucursalActiva];
+                    if (cierreInv && current.isBefore(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                    return false;
+                  }} />
               </FloatingField>
             </Form.Item>
           </Col>

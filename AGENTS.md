@@ -257,3 +257,11 @@ const datosFiltrados = useMemo(() => {
 - Todos los reportes PDF deben abrirse en una nueva pestaña del navegador usando `window.open(blobUrl, '_blank')`.
 - No usar iframes ocultos, Drawers ni `print()` programático para previsualizar reportes.
 - El componente `PdfPreviewDrawer` existe como adaptador legacy pero su uso directo está deprecated para nuevos reportes.
+
+## Preseleccion de sucursal activa en formularios
+
+En todo formulario con `Form.Item name="sucursal"`, el campo debe preseleccionarse con la `sucursalActiva` del `useAuthStore` cuando se entra en modo crear.
+
+- Si el Select se controla mediante `value={selectedSucursal...}`, basta con llamar `setSelectedSucursal(match)`.
+- Si el Select no tiene `value` explícito (controlado por Form.Item), debe ademas llamarse `form.setFieldsValue({ sucursal: match.codigo || match.idExterno })`.
+- El efecto debe ejecutarse solo cuando `mode === 'crear'`, `sucursalesCache.length > 0` y `!selectedSucursal`.

@@ -8,6 +8,7 @@ import {
   SearchOutlined, ReloadOutlined, PrinterOutlined, DownloadOutlined, CloseOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { antiguedadSaldosApi } from '../../api/antiguedadSaldosApi';
@@ -77,6 +78,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
   const [codCategoria, setCodCategoria] = useState<string>('');
   const [nomCategoria, setNomCategoria] = useState<string>('');
   const [detallado, setDetallado] = useState<boolean>(true);
+  const [searchParams] = useSearchParams();
 
   // Datos
   const [data, setData] = useState<TransaccionBalanceDTO[]>([]);
@@ -142,6 +144,25 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       return () => clearTimeout(timer);
     }
   }, [modalSucursalAbierto]);
+
+  /* ───── Inicializar desde parámetros URL ───── */
+
+  useEffect(() => {
+    const codFromUrl = searchParams.get('codEntidad');
+    const nomFromUrl = searchParams.get('nomEntidad');
+    const detFromUrl = searchParams.get('detallado');
+
+    if (codFromUrl) {
+      setCodEntidad(codFromUrl);
+      setNomEntidad(nomFromUrl || '');
+      if (detFromUrl === 'true') {
+        setDetallado(true);
+      }
+      // Auto-ejecutar reporte después de un breve delay
+      setTimeout(() => generarReporte(), 100);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ───── Cargar datos ───── */
 
@@ -617,7 +638,24 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       key: 'entidad',
       width: 260,
       render: (_: any, record: ResumenAgingDTO) => (
-        <Text strong>{toTitleCase(record.nombreEntidad || '')}</Text>
+        <a
+          style={{ cursor: 'pointer' }}
+          onClick={() => {
+            // Guardar datos en sessionStorage para que la nueva pestaña los lea sin re-consultar
+            const datosParaDetalle = {
+              codEntidad: record.codigoEntidad,
+              nomEntidad: record.nombreEntidad || '',
+              tipoEntidad: esCxP ? 'SUP' : 'CLI',
+            };
+            localStorage.setItem('detalleSuplidor_data', JSON.stringify(datosParaDetalle));
+
+            const basePath = window.location.pathname.split('/')[1] === 'saas' ? '/saas' : '';
+            const url = `${basePath}/${codigoPantalla}/detalle?codEntidad=${record.codigoEntidad}&nomEntidad=${encodeURIComponent(record.nombreEntidad || '')}&skipGuard=1`;
+            window.open(url, '_blank');
+          }}
+        >
+          <Text strong style={{ color: '#556ee6' }}>{toTitleCase(record.nombreEntidad || '')}</Text>
+        </a>
       ),
     },
     {

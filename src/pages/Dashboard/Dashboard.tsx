@@ -63,6 +63,7 @@ const Dashboard: React.FC = () => {
 
   // ── Estados ──────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [resumen, setResumen] = useState<DashboardResumenDTO | null>(null);
   const [recientes, setRecientes] = useState<DocumentoRecienteDTO[]>([]);
   const [ventasPorMes, setVentasPorMes] = useState<VentaPorMesDTO[]>([]);
@@ -208,6 +209,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
       message.error(msg);
     } finally {
       setLoading(false);
+      setLastUpdated(new Date().toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }));
     }
   }, [sucursalActiva, periodo]);
 
@@ -427,13 +429,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
       {/* ========== HEADER ========== */}
       <div className="dashboard-hero">
         <div className="dashboard-hero-copy">
-          <Tag className="dashboard-hero-badge" color="processing">
-            Dashboard operativo
-          </Tag>
           <h1 className="dashboard-hero-title">Hola, {nombreCortoUsuario}</h1>
-          <p className="dashboard-hero-subtitle">
-            Vista ejecutiva de {nombreSucursalActiva} para {etiquetaPeriodo.toLowerCase()}.
-          </p>
           <div className="dashboard-hero-meta">
             <span>{todayStr}</span>
             <span>{companyData?.sucursales?.length ?? 0} sucursales visibles</span>
@@ -454,6 +450,11 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 Actualizar
               </Button>
             </Tooltip>
+            {lastUpdated && (
+              <span className="dashboard-last-updated">
+                Últ. act.: {lastUpdated}
+              </span>
+            )}
           </div>
           <Segmented
             value={periodo}
@@ -564,14 +565,16 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <Empty description="Sin datos de ventas" style={{ padding: 40 }} />
+                  <div className="dashboard-panel-empty">
+                    <Empty description="Sin datos de ventas" />
+                  </div>
                 )}
               </div>
             </Col>
             <Col xs={24} lg={8}>
-              <div className="dashboard-chart-card dashboard-chart-card-compact" style={{ padding: 0, overflow: 'hidden' }}>
-                <div className="dashboard-panel-header-minimal">
-                  <h3 className="dashboard-section-title dashboard-section-title-tight" style={{ margin: 0 }}>
+              <div className="dashboard-chart-card dashboard-chart-card-compact">
+                <div className="dashboard-panel-header-minimal" style={{ padding: '16px 20px 8px' }}>
+                  <h3 className="dashboard-section-title-tight">
                     <BarChartOutlined /> Comparativo por Sucursales
                   </h3>
                 </div>
@@ -581,9 +584,8 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     rowKey={(r) => r.sucursal || `comp-${Math.random()}`}
                     pagination={false}
                     size="small"
-                    className="paces-list-table"
+                    className="paces-list-table paces-border-top"
                     showHeader={false}
-                    style={{ borderTop: '1px solid var(--paces-border)' }}
                     columns={[
                       {
                         title: 'Sucursal',
@@ -615,8 +617,8 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
               </div>
             </Col>
             <Col xs={24} lg={8}>
-              <div className="dashboard-chart-card dashboard-chart-card-compact">
-                  <h3 className="dashboard-section-title dashboard-section-title-tight">
+              <div className="dashboard-chart-card">
+                  <h3 className="dashboard-section-title">
                     <LineChartOutlined /> Evolución Diaria
                   </h3>
                 {evolucionDiaria.length > 0 ? (
@@ -651,15 +653,12 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
           {/* ========== FILA 3: NCF Pendientes ========== */}
           <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
             <Col xs={24}>
-              <div className="dashboard-chart-card dashboard-chart-card-compact" style={{ padding: 0, overflow: 'hidden' }}>
+              <div className="dashboard-chart-card dashboard-chart-card-compact">
                 <div className="dashboard-panel-header">
-                  <h3 className="dashboard-section-title dashboard-section-title-tight">
+                  <h3 className="dashboard-section-title-tight">
                     <FileTextOutlined /> NCF Pendientes por Enviar
                   </h3>
-                  <span
-                    className="dashboard-panel-status"
-                    style={{ color: pendientesNCF.length > 0 ? '#f46a6a' : '#34c38f' }}
-                  >
+                  <span className="dashboard-panel-status" style={{ color: pendientesNCF.length > 0 ? '#f46a6a' : '#34c38f' }}>
                     {pendientesNCF.length > 0 ? `${pendientesNCF.length} pendiente(s)` : <><CheckCircleOutlined /> Al día</>}
                   </span>
                 </div>
@@ -669,7 +668,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     rowKey={(r) => r.id ?? `ncf-${r.transaccionID ?? Math.random()}`}
                     pagination={false}
                     size="small"
-                    className="paces-list-table"
+                    className="paces-list-table paces-border-top"
                     columns={[
                       { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => <Text style={{ fontSize: 12 }}>{v?.split('T')[0]}</Text> },
                       { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 150, render: (v: string) => <Text style={{ fontSize: 12 }}>{v || '-'}</Text> },
@@ -678,7 +677,6 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                       { title: 'Mensaje DGII', dataIndex: 'respuestaDGII', key: 'respuestaDGII', ellipsis: true, render: (v: string) => v ? <Text style={{ color: '#f46a6a', fontSize: 12 }}>{v}</Text> : <Text className="paces-text-placeholder" style={{ fontSize: 12 }}>-</Text> },
                       { title: 'Sucursal', dataIndex: 'sucursalNombre', key: 'sucursalNombre', width: 120, render: (v: string) => <Text style={{ fontSize: 12 }}>{v || '-'}</Text> },
                     ]}
-                    style={{ borderTop: '1px solid var(--paces-border)' }}
                   />
                 ) : (
                   <div className="dashboard-empty-state">
@@ -692,15 +690,12 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
           {/* ========== FILA 4B: Docs No Cuadrados ========== */}
           <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
             <Col xs={24}>
-              <div className="dashboard-chart-card dashboard-chart-card-compact" style={{ padding: 0, overflow: 'hidden' }}>
+              <div className="dashboard-chart-card dashboard-chart-card-compact">
                 <div className="dashboard-panel-header">
-                  <h3 className="dashboard-section-title dashboard-section-title-tight">
+                  <h3 className="dashboard-section-title-tight">
                     <WarningOutlined /> Documentos No Cuadrados
                   </h3>
-                  <span
-                    className="dashboard-panel-status"
-                    style={{ color: docsNoCuadrados.length > 0 ? '#f46a6a' : '#34c38f' }}
-                  >
+                  <span className="dashboard-panel-status" style={{ color: docsNoCuadrados.length > 0 ? '#f46a6a' : '#34c38f' }}>
                     {docsNoCuadrados.length > 0 ? `${docsNoCuadrados.length} documento(s)` : <><CheckCircleOutlined /> Al día</>}
                   </span>
                 </div>
@@ -710,7 +705,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     rowKey={(r) => r.id ?? `doc-${Math.random()}`}
                     pagination={{ pageSize: 5, showSizeChanger: false }}
                     size="small"
-                    className="paces-list-table"
+                    className="paces-list-table paces-border-top"
                     columns={[
                       { title: 'Fecha', dataIndex: 'fechaDocumento', key: 'fechaDocumento', width: 110, render: (v: string) => <Text style={{ fontSize: 12 }}>{v?.split('T')[0]}</Text> },
                       { title: 'Documento', dataIndex: 'noDocumento', key: 'noDocumento', width: 150, render: (v: string) => <Text style={{ fontSize: 12 }}>{v || '-'}</Text> },
@@ -722,7 +717,6 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                         return <Text style={{ color: '#f46a6a', fontWeight: 600, fontSize: 12 }}>{formatNumber(diff)}</Text>;
                       }},
                     ]}
-                    style={{ borderTop: '1px solid var(--paces-border)' }}
                   />
                 ) : (
                   <div className="dashboard-empty-state">
@@ -736,9 +730,9 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
           {/* ========== FILA 5: Recientes ========== */}
           <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
             <Col xs={24}>
-              <div className="dashboard-chart-card dashboard-chart-card-compact" style={{ padding: 0, overflow: 'hidden' }}>
-                <div className="dashboard-panel-header-minimal">
-                  <h3 className="dashboard-section-title dashboard-section-title-tight">
+              <div className="dashboard-chart-card dashboard-chart-card-compact">
+                <div className="dashboard-panel-header">
+                  <h3 className="dashboard-section-title-tight">
                     <FileTextOutlined /> Últimos Documentos
                   </h3>
                 </div>
@@ -749,8 +743,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     rowKey={(r) => `${r.tipoDocumento}-${r.noDocumento}`}
                     pagination={false}
                     size="middle"
-                    className="paces-list-table"
-                    style={{ borderTop: `1px solid var(--paces-border)` }}
+                    className="paces-list-table paces-border-top"
                   />
                 ) : (
                   <div className="dashboard-panel-empty">
@@ -765,12 +758,12 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
           {sucursalesActivas.length > 0 && (
             <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
               <Col xs={24}>
-              <div className="dashboard-chart-card dashboard-chart-card-compact" style={{ padding: 0, overflow: 'hidden' }}>
-                <div className="dashboard-panel-header">
-                  <h3 className="dashboard-section-title dashboard-section-title-tight">
-                    <InboxOutlined /> Productos con Stock Negativo
-                  </h3>
-                  <Select
+                <div className="dashboard-chart-card dashboard-chart-card-compact">
+                  <div className="dashboard-panel-header">
+                    <h3 className="dashboard-section-title-tight">
+                      <InboxOutlined /> Productos con Stock Negativo
+                    </h3>
+                    <Select
                       value={sucursalStock}
                       onChange={(val) => {
                         setSucursalStock(val);
@@ -797,7 +790,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                         showTotal: (total, range) => `${range[0]}-${range[1]} de ${total}`,
                       }}
                       size="small"
-                      className="paces-list-table"
+                      className="paces-list-table paces-border-top"
                       loading={loadingStock}
                       columns={[
                         { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 120, render: (v: string) => <Text code style={{ fontSize: 12 }}>{v}</Text> },
@@ -808,14 +801,13 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                           render: (v: number | null) => <Text style={{ fontSize: 13 }}>{v != null ? formatNumber(v) : '-'}</Text> },
                         { title: 'Almacén', dataIndex: 'almacen', key: 'almacen', width: 180, render: (v: string) => <Text style={{ fontSize: 13 }}>{v?.trim() || '-'}</Text> },
                       ]}
-                      style={{ borderTop: '1px solid var(--paces-border)' }}
                     />
                   ) : (
-                  <div className="dashboard-empty-state">
-                    <span className="paces-text-secondary"><CheckCircleOutlined /> No hay productos con stock negativo en esta sucursal</span>
-                  </div>
-                )}
-              </div>
+                    <div className="dashboard-panel-empty">
+                      <span className="paces-text-secondary"><CheckCircleOutlined /> No hay productos con stock negativo en esta sucursal</span>
+                    </div>
+                  )}
+                </div>
               </Col>
             </Row>
           )}
@@ -836,12 +828,12 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                       size={48}
                     />
                     <div className="dashboard-user-meta">
-                      <Text className="dashboard-user-name">
+                      <span className="dashboard-user-name">
                         {usuario?.nombre || '-'}
-                      </Text>
-                      <Text className="dashboard-user-handle">
+                      </span>
+                      <span className="dashboard-user-handle paces-text-secondary">
                         @{usuario?.nombreUsuario}
-                      </Text>
+                      </span>
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -898,7 +890,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                       </Button>
                     </div>
                   ) : (
-                    <Row gutter={[10, 10]} className="dashboard-quick-grid">
+                    <Row gutter={[10, 10]}>
                       {pantallasVisibles.map((p) => (
                         <Col span={12} key={p.codigo}>
                           <div

@@ -37,6 +37,11 @@ export const entidadApi = {
     );
     return data.data;
   },
+
+  obtenerPorCodigo: async (sucursal: number, codigo: string, tipoEntidad: string): Promise<any> => {
+    const { data } = await apiClient.get(`${ENTIDADES_BASE}/${sucursal}/${codigo}`, { params: { tipoEntidad } });
+    return data.data;
+  },
 };
 
 export default entidadApi;

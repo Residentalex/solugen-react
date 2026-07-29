@@ -24,4 +24,9 @@ export const parametrosApi = {
     if (!data.isSuccess) throw new Error(data.errorMessage || 'Error al obtener sucursal contable');
     return data.data ?? null;
   },
+
+  obtenerParametrosAjuste: async (sucursal: number): Promise<any> => {
+    const { data } = await apiClient.get<ApiResponse<any>>(`${BASE}/${sucursal}/ajuste`);
+    return data.data;
+  },
 };
