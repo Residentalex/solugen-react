@@ -736,9 +736,9 @@ const SolicitudPagoFormulario: React.FC = () => {
                           if (current.isAfter(dayjs(), 'day')) return true;
                         }
                         const cierre = fechasCierre?.[sucursalActiva];
-                        if (cierre && current.isBefore(dayjs(cierre).startOf('day'), 'day')) return true;
+                        if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day')) return true;
                         const cierreInv = fechasCierreInv?.[sucursalActiva];
-                        if (cierreInv && current.isBefore(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                        if (cierreInv && !current.isAfter(dayjs(cierreInv).startOf('day'), 'day')) return true;
                         return false;
                       }}
                     />
