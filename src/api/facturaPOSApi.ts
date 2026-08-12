@@ -1,6 +1,9 @@
 import { apiClient } from './client';
 import type { FacturaVistaDTO, FiltroFacturacion } from '../types/facturacion';
-import type { FacturaPOSDTO, FacturaPOSResumenDTO, FacturaPOSFormularioDTO } from '../types/facturaPOS';
+import type { FacturaPOSDTO, FacturaPOSResumenDTO, FacturaPOSFormularioDTO, DetalleFacturaPOSDTO } from '../types/facturaPOS';
+import type { ImpuestoFacturaDTO } from '../types/impuestos';
+import type { AsientoContableDTO } from '../types/entradaAlmacen';
+import type { DocumentoRelacionadoDTO } from '../types/notaDebito';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/PV';
@@ -96,6 +99,37 @@ export const facturaPOSApi = {
   obtenerPorId: async (sucursal: number, id: number): Promise<FacturaPOSDTO> => {
     const { data } = await apiClient.get<ApiResponse<FacturaPOSDTO>>(`${BASE}/${sucursal}/${id}`);
     return data.data;
+  },
+
+  // ===== Carga progresiva: secciones =====
+  obtenerEncabezado: async (sucursal: number, id: number): Promise<FacturaPOSDTO> => {
+    const { data } = await apiClient.get<ApiResponse<FacturaPOSDTO>>(`${BASE}/${sucursal}/${id}/encabezado`);
+    return data.data;
+  },
+
+  obtenerDetalles: async (sucursal: number, id: number): Promise<DetalleFacturaPOSDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<DetalleFacturaPOSDTO[]>>(`${BASE}/${sucursal}/${id}/detalles`);
+    return data.data || [];
+  },
+
+  obtenerCobros: async (sucursal: number, id: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/${id}/cobros`);
+    return data.data || [];
+  },
+
+  obtenerAsientos: async (sucursal: number, id: number): Promise<AsientoContableDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<AsientoContableDTO[]>>(`${BASE}/${sucursal}/${id}/asientos`);
+    return data.data || [];
+  },
+
+  obtenerImpuestos: async (sucursal: number, id: number): Promise<ImpuestoFacturaDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<ImpuestoFacturaDTO[]>>(`${BASE}/${sucursal}/${id}/impuestos`);
+    return data.data || [];
+  },
+
+  obtenerRelacionados: async (sucursal: number, id: number): Promise<DocumentoRelacionadoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<DocumentoRelacionadoDTO[]>>(`${BASE}/${sucursal}/${id}/relacionados`);
+    return data.data || [];
   },
 
   obtenerTotal: async (sucursal: number, desde?: string, hasta?: string): Promise<number> => {

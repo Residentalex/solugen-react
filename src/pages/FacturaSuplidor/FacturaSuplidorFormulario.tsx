@@ -31,6 +31,7 @@ import { conceptosApi } from '../../api/conceptosApi';
 import { productoApi } from '../../api/productoApi';
 import { impuestoApi } from '../../api/impuestoApi';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
+import ModalFechaVencimiento from '../../components/ModalFechaVencimiento/ModalFechaVencimiento';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import { BuscarEntradaModal } from '../../components/BuscarEntradaModal';
 import ScannerModal from '../../components/ScannerModal/ScannerModal';
@@ -2261,7 +2262,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
                 {
                   key: 'asientos',
                   label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
-                  children: permisoModificarAsientos ? (
+                  children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
                         <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)}>
@@ -2397,7 +2398,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
               {
                 key: 'asientos',
                 label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
-                children: permisoModificarAsientos ? (
+                children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
                   <>
                     <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
                       <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)}>
@@ -2433,20 +2434,11 @@ const FacturaSuplidorFormulario: React.FC = () => {
       )}
 
       {/* Modal de Fecha de Vencimiento */}
-      <Modal
-        title="Fecha de Vencimiento"
+      <ModalFechaVencimiento
         open={fechaVencimientoModal.open}
-        onCancel={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
-        onOk={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
-        footer={null}
-        destroyOnHidden
-      >
-        <DatePicker
-          style={{ width: '100%' }}
-          format="YYYY-MM-DD"
-          onChange={handleFechaVencimiento}
-        />
-      </Modal>
+        onClose={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
+        onFechaChange={handleFechaVencimiento}
+      />
 
       {/* Guía paso a paso */}
       {(mode === 'crear' || esBorrador) && (

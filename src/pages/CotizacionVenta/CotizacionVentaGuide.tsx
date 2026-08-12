@@ -14,6 +14,8 @@ export interface CotizacionVentaGuideProps {
   clienteRef: React.RefObject<HTMLDivElement | null>;
   almacenRef: React.RefObject<HTMLDivElement | null>;
   agregarFilaRef: React.RefObject<HTMLDivElement | null>;
+  sucursal: any | null;
+  sucursalRef: React.RefObject<HTMLDivElement | null>;
 }
 
 interface GuideStep {
@@ -33,6 +35,8 @@ const CotizacionVentaGuide: React.FC<CotizacionVentaGuideProps> = ({
   clienteRef,
   almacenRef,
   agregarFilaRef,
+  sucursal,
+  sucursalRef,
 }) => {
   const [open, setOpen] = useState(false);
   const dismissedStepRef = useRef<string | null>(null);
@@ -41,15 +45,21 @@ const CotizacionVentaGuide: React.FC<CotizacionVentaGuideProps> = ({
   const getCurrentStep = useCallback((): GuideStep | null => {
     const steps: GuideStep[] = [
       {
+        key: 'sucursal',
+        title: 'Sucursal',
+        description: 'Seleccione la sucursal contable.',
+        target: () => sucursalRef.current,
+      },
+      {
         key: 'concepto',
-        title: 'Concepto',
-        description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento, por ejemplo qué documento se va a generar, el almacén por defecto, o si va a generar asientos o no, etc.',
+        title: 'Paso 1: Concepto',
+        description: 'Seleccione un concepto para la cotización.',
         target: () => conceptoRef.current,
       },
       {
         key: 'cliente',
-        title: 'Cliente / Entidad',
-        description: 'Debe elegir una entidad para poder continuar.',
+        title: 'Paso 2: Cliente',
+        description: 'Seleccione el cliente. El RNC se mostrará automáticamente.',
         target: () => clienteRef.current,
       },
       {
@@ -60,19 +70,20 @@ const CotizacionVentaGuide: React.FC<CotizacionVentaGuideProps> = ({
       },
       {
         key: 'productos',
-        title: 'Productos',
-        description: 'Seleccione productos a agregar para este Documento.',
+        title: 'Paso 3: Productos',
+        description: 'Agregue productos usando "Agregar fila" o "Buscar Producto".',
         target: () => agregarFilaRef.current,
       },
     ];
 
-    if (!concepto) return steps[0];
-    if (!cliente) return steps[1];
-    if (tieneProductos && !almacen) return steps[2];
-    if (detallesCount === 0) return steps[3];
+    if (!sucursal) return steps[0];
+    if (!concepto) return steps[1];
+    if (!cliente) return steps[2];
+    if (tieneProductos && !almacen) return steps[3];
+    if (detallesCount === 0) return steps[4];
 
     return null;
-  }, [concepto, cliente, tieneProductos, almacen, detallesCount, conceptoRef, clienteRef, almacenRef, agregarFilaRef]);
+  }, [concepto, almacen, cliente, detallesCount, tieneProductos, sucursal, conceptoRef, almacenRef, clienteRef, agregarFilaRef, sucursalRef]);
 
   currentStepRef.current = getCurrentStep();
 

@@ -12,6 +12,7 @@ import PermissionGate from '../../components/PermissionGate';
 import { toTitleCase, formatCurrency } from '../../utils/formats';
 import type { ProductoVistaDTO } from '../../types/productos';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 
@@ -64,6 +65,29 @@ const Productos: React.FC = () => {
       setPageTitleOverride('');
     };
   }, [setActiveModule, updateToolbar, resetToolbar, setPageTitleOverride]);
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalProductos);
+    const dataSource = data?.data || [];
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        if (col.dataIndex) {
+          const val = item[col.dataIndex];
+          return val != null ? String(val) : '';
+        }
+        return '';
+      })
+    );
+    exportToExcel({
+      fileName: `Productos_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'Productos',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -184,6 +208,7 @@ const Productos: React.FC = () => {
           onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onReload={() => refetch()}
           onNuevo={() => navigate('/MProducto/nuevo')}
+          onExportarExcel={handleExportarExcel}
           filtros={
             <Select
               value={filtroActivo}

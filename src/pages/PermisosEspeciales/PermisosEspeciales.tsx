@@ -26,6 +26,7 @@ import { Sucursal } from '../../types/auth';
 import type { AuthPermisoEspecialDTO } from '../../types/auth';
 import { permisoEspecialApi } from '../../api/permisoEspecialApi';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 
@@ -74,6 +75,23 @@ const PermisosEspeciales: React.FC = () => {
         (p.nombre && p.nombre.toLowerCase().includes(term)),
     );
   }, [data, searchText]);
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(securitySucursal);
+    const cols = columns.filter((c) => c.key !== 'acciones');
+    exportToExcel({
+      fileName: `PermisosEspeciales_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'Permisos Especiales',
+      companyName,
+      columnHeaders: cols.map((c) => c.title as string),
+      dataRows: filteredData.map((item: any) =>
+        cols.map((col) => {
+          const val = item[col.dataIndex as string];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
+  };
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -205,6 +223,7 @@ const PermisosEspeciales: React.FC = () => {
           ocultarPageSize
           onNuevo={abrirNuevo}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
         />
 
         <Table<AuthPermisoEspecialDTO>

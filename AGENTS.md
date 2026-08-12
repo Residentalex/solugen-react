@@ -26,6 +26,45 @@ npm run lint
 npx tsc --noEmit
 ```
 
+## Boton Exportar Excel estandar
+
+Toda pantalla de listado con datos tabulares debe incluir el boton "Exportar Excel" con este patron exacto:
+
+```tsx
+<Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+```
+
+**Posicion:** Siempre despues de `<div style={{ flex: 1 }} />` y antes del boton de recargar.
+
+**Handler:**
+```tsx
+const handleExportarExcel = async () => {
+  const companyName = await getCompanyName(sucursalActiva);
+  exportToExcel({
+    fileName: `NombrePantalla_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+    sheetName: 'NombrePantalla',
+    companyName,
+    columns: COLUMNAS_VISIBLES_SIN_ACCIONES,
+    dataSource: datosFiltrados || data,
+  });
+};
+```
+
+**Imports requeridos:**
+```tsx
+import { FileExcelOutlined } from '@ant-design/icons';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
+```
+
+**Si la pantalla usa `CatalogoListadoToolbar`:** solo pasar la prop `onExportarExcel={handleExportarExcel}` (el boton ya esta integrado en el componente compartido).
+
+**Reglas:**
+- El boton debe ser solo icono `FileExcelOutlined`, sin texto (consistente con el boton de recargar `ReloadOutlined`).
+- Excluir siempre la columna "Acciones" del export.
+- Si la columna usa `render` sin `dataIndex`, mapear manualmente el valor renderizado.
+- Usar `datosFiltrados` si existe, sino la variable de datos completa.
+- No importar `dayjs` solo para el nombre del archivo; usar `new Date().toISOString().slice(0,10).replace(/-/g, '')`.
+
 ## Referencia bajo demanda
 
 - Cargar `docs-ai/frontend.md` solo si el cambio requiere detalles de estructura, UI o API.
@@ -192,8 +231,7 @@ Reglas:
 - No crear columna "Acciones" redundante si la columna primaria es clickeable
 - No duplicar SuplidorCard/TotalesCard - extraer a componentes compartidos si se necesitan en múltiples pantallas
 - No usar estilos inline repetidos que puedan reemplazarse con clases CSS existentes
-- Todo modal de busqueda o seleccion (BuscarConcepto, BuscarDocumento, BuscarEntidad, etc.) debe ser un componente compartido en `src/components/`, no definido dentro de la misma pagina donde se usa.
-- La unica excepcion son modales especificos de una sola pantalla que no se reutilizan en ningun otro modulo.
+- Todo modal de busqueda o seleccion (BuscarConcepto, BuscarDocumento, BuscarEntidad, etc.) debe ser un componente compartido en `src/components/`, no definido dentro de la misma pagina donde se usa. Unica excepcion: modales especificos de una sola pantalla que no se reutilizan en otro modulo, o diferencias funcionales reales justificadas y comentadas.
 
 ## Filtros tipo Excel en columnas
 
@@ -265,3 +303,26 @@ En todo formulario con `Form.Item name="sucursal"`, el campo debe preseleccionar
 - Si el Select se controla mediante `value={selectedSucursal...}`, basta con llamar `setSelectedSucursal(match)`.
 - Si el Select no tiene `value` explícito (controlado por Form.Item), debe ademas llamarse `form.setFieldsValue({ sucursal: match.codigo || match.idExterno })`.
 - El efecto debe ejecutarse solo cuando `mode === 'crear'`, `sucursalesCache.length > 0` y `!selectedSucursal`.
+
+## Conciliación Bancaria
+
+- En `ConciliacionBancariaFormulario.tsx`, los campos `numeroCta` y `fecha` deben estar bloqueados en modo edición: `disabled={mode === 'editar'}` (sin condiciones adicionales), en los bloques desktop y mobile.
+ - Solo son editables al crear la conciliación.
+
+## Tab de Asientos Contables
+
+En todos los formularios que tengan tab de asientos contables, la visibilidad del tab editable con botón GENERAR debe regirse exclusivamente por esta condición:
+
+```
+permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos
+```
+
+Donde:
+- `permisoModificarAsientos`: verifica el permiso especial `pe_modificar_asientos` del usuario (`usuario?.permisosEspeciales?.some(p => p.codigo === 'pe_modificar_asientos' && p.valor === true)`)
+- `estado === 0`: el documento debe estar en estado Borrador
+- `!selectedConcepto?.noAsientos`: el concepto del documento debe permitir generar asientos
+
+Si la condición es verdadera → mostrar `AsientosContableEditables` con `onGenerar={handleGenerarAsientos}` y `editable={true}`.
+Si la condición es falsa → mostrar `AsientosContableTable` en modo solo lectura.
+
+El botón GENERAR **nunca** debe estar restringido por `!id` o `disableGenerar={!id}`. El backend acepta `id=0` (documento no persistido).

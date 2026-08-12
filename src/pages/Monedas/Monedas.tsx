@@ -20,6 +20,7 @@ import { monedaApi } from '../../api/monedaApi';
 import type { MonedaDTO } from '../../types/contabilidad';
 import { toTitleCase } from '../../utils/formats';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 
@@ -62,6 +63,29 @@ const Monedas: React.FC = () => {
     updateToolbar({});
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const dataSource = data?.datos || [];
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        if (col.dataIndex) {
+          const val = item[col.dataIndex];
+          return val != null ? String(val) : '';
+        }
+        return '';
+      })
+    );
+    exportToExcel({
+      fileName: `Monedas_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'Monedas',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
 
   const handleSearch = (value: string) => {
     setPage(1);
@@ -183,6 +207,7 @@ const Monedas: React.FC = () => {
           onPageSizeChange={(v) => { setPageSize(v); }}
           onNuevo={abrirNuevo}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
         />
         <Table<MonedaDTO>
           columns={columns}

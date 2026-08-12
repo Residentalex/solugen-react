@@ -33,6 +33,7 @@ import type {
   ConceptoDTO, AlmacenDTO, ClienteDTO, TipoDTO,
 } from '../../types/facturaCliente';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
+import ModalFechaVencimiento from '../../components/ModalFechaVencimiento/ModalFechaVencimiento';
 import type { DetalleFacturaClienteDTO, FacturaClienteFullDTO } from '../../types/facturaCliente';
 import LogTable from '../../components/LogTable';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
@@ -43,6 +44,8 @@ import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar
 import LoadingSpinner from '../../components/LoadingSpinner';
 import GuidePopover from '../../components/GuidePopover/GuidePopover';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
+import AsientosContableTable from '../../components/AsientosContableTable';
+import { transaccionApi } from '../../api/transaccionApi';
 import SeleccionarImpuestosModal from '../../components/SeleccionarImpuestosModal';
 import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestosModal';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
@@ -265,6 +268,13 @@ const FacturaClienteFormulario: React.FC = () => {
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
   const esAnulado = estado === 3;
+
+  // ===== Permisos especiales =====
+  const usuario = useAuthStore((s: any) => s.usuario);
+  const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
+    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+  ) ?? false;
+  const [generandoAsientos, setGenerandoAsientos] = useState(false);
 
   // ===== Determinar si almacén es obligatorio =====
   const tieneProductos = detalles.some((d) => d.tipoArticulo === 'P' || d.tipoArticulo === 'Producto');
@@ -897,6 +907,22 @@ const FacturaClienteFormulario: React.FC = () => {
   // ===== Funciones auxiliares para asientos =====
   function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
   function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
+
+  const handleGenerarAsientos = async () => {
+    if (sucursalActiva === undefined) return;
+    setGenerandoAsientos(true);
+    try {
+      const dto = construirDTO();
+      const asientosGenerados = await transaccionApi.generarAsientos(sucursalActiva, dto);
+      setAsientosLocales(asientosGenerados);
+      message.success(`Se generaron ${asientosGenerados.length} asientos`);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al generar asientos');
+      message.error(msg);
+    } finally {
+      setGenerandoAsientos(false);
+    }
+  };
 
   const handleRefresh = useCallback(() => {
     if (mode === 'crear') return;
@@ -1751,13 +1777,17 @@ const FacturaClienteFormulario: React.FC = () => {
                 {
                   key: 'asientos',
                   label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
-                  children: (
+                  children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
                     <AsientosContableEditables
                       asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
                       onChange={setAsientosLocales}
-                      editable={mode === 'crear' || mode === 'editar'}
+                      editable={true}
                       scroll={{ x: 900 }}
+                      onGenerar={handleGenerarAsientos}
+                      generando={generandoAsientos}
                     />
+                  ) : (
+                    <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
                   ),
                 },
                 ...(data?.logs && data.logs.length > 0
@@ -1881,13 +1911,17 @@ const FacturaClienteFormulario: React.FC = () => {
               {
                 key: 'asientos',
                 label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
-                children: (
+                children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
                   <AsientosContableEditables
                     asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
                     onChange={setAsientosLocales}
-                    editable={mode === 'crear' || mode === 'editar'}
+                    editable={true}
                     scroll={{ x: 900 }}
+                    onGenerar={handleGenerarAsientos}
+                    generando={generandoAsientos}
                   />
+                ) : (
+                  <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
                 ),
               },
               ...(data?.logs && data.logs.length > 0
@@ -1905,20 +1939,11 @@ const FacturaClienteFormulario: React.FC = () => {
       )}
 
       {/* Modal de Fecha de Vencimiento */}
-      <Modal
-        title="Fecha de Vencimiento"
+      <ModalFechaVencimiento
         open={fechaVencimientoModal.open}
-        onCancel={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
-        onOk={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
-        footer={null}
-        destroyOnHidden
-      >
-        <DatePicker
-          style={{ width: '100%' }}
-          format="YYYY-MM-DD"
-          onChange={handleFechaVencimiento}
-        />
-      </Modal>
+        onClose={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
+        onFechaChange={handleFechaVencimiento}
+      />
 
       {/* Guía paso a paso */}
       {(mode === 'crear' || esBorrador) && (

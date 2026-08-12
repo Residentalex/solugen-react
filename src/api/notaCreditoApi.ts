@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import type { TransaccionVistaDTO, FiltroTransaccion } from '../types/transaccion';
 import type { ApiResponse } from '../types/auth';
+import type { NotaCreditoFullDTO, DetalleMovimientoDTO } from '../types/notaCredito';
 
 const BASE = '/Transaccion';
 const TIPO_DOC = 'NC';
@@ -53,6 +54,32 @@ export const notaCreditoApi = {
 
   obtenerPorId: async (sucursal: number, id: number): Promise<TransaccionVistaDTO> => {
     const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO>>(`${BASE}/${sucursal}/${id}`);
+    return data.data;
+  },
+
+  // ═══ Carga progresiva: encabezado ligero + secciones on-demand ═══
+  obtenerEncabezado: async (sucursal: number, id: number): Promise<NotaCreditoFullDTO> => {
+    const { data } = await apiClient.get<ApiResponse<NotaCreditoFullDTO>>(`${BASE}/${sucursal}/${id}/encabezado`);
+    return data.data;
+  },
+
+  obtenerDetalles: async (sucursal: number, id: number): Promise<DetalleMovimientoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<DetalleMovimientoDTO[]>>(`${BASE}/${sucursal}/detalles/${id}`);
+    return data.data;
+  },
+
+  obtenerAsientos: async (sucursal: number, id: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/${id}/asientos`);
+    return data.data;
+  },
+
+  obtenerImpuestos: async (sucursal: number, id: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/${id}/impuestos`);
+    return data.data;
+  },
+
+  obtenerRelacionados: async (sucursal: number, id: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/${id}/relacionados`);
     return data.data;
   },
 

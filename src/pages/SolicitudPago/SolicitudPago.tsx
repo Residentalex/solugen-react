@@ -34,7 +34,7 @@ const SolicitudPago: React.FC = () => {
         entidad: params.entidad,
         concepto: params.concepto,
       }),
-    reporteUrl: () => '',
+    reporteUrl: (sucursal, id) => `/reportes/banco/solicitud-pago/${sucursal}/${id}`,
     tituloReporte: '',
     tituloError: 'Error al cargar solicitudes de pago',
   });
@@ -157,7 +157,7 @@ const SolicitudPago: React.FC = () => {
         showClonar: true,
         clonarDisabled: !state.selectedRow,
         onClonar: handleClonar,
-        showImprimir: false,
+        showImprimir: true,
         imprimirDisabled: !state.selectedRow,
         onImprimir: actions.handleImprimir,
         showEditar: true,

@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, DatePicker, message, Typography, Button, Alert } from 'antd';
+import { FileExcelOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { cierreMesApi } from '../../api/cierreMesApi';
 import type { CierreMesDTO } from '../../api/cierreMesApi';
 import type { Dayjs } from 'dayjs';
+import { useAuthStore } from '../../stores/authStore';
+import PermissionGate from '../../components/PermissionGate';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Title } = Typography;
 
@@ -29,6 +33,26 @@ const CierreMes: React.FC = () => {
   };
 
   useEffect(() => { cargar(); }, []);
+
+  const handleExportarExcel = async () => {
+    const sucursalActiva = useAuthStore.getState().sucursalActiva;
+    const companyName = await getCompanyName(sucursalActiva);
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = datos.map((item: any) =>
+      exportCols.map((col: any) => {
+        const val = item[col.dataIndex];
+        return val != null ? String(val) : '';
+      })
+    );
+    exportToExcel({
+      fileName: `CierreMes_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'CierreMes',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
 
   const handleFechaChange = (sucursalId: number, date: dayjs.Dayjs | null) => {
     if (date) {
@@ -97,6 +121,10 @@ const CierreMes: React.FC = () => {
     <div style={{ padding: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>Cierre de Mes</Title>
+        <div style={{ flex: 1 }} />
+        <PermissionGate accion="EXPORTAR">
+          <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+        </PermissionGate>
         {cantCambios > 0 && (
           <Button type="primary" onClick={handleGuardar} loading={guardando}>
             Guardar cambios ({cantCambios})

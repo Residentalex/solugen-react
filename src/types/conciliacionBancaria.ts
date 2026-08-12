@@ -40,6 +40,14 @@ export interface MovimientoBancarioDTO {
   concepto: string;
   cotejado: boolean;
   referencia: string;
+  /** Documento relacionado resuelto por el backend (editable en UI) */
+  documento?: string;
+  /** Tipo de documento resuelto por el backend al matchear en CTRANSAC (ej: FAC) */
+  tipoDoc?: string;
+  /** Nombre descriptivo del tipo de documento (resuelto por el backend) */
+  nombreTipoDoc?: string;
+  /** Nombre del beneficiario (NOMBRE de CTRANSAC) resuelto por el backend */
+  entidad?: string;
 }
 
 /** Ajuste de conciliación (AJUSTCON) */
@@ -62,6 +70,18 @@ export interface TransaccionConciliadaDTO {
   monto: number;
   concil: boolean;
   debCred: string;
+  /** Nombre descriptivo del tipo de documento (resuelto por el backend) */
+  nombreTipoDoc?: string;
+  /** Nota del documento (NOTAS de CTRANSAC) */
+  nota?: string;
+}
+
+/** Resumen de movimientos conciliados agrupados por tipo de documento */
+export interface ResumenTipoDocumentoDTO {
+  tipoDoc: string;
+  nombreTipoDoc: string;
+  cantidad: number;
+  montoTotal: number;
 }
 
 /** Cuenta bancaria (CTASBANC) para selector */

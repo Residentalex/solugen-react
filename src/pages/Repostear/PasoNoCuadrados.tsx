@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { DatePicker, Select, Button, Table, Typography, Space, message, Badge } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
+import { SearchOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { transaccionApi, formatDateParam } from '../../api/transaccionApi';
 import { useUIStore } from '../../stores/uiStore';
 import type { TransaccionDTO } from '../../types/transaccion';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import type { Sucursal } from '../../types/auth';
+import PermissionGate from '../../components/PermissionGate';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -75,6 +77,25 @@ const PasoNoCuadrados: React.FC<Props> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursal?.id ?? 0);
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = documentos.map((item: any) =>
+      exportCols.map((col: any) => {
+        const val = item[col.dataIndex];
+        return val != null ? String(val) : '';
+      })
+    );
+    exportToExcel({
+      fileName: `NoCuadrados_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'NoCuadrados',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
   };
 
   const noCuadradosCount = documentos.filter(
@@ -209,6 +230,9 @@ const PasoNoCuadrados: React.FC<Props> = ({
           >
             Buscar
           </Button>
+          <PermissionGate accion="EXPORTAR">
+            <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+          </PermissionGate>
         </Space>
       </div>
 

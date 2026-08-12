@@ -56,6 +56,27 @@ export const notaDebitoApi = {
     return data.data;
   },
 
+  // ═══ Carga progresiva: encabezado ligero + secciones on-demand ═══
+  obtenerEncabezado: async (sucursal: number, id: number): Promise<any> => {
+    const { data } = await apiClient.get<ApiResponse<any>>(`${BASE}/${sucursal}/${id}/encabezado`);
+    return data.data;
+  },
+
+  obtenerAsientos: async (sucursal: number, id: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/${id}/asientos`);
+    return data.data;
+  },
+
+  obtenerImpuestos: async (sucursal: number, id: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/${id}/impuestos`);
+    return data.data;
+  },
+
+  obtenerRelacionados: async (sucursal: number, id: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/${id}/relacionados`);
+    return data.data;
+  },
+
   crear: async <T>(sucursal: number, transaccion: T): Promise<T> => {
     const { data } = await apiClient.post<ApiResponse<T>>(`${BASE}/${sucursal}`, transaccion);
     return data.data;

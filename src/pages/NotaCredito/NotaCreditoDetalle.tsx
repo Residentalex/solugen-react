@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Tooltip, Modal, Alert, App, QRCode, Input, Typography, Switch
@@ -34,6 +34,7 @@ import type { NotaCreditoFullDTO, DetalleMovimientoDTO } from '../../types/notaC
 import ErrorDetalle from '../../components/ErrorDetalle';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
+import ModalVisorScanner from '../../components/ModalVisorScanner/ModalVisorScanner';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 import TablaImpuestosDetalle from '../../components/TablaImpuestosDetalle';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
@@ -73,6 +74,17 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
   const [detalleSearch, setDetalleSearch] = useState('');
   const monedaDefault = getMonedaSucursalActiva();
 
+  // ═══ Carga progresiva: banderas anti doble fetch por sección ═══
+  const [relacionadosCargados, setRelacionadosCargados] = useState(false);
+  const [detallesCargados, setDetallesCargados] = useState(false);
+  const [impuestosCargados, setImpuestosCargados] = useState(false);
+  const [asientosCargados, setAsientosCargados] = useState(false);
+  const [seccionesCargando, setSeccionesCargando] = useState<Set<string>>(new Set());
+  const relacionadosCargadosRef = useRef(false);
+  const detallesCargadosRef = useRef(false);
+  const impuestosCargadosRef = useRef(false);
+  const asientosCargadosRef = useRef(false);
+
   const codigoPantalla = tipoEntidad === 'SUP' ? 'FNCSUP' : 'FNCCLI';
   const { screenCode, documentCode } = useScreenConfig(codigoPantalla);
   const rutaBase = tipoEntidad === 'SUP' ? 'NCSUP' : 'NCCLI';
@@ -98,49 +110,129 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride, codigoPantalla]);
 
-  useEffect(() => {
+  const marcarSeccionesCompletas = useCallback(() => {
+    setRelacionadosCargados(true);
+    setDetallesCargados(true);
+    setImpuestosCargados(true);
+    setAsientosCargados(true);
+  }, []);
+
+  // ═══════════════════════════════════════════════════════════════
+  // Carga progresiva: encabezado primero + secciones críticas
+  // ═══════════════════════════════════════════════════════════════
+  const cargarEncabezado = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setLoadingError(false);
-    notaCreditoApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res: NotaCreditoFullDTO) => {
-        if (!res) {
-          message.error('Documento no encontrado en la sucursal seleccionada.');
-          setLoadingError(true);
-          return;
-        }
-        setData(res);
-        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
-        // Si el documento está anulado y tiene reversoId, cargar el reverso
-        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-          notaCreditoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
-            .then((revRes) => setReversoData(revRes))
-            .catch(() => setReversoData(null));
-        } else {
-          setReversoData(null);
-          setMostrandoReverso(false);
-        }
-        const promises: Promise<any>[] = [
-          notaCreditoApi.verificarScan(sucursalActiva, parseInt(id))
-            .then((scanRes) => setTieneScan(scanRes.existe))
-            .catch(() => setTieneScan(false)),
-        ];
-        if (res.ncf) {
-          promises.push(
-            apiClient.get(`/DGII/${sucursalActiva}/${res.id}`)
-              .then(({ data: resp }: any) => { setEstadoDGII(resp?.data || null); })
-              .catch(() => { setEstadoDGII(null); })
-          );
-        }
-        Promise.all(promises).catch((err) => console.warn('Error en cargas secundarias del detalle', err));
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
-        message.error(msg);
+    try {
+      const res = await notaCreditoApi.obtenerEncabezado(sucursalActiva, parseInt(id));
+      if (!res) {
+        message.error('Documento no encontrado en la sucursal seleccionada.');
         setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
+        return;
+      }
+      setData(res);
+      setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+      // Si el documento está anulado y tiene reversoId, cargar el reverso
+      if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
+        notaCreditoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+          .then((revRes) => setReversoData(revRes))
+          .catch(() => setReversoData(null));
+      } else {
+        setReversoData(null);
+        setMostrandoReverso(false);
+      }
+      const promises: Promise<any>[] = [
+        notaCreditoApi.verificarScan(sucursalActiva, parseInt(id))
+          .then((scanRes) => setTieneScan(scanRes.existe))
+          .catch(() => setTieneScan(false)),
+      ];
+      if (res.ncf) {
+        promises.push(
+          apiClient.get(`/DGII/${sucursalActiva}/${res.id}`)
+            .then(({ data: resp }: any) => { setEstadoDGII(resp?.data || null); })
+            .catch(() => { setEstadoDGII(null); })
+        );
+      }
+      Promise.all(promises).catch((err) => console.warn('Error en cargas secundarias del detalle', err));
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
+      message.error(msg);
+      setLoadingError(true);
+    } finally {
+      setLoading(false);
+    }
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  const cargarSeccion = useCallback(async (seccion: 'relacionados' | 'detalles' | 'impuestos' | 'asientos') => {
+    if (!id) return;
+    // Guard anti doble fetch ANTES de cualquier setState: si la sección ya está
+    // cargada, salir sin re-render. Esto corta los loops de "Maximum update depth".
+    if (
+      (seccion === 'relacionados' && relacionadosCargadosRef.current) ||
+      (seccion === 'detalles' && detallesCargadosRef.current) ||
+      (seccion === 'impuestos' && impuestosCargadosRef.current) ||
+      (seccion === 'asientos' && asientosCargadosRef.current)
+    ) {
+      return;
+    }
+    setSeccionesCargando(prev => new Set(prev).add(seccion));
+    try {
+      const suc = sucursalActiva;
+      const numId = parseInt(id);
+      switch (seccion) {
+        case 'relacionados': {
+          const transaccionesAsociadas = await notaCreditoApi.obtenerRelacionados(suc, numId);
+          setData(prev => (prev ? { ...prev, transaccionesAsociadas } : prev));
+          setRelacionadosCargados(true);
+          break;
+        }
+        case 'detalles': {
+          const detalles = await notaCreditoApi.obtenerDetalles(suc, numId);
+          setData(prev => (prev ? { ...prev, detalles } : prev));
+          setDetallesCargados(true);
+          break;
+        }
+        case 'impuestos': {
+          const impuestosFactura = await notaCreditoApi.obtenerImpuestos(suc, numId);
+          setData(prev => (prev ? { ...prev, impuestosFactura } : prev));
+          setImpuestosCargados(true);
+          break;
+        }
+        case 'asientos': {
+          const asientos = await notaCreditoApi.obtenerAsientos(suc, numId);
+          setData(prev => (prev ? { ...prev, asientos } : prev));
+          setAsientosCargados(true);
+          break;
+        }
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || `Error al cargar ${seccion}`;
+      message.error(msg);
+    } finally {
+      setSeccionesCargando(prev => {
+        const next = new Set(prev);
+        next.delete(seccion);
+        return next;
+      });
+    }
+  }, [id, sucursalActiva]);
+
+  // Montaje: encabezado primero, luego las secciones críticas. Ant Design no dispara
+  // onChange con defaultActiveKey, por eso la pestaña por defecto se carga aquí.
+  useEffect(() => {
+    const init = async () => {
+      await cargarEncabezado();
+      await cargarSeccion('relacionados');
+    };
+    init();
+  }, [cargarEncabezado, cargarSeccion]);
+
+  // Sincronizar refs de banderas para evitar stale closures en cargarSeccion
+  useEffect(() => { relacionadosCargadosRef.current = relacionadosCargados; }, [relacionadosCargados]);
+  useEffect(() => { detallesCargadosRef.current = detallesCargados; }, [detallesCargados]);
+  useEffect(() => { impuestosCargadosRef.current = impuestosCargados; }, [impuestosCargados]);
+  useEffect(() => { asientosCargadosRef.current = asientosCargados; }, [asientosCargados]);
 
   useEffect(() => {
     if (!data?.id) return;
@@ -163,6 +255,8 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
           return;
         }
         setData(res);
+        // Recarga completa: todas las secciones quedan cargadas
+        marcarSeccionesCompletas();
         // Calcular balance de asientos contables
         const totalDeb = (res?.asientos || []).reduce((s: number, r: any) =>
           s + ((r.tipoAsiento === 0 || r.tipoAsiento === 'D') ? (r.monto || 0) : 0), 0);
@@ -262,6 +356,8 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
       setModalAnularOpen(false);
       const res = await notaCreditoApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
+      // Recarga completa: todas las secciones quedan cargadas
+      marcarSeccionesCompletas();
       if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
         const revRes = await notaCreditoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
@@ -308,6 +404,8 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
       message.success('Documento marcado como revisado');
       const res = await notaCreditoApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
+      // Recarga completa: todas las secciones quedan cargadas
+      marcarSeccionesCompletas();
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al marcar revisado');
       message.error(msg);
@@ -324,6 +422,8 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
       message.success('Documento reversado exitosamente');
       const res = await notaCreditoApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
+      // Recarga completa: todas las secciones quedan cargadas
+      marcarSeccionesCompletas();
       if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
         const revRes = await notaCreditoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
@@ -345,6 +445,8 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
       await notaCreditoApi.recalcular(sucursalActiva, parseInt(id));
       const res = await notaCreditoApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
+      // Recarga completa: todas las secciones quedan cargadas
+      marcarSeccionesCompletas();
       message.success('Documento recalculado correctamente');
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al recalcular');
@@ -725,6 +827,13 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
             <Tabs
               defaultActiveKey="documentos"
               type="card"
+              onChange={(key) => {
+                // Secciones perezosas bajo demanda con guards anti doble fetch
+                if (key === 'impuestos') cargarSeccion('impuestos');
+                if (key === 'detalles') cargarSeccion('detalles');
+                if (key === 'asientos') cargarSeccion('asientos');
+                if (key === 'documentos') cargarSeccion('relacionados');
+              }}
               tabBarExtraContent={
                 <Input.Search
                   placeholder="Buscar detalle..."
@@ -739,32 +848,48 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                   key: 'documentos',
                   label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                   children: (
-                    <TransaccionesAsociadasCard
-                      documentos={documentoActivo?.transaccionesAsociadas || []}
-                      readOnly={true}
-                      rutas={rutasDocumentos}
-                    />
+                    <Spin spinning={seccionesCargando.has('relacionados')} tip="Cargando documentos...">
+                      <div style={{ minHeight: 220 }}>
+                        <TransaccionesAsociadasCard
+                          documentos={documentoActivo?.transaccionesAsociadas || []}
+                          readOnly={true}
+                          rutas={rutasDocumentos}
+                        />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
                   key: 'impuestos',
                   label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
                   children: (
-                    <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
+                    <Spin spinning={seccionesCargando.has('impuestos')} tip="Cargando impuestos...">
+                      <div style={{ minHeight: 120 }}>
+                        <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
                   key: 'detalles',
                   label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detalles?.length || 0}` : ''})`,
                   children: (
-                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                    <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
+                      <div style={{ minHeight: 220 }}>
+                        <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey={(r: any, i?: number) => r.id || i} size="small" pagination={false} scroll={{ x: 1100 }} />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
                   key: 'asientos',
                   label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                    <Spin spinning={seccionesCargando.has('asientos')} tip="Cargando asientos...">
+                      <div style={{ minHeight: 220 }}>
+                        <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
@@ -847,6 +972,13 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
           <Tabs
             defaultActiveKey="documentos"
             type="card"
+            onChange={(key) => {
+              // Secciones perezosas bajo demanda con guards anti doble fetch
+              if (key === 'impuestos') cargarSeccion('impuestos');
+              if (key === 'detalles') cargarSeccion('detalles');
+              if (key === 'asientos') cargarSeccion('asientos');
+              if (key === 'documentos') cargarSeccion('relacionados');
+            }}
             tabBarExtraContent={
               <Input.Search
                 placeholder="Buscar detalle..."
@@ -861,32 +993,48 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                   key: 'documentos',
                   label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                   children: (
-                    <TransaccionesAsociadasCard
-                      documentos={documentoActivo?.transaccionesAsociadas || []}
-                      readOnly={true}
-                      rutas={rutasDocumentos}
-                    />
+                    <Spin spinning={seccionesCargando.has('relacionados')} tip="Cargando documentos...">
+                      <div style={{ minHeight: 220 }}>
+                        <TransaccionesAsociadasCard
+                          documentos={documentoActivo?.transaccionesAsociadas || []}
+                          readOnly={true}
+                          rutas={rutasDocumentos}
+                        />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
                   key: 'impuestos',
                   label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
                   children: (
-                    <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
+                    <Spin spinning={seccionesCargando.has('impuestos')} tip="Cargando impuestos...">
+                      <div style={{ minHeight: 120 }}>
+                        <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
                   key: 'detalles',
                   label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detalles?.length || 0}` : ''})`,
                   children: (
-                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                    <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
+                      <div style={{ minHeight: 220 }}>
+                        <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey={(r: any, i?: number) => r.id || i} size="small" pagination={false} scroll={{ x: 1100 }} />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
                   key: 'asientos',
                   label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                    <Spin spinning={seccionesCargando.has('asientos')} tip="Cargando asientos...">
+                      <div style={{ minHeight: 220 }}>
+                        <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
@@ -919,28 +1067,13 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
         </div>
       )}
 
-      {/* Modal de Visor de Scanner */}
-      <Modal
-        title="Factura Escaneada"
+      <ModalVisorScanner
         open={scannerModalOpen}
-        onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
-        width="80%"
-        style={{ top: 20 }}
-        footer={null}
-        destroyOnHidden
-      >
-        {scannerLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        ) : scannerUrl ? (
-          <iframe src={scannerUrl} style={{ width: '100%', height: '70vh', border: 'none' }} title="Scanner" />
-        ) : (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        )}
-      </Modal>
+        titulo="Factura Escaneada"
+        url={scannerUrl}
+        loading={scannerLoading}
+        onClose={() => { setScannerModalOpen(false); setScannerUrl(null); }}
+      />
 
       {/* Modal de Progreso para Aplicar/Postear */}
       <ModalProgreso

@@ -175,6 +175,11 @@ const ReciboIngresoFormulario: React.FC = () => {
   const sinOC = true;
   const isLarge = screens.xxl === true;
 
+  const usuario = useAuthStore((s) => s.usuario);
+  const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
+    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+  ) ?? false;
+
   // Estado
   const estado = toEstadoNum(data?.estado);
   const esCerrado = data?.periodo === 6;
@@ -479,6 +484,7 @@ const ReciboIngresoFormulario: React.FC = () => {
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
         ...t,
         transaccionAsociadaID: t.transaccionAsociadaID || t.id,
+        saldoPendiente: pendienteEfectivo(t),
       })),
       cobros: cobros.map((c) => ({
         medioCobro: c.medioCobro,
@@ -625,6 +631,14 @@ const ReciboIngresoFormulario: React.FC = () => {
   const totalDebitos = asientos.reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
   const totalCreditos = asientos.reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
 
+  // ===== Pendiente efectivo por fila =====
+  // DOCASOC.PENDIENTE puede venir mal (0) cuando en realidad DEBITADO - ACREDITADO != 0.
+  // El pendiente efectivo se calcula como max(montoOriginal - pagado, saldoPendiente), nunca negativo.
+  const pendienteEfectivo = (t: TransaccionAsociadaDTO): number => {
+    const v = Math.max(0, (t.montoOriginal || 0) - (t.pagado || 0), t.saldoPendiente || 0);
+    return Math.round(v * 100) / 100;
+  };
+
   // ===== Columnas =====
   const asociadasColumns = [
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => formatDate(v) },
@@ -642,21 +656,24 @@ const ReciboIngresoFormulario: React.FC = () => {
     { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 140, render: (v: string) => v || '-' },
     { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v) },
     { title: 'Abonado', dataIndex: 'pagado', key: 'pagado', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Pendiente', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
+    { title: 'Pendiente', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (_: any, record: TransaccionAsociadaDTO) => <strong>{formatNumber(pendienteEfectivo(record))}</strong> },
     { title: 'Retención', dataIndex: 'retencion', key: 'retencion', width: 110, align: 'right' as const, render: (v: number) => formatNumber(v || 0) },
     {
       title: 'Monto', dataIndex: 'monto', key: 'monto', width: 130, align: 'right' as const,
-      render: (_: any, _record: TransaccionAsociadaDTO, idx: number) => (
+      render: (_: any, record: TransaccionAsociadaDTO, idx: number) => (
         <InputNumber
           size="small"
           style={{ width: '100%' }}
+          styles={{ input: { textAlign: 'right' } }}
           min={0}
+          max={pendienteEfectivo(record)}
           step={0.01}
           precision={2}
           value={transaccionesAsociadas[idx]?.monto}
           onChange={(val) => {
+            const monto = val ?? 0;
             setTransaccionesAsociadas((prev) =>
-              prev.map((t, i) => i === idx ? { ...t, monto: val || 0 } : t)
+              prev.map((t, i) => i === idx ? { ...t, monto: Math.min(monto, pendienteEfectivo(t)) } : t)
             );
           }}
         />
@@ -1126,14 +1143,13 @@ const ReciboIngresoFormulario: React.FC = () => {
   tabItems.push({
     key: 'asientos',
     label: `Asientos Contables (${asientos.length})`,
-    children: (
+    children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
       <div>
         <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end' }}>
           <Button
             icon={<ExclamationCircleOutlined />}
             onClick={handleGenerarAsientos}
             loading={saving}
-            disabled={!id}
           >
             GENERAR
           </Button>
@@ -1156,6 +1172,24 @@ const ReciboIngresoFormulario: React.FC = () => {
           )}
         />
       </div>
+    ) : (
+      <Table
+        dataSource={asientos}
+        columns={asientoColumns}
+        rowKey={(r) => r.id || Math.random()}
+        size="small"
+        pagination={false}
+        scroll={{ x: 600 }}
+        summary={() => (
+          <Table.Summary fixed>
+            <Table.Summary.Row>
+              <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
+              <Table.Summary.Cell index={3} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
+              <Table.Summary.Cell index={4} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
+            </Table.Summary.Row>
+          </Table.Summary>
+        )}
+      />
     ),
   });
 

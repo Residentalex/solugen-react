@@ -13,6 +13,7 @@ import type { TicketDTO } from '../../types/ticket';
 import type { CrearTicketRequest } from '../../types/ticket';
 import type { UsuarioDTO } from '../../types/administracion';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { TextArea } = Input;
 
@@ -72,6 +73,23 @@ const Tickets: React.FC = () => {
       usuarioApi.obtenerListado(sucursal).then(setUsuarios).catch((err) => console.warn('Error al cargar usuarios', err));
     }
   }, [sucursal]);
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursal);
+    const cols = columns.filter((c) => c.key !== 'acciones');
+    exportToExcel({
+      fileName: `Tickets_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'Tickets',
+      companyName,
+      columnHeaders: cols.map((c) => c.title as string),
+      dataRows: filtered.map((item: any) =>
+        cols.map((col) => {
+          const val = item[col.dataIndex as string];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
+  };
 
   const handleCrear = useCallback(async () => {
     if (!sucursal || !usuarioID) return;
@@ -180,6 +198,7 @@ const Tickets: React.FC = () => {
           onPageSizeChange={(v) => { setPageSize(v); }}
           onNuevo={() => setCrearModal(true)}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
           filtros={
             <Select
               placeholder="Estado"

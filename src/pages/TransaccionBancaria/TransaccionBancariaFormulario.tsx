@@ -88,6 +88,14 @@ const TransaccionBancariaFormulario: React.FC = () => {
   const [documentosAsociados, setDocumentosAsociados] = useState<any[]>([]);
   const [buscarDocModalOpen, setBuscarDocModalOpen] = useState(false);
 
+  // ===== Pendiente efectivo por fila =====
+  // DOCASOC.PENDIENTE puede venir mal (0) cuando en realidad DEBITADO - ACREDITADO != 0.
+  // El pendiente efectivo se calcula como max(montoOriginal - pagado, saldoPendiente), nunca negativo.
+  const pendienteEfectivo = (t: any): number => {
+    const v = Math.max(0, (t.montoOriginal || 0) - (t.pagado || 0), t.saldoPendiente || t.pendiente || 0);
+    return Math.round(v * 100) / 100;
+  };
+
   // ===== Estado para campos rápidos (Referencia, Tasa) =====
   const [editingField, setEditingField] = useState<string | null>(null);
   const editingOriginalValue = useRef<string | number>('');
@@ -285,7 +293,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
             descuento: d.descuento ?? 0,
             retencion: d.retencion ?? 0,
             pagado: d.pagado ?? 0,
-            pendiente: d.saldoPendiente ?? 0,
+            pendiente: pendienteEfectivo(d),
           })));
         }
 
@@ -533,7 +541,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
         nCF: d.nCF,
         documento: d.documento,
         pagado: d.pagado ?? 0,
-        saldoPendiente: d.pendiente ?? 0,
+        saldoPendiente: pendienteEfectivo(d),
       })),
     };
 
@@ -615,7 +623,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
             descuento: d.descuento ?? 0,
             retencion: d.retencion ?? 0,
             pagado: d.pagado ?? 0,
-            pendiente: d.saldoPendiente ?? 0,
+            pendiente: pendienteEfectivo(d),
           })));
         }
 
@@ -680,7 +688,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
   // ===== Handlers de documentos asociados =====
   const handleMontoChange = useCallback((id: number, value: number | null) => {
     setDocumentosAsociados(prev =>
-      prev.map(d => (d.transaccionAsociadaID ?? d.id) === id ? { ...d, monto: value ?? 0 } : d)
+      prev.map(d => (d.transaccionAsociadaID ?? d.id) === id ? { ...d, monto: Math.min(value ?? 0, pendienteEfectivo(d)) } : d)
     );
   }, []);
 
@@ -712,7 +720,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
         descuento: 0,
         retencion: d.retencion ?? 0,
         pagado: d.pagado ?? d.acreditado ?? 0,
-        pendiente: d.pendiente ?? d.saldoPendiente ?? 0,
+        pendiente: pendienteEfectivo(d),
       }))];
     });
   }, []);
@@ -1179,6 +1187,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
                             inputStyle={{ textAlign: 'right' as const }}
                             className="input-number-right"
                             min={0}
+                            max={pendienteEfectivo(record)}
                             step={0.01}
                             precision={2}
                             value={record.monto}

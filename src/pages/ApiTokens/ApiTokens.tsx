@@ -9,6 +9,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { apiTokenApi, type AuthApiTokenListadoDTO } from '../../api/apiTokenApi';
 import PermissionGate from '../../components/PermissionGate';
 import ApiTokenCrearModal from './ApiTokenCrearModal';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 
@@ -36,8 +37,27 @@ const ApiTokens: React.FC = () => {
     return () => resetToolbar();
   }, [setActiveModule, resetToolbar]);
 
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+
   const handleSearch = (value: string) => {
     setSearchText(value);
+  };
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const cols = columns.filter((c) => c.key !== 'acciones');
+    exportToExcel({
+      fileName: `ApiTokens_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'API Tokens',
+      companyName,
+      columnHeaders: cols.map((c) => c.title as string),
+      dataRows: filteredData.map((item: any) =>
+        cols.map((col) => {
+          const val = item[col.dataIndex as string];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
   };
 
   const handleRevocar = async (id: number) => {
@@ -181,6 +201,7 @@ const ApiTokens: React.FC = () => {
           ocultarPageSize
           onNuevo={() => setModalOpen(true)}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
         />
         <Table<AuthApiTokenListadoDTO>
           columns={columns}

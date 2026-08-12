@@ -140,6 +140,9 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const entidadLabel = tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente';
   const pantallaActiva = usuario?.pantallas?.find((p: any) => p.codigo?.toUpperCase() === codigoPantalla?.toUpperCase());
   const tienePermisoPostear = pantallaActiva?.acciones?.includes('POSTEAR') ?? false;
+  const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
+    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+  ) ?? false;
 
   // ===== States =====
   const [loading, setLoading] = useState(false);
@@ -1134,6 +1137,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
   // ===== Columnas de pestañas =====
   const docRelColumns = [
+    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => v ? formatDate(v) : '-' },
     { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
     { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 140, render: (v: string) => v || '-' },
     { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v) },
@@ -1153,7 +1157,6 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         const pagado = record.pagado || 0;
         const saldoPendiente = record.saldoPendiente || 0;
         const maxCalculado = Math.max(0, montoOriginal - pagado);
-        console.log('[DEBUG monto] idx:', idx, 'montoOriginal:', montoOriginal, 'pagado:', pagado, 'saldoPendiente:', saldoPendiente, 'max:', maxCalculado, 'value:', documentosRelacionados[idx]?.monto);
         return (
         <InputNumber
           size="small"
@@ -1178,8 +1181,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   ];
 
   const devColumns = [
-    { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => v ? formatDate(v) : '-' },
+    { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
     {
       title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 140, align: 'right' as const,
       render: (_: any, record: DevolucionAsociadaDTO) => formatNumber((record.montoOriginal || 0) + (record.impuesto || 0)),
@@ -1636,7 +1639,7 @@ render: (v: number) => formatNumber(v ?? 0),
             rowKey={(r) => r.transaccionAsociadaID || r.id || 0}
             size="small"
             pagination={false}
-            scroll={{ x: 800 }}
+            scroll={{ x: 950 }}
           />
         </div>
       ),
@@ -1736,7 +1739,7 @@ render: (v: number) => formatNumber(v ?? 0),
     {
       key: 'asientos',
       label: `Asientos (${asientos.length})`,
-      children: (estado === 0 && tienePermisoPostear) ? (
+      children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
         <>
           <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
             <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)}>
@@ -1749,7 +1752,6 @@ render: (v: number) => formatNumber(v ?? 0),
             editable={true}
             onGenerar={handleGenerarAsientos}
             generando={saving}
-            disableGenerar={!id}
           />
         </>
       ) : (

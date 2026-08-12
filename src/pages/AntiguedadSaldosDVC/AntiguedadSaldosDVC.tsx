@@ -11,10 +11,11 @@ import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { antiguedadSaldosDVCApi } from '../../api/antiguedadSaldosDVCApi';
-import { proveedorApi } from '../../api/proveedorApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { toTitleCase, formatCurrency } from '../../utils/formats';
+import PermissionGate from '../../components/PermissionGate';
+import ModalBuscarSuplidor from '../../components/ModalBuscarSuplidor/ModalBuscarSuplidor';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import type { TransaccionBalanceDTO, ResumenAgingDTO } from '../../types/antiguedadSaldos';
 import type { SuplidorDTO } from '../../types/entradaAlmacen';
@@ -135,10 +136,6 @@ const AntiguedadSaldosDVC: React.FC = () => {
 
   // Modal de búsqueda de suplidor
   const [modalEntidadAbierto, setModalEntidadAbierto] = useState(false);
-  const [entidades, setEntidades] = useState<SuplidorDTO[]>([]);
-  const [entidadesOrig, setEntidadesOrig] = useState<SuplidorDTO[]>([]);
-  const [buscandoEntidad, setBuscandoEntidad] = useState(false);
-  const [_searchEntidad, setSearchEntidad] = useState('');
 
   // Modal de búsqueda de tipo DVC
   const [modalTipoAbierto, setModalTipoAbierto] = useState(false);
@@ -154,18 +151,8 @@ const AntiguedadSaldosDVC: React.FC = () => {
   const [buscandoSucursal, setBuscandoSucursal] = useState(false);
   const [_searchSucursal, setSearchSucursal] = useState('');
 
-  const entidadSearchRef = useRef<any>(null);
   const tipoSearchRef = useRef<any>(null);
   const sucursalSearchRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (modalEntidadAbierto) {
-      const timer = setTimeout(() => {
-        entidadSearchRef.current?.focus?.();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [modalEntidadAbierto]);
 
   useEffect(() => {
     if (modalTipoAbierto) {
@@ -271,37 +258,6 @@ const AntiguedadSaldosDVC: React.FC = () => {
   };
 
   /* ───── Handlers de búsqueda de suplidor ───── */
-
-  const abrirModalEntidad = async () => {
-    setModalEntidadAbierto(true);
-    setSearchEntidad('');
-    setBuscandoEntidad(true);
-    try {
-      const lista = await proveedorApi.obtenerListado(sucursalActiva);
-      setEntidades(lista || []);
-      setEntidadesOrig(lista || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || `Error al cargar suplidores`);
-    } finally {
-      setBuscandoEntidad(false);
-    }
-  };
-
-  const buscarEntidad = (valor: string) => {
-    setSearchEntidad(valor);
-    if (!valor) {
-      setEntidades([...entidadesOrig]);
-      return;
-    }
-    const term = valor.toLowerCase();
-    const filtradas = entidadesOrig.filter(
-      (e) =>
-        e.codigo?.toLowerCase().includes(term) ||
-        e.nombre?.toLowerCase().includes(term) ||
-        (e.identificacion?.toLowerCase() || '').includes(term),
-    );
-    setEntidades(filtradas);
-  };
 
   const seleccionarEntidad = (item: SuplidorDTO) => {
     setCodEntidad(item.codigo);
@@ -443,6 +399,7 @@ const AntiguedadSaldosDVC: React.FC = () => {
       const existente = map.get(key);
       if (existente) {
         existente.total += item.total || 0;
+        existente.impuestos = (existente.impuestos || 0) + ((item as any).impuestos || 0);
         existente.monto0_30 += aging.monto0_30;
         existente.monto31_60 += aging.monto31_60;
         existente.monto61_90 += aging.monto61_90;
@@ -454,6 +411,7 @@ const AntiguedadSaldosDVC: React.FC = () => {
           codigoEntidad: key,
           nombreEntidad: nombre,
           total: item.total || 0,
+          impuestos: (item as any).impuestos || 0,
           monto0_30: aging.monto0_30,
           monto31_60: aging.monto31_60,
           monto61_90: aging.monto61_90,
@@ -469,9 +427,10 @@ const AntiguedadSaldosDVC: React.FC = () => {
   /* ───── Totales para summary ───── */
 
   const summaryTotals = useMemo(() => {
-    const items: Array<{ total: number; monto0_30: number; monto31_60: number; monto61_90: number; monto91_120: number; montoMas120: number }> =
+    const items: Array<{ total: number; impuestos?: number; monto0_30: number; monto31_60: number; monto61_90: number; monto91_120: number; montoMas120: number }> =
       detallado ? agingData : resumenData;
     let total = 0;
+    let impuestos = 0;
     let m0_30 = 0;
     let m31_60 = 0;
     let m61_90 = 0;
@@ -479,13 +438,14 @@ const AntiguedadSaldosDVC: React.FC = () => {
     let mMas120 = 0;
     for (const item of items) {
       total += item.total || 0;
+      impuestos += (item as any).impuestos || 0;
       m0_30 += item.monto0_30 || 0;
       m31_60 += item.monto31_60 || 0;
       m61_90 += item.monto61_90 || 0;
       m91_120 += item.monto91_120 || 0;
       mMas120 += item.montoMas120 || 0;
     }
-    return { total, m0_30, m31_60, m61_90, m91_120, mMas120 };
+    return { total, impuestos, m0_30, m31_60, m61_90, m91_120, mMas120 };
   }, [detallado, agingData, resumenData]);
 
   /* ───── Exportar Excel ───── */
@@ -500,17 +460,19 @@ const AntiguedadSaldosDVC: React.FC = () => {
     const companyName = await getCompanyName(sucursalActiva);
 
     if (detallado) {
-      const columnHeaders = ['Suplidor', 'Documento', 'NCF', 'Fecha', 'Tipo DVC', 'Sucursal', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
+      const columnHeaders = ['Sucursal', 'Fecha', 'Documento', 'NCF', 'Suplidor', 'Tipo DVC', 'Total', 'Impuestos', 'Moneda', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
       const dataRows = agingData.map((item) => [
-        item.entidad?.nombre || item.nombreEntidad || '',
+        (item as any).sucursal?.nombre || '',
+        formatDate(item.fechaDocumento),
         item.tipoDocumento
           ? `${item.tipoDocumento}-${item.noDocumento}`
           : (item.noDocumento || ''),
         item.ncf || '',
-        formatDate(item.fechaDocumento),
+        item.entidad?.nombre || item.nombreEntidad || '',
         (item as any).tipo?.nombre || '',
-        (item as any).sucursal?.nombre || '',
         item.total ?? 0,
+        (item as any).impuestos ?? 0,
+        item.moneda?.nombre || '',
         item.monto0_30 ?? 0,
         item.monto31_60 ?? 0,
         item.monto61_90 ?? 0,
@@ -518,7 +480,7 @@ const AntiguedadSaldosDVC: React.FC = () => {
         item.montoMas120 ?? 0,
       ]);
       dataRows.push([
-        'Totales', '', '', '', '', '', summaryTotals.total,
+        'Totales', '', '', '', '', '', summaryTotals.total, summaryTotals.impuestos, '',
         summaryTotals.m0_30, summaryTotals.m31_60, summaryTotals.m61_90,
         summaryTotals.m91_120, summaryTotals.mMas120,
       ]);
@@ -530,11 +492,13 @@ const AntiguedadSaldosDVC: React.FC = () => {
         columnWidths: columnHeaders.map(() => ({ wch: 18 })),
       });
     } else {
-      const columnHeaders = [entidadLabel, 'Código', 'Total', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
+      const columnHeaders = ['Suplidor', 'Código', 'Moneda', 'Total', 'Impuestos', '0-30 días', '31-60 días', '61-90 días', '91-120 días', 'Más 120 días'];
       const dataRows = resumenData.map((item) => [
         item.nombreEntidad,
         item.codigoEntidad,
+        item.moneda || '',
         item.total,
+        (item as any).impuestos ?? 0,
         item.monto0_30,
         item.monto31_60,
         item.monto61_90,
@@ -542,7 +506,7 @@ const AntiguedadSaldosDVC: React.FC = () => {
         item.montoMas120,
       ]);
       dataRows.push([
-        'Totales', '', summaryTotals.total,
+        'Totales', '', '', summaryTotals.total, summaryTotals.impuestos,
         summaryTotals.m0_30, summaryTotals.m31_60, summaryTotals.m61_90,
         summaryTotals.m91_120, summaryTotals.mMas120,
       ]);
@@ -554,7 +518,7 @@ const AntiguedadSaldosDVC: React.FC = () => {
         columnWidths: columnHeaders.map(() => ({ wch: 18 })),
       });
     }
-  }, [sucursalActiva, detallado, agingData, resumenData, summaryTotals, entidadLabel]);
+  }, [sucursalActiva, detallado, agingData, resumenData, summaryTotals]);
 
   /* ───── Columnas vista detallada ───── */
 
@@ -809,7 +773,7 @@ const AntiguedadSaldosDVC: React.FC = () => {
                   readOnly
                   style={{ width: '100%' }}
                 />
-                <Button icon={<SearchOutlined />} onClick={abrirModalEntidad} />
+                <Button icon={<SearchOutlined />} onClick={() => setModalEntidadAbierto(true)} />
                 {nomEntidad ? (
                   <Button icon={<CloseOutlined />} onClick={limpiarEntidad} />
                 ) : null}
@@ -932,9 +896,11 @@ const AntiguedadSaldosDVC: React.FC = () => {
               <Button icon={<PrinterOutlined />} onClick={handlePrint} loading={imprimiendo}>
                 Imprimir PDF
               </Button>
-              <Button icon={<DownloadOutlined />} onClick={exportarExcel}>
-                Exportar
-              </Button>
+              <PermissionGate accion="EXPORTAR">
+                <Button icon={<DownloadOutlined />} onClick={exportarExcel}>
+                  Exportar
+                </Button>
+              </PermissionGate>
               <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
             </div>
           </div>
@@ -969,39 +935,24 @@ const AntiguedadSaldosDVC: React.FC = () => {
       ) : null}
 
       {/* ───── Modal búsqueda suplidor ───── */}
-      <Modal
-        title="Buscar Suplidor"
+      <ModalBuscarSuplidor
         open={modalEntidadAbierto}
-        onCancel={() => setModalEntidadAbierto(false)}
-        footer={null}
-        width={600}
-        destroyOnHidden
-      >
-        <Input.Search
-          ref={entidadSearchRef}
-          placeholder="Buscar por nombre o código..."
-          allowClear
-          onSearch={buscarEntidad}
-          style={{ marginBottom: 12 }}
-        />
-        <Table
-          columns={[
-            { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
-            { title: 'Nombre', dataIndex: 'nombre', key: 'nombre' },
-            { title: 'RNC', dataIndex: 'identificacion', key: 'identificacion', width: 140 },
-          ]}
-          dataSource={entidades}
-          rowKey="codigo"
-          loading={buscandoEntidad}
-          size="small"
-          pagination={{ pageSize: 10, showSizeChanger: false }}
-          onRow={(record: any) => ({
-            onClick: () => seleccionarEntidad(record),
-            style: { cursor: 'pointer' },
-          })}
-          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
-        />
-      </Modal>
+        onClose={() => setModalEntidadAbierto(false)}
+        onSelect={seleccionarEntidad}
+        buscar={async (filtro) => {
+          const { proveedorApi } = await import('../../api/proveedorApi');
+          const lista = await proveedorApi.obtenerListado(sucursalActiva);
+          if (!filtro) return lista;
+          const term = filtro.toLowerCase();
+          return (lista || []).filter(
+            (e) =>
+              e.codigo?.toLowerCase().includes(term) ||
+              e.nombre?.toLowerCase().includes(term) ||
+              (e.identificacion?.toLowerCase() || '').includes(term)
+          );
+        }}
+        autoFocus
+      />
 
       {/* ───── Modal búsqueda tipo DVC ───── */}
       <Modal

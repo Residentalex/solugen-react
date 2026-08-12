@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, Table, Button, DatePicker, Typography, Empty, message } from 'antd';
-import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
@@ -10,6 +10,8 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { salidaAlmacenApi } from '../../api/salidaAlmacenApi';
 import type { SalidaAlmacenDTO } from '../../types/salidaAlmacen';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
+import PermissionGate from '../../components/PermissionGate';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import ListadoErrorAlert from '../../components/ListadoErrorAlert';
 
 const { RangePicker } = DatePicker;
@@ -102,6 +104,25 @@ const TransferenciaSucursales: React.FC = () => {
     if (hasQueried) handleConsultar();
   }, [hasQueried, handleConsultar]);
 
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const exportCols = columnas.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = data.map((item: any) =>
+      exportCols.map((col: any) => {
+        const val = item[col.dataIndex];
+        return val != null ? String(val) : '';
+      })
+    );
+    exportToExcel({
+      fileName: `TransferenciaSucursales_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'TransferenciaSucursales',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
+
   return (
     <>
       {loadingError && (
@@ -131,6 +152,9 @@ const TransferenciaSucursales: React.FC = () => {
               Consultar
             </Button>
             <div style={{ flex: 1 }} />
+            <PermissionGate accion="EXPORTAR">
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+            </PermissionGate>
             <Button icon={<ReloadOutlined />} disabled={!hasQueried} onClick={handleRefresh} />
           </div>
         </div>

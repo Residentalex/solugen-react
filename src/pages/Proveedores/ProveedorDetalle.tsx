@@ -110,6 +110,9 @@ const ProveedorDetalle: React.FC = () => {
           <Descriptions.Item label="Teléfono">
             <span><PhoneOutlined style={{ color: '#556ee6', marginRight: 6 }} />{data.telefono || '-'}</span>
           </Descriptions.Item>
+          <Descriptions.Item label="Beneficiario">
+            {data.beneficiario ? toTitleCase(data.beneficiario) : '-'}
+          </Descriptions.Item>
           <Descriptions.Item label="Días Crédito">
             {data.diasCredito ? `${data.diasCredito} días` : '-'}
           </Descriptions.Item>

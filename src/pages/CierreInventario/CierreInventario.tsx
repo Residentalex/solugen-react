@@ -8,12 +8,13 @@ import {
   ReloadOutlined, LockOutlined, CheckCircleOutlined,
   ExclamationCircleOutlined, CloseCircleOutlined,
   CalendarOutlined, SafetyOutlined, ShoppingCartOutlined,
-  SearchOutlined, DollarOutlined, EyeOutlined,
+  SearchOutlined, DollarOutlined, EyeOutlined, FileExcelOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import PermissionGate from '../../components/PermissionGate';
 import { cierreInventarioApi } from '../../api/cierreInventarioApi';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import CierreReaperturaModal from './CierreReaperturaModal';
 import ExistenciasNegativasModal from './ExistenciasNegativasModal';
 
@@ -249,6 +250,31 @@ const CierreInventario: React.FC = () => {
     cargarDatos();
   };
 
+  // ===== Exportar Excel =====
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursal);
+    const exportColumns = [
+      { title: 'Fecha de cierre', dataIndex: 'fechaCierre' },
+      { title: 'Fecha realizado', dataIndex: 'fechaRealizado' },
+      { title: 'Cantidad total', dataIndex: 'cantidad' },
+      { title: 'Costo total', dataIndex: 'total' },
+    ];
+    const columnHeaders = exportColumns.map((col) => col.title);
+    const dataRows = cierres.map((item: any) =>
+      exportColumns.map((col) => {
+        const val = item[col.dataIndex];
+        return val != null ? String(val) : '';
+      })
+    );
+    exportToExcel({
+      fileName: `CierreInventario_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'CierreInventario',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
+
   // ===== Render helpers =====
   const renderValidationIcon = (estado: ValidacionItem['estado']) => {
     switch (estado) {
@@ -349,6 +375,9 @@ const CierreInventario: React.FC = () => {
         }}
       >
         <div style={{ flex: 1 }} />
+        <PermissionGate accion="EXPORTAR">
+          <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+        </PermissionGate>
         <Button icon={<ReloadOutlined />} onClick={cargarDatos} loading={loading} />
       </div>
 

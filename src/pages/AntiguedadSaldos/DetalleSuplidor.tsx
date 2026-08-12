@@ -26,12 +26,15 @@ const DetalleSuplidor: React.FC = () => {
     const skipGuard = searchParams.get('skipGuard');
 
     // Leer datos desde localStorage (enviados desde la página principal)
-    const storedData = localStorage.getItem('detalleSuplidor_data');
+    // Determinar tipo entidad desde la ruta
+    const rutaTipo = window.location.pathname.includes('RAntiguedaCXC') ? 'CLI' : 'SUP';
+    const storageKey = `detalleSuplidor_data_${rutaTipo}`;
+    const storedData = localStorage.getItem(storageKey);
     const parsedData = storedData ? JSON.parse(storedData) : null;
     
     const codEntidad = parsedData?.codEntidad || searchParams.get('codEntidad') || '';
     const nomEntidad = parsedData?.nomEntidad || searchParams.get('nomEntidad') || '';
-    const tipoEntidad = parsedData?.tipoEntidad || 'SUP';
+    const tipoEntidad = parsedData?.tipoEntidad || rutaTipo;
 
     const [documentos, setDocumentos] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -57,16 +60,13 @@ const DetalleSuplidor: React.FC = () => {
                 .map((d: any) => {
                     const creditos = d.creditos || 0;
                     const debitos = d.debitos || 0;
-                    const total = d.total || 0;
-                    const saldo = tipoEntidad === 'SUP'
-                        ? total - debitos
-                        : total - creditos;
+                    const balance = creditos - debitos;
                     
                     return {
                         ...d,
-                        abonado: tipoEntidad === 'SUP' ? debitos : creditos,
-                        saldoPendiente: Math.round(saldo * 100) / 100,
-                        esSobrepago: saldo < 0,
+                        abonado: Math.abs(debitos || 0),
+                        saldoPendiente: Math.round(balance * 100) / 100,
+                        esSobrepago: balance < 0,
                         dias: calcularDias(d.fechaDocumento, fechaRef),
                     };
                 })
@@ -123,8 +123,11 @@ const DetalleSuplidor: React.FC = () => {
                 });
             }
             
-            // Si hay mezcla, priorizar ND (saldo positivo predomina)
-            const esNC = haySobrepago && !haySaldoPositivo;
+            // SUP: sobrepago → NC, saldo positivo → ND
+            // CLI: saldo positivo → NC, sobrepago → ND (invertido)
+            const esNC = tipoEntidad === 'SUP'
+                ? (haySobrepago && !haySaldoPositivo)
+                : (haySaldoPositivo && !haySobrepago);
             
             // Obtener tipo de documento según caso
             let tipoCodigo = '';
@@ -188,7 +191,7 @@ const DetalleSuplidor: React.FC = () => {
             title: 'Saldo Pendiente', key: 'saldo', width: 130, align: 'right' as const,
             render: (_: any, r: any) => (
                 <Text strong style={{ color: r.saldoPendiente < 0 ? '#ff4d4f' : undefined }}>
-                    {formatCurrency(r.saldoPendiente)}
+                    {formatCurrency(Math.abs(r.saldoPendiente))}
                 </Text>
             ),
         },

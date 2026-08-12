@@ -4,7 +4,7 @@ import {
 } from 'antd';
 import {
   SearchOutlined, ReloadOutlined, PlusOutlined, EditOutlined,
-  PlayCircleOutlined, PoweroffOutlined, DeleteOutlined,
+  PlayCircleOutlined, PoweroffOutlined, DeleteOutlined, FileExcelOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import PermissionGate from '../../components/PermissionGate';
@@ -13,6 +13,8 @@ import type { NotificacionSQLConfig } from '../../types/notificaciones';
 import NotificacionSQLFormulario from './NotificacionSQLFormulario';
 import NotificacionSQLResultadoModal from './NotificacionSQLResultadoModal';
 import { useCompanyStore } from '../../stores/companyStore';
+import { useAuthStore } from '../../stores/authStore';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 function formatIntervalo(minutos: number): string {
   if (minutos < 60) return `Cada ${minutos} min`;
@@ -44,6 +46,7 @@ const tipoColor: Record<string, string> = {
 };
 
 const NotificacionesPersonalizadas: React.FC = () => {
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const sucursalesData = useCompanyStore((s) => s.data.sucursales);
   const SUCURSALES_LABELS = Object.fromEntries(
     (sucursalesData || [])
@@ -83,6 +86,23 @@ const NotificacionesPersonalizadas: React.FC = () => {
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPagina(1);
+  };
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const cols = columns.filter((c) => c.key !== 'acciones');
+    exportToExcel({
+      fileName: `NotificacionesPersonalizadas_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'Notificaciones Personalizadas',
+      companyName,
+      columnHeaders: cols.map((c) => c.title as string),
+      dataRows: dataSource.map((item: any) =>
+        cols.map((col) => {
+          const val = item[col.dataIndex as string];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
   };
 
   const handleRefresh = () => {
@@ -287,6 +307,9 @@ const NotificacionesPersonalizadas: React.FC = () => {
               ]}
             />
             <div style={{ flex: 1 }} />
+            <PermissionGate accion="EXPORTAR">
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+            </PermissionGate>
             <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>
         </div>

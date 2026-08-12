@@ -2,19 +2,40 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   Table, Button, Card, Modal, Form, Input, InputNumber, Switch, Typography, Tooltip, message, Popconfirm,
 } from 'antd';
-import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { ecommerceApi } from '../../../api/ecommerceApi';
 import type { AdminCategoriaDTO } from '../../../api/ecommerceApi';
+import { useAuthStore } from '../../../stores/authStore';
+import PermissionGate from '../../../components/PermissionGate';
+import { exportToExcel, getCompanyName } from '../../../utils/exportToExcel';
 
 const { Text } = Typography;
 
 const EcommerceAdminCategorias: React.FC = () => {
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const [data, setData] = useState<AdminCategoriaDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AdminCategoriaDTO | null>(null);
   const [form] = Form.useForm();
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const cols = columns.filter((c) => c.key !== 'acciones');
+    exportToExcel({
+      fileName: `Categorias_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'Categorías Ecommerce',
+      companyName,
+      columnHeaders: cols.map((c) => c.title as string),
+      dataRows: data.map((item: any) =>
+        cols.map((col) => {
+          const val = item[col.dataIndex as string];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
+  };
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -150,6 +171,9 @@ const EcommerceAdminCategorias: React.FC = () => {
             <Button type="primary" icon={<PlusOutlined />} onClick={openCrear}>
               Nueva Categoría
             </Button>
+            <PermissionGate accion="EXPORTAR">
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+            </PermissionGate>
             <Button icon={<ReloadOutlined />} onClick={cargar} />
           </div>
         </div>

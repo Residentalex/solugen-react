@@ -4,14 +4,15 @@ import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Typography, Descriptions, Alert, message, Modal, Input,
 } from 'antd';
 import {
-  ArrowLeftOutlined, EditOutlined, CheckCircleOutlined, CheckCircleFilled, CloseCircleFilled, SearchOutlined,
+  ArrowLeftOutlined, EditOutlined, CheckCircleOutlined, CheckCircleFilled, CloseCircleFilled, SearchOutlined, PrinterOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { apiClient } from '../../api/client';
 import { conciliacionBancariaApi } from '../../api/conciliacionBancariaApi';
 import PermissionGate from '../../components/PermissionGate';
 import { formatCurrency, formatNumber, formatDate, extraerMensajeError, toTitleCase } from '../../utils/formats';
-import type { ConciliacionBancariaDTO, MovimientoBancarioDTO, TransaccionConciliadaDTO } from '../../types/conciliacionBancaria';
+import type { ConciliacionBancariaDTO, MovimientoBancarioDTO, TransaccionConciliadaDTO, ResumenTipoDocumentoDTO } from '../../types/conciliacionBancaria';
 
 const { Text } = Typography;
 
@@ -27,8 +28,18 @@ const ConciliacionBancariaDetalle: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [imprimiendo, setImprimiendo] = useState(false);
   const [searchMov, setSearchMov] = useState('');
+  const [searchSinConcil, setSearchSinConcil] = useState('');
   const [searchTrans, setSearchTrans] = useState('');
+  const [enTransito, setEnTransito] = useState<TransaccionConciliadaDTO[]>([]);
+  const [loadingTransito, setLoadingTransito] = useState(false);
+  const [searchTransito, setSearchTransito] = useState('');
+  const [searchResumen, setSearchResumen] = useState('');
+  const [movimientosDetalle, setMovimientosDetalle] = useState<MovimientoBancarioDTO[]>([]);
+  const [transaccionesDetalle, setTransaccionesDetalle] = useState<TransaccionConciliadaDTO[]>([]);
+  const [movimientosCargados, setMovimientosCargados] = useState(false);
+  const [transaccionesCargadas, setTransaccionesCargadas] = useState(false);
 
   // ===== Carga de datos =====
   const cargarData = useCallback(() => {
@@ -36,7 +47,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
     setLoading(true);
     setLoadingError(false);
 
-    conciliacionBancariaApi.obtenerPorId(sucursalActiva, parseInt(id))
+    conciliacionBancariaApi.obtenerEncabezado(sucursalActiva, parseInt(id))
       .then((res) => {
         setData(res);
         setPageTitleOverride(`Conciliación N° ${res.concilID}`);
@@ -49,6 +60,62 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
+  const cargarEnTransito = useCallback(() => {
+    if (!id) return;
+    setLoadingTransito(true);
+    conciliacionBancariaApi.obtenerEnTransito(sucursalActiva, parseInt(id))
+      .then((res) => setEnTransito(res))
+      .catch(() => message.error('Error al cargar documentos en tránsito'))
+      .finally(() => setLoadingTransito(false));
+  }, [id, sucursalActiva]);
+
+  const cargarMovimientosDetalle = useCallback(() => {
+    if (!id) return;
+    conciliacionBancariaApi.obtenerMovimientos(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setMovimientosDetalle(res);
+        setMovimientosCargados(true);
+      })
+      .catch((err: any) => {
+        const msg = extraerMensajeError(err, 'Error al cargar los movimientos');
+        message.error(msg);
+      });
+  }, [id, sucursalActiva]);
+
+  const cargarTransaccionesDetalle = useCallback(() => {
+    if (!id) return;
+    conciliacionBancariaApi.obtenerTransaccionesConciliadas(sucursalActiva, parseInt(id))
+      .then((res) => {
+        setTransaccionesDetalle(res);
+        setTransaccionesCargadas(true);
+      })
+      .catch((err: any) => {
+        const msg = extraerMensajeError(err, 'Error al cargar las transacciones');
+        message.error(msg);
+      });
+  }, [id, sucursalActiva]);
+
+  // Resumen de transacciones conciliadas agrupadas por tipo de documento
+  const resumenTipoDocDetalle = useMemo<ResumenTipoDocumentoDTO[]>(() => {
+    const map = new Map<string, ResumenTipoDocumentoDTO>();
+    transaccionesDetalle.forEach((t) => {
+      if (!t.tipoDoc) return;
+      const existing = map.get(t.tipoDoc);
+      if (existing) {
+        existing.cantidad += 1;
+        existing.montoTotal += t.monto;
+      } else {
+        map.set(t.tipoDoc, {
+          tipoDoc: t.tipoDoc,
+          nombreTipoDoc: t.nombreTipoDoc || '',
+          cantidad: 1,
+          montoTotal: t.monto,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [transaccionesDetalle]);
+
   useEffect(() => {
     setActiveModule('FConcil');
     return () => setPageTitleOverride('');
@@ -57,6 +124,19 @@ const ConciliacionBancariaDetalle: React.FC = () => {
   useEffect(() => {
     cargarData();
   }, [cargarData]);
+
+  // Cargar tránsito al montar para que el label del tab muestre el conteo real
+  useEffect(() => {
+    if (data) cargarEnTransito();
+  }, [data, cargarEnTransito]);
+
+  // La pestaña activa por defecto es 'movimientos'; onChange no se dispara al montar,
+  // así que cargar los movimientos aquí (igual que el efecto de tránsito).
+  useEffect(() => {
+    if (!data) return;
+    if (movimientosCargados) return;
+    cargarMovimientosDetalle();
+  }, [data, movimientosCargados, cargarMovimientosDetalle]);
 
   // ===== Handlers =====
   const handleAplicar = () => {
@@ -73,6 +153,8 @@ const ConciliacionBancariaDetalle: React.FC = () => {
           await conciliacionBancariaApi.aplicar(sucursalActiva, data.concilID);
           message.success('Conciliación aplicada exitosamente');
           cargarData();
+          if (movimientosCargados) cargarMovimientosDetalle();
+          if (transaccionesCargadas) cargarTransaccionesDetalle();
         } catch (err: any) {
           const msg = extraerMensajeError(err, 'Error al aplicar');
           message.error(msg);
@@ -81,6 +163,22 @@ const ConciliacionBancariaDetalle: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleImprimir = async () => {
+    setImprimiendo(true);
+    try {
+      const res = await apiClient.get(
+        `/reportes/conciliacion-bancaria/${sucursalActiva}/${Number(id)}/pdf`,
+        { responseType: 'blob' }
+      );
+      const blobUrl = URL.createObjectURL(res.data);
+      window.open(blobUrl, '_blank');
+    } catch {
+      message.error('Error al generar el PDF');
+    } finally {
+      setImprimiendo(false);
+    }
   };
 
   // ===== Loading state =====
@@ -210,6 +308,33 @@ const ConciliacionBancariaDetalle: React.FC = () => {
     },
   ];
 
+  // ===== Columnas del resumen por tipo de documento =====
+  const resumenColumns = [
+    {
+      title: 'Nombre del tipo',
+      key: 'tipo',
+      render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
+        <Text>{r.nombreTipoDoc || r.tipoDoc}</Text>
+      ),
+    },
+    {
+      title: 'Cantidad de documentos',
+      dataIndex: 'cantidad',
+      key: 'cantidad',
+      width: 180,
+      align: 'right' as const,
+      render: (val: number) => <Text>{formatNumber(val)}</Text>,
+    },
+    {
+      title: 'Monto total',
+      dataIndex: 'montoTotal',
+      key: 'montoTotal',
+      width: 150,
+      align: 'right' as const,
+      render: (val: number) => <Text strong>{formatCurrency(val)}</Text>,
+    },
+  ];
+
   return (
     <div>
       {/* Alert de error */}
@@ -238,6 +363,15 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               disabled={data.aplicada}
             >
               Editar
+            </Button>
+          </PermissionGate>
+          <PermissionGate accion="IMPRIMIR">
+            <Button
+              icon={<PrinterOutlined />}
+              onClick={handleImprimir}
+              loading={imprimiendo}
+            >
+              Imprimir
             </Button>
           </PermissionGate>
           <PermissionGate accion="APLICAR">
@@ -300,10 +434,19 @@ const ConciliacionBancariaDetalle: React.FC = () => {
             <Tabs
               defaultActiveKey="movimientos"
               type="card"
+              onChange={(key) => {
+                if (key === 'movimientos' || key === 'sinconciliar') {
+                  if (!movimientosCargados) cargarMovimientosDetalle();
+                } else if (key === 'transacciones' || key === 'resumen') {
+                  if (!transaccionesCargadas) cargarTransaccionesDetalle();
+                } else if (key === 'transito') {
+                  cargarEnTransito();
+                }
+              }}
               items={[
               {
               key: 'movimientos',
-              label: `Movimientos Bancarios (${data.movimientos?.length || 0})`,
+              label: `Movimientos Bancarios (${movimientosDetalle.length})`,
               children: (
               <>
               <Input.Search
@@ -316,7 +459,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                 />
                   <Table
                       dataSource={(() => {
-                        const items = data.movimientos || [];
+                        const items = movimientosDetalle;
                       if (!searchMov) return items;
                       const q = searchMov.toLowerCase();
                       return items.filter((m) =>
@@ -328,16 +471,51 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                 columns={movimientoColumns}
                 rowKey="orden"
                 size="small"
-                  pagination={false}
+                  pagination={{ pageSize: 50, showSizeChanger: true }}
                     scroll={{ x: 800 }}
                       locale={{ emptyText: 'No hay movimientos bancarios importados' }}
                       />
-                      </>
-                      ),
-                    },
+                        </>
+                        ),
+                              },
+                      {
+                      key: 'sinconciliar',
+              label: `Importados sin conciliar (${movimientosDetalle.filter((m) => !m.cotejado).length})`,
+              children: (
+                <>
+                  <Input.Search
+                    placeholder="Buscar en sin conciliar..."
+                    allowClear
+                    onSearch={(v) => setSearchSinConcil(v)}
+                    onChange={(e) => { if (!e.target.value) setSearchSinConcil(''); }}
+                    style={{ width: 300, marginBottom: 12 }}
+                    prefix={<SearchOutlined className="paces-text-icon" />}
+                  />
+                  <Table
+                    dataSource={(() => {
+                      const items = movimientosDetalle.filter((m) => !m.cotejado);
+                      if (!searchSinConcil) return items;
+                      const q = searchSinConcil.toLowerCase();
+                      return items.filter((m) =>
+                        (m.concepto && m.concepto.toLowerCase().includes(q)) ||
+                        (m.numRef && m.numRef.toLowerCase().includes(q)) ||
+                        (m.documento && m.documento.toLowerCase().includes(q)) ||
+                        (m.entidad && m.entidad.toLowerCase().includes(q))
+                      );
+                    })()}
+                    columns={movimientoColumns}
+                    rowKey="orden"
+                    size="small"
+                    pagination={{ pageSize: 50, showSizeChanger: true }}
+                    scroll={{ x: 800 }}
+                    locale={{ emptyText: 'No hay movimientos sin conciliar' }}
+                  />
+                </>
+              ),
+            },
             {
               key: 'transacciones',
-              label: `Documentos Conciliados (${data.transacciones?.length || 0})`,
+              label: `Transacciones Conciliadas (${transaccionesDetalle.length})`,
               children: (
                 <>
                   <Input.Search
@@ -350,7 +528,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                   />
                   <Table
                     dataSource={(() => {
-                      const items = data.transacciones || [];
+                      const items = transaccionesDetalle;
                       if (!searchTrans) return items;
                       const q = searchTrans.toLowerCase();
                       return items.filter((t) =>
@@ -364,7 +542,75 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                     size="small"
                     pagination={{ pageSize: 10, showTotal: (t) => `${t} registros`, size: 'small' }}
                     scroll={{ x: 700 }}
-                    locale={{ emptyText: 'No hay documentos conciliados' }}
+                    locale={{ emptyText: 'No hay transacciones conciliadas' }}
+                  />
+                </>
+              ),
+            },
+            {
+              key: 'resumen',
+              label: 'Resumen por tipo de documento',
+              children: (
+                <>
+                  <Input.Search
+                    placeholder="Buscar por tipo de documento..."
+                    allowClear
+                    onSearch={(v) => setSearchResumen(v)}
+                    onChange={(e) => { if (!e.target.value) setSearchResumen(''); }}
+                    style={{ width: 300, marginBottom: 12 }}
+                    prefix={<SearchOutlined className="paces-text-icon" />}
+                  />
+                  <Table
+                    dataSource={(() => {
+                      const items = resumenTipoDocDetalle;
+                      if (!searchResumen) return items;
+                      const q = searchResumen.toLowerCase();
+                      return items.filter((r) =>
+                        (r.nombreTipoDoc && r.nombreTipoDoc.toLowerCase().includes(q)) ||
+                        (r.tipoDoc && r.tipoDoc.toLowerCase().includes(q))
+                      );
+                    })()}
+                    columns={resumenColumns}
+                    rowKey="tipoDoc"
+                    size="small"
+                    pagination={{ pageSize: 10, showTotal: (t) => `${t} registros`, size: 'small' }}
+                    scroll={{ x: 600 }}
+                    locale={{ emptyText: 'No hay transacciones conciliadas para resumir' }}
+                  />
+                </>
+              ),
+            },
+            {
+              key: 'transito',
+              label: `Transacciones en Tránsito (${enTransito.length})`,
+              children: (
+                <>
+                  <Input.Search
+                    placeholder="Buscar en tránsito..."
+                    allowClear
+                    onSearch={(v) => setSearchTransito(v)}
+                    onChange={(e) => { if (!e.target.value) setSearchTransito(''); }}
+                    style={{ width: 300, marginBottom: 12 }}
+                    prefix={<SearchOutlined className="paces-text-icon" />}
+                  />
+                  <Table
+                    dataSource={(() => {
+                      const items = enTransito;
+                      if (!searchTransito) return items;
+                      const q = searchTransito.toLowerCase();
+                      return items.filter((t) =>
+                        (t.tipoDoc && t.tipoDoc.toLowerCase().includes(q)) ||
+                        (t.numDoc && t.numDoc.toLowerCase().includes(q)) ||
+                        (t.entidad && t.entidad.toLowerCase().includes(q))
+                      );
+                    })()}
+                    columns={transaccionColumns}
+                    rowKey="transacId"
+                    size="small"
+                    loading={loadingTransito}
+                    pagination={{ pageSize: 50, showSizeChanger: true }}
+                    scroll={{ x: 700 }}
+                    locale={{ emptyText: 'No hay documentos en tránsito' }}
                   />
                 </>
               ),
@@ -401,15 +647,19 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span className="paces-text-secondary">Total movimientos</span>
-                  <span>{data.movimientos?.length || 0}</span>
+                  <span>{movimientosDetalle.length}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span className="paces-text-secondary">Cotejados</span>
-                  <span>{data.movimientos?.filter((m) => m.cotejado).length || 0}</span>
+                  <span>{movimientosDetalle.filter((m) => m.cotejado).length}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span className="paces-text-secondary">Documentos conciliados</span>
-                  <span>{data.transacciones?.length || 0}</span>
+                  <span>{transaccionesDetalle.length}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span className="paces-text-secondary">En tránsito</span>
+                  <span>{enTransito.length}</span>
                 </div>
               </div>
             </Card>
@@ -453,10 +703,19 @@ const ConciliacionBancariaDetalle: React.FC = () => {
           <Tabs
             defaultActiveKey="movimientos"
             type="card"
+            onChange={(key) => {
+              if (key === 'movimientos' || key === 'sinconciliar') {
+                if (!movimientosCargados) cargarMovimientosDetalle();
+              } else if (key === 'transacciones' || key === 'resumen') {
+                if (!transaccionesCargadas) cargarTransaccionesDetalle();
+              } else if (key === 'transito') {
+                cargarEnTransito();
+              }
+            }}
             items={[
             {
             key: 'movimientos',
-            label: `Movimientos Bancarios (${data.movimientos?.length || 0})`,
+            label: `Movimientos Bancarios (${movimientosDetalle.length})`,
             children: (
             <>
             <Input.Search
@@ -469,7 +728,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               />
                 <Table
                     dataSource={(() => {
-                      const items = data.movimientos || [];
+                      const items = movimientosDetalle;
                     if (!searchMov) return items;
                     const q = searchMov.toLowerCase();
                     return items.filter((m) =>
@@ -481,7 +740,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               columns={movimientoColumns}
               rowKey="orden"
               size="small"
-                pagination={false}
+                pagination={{ pageSize: 50, showSizeChanger: true }}
                   scroll={{ x: 800 }}
                     locale={{ emptyText: 'No hay movimientos bancarios importados' }}
                     />
@@ -489,8 +748,43 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               ),
               },
             {
+              key: 'sinconciliar',
+              label: `Importados sin conciliar (${movimientosDetalle.filter((m) => !m.cotejado).length})`,
+              children: (
+                <>
+                  <Input.Search
+                    placeholder="Buscar en sin conciliar..."
+                    allowClear
+                    onSearch={(v) => setSearchSinConcil(v)}
+                    onChange={(e) => { if (!e.target.value) setSearchSinConcil(''); }}
+                    style={{ width: 300, marginBottom: 12 }}
+                    prefix={<SearchOutlined className="paces-text-icon" />}
+                  />
+                  <Table
+                    dataSource={(() => {
+                      const items = movimientosDetalle.filter((m) => !m.cotejado);
+                      if (!searchSinConcil) return items;
+                      const q = searchSinConcil.toLowerCase();
+                      return items.filter((m) =>
+                        (m.concepto && m.concepto.toLowerCase().includes(q)) ||
+                        (m.numRef && m.numRef.toLowerCase().includes(q)) ||
+                        (m.documento && m.documento.toLowerCase().includes(q)) ||
+                        (m.entidad && m.entidad.toLowerCase().includes(q))
+                      );
+                    })()}
+                    columns={movimientoColumns}
+                    rowKey="orden"
+                    size="small"
+                    pagination={{ pageSize: 50, showSizeChanger: true }}
+                    scroll={{ x: 800 }}
+                    locale={{ emptyText: 'No hay movimientos sin conciliar' }}
+                  />
+                </>
+              ),
+            },
+            {
               key: 'transacciones',
-              label: `Documentos Conciliados (${data.transacciones?.length || 0})`,
+              label: `Transacciones Conciliadas (${transaccionesDetalle.length})`,
               children: (
                 <>
                   <Input.Search
@@ -503,7 +797,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                   />
                   <Table
                     dataSource={(() => {
-                      const items = data.transacciones || [];
+                      const items = transaccionesDetalle;
                       if (!searchTrans) return items;
                       const q = searchTrans.toLowerCase();
                       return items.filter((t) =>
@@ -517,7 +811,75 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                     size="small"
                     pagination={{ pageSize: 10, showTotal: (t) => `${t} registros`, size: 'small' }}
                     scroll={{ x: 700 }}
-                    locale={{ emptyText: 'No hay documentos conciliados' }}
+                    locale={{ emptyText: 'No hay transacciones conciliadas' }}
+                  />
+                </>
+              ),
+            },
+            {
+              key: 'resumen',
+              label: 'Resumen por tipo de documento',
+              children: (
+                <>
+                  <Input.Search
+                    placeholder="Buscar por tipo de documento..."
+                    allowClear
+                    onSearch={(v) => setSearchResumen(v)}
+                    onChange={(e) => { if (!e.target.value) setSearchResumen(''); }}
+                    style={{ width: 300, marginBottom: 12 }}
+                    prefix={<SearchOutlined className="paces-text-icon" />}
+                  />
+                  <Table
+                    dataSource={(() => {
+                      const items = resumenTipoDocDetalle;
+                      if (!searchResumen) return items;
+                      const q = searchResumen.toLowerCase();
+                      return items.filter((r) =>
+                        (r.nombreTipoDoc && r.nombreTipoDoc.toLowerCase().includes(q)) ||
+                        (r.tipoDoc && r.tipoDoc.toLowerCase().includes(q))
+                      );
+                    })()}
+                    columns={resumenColumns}
+                    rowKey="tipoDoc"
+                    size="small"
+                    pagination={{ pageSize: 10, showTotal: (t) => `${t} registros`, size: 'small' }}
+                    scroll={{ x: 600 }}
+                    locale={{ emptyText: 'No hay transacciones conciliadas para resumir' }}
+                  />
+                </>
+              ),
+            },
+            {
+              key: 'transito',
+              label: `Transacciones en Tránsito (${enTransito.length})`,
+              children: (
+                <>
+                  <Input.Search
+                    placeholder="Buscar en tránsito..."
+                    allowClear
+                    onSearch={(v) => setSearchTransito(v)}
+                    onChange={(e) => { if (!e.target.value) setSearchTransito(''); }}
+                    style={{ width: 300, marginBottom: 12 }}
+                    prefix={<SearchOutlined className="paces-text-icon" />}
+                  />
+                  <Table
+                    dataSource={(() => {
+                      const items = enTransito;
+                      if (!searchTransito) return items;
+                      const q = searchTransito.toLowerCase();
+                      return items.filter((t) =>
+                        (t.tipoDoc && t.tipoDoc.toLowerCase().includes(q)) ||
+                        (t.numDoc && t.numDoc.toLowerCase().includes(q)) ||
+                        (t.entidad && t.entidad.toLowerCase().includes(q))
+                      );
+                    })()}
+                    columns={transaccionColumns}
+                    rowKey="transacId"
+                    size="small"
+                    loading={loadingTransito}
+                    pagination={{ pageSize: 50, showSizeChanger: true }}
+                    scroll={{ x: 700 }}
+                    locale={{ emptyText: 'No hay documentos en tránsito' }}
                   />
                 </>
               ),
@@ -550,15 +912,19 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span className="paces-text-secondary">Total movimientos</span>
-                  <span>{data.movimientos?.length || 0}</span>
+                  <span>{movimientosDetalle.length}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span className="paces-text-secondary">Cotejados</span>
-                  <span>{data.movimientos?.filter((m) => m.cotejado).length || 0}</span>
+                  <span>{movimientosDetalle.filter((m) => m.cotejado).length}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span className="paces-text-secondary">Documentos conciliados</span>
-                  <span>{data.transacciones?.length || 0}</span>
+                  <span>{transaccionesDetalle.length}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span className="paces-text-secondary">En tránsito</span>
+                  <span>{enTransito.length}</span>
                 </div>
               </div>
             </Card>

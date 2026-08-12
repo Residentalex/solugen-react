@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import type { FacturaVistaDTO, FiltroFacturacion } from '../types/facturacion';
-import type { FacturaClienteDTO, FacturaClienteFullDTO, FacturaClienteResumenDTO, TipoDTO, ConceptoDTO, AlmacenDTO, ClienteDTO } from '../types/facturaCliente';
+import type { FacturaClienteDTO, FacturaClienteFullDTO, FacturaClienteResumenDTO, TipoDTO, ConceptoDTO, AlmacenDTO, ClienteDTO, DetalleFacturaClienteDTO, AsientoContableDTO } from '../types/facturaCliente';
+import type { DocumentoRelacionadoDTO } from '../types/notaDebito';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/FAC';
@@ -70,6 +71,32 @@ export const facturaClienteApi = {
     return data.data;
   },
 
+  // ===== Carga progresiva: secciones =====
+  obtenerEncabezado: async (sucursal: number, id: number): Promise<FacturaClienteDTO> => {
+    const { data } = await apiClient.get<ApiResponse<FacturaClienteDTO>>(`${BASE}/${sucursal}/${id}/encabezado`);
+    return data.data;
+  },
+
+  obtenerDetalles: async (sucursal: number, id: number): Promise<DetalleFacturaClienteDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<DetalleFacturaClienteDTO[]>>(`${BASE}/${sucursal}/${id}/detalles`);
+    return data.data || [];
+  },
+
+  obtenerAsientos: async (sucursal: number, id: number): Promise<AsientoContableDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<AsientoContableDTO[]>>(`${BASE}/${sucursal}/${id}/asientos`);
+    return data.data || [];
+  },
+
+  obtenerPagos: async (sucursal: number, id: number): Promise<DocumentoRelacionadoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<DocumentoRelacionadoDTO[]>>(`${BASE}/${sucursal}/${id}/pagos`);
+    return data.data || [];
+  },
+
+  obtenerCobros: async (sucursal: number, id: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/${id}/cobros`);
+    return data.data || [];
+  },
+
   obtenerTotal: async (sucursal: number, desde?: string, hasta?: string): Promise<number> => {
     const params: Record<string, string> = {};
     if (desde) params.desde = desde;
@@ -120,12 +147,12 @@ export const facturaClienteApi = {
   },
 
   verificarScan: async (sucursal: number, id: number): Promise<{ existe: boolean }> => {
-    const { data } = await apiClient.get<ApiResponse<{ existe: boolean }>>(`${BASE}/${sucursal}/${id}/scanner/verificar`);
+    const { data } = await apiClient.get<ApiResponse<{ existe: boolean }>>(`/Transaccion/${sucursal}/${id}/scanner/verificar`);
     return data.data;
   },
 
   descargarScan: async (sucursal: number, id: number): Promise<Blob> => {
-    const { data } = await apiClient.get<Blob>(`${BASE}/${sucursal}/${id}/scanner/descargar`, {
+    const { data } = await apiClient.get<Blob>(`/Transaccion/${sucursal}/${id}/scanner/descargar`, {
       responseType: 'blob',
     });
     return data;

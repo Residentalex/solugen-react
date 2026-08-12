@@ -93,6 +93,11 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   const { documentCode } = useScreenConfig('FNC');
   const pantallaActiva = usuario?.pantallas?.find((p: any) => p.codigo?.toUpperCase() === codigoPantalla?.toUpperCase());
   const tienePermisoPostear = pantallaActiva?.acciones?.includes('POSTEAR') ?? false;
+
+  const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
+    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+  ) ?? false;
+
   const entidadLabel = tipoEntidad === 'SUP' ? 'Suplidor' : 'Cliente';
 
   // ===== States =====
@@ -205,6 +210,14 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       : `Editar Nota de Crédito - ${entidadLabel}`;
     setPageTitleOverride(pageTitle);
 
+    // Cargar catálogos necesarios (tipos y sucursales)
+    tipoApi.obtenerPorDocumento(sucursalActiva, 'NC')
+      .then((tipos) => {
+        setTiposCache(tipos as any);
+      })
+      .catch((err) => console.warn('Error al cargar tipos cache', err));
+    conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch((err) => console.warn('Error al cargar sucursales cache', err));
+
     const cleanup = () => {
       resetToolbar();
       setPageTitleOverride('');
@@ -277,17 +290,9 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         servicios: cloneData.servicios || 0,
       });
 
-      // Cargar caches necesarios
-      console.log('[DEBUG NC] tipo en cloneData:', cloneData.tipo);
-      tipoApi.obtenerPorDocumento(sucursalActiva, 'NC')
-        .then((tipos) => {
-          console.log('[DEBUG NC] tipos cargados:', tipos);
-          setTiposCache(tipos as any);
-        })
-        .catch((err) => console.warn('Error al cargar tipos cache', err));
+      // Cargar medidas y fecha cierre fiscal
       unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => console.warn('Error al cargar medidas cache', err));
       parametrosApi.obtenerFechaCierreFiscal(sucursalActiva).then(setFechaCierreContable).catch((err) => console.warn('Error al obtener fecha cierre fiscal', err));
-      conceptosApi.obtenerSucursales(sucursalActiva).then(setSucursalesCache).catch((err) => console.warn('Error al cargar sucursales cache', err));
 
       return cleanup;
     }
@@ -607,6 +612,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
         ...t,
         transaccionAsociadaID: t.transaccionAsociadaID || t.id,
+        saldoPendiente: pendienteEfectivo(t),
       })),
       detallesMovimiento: tipoEntidad === 'CLI' ? detallesMovimiento : [],
       devoluciones: tipoEntidad === 'SUP' ? devoluciones : [],
@@ -803,6 +809,14 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     setTransaccionesAsociadas((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // ===== Pendiente efectivo por fila =====
+  // DOCASOC.PENDIENTE puede venir mal (0) cuando en realidad DEBITADO - ACREDITADO != 0.
+  // El pendiente efectivo se calcula como max(montoOriginal - pagado, saldoPendiente), nunca negativo.
+  const pendienteEfectivo = (t: TransaccionAsociadaDTO): number => {
+    const v = Math.max(0, (t.montoOriginal || 0) - (t.pagado || 0), t.saldoPendiente || 0);
+    return Math.round(v * 100) / 100;
+  };
+
   // ===== Columnas =====
   const asociadasColumns = [
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => formatDate(v) },
@@ -812,20 +826,23 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     },
     { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v) },
     { title: 'Abonado', dataIndex: 'pagado', key: 'pagado', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Pendiente', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
+    { title: 'Pendiente', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (_: any, record: TransaccionAsociadaDTO) => <strong>{formatNumber(pendienteEfectivo(record))}</strong> },
     {
       title: 'Monto a Aplicar', dataIndex: 'monto', key: 'monto', width: 130, align: 'right' as const,
-      render: (_: any, _record: TransaccionAsociadaDTO, idx: number) => (
+      render: (_: any, record: TransaccionAsociadaDTO, idx: number) => (
         <InputNumber
           size="small"
           style={{ width: '100%' }}
+          styles={{ input: { textAlign: 'right' } }}
           min={0}
+          max={pendienteEfectivo(record)}
           step={0.01}
           precision={2}
           value={transaccionesAsociadas[idx]?.monto}
           onChange={(val) => {
+            const monto = val ?? 0;
             setTransaccionesAsociadas((prev) =>
-              prev.map((t, i) => i === idx ? { ...t, monto: val || 0 } : t)
+              prev.map((t, i) => i === idx ? { ...t, monto: Math.min(monto, pendienteEfectivo(t)) } : t)
             );
           }}
         />
@@ -1405,7 +1422,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   tabItems.push({
     key: 'asientos',
     label: `Asientos Contables (${asientos.length})`,
-    children: (estado === 0 && tienePermisoPostear) ? (
+    children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
       <>
         <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
           <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)}>
@@ -1418,7 +1435,6 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
           editable={true}
           onGenerar={handleGenerarAsientos}
           generando={saving}
-          disableGenerar={!id}
         />
       </>
     ) : (

@@ -23,6 +23,7 @@ import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSens
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
 import { productoApi } from '../../api/productoApi';
@@ -33,7 +34,6 @@ import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type {
   ConceptoDTO, AlmacenDTO,
-  AsientoContableDTO,
 } from '../../types/entradaAlmacen';
 import type { UnidadMedidaDTO } from '../../types/productos';
 import type { DetalleTransferenciaAlmacenDTO, TransferenciaAlmacenFullDTO } from '../../types/transferenciaAlmacen';
@@ -41,6 +41,9 @@ import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import { TransferenciaAlmacenGuide } from './TransferenciaAlmacenGuide';
+import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
+import AsientosContableTable from '../../components/AsientosContableTable';
+import { transaccionApi } from '../../api/transaccionApi';
 
 import EntidadCard from '../../components/EntidadCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
@@ -101,6 +104,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
   const location = useLocation();
   const cloneData = (location.state as any)?.cloneData;
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
@@ -209,6 +213,13 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
   const esAplicado = estado === 1;
   const esAnulado = estado === 3;
 
+  const usuario = useAuthStore((s: any) => s.usuario);
+  const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
+    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+  ) ?? false;
+  const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
+  const [generandoAsientos, setGenerandoAsientos] = useState(false);
+
   // ===== Cargar datos de apoyo al montar =====
   useEffect(() => {
     setActiveModule(screenCode);
@@ -272,6 +283,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       .then((res) => {
         setData(res);
         setDetalles((res.detalles || []).map((d) => ({ ...d, _costo: d.total && d.cantidad ? d.total / d.cantidad : 0 })));
+        setAsientosLocales(res.asientos || []);
         setSelectedConcepto(res.concepto || null);
         setSelectedAlmacen(res.almacen || null);
         setSelectedAlmacenDestino(res.almacenDestino || null);
@@ -347,6 +359,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
               .then((res) => {
                 setData(res);
                 setDetalles((res.detalles || []).map((d) => ({ ...d, _costo: d.total && d.cantidad ? d.total / d.cantidad : 0 })));
+                setAsientosLocales(res.asientos || []);
                 setSelectedConcepto(res.concepto || null);
                 setSelectedAlmacen(res.almacen || null);
                 setSelectedAlmacenDestino(res.almacenDestino || null);
@@ -453,7 +466,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       almacen: selectedAlmacen || { nombre: '', codigo: '' },
       almacenDestino: selectedAlmacenDestino || { nombre: '', codigo: '' },
       detalles: detallesDTO,
-      asientos: base.asientos || [],
+      asientos: asientosLocales.length > 0 ? asientosLocales : (base.asientos || []),
       logs: base.logs || [],
     };
   };
@@ -663,24 +676,21 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
     form.setFieldsValue({ almacenDestino: codigo });
   };
 
-  // ===== Columnas de la tabla de asientos =====
-  function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
-  function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
-  const totalDebitos = (data?.asientos || []).reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
-  const totalCreditos = (data?.asientos || []).reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
-
-  const asientoColumns = [
-    { title: 'Cuenta', key: 'cuenta', width: 120,
-      render: (_: any, r: AsientoContableDTO) => r.cuentaContable?.noCuenta || '-' },
-    { title: 'Nombre', key: 'nombre', ellipsis: true,
-      render: (_: any, r: AsientoContableDTO) => r.cuentaContable?.nombre ? toTitleCase(r.cuentaContable.nombre) : '-' },
-    { title: 'Descripcion', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
-      render: (v: string) => v ? toTitleCase(v) : '-' },
-    { title: 'Debito', key: 'debito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => esDebito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-    { title: 'Credito', key: 'credito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-  ];
+  const handleGenerarAsientos = useCallback(async () => {
+    if (sucursalActiva === undefined) return;
+    setGenerandoAsientos(true);
+    try {
+      const dto = construirDTO();
+      const asientosGenerados = await transaccionApi.generarAsientos(sucursalActiva, dto);
+      setAsientosLocales(asientosGenerados);
+      message.success(`Se generaron ${asientosGenerados.length} asientos`);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al generar asientos');
+      message.error(msg);
+    } finally {
+      setGenerandoAsientos(false);
+    }
+  }, [sucursalActiva, construirDTO]);
 
   const handleRefresh = useCallback(() => {
     if (mode === 'crear') return;
@@ -691,6 +701,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       .then((res) => {
         setData(res);
         setDetalles((res.detalles || []).map((d: any) => ({ ...d, _costo: d.total && d.cantidad ? d.total / d.cantidad : 0 })));
+        setAsientosLocales(res.asientos || []);
         setSelectedConcepto(res.concepto || null);
         setSelectedAlmacen(res.almacen || null);
         setSelectedAlmacenDestino(res.almacenDestino || null);
@@ -715,7 +726,7 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, form, mode]);
 
-  // ===== Loading state =====
+  // ===== Handlers de concepto =====
   if (loading) {
     return <LoadingSpinner mensaje="Cargando documento..." />;
   }
@@ -914,7 +925,15 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Documento" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                  disabledDate={(current) => {
+                    if (!current) return false;
+                    const cierre = fechasCierre?.[sucursalActiva];
+                    if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day')) return true;
+                    const cierreInv = fechasCierreInv?.[sucursalActiva];
+                    if (cierreInv && !current.isAfter(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                    return false;
+                  }} />
               </FloatingField>
             </Form.Item>
           </Col>
@@ -1188,25 +1207,18 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                 },
                 {
                   key: 'asientos',
-                  label: `Asientos (${data?.asientos?.length || 0})`,
-                  children: (
-                    <Table
-                      dataSource={data?.asientos || []}
-                      columns={asientoColumns}
-                      rowKey="id"
-                      size="small"
-                      pagination={false}
+                  label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
+                  children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
+                    <AsientosContableEditables
+                      asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
+                      onChange={setAsientosLocales}
+                      editable={true}
                       scroll={{ x: 900 }}
-                      summary={() => (
-                        <Table.Summary fixed>
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        </Table.Summary>
-                      )}
+                      onGenerar={handleGenerarAsientos}
+                      generando={generandoAsientos}
                     />
+                  ) : (
+                    <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
                   ),
                 },
                 {
@@ -1289,27 +1301,20 @@ const TransferenciaAlmacenFormulario: React.FC = () => {
                 },
                 {
                   key: 'asientos',
-                label: `Asientos (${data?.asientos?.length || 0})`,
-                children: (
-                  <Table
-                    dataSource={data?.asientos || []}
-                    columns={asientoColumns}
-                    rowKey="id"
-                    size="small"
-                    pagination={false}
-                    scroll={{ x: 900 }}
-                    summary={() => (
-                      <Table.Summary fixed>
-                        <Table.Summary.Row>
-                          <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                          <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                          <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                        </Table.Summary.Row>
-                      </Table.Summary>
-                    )}
-                  />
-                ),
-              },
+                  label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
+                  children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
+                    <AsientosContableEditables
+                      asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
+                      onChange={setAsientosLocales}
+                      editable={true}
+                      scroll={{ x: 900 }}
+                      onGenerar={handleGenerarAsientos}
+                      generando={generandoAsientos}
+                    />
+                  ) : (
+                    <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
+                  ),
+                },
               {
                 key: 'historial',
                 label: `Historial (${data?.logs?.length || 0})`,

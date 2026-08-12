@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
-import type { EntidadDTO } from '../types/entradaAlmacen';
+import type { EntidadDTO, TipoEntidadDTO } from '../types/entradaAlmacen';
 
 const ENTIDADES_BASE = '/Entidad';
 
@@ -40,6 +40,22 @@ export const entidadApi = {
 
   obtenerPorCodigo: async (sucursal: number, codigo: string, tipoEntidad: string): Promise<any> => {
     const { data } = await apiClient.get(`${ENTIDADES_BASE}/${sucursal}/${codigo}`, { params: { tipoEntidad } });
+    return data.data;
+  },
+
+  buscar: async (sucursal: number, valor: string, cantidad?: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(
+      `${ENTIDADES_BASE}/${sucursal}/buscar`,
+      { params: { valor, cantidad } }
+    );
+    return data.data;
+  },
+
+  buscarTipos: async (sucursal: number, busqueda: string): Promise<TipoEntidadDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<TipoEntidadDTO[]>>(
+      `${ENTIDADES_BASE}/${sucursal}/tipos`,
+      { params: { busqueda } }
+    );
     return data.data;
   },
 };

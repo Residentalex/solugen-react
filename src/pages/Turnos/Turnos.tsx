@@ -9,8 +9,10 @@ import { useUIStore } from '../../stores/uiStore';
 import { turnoApi } from '../../api/turnoApi';
 import type { TurnoDTO } from '../../types/turno';
 import type { ColumnsType } from 'antd/es/table';
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { ReloadOutlined, SearchOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { formatCurrency } from '../../utils/formats';
+import PermissionGate from '../../components/PermissionGate';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
@@ -132,6 +134,26 @@ const Turnos: React.FC = () => {
     setPage(1);
   };
 
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const dataSource = data?.datos || [];
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        const val = item[col.dataIndex];
+        return val != null ? String(val) : '';
+      })
+    );
+    exportToExcel({
+      fileName: `Turnos_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'Turnos',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
+
   const handleRowClick = (record: TurnoDTO) => {
     setSelectedRow(record);
   };
@@ -235,6 +257,9 @@ const Turnos: React.FC = () => {
               placeholder={["Desde", "Hasta"]}
             />
             <div style={{ flex: 1 }} />
+            <PermissionGate accion="EXPORTAR">
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+            </PermissionGate>
             <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>
         </div>

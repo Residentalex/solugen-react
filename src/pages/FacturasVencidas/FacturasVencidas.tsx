@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Card, Table, Input, InputNumber, Select, Button, Typography, message, Spin, DatePicker,
-  Modal, Space, Row, Col, Empty,
+  Space, Row, Col, Empty,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -10,8 +10,9 @@ import {
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
-import { proveedorApi } from '../../api/proveedorApi';
 import { formatCurrency, formatDateParam } from '../../utils/formats';
+import PermissionGate from '../../components/PermissionGate';
+import ModalBuscarSuplidor from '../../components/ModalBuscarSuplidor/ModalBuscarSuplidor';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import { facturasVencidasApi } from '../../api/facturasVencidasApi';
 import type { FacturaVencidaDTO } from '../../api/facturasVencidasApi';
@@ -58,21 +59,6 @@ const FacturasVencidas: React.FC = () => {
 
   // Modal de búsqueda de suplidor
   const [modalSuplidorAbierto, setModalSuplidorAbierto] = useState(false);
-  const [suplidores, setSuplidores] = useState<SuplidorDTO[]>([]);
-  const [suplidoresOrig, setSuplidoresOrig] = useState<SuplidorDTO[]>([]);
-  const [buscandoSuplidor, setBuscandoSuplidor] = useState(false);
-  const [_searchSuplidor, setSearchSuplidor] = useState('');
-
-  const suplidorSearchRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (modalSuplidorAbierto) {
-      const timer = setTimeout(() => {
-        suplidorSearchRef.current?.focus?.();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [modalSuplidorAbierto]);
 
   /* ───── Cargar datos ───── */
 
@@ -133,36 +119,6 @@ const FacturasVencidas: React.FC = () => {
   };
 
   /* ───── Handlers de búsqueda de suplidor ───── */
-
-  const abrirModalSuplidor = async () => {
-    setModalSuplidorAbierto(true);
-    setSearchSuplidor('');
-    setBuscandoSuplidor(true);
-    try {
-      const lista = await proveedorApi.obtenerListado(sucursalActiva);
-      setSuplidores(lista || []);
-      setSuplidoresOrig(lista || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar suplidores');
-    } finally {
-      setBuscandoSuplidor(false);
-    }
-  };
-
-  const buscarSuplidor = (valor: string) => {
-    setSearchSuplidor(valor);
-    if (!valor) {
-      setSuplidores([...suplidoresOrig]);
-      return;
-    }
-    const term = valor.toLowerCase();
-    const filtradas = suplidoresOrig.filter(
-      (e) =>
-        e.codigo?.toLowerCase().includes(term) ||
-        e.nombre?.toLowerCase().includes(term),
-    );
-    setSuplidores(filtradas);
-  };
 
   const seleccionarSuplidor = (item: SuplidorDTO) => {
     setCodSuplidor(item.codigo);
@@ -385,7 +341,7 @@ const FacturasVencidas: React.FC = () => {
                   readOnly
                   style={{ width: '100%' }}
                 />
-                <Button icon={<SearchOutlined />} onClick={abrirModalSuplidor} />
+                <Button icon={<SearchOutlined />} onClick={() => setModalSuplidorAbierto(true)} />
                 {nomSuplidor ? (
                   <Button icon={<CloseOutlined />} onClick={limpiarSuplidor} />
                 ) : null}
@@ -457,9 +413,11 @@ const FacturasVencidas: React.FC = () => {
                 ]}
               />
               <div style={{ flex: 1 }} />
-              <Button icon={<DownloadOutlined />} onClick={exportarExcel}>
-                Exportar
-              </Button>
+              <PermissionGate accion="EXPORTAR">
+                <Button icon={<DownloadOutlined />} onClick={exportarExcel}>
+                  Exportar
+                </Button>
+              </PermissionGate>
               <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
             </div>
           </div>
@@ -492,38 +450,25 @@ const FacturasVencidas: React.FC = () => {
       )}
 
       {/* ───── Modal búsqueda suplidor ───── */}
-      <Modal
-        title="Buscar Suplidor"
+      <ModalBuscarSuplidor
         open={modalSuplidorAbierto}
-        onCancel={() => setModalSuplidorAbierto(false)}
-        footer={null}
-        width={600}
+        onClose={() => setModalSuplidorAbierto(false)}
+        onSelect={seleccionarSuplidor}
+        buscar={async (filtro) => {
+          const { proveedorApi } = await import('../../api/proveedorApi');
+          const lista = await proveedorApi.obtenerListado(sucursalActiva);
+          if (!filtro) return lista;
+          const term = filtro.toLowerCase();
+          return (lista || []).filter(
+            (e) =>
+              e.codigo?.toLowerCase().includes(term) ||
+              e.nombre?.toLowerCase().includes(term)
+          );
+        }}
+        mostrarRnc={false}
         destroyOnClose
-      >
-        <Input.Search
-          ref={suplidorSearchRef}
-          placeholder="Buscar por nombre o código..."
-          allowClear
-          onSearch={buscarSuplidor}
-          style={{ marginBottom: 12 }}
-        />
-        <Table
-          columns={[
-            { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
-            { title: 'Nombre', dataIndex: 'nombre', key: 'nombre' },
-          ]}
-          dataSource={suplidores}
-          rowKey="codigo"
-          loading={buscandoSuplidor}
-          size="small"
-          pagination={{ pageSize: 10, showSizeChanger: false }}
-          onRow={(record: any) => ({
-            onClick: () => seleccionarSuplidor(record),
-            style: { cursor: 'pointer' },
-          })}
-          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
-        />
-      </Modal>
+        autoFocus
+      />
     </>
   );
 };

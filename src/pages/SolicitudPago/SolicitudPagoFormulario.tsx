@@ -55,6 +55,10 @@ const SolicitudPagoFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const usuario = useAuthStore((s: any) => s.usuario);
+  const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
+    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+  ) ?? false;
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
@@ -101,11 +105,12 @@ const SolicitudPagoFormulario: React.FC = () => {
     subTotal: transaccionesAsociadas.reduce((s, t) => s + (t.monto || 0), 0),
     descuento: transaccionesAsociadas.reduce((s, t) => s + (t.descuento || 0), 0),
     impuestos: transaccionesAsociadas.reduce((s, t) => s + (t.impuesto || 0), 0),
-    retenciones: transaccionesAsociadas.reduce((s, t) => s + (t.retencion || 0), 0),
+    // Las retenciones ya vienen descontadas en el monto de cada documento relacionado: no sumar ni restar.
+    retenciones: 0,
   }), [transaccionesAsociadas]);
 
   const totalCalculado = Math.round(
-    (totalesDocs.subTotal - totalesDocs.descuento + totalesDocs.impuestos - totalesDocs.retenciones) * 100
+    (totalesDocs.subTotal + totalesDocs.impuestos - totalesDocs.retenciones) * 100
   ) / 100;
 
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
@@ -352,9 +357,10 @@ const SolicitudPagoFormulario: React.FC = () => {
 
   const handleMontoChange = (id: number | undefined, nuevoMonto: number | null) => {
     if (!id) return;
+    const monto = nuevoMonto ?? 0;
     setTransaccionesAsociadas((prev) =>
       prev.map((t) =>
-        (t.transaccionAsociadaID || t.id) === id ? { ...t, monto: nuevoMonto || 0 } : t
+        (t.transaccionAsociadaID || t.id) === id ? { ...t, monto: Math.min(monto, pendienteEfectivo(t)) } : t
       )
     );
   };
@@ -441,6 +447,7 @@ const SolicitudPagoFormulario: React.FC = () => {
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
         ...t,
         transaccionAsociadaID: t.transaccionAsociadaID || t.id,
+        saldoPendiente: pendienteEfectivo(t),
       })),
       asientos: asientos || [],
       logs: logs || [],
@@ -535,6 +542,7 @@ const SolicitudPagoFormulario: React.FC = () => {
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
         ...t,
         transaccionAsociadaID: t.transaccionAsociadaID || t.id,
+        saldoPendiente: pendienteEfectivo(t),
       })),
     };
 
@@ -826,6 +834,14 @@ const SolicitudPagoFormulario: React.FC = () => {
     </Card>
   );
 
+  // ===== Pendiente efectivo por fila =====
+  // DOCASOC.PENDIENTE puede venir mal (0) cuando en realidad DEBITADO - ACREDITADO != 0.
+  // El pendiente efectivo se calcula como max(montoOriginal - pagado, saldoPendiente), nunca negativo.
+  const pendienteEfectivo = (t: TransaccionAsociadaDTO): number => {
+    const v = Math.max(0, (t.montoOriginal || 0) - (t.pagado || 0), t.saldoPendiente || 0);
+    return Math.round(v * 100) / 100;
+  };
+
   // ===== Columnas de documentos relacionados (mismo formato que TransaccionBancaria) =====
   const asociadasColumns = [
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => v ? formatDate(v) : '-' },
@@ -847,8 +863,8 @@ const SolicitudPagoFormulario: React.FC = () => {
       width: 130,
       align: 'right' as const,
       render: (_: any, record: TransaccionAsociadaDTO) => (
-        <Text style={{ color: record.saldoPendiente > 0 ? '#fa8c16' : undefined }}>
-          {formatNumber(record.saldoPendiente ?? 0)}
+        <Text style={{ color: pendienteEfectivo(record) > 0 ? '#fa8c16' : undefined }}>
+          {formatNumber(pendienteEfectivo(record))}
         </Text>
       ),
     },
@@ -888,6 +904,7 @@ const SolicitudPagoFormulario: React.FC = () => {
           style={{ width: '100%' }}
           className="input-number-right"
           min={0}
+          max={pendienteEfectivo(record)}
           step={0.01}
           precision={2}
           value={record.monto}
@@ -949,20 +966,21 @@ const SolicitudPagoFormulario: React.FC = () => {
     {
       key: 'asientos',
       label: `Asientos Contables (${asientos.length})`,
-      children: (
+      children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
         <div>
           <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end' }}>
             <Button
               icon={<ExclamationCircleOutlined />}
               onClick={handleGenerarAsientos}
               loading={saving}
-              disabled={!id}
             >
               GENERAR
             </Button>
           </div>
           <AsientosContableTable asientos={asientos} scroll={{ x: 700 }} rowKey={(r: any) => r.id || Math.random()} />
         </div>
+      ) : (
+        <AsientosContableTable asientos={asientos} scroll={{ x: 700 }} rowKey={(r: any) => r.id || Math.random()} />
       ),
     },
     {

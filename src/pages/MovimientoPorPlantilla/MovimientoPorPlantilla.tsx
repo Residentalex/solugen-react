@@ -5,6 +5,7 @@ import {
 } from 'antd';
 import { ThunderboltOutlined, SearchOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { movimientoApi } from '../../api/movimientoApi';
 import { conteoApi } from '../../api/conteoApi';
@@ -190,6 +191,7 @@ const BuscarPlantillaModal: React.FC<BuscarPlantillaModalProps> = ({
 // ---------------------------------------------------------------------------
 const MovimientoPorPlantilla: React.FC = () => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
 
@@ -455,6 +457,14 @@ const MovimientoPorPlantilla: React.FC = () => {
               style={{ width: '100%' }}
               value={fechaSeleccionada}
               onChange={(date) => setFechaSeleccionada(date || dayjs())}
+              disabledDate={(current) => {
+                if (!current) return false;
+                const cierre = fechasCierre?.[sucursalActiva];
+                if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day')) return true;
+                const cierreInv = fechasCierreInv?.[sucursalActiva];
+                if (cierreInv && !current.isAfter(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                return false;
+              }}
             />
           </Col>
 

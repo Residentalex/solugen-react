@@ -34,6 +34,7 @@ import type { TipoDocumentoDTO } from '../../types/transaccion';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import LogTable from '../../components/LogTable';
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
+import AsientosContableTable from '../../components/AsientosContableTable';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import { OrigenCuenta } from '../../types/contabilidad';
@@ -60,6 +61,11 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
+  const usuario = useAuthStore((s: any) => s.usuario);
+  const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
+    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+  ) ?? false;
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
@@ -342,6 +348,14 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     return null;
   };
 
+  // ===== Pendiente efectivo por fila =====
+  // DOCASOC.PENDIENTE puede venir mal (0) cuando en realidad DEBITADO - ACREDITADO != 0.
+  // El pendiente efectivo se calcula como max(montoOriginal - pagado, saldoPendiente), nunca negativo.
+  const pendienteEfectivo = (t: TransaccionAsociadaDTO): number => {
+    const v = Math.max(0, (t.montoOriginal || 0) - (t.pagado || 0), t.saldoPendiente || 0);
+    return Math.round(v * 100) / 100;
+  };
+
   // ===== Construir DTO =====
   const construirDTO = (): any => {
     const values = form.getFieldsValue();
@@ -403,6 +417,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
         ...t,
         transaccionAsociadaID: t.transaccionAsociadaID || t.id,
+        saldoPendiente: pendienteEfectivo(t),
       })),
       asientos: asientos || [],
       logs: logs || [],
@@ -534,7 +549,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       prev.map((t) => {
         if ((t.transaccionAsociadaID || t.id) !== id) return t;
         const monto = value ?? 0;
-        return { ...t, monto: Math.min(monto, t.saldoPendiente) };
+        return { ...t, monto: Math.min(monto, pendienteEfectivo(t)) };
       })
     );
   };
@@ -590,7 +605,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
     },
     {
       title: 'Pendiente', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 110, align: 'right' as const,
-      render: (v: number) => <strong>{formatNumber(v)}</strong>,
+      render: (_: any, record: TransaccionAsociadaDTO) => <strong>{formatNumber(pendienteEfectivo(record))}</strong>,
     },
     {
       title: 'Retención', dataIndex: 'retencion', key: 'retencion', width: 100, align: 'right' as const,
@@ -602,8 +617,9 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
         <InputNumber
           size="small"
           style={{ width: '100%' }}
+          styles={{ input: { textAlign: 'right' } }}
           min={0}
-          max={record.saldoPendiente}
+          max={pendienteEfectivo(record)}
           step={0.01}
           precision={2}
           value={record.monto}
@@ -730,7 +746,15 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                  disabledDate={(current) => {
+                    if (!current) return false;
+                    const cierre = fechasCierre?.[sucursalActiva];
+                    if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day')) return true;
+                    const cierreInv = fechasCierreInv?.[sucursalActiva];
+                    if (cierreInv && !current.isAfter(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                    return false;
+                  }} />
               </FloatingField>
             </Form.Item>
           </Col>
@@ -1026,15 +1050,16 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   tabItems.push({
     key: 'asientos',
     label: `Asientos Contables (${asientos.length})`,
-    children: (
+    children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
       <AsientosContableEditables
         asientos={asientos}
         onChange={setAsientos}
-        editable={estado === 0}
+        editable={true}
         onGenerar={handleGenerarAsientos}
         generando={saving}
-        disableGenerar={!id}
       />
+    ) : (
+      <AsientosContableTable asientos={asientos} />
     ),
   });
 

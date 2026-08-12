@@ -6,12 +6,14 @@ import {
 import {
   LockFilled,
   BankOutlined,
+  PrinterOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
+import { apiClient } from '../../api/client';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard/TransaccionesAsociadasCard';
 import SucursalField from '../../components/SucursalField';
 import LogTable from '../../components/LogTable';
@@ -73,6 +75,7 @@ const SolicitudPagoDetalle: React.FC = () => {
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
   const [mostrandoReverso, setMostrandoReverso] = useState(false);
   const [reversoData, setReversoData] = useState<any>(null);
+  const [imprimiendo, setImprimiendo] = useState(false);
 
   // Módulo activo
   useEffect(() => {
@@ -317,7 +320,22 @@ const SolicitudPagoDetalle: React.FC = () => {
         onRevisado={handleRevisado}
         onDesaplicar={handleDesaplicar}
         onReversar={handleReversar}
-        showImprimir={false}
+        showImprimir={true}
+        imprimiendo={imprimiendo}
+        onImprimir={async () => {
+          setImprimiendo(true);
+          try {
+            const res = await apiClient.get(`/reportes/banco/solicitud-pago/${sucursalActiva}/${id}`, {
+              responseType: 'blob',
+            });
+            const blobUrl = URL.createObjectURL(res.data);
+            window.open(blobUrl, '_blank');
+          } catch {
+            message.error('Error al generar el PDF');
+          } finally {
+            setImprimiendo(false);
+          }
+        }}
         extraButtons={id ? (
           <>
             {toEstadoNum(data?.estado) === 3 && reversoData && (
@@ -430,6 +448,7 @@ const SolicitudPagoDetalle: React.FC = () => {
               identificacion: documentoActivo.entidad?.identificacion || '',
               telefono: documentoActivo.entidad?.telefono || '',
               direccion: documentoActivo.entidad?.direccion || '',
+              beneficiario: (data as any)?.nombreBeneficiario || '',
             }} fallbackTitulo="Entidad" />
             <TotalesCard
               subTotal={documentoActivo.subTotal ?? documentoActivo.total ?? 0}

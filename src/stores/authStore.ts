@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Sucursal } from '../types/auth';
 import type { PantallaDTO, AuthUsuarioSesionDTO, AuthSucursalPermitidaDTO } from '../types/auth';
+import type { ClienteDTO } from '../types/facturaPOS';
 import { authApi } from '../api/authApi';
 
 const SUCURSAL_CONSOLIDADO = Sucursal.Consolidado;
@@ -81,6 +82,7 @@ interface AuthState {
   ip: string;
   appVersion: string;
   isAuthenticated: boolean;
+  clienteDefectoPOS: ClienteDTO | null;
 
   login: (request: {
     nombreUsuario: string;
@@ -119,6 +121,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   ip: localStorage.getItem('ip') || '',
   appVersion: localStorage.getItem('appVersion') || '',
   isAuthenticated: !!localStorage.getItem('accessToken'),
+  clienteDefectoPOS: null,
 
   login: async (request) => {
     const sesion = await authApi.login(request);
@@ -154,6 +157,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       equipo: request.equipo,
       ip: request.ip,
       isAuthenticated: true,
+      clienteDefectoPOS: (sesion as any).clienteDefectoPOS || null,
     });
   },
 
@@ -181,6 +185,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       ip: '',
       appVersion: '',
       isAuthenticated: false,
+      clienteDefectoPOS: null,
     });
   },
 
@@ -211,6 +216,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       sucursalesPermitidas: session.sucursalesPermitidas,
       compania: SUCURSAL_CONSOLIDADO,
       isAuthenticated: true,
+      clienteDefectoPOS: (session as any).clienteDefectoPOS || null,
     });
   },
 

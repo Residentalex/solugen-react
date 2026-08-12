@@ -18,9 +18,13 @@ import {
   ShoppingOutlined,
   ArrowLeftOutlined,
   ReloadOutlined,
+  FileExcelOutlined,
 } from '@ant-design/icons';
 import { ecommerceApi, type OrdenDTO, type OrdenDetalleDTO } from '../../api/ecommerceApi';
 import { useCarritoStore } from '../../stores/useCarritoStore';
+import { useAuthStore } from '../../stores/authStore';
+import PermissionGate from '../../components/PermissionGate';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text, Title } = Typography;
 
@@ -75,6 +79,7 @@ interface OrdenConKey extends OrdenDTO {
 const OrdenesPage: React.FC = () => {
   const navigate = useNavigate();
   const sessionId = useCarritoStore((s) => s.sessionId);
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
 
   const [ordenes, setOrdenes] = useState<OrdenConKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,6 +114,23 @@ const OrdenesPage: React.FC = () => {
     setModalOpen(false);
     setOrdenSeleccionada(null);
   }, []);
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const cols = columns.filter((c) => c.key !== 'acciones');
+    exportToExcel({
+      fileName: `MisOrdenes_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'Mis Órdenes',
+      companyName,
+      columnHeaders: cols.map((c) => c.title as string),
+      dataRows: ordenes.map((item: any) =>
+        cols.map((col) => {
+          const val = item[col.dataIndex as string];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
+  };
 
   const handleRefresh = useCallback(() => {
     cargarOrdenes();
@@ -186,6 +208,9 @@ const OrdenesPage: React.FC = () => {
               Mis Órdenes
             </Title>
           </div>
+          <PermissionGate accion="EXPORTAR">
+            <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+          </PermissionGate>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
             Recargar
           </Button>

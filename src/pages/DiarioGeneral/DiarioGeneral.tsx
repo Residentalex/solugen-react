@@ -13,6 +13,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { diarioGeneralApi } from '../../api/diarioGeneralApi';
 import type { DiarioGeneralItem } from '../../api/diarioGeneralApi';
 import { formatDateParam } from '../../utils/formats';
+import PermissionGate from '../../components/PermissionGate';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
@@ -292,9 +293,9 @@ const DiarioGeneral: React.FC = () => {
                 prefix={<SearchOutlined className="paces-text-icon" />}
               />
               <div style={{ flex: 1 }} />
-              <Button icon={<FileExcelOutlined />} onClick={handleExportExcel}>
-                Exportar Excel
-              </Button>
+              <PermissionGate accion="EXPORTAR">
+                <Button icon={<FileExcelOutlined />} onClick={handleExportExcel} />
+              </PermissionGate>
             </div>
 
             <Table

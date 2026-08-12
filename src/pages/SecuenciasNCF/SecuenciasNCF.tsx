@@ -15,6 +15,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { ncfApi } from '../../api/ncfApi';
 import type { SecuenciaNCFListDTO } from '../../types/contabilidad';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const formatearFecha = (fecha?: string): string => {
   if (!fecha) return '-';
@@ -82,6 +83,35 @@ const SecuenciasNCF: React.FC = () => {
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
   // Handlers
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const cols = columns.filter((c) => c.key !== 'acciones' && c.key !== 'estado');
+    exportToExcel({
+      fileName: `SecuenciasNCF_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'Secuencias NCF',
+      companyName,
+      columnHeaders: cols.map((c) => c.title as string),
+      dataRows: filteredData.map((item: any) =>
+        cols.map((col) => {
+          if (col.key === 'rango') {
+            return `${item.secuenciaInicial || ''} → ${item.secuenciaFinal || ''}`;
+          }
+          if (col.key === 'consumo') {
+            const usado = item.usado ?? 0;
+            const cantidad = item.cantidad ?? 0;
+            const pct = cantidad > 0 ? Math.round((usado / cantidad) * 100) : 0;
+            return `${usado}/${cantidad} (${pct}%)`;
+          }
+          if (col.key === 'disponible') {
+            return String((item.cantidad ?? 0) - (item.usado ?? 0));
+          }
+          const val = item[col.dataIndex as string];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
+  };
+
   const handleSearch = useCallback((value: string) => {
     setSearchText(value);
     setPagina(1);
@@ -342,6 +372,7 @@ const SecuenciasNCF: React.FC = () => {
           pageSize={pageSize}
           onPageSizeChange={(v) => { setPageSize(v); setPagina(1); }}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
           filtros={
             <>
               <Select

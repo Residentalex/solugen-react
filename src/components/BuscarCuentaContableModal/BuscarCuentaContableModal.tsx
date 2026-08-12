@@ -9,6 +9,8 @@ interface BuscarCuentaContableModalProps {
   onClose: () => void;
   onSelect: (cuenta: CuentaContableResumenDTO) => void;
   sucursal: number;
+  /** Modo servidor: si se pasa, no carga auxiliares al abrir y la busqueda se delega en esta funcion. */
+  buscar?: (filtro: string) => Promise<CuentaContableResumenDTO[]>;
 }
 
 const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
@@ -16,23 +18,26 @@ const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
   onClose,
   onSelect,
   sucursal,
+  buscar,
 }) => {
   const [cuentas, setCuentas] = useState<CuentaContableResumenDTO[]>([]);
   const [searchText, setSearchText] = useState('');
   const searchRef = useRef<any>(null);
 
+  // Ref para estabilizar `buscar` en el useEffect de limpieza: evita que
+  // el efecto se re-ejecute en cada render del padre cuando `buscar` es inline.
+  const buscarRef = useRef(buscar);
   useEffect(() => {
-    if (open) {
-      const timer = setTimeout(() => {
-        searchRef.current?.focus?.();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [open]);
+    buscarRef.current = buscar;
+  }, [buscar]);
 
   useEffect(() => {
     if (!open) return;
     setSearchText('');
+    if (buscarRef.current) {
+      setCuentas([]);
+      return;
+    }
     cuentaContableApi
       .obtenerAuxiliares(sucursal)
       .then((res) => setCuentas(res || []))
@@ -51,6 +56,23 @@ const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
     );
   }, [cuentas, searchText]);
 
+  const handleBuscarServidor = async (val: string) => {
+    const trimmed = (val || '').trim();
+    setSearchText(trimmed);
+    if (!trimmed) {
+      setCuentas([]);
+      return;
+    }
+    try {
+      if (!buscar) return;
+      const result = await buscar(trimmed);
+      setCuentas(result || []);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al buscar cuentas contables');
+      setCuentas([]);
+    }
+  };
+
   const columnas = [
     {
       title: 'No. Cuenta',
@@ -66,6 +88,8 @@ const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
     },
   ];
 
+  const dataSource = buscar ? cuentas : cuentasFiltradas;
+
   return (
     <Modal
       title="Buscar Cuenta Contable"
@@ -73,18 +97,33 @@ const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
       onCancel={onClose}
       footer={null}
       width={700}
-      destroyOnHidden
+      destroyOnClose
     >
       <Input.Search
         ref={searchRef}
         placeholder="Buscar por No. Cuenta o Nombre..."
         allowClear
-        onSearch={(val) => setSearchText(val || '')}
-        onChange={(e) => setSearchText(e.target.value || '')}
+        onSearch={(val) => {
+          if (buscar) {
+            handleBuscarServidor(val);
+          } else {
+            setSearchText(val || '');
+          }
+        }}
+        onChange={(e) => {
+          if (buscar) {
+            if (!e.target.value) {
+              setSearchText('');
+              setCuentas([]);
+            }
+          } else {
+            setSearchText(e.target.value || '');
+          }
+        }}
         style={{ marginBottom: 16 }}
       />
       <Table
-        dataSource={cuentasFiltradas}
+        dataSource={dataSource}
         columns={columnas}
         rowKey="noCuenta"
         size="small"
@@ -100,7 +139,13 @@ const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
         locale={{
           emptyText: (
             <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Empty description="No hay cuentas contables" />
+              <Empty
+                description={
+                  buscar
+                    ? (searchText ? 'Sin resultados' : 'Escriba para buscar cuentas')
+                    : 'No hay cuentas contables'
+                }
+              />
             </div>
           ),
         }}

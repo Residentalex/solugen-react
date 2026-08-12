@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Modal, Tooltip, Alert, App
@@ -25,10 +25,11 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
-import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
+import ModalVisorScanner from '../../components/ModalVisorScanner/ModalVisorScanner';
 
 const CotizacionVentaDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -50,6 +51,12 @@ const CotizacionVentaDetalle: React.FC = () => {
   const [scannerUrl, setScannerUrl] = useState<string | null>(null);
   const [scannerLoading, setScannerLoading] = useState(false);
   const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionDTO[]>([]);
+  // ═══ Carga progresiva: banderas anti doble fetch por sección ═══
+  const [detallesCargados, setDetallesCargados] = useState(false);
+  const [asientosCargados, setAsientosCargados] = useState(false);
+  const [seccionesCargando, setSeccionesCargando] = useState<Set<string>>(new Set());
+  const detallesCargadosRef = useRef(false);
+  const asientosCargadosRef = useRef(false);
   const monedaDefault = getMonedaSucursalActiva();
 
   const operacion = useAplicar();
@@ -75,6 +82,96 @@ const CotizacionVentaDetalle: React.FC = () => {
       });
   }, [data?.id]);
 
+  const marcarSeccionesCompletas = useCallback(() => {
+    setDetallesCargados(true);
+    setAsientosCargados(true);
+  }, []);
+
+  // ═══════════════════════════════════════════════════════════════
+  // Carga progresiva: encabezado primero + secciones críticas
+  // ═══════════════════════════════════════════════════════════════
+  const cargarEncabezado = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    setLoadingError(false);
+    try {
+      const res = await cotizacionVentaApi.obtenerEncabezado(sucursalActiva, parseInt(id));
+      if (!res) {
+        message.error('Documento no encontrado en la sucursal seleccionada.');
+        setLoadingError(true);
+        return;
+      }
+      setData(res as any);
+      setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+      // Verificar scanner
+      cotizacionVentaApi.verificarScan(sucursalActiva, parseInt(id))
+        .then((scanRes) => setTieneScan(scanRes.existe))
+        .catch(() => setTieneScan(false));
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al cargar el documento';
+      message.error(msg);
+      setLoadingError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [id, sucursalActiva, setPageTitleOverride]);
+
+  const cargarSeccion = useCallback(async (seccion: 'detalles' | 'asientos') => {
+    if (!id) return;
+    // Guard anti doble fetch ANTES de cualquier setState
+    if (
+      (seccion === 'detalles' && detallesCargadosRef.current) ||
+      (seccion === 'asientos' && asientosCargadosRef.current)
+    ) {
+      return;
+    }
+    setSeccionesCargando(prev => new Set(prev).add(seccion));
+    try {
+      const suc = sucursalActiva;
+      const numId = parseInt(id);
+      switch (seccion) {
+        case 'detalles': {
+          const detalles = await cotizacionVentaApi.obtenerDetalles(suc, numId);
+          setData(prev => (prev ? { ...prev, detalles } : prev));
+          setDetallesCargados(true);
+          break;
+        }
+        case 'asientos': {
+          const asientos = await cotizacionVentaApi.obtenerAsientos(suc, numId);
+          setData(prev => (prev ? { ...prev, asientos } : prev));
+          setAsientosCargados(true);
+          break;
+        }
+      }
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, `Error al cargar ${seccion}`);
+      message.error(msg);
+    } finally {
+      setSeccionesCargando(prev => {
+        const next = new Set(prev);
+        next.delete(seccion);
+        return next;
+      });
+    }
+  }, [id, sucursalActiva]);
+
+  // Montaje: encabezado primero, luego secciones críticas. Ant Design no dispara
+  // onChange con defaultActiveKey, por eso la pestaña por defecto se carga aquí.
+  useEffect(() => {
+    const init = async () => {
+      await cargarEncabezado();
+      await Promise.all([
+        cargarSeccion('detalles'),
+        cargarSeccion('asientos'),
+      ]);
+    };
+    init();
+  }, [cargarEncabezado, cargarSeccion]);
+
+  // Sincronizar refs de banderas para evitar stale closures en cargarSeccion
+  useEffect(() => { detallesCargadosRef.current = detallesCargados; }, [detallesCargados]);
+  useEffect(() => { asientosCargadosRef.current = asientosCargados; }, [asientosCargados]);
+
   const handleRefresh = useCallback(() => {
     if (!id) return;
     setLoadingError(false);
@@ -86,6 +183,8 @@ const CotizacionVentaDetalle: React.FC = () => {
           return;
         }
         setData(res);
+        // Recarga completa: todas las secciones quedan cargadas
+        marcarSeccionesCompletas();
         // Calcular balance de asientos contables
         const totalDeb = (res?.asientos || []).reduce((s: number, r: any) =>
           s + ((r.tipoAsiento === 0 || r.tipoAsiento === 'D') ? (r.monto || 0) : 0), 0);
@@ -106,33 +205,7 @@ const CotizacionVentaDetalle: React.FC = () => {
         message.error(msg);
         setLoadingError(true);
       })
-  }, [id, sucursalActiva, setPageTitleOverride]);
-
-  useEffect(() => {
-    if (!id) return;
-    setLoading(true);
-    setLoadingError(false);
-    cotizacionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res: any) => {
-        if (!res) {
-          message.error('Documento no encontrado en la sucursal seleccionada.');
-          setLoadingError(true);
-          return;
-        }
-        setData(res);
-        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
-        // Verificar scanner
-        cotizacionVentaApi.verificarScan(sucursalActiva, parseInt(id))
-          .then((scanRes) => setTieneScan(scanRes.existe))
-          .catch(() => setTieneScan(false));
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al cargar el documento';
-        message.error(msg);
-        setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, setPageTitleOverride]);
+  }, [id, sucursalActiva, setPageTitleOverride, marcarSeccionesCompletas]);
 
   // ===== Detalles filtrados por búsqueda =====
   const detallesFiltrados = detalleSearch
@@ -413,22 +486,6 @@ const CotizacionVentaDetalle: React.FC = () => {
     }
   };
 
-  function extraerMensajeError(err: any, fallback: string): string {
-    const errData = err?.response?.data;
-    if (!errData) return fallback;
-    if (errData.errorMessage) return errData.errorMessage;
-    if (errData.errors && typeof errData.errors === 'object') {
-      const mensajes: string[] = [];
-      for (const key of Object.keys(errData.errors)) {
-        const val = errData.errors[key];
-        if (Array.isArray(val)) mensajes.push(...val);
-        else if (typeof val === 'string') mensajes.push(val);
-      }
-      if (mensajes.length > 0) return mensajes.join('; ');
-    }
-    return fallback;
-  }
-
   return (
     <div>
       {loadingError && (
@@ -530,6 +587,10 @@ const CotizacionVentaDetalle: React.FC = () => {
             <Tabs
               defaultActiveKey="detalles"
               type="card"
+              onChange={(key) => {
+                if (key === 'detalles') cargarSeccion('detalles');
+                if (key === 'asientos') cargarSeccion('asientos');
+              }}
               tabBarExtraContent={
                 <Input.Search
                   placeholder="Buscar detalle..."
@@ -544,18 +605,26 @@ const CotizacionVentaDetalle: React.FC = () => {
                   key: 'detalles',
                   label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                   children: (
-                    <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                    <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
+                      <div style={{ minHeight: 220 }}>
+                        <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey={(r: any, i?: number) => r.id || i} size="small" pagination={false} scroll={{ x: 1100 }} />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
                   key: 'asientos',
                   label: `Asientos (${data.asientos?.length || 0})`,
                   children: (
-                    data.asientos && data.asientos.length > 0 ? (
-                      <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: 24 }} className="paces-text-secondary">Sin asientos contables</div>
-                    )
+                    <Spin spinning={seccionesCargando.has('asientos')} tip="Cargando asientos...">
+                      <div style={{ minHeight: 220 }}>
+                        {data.asientos && data.asientos.length > 0 ? (
+                          <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                        ) : (
+                          <div style={{ textAlign: 'center', padding: 24 }} className="paces-text-secondary">Sin asientos contables</div>
+                        )}
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
@@ -633,6 +702,10 @@ const CotizacionVentaDetalle: React.FC = () => {
             <Tabs
               defaultActiveKey="detalles"
             type="card"
+            onChange={(key) => {
+              if (key === 'detalles') cargarSeccion('detalles');
+              if (key === 'asientos') cargarSeccion('asientos');
+            }}
             tabBarExtraContent={
               <Input.Search
                 placeholder="Buscar detalle..."
@@ -647,18 +720,26 @@ const CotizacionVentaDetalle: React.FC = () => {
                 key: 'detalles',
                 label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                 children: (
-                  <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1100 }} />
+                  <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
+                    <div style={{ minHeight: 220 }}>
+                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey={(r: any, i?: number) => r.id || i} size="small" pagination={false} scroll={{ x: 1100 }} />
+                    </div>
+                  </Spin>
                 ),
               },
               {
                 key: 'asientos',
                 label: `Asientos (${data.asientos?.length || 0})`,
                 children: (
-                  data.asientos && data.asientos.length > 0 ? (
-                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: 24 }} className="paces-text-secondary">Sin asientos contables</div>
-                  )
+                  <Spin spinning={seccionesCargando.has('asientos')} tip="Cargando asientos...">
+                    <div style={{ minHeight: 220 }}>
+                      {data.asientos && data.asientos.length > 0 ? (
+                        <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: 24 }} className="paces-text-secondary">Sin asientos contables</div>
+                      )}
+                    </div>
+                  </Spin>
                 ),
               },
               {
@@ -686,28 +767,13 @@ const CotizacionVentaDetalle: React.FC = () => {
         </div>
       )}
 
-      {/* Modal de Visor de Scanner */}
-      <Modal
-        title="Cotización Escaneada"
+      <ModalVisorScanner
         open={scannerModalOpen}
-        onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
-        width="80%"
-        style={{ top: 20 }}
-        footer={null}
-        destroyOnHidden
-      >
-        {scannerLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        ) : scannerUrl ? (
-          <iframe src={scannerUrl} style={{ width: '100%', height: '70vh', border: 'none' }} title="Scanner" />
-        ) : (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        )}
-      </Modal>
+        titulo="Cotización Escaneada"
+        url={scannerUrl}
+        loading={scannerLoading}
+        onClose={() => { setScannerModalOpen(false); setScannerUrl(null); }}
+      />
 
       {/* Modal de Progreso para Aplicar/Postear */}
       <ModalProgreso

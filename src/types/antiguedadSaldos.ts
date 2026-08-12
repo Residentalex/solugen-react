@@ -6,10 +6,12 @@ export interface TransaccionBalanceDTO {
   ncf: string;
   fechaDocumento: string;
   total: number;
+  impuestos?: number;
   debitos: number;
   creditos: number;
   codigoEntidad: string;
   nombreEntidad: string;
+  categoriaNombre?: string;
   entidad: { codigo: string; nombre: string; categoria?: { codigo: string; nombre: string } };
   moneda: { nombre: string; codigo: string };
   tipo?: { codigo?: string; nombre?: string };
@@ -33,6 +35,7 @@ export interface ResumenAgingDTO {
   nombreEntidad: string;
   categoriaNombre?: string;
   total: number;
+  impuestos?: number;
   monto0_30: number;
   monto31_60: number;
   monto61_90: number;

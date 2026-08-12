@@ -2,15 +2,19 @@
 import {
   Table, Input, Button, Card, Switch, Modal, Form, InputNumber, Select, Typography, Tooltip, message,
 } from 'antd';
-import { SearchOutlined, ReloadOutlined, EditOutlined, PictureOutlined, UploadOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, EditOutlined, PictureOutlined, UploadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { ecommerceApi } from '../../../api/ecommerceApi';
 import type { AdminProductoListadoDTO, AdminCategoriaDTO } from '../../../api/ecommerceApi';
 import { formatCurrency } from '../../../utils/formats';
+import { useAuthStore } from '../../../stores/authStore';
+import PermissionGate from '../../../components/PermissionGate';
+import { exportToExcel, getCompanyName } from '../../../utils/exportToExcel';
 
 const { Text } = Typography;
 
 const EcommerceAdminProductos: React.FC = () => {
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const [data, setData] = useState<AdminProductoListadoDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -74,6 +78,23 @@ const EcommerceAdminProductos: React.FC = () => {
   useEffect(() => {
     cargarProductos();
   }, [cargarProductos]);
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const cols = columns.filter((c) => c.key !== 'acciones' && c.dataIndex !== 'imagenUrl');
+    exportToExcel({
+      fileName: `ProductosEcommerce_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'Productos Ecommerce',
+      companyName,
+      columnHeaders: cols.map((c) => c.title as string),
+      dataRows: data.map((item: any) =>
+        cols.map((col) => {
+          const val = item[col.dataIndex as string];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
+  };
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -307,6 +328,9 @@ const EcommerceAdminProductos: React.FC = () => {
               ]}
             />
             <div style={{ flex: 1 }} />
+            <PermissionGate accion="EXPORTAR">
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+            </PermissionGate>
             <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>
         </div>

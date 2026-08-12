@@ -24,6 +24,7 @@ import { useAplicar } from '../../hooks/useAplicar';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
+import ModalVisorScanner from '../../components/ModalVisorScanner/ModalVisorScanner';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
@@ -598,24 +599,13 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         />
       </div>
 
-      {/* Modal de Visor de Scanner */}
-      <Modal
-        title="Documento Escaneado"
+      <ModalVisorScanner
         open={scannerModalOpen}
-        onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
-        width="80%"
-        style={{ top: 20 }}
-        footer={null}
-        destroyOnHidden
-      >
-        {scannerLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
-        ) : scannerUrl ? (
-          <iframe src={scannerUrl} style={{ width: '100%', height: '70vh', border: 'none' }} title="Scanner" />
-        ) : (
-          <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
-        )}
-      </Modal>
+        titulo="Documento Escaneado"
+        url={scannerUrl}
+        loading={scannerLoading}
+        onClose={() => { setScannerModalOpen(false); setScannerUrl(null); }}
+      />
 
       {/* Modal Desaplicar */}
       <ModalDesaplicar

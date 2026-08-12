@@ -46,6 +46,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import type { JobHangfire, JobTemplate } from '../../types/hangfire';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text, Title } = Typography;
 
@@ -152,6 +153,7 @@ const Automatizaciones: React.FC = () => {
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const updateToolbar = useUIStore((s) => s.updateToolbar);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
   const sucursalesData = useCompanyStore((s) => s.data.sucursales);
 
@@ -304,6 +306,24 @@ const Automatizaciones: React.FC = () => {
       handleSelectTemplate(templates[0].tipoJobId);
     }
   }, [activeTab, templates, selectedTemplateId]);
+
+  // â”€â”€ Exportar Excel â”€â”€
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const cols = columns.filter((c) => c.key !== 'acciones');
+    exportToExcel({
+      fileName: `Automatizaciones_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'Automatizaciones',
+      companyName,
+      columnHeaders: cols.map((c) => c.title as string),
+      dataRows: filteredJobs.map((item: any) =>
+        cols.map((col) => {
+          const val = item[col.dataIndex as string];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
+  };
 
   // â”€â”€ Handlers jobs â”€â”€
 
@@ -901,6 +921,7 @@ const Automatizaciones: React.FC = () => {
       pageSize={pageSize}
       onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
       onReload={handleRefresh}
+      onExportarExcel={handleExportarExcel}
       filtros={
         <Select
           style={{ width: 160 }}

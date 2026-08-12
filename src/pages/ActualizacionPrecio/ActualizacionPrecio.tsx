@@ -2,13 +2,14 @@
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Table, Input, Tag, Button, Card, Typography, DatePicker, Alert, Empty } from 'antd';
-import { PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, SearchOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { actualizacionPrecioApi } from '../../api/actualizacionPrecioApi';
 import type { ActualizacionPrecioDTO } from '../../types/actualizacionPrecio';
 import PermissionGate from '../../components/PermissionGate';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -120,6 +121,26 @@ const ActualizacionPrecio: React.FC = () => {
 
   const handleRefresh = () => {
     setDateTrigger((n) => n + 1);
+  };
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const dataSource = data?.datos || [];
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        const val = item[col.dataIndex];
+        return val != null ? String(val) : '';
+      })
+    );
+    exportToExcel({
+      fileName: `ActualizacionPrecio_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'ActualizacionPrecio',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
   };
 
   const handleDateChange = (dates: any) => {
@@ -243,6 +264,9 @@ const ActualizacionPrecio: React.FC = () => {
               <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/FActPrecio/nuevo')}>
                 Nuevo
               </Button>
+            </PermissionGate>
+            <PermissionGate accion="EXPORTAR">
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
             </PermissionGate>
             <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>

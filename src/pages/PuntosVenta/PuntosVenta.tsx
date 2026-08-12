@@ -7,6 +7,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { puntoVentaApi } from '../../api/puntoVentaApi';
 import type { PuntoVentaDTO } from '../../types/facturacion';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -34,11 +35,8 @@ const PuntosVenta: React.FC = () => {
       const params: { cantidad: number; salto: number; busqueda?: string } = { cantidad: pageSize, salto };
       if (searchText) params.busqueda = searchText;
 
-      const [resultados, totalCount] = await Promise.all([
-        puntoVentaApi.filtrarPuntosVenta(sucursalActiva, params),
-        puntoVentaApi.obtenerTotalPuntosVenta(sucursalActiva, { busqueda: searchText || undefined }),
-      ]);
-      return { datos: resultados || [], total: totalCount ?? 0 };
+      const result = await puntoVentaApi.filtrarPuntosVenta(sucursalActiva, params);
+      return { datos: result.items, total: result.total };
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -49,6 +47,29 @@ const PuntosVenta: React.FC = () => {
     updateToolbar({});
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const dataSource = data?.datos || [];
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        if (col.dataIndex) {
+          const val = item[col.dataIndex];
+          return val != null ? String(val) : '';
+        }
+        return '';
+      })
+    );
+    exportToExcel({
+      fileName: `PuntosVenta_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'PuntosVenta',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -98,6 +119,7 @@ const PuntosVenta: React.FC = () => {
           pageSize={pageSize}
           onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
         />
 
       <Table<PuntoVentaDTO>

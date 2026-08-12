@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Table, Card, Button, Alert, Typography, message, Tag, Select, Empty } from 'antd';
-import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, ReloadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { notificacionesApi } from '../../api/notificacionesApi';
+import { useAuthStore } from '../../stores/authStore';
+import PermissionGate from '../../components/PermissionGate';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const VisualizarConsulta: React.FC = () => {
   const { configID } = useParams<{ configID: string }>();
   const navigate = useNavigate();
+  const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const [filas, setFilas] = useState<Record<string, any>[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -45,6 +49,25 @@ const VisualizarConsulta: React.FC = () => {
       }))
     : [];
 
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const cols = columnas.length > 0
+      ? columnas.map((c) => ({ title: c.title as string, key: c.key as string }))
+      : [];
+    exportToExcel({
+      fileName: `ConsultaSQL_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'Resultado Consulta',
+      companyName,
+      columnHeaders: cols.map((c) => c.title),
+      dataRows: filas.map((item: any) =>
+        cols.map((col) => {
+          const val = item[col.key];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
@@ -63,6 +86,9 @@ const VisualizarConsulta: React.FC = () => {
             { value: 100, label: '100' },
           ]}
         />
+        <PermissionGate accion="EXPORTAR">
+          <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+        </PermissionGate>
         <Button icon={<ReloadOutlined />} onClick={cargarDatos} loading={loading}>Recargar</Button>
       </div>
 

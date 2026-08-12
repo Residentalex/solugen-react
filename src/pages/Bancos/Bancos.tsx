@@ -9,6 +9,7 @@ import { toTitleCase } from '../../utils/formats';
 import { bancoApi } from '../../api/bancoApi';
 import type { BancoDTO } from '../../api/bancoApi';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 
@@ -46,6 +47,29 @@ const Bancos: React.FC = () => {
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
   });
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const dataSource = data?.datos || [];
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        if (col.dataIndex) {
+          const val = item[col.dataIndex];
+          return val != null ? String(val) : '';
+        }
+        return '';
+      })
+    );
+    exportToExcel({
+      fileName: `Bancos_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'Bancos',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -127,6 +151,7 @@ const Bancos: React.FC = () => {
           onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onNuevo={() => navigate('/MBanco/nuevo')}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
         />
         <Table<BancoDTO>
           columns={columns}

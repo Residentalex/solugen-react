@@ -4,6 +4,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Table, Input, Tag, Button, message, Card, Modal, Form, Switch, Typography, Select, Alert, Row, Col, Empty } from 'antd';
 import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
@@ -146,6 +147,29 @@ const CuentasContables: React.FC = () => {
     }
   };
 
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const dataSource = data?.data || [];
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        if (col.dataIndex) {
+          const val = item[col.dataIndex];
+          return val != null ? String(val) : '';
+        }
+        return '';
+      })
+    );
+    exportToExcel({
+      fileName: `CuentasContables_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'CuentasContables',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
+
   const handleSearch = (value: string) => {
     setFiltro(value);
     setPage(1);
@@ -238,6 +262,7 @@ const CuentasContables: React.FC = () => {
           onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onNuevo={abrirNuevo}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
         />
 
       <Table<CuentaContableResumenDTO>

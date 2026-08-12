@@ -17,6 +17,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { documentosApi } from '../../api/documentosApi';
 import type { DocumentoDTO } from '../../types/documento';
 import { toTitleCase } from '../../utils/formats';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
@@ -60,6 +61,26 @@ const Documentos: React.FC = () => {
   const handleSearch = (value: string) => {
     setPage(1);
     setSearchText(value);
+  };
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const dataSource = data?.datos || [];
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones' && col.title !== 'Acción');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        const val = item[col.dataIndex];
+        return val != null ? String(val) : '';
+      })
+    );
+    exportToExcel({
+      fileName: `Documentos_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'Documentos',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
   };
 
   const handleEliminar = async (doc: DocumentoDTO) => {
@@ -170,6 +191,7 @@ const Documentos: React.FC = () => {
           onPageSizeChange={(v) => { setPageSize(v); }}
           onNuevo={() => navigate('/MDocumento/nuevo')}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
         />
         <Table<DocumentoDTO>
           columns={columns}

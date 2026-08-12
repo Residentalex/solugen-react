@@ -1,14 +1,17 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Tooltip, Alert, Modal, App, Typography
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Tooltip, Alert, App, Typography, Dropdown
 } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
   FileTextOutlined, FileSearchOutlined, WarningFilled,
+  PrinterOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
+import PermissionGate from '../../components/PermissionGate';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
@@ -23,6 +26,8 @@ import { useAplicar } from '../../hooks/useAplicar';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
+import ModalVisorScanner from '../../components/ModalVisorScanner/ModalVisorScanner';
+import ModalSeleccionarImpresoraPOS from '../../components/ModalSeleccionarImpresoraPOS/ModalSeleccionarImpresoraPOS';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -32,6 +37,10 @@ import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
+import { useQZTray } from '../../hooks/useQZTray';
+import { formatTicketReciboIngreso, escposQRCode, feed, CMD_CUT } from '../../utils/escpos-formatter';
+import { obtenerConfigPlantilla, CODIGO_PLANTILLA_FRI_TICKET } from '../../utils/ticketPlantilla';
+import { obtenerLogoEscPosBase64 } from '../../utils/logoEscPos';
 
 // ===== Helpers para tipo de asiento =====
 function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
@@ -51,6 +60,9 @@ const ReciboIngresoDetalle: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [printerModalOpen, setPrinterModalOpen] = useState(false);
+  const [printerList, setPrinterList] = useState<string[]>([]);
+  const [selectedPrinter, setSelectedPrinter] = useState<string>('');
   const [detalleSearch, setDetalleSearch] = useState('');
   const [tieneScan, setTieneScan] = useState<boolean | null>(null);
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
@@ -64,6 +76,7 @@ const ReciboIngresoDetalle: React.FC = () => {
   const screens = Grid.useBreakpoint();
 
   const { message } = App.useApp();
+  const qz = useQZTray();
 
   const operacion = useAplicar();
   const [operacionTitulo, setOperacionTitulo] = useState('');
@@ -207,6 +220,7 @@ const ReciboIngresoDetalle: React.FC = () => {
   };
 
   const asociadasColumns = [
+    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => v ? formatDate(v) : '-' },
     {
       title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140,
       render: (doc: string, record: any) => {
@@ -352,6 +366,112 @@ const ReciboIngresoDetalle: React.FC = () => {
     }
   };
 
+  const printMenuItems: MenuProps['items'] = [
+    { key: 'ticket', label: 'Ticket' },
+    { key: 'carta', label: 'Factura Carta' },
+  ];
+
+  const handlePrintMenuClick: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'ticket') {
+      handlePrintTicket();
+    } else if (key === 'carta') {
+      handlePrintCarta();
+    }
+  };
+
+  const handlePrintTicket = async () => {
+    if (!id || !data) return;
+    setImprimiendo(true);
+    try {
+      const sucursales = useAuthStore.getState().sucursalesPermitidas;
+      const sucursalNombre = sucursales.find((sp) => sp.sucursal === sucursalActiva)?.nombre || '';
+
+      // Obtener config de plantilla (si falla o no existe, usar formato predeterminado)
+      let config = null;
+      try {
+        config = await obtenerConfigPlantilla(CODIGO_PLANTILLA_FRI_TICKET);
+      } catch {
+        config = null;
+      }
+
+      // Generar ticket ESC/POS (texto con formato)
+      let ticketText = formatTicketReciboIngreso(data, {
+        nombre: sucursalNombre,
+        direccion: data.sucursal?.direccion || '',
+        telefono: data.sucursal?.telefono || '',
+        rnc: data.sucursal?.rnc || '',
+        fax: data.sucursal?.fax || '',
+        slogan: data.sucursal?.slogan || '',
+      }, config || undefined);
+
+      // QR se genera desde la plantilla configurable (CAMPO:CODIGO_QR)
+      // const qrData = data.envioDGII?.codigoQR;
+      // if (qrData) {
+      //   ticketText += escposQRCode(qrData);
+      // }
+
+      // Avance y corte DESPUÉS del QR
+      ticketText += feed(config?.opciones?.feedCorte ?? 4);
+      ticketText += CMD_CUT;
+
+      // Logo configurable: generar comando GS v 0 (base64) si la plantilla lo activa.
+      let logoBase64 = '';
+      if (config?.logo?.mostrar) {
+        logoBase64 = await obtenerLogoEscPosBase64(config.logo);
+      }
+
+      // Enviar a QZ Tray como texto raw ESC/POS
+      await qz.print(ticketText, logoBase64 || undefined);
+      message.success(`Imprimiendo en: ${qz.printerName || 'Impresora POS'}`);
+    } catch (err: any) {
+      if (err.code === 'NO_PRINTER_SELECTED') {
+        // Mostrar selector de impresora
+        try {
+          const list = await qz.fetchPrinters();
+          if (list.length === 0) {
+            await imprimirPDF();
+          } else {
+            setPrinterList(list);
+            setSelectedPrinter(list[0] || '');
+            setPrinterModalOpen(true);
+          }
+        } catch {
+          await imprimirPDF();
+        }
+      } else {
+        message.error('QZ Tray: ' + (err.message || 'Error'));
+        await imprimirPDF();
+      }
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
+  const imprimirPDF = async () => {
+    const res = await apiClient.post(`/reportes/contabilidad/reciboIngreso/ticket`, data, {
+      responseType: 'blob',
+    });
+    const blobUrl = URL.createObjectURL(res.data);
+    window.open(blobUrl, '_blank');
+  };
+
+  const handlePrintCarta = async () => {
+    if (!id || !data) return;
+    setImprimiendo(true);
+    try {
+      const res = await apiClient.post(`/reportes/contabilidad/reciboIngreso`, data, {
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(res.data);
+      window.open(blobUrl, '_blank');
+    } catch (err: any) {
+      const msg = err?.response?.data?.ErrorMessage || 'Error al generar el PDF';
+      message.error(msg);
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
   const tienePagos = pagosAsociados.length > 0;
 
   // RI8 - Verificar si los asientos están cuadrados
@@ -394,6 +514,7 @@ const ReciboIngresoDetalle: React.FC = () => {
       )}
       <DetalleToolbar
         modulo="FRI"
+        showImprimir={false}
         estado={data.estado}
         periodo={data.periodo}
         revisado={data.revisado}
@@ -401,22 +522,6 @@ const ReciboIngresoDetalle: React.FC = () => {
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
         onVolver={() => navigate(-1)}
-        onImprimir={async () => {
-          if (!id || !data) return;
-          setImprimiendo(true);
-          try {
-            const res = await apiClient.post('/reportes/contabilidad/reciboIngreso', data, {
-              responseType: 'blob',
-            });
-            const blobUrl = URL.createObjectURL(res.data);
-            window.open(blobUrl, '_blank');
-          } catch (err: any) {
-            const msg = err?.response?.data?.ErrorMessage || 'Error al generar el PDF';
-            message.error(msg);
-          } finally {
-            setImprimiendo(false);
-          }
-        }}
         onEditar={() => navigate(`/FRI/${id}/editar`)}
         onAplicar={handleAplicar}
         onAnular={tienePagos ? undefined : async () => setModalAnularOpen(true)}
@@ -424,6 +529,20 @@ const ReciboIngresoDetalle: React.FC = () => {
         onRevisado={handleRevisado}
         onDesaplicar={tienePagos ? undefined : async () => setModalDesaplicarOpen(true)}
         onReversar={handleReversar}
+        extraButtons={
+          <>
+            <PermissionGate codigoPantalla={screenCode} accion="IMPRIMIR">
+              <Dropdown menu={{ items: printMenuItems, onClick: handlePrintMenuClick }} trigger={['click']}>
+                <Button icon={<PrinterOutlined />} loading={imprimiendo} />
+              </Dropdown>
+              {qz.printerName && (
+                <Tag color="success" style={{ marginLeft: 2, fontSize: 11, lineHeight: '18px' }}>
+                  QZ: {qz.printerName}
+                </Tag>
+              )}
+            </PermissionGate>
+          </>
+        }
       />
 
       {isLarge ? (
@@ -489,7 +608,7 @@ const ReciboIngresoDetalle: React.FC = () => {
                   key: 'documentos',
                   label: `Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`,
                   children: (
-                    <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
+                    <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 900 }} />
                   ),
                 },
                 {
@@ -601,7 +720,7 @@ const ReciboIngresoDetalle: React.FC = () => {
                 key: 'documentos',
                 label: `Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`,
                 children: (
-                  <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 800 }} />
+                  <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 900 }} />
                 ),
               },
               {
@@ -652,28 +771,13 @@ const ReciboIngresoDetalle: React.FC = () => {
         </div>
       )}
 
-      {/* Modal de Visor de Scanner */}
-      <Modal
-        title="Factura Escaneada"
+      <ModalVisorScanner
         open={scannerModalOpen}
-        onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
-        width="80%"
-        style={{ top: 20 }}
-        footer={null}
-        destroyOnHidden
-      >
-        {scannerLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        ) : scannerUrl ? (
-          <iframe src={scannerUrl} style={{ width: '100%', height: '70vh', border: 'none' }} title="Scanner" />
-        ) : (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        )}
-      </Modal>
+        titulo="Factura Escaneada"
+        url={scannerUrl}
+        loading={scannerLoading}
+        onClose={() => { setScannerModalOpen(false); setScannerUrl(null); }}
+      />
 
       {/* Modal de Anular */}
       <ModalAnular
@@ -701,6 +805,22 @@ const ReciboIngresoDetalle: React.FC = () => {
         completado={operacion.completado}
         balanceInfo={operacion.balanceInfo}
         onClose={() => operacion.reset()}
+      />
+
+      {/* Modal selector de impresora POS */}
+      <ModalSeleccionarImpresoraPOS
+        open={printerModalOpen}
+        impresoras={printerList}
+        seleccionada={selectedPrinter}
+        onSelect={setSelectedPrinter}
+        onConfirm={async () => {
+          if (!selectedPrinter) return;
+          qz.selectPrinter(selectedPrinter);
+          setPrinterModalOpen(false);
+          // Reintentar impresión
+          handlePrintTicket();
+        }}
+        onClose={() => { setPrinterModalOpen(false); }}
       />
     </div>
   );

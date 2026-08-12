@@ -47,7 +47,7 @@ const DETALLE_COLUMNS_CONFIG: ColumnConfig[] = [
   { key: 'cantidad', label: 'Cantidad', defaultVisible: true },
   { key: 'costo', label: 'Costo', defaultVisible: true },
   { key: 'descuento', label: 'Descuento', defaultVisible: true },
-  { key: 'subTotal', label: 'SubTotal', defaultVisible: true },
+  { key: 'subTotal', label: 'SubTotal', defaultVisible: false },
   { key: 'impuestos', label: 'Impuestos', defaultVisible: true },
   { key: 'total', label: 'Total', defaultVisible: true },
   { key: 'factor', label: 'Factor', defaultVisible: false },
@@ -310,7 +310,7 @@ const DevolucionCompraDetalle: React.FC = () => {
     {
       title: 'Código',
       key: 'codigo',
-      width: 120,
+      width: 100,
       fixed: 'left' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
@@ -345,7 +345,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       title: 'Cantidad',
       dataIndex: 'cantidad',
       key: 'cantidad',
-      width: 120,
+      width: 110,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
@@ -363,7 +363,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       title: 'Costo',
       dataIndex: 'costo',
       key: 'costo',
-      width: 130,
+      width: 110,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
@@ -386,7 +386,7 @@ const DevolucionCompraDetalle: React.FC = () => {
     {
       title: 'Descuento',
       key: 'descuento',
-      width: 120,
+      width: 100,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
@@ -403,7 +403,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       title: 'SubTotal',
       dataIndex: 'subTotal',
       key: 'subTotal',
-      width: 120,
+      width: 110,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
@@ -438,7 +438,7 @@ const DevolucionCompraDetalle: React.FC = () => {
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
-      width: 120,
+      width: 100,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top', paddingRight: 16 } }),
       onHeaderCell: () => ({ style: { paddingRight: 16 } }),
@@ -764,7 +764,7 @@ const DevolucionCompraDetalle: React.FC = () => {
                   key: 'detalles',
                   label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                   children: (
-                    <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1300 }} />
+                    <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1200 }} />
                   ),
                 },
                 {
@@ -883,7 +883,7 @@ const DevolucionCompraDetalle: React.FC = () => {
                   key: 'detalles',
                   label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                   children: (
-                    <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1300 }} />
+                    <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1200 }} />
                   ),
                 },
                 {

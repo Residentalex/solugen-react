@@ -39,11 +39,35 @@ const BuscarCuentaInlineModal: React.FC<BuscarCuentaInlineModalProps> = ({ open,
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
 
+  // Precargar cuentas al abrir el modal
+  useEffect(() => {
+    if (!open) return;
+    setSearchText('');
+    setLoading(true);
+    buscarCuentas('')
+      .then(result => {
+        setFiltered(result || []);
+      })
+      .catch(err => {
+        message.error(err?.response?.data?.errorMessage || 'Error al cargar cuentas contables');
+        setFiltered([]);
+      })
+      .finally(() => setLoading(false));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSearch = async (val: string) => {
     const trimmed = (val || '').trim();
     setSearchText(trimmed);
     if (!trimmed) {
-      setFiltered([]);
+      setLoading(true);
+      try {
+        const result = await buscarCuentas('');
+        setFiltered(result || []);
+      } catch {
+        setFiltered([]);
+      } finally {
+        setLoading(false);
+      }
       return;
     }
     setLoading(true);
@@ -61,7 +85,6 @@ const BuscarCuentaInlineModal: React.FC<BuscarCuentaInlineModalProps> = ({ open,
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.value) {
       setSearchText('');
-      setFiltered([]);
     }
   };
 
@@ -92,7 +115,7 @@ const BuscarCuentaInlineModal: React.FC<BuscarCuentaInlineModalProps> = ({ open,
           })}
           locale={{
             emptyText: !searchText
-              ? <Empty description="Escriba para buscar cuentas" />
+              ? <Empty description="Escriba para filtrar cuentas" />
               : <Empty description="Sin resultados" />,
           }}
         />
@@ -126,7 +149,7 @@ const BuscarDocumentoInlineModal: React.FC<BuscarDocumentoInlineModalProps> = ({
   ];
 
   return (
-    <Modal title="Buscar Documento" open={open} onCancel={onClose} footer={null} width={600} destroyOnHidden>
+    <Modal title="Buscar Documento" open={open} onCancel={onClose} footer={null} width={600} destroyOnClose>
       <Input.Search
         placeholder="Buscar por código o nombre..."
         allowClear
@@ -336,6 +359,15 @@ const ConceptoFormulario: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [mode, codigo, sucursalActiva, form, navigate, documentos, setPageTitleOverride, navigationConfirmedRef]);
+
+  // ===== Cargar tipos de entidad al abrir el modal =====
+  useEffect(() => {
+    if (!entidadBuscarModalOpen) return;
+    setEntidadBuscarText('');
+    entidadApi.buscarTipos(sucursalActiva, '')
+      .then(setEntidadResultados)
+      .catch((err) => console.warn('Error al cargar tipos de entidad', err));
+  }, [entidadBuscarModalOpen, sucursalActiva]);
 
   // ===== Handlers =====
   const handleGuardar = async () => {
@@ -562,12 +594,12 @@ const ConceptoFormulario: React.FC = () => {
   };
 
   // ===== Handlers para Entidades y Documentos =====
-  const handleAgregarEntidad = (ent: any) => {
+  const handleAgregarEntidad = (ent: TipoEntidadDTO) => {
     if (entidades.find(e => e.codigo === ent.codigo)) {
-      message.warning('La entidad ya está agregada');
+      message.warning('El tipo de entidad ya está agregado');
       return;
     }
-    setEntidades(prev => [...prev, { codigo: ent.codigo, nombre: ent.nombre || ent.descripcion || '', tipo: '' }]);
+    setEntidades(prev => [...prev, { codigo: ent.codigo, nombre: ent.nombre, tipo: '' }]);
     setEntidadBuscarModalOpen(false);
     setEntidadBuscarText('');
     setEntidadResultados([]);
@@ -594,13 +626,22 @@ const ConceptoFormulario: React.FC = () => {
     setDocumentosForm(prev => prev.map(d => d.codigo === codigo ? { ...d, tipo } : d));
   };
 
-  const handleBuscarEntidad = async () => {
-    if (!entidadBuscarText) return;
+  const handleBuscarEntidad = async (valor?: string) => {
+    const termino = (valor || '').trim();
+    setEntidadBuscarText(termino);
+    if (!termino) {
+      // Recargar todos al limpiar
+      try {
+        const todos = await entidadApi.buscarTipos(sucursalActiva, '');
+        setEntidadResultados(todos);
+      } catch { /* ignore */ }
+      return;
+    }
     try {
-      const resultados = await entidadApi.buscar(sucursalActiva, entidadBuscarText, 20);
+      const resultados = await entidadApi.buscarTipos(sucursalActiva, termino);
       setEntidadResultados(resultados);
     } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al buscar entidades');
+      message.error(err?.response?.data?.errorMessage || 'Error al buscar tipos de entidad');
     }
   };
 
@@ -635,9 +676,8 @@ const ConceptoFormulario: React.FC = () => {
                     <Form.Item
                       name="codigo"
                       label="Código"
-                      rules={mode === 'crear' ? [{ required: true, message: 'El código es requerido' }] : []}
                     >
-                      <Input disabled={mode === 'editar'} placeholder="Código del concepto" />
+                      <Input disabled placeholder="Auto-generado" />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={8}>
@@ -880,7 +920,7 @@ const ConceptoFormulario: React.FC = () => {
                           dataSource={entidades}
                           rowKey="codigo"
                           size="small"
-                          pagination={false}
+                          pagination={{ pageSize: 10, showSizeChanger: false }}
                           columns={[
                             { title: 'Código', dataIndex: 'codigo', width: 120 },
                             { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
@@ -1058,9 +1098,8 @@ const ConceptoFormulario: React.FC = () => {
                   <Form.Item
                     name="codigo"
                     label="Código"
-                    rules={mode === 'crear' ? [{ required: true, message: 'El código es requerido' }] : []}
                   >
-                    <Input disabled={mode === 'editar'} placeholder="Código del concepto" />
+                    <Input disabled placeholder="Auto-generado" />
                   </Form.Item>
                 </Col>
                 <Col xs={24}>
@@ -1295,7 +1334,7 @@ const ConceptoFormulario: React.FC = () => {
                         onClick={() => setEntidadBuscarModalOpen(true)}
                         style={{ marginBottom: 16 }}
                       >
-                        Agregar Entidad
+                        Agregar Tipo de Entidad
                       </Button>
                       {entidades.length > 0 ? (
                         <Table
@@ -1343,7 +1382,7 @@ const ConceptoFormulario: React.FC = () => {
                           ]}
                         />
                       ) : (
-                        <Text type="secondary">No hay entidades agregadas</Text>
+                        <Text type="secondary">No hay tipos de entidad agregados</Text>
                       )}
                     </div>
                   ),
@@ -1410,7 +1449,7 @@ const ConceptoFormulario: React.FC = () => {
                           ]}
                         />
                       ) : (
-                        <Text type="secondary">No hay entidades agregadas</Text>
+                        <Text type="secondary">No hay documentos agregados</Text>
                       )}
                     </div>
                   ),
@@ -1492,18 +1531,16 @@ const ConceptoFormulario: React.FC = () => {
 
       {/* Modal Buscar Entidad */}
       <Modal
-        title="Buscar Entidad"
+        title="Buscar Tipo de Entidad"
         open={entidadBuscarModalOpen}
         onCancel={() => { setEntidadBuscarModalOpen(false); setEntidadBuscarText(''); setEntidadResultados([]); }}
         footer={null}
         width={600}
-        destroyOnHidden
+        destroyOnClose
       >
         <Input.Search
-          placeholder="Buscar por código o nombre..."
+          placeholder="Buscar tipo de entidad (CLI, SUP, EMP)..."
           allowClear
-          value={entidadBuscarText}
-          onChange={(e) => setEntidadBuscarText(e.target.value)}
           onSearch={handleBuscarEntidad}
           style={{ marginBottom: 16 }}
         />
@@ -1512,10 +1549,10 @@ const ConceptoFormulario: React.FC = () => {
             dataSource={entidadResultados}
             rowKey="codigo"
             size="small"
-            pagination={false}
+            pagination={{ pageSize: 10, showSizeChanger: false }}
             columns={[
-              { title: 'Código', dataIndex: 'codigo', width: 120 },
-              { title: 'Nombre', dataIndex: 'nombre', ellipsis: true, render: (v: string) => toTitleCase(v) },
+              { title: 'Código', dataIndex: 'codigo', width: 100 },
+              { title: 'Descripción', dataIndex: 'nombre', ellipsis: true, render: (v: string) => toTitleCase(v) },
             ]}
             onRow={(record) => ({
               onClick: () => handleAgregarEntidad(record),
@@ -1524,7 +1561,7 @@ const ConceptoFormulario: React.FC = () => {
             locale={{ emptyText: <Empty description="No hay resultados" /> }}
           />
         ) : (
-          entidadBuscarText && <Empty description="No se encontraron entidades" />
+          entidadBuscarText && <Empty description="No se encontraron tipos de entidad" />
         )}
       </Modal>
 

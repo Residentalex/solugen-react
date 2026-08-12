@@ -264,6 +264,12 @@ export const transaccionApi = {
     return data.data;
   },
 
+  /** Generar asientos contables para un documento */
+  generarAsientos: async (sucursal: number, transaccion: any): Promise<any[]> => {
+    const { data } = await apiClient.post<ApiResponse<any[]>>(`${BASE}/${sucursal}/generarAsiento`, transaccion);
+    return data.data ?? [];
+  },
+
   /** Obtener documentos registrados que deberian tener asientos pero no tienen */
   obtenerDocumentosSinAsiento: async (
     sucursal: number,
@@ -296,6 +302,12 @@ export const transaccionApi = {
       { params: { tipoEntidad } }
     );
     return data.data || [];
+  },
+
+  /** Generar asientos contables para una transacción */
+  generarAsientos: async (sucursal: number, transaccion: any): Promise<any[]> => {
+    const { data } = await apiClient.post<ApiResponse<any[]>>(`${BASE}/${sucursal}/generarAsiento`, transaccion);
+    return data.data;
   },
 };
 

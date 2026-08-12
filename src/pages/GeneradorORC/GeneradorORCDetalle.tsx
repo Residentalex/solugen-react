@@ -33,6 +33,7 @@ import { ErrorDetalle } from '../../components';
 import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 import PermissionGate from '../../components/PermissionGate';
 import LogTable from '../../components/LogTable';
+import ModalMovimientosPosteriores from '../../components/ModalMovimientosPosteriores/ModalMovimientosPosteriores';
 
 const { Text } = Typography;
 
@@ -1178,29 +1179,14 @@ const GeneradorORCDetalle: React.FC = () => {
       </Drawer>
 
       {/* ===== Modal de Movimientos Posteriores ===== */}
-      <Modal
-        title={`Movimientos posteriores — ${movimientosSucursal} — ${analisisDetalle?.codigo || ''}`}
+      <ModalMovimientosPosteriores
         open={movimientosModalOpen}
-        onCancel={() => setMovimientosModalOpen(false)}
-        footer={null}
-        width={700}
-        destroyOnHidden
-      >
-        <Table
-          dataSource={movimientosData}
-          rowKey="transacid"
-          size="small"
-          pagination={{ pageSize: 10, showSizeChanger: false }}
-          loading={movimientosLoading}
-          locale={{ emptyText: <Empty description="No hay movimientos posteriores" /> }}
-          columns={[
-            { title: 'Fecha', dataIndex: 'fecha', width: 110, render: (v: string) => formatDate(v) },
-            { title: 'Documento', dataIndex: 'documento', width: 160, ellipsis: true },
-            { title: 'Cantidad', dataIndex: 'cantidad', width: 90, align: 'right' as const, render: (v: number) => formatNumber(v) },
-          ]}
-          scroll={{ x: 600 }}
-        />
-      </Modal>
+        sucursal={movimientosSucursal}
+        codigo={analisisDetalle?.codigo || ''}
+        dataSource={movimientosData}
+        loading={movimientosLoading}
+        onClose={() => setMovimientosModalOpen(false)}
+      />
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, DatePicker, message, Alert, Typography, Empty, Modal } from 'antd';
-import { ArrowLeftOutlined, SearchOutlined, ReloadOutlined, FileTextOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SearchOutlined, ReloadOutlined, FileTextOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { devolucionVentaApi } from '../../api/devolucionVentaApi';
@@ -9,6 +9,8 @@ import type { FacturaVistaDTO } from '../../types/facturacion';
 import { formatCurrency, formatDate } from '../../utils/formats';
 import { toTitleCase } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
+import PermissionGate from '../../components/PermissionGate';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
@@ -107,6 +109,25 @@ const ReporteDevolucionVenta: React.FC = () => {
     });
   }, [selectedRowKeys, noConsumidas, sucursalActiva, cargar, navigate]);
 
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = data.map((item: any) =>
+      exportCols.map((col: any) => {
+        const val = item[col.dataIndex];
+        return val != null ? String(val) : '';
+      })
+    );
+    exportToExcel({
+      fileName: `ReporteDevolucionVenta_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'ReporteDevolucionVenta',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
+
   const columns = [
     {
       title: 'Documento',
@@ -172,6 +193,9 @@ const ReporteDevolucionVenta: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/')}>Volver</Button>
         <div style={{ flex: 1 }} />
+        <PermissionGate accion="EXPORTAR">
+          <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+        </PermissionGate>
         <RangePicker
           value={fechas}
           onChange={setFechas as any}

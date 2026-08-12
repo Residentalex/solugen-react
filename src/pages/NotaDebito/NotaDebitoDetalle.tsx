@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Tooltip, Modal, Alert, App, Switch
@@ -31,6 +31,7 @@ import PermissionGate from '../../components/PermissionGate';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
+import ModalVisorScanner from '../../components/ModalVisorScanner/ModalVisorScanner';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 
 interface NotaDebitoDetalleProps {
@@ -64,6 +65,15 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
   const monedaDefault = getMonedaSucursalActiva();
   const screens = Grid.useBreakpoint();
 
+  // ═══ Carga progresiva: banderas anti doble fetch por sección ═══
+  const [relacionadosCargados, setRelacionadosCargados] = useState(false);
+  const [impuestosCargados, setImpuestosCargados] = useState(false);
+  const [asientosCargados, setAsientosCargados] = useState(false);
+  const [seccionesCargando, setSeccionesCargando] = useState<Set<string>>(new Set());
+  const relacionadosCargadosRef = useRef(false);
+  const impuestosCargadosRef = useRef(false);
+  const asientosCargadosRef = useRef(false);
+
   const codigoPantalla = tipoEntidad === 'SUP' ? 'FNDSUP' : 'FNDCLI';
   const rutaBase = tipoEntidad === 'SUP' ? 'NDSUP' : 'NDCLI';
 
@@ -75,39 +85,110 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride, codigoPantalla]);
 
-  useEffect(() => {
+  const marcarSeccionesCompletas = useCallback(() => {
+    setRelacionadosCargados(true);
+    setImpuestosCargados(true);
+    setAsientosCargados(true);
+  }, []);
+
+  // ═══════════════════════════════════════════════════════════════
+  // Carga progresiva: encabezado primero + secciones críticas
+  // ═══════════════════════════════════════════════════════════════
+  const cargarEncabezado = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setLoadingError(false);
-    notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        if (!res) {
-          message.error('Documento no encontrado en la sucursal seleccionada.');
-          setLoadingError(true);
-          return;
-        }
-        setData(res);
-        setPageTitleOverride(`${(res as any).documento.codigo}-${(res as any).noDocumento}`);
-        // Si el documento está anulado y tiene reversoId, cargar el reverso
-        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-          notaDebitoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
-            .then((revRes) => setReversoData(revRes))
-            .catch(() => setReversoData(null));
-        } else {
-          setReversoData(null);
-          setMostrandoReverso(false);
-        }
-        notaDebitoApi.verificarScan(sucursalActiva, parseInt(id))
-          .then((scanRes) => setTieneScan(scanRes.existe))
-          .catch(() => setTieneScan(false));
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
-        message.error(msg);
+    try {
+      const res = await notaDebitoApi.obtenerEncabezado(sucursalActiva, parseInt(id));
+      if (!res) {
+        message.error('Documento no encontrado en la sucursal seleccionada.');
         setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
+        return;
+      }
+      setData(res);
+      setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+      // Si el documento está anulado y tiene reversoId, cargar el reverso
+      if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
+        notaDebitoApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+          .then((revRes) => setReversoData(revRes))
+          .catch(() => setReversoData(null));
+      } else {
+        setReversoData(null);
+        setMostrandoReverso(false);
+      }
+      notaDebitoApi.verificarScan(sucursalActiva, parseInt(id))
+        .then((scanRes) => setTieneScan(scanRes.existe))
+        .catch(() => setTieneScan(false));
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
+      message.error(msg);
+      setLoadingError(true);
+    } finally {
+      setLoading(false);
+    }
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  const cargarSeccion = useCallback(async (seccion: 'relacionados' | 'impuestos' | 'asientos') => {
+    if (!id) return;
+    // Guard anti doble fetch ANTES de cualquier setState: si la sección ya está
+    // cargada, salir sin re-render. Esto corta los loops de "Maximum update depth".
+    if (
+      (seccion === 'relacionados' && relacionadosCargadosRef.current) ||
+      (seccion === 'impuestos' && impuestosCargadosRef.current) ||
+      (seccion === 'asientos' && asientosCargadosRef.current)
+    ) {
+      return;
+    }
+    setSeccionesCargando(prev => new Set(prev).add(seccion));
+    try {
+      const suc = sucursalActiva;
+      const numId = parseInt(id);
+      switch (seccion) {
+        case 'relacionados': {
+          const transaccionesAsociadas = await notaDebitoApi.obtenerRelacionados(suc, numId);
+          setData(prev => (prev ? { ...prev, transaccionesAsociadas } : prev));
+          setRelacionadosCargados(true);
+          break;
+        }
+        case 'impuestos': {
+          const impuestosFactura = await notaDebitoApi.obtenerImpuestos(suc, numId);
+          setData(prev => (prev ? { ...prev, impuestosFactura } : prev));
+          setImpuestosCargados(true);
+          break;
+        }
+        case 'asientos': {
+          const asientos = await notaDebitoApi.obtenerAsientos(suc, numId);
+          setData(prev => (prev ? { ...prev, asientos } : prev));
+          setAsientosCargados(true);
+          break;
+        }
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || `Error al cargar ${seccion}`;
+      message.error(msg);
+    } finally {
+      setSeccionesCargando(prev => {
+        const next = new Set(prev);
+        next.delete(seccion);
+        return next;
+      });
+    }
+  }, [id, sucursalActiva]);
+
+  // Montaje: encabezado primero, luego las secciones críticas. Ant Design no dispara
+  // onChange con defaultActiveKey, por eso la pestaña por defecto se carga aquí.
+  useEffect(() => {
+    const init = async () => {
+      await cargarEncabezado();
+      await cargarSeccion('relacionados');
+    };
+    init();
+  }, [cargarEncabezado, cargarSeccion]);
+
+  // Sincronizar refs de banderas para evitar stale closures en cargarSeccion
+  useEffect(() => { relacionadosCargadosRef.current = relacionadosCargados; }, [relacionadosCargados]);
+  useEffect(() => { impuestosCargadosRef.current = impuestosCargados; }, [impuestosCargados]);
+  useEffect(() => { asientosCargadosRef.current = asientosCargados; }, [asientosCargados]);
 
   // Actualizar el título del header al alternar entre Original/Reverso
   useEffect(() => {
@@ -141,6 +222,8 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
           return;
         }
         setData(res);
+        // Recarga completa: todas las secciones quedan cargadas
+        marcarSeccionesCompletas();
         // Calcular balance de asientos contables
         const totalDeb = (res?.asientos || []).reduce((s: number, r: any) =>
           s + ((r.tipoAsiento === 0 || r.tipoAsiento === 'D') ? (r.monto || 0) : 0), 0);
@@ -205,6 +288,8 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
       setModalAnularOpen(false);
       const res = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
+      // Recarga completa: todas las secciones quedan cargadas
+      marcarSeccionesCompletas();
       if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
       const revRes = await notaDebitoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
@@ -251,6 +336,8 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
       message.success('Documento marcado como revisado');
       const res = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
+      // Recarga completa: todas las secciones quedan cargadas
+      marcarSeccionesCompletas();
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al marcar revisado');
       message.error(msg);
@@ -267,6 +354,8 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
       message.success('Documento reversado exitosamente');
       const res = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
+      // Recarga completa: todas las secciones quedan cargadas
+      marcarSeccionesCompletas();
       if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
         const revRes = await notaDebitoApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
@@ -288,6 +377,8 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
       await notaDebitoApi.recalcular(sucursalActiva, parseInt(id));
       const res = await notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id));
       setData(res);
+      // Recarga completa: todas las secciones quedan cargadas
+      marcarSeccionesCompletas();
       message.success('Documento recalculado correctamente');
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al recalcular');
@@ -467,32 +558,50 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
             <Tabs
               defaultActiveKey="documentos"
               type="card"
+              onChange={(key) => {
+                // Secciones perezosas bajo demanda con guards anti doble fetch
+                if (key === 'impuestos') cargarSeccion('impuestos');
+                if (key === 'asientos') cargarSeccion('asientos');
+                if (key === 'documentos') cargarSeccion('relacionados');
+              }}
               items={[
                 {
                   key: 'documentos',
                   label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                   children: (
-                    <TransaccionesAsociadasCard
-                      documentos={(documentoActivo?.transaccionesAsociadas || []).map((d: any) => ({
-                        ...d,
-                        esDocumentoInventario: d.esDocumentoInventario ?? false,
-                      }))}
-                      readOnly={true}
-                    />
+                    <Spin spinning={seccionesCargando.has('relacionados')} tip="Cargando documentos...">
+                      <div style={{ minHeight: 220 }}>
+                        <TransaccionesAsociadasCard
+                          documentos={(documentoActivo?.transaccionesAsociadas || []).map((d: any) => ({
+                            ...d,
+                            esDocumentoInventario: d.esDocumentoInventario ?? false,
+                          }))}
+                          readOnly={true}
+                        />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
                   key: 'impuestos',
                   label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
                   children: (
-                    <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
+                    <Spin spinning={seccionesCargando.has('impuestos')} tip="Cargando impuestos...">
+                      <div style={{ minHeight: 120 }}>
+                        <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
                   key: 'asientos',
                   label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                    <Spin spinning={seccionesCargando.has('asientos')} tip="Cargando asientos...">
+                      <div style={{ minHeight: 220 }}>
+                        <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
@@ -570,32 +679,50 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
           <Tabs
             defaultActiveKey="documentos"
             type="card"
+            onChange={(key) => {
+              // Secciones perezosas bajo demanda con guards anti doble fetch
+              if (key === 'impuestos') cargarSeccion('impuestos');
+              if (key === 'asientos') cargarSeccion('asientos');
+              if (key === 'documentos') cargarSeccion('relacionados');
+            }}
               items={[
                 {
                   key: 'documentos',
                   label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                   children: (
-                    <TransaccionesAsociadasCard
-                      documentos={(documentoActivo?.transaccionesAsociadas || []).map((d: any) => ({
-                        ...d,
-                        esDocumentoInventario: d.esDocumentoInventario ?? false,
-                      }))}
-                      readOnly={true}
-                    />
+                    <Spin spinning={seccionesCargando.has('relacionados')} tip="Cargando documentos...">
+                      <div style={{ minHeight: 220 }}>
+                        <TransaccionesAsociadasCard
+                          documentos={(documentoActivo?.transaccionesAsociadas || []).map((d: any) => ({
+                            ...d,
+                            esDocumentoInventario: d.esDocumentoInventario ?? false,
+                          }))}
+                          readOnly={true}
+                        />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
                   key: 'impuestos',
                   label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
                   children: (
-                    <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
+                    <Spin spinning={seccionesCargando.has('impuestos')} tip="Cargando impuestos...">
+                      <div style={{ minHeight: 120 }}>
+                        <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
                   key: 'asientos',
                   label: `Asientos (${documentoActivo.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                    <Spin spinning={seccionesCargando.has('asientos')} tip="Cargando asientos...">
+                      <div style={{ minHeight: 220 }}>
+                        <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
@@ -623,28 +750,13 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
         </div>
       )}
 
-      {/* Modal de Visor de Scanner */}
-      <Modal
-        title="Factura Escaneada"
+      <ModalVisorScanner
         open={scannerModalOpen}
-        onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
-        width="80%"
-        style={{ top: 20 }}
-        footer={null}
-        destroyOnHidden
-      >
-        {scannerLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        ) : scannerUrl ? (
-          <iframe src={scannerUrl} style={{ width: '100%', height: '70vh', border: 'none' }} title="Scanner" />
-        ) : (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        )}
-      </Modal>
+        titulo="Factura Escaneada"
+        url={scannerUrl}
+        loading={scannerLoading}
+        onClose={() => { setScannerModalOpen(false); setScannerUrl(null); }}
+      />
 
       {/* Modal de Progreso para Aplicar/Postear */}
       <ModalProgreso

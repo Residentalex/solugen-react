@@ -2,6 +2,7 @@
 import { Modal, Table, Input, Alert, Tag, Typography, Empty, Button } from 'antd';
 import { WarningOutlined, SearchOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
+import PermissionGate from '../../components/PermissionGate';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
@@ -125,14 +126,14 @@ const ExistenciasNegativasModal: React.FC<ExistenciasNegativasModalProps> = ({
               {datos.length.toLocaleString('es-DO')}
             </Tag>
           </span>
-          <Button
-            type="default"
-            size="small"
-            icon={<DownloadOutlined />}
-            onClick={handleExportExcel}
-          >
-            Exportar Excel
-          </Button>
+          <PermissionGate accion="EXPORTAR">
+            <Button
+              type="default"
+              size="small"
+              icon={<DownloadOutlined />}
+              onClick={handleExportExcel}
+            />
+          </PermissionGate>
         </div>
       }
       open={open}

@@ -14,6 +14,7 @@ import { usuarioApi } from '../../api/usuarioApi';
 
 import type { UsuarioDTO } from '../../types/administracion';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 function letraInicial(nombre: string): string {
   return (nombre || '?').charAt(0).toUpperCase();
@@ -52,6 +53,35 @@ const Usuarios: React.FC = () => {
     updateToolbar({});
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(securitySucursal);
+    const dataSource = data || [];
+    const cols = columns.filter((c) => c.key !== 'acciones');
+    exportToExcel({
+      fileName: `Usuarios_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'Usuarios',
+      companyName,
+      columnHeaders: cols.map((c) => c.title as string),
+      dataRows: dataSource.map((item: any) =>
+        cols.map((col) => {
+          if (col.key === 'usuario') {
+            return `${item.nombreUsuario || ''} - ${item.nombre || ''}`;
+          }
+          if (col.key === 'roles') {
+            const roles = item.roles || [];
+            return roles.map((r: any) => r.nombre).join(', ');
+          }
+          if (col.key === 'sucursales') {
+            const sucs = item.sucursalesRoles || [];
+            return sucs.map((s: any) => s.nombreSucursal).join(', ');
+          }
+          const val = item[col.dataIndex as string];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
+  };
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -161,6 +191,7 @@ const Usuarios: React.FC = () => {
           onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onNuevo={abrirNuevo}
           onReload={() => { setSearchText(""); refetch(); }}
+          onExportarExcel={handleExportarExcel}
         />
         <Table<UsuarioDTO>
           columns={columns}

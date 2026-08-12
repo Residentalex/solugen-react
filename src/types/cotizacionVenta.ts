@@ -1,5 +1,6 @@
 import type { DocumentoDTO } from './documento';
 import type { EntidadDTO, ConceptoDTO, MonedaDTO, AlmacenDTO, AsientoContableDTO, LogDTO } from './entradaAlmacen';
+import type { DetalleFacturaPOSDTO } from './facturaPOS';
 
 export interface CotizacionVentaDTO {
   id: number;
@@ -26,9 +27,12 @@ export interface CotizacionVentaDetalleDTO {
   entidad: EntidadDTO;
   documento: DocumentoDTO;
   ncf: string;
+  ncfModificado?: string;
   nota: string;
   referencia: string;
   tasa: number;
+  diasCredito?: number;
+  fechaVencimiento?: string;
   subTotal: number;
   descuento: number;
   impuestos: number;
@@ -39,9 +43,11 @@ export interface CotizacionVentaDetalleDTO {
   creadoPor?: { nombre: string };
   usuario?: { nombre: string };
   almacen?: AlmacenDTO;
-  detalles: any[];
+  sucursal?: any;
+  detalles: DetalleFacturaPOSDTO[];
   asientos: AsientoContableDTO[];
   logs: LogDTO[];
+  impuestosFactura?: any[];
 }
 
 export interface FiltroCotizacionVenta {

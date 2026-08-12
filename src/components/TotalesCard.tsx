@@ -22,12 +22,15 @@ interface TotalesCardProps {
   hideTitle?: boolean;
   children?: React.ReactNode;
   impuestosInformativos?: ImpuestoInformativo[];
+  pagado?: number;
+  pendiente?: number;
 }
 
 const TotalesCard: React.FC<TotalesCardProps> = ({
   subTotal, descuento, impuestos, total, retenciones, nota,
   alignRight = false, monedaSimbolo, monedaNombre, tasa, hideTitle = false,
   impuestosInformativos = [],
+  pagado, pendiente,
   children,
 }) => {
   const monedaDefault = getMonedaSucursalActiva();
@@ -75,6 +78,18 @@ const TotalesCard: React.FC<TotalesCardProps> = ({
         <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
           {!alignRight && <span className="paces-text-secondary">Retenciones</span>}
           <span>{formatNumber(retenciones)}</span>
+        </div>
+      )}
+      {pagado !== undefined && (
+        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
+          {!alignRight && <span className="paces-text-secondary">Pagado</span>}
+          <span>{formatNumber(pagado)}</span>
+        </div>
+      )}
+      {pendiente !== undefined && (
+        <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16, fontSize: 14 }}>
+          {!alignRight && <span className="paces-text-secondary">Pendiente</span>}
+          <span style={{ fontWeight: 600, color: pendiente > 0 ? '#fa8c16' : undefined }}>{formatNumber(pendiente)}</span>
         </div>
       )}
     </div>

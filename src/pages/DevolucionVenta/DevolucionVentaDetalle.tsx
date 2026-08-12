@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Modal, Typography, Tooltip, Alert, App
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Modal, Typography, Tooltip, Alert, App, DatePicker
 } from 'antd';
+import dayjs from 'dayjs';
 import ColumnVisibilityToggle from '../../components/ColumnVisibilityToggle';
 import type { ColumnConfig } from '../../components/ColumnVisibilityToggle';
 import {
@@ -24,6 +25,7 @@ import DetalleToolbar from '../../components/DetalleToolbar';
 import PermissionGate from '../../components/PermissionGate';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { devolucionVentaApi } from '../../api/devolucionVentaApi';
@@ -40,10 +42,11 @@ import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
-import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
+import { formatCurrency, formatNumber, toTitleCase, formatDate, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
+import ModalVisorScanner from '../../components/ModalVisorScanner/ModalVisorScanner';
 import SucursalField from '../../components/SucursalField';
 
 const { Text } = Typography;
@@ -54,7 +57,7 @@ const DETALLE_COLUMNS_CONFIG: ColumnConfig[] = [
   { key: 'cantidad', label: 'Cantidad', defaultVisible: true },
   { key: 'precio', label: 'Precio', defaultVisible: true },
   { key: 'descuento', label: 'Descuento', defaultVisible: true },
-  { key: 'subTotal', label: 'SubTotal', defaultVisible: true },
+  { key: 'subTotal', label: 'SubTotal', defaultVisible: false },
   { key: 'impuestos', label: 'Impuestos', defaultVisible: true },
   { key: 'total', label: 'Total', defaultVisible: true },
   { key: 'factor', label: 'Factor', defaultVisible: false },
@@ -65,22 +68,6 @@ const DETALLE_DEFAULT_VISIBLE_KEYS = DETALLE_COLUMNS_CONFIG
   .map((c) => c.key);
 
 const LS_DETALLE_VISIBLE_COLUMNS_KEY = 'dev_detalle_visibleColumns';
-
-function extraerMensajeError(err: any, fallback: string): string {
-  const data = err?.response?.data;
-  if (!data) return fallback;
-  if (data.errorMessage) return data.errorMessage;
-  if (data.errors && typeof data.errors === 'object') {
-    const mensajes: string[] = [];
-    for (const key of Object.keys(data.errors)) {
-      const val = data.errors[key];
-      if (Array.isArray(val)) mensajes.push(...val);
-      else if (typeof val === 'string') mensajes.push(val);
-    }
-    if (mensajes.length > 0) return mensajes.join('; ');
-  }
-  return fallback;
-}
 
 const DevolucionVentaDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -103,7 +90,16 @@ const DevolucionVentaDetalle: React.FC = () => {
   const [scannerLoading, setScannerLoading] = useState(false);
   const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionDTO[]>([]);
   const [facturaData, setFacturaData] = useState<any>(null);
+  // ═══ Carga progresiva: banderas anti doble fetch por sección ═══
+  const [detallesCargados, setDetallesCargados] = useState(false);
+  const [asientosCargados, setAsientosCargados] = useState(false);
+  const [seccionesCargando, setSeccionesCargando] = useState<Set<string>>(new Set());
+  const detallesCargadosRef = useRef(false);
+  const asientosCargadosRef = useRef(false);
   const monedaDefault = getMonedaSucursalActiva();
+  const [modalNDOpen, setModalNDOpen] = useState(false);
+  const [generandoND, setGenerandoND] = useState(false);
+  const [fechaND, setFechaND] = useState<string>(dayjs().format('YYYY-MM-DDTHH:mm:ss'));
   const [visibleDetalleKeys, setVisibleDetalleKeys] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(LS_DETALLE_VISIBLE_COLUMNS_KEY);
@@ -122,6 +118,8 @@ const DevolucionVentaDetalle: React.FC = () => {
   }, [visibleDetalleKeys]);
 
   const { message: messageApi } = App.useApp();
+  const fechasCierre = useCompanyStore((s) => s.data.fechasCierre);
+  const fechasCierreInv = useCompanyStore((s) => s.data.fechasCierreInv);
   const operacion = useAplicar();
   const [operacionTitulo, setOperacionTitulo] = useState('');
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
@@ -143,37 +141,106 @@ const DevolucionVentaDetalle: React.FC = () => {
       });
   }, [data?.id]);
 
-  // ===== Carga inicial =====
-  useEffect(() => {
+  const marcarSeccionesCompletas = React.useCallback(() => {
+    setDetallesCargados(true);
+    setAsientosCargados(true);
+  }, []);
+
+  // ═══════════════════════════════════════════════════════════════
+  // Carga progresiva: encabezado primero + secciones críticas
+  // ═══════════════════════════════════════════════════════════════
+  const cargarEncabezado = React.useCallback(async () => {
     if (!id) return;
-    setFacturaData(null);
     setLoading(true);
     setLoadingError(false);
-    devolucionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        if (!res) {
-          messageApi.error('Documento no encontrado en la sucursal seleccionada.');
-          setLoadingError(true);
-          return;
-        }
-        setData(res);
-        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
-        // Verificar factura escaneada
-        devolucionVentaApi.verificarScan(sucursalActiva, parseInt(id))
-          .then((scanRes) => setTieneScan(scanRes.existe))
-          .catch(() => setTieneScan(false));
-        // Cargar factura POS asociada
-        if (res.factura?.id) {
-          setFacturaData(res.factura);
-        }
-      })
-      .catch((err: any) => {
-        const msg = extraerMensajeError(err, 'Error al cargar el documento');
-        messageApi.error(msg);
+    setFacturaData(null);
+    try {
+      const res = await devolucionVentaApi.obtenerEncabezado(sucursalActiva, parseInt(id));
+      if (!res) {
+        messageApi.error('Documento no encontrado en la sucursal seleccionada.');
         setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
+        return;
+      }
+      setData(res);
+      setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+      // Verificar factura escaneada
+      devolucionVentaApi.verificarScan(sucursalActiva, parseInt(id))
+        .then((scanRes) => setTieneScan(scanRes.existe))
+        .catch(() => setTieneScan(false));
+      // Cargar factura POS asociada
+      if (res.factura?.id) {
+        setFacturaData(res.factura);
+      }
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al cargar el documento');
+      messageApi.error(msg);
+      setLoadingError(true);
+    } finally {
+      setLoading(false);
+    }
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  const cargarSeccion = React.useCallback(async (seccion: 'detalles' | 'asientos') => {
+    if (!id) return;
+    // Guard anti doble fetch ANTES de cualquier setState
+    if (
+      (seccion === 'detalles' && detallesCargadosRef.current) ||
+      (seccion === 'asientos' && asientosCargadosRef.current)
+    ) {
+      return;
+    }
+    setSeccionesCargando(prev => new Set(prev).add(seccion));
+    try {
+      const suc = sucursalActiva;
+      const numId = parseInt(id);
+      switch (seccion) {
+        case 'detalles': {
+          const detalles = await devolucionVentaApi.obtenerDetalles(suc, numId);
+          setData(prev => (prev ? { ...prev, detalles } : prev));
+          setDetallesCargados(true);
+          break;
+        }
+        case 'asientos': {
+          const asientos = await devolucionVentaApi.obtenerAsientos(suc, numId);
+          setData(prev => (prev ? { ...prev, asientos } : prev));
+          setAsientosCargados(true);
+          break;
+        }
+      }
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, `Error al cargar ${seccion}`);
+      messageApi.error(msg);
+    } finally {
+      setSeccionesCargando(prev => {
+        const next = new Set(prev);
+        next.delete(seccion);
+        return next;
+      });
+    }
+  }, [id, sucursalActiva]);
+
+  // Montaje: encabezado primero, luego secciones críticas. Ant Design no dispara
+  // onChange con defaultActiveKey, por eso la pestaña por defecto se carga aquí.
+  useEffect(() => {
+    detallesCargadosRef.current = false;
+    asientosCargadosRef.current = false;
+    const init = async () => {
+      await cargarEncabezado();
+      await Promise.all([
+        cargarSeccion('detalles'),
+        cargarSeccion('asientos'),
+      ]);
+    };
+    init();
+    return () => {
+      detallesCargadosRef.current = false;
+      asientosCargadosRef.current = false;
+    };
+  }, [cargarEncabezado, cargarSeccion]);
+
+  // Sincronizar refs de banderas para evitar stale closures en cargarSeccion
+  useEffect(() => { detallesCargadosRef.current = detallesCargados; }, [detallesCargados]);
+  useEffect(() => { asientosCargadosRef.current = asientosCargados; }, [asientosCargados]);
 
   const handleRefresh = useCallback(() => {
     if (!id) return;
@@ -187,6 +254,8 @@ const DevolucionVentaDetalle: React.FC = () => {
           return;
         }
         setData(res);
+        // Recarga completa: todas las secciones quedan cargadas
+        marcarSeccionesCompletas();
         // Calcular balance de asientos contables
         const totalDeb = (res?.asientos || []).reduce((s: number, r: any) =>
           s + ((r.tipoAsiento === 0 || r.tipoAsiento === 'D') ? (r.monto || 0) : 0), 0);
@@ -214,19 +283,29 @@ const DevolucionVentaDetalle: React.FC = () => {
         messageApi.error(msg);
         setLoadingError(true);
       })
-  }, [id, sucursalActiva, setPageTitleOverride]);
+  }, [id, sucursalActiva, setPageTitleOverride, marcarSeccionesCompletas]);
 
-  const handleGenerarND = useCallback(async () => {
+  const handleGenerarND = useCallback(() => {
     if (!data?.id) return;
+    setFechaND(dayjs().format('YYYY-MM-DDTHH:mm:ss'));
+    setModalNDOpen(true);
+  }, [data]);
+
+  const handleConfirmarGenerarND = useCallback(async () => {
+    if (!data?.id) return;
+    setGenerandoND(true);
     try {
-      const nd = await devolucionVentaApi.generarND(sucursalActiva, [data.id]);
+      const nd = await devolucionVentaApi.generarND(sucursalActiva, [data.id], fechaND);
       messageApi.success(`Nota de Débito ${nd.noDocumento} generada exitosamente`);
+      setModalNDOpen(false);
       navigate(`/FNDCLI/${nd.id}`);
     } catch (err: any) {
       const msg = err?.response?.data?.errorMessage || 'Error al generar la Nota de Débito';
       messageApi.error(msg);
+    } finally {
+      setGenerandoND(false);
     }
-  }, [data, sucursalActiva, navigate]);
+  }, [data, sucursalActiva, navigate, fechaND]);
 
   const handleVerScanner = async () => {
     if (!id) return;
@@ -286,7 +365,7 @@ const DevolucionVentaDetalle: React.FC = () => {
     {
       title: 'Código',
       key: 'codigo',
-      width: 120,
+      width: 100,
       fixed: 'left' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
@@ -320,7 +399,7 @@ const DevolucionVentaDetalle: React.FC = () => {
     {
       title: 'Cantidad',
       key: 'cantidad',
-      width: 120,
+      width: 110,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
@@ -340,7 +419,7 @@ const DevolucionVentaDetalle: React.FC = () => {
       title: 'Precio',
       dataIndex: 'precio',
       key: 'precio',
-      width: 130,
+      width: 110,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
@@ -363,7 +442,7 @@ const DevolucionVentaDetalle: React.FC = () => {
     {
       title: 'Descuento',
       key: 'descuento',
-      width: 120,
+      width: 100,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
@@ -380,7 +459,7 @@ const DevolucionVentaDetalle: React.FC = () => {
       title: 'SubTotal',
       dataIndex: 'subTotal',
       key: 'subTotal',
-      width: 120,
+      width: 110,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
@@ -415,7 +494,7 @@ const DevolucionVentaDetalle: React.FC = () => {
       title: 'Total',
       dataIndex: 'total',
       key: 'total',
-      width: 120,
+      width: 100,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top', paddingRight: 16 } }),
       onHeaderCell: () => ({ style: { paddingRight: 16 } }),
@@ -661,6 +740,11 @@ const DevolucionVentaDetalle: React.FC = () => {
             <Tabs
               defaultActiveKey="detalles"
               type="card"
+              onChange={(key) => {
+                // Secciones perezosas bajo demanda con guards anti doble fetch
+                if (key === 'detalles') cargarSeccion('detalles');
+                if (key === 'asientos') cargarSeccion('asientos');
+              }}
               tabBarExtraContent={
                 <Space>
                   <Input.Search
@@ -683,14 +767,22 @@ const DevolucionVentaDetalle: React.FC = () => {
                   key: 'detalles',
                   label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                   children: (
-                    <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1300 }} />
+                    <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
+                      <div style={{ minHeight: 220 }}>
+                        <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey={(r: any, i?: number) => r.id || i} size="small" pagination={false} scroll={{ x: 1200 }} />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
                   key: 'asientos',
                   label: `Asientos (${data.asientos?.length || 0})`,
                   children: (
-                    <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 900 }} />
+                    <Spin spinning={seccionesCargando.has('asientos')} tip="Cargando asientos...">
+                      <div style={{ minHeight: 220 }}>
+                        <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 900 }} />
+                      </div>
+                    </Spin>
                   ),
                 },
                 {
@@ -860,6 +952,11 @@ const DevolucionVentaDetalle: React.FC = () => {
             <Tabs
               defaultActiveKey="detalles"
             type="card"
+            onChange={(key) => {
+              // Secciones perezosas bajo demanda con guards anti doble fetch
+              if (key === 'detalles') cargarSeccion('detalles');
+              if (key === 'asientos') cargarSeccion('asientos');
+            }}
             tabBarExtraContent={
               <Space>
                 <Input.Search
@@ -882,14 +979,22 @@ const DevolucionVentaDetalle: React.FC = () => {
                 key: 'detalles',
                 label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                 children: (
-                  <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1300 }} />
+                  <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
+                    <div style={{ minHeight: 220 }}>
+                      <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey={(r: any, i?: number) => r.id || i} size="small" pagination={false} scroll={{ x: 1200 }} />
+                    </div>
+                  </Spin>
                 ),
               },
               {
                 key: 'asientos',
                 label: `Asientos (${data.asientos?.length || 0})`,
                 children: (
-                  <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 900 }} />
+                  <Spin spinning={seccionesCargando.has('asientos')} tip="Cargando asientos...">
+                    <div style={{ minHeight: 220 }}>
+                      <AsientosContableTable asientos={data.asientos || []} scroll={{ x: 900 }} />
+                    </div>
+                  </Spin>
                 ),
               },
               {
@@ -996,28 +1101,13 @@ const DevolucionVentaDetalle: React.FC = () => {
         </div>
       )}
 
-      {/* Modal de Visor de Scanner */}
-      <Modal
-        title="Documento Escaneado"
+      <ModalVisorScanner
         open={scannerModalOpen}
-        onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
-        width="80%"
-        style={{ top: 20 }}
-        footer={null}
-        destroyOnHidden
-      >
-        {scannerLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        ) : scannerUrl ? (
-          <iframe src={scannerUrl} style={{ width: '100%', height: '70vh', border: 'none' }} title="Scanner" />
-        ) : (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        )}
-      </Modal>
+        titulo="Documento Escaneado"
+        url={scannerUrl}
+        loading={scannerLoading}
+        onClose={() => { setScannerModalOpen(false); setScannerUrl(null); }}
+      />
 
       {/* Modal de Progreso para Aplicar/Postear */}
       <ModalProgreso
@@ -1028,6 +1118,52 @@ const DevolucionVentaDetalle: React.FC = () => {
         balanceInfo={operacion.balanceInfo}
         onClose={() => operacion.reset()}
       />
+
+      {/* Modal Generar Nota de Débito */}
+      <Modal
+        title="Generar Nota de Débito"
+        open={modalNDOpen}
+        onOk={handleConfirmarGenerarND}
+        onCancel={() => setModalNDOpen(false)}
+        okText="Confirmar"
+        cancelText="Cancelar"
+        confirmLoading={generandoND}
+        destroyOnHidden
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Descriptions bordered size="small" column={1}>
+            <Descriptions.Item label="Documento">
+              {data?.documento?.codigo}-{data?.noDocumento}
+            </Descriptions.Item>
+            <Descriptions.Item label="Cliente">
+              {toTitleCase(data?.cliente?.nombre || data?.entidad?.nombre || '-')}
+            </Descriptions.Item>
+            <Descriptions.Item label="Monto Total">
+              {formatCurrency(data?.total ?? 0)}
+            </Descriptions.Item>
+          </Descriptions>
+        </div>
+        <div>
+          <div style={{ marginBottom: 8, fontWeight: 500 }}>Fecha del Documento</div>
+          <DatePicker
+            style={{ width: '100%' }}
+            value={dayjs(fechaND)}
+            onChange={(val) => {
+              if (val) setFechaND(val.format('YYYY-MM-DDTHH:mm:ss'));
+            }}
+            format="DD/MM/YYYY"
+            disabledDate={(current) => {
+              if (!current) return false;
+              if (current.isAfter(dayjs(), 'day')) return true;
+              const cierre = fechasCierre?.[sucursalActiva];
+              if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day')) return true;
+              const cierreInv = fechasCierreInv?.[sucursalActiva];
+              if (cierreInv && !current.isAfter(dayjs(cierreInv).startOf('day'), 'day')) return true;
+              return false;
+            }}
+          />
+        </div>
+      </Modal>
     </div>
   );
 };

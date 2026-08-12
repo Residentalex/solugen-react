@@ -34,6 +34,7 @@ export interface SolicitudPagoDTO {
   periodo: number;
   codigoSucursal?: string;
   noDocumento: string;
+  nombreBeneficiario?: string;
   cuentaBancaria: string;
   nota: string;
   revisado?: boolean;

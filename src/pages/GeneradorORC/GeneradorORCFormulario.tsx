@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Avatar, Card, Table, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Checkbox, Select,
   message, Form, Input, InputNumber, DatePicker, Typography, Modal, Dropdown, Alert, Skeleton, Drawer, Descriptions,
-  Tooltip, Empty,
+  Tooltip,
 } from 'antd';
 import {
   SaveOutlined,
@@ -41,6 +41,7 @@ import { parametrosApi } from '../../api/parametrosApi';
 import { configModuloApi } from '../../api/configModuloApi';
 import { conteoApi } from '../../api/conteoApi';
 import AgregarProductoGORCModal from '../../components/AgregarProductoGORCModal/AgregarProductoGORCModal';
+import ModalBuscarSuplidor from '../../components/ModalBuscarSuplidor/ModalBuscarSuplidor';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import type { GeneradorOrdenCompraDTO, DetalleGeneradorDTO, SuplidorGORC } from '../../types/generadorOrc';
@@ -56,6 +57,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import ModalMovimientosPosteriores from '../../components/ModalMovimientosPosteriores/ModalMovimientosPosteriores';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 
 const { Text } = Typography;
@@ -107,93 +109,18 @@ function redondearAlFactor(precio: number, factor: number): number {
   return Math.ceil(precio / factor) * factor;
 }
 
-
-
-// ===== BuscarSuplidorModal =====
-interface BuscarSuplidorModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSelect: (suplidor: SuplidorGORC) => void;
-  sucursal: number;
+/** Normaliza una medida asegurando que tenga nombre, codigo, factor e idExterno.
+ *  Maneja el caso en que la API devuelva `id` en lugar de `idExterno`. */
+function normalizarMedida(medida: any): UnidadMedidaDTO | null {
+  if (!medida) return null;
+  return {
+    nombre: medida.nombre || '',
+    codigo: medida.codigo || '',
+    factor: medida.factor ?? 1,
+    idExterno: medida.idExterno ?? medida.id ?? 0,
+  };
 }
 
-const BuscarSuplidorModal: React.FC<BuscarSuplidorModalProps> = ({ open, onClose, onSelect, sucursal }) => {
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
-  const searchRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (open) {
-      const timer = setTimeout(() => {
-        searchRef.current?.focus?.();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [open]);
-
-  const cargar = useCallback(async (filtro?: string) => {
-    setLoading(true);
-    try {
-      const { proveedorApi } = await import('../../api/proveedorApi');
-      const res = await proveedorApi.filtrar(sucursal, filtro || undefined, filtro || undefined);
-      setData(Array.isArray(res) ? res : []);
-    } catch {
-      message.error('Error al cargar suplidores');
-      setData([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [sucursal]);
-
-  useEffect(() => {
-    if (open) cargar();
-  }, [open, cargar]);
-
-  const columnas = [
-    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
-    { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true,
-      render: (v: string) => toTitleCase(v || '') },
-    { title: 'RNC', dataIndex: 'identificacion', key: 'rnc', width: 140 },
-  ];
-
-  return (
-    <Modal title="Buscar Suplidor" open={open} onCancel={onClose} footer={null} width={600} destroyOnHidden>
-      <Input.Search
-        ref={searchRef}
-        placeholder="Buscar por código o nombre..."
-        allowClear
-        onSearch={(val) => { setSearch(val); cargar(val); }}
-        style={{ marginBottom: 16 }}
-      />
-      <Table
-        dataSource={data}
-        columns={columnas}
-        rowKey="codigo"
-        loading={loading}
-        size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: () => {
-            const suplidor: SuplidorGORC = {
-              idExterno: record.idExterno || record.codigo || '',
-              codigo: record.codigo || '',
-              nombre: record.nombre || '',
-              diasCredito: record.diasCredito || 0,
-              rnc: record.identificacion || '',
-              identificacion: record.identificacion || '',
-              telefono: record.telefono || '',
-              direccion: record.direccion || '',
-            };
-            onSelect(suplidor);
-            onClose();
-          },
-          style: { cursor: 'pointer' },
-        })}
-      />
-    </Modal>
-  );
-};
 
 // ===== ModosCargaModal =====
 interface ModosCargaModalProps {
@@ -795,9 +722,9 @@ const GeneradorORCFormulario: React.FC = () => {
           _ultimaCompraFecha: hist?.fecha ?? undefined,
           _porcentajeDescuento: hist?.porcientoDescuento ?? 0,
           _impuesto: impuestoCompra,
-          _medida: prod.unidadMedida ? { ...prod.unidadMedida } : unidadBase || null,
+          _medida: normalizarMedida(prod.unidadMedida) ?? normalizarMedida(unidadBase),
           ultimoCosto: hist?.costo ?? prod.ultimoCosto ?? 0,
-          medida: prod.unidadMedida ? { ...prod.unidadMedida } : unidadBase || null,
+          medida: normalizarMedida(prod.unidadMedida) ?? normalizarMedida(unidadBase),
         };
       });
 
@@ -824,7 +751,7 @@ const GeneradorORCFormulario: React.FC = () => {
             codigo: prod.codigo,
             referencia: prod.referenciaInterna || '',
             producto: prod.nombre || '',
-            medida: prod.unidadMedida ? { ...prod.unidadMedida } : unidadBase || null,
+            medida: normalizarMedida(prod.unidadMedida) ?? normalizarMedida(unidadBase),
             impuesto: impuestoCompra,
             cantidades: { OP: 0, HR: 0, VH: 0 },
             cantidadesBonificadas: { OP: 0, HR: 0, VH: 0 },
@@ -980,7 +907,7 @@ const GeneradorORCFormulario: React.FC = () => {
               const histMedida = medidasCache.find(m => Number(m.idExterno) === Number(hist.medidaId));
               if (histMedida) return { ...histMedida };
             }
-            return prod.unidadMedida ? { ...prod.unidadMedida } : unidadBase || null;
+            return normalizarMedida(prod.unidadMedida) ?? normalizarMedida(unidadBase);
           })(),
           ultimoCosto: hist?.costo ?? prod.ultimoCosto ?? 0,
           medida: (() => {
@@ -988,7 +915,7 @@ const GeneradorORCFormulario: React.FC = () => {
               const histMedida = medidasCache.find(m => Number(m.idExterno) === Number(hist.medidaId));
               if (histMedida) return { ...histMedida };
             }
-            return prod.unidadMedida ? { ...prod.unidadMedida } : unidadBase || null;
+            return normalizarMedida(prod.unidadMedida) ?? normalizarMedida(unidadBase);
           })(),
         };
       });
@@ -1013,7 +940,7 @@ const GeneradorORCFormulario: React.FC = () => {
         codigo: producto.codigo,
         referencia: producto.referencia || '',
         producto: producto.articulo || '',
-        medida: producto.medida || unidadBase || null,
+        medida: producto.medida || normalizarMedida(unidadBase),
         impuesto: producto.impuesto || null,
         cantidades: { OP: 0, HR: 0, VH: 0 },
         cantidadesBonificadas: { OP: 0, HR: 0, VH: 0 },
@@ -1111,9 +1038,7 @@ const GeneradorORCFormulario: React.FC = () => {
         }
       }
       if (!medidaFinal) {
-        medidaFinal = producto.unidadMedida
-          ? { id: Number(producto.unidadMedida.idExterno) ?? 0, nombre: producto.unidadMedida.nombre || '' }
-          : null;
+        medidaFinal = normalizarMedida(producto.unidadMedida);
       }
 
       const productoCompacto = {
@@ -1181,7 +1106,7 @@ const GeneradorORCFormulario: React.FC = () => {
       codigo: d.codigo || '',
       referencia: d.referencia || '',
       producto: d.articulo || '',
-      medida: d._medida || d.medida || unidadBase || null,
+      medida: d._medida || d.medida || normalizarMedida(unidadBase),
       impuesto: d._impuesto || null,
       cantidades: { OP: 0, HR: 0, VH: 0 },
       cantidadesBonificadas: { OP: 0, HR: 0, VH: 0 },
@@ -1267,7 +1192,7 @@ const GeneradorORCFormulario: React.FC = () => {
                 producto: d.producto || d.DESCRIPCION || '',
                 medida: d.presentacion
                   ? { nombre: d.presentacion, codigo: '', factor: 1, idExterno: d.presentacionID || 0 }
-                  : mapMedidasFallback.get(d.codigo) || unidadBase || null,
+                  : mapMedidasFallback.get(d.codigo) || normalizarMedida(unidadBase),
                 impuesto: mapImpuestos.get(d.codigo) || null,
                 cantidades: { OP: 0, HR: 0, VH: 0 },
                 cantidadesBonificadas: { OP: 0, HR: 0, VH: 0 },
@@ -1408,7 +1333,7 @@ const GeneradorORCFormulario: React.FC = () => {
           _impuesto: mapImpuestos.get(d.codigo) || null,
           _medida: detallePlantilla?.presentacion
             ? { nombre: detallePlantilla.presentacion, codigo: '', factor: 1, idExterno: detallePlantilla.presentacionID || 0 }
-            : d.medida || mapMedidas.get(d.codigo) || unidadBase || null,
+            : d.medida || mapMedidas.get(d.codigo) || normalizarMedida(unidadBase),
         };
       });
 
@@ -2272,11 +2197,28 @@ const GeneradorORCFormulario: React.FC = () => {
       )}
 
       {/* ===== Modales ===== */}
-      <BuscarSuplidorModal
+      <ModalBuscarSuplidor
         open={suplidorModalOpen}
         onClose={() => setSuplidorModalOpen(false)}
-        onSelect={handleSuplidorSelect}
-        sucursal={sucursalActiva}
+        onSelect={(record) => {
+          const suplidor: SuplidorGORC = {
+            idExterno: record.idExterno || record.codigo || '',
+            codigo: record.codigo || '',
+            nombre: record.nombre || '',
+            diasCredito: record.diasCredito || 0,
+            rnc: record.identificacion || '',
+            identificacion: record.identificacion || '',
+            telefono: record.telefono || '',
+            direccion: record.direccion || '',
+          };
+          handleSuplidorSelect(suplidor);
+        }}
+        buscar={async (filtro) => {
+          const { proveedorApi } = await import('../../api/proveedorApi');
+          return proveedorApi.filtrar(sucursalActiva, filtro || undefined, filtro || undefined);
+        }}
+        autoFocus
+        mostrarRnc
       />
 
       <AgregarProductoGORCModal
@@ -2295,7 +2237,7 @@ const GeneradorORCFormulario: React.FC = () => {
               codigo: p.codigo,
               referencia: p.referencia || '',
               producto: p.articulo || '',
-              medida: p._medida || p.medida || unidadBase || null,
+              medida: p._medida || p.medida || normalizarMedida(unidadBase),
               impuesto: p._impuesto || p.impuesto || null,
               cantidades: { OP: 0, HR: 0, VH: 0 },
               cantidadesBonificadas: { OP: 0, HR: 0, VH: 0 },
@@ -2596,29 +2538,14 @@ const GeneradorORCFormulario: React.FC = () => {
       </Drawer>
 
       {/* ===== Modal de Movimientos Posteriores ===== */}
-      <Modal
-        title={`Movimientos posteriores — ${movimientosSucursal} — ${analisisDetalle?.codigo || ''}`}
+      <ModalMovimientosPosteriores
         open={movimientosModalOpen}
-        onCancel={() => setMovimientosModalOpen(false)}
-        footer={null}
-        width={700}
-        destroyOnHidden
-      >
-        <Table
-          dataSource={movimientosData}
-          rowKey="transacid"
-          size="small"
-          pagination={{ pageSize: 10, showSizeChanger: false }}
-          loading={movimientosLoading}
-          locale={{ emptyText: <Empty description="No hay movimientos posteriores" /> }}
-          columns={[
-            { title: 'Fecha', dataIndex: 'fecha', width: 110, render: (v: string) => formatDate(v) },
-            { title: 'Documento', dataIndex: 'documento', width: 160, ellipsis: true },
-            { title: 'Cantidad', dataIndex: 'cantidad', width: 90, align: 'right' as const, render: (v: number) => formatNumber(v) },
-          ]}
-          scroll={{ x: 600 }}
-        />
-      </Modal>
+        sucursal={movimientosSucursal}
+        codigo={analisisDetalle?.codigo || ''}
+        dataSource={movimientosData}
+        loading={movimientosLoading}
+        onClose={() => setMovimientosModalOpen(false)}
+      />
     </div>
   );
 };

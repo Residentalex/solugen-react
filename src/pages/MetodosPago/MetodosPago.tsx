@@ -7,6 +7,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { puntoVentaApi } from '../../api/puntoVentaApi';
 import type { MetodoPagoDTO } from '../../types/facturacion';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -46,6 +47,29 @@ const MetodosPago: React.FC = () => {
     updateToolbar({});
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar]);
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const dataSource = Array.isArray(data?.datos) ? data.datos : [];
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        if (col.dataIndex) {
+          const val = item[col.dataIndex];
+          return val != null ? String(val) : '';
+        }
+        return '';
+      })
+    );
+    exportToExcel({
+      fileName: `MetodosPago_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'MetodosPago',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -123,6 +147,7 @@ const MetodosPago: React.FC = () => {
           pageSize={pageSize}
           onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
         />
 
       <Table<MetodoPagoDTO>

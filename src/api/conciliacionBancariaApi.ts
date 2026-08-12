@@ -53,7 +53,7 @@ export const conciliacionBancariaApi = {
       hasta,
     };
     if (estado === 0) params.aplicada = 'F';
-    else if (estado === 1) params.aplicada = 'S';
+    else if (estado === 1) params.aplicada = 'T';
     const { data } = await apiClient.get<ApiResponse<ConciliacionBancariaVistaDTO[]>>(
       `${BASE}/${sucursal}`, { params }
     );
@@ -71,7 +71,11 @@ export const conciliacionBancariaApi = {
     };
     if (params.desde) queryParams.desde = params.desde;
     if (params.hasta) queryParams.hasta = params.hasta;
-    if (params.documento) queryParams.numeroCta = params.documento;
+    if (params.documento) {
+      queryParams.numeroCta = params.documento;
+      const id = parseInt(params.documento, 10);
+      if (!isNaN(id) && id > 0) queryParams.concilID = id;
+    }
     const { data } = await apiClient.get<ApiResponse<ConciliacionBancariaVistaDTO[]>>(
       `${BASE}/${sucursal}`, { params: queryParams }
     );
@@ -87,6 +91,23 @@ export const conciliacionBancariaApi = {
     return data.data;
   },
 
+  /** Obtener solo el encabezado de la conciliación (rápido: sin movimientos ni transacciones) */
+  obtenerEncabezado: async (sucursal: number, id: number): Promise<ConciliacionBancariaDTO> => {
+    const { data } = await apiClient.get<ApiResponse<ConciliacionBancariaDTO>>(
+      `${BASE}/${sucursal}/${id}/encabezado`
+    );
+    if (!data.data) throw new Error('Conciliación no encontrada');
+    return data.data;
+  },
+
+  /** Obtener movimientos de DARCHCON de la conciliación */
+  obtenerMovimientos: async (sucursal: number, id: number): Promise<MovimientoBancarioDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<MovimientoBancarioDTO[]>>(
+      `${BASE}/${sucursal}/${id}/movimientos`
+    );
+    return data.data || [];
+  },
+
   /** Crear nueva conciliación */
   crear: async (sucursal: number, dto: Partial<ConciliacionBancariaDTO>): Promise<number> => {
     const { data } = await apiClient.post<ApiResponse<number>>(`${BASE}/${sucursal}`, dto);
@@ -95,8 +116,8 @@ export const conciliacionBancariaApi = {
   },
 
   /** Actualizar conciliación existente */
-  actualizar: async (sucursal: number, dto: Partial<ConciliacionBancariaDTO>): Promise<void> => {
-    await apiClient.put(`${BASE}/${sucursal}`, dto);
+  actualizar: async (sucursal: number, id: number, dto: Partial<ConciliacionBancariaDTO>): Promise<void> => {
+    await apiClient.put(`${BASE}/${sucursal}/${id}`, dto);
   },
 
   /** Eliminar conciliación */
@@ -109,17 +130,52 @@ export const conciliacionBancariaApi = {
     await apiClient.post(`${BASE}/${sucursal}/${id}/aplicar`);
   },
 
-  /** Importar movimientos bancarios como JSON */
+  /** Importar movimientos bancarios desde archivo (multipart/form-data) */
   importarMovimientos: async (
     sucursal: number,
     concilId: number,
-    movimientos: Array<{ fecha: string; numRef: string; monto: number; debCred: string; concepto: string }>
+    file: File
   ): Promise<MovimientoBancarioDTO[]> => {
+    const formData = new FormData();
+    formData.append('archivo', file);
     const { data } = await apiClient.post<ApiResponse<MovimientoBancarioDTO[]>>(
       `${BASE}/${sucursal}/importar/${concilId}`,
-      movimientos
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
     );
     return data.data || [];
+  },
+
+  /** Preview: sube archivo, devuelve movimientos con Documento resuelto */
+  importarPreview: async (
+    sucursal: number,
+    file: File,
+    concilId?: number
+  ): Promise<MovimientoBancarioDTO[]> => {
+    const formData = new FormData();
+    formData.append('archivo', file);
+    const url = concilId
+      ? `${BASE}/${sucursal}/importar/preview?concilId=${concilId}`
+      : `${BASE}/${sucursal}/importar/preview`;
+    const { data } = await apiClient.post<ApiResponse<MovimientoBancarioDTO[]>>(
+      url,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return data.data || [];
+  },
+
+  /** Guardar: envía movimientos (JSON) para insertar en DARCHCON */
+  guardarMovimientosImportados: async (
+    sucursal: number,
+    concilId: number,
+    movimientos: MovimientoBancarioDTO[]
+  ): Promise<number> => {
+    const { data } = await apiClient.post<ApiResponse<number>>(
+      `${BASE}/${sucursal}/importar/guardar/${concilId}`,
+      movimientos
+    );
+    return data.data || 0;
   },
 
   /** Obtener cuentas bancarias disponibles (CTASBANC) */
@@ -137,6 +193,31 @@ export const conciliacionBancariaApi = {
   ): Promise<TransaccionConciliadaDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<TransaccionConciliadaDTO[]>>(
       `${BASE}/${sucursal}/${concilId}/transacciones`
+    );
+    return data.data || [];
+  },
+
+  /** Obtener documentos en tránsito desde DOCTRANS */
+  obtenerEnTransito: async (
+    sucursal: number,
+    concilId: number
+  ): Promise<TransaccionConciliadaDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<TransaccionConciliadaDTO[]>>(
+      `${BASE}/${sucursal}/${concilId}/en-transito`
+    );
+    return data.data || [];
+  },
+
+  /** Obtener transacciones sin conciliar de la cuenta (CONCIL='F'/NULL o CONCIL='T' del concilID en edición) */
+  obtenerTransaccionesSinConciliar: async (
+    sucursal: number,
+    numeroCta: string,
+    concilID: number = 0,
+    fecha?: string
+  ): Promise<TransaccionConciliadaDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<TransaccionConciliadaDTO[]>>(
+      `${BASE}/${sucursal}/transacciones-sin-conciliar`,
+      { params: { numeroCta, concilID, ...(fecha ? { fecha } : {}) } }
     );
     return data.data || [];
   },

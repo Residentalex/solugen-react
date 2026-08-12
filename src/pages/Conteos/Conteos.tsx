@@ -19,6 +19,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { conteoApi } from '../../api/conteoApi';
 import type { ConteoFisicoDTO } from '../../types/conteo';
 import { formatCurrency } from '../../utils/formats';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
@@ -138,6 +139,26 @@ const Conteos: React.FC = () => {
     setPage(pagination.current);
   };
 
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const dataSource = data?.datos || [];
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        const val = item[col.dataIndex];
+        return val != null ? String(val) : '';
+      })
+    );
+    exportToExcel({
+      fileName: `Conteos_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'Conteos',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
+
   const abrirDetalle = (record: ConteoFisicoDTO) => {
     navigate(`/FConteos/${record.documento}`, { state: record });
   };
@@ -242,6 +263,7 @@ const Conteos: React.FC = () => {
           onPageSizeChange={(v) => {}}
           ocultarPageSize
           onReload={handleRefresh}
+          onExportarExcel={handleExportarExcel}
           filtros={
             <RangePicker
               style={{ width: 180 }}

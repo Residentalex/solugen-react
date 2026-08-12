@@ -12,6 +12,7 @@ import { clienteApi } from '../../api/clienteApi';
 import { toTitleCase, formatCurrency } from '../../utils/formats';
 import type { ClienteVistaDTO } from '../../types/facturacion';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 
@@ -58,6 +59,29 @@ const Clientes: React.FC = () => {
     },
     enabled: sucursalClientes !== undefined,
   });
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalClientes);
+    const dataSource = data?.datos || [];
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        if (col.dataIndex) {
+          const val = item[col.dataIndex];
+          return val != null ? String(val) : '';
+        }
+        return '';
+      })
+    );
+    exportToExcel({
+      fileName: `Clientes_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'Clientes',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -144,6 +168,7 @@ const Clientes: React.FC = () => {
           onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onNuevo={abrirNuevo}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
           filtros={
             <Select
               value={filtroActivo}

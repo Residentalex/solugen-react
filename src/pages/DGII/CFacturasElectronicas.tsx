@@ -22,10 +22,13 @@ import {
   SendOutlined,
   SwapOutlined,
   CheckOutlined,
+  FileExcelOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
+import { useAuthStore } from '../../stores/authStore';
 import PermissionGate from '../../components/PermissionGate';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import { dgiiApi } from '../../api/dgiiApi';
 import type { ResumenTipoNcfDTO, ResumenTipoNcfSucursalDTO, EnvioDGIIDTO } from '../../types/facturacion';
 
@@ -287,6 +290,27 @@ const CFacturasElectronicas: React.FC = () => {
     });
   }, [pendientes, cargarTabla, tamanoPagina]);
 
+  const handleExportarExcel = async () => {
+    const sucursalActiva = useAuthStore.getState().sucursalActiva;
+    const companyName = await getCompanyName(sucursalActiva);
+    const dataSource = dataTabla || [];
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        const val = item[col.dataIndex];
+        return val != null ? String(val) : '';
+      })
+    );
+    exportToExcel({
+      fileName: `FacturasElectronicas_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'FacturasElectronicas',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
+
   const totalEmitidos = useMemo(
     () => resumen.reduce((sum, r) => sum + (r.cantidad || 0), 0),
     [resumen]
@@ -524,6 +548,11 @@ const CFacturasElectronicas: React.FC = () => {
               { value: 100, label: '100' },
             ]}
           />
+        </Col>
+        <Col xs={12} md={4} lg={3}>
+          <PermissionGate accion="EXPORTAR">
+            <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} block />
+          </PermissionGate>
         </Col>
       </Row>
 

@@ -32,6 +32,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 import { productoApi } from '../../api/productoApi';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
+import ModalFechaVencimiento from '../../components/ModalFechaVencimiento/ModalFechaVencimiento';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import { BuscarEntradaModal } from '../../components/BuscarEntradaModal';
 import ScannerModal from '../../components/ScannerModal/ScannerModal';
@@ -41,7 +42,6 @@ import PermissionGate from '../../components/PermissionGate';
 import '../../components/FloatingLabel/FloatingField.css';
 import type {
   ConceptoDTO, AlmacenDTO, SuplidorDTO,
-  AsientoContableDTO,
 } from '../../types/entradaAlmacen';
 import type { UnidadMedidaDTO } from '../../types/productos';
 import type {
@@ -49,8 +49,11 @@ import type {
 } from '../../types/devolucionCompra';
 import type { DocumentoDTO } from '../../types/documento';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
+import { transaccionApi } from '../../api/transaccionApi';
 import LogTable from '../../components/LogTable';
 
+import AsientosContableTable from '../../components/AsientosContableTable';
+import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
@@ -160,6 +163,13 @@ const DevolucionCompraFormulario: React.FC = () => {
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
   const [documento, setDocumento] = useState<DocumentoDTO | null>(null);
+
+  const usuario = useAuthStore((s: any) => s.usuario);
+  const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
+    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+  ) ?? false;
+  const [generandoAsientos, setGenerandoAsientos] = useState(false);
+  const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
 
   const editValuesRef = useRef<Record<string, any>>({});
   const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
@@ -634,6 +644,22 @@ const DevolucionCompraFormulario: React.FC = () => {
     }
   };
 
+  const handleGenerarAsientos = async () => {
+    if (sucursalActiva === undefined) return;
+    setGenerandoAsientos(true);
+    try {
+      const dto = construirDTO();
+      const asientosGenerados = await transaccionApi.generarAsientos(sucursalActiva, dto);
+      setAsientosLocales(asientosGenerados);
+      message.success(`Se generaron ${asientosGenerados.length} asientos`);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al generar asientos');
+      message.error(msg);
+    } finally {
+      setGenerandoAsientos(false);
+    }
+  };
+
   // ===== Handlers de Tipo =====
   const handleTipoSelect = (tipoCodigo: string) => {
     const tipo = tiposCache.find((t) => t.codigo === tipoCodigo) || null;
@@ -1088,25 +1114,6 @@ const DevolucionCompraFormulario: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, form, mode]);
-
-  // ===== Columnas de la tabla de asientos =====
-  function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
-  function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
-  const totalDebitos = (data?.asientos || []).reduce((s, r) => s + (esDebito(r.tipoAsiento) ? r.monto : 0), 0);
-  const totalCreditos = (data?.asientos || []).reduce((s, r) => s + (esCredito(r.tipoAsiento) ? r.monto : 0), 0);
-
-  const asientoColumns = [
-    { title: 'Cuenta', key: 'cuenta', width: 120,
-      render: (_: any, r: AsientoContableDTO) => r.cuentaContable?.noCuenta || '-' },
-    { title: 'Nombre', key: 'nombre', ellipsis: true,
-      render: (_: any, r: AsientoContableDTO) => r.cuentaContable?.nombre ? toTitleCase(r.cuentaContable.nombre) : '-' },
-    { title: 'Descripcion', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
-      render: (v: string) => v ? toTitleCase(v) : '-' },
-    { title: 'Debito', key: 'debito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => esDebito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-    { title: 'Credito', key: 'credito', width: 130, align: 'right' as const,
-      render: (_: any, r: AsientoContableDTO) => esCredito(r.tipoAsiento) ? formatNumber(r.monto) : '' },
-  ];
 
   // ===== Loading state =====
   if (loading) {
@@ -1867,24 +1874,17 @@ const DevolucionCompraFormulario: React.FC = () => {
                 {
                   key: 'asientos',
                   label: `Asientos (${data?.asientos?.length || 0})`,
-                  children: (
-                    <Table
-                      dataSource={data?.asientos || []}
-                      columns={asientoColumns}
-                      rowKey="id"
-                      size="small"
-                      pagination={false}
+                  children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
+                    <AsientosContableEditables
+                      asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
+                      onChange={setAsientosLocales}
+                      editable={true}
                       scroll={{ x: 900 }}
-                      summary={() => (
-                        <Table.Summary fixed>
-                          <Table.Summary.Row>
-                            <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                            <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                          </Table.Summary.Row>
-                        </Table.Summary>
-                      )}
+                      onGenerar={handleGenerarAsientos}
+                      generando={generandoAsientos}
                     />
+                  ) : (
+                    <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
                   ),
                 },
                 {
@@ -1971,24 +1971,17 @@ const DevolucionCompraFormulario: React.FC = () => {
               {
                 key: 'asientos',
                 label: `Asientos (${data?.asientos?.length || 0})`,
-                children: (
-                  <Table
-                    dataSource={data?.asientos || []}
-                    columns={asientoColumns}
-                    rowKey="id"
-                    size="small"
-                    pagination={false}
+                children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
+                  <AsientosContableEditables
+                    asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
+                    onChange={setAsientosLocales}
+                    editable={true}
                     scroll={{ x: 900 }}
-                    summary={() => (
-                      <Table.Summary fixed>
-                        <Table.Summary.Row>
-                          <Table.Summary.Cell index={0} colSpan={3}><strong>Totales</strong></Table.Summary.Cell>
-                          <Table.Summary.Cell index={1} align="right"><strong>{formatNumber(totalDebitos)}</strong></Table.Summary.Cell>
-                          <Table.Summary.Cell index={2} align="right"><strong>{formatNumber(totalCreditos)}</strong></Table.Summary.Cell>
-                        </Table.Summary.Row>
-                      </Table.Summary>
-                    )}
+                    onGenerar={handleGenerarAsientos}
+                    generando={generandoAsientos}
                   />
+                ) : (
+                  <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
                 ),
               },
               {
@@ -2025,20 +2018,11 @@ const DevolucionCompraFormulario: React.FC = () => {
       )}
 
       {/* Modal de Fecha de Vencimiento */}
-      <Modal
-        title="Fecha de Vencimiento"
+      <ModalFechaVencimiento
         open={fechaVencimientoModal.open}
-        onCancel={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
-        onOk={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
-        footer={null}
-        destroyOnHidden
-      >
-        <DatePicker
-          style={{ width: '100%' }}
-          format="YYYY-MM-DD"
-          onChange={handleFechaVencimiento}
-        />
-      </Modal>
+        onClose={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
+        onFechaChange={handleFechaVencimiento}
+      />
     </div>
   );
 };

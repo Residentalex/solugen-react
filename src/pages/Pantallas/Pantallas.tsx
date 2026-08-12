@@ -18,6 +18,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { pantallaApi } from '../../api/pantallaApi';
 import type { PantallaDTO, PantallaEntidadDTO, ModuloDTO } from '../../types/auth';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 const FILAS_POR_PAGINA = 25;
@@ -94,6 +95,28 @@ const Pantallas: React.FC = () => {
     cargarModulos();
     return () => resetToolbar();
   }, [setActiveModule, updateToolbar, resetToolbar, cargarEntidades, cargarModulos]);
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const cols = columns.filter((c) => c.key !== 'acciones' && c.key !== 'entidades');
+    const dataSource = data?.datos || [];
+    exportToExcel({
+      fileName: `Pantallas_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'Pantallas',
+      companyName,
+      columnHeaders: cols.map((c) => c.title as string),
+      dataRows: dataSource.map((item: any) =>
+        cols.map((col) => {
+          if (col.key === 'modulo') {
+            const mods = item.modulos || [];
+            return mods.map((m: any) => m.nombre).join(', ');
+          }
+          const val = item[col.dataIndex as string];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
+  };
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -198,6 +221,7 @@ const Pantallas: React.FC = () => {
           onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onNuevo={() => navigate('/MPantalla/nuevo')}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
           filtros={
             <>
               <Select

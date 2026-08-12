@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Modal, Descriptions } from 'antd';
 import { Table, Tabs, Tag, Button, Tooltip, message, Card, Input, Empty, Row, Col, Select, Skeleton, Alert } from 'antd';
-import { SearchOutlined, ReloadOutlined, SendOutlined, CheckOutlined, ClockCircleOutlined, BellOutlined, WarningOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, SendOutlined, CheckOutlined, ClockCircleOutlined, BellOutlined, WarningOutlined, CloseCircleOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -13,6 +13,7 @@ import { ticketApi } from '../../api/ticketApi';
 import type { NotificacionVista } from '../../types/notificaciones';
 import EnviarNotificacionModal from './EnviarNotificacionModal';
 import TicketThreadModal from '../../components/TicketThreadModal';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 function formatFecha(iso?: string): string {
   if (!iso) return '-';
@@ -120,6 +121,27 @@ const Notificaciones: React.FC = () => {
 
   const handleSearch = (value: string) => {
     setSearchText(value);
+  };
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursal);
+    const dataSource = getDataSource();
+    const cols = columns.filter((c) => c.key !== 'acciones');
+    exportToExcel({
+      fileName: `Notificaciones_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'Notificaciones',
+      companyName,
+      columnHeaders: cols.map((c) => c.title as string),
+      dataRows: dataSource.map((item: any) =>
+        cols.map((col) => {
+          if (col.key === 'estado') {
+            return item.leida ? 'Leída' : 'No leída';
+          }
+          const val = item[col.dataIndex as string];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
   };
 
   const handleRefresh = () => {
@@ -426,6 +448,9 @@ const Notificaciones: React.FC = () => {
               ]}
             />
             <div style={{ flex: 1 }} />
+            <PermissionGate accion="EXPORTAR">
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+            </PermissionGate>
             <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>
         </div>

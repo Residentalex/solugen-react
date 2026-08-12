@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   Card, Table, Input, Select, Button, Typography, message, Spin, DatePicker, Checkbox,
-  Modal, Space, Row, Col, Empty,
+  Modal, Space, Row, Col, Empty, Tabs,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -17,6 +17,7 @@ import { proveedorApi } from '../../api/proveedorApi';
 import { clienteApi } from '../../api/clienteApi';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { toTitleCase, formatCurrency } from '../../utils/formats';
+import PermissionGate from '../../components/PermissionGate';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import type { TransaccionBalanceDTO, ResumenAgingDTO, CategoriaEntidadDTO } from '../../types/antiguedadSaldos';
 import type { SuplidorDTO, CompaniaDTO } from '../../types/entradaAlmacen';
@@ -98,6 +99,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
   const [entidadesOrig, setEntidadesOrig] = useState<(SuplidorDTO | ClienteDTO)[]>([]);
   const [buscandoEntidad, setBuscandoEntidad] = useState(false);
   const [_searchEntidad, setSearchEntidad] = useState('');
+  const [tabActiva, setTabActiva] = useState<'activos' | 'inactivos'>('activos');
 
   // Modal de búsqueda de categoría
   const [modalCategoriaAbierto, setModalCategoriaAbierto] = useState(false);
@@ -222,10 +224,19 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     setImprimiendo(true);
     try {
       const hasta = formatDateParam(fechaHasta.toDate());
+      // Enviar los datos ya cargados en pantalla, mapeando campos anidados a planos
+      // para que coincidan con el DTO esperado por el backend (monedaNombre, entidadNombre, categoriaNombre)
+      const datosParaPdf = data.map((item) => ({
+        ...item,
+        monedaNombre: item.moneda?.nombre || '',
+        entidadNombre: item.entidad?.nombre || item.nombreEntidad || '',
+        codigoEntidad: item.entidad?.codigo || item.codigoEntidad || '',
+        categoriaNombre: item.entidad?.categoria?.nombre || '',
+      }));
       const blob = await antiguedadSaldosApi.generarPDF(
-        sucursalActiva, tipoEntidad, hasta,
-        codEntidad || undefined, codCategoria || undefined,
-        codSucursalFiltro || undefined
+        sucursalActiva,
+        tipoEntidad,
+        { hasta, detallado, datos: datosParaPdf },
       );
       const blobUrl = URL.createObjectURL(blob);
       window.open(blobUrl, '_blank');
@@ -255,6 +266,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
   const abrirModalEntidad = async () => {
     setModalEntidadAbierto(true);
     setSearchEntidad('');
+    setTabActiva('activos');
     setBuscandoEntidad(true);
     try {
       if (esCxP) {
@@ -275,12 +287,19 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
 
   const buscarEntidad = (valor: string) => {
     setSearchEntidad(valor);
+    const soloActivos = !esCxP && tabActiva === 'activos';
+    const soloInactivos = !esCxP && tabActiva === 'inactivos';
+
+    let base = entidadesOrig;
+    if (soloActivos) base = base.filter(e => (e as ClienteDTO).activo === true);
+    if (soloInactivos) base = base.filter(e => (e as ClienteDTO).activo === false);
+
     if (!valor) {
-      setEntidades([...entidadesOrig]);
+      setEntidades([...base]);
       return;
     }
     const term = valor.toLowerCase();
-    const filtradas = entidadesOrig.filter(
+    const filtradas = base.filter(
       (e) =>
         e.codigo?.toLowerCase().includes(term) ||
         e.nombre?.toLowerCase().includes(term) ||
@@ -647,7 +666,8 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
               nomEntidad: record.nombreEntidad || '',
               tipoEntidad: esCxP ? 'SUP' : 'CLI',
             };
-            localStorage.setItem('detalleSuplidor_data', JSON.stringify(datosParaDetalle));
+            const storageKey = `detalleSuplidor_data_${esCxP ? 'SUP' : 'CLI'}`;
+            localStorage.setItem(storageKey, JSON.stringify(datosParaDetalle));
 
             const basePath = window.location.pathname.split('/')[1] === 'saas' ? '/saas' : '';
             const url = `${basePath}/${codigoPantalla}/detalle?codEntidad=${record.codigoEntidad}&nomEntidad=${encodeURIComponent(record.nombreEntidad || '')}&skipGuard=1`;
@@ -943,9 +963,11 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
               <Button icon={<PrinterOutlined />} onClick={handlePrint} loading={imprimiendo}>
                 Imprimir PDF
               </Button>
-              <Button icon={<DownloadOutlined />} onClick={exportarExcel}>
-                Exportar
-              </Button>
+              <PermissionGate accion="EXPORTAR">
+                <Button icon={<DownloadOutlined />} onClick={exportarExcel}>
+                  Exportar
+                </Button>
+              </PermissionGate>
               <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
             </div>
           </div>
@@ -980,42 +1002,110 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       ) : null}
 
       {/* ───── Modal búsqueda entidad ───── */}
-      <Modal
-        title={`Buscar ${entidadLabel}`}
-        open={modalEntidadAbierto}
-        onCancel={() => setModalEntidadAbierto(false)}
-        footer={null}
-        width={600}
-        destroyOnHidden
-      >
-        <Input.Search
-          ref={entidadSearchRef}
-          placeholder="Buscar por nombre o código..."
-          allowClear
-          onSearch={buscarEntidad}
-          style={{ marginBottom: 12 }}
-        />
-        <Table
-          columns={[
-            { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
-            { title: 'Nombre', dataIndex: 'nombre', key: 'nombre' },
-            ...(esCxP
-              ? [{ title: 'RNC', dataIndex: 'identificacion' as string, key: 'identificacion', width: 140 }]
-              : [{ title: 'Identificación', dataIndex: 'identificacion' as string, key: 'identificacion', width: 140 }]
-            ),
-          ]}
-          dataSource={entidades}
-          rowKey="codigo"
-          loading={buscandoEntidad}
-          size="small"
-          pagination={{ pageSize: 10, showSizeChanger: false }}
-          onRow={(record: any) => ({
-            onClick: () => seleccionarEntidad(record),
-            style: { cursor: 'pointer' },
-          })}
-          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
-        />
-      </Modal>
+      {esCxP ? (
+        <Modal
+          title={`Buscar ${entidadLabel}`}
+          open={modalEntidadAbierto}
+          onCancel={() => setModalEntidadAbierto(false)}
+          footer={null}
+          width={600}
+          destroyOnHidden
+        >
+          <Input.Search
+            ref={entidadSearchRef}
+            placeholder="Buscar por nombre o código..."
+            allowClear
+            onSearch={buscarEntidad}
+            style={{ marginBottom: 12 }}
+          />
+          <Table
+            columns={[
+              { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
+              { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', render: (val: string) => toTitleCase(val) },
+              { title: 'RNC', dataIndex: 'identificacion' as string, key: 'identificacion', width: 140 },
+            ]}
+            dataSource={entidades}
+            rowKey="codigo"
+            loading={buscandoEntidad}
+            size="small"
+            pagination={{ pageSize: 10, showSizeChanger: false }}
+            onRow={(record: any) => ({
+              onClick: () => seleccionarEntidad(record),
+              style: { cursor: 'pointer' },
+            })}
+            locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
+          />
+        </Modal>
+      ) : (
+        <Modal
+          title={`Buscar ${entidadLabel}`}
+          open={modalEntidadAbierto}
+          onCancel={() => setModalEntidadAbierto(false)}
+          footer={null}
+          width={600}
+          destroyOnHidden
+        >
+          <Input.Search
+            ref={entidadSearchRef}
+            placeholder="Buscar por nombre o código..."
+            allowClear
+            onSearch={buscarEntidad}
+            style={{ marginBottom: 12 }}
+          />
+          <Tabs
+            activeKey={tabActiva}
+            onChange={(key) => { setTabActiva(key as 'activos' | 'inactivos'); setSearchEntidad(''); setEntidades(entidadesOrig.filter(e => (e as ClienteDTO).activo === (key === 'activos'))); }}
+            items={[
+              {
+                key: 'activos',
+                label: `Activos (${entidadesOrig.filter(e => (e as ClienteDTO).activo === true).length})`,
+                children: (
+                  <Table
+                    columns={[
+                      { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
+                      { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', render: (val: string) => toTitleCase(val) },
+                      { title: 'Identificación', dataIndex: 'identificacion' as string, key: 'identificacion', width: 140 },
+                    ]}
+                    dataSource={entidades.filter(e => (e as ClienteDTO).activo === true)}
+                    rowKey="codigo"
+                    loading={buscandoEntidad}
+                    size="small"
+                    pagination={{ pageSize: 10, showSizeChanger: false }}
+                    onRow={(record: any) => ({
+                      onClick: () => seleccionarEntidad(record),
+                      style: { cursor: 'pointer' },
+                    })}
+                    locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
+                  />
+                ),
+              },
+              {
+                key: 'inactivos',
+                label: `Inactivos (${entidadesOrig.filter(e => (e as ClienteDTO).activo === false).length})`,
+                children: (
+                  <Table
+                    columns={[
+                      { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
+                      { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', render: (val: string) => toTitleCase(val) },
+                      { title: 'Identificación', dataIndex: 'identificacion' as string, key: 'identificacion', width: 140 },
+                    ]}
+                    dataSource={entidades.filter(e => (e as ClienteDTO).activo === false)}
+                    rowKey="codigo"
+                    loading={buscandoEntidad}
+                    size="small"
+                    pagination={{ pageSize: 10, showSizeChanger: false }}
+                    onRow={(record: any) => ({
+                      onClick: () => seleccionarEntidad(record),
+                      style: { cursor: 'pointer' },
+                    })}
+                    locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
+                  />
+                ),
+              },
+            ]}
+          />
+        </Modal>
+      )}
 
       {/* ───── Modal búsqueda categoría ───── */}
       <Modal

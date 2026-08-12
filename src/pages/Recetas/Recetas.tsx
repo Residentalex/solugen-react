@@ -9,6 +9,7 @@ import { recetaApi } from '../../api/recetaApi';
 import type { ProductoRecetaDTO, IngredienteDTO } from '../../types/receta';
 import { formatCurrency } from '../../utils/formats';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 
@@ -65,6 +66,29 @@ const Recetas: React.FC = () => {
     } finally {
       setLoadingIngredientes(false);
     }
+  };
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const dataSource = filteredProductos;
+    const exportCols = columnasProductos.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        if (col.dataIndex) {
+          const val = item[col.dataIndex];
+          return val != null ? String(val) : '';
+        }
+        return '';
+      })
+    );
+    exportToExcel({
+      fileName: `Recetas_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'Recetas',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
   };
 
   const handleVolver = () => {
@@ -184,6 +208,7 @@ const Recetas: React.FC = () => {
             pageSize={pageSize}
             onPageSizeChange={(v) => { setPageSize(v); }}
             onReload={() => refetch()}
+            onExportarExcel={handleExportarExcel}
           />
         )}
 

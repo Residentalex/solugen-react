@@ -9,6 +9,7 @@ import { moduloApi } from '../../api/moduloApi';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import { toTitleCase } from '../../utils/formats';
 import type { ModuloDTO } from '../../types/auth';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const Modulos: React.FC = () => {
   const navigate = useNavigate();
@@ -44,6 +45,23 @@ const Modulos: React.FC = () => {
     cargar();
     return () => { resetToolbar(); setPageTitleOverride(''); };
   }, [setActiveModule, setPageTitleOverride, resetToolbar, cargar, screenCode]);
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const cols = columns.filter((c) => c.key !== 'acciones');
+    exportToExcel({
+      fileName: `Modulos_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+      sheetName: 'Módulos',
+      companyName,
+      columnHeaders: cols.map((c) => c.title as string),
+      dataRows: filtered.map((item: any) =>
+        cols.map((col) => {
+          const val = item[col.dataIndex as string];
+          return val !== null && val !== undefined ? String(val) : '';
+        })
+      ),
+    });
+  };
 
   const handleSearch = (val: string) => {
     setSearchText(val);
@@ -127,6 +145,7 @@ const Modulos: React.FC = () => {
           onPageSizeChange={handlePageSizeChange}
           onNuevo={() => navigate('/Modulos/nuevo')}
           onReload={cargar}
+          onExportarExcel={handleExportarExcel}
         />
         <Table
           className="paces-border-top paces-list-table"

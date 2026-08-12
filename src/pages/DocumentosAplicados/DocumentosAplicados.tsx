@@ -1,15 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, Table, Button, DatePicker, Typography, Tooltip, Empty } from 'antd';
-import { SearchOutlined, PrinterOutlined, ReloadOutlined } from '@ant-design/icons';
+import { SearchOutlined, PrinterOutlined, ReloadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
+import { useAuthStore } from '../../stores/authStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentosReporte } from '../../hooks/useDocumentosReporte';
 import { documentosReporteApi } from '../../api/documentosReporteApi';
 import type { MovimientoVistaDTO } from '../../types/entradaAlmacen';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
+import PermissionGate from '../../components/PermissionGate';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 import ListadoErrorAlert from '../../components/ListadoErrorAlert';
 
@@ -114,6 +117,26 @@ const DocumentosAplicados: React.FC = () => {
     ? `Imprimir seleccionados (${selectedRowKeys.length})`
     : 'Imprimir reporte completo del período';
 
+  const handleExportarExcel = async () => {
+    const sucursalActiva = useAuthStore.getState().sucursalActiva;
+    const companyName = await getCompanyName(sucursalActiva);
+    const exportCols = columnas.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = data.map((item: any) =>
+      exportCols.map((col: any) => {
+        const val = item[col.dataIndex];
+        return val != null ? String(val) : '';
+      })
+    );
+    exportToExcel({
+      fileName: `DocumentosAplicados_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'DocumentosAplicados',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
+
   return (
     <>
       {loadingError && (
@@ -144,6 +167,9 @@ const DocumentosAplicados: React.FC = () => {
               Consultar
             </Button>
             <div style={{ flex: 1 }} />
+            <PermissionGate accion="EXPORTAR">
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+            </PermissionGate>
             <Tooltip title={tooltipTitle}>
               <Button
                 icon={<PrinterOutlined />}

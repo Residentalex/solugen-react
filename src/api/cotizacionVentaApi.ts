@@ -1,5 +1,7 @@
 import { apiClient } from './client';
-import type { CotizacionVentaDTO, FiltroCotizacionVenta } from '../types/cotizacionVenta';
+import type { CotizacionVentaDTO, CotizacionVentaDetalleDTO, FiltroCotizacionVenta } from '../types/cotizacionVenta';
+import type { DetalleFacturaPOSDTO } from '../types/facturaPOS';
+import type { AsientoContableDTO } from '../types/entradaAlmacen';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/COTV';
@@ -44,6 +46,22 @@ export const cotizacionVentaApi = {
   obtenerPorId: async (sucursal: number, id: number): Promise<CotizacionVentaDTO> => {
     const { data } = await apiClient.get<ApiResponse<CotizacionVentaDTO>>(`${BASE}/${sucursal}/${id}`);
     return data.data;
+  },
+
+  // ═══ Carga progresiva: encabezado ligero + secciones on-demand ═══
+  obtenerEncabezado: async (sucursal: number, id: number): Promise<CotizacionVentaDetalleDTO> => {
+    const { data } = await apiClient.get<ApiResponse<CotizacionVentaDetalleDTO>>(`${BASE}/${sucursal}/${id}/encabezado`);
+    return data.data;
+  },
+
+  obtenerDetalles: async (sucursal: number, id: number): Promise<DetalleFacturaPOSDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<DetalleFacturaPOSDTO[]>>(`${BASE}/${sucursal}/${id}/detalles`);
+    return data.data || [];
+  },
+
+  obtenerAsientos: async (sucursal: number, id: number): Promise<AsientoContableDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<AsientoContableDTO[]>>(`${BASE}/${sucursal}/${id}/asientos`);
+    return data.data || [];
   },
 
   aplicar: async (sucursal: number, id: number): Promise<CotizacionVentaDTO> => {

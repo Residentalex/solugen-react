@@ -17,6 +17,7 @@ import {
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { importarInventarioApi } from '../../api/importarInventarioApi';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
@@ -182,6 +183,7 @@ function parseCSV(text: string): DetalleImportarDTO[] {
 const ImportarInventario: React.FC = () => {
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
@@ -967,7 +969,15 @@ const ImportarInventario: React.FC = () => {
           {/* Fila 2: Fecha */}
           <Col xs={24} sm={12} lg={8}>
             <Form.Item name="fechaDocumento" label="Fecha" required style={{ marginBottom: 0 }}>
-              <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+              <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                disabledDate={(current) => {
+                  if (!current) return false;
+                  const cierre = fechasCierre?.[sucursalActiva];
+                  if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day')) return true;
+                  const cierreInv = fechasCierreInv?.[sucursalActiva];
+                  if (cierreInv && !current.isAfter(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                  return false;
+                }} />
             </Form.Item>
           </Col>
 

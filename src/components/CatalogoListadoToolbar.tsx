@@ -1,6 +1,6 @@
 import React from 'react';
 import { Input, Button } from 'antd';
-import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined, FileExcelOutlined } from '@ant-design/icons';
 import PageSizeSelect from './PageSizeSelect';
 import PermissionGate from './PermissionGate';
 
@@ -16,6 +16,7 @@ interface CatalogoListadoToolbarProps {
   onNuevo?: () => void;
   acciones?: React.ReactNode;
   onReload: () => void;
+  onExportarExcel?: () => void;
 }
 
 const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
@@ -28,6 +29,7 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
   onNuevo,
   acciones,
   onReload,
+  onExportarExcel,
 }) => {
   return (
     <div style={{ padding: '16px 24px 0' }}>
@@ -50,6 +52,11 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
           </PermissionGate>
         )}
         {acciones}
+        {onExportarExcel && (
+          <PermissionGate accion="EXPORTAR">
+            <Button icon={<FileExcelOutlined />} onClick={onExportarExcel} />
+          </PermissionGate>
+        )}
         <Button icon={<ReloadOutlined />} onClick={onReload} />
       </div>
     </div>

@@ -181,6 +181,9 @@ import ConciliacionBancariaDetalle from './pages/ConciliacionBancaria/Conciliaci
 import ConciliacionBancariaFormulario from './pages/ConciliacionBancaria/ConciliacionBancariaFormulario';
 import ConfigPedidosYa from './pages/ConfigPedidosYa/ConfigPedidosYa';
 import ReportesModulo from './pages/ReportesModulo/ReportesModulo';
+import VisanetTest from './pages/VisanetTest/VisanetTest';
+import MonitoreoCajas from './pages/MonitoreoCajas/MonitoreoCajas';
+import ReportesConfig from './pages/ReportesConfig/ReportesConfig';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -209,7 +212,7 @@ const PantallaGuard: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   if (searchParams.get('skipGuard') === '1') {
     return <>{children}</>;
   }
-  if (codigoRuta && !['dashboard', 'cambiar-clave', 'MPERFIL', 'MPerfil', 'notificaciones', 'MTicket', 'visualizar-consulta', 'MApiToken', 'Modulos', 'RGORC', 'Reportes'].includes(codigoRuta) && !codigoRuta.startsWith('Reportes_')) {
+  if (codigoRuta && !['dashboard', 'cambiar-clave', 'MPERFIL', 'MPerfil', 'notificaciones', 'MTicket', 'visualizar-consulta', 'MApiToken', 'Modulos', 'RGORC', 'Reportes', 'TVISANET'].includes(codigoRuta) && !codigoRuta.startsWith('Reportes_')) {
     const tieneAcceso =
       pantallas.some((p) => p.codigo.toLowerCase() === codigoRuta.toLowerCase()) ||
       pantallas.some((p) => p.codigo.toLowerCase() === codigoRutaCompleto.toLowerCase()) ||
@@ -368,6 +371,7 @@ const App: React.FC = () => {
             <Route path="MCliente/nuevo" element={<ClienteDetalle />} />
             <Route path="MCliente/:codigo" element={<ClienteDetalle />} />
             <Route path="MPOS" element={<PuntosVenta />} />
+            <Route path="TVISANET" element={<VisanetTest />} />
             <Route path="MMetodosPago" element={<MetodosPago />} />
             <Route path="MAlmacen" element={<Almacenes />} />
             <Route path="FDenominacion" element={<Denominaciones />} />
@@ -378,7 +382,7 @@ const App: React.FC = () => {
             <Route path="FActPrecio/:id" element={<ActualizacionPrecioDetalle />} />
             <Route path="FTarifas" element={<Proximamente modulo="Tarifas" codigo="FTarifas" />} />
             <Route path="CCUADRECAJA" element={<Proximamente modulo="Cuadre de Caja" codigo="CCUADRECAJA" />} />
-            <Route path="CCENTRALSUPERVISION" element={<Proximamente modulo="Central de Supervisión" codigo="CCENTRALSUPERVISION" />} />
+            <Route path="CCENTRALSUPERVISION" element={<MonitoreoCajas />} />
             <Route path="MPlanPago" element={<PlanesPago />} />
             <Route path="FORC" element={<OrdenCompra />} />
             <Route path="FORC/nuevo" element={<OrdenCompraFormulario />} />
@@ -460,10 +464,11 @@ const App: React.FC = () => {
           <Route path="MPermiso" element={<PermisosEspeciales />} />
           <Route path="MAuditoria" element={<Proximamente modulo="Historial y Auditoría" codigo="MAuditoria" />} />
           <Route path="OConfig" element={<Empresa />} />
+          <Route path="reportesconfig" element={<ReportesConfig />} />
           <Route path="MConfigPedidosYa" element={<ConfigPedidosYa />} />
           <Route path="MTerminal" element={<Proximamente modulo="Terminales" codigo="MTerminal" />} />
-          <Route path="MSincronizacion" element={<Proximamente modulo="Sincronización" codigo="MSincronizacion" />} />
-           <Route path="MApiToken" element={<ApiTokens />} />
+           <Route path="MSincronizacion" element={<Proximamente modulo="Sincronización" codigo="MSincronizacion" />} />
+            <Route path="MApiToken" element={<ApiTokens />} />
            <Route path="EDashboard" element={<EcommerceAdminDashboard />} />
            <Route path="EProductos" element={<EcommerceAdminProductos />} />
            <Route path="ECategorias" element={<EcommerceAdminCategorias />} />
@@ -606,6 +611,7 @@ const App: React.FC = () => {
             <Route path="MCliente/nuevo" element={<ClienteDetalle />} />
             <Route path="MCliente/:codigo" element={<ClienteDetalle />} />
             <Route path="MPOS" element={<PuntosVenta />} />
+            <Route path="TVISANET" element={<VisanetTest />} />
             <Route path="MMetodosPago" element={<MetodosPago />} />
             <Route path="MAlmacen" element={<Almacenes />} />
             <Route path="FDenominacion" element={<Denominaciones />} />
@@ -616,7 +622,7 @@ const App: React.FC = () => {
             <Route path="FActPrecio/:id" element={<ActualizacionPrecioDetalle />} />
             <Route path="FTarifas" element={<Proximamente modulo="Tarifas" codigo="FTarifas" />} />
             <Route path="CCUADRECAJA" element={<Proximamente modulo="Cuadre de Caja" codigo="CCUADRECAJA" />} />
-            <Route path="CCENTRALSUPERVISION" element={<Proximamente modulo="Central de Supervisión" codigo="CCENTRALSUPERVISION" />} />
+            <Route path="CCENTRALSUPERVISION" element={<MonitoreoCajas />} />
             <Route path="MPlanPago" element={<PlanesPago />} />
             <Route path="FORC" element={<OrdenCompra />} />
             <Route path="FORC/nuevo" element={<OrdenCompraFormulario />} />
@@ -698,10 +704,11 @@ const App: React.FC = () => {
           <Route path="MPermiso" element={<PermisosEspeciales />} />
           <Route path="MAuditoria" element={<Proximamente modulo="Historial y Auditoría" codigo="MAuditoria" />} />
           <Route path="OConfig" element={<Empresa />} />
+          <Route path="reportesconfig" element={<ReportesConfig />} />
           <Route path="MConfigPedidosYa" element={<ConfigPedidosYa />} />
           <Route path="MTerminal" element={<Proximamente modulo="Terminales" codigo="MTerminal" />} />
-          <Route path="MSincronizacion" element={<Proximamente modulo="Sincronización" codigo="MSincronizacion" />} />
-           <Route path="MApiToken" element={<ApiTokens />} />
+           <Route path="MSincronizacion" element={<Proximamente modulo="Sincronización" codigo="MSincronizacion" />} />
+            <Route path="MApiToken" element={<ApiTokens />} />
            <Route path="EDashboard" element={<EcommerceAdminDashboard />} />
            <Route path="EProductos" element={<EcommerceAdminProductos />} />
            <Route path="ECategorias" element={<EcommerceAdminCategorias />} />

@@ -370,9 +370,9 @@ const ActualizacionCostos: React.FC = () => {
             </PermissionGate>
           )}
           {data.length > 0 && (
-            <Button icon={<DownloadOutlined />} onClick={exportarExcel}>
-              Exportar Excel
-            </Button>
+            <PermissionGate accion="EXPORTAR">
+              <Button icon={<DownloadOutlined />} onClick={exportarExcel} />
+            </PermissionGate>
           )}
           <div style={{ flex: 1 }} />
           <Select

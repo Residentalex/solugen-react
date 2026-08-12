@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { actualizacionPrecioApi } from '../../api/actualizacionPrecioApi';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
@@ -57,6 +58,7 @@ const ActualizacionPrecioFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
@@ -421,12 +423,28 @@ const ActualizacionPrecioFormulario: React.FC = () => {
                 <Row gutter={[16, 24]}>
                   <Col xs={24} sm={12} lg={8}>
                     <Form.Item name="fecha" label="Fecha" rules={[{ required: true, message: 'Requerido' }]}>
-                      <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                      <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                        disabledDate={(current) => {
+                          if (!current) return false;
+                          const cierre = fechasCierre?.[sucursalActiva];
+                          if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day')) return true;
+                          const cierreInv = fechasCierreInv?.[sucursalActiva];
+                          if (cierreInv && !current.isAfter(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                          return false;
+                        }} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={8}>
                     <Form.Item name="fechaParaAplicar" label="Fecha para Aplicar" rules={[{ required: true, message: 'Requerido' }]}>
-                      <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                      <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                        disabledDate={(current) => {
+                          if (!current) return false;
+                          const cierre = fechasCierre?.[sucursalActiva];
+                          if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day')) return true;
+                          const cierreInv = fechasCierreInv?.[sucursalActiva];
+                          if (cierreInv && !current.isAfter(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                          return false;
+                        }} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={8}>
@@ -531,12 +549,28 @@ const ActualizacionPrecioFormulario: React.FC = () => {
               <Row gutter={[16, 24]}>
                 <Col xs={24} sm={12}>
                   <Form.Item name="fecha" label="Fecha" rules={[{ required: true, message: 'Requerido' }]}>
-                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                      disabledDate={(current) => {
+                        if (!current) return false;
+                        const cierre = fechasCierre?.[sucursalActiva];
+                        if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day')) return true;
+                        const cierreInv = fechasCierreInv?.[sucursalActiva];
+                        if (cierreInv && !current.isAfter(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                        return false;
+                      }} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>
                   <Form.Item name="fechaParaAplicar" label="Fecha para Aplicar" rules={[{ required: true, message: 'Requerido' }]}>
-                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                    <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                      disabledDate={(current) => {
+                        if (!current) return false;
+                        const cierre = fechasCierre?.[sucursalActiva];
+                        if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day')) return true;
+                        const cierreInv = fechasCierreInv?.[sucursalActiva];
+                        if (cierreInv && !current.isAfter(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                        return false;
+                      }} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12}>

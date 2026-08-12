@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { FacturaVistaDTO, FiltroFacturacion } from '../types/facturacion';
-import type { DevolucionVentaDTO, DevolucionVentaFullDTO } from '../types/devolucionVenta';
+import type { DevolucionVentaDTO, DevolucionVentaFullDTO, DetalleDevolucionVentaDTO, AsientoContableDTO } from '../types/devolucionVenta';
 import type { ConceptoDTO, AlmacenDTO } from '../types/entradaAlmacen';
 import type { ClienteDTO } from '../types/facturaPOS';
 import type { ApiResponse } from '../types/auth';
@@ -51,6 +51,22 @@ export const devolucionVentaApi = {
   obtenerPorId: async (sucursal: number, id: number): Promise<DevolucionVentaDTO> => {
     const { data } = await apiClient.get<ApiResponse<DevolucionVentaDTO>>(`${BASE}/${sucursal}/${id}`);
     return data.data;
+  },
+
+  // ═══ Carga progresiva: encabezado ligero + secciones on-demand ═══
+  obtenerEncabezado: async (sucursal: number, id: number): Promise<DevolucionVentaDTO> => {
+    const { data } = await apiClient.get<ApiResponse<DevolucionVentaDTO>>(`${BASE}/${sucursal}/${id}/encabezado`);
+    return data.data;
+  },
+
+  obtenerDetalles: async (sucursal: number, id: number): Promise<DetalleDevolucionVentaDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<DetalleDevolucionVentaDTO[]>>(`${BASE}/${sucursal}/${id}/detalles`);
+    return data.data || [];
+  },
+
+  obtenerAsientos: async (sucursal: number, id: number): Promise<AsientoContableDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<AsientoContableDTO[]>>(`${BASE}/${sucursal}/${id}/asientos`);
+    return data.data || [];
   },
 
   crear: async (sucursal: number, devolucion: DevolucionVentaFullDTO): Promise<DevolucionVentaFullDTO> => {
@@ -131,8 +147,10 @@ export const devolucionVentaApi = {
     await apiClient.post(`${BASE}/${sucursal}/${id}/Reversar`);
   },
 
-  generarND: async (sucursal: number, devolucionIds: number[]): Promise<any> => {
-    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/generar-nd`, devolucionIds);
+  generarND: async (sucursal: number, devolucionIds: number[], fechaDocumento?: string): Promise<any> => {
+    const body: { devolucionIds: number[]; fechaDocumento?: string } = { devolucionIds };
+    if (fechaDocumento) body.fechaDocumento = fechaDocumento;
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/generar-nd`, body);
     return data.data;
   },
 

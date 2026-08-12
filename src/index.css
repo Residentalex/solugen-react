@@ -1415,6 +1415,11 @@ a:hover {
   padding: 0 !important;
 }
 
+/* Variante de Card ERP con body con padding (para cards sin tabla con contenido apilado) */
+.paces-card-erp-padded.ant-card > .ant-card-body {
+  padding: 16px 20px !important;
+}
+
 /* ===== List view table font size (smaller) ===== */
 .paces-list-table.ant-table-medium .ant-table-thead > tr > th {
   font-size: 10px !important;

@@ -1,16 +1,17 @@
-﻿import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+﻿import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Card, Input, Button, Typography, message, Spin, DatePicker, Checkbox,
-  Modal, Space, Row, Col, Table, Empty, Statistic,
+  Space, Row, Col, Table, Empty, Statistic,
 } from 'antd';
 import { PrinterOutlined, SearchOutlined, CloseOutlined, TableOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined, FileExcelOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { mayorAuxiliarApi } from '../../api/mayorAuxiliarApi';
-import { cuentaContableApi } from '../../api/cuentaContableApi';
 import { companiaApi } from '../../api/companiaApi';
 import { formatDateParam } from '../../utils/formats';
+import PermissionGate from '../../components/PermissionGate';
+import BuscarCuentaContableModal from '../../components/BuscarCuentaContableModal/BuscarCuentaContableModal';
 import { exportToExcel } from '../../utils/exportToExcel';
 import type { CuentaContableResumenDTO } from '../../types/contabilidad';
 
@@ -65,20 +66,6 @@ const MayorAuxiliar: React.FC = () => {
 
   // Modal de busqueda de cuenta contable
   const [modalCuentaAbierto, setModalCuentaAbierto] = useState(false);
-  const [cuentas, setCuentas] = useState<CuentaContableResumenDTO[]>([]);
-  const [cuentasOrig, setCuentasOrig] = useState<CuentaContableResumenDTO[]>([]);
-  const [buscandoCuenta, setBuscandoCuenta] = useState(false);
-  const [_searchCuenta, setSearchCuenta] = useState('');
-  const cuentaSearchRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (modalCuentaAbierto) {
-      const timer = setTimeout(() => {
-        cuentaSearchRef.current?.focus?.();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [modalCuentaAbierto]);
 
   /* â”€â”€â”€â”€â”€ UI setup â”€â”€â”€â”€â”€ */
 
@@ -289,36 +276,6 @@ const MayorAuxiliar: React.FC = () => {
 
   /* â”€â”€â”€â”€â”€ Handlers de busqueda de cuenta â”€â”€â”€â”€â”€ */
 
-  const abrirModalCuenta = async () => {
-    setModalCuentaAbierto(true);
-    setSearchCuenta('');
-    setBuscandoCuenta(true);
-    try {
-      const lista = await cuentaContableApi.obtenerAuxiliares(sucursalActiva);
-      setCuentas(lista || []);
-      setCuentasOrig(lista || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar cuentas contables');
-    } finally {
-      setBuscandoCuenta(false);
-    }
-  };
-
-  const buscarCuenta = (valor: string) => {
-    setSearchCuenta(valor);
-    if (!valor) {
-      setCuentas([...cuentasOrig]);
-      return;
-    }
-    const term = valor.toLowerCase();
-    const filtradas = cuentasOrig.filter(
-      (c) =>
-        c.noCuenta?.toLowerCase().includes(term) ||
-        c.nombre?.toLowerCase().includes(term),
-    );
-    setCuentas(filtradas);
-  };
-
   const seleccionarCuenta = (item: CuentaContableResumenDTO) => {
     setNoCuenta(item.noCuenta);
     setNomCuenta(`${item.noCuenta} - ${toTitleCase(item.nombre)}`);
@@ -373,7 +330,7 @@ const MayorAuxiliar: React.FC = () => {
                   readOnly
                   style={{ width: '100%' }}
                 />
-                <Button icon={<SearchOutlined />} onClick={abrirModalCuenta} />
+                <Button icon={<SearchOutlined />} onClick={() => setModalCuentaAbierto(true)} />
                 {nomCuenta ? (
                   <Button icon={<CloseOutlined />} onClick={limpiarCuenta} />
                 ) : null}
@@ -513,9 +470,9 @@ const MayorAuxiliar: React.FC = () => {
                 prefix={<SearchOutlined className="paces-text-icon" />}
               />
               <div style={{ flex: 1 }} />
-              <Button icon={<FileExcelOutlined />} onClick={handleExportExcel}>
-                Exportar Excel
-              </Button>
+              <PermissionGate accion="EXPORTAR">
+                <Button icon={<FileExcelOutlined />} onClick={handleExportExcel} />
+              </PermissionGate>
             </div>
 
             {detallado ? (
@@ -562,38 +519,12 @@ const MayorAuxiliar: React.FC = () => {
       )}
 
       {/* â”€â”€â”€â”€â”€ Modal busqueda cuenta contable â”€â”€â”€â”€â”€ */}
-      <Modal
-        title="Buscar Cuenta Contable"
+      <BuscarCuentaContableModal
         open={modalCuentaAbierto}
-        onCancel={() => setModalCuentaAbierto(false)}
-        footer={null}
-        width={600}
-        destroyOnHidden
-      >
-        <Input.Search
-          ref={cuentaSearchRef}
-          placeholder="Buscar por número o nombre..."
-          allowClear
-          onSearch={buscarCuenta}
-          style={{ marginBottom: 12 }}
-        />
-        <Table
-          columns={[
-            { title: 'No. Cuenta', dataIndex: 'noCuenta', key: 'noCuenta', width: 140 },
-            { title: 'Nombre', key: 'nombre', render: (_: any, r: CuentaContableResumenDTO) => toTitleCase(r.nombre) },
-          ]}
-          dataSource={cuentas}
-          rowKey="noCuenta"
-          loading={buscandoCuenta}
-          size="small"
-          pagination={{ pageSize: 10, showSizeChanger: false }}
-          onRow={(record: CuentaContableResumenDTO) => ({
-            onClick: () => seleccionarCuenta(record),
-            style: { cursor: 'pointer' },
-          })}
-          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
-        />
-      </Modal>
+        onClose={() => setModalCuentaAbierto(false)}
+        onSelect={seleccionarCuenta}
+        sucursal={sucursalActiva}
+      />
     </>
   );
 };

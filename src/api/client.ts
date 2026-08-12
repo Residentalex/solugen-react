@@ -3,7 +3,7 @@ import type { AuthSesionDTO } from '../types/auth';
 import type { AuthRefreshRequest } from '../types/auth';
 import { useAuthStore } from '../stores/authStore';
 
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4002/api';
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4003/api';
 
 export const apiClient = axios.create({
   baseURL: apiUrl,

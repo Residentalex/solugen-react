@@ -13,6 +13,7 @@ import DetalleToolbar from '../../components/DetalleToolbar';
 import PermissionGate from '../../components/PermissionGate';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
+import ModalVisorScanner from '../../components/ModalVisorScanner/ModalVisorScanner';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
@@ -385,6 +386,11 @@ const FacturaSuplidorDetalle: React.FC = () => {
   const estadoInfo = resolveEstado(documentoActivo.estado);
   const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
   const tienePagos = pagosAsociados.length > 0;
+
+  // NOTA: el campo `pagado` de transaccionesAsociadas viene en 0; el monto realmente aplicado
+  // (coincide con CTRANSAC.ACREDITADO) esta en `monto` (y opcionalmente `descuento`).
+  const totalPagado = (documentoActivo?.transaccionesAsociadas || []).reduce((s: number, t: any) => s + (t.monto || 0) + (t.descuento || 0), 0);
+  const totalPendiente = Math.max(0, (documentoActivo?.total || 0) - totalPagado);
 
   const detallesFuente = documentoActivo?.entradaAlmacen?.detalles?.length
     ? documentoActivo.entradaAlmacen.detalles
@@ -775,6 +781,8 @@ const FacturaSuplidorDetalle: React.FC = () => {
           <Col xxl={6}>
             <EntidadCard entidad={documentoActivo.suplidor} entidadSecundaria={documentoActivo.entidad} fallbackTitulo="Suplidor" />
             <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones ?? 0} total={documentoActivo.total} alignRight={false}
+              pagado={totalPagado}
+              pendiente={totalPendiente}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
               tasa={documentoActivo.tasa ?? 1}
@@ -921,6 +929,8 @@ const FacturaSuplidorDetalle: React.FC = () => {
 
         <div style={{ marginTop: 24 }}>
           <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones ?? 0} total={documentoActivo.total} alignRight={true}
+              pagado={totalPagado}
+              pendiente={totalPendiente}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
               tasa={documentoActivo.tasa ?? 1}
@@ -945,28 +955,13 @@ const FacturaSuplidorDetalle: React.FC = () => {
         </div>
       )}
 
-      {/* Modal de Visor de Scanner */}
-      <Modal
-        title="Factura Escaneada"
+      <ModalVisorScanner
         open={scannerModalOpen}
-        onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
-        width="80%"
-        style={{ top: 20 }}
-        footer={null}
-        destroyOnHidden
-      >
-        {scannerLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        ) : scannerUrl ? (
-          <iframe src={scannerUrl} style={{ width: '100%', height: '70vh', border: 'none' }} title="Scanner" />
-        ) : (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        )}
-      </Modal>
+        titulo="Factura Escaneada"
+        url={scannerUrl}
+        loading={scannerLoading}
+        onClose={() => { setScannerModalOpen(false); setScannerUrl(null); }}
+      />
 
       {/* Modal de Anular */}
       <ModalAnular

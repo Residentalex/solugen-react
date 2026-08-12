@@ -67,6 +67,7 @@ export interface DocumentoRelacionadoDTO {
   transaccionAsociadaID?: number;
   id?: number;
   documento?: string;
+  fecha?: string;
   nCF?: string;
   montoOriginal?: number;
   pagado?: number;

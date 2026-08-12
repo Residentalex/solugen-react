@@ -13,6 +13,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { integridadApi } from '../../api/integridadApi';
 import { companiaApi } from '../../api/companiaApi';
 import { formatCurrency, formatDateRaw } from '../../utils/formats';
+import PermissionGate from '../../components/PermissionGate';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import type { AuxiliarIntegridadDTO } from '../../types/integridad';
 
@@ -472,9 +473,9 @@ const ReporteIntegridadAuxiliares: React.FC = () => {
                     Corregir Sucursal ({selectedRowKeys.length})
                   </Button>
                 )}
-                <Button icon={<FileExcelOutlined />} onClick={handleExportExcel}>
-                  Exportar Excel
-                </Button>
+                <PermissionGate accion="EXPORTAR">
+                  <Button icon={<FileExcelOutlined />} onClick={handleExportExcel} />
+                </PermissionGate>
                 <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
               </div>
             </div>

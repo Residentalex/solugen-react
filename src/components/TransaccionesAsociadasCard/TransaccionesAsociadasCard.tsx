@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Card, Table, Typography, Empty, Space, Skeleton } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { formatNumber } from '../../utils/formats';
+import { formatNumber, formatDate } from '../../utils/formats';
 
 const { Text } = Typography;
 
@@ -62,6 +62,7 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
   );
 
   const columns = [
+    { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => v ? formatDate(v) : '-' },
     {
       title: 'Documento',
       key: 'documento',
@@ -156,7 +157,45 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
         rowKey={(r: DocumentoAsociadoItem) => r.transaccionAsociadaID ?? r.id}
         size="small"
         pagination={false}
-        scroll={{ x: scrollX || 780 }}
+        scroll={{ x: scrollX || 900 }}
+        summary={() => {
+          const totales = docsNormalizados.reduce(
+            (acc, d) => {
+              acc.montoOriginal += d.montoOriginal || 0;
+              acc.pagado += d.pagado || 0;
+              acc.saldoPendiente += d.saldoPendiente ?? Math.round(((d.montoOriginal || 0) - (d.pagado || 0)) * 100) / 100;
+              acc.monto += d.monto || 0;
+              acc.perdida += d.perdida || 0;
+              return acc;
+            },
+            { montoOriginal: 0, pagado: 0, saldoPendiente: 0, monto: 0, perdida: 0 }
+          );
+
+          return (
+            <Table.Summary.Row>
+              <Table.Summary.Cell align="left">
+                <Text strong>Totales</Text>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell />
+              <Table.Summary.Cell />
+              <Table.Summary.Cell align="right">
+                <Text strong>{formatNumber(totales.montoOriginal)}</Text>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell align="right">
+                <Text strong>{formatNumber(totales.pagado)}</Text>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell align="right">
+                <Text strong>{formatNumber(totales.saldoPendiente)}</Text>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell align="right">
+                <Text strong>{formatNumber(totales.monto)}</Text>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell align="right">
+                <Text strong>{formatNumber(totales.perdida)}</Text>
+              </Table.Summary.Cell>
+            </Table.Summary.Row>
+          );
+        }}
         onRow={(!readOnly || onDocumentoClick || rutas) ? (record: DocumentoAsociadoItem) => ({
           onClick: () => {
             if (onDocumentoClick) {

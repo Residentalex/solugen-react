@@ -24,6 +24,7 @@ import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSens
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { Sucursal } from '../../types/auth';
 
@@ -33,11 +34,13 @@ import { conceptosApi } from '../../api/conceptosApi';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
 import { productoApi } from '../../api/productoApi';
 import { parametrosApi } from '../../api/parametrosApi';
+import { transaccionApi } from '../../api/transaccionApi';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import BuscarOrdenCompraModal from '../../components/BuscarOrdenCompraModal/BuscarOrdenCompraModal';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import EntradaAlmacenGuide from './EntradaAlmacenGuide';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
+import ModalFechaVencimiento from '../../components/ModalFechaVencimiento/ModalFechaVencimiento';
 import ScannerModal from '../../components/ScannerModal/ScannerModal';
 import ProductosOrigenModal from '../../components/ProductosOrigenModal/ProductosOrigenModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
@@ -62,6 +65,7 @@ import type {
 import type { UnidadMedidaDTO } from '../../types/productos';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
+import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 
 const { Text } = Typography;
@@ -145,6 +149,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const location = useLocation();
   const cloneData = (location.state as any)?.cloneData;
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
@@ -288,6 +293,13 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
 
+  const usuario = useAuthStore((s: any) => s.usuario);
+  const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
+    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+  ) ?? false;
+  const [generandoAsientos, setGenerandoAsientos] = useState(false);
+  const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
+
   // ===== Cargar datos de apoyo al montar =====
   useEffect(() => {
     setActiveModule(screenCode);
@@ -302,6 +314,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
     // === Si viene de Clonar ===
     if (cloneData) {
       setDetalles((cloneData.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
+      setAsientosLocales(cloneData.asientos || []);
       setSelectedConcepto(cloneData.concepto || null);
       setConceptoSearchText(`${cloneData.concepto?.codigo || ''} - ${toTitleCase(cloneData.concepto?.nombre || '')}`);
       setSelectedEntidad(cloneData.suplidor || cloneData.entidad || null);
@@ -357,20 +370,20 @@ const EntradaAlmacenFormulario: React.FC = () => {
         setData(res);
         setPageTitleOverride(`Editar - ${res.documento.codigo}-${res.noDocumento}`);
         setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
-        setSelectedConcepto(res.concepto || null);
-        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
-		// === DEFENSIVE: asegurar RNC desde entidad si suplidor no lo tiene ===
-		const suplidorFinal = res.suplidor
-		  ? { ...res.suplidor, identificacion: res.suplidor.identificacion || res.entidad?.identificacion || '' }
-		  : res.entidad || null;
-		setSelectedEntidad(suplidorFinal);
-		setSelectedAlmacen(res.almacen || null);
-		setSelectedOC(res.ordenCompra?.id ? { id: res.ordenCompra.id, noDocumento: res.ordenCompra.noDocumento } as any : null);
-		setOcDetallesData(res.ordenCompra?.detalles || []);
-		setOrdenCompraNoDoc(res.ordenCompra?.noDocumento || '');
+                setAsientosLocales(res.asientos || []);
+                setSelectedConcepto(res.concepto || null);
+                setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
+                // === DEFENSIVE: asegurar RNC desde entidad si suplidor no lo tiene ===
+                const suplidorFinal = res.suplidor
+                  ? { ...res.suplidor, identificacion: res.suplidor.identificacion || res.entidad?.identificacion || '' }
+                  : res.entidad || null;
+                setSelectedEntidad(suplidorFinal);
+                setSelectedAlmacen(res.almacen || null);
+                setSelectedOC(res.ordenCompra?.id ? { id: res.ordenCompra.id, noDocumento: res.ordenCompra.noDocumento } as any : null);
+                setOcDetallesData(res.ordenCompra?.detalles || []);
+                setOrdenCompraNoDoc(res.ordenCompra?.noDocumento || '');
 
-        // Poblar formulario
-        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+                const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
 
         form.setFieldsValue({
           conceptoNombre: res.concepto?.nombre || '',
@@ -479,8 +492,9 @@ const EntradaAlmacenFormulario: React.FC = () => {
         setData(res);
         setPageTitleOverride(`Editar - ${res.documento.codigo}-${res.noDocumento}`);
         setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
-                setSelectedConcepto(res.concepto || null);
-                setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
+        setAsientosLocales(res.asientos || []);
+        setSelectedConcepto(res.concepto || null);
+        setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
                 // === DEFENSIVE: asegurar RNC desde entidad si suplidor no lo tiene ===
                 const suplidorFinal = res.suplidor
                   ? { ...res.suplidor, identificacion: res.suplidor.identificacion || res.entidad?.identificacion || '' }
@@ -621,7 +635,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         ? { id: base.ordenCompra?.id || 0, noDocumento: values.ordenCompra }
         : { id: 0, noDocumento: '' },
       detalles: detalles.map((d) => calcularFila(d)),
-      asientos: base.asientos || [],
+      asientos: asientosLocales.length > 0 ? asientosLocales : (base.asientos || []),
       logs: base.logs || [],
     };
   };
@@ -1130,6 +1144,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       .then((res) => {
         setData(res);
         setDetalles((res.detalles || []).map((d: DetalleEntradaAlmacenDTO) => calcularFila(d)));
+        setAsientosLocales(res.asientos || []);
         setSelectedConcepto(res.concepto || null);
         setConceptoSearchText(`${res.concepto?.codigo || ''} - ${toTitleCase(res.concepto?.nombre || '')}`);
         const suplidorFinal = res.suplidor
@@ -1168,6 +1183,22 @@ const EntradaAlmacenFormulario: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, form, mode]);
+
+  const handleGenerarAsientos = async () => {
+    if (sucursalActiva === undefined) return;
+    setGenerandoAsientos(true);
+    try {
+      const dto = construirDTO();
+      const asientosGenerados = await transaccionApi.generarAsientos(sucursalActiva, dto);
+      setAsientosLocales(asientosGenerados);
+      message.success(`Se generaron ${asientosGenerados.length} asientos`);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al generar asientos');
+      message.error(msg);
+    } finally {
+      setGenerandoAsientos(false);
+    }
+  };
 
   if (loading) return <LoadingSpinner mensaje="Cargando documento..." />;
 
@@ -1826,7 +1857,15 @@ const EntradaAlmacenFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Documento" required>
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                  disabledDate={(current) => {
+                    if (!current) return false;
+                    const cierre = fechasCierre?.[sucursalActiva];
+                    if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day')) return true;
+                    const cierreInv = fechasCierreInv?.[sucursalActiva];
+                    if (cierreInv && !current.isAfter(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                    return false;
+                  }} />
               </FloatingField>
             </Form.Item>
           </Col>
@@ -1886,7 +1925,15 @@ const EntradaAlmacenFormulario: React.FC = () => {
           <Col xs={24} sm={12} lg={9}>
             <Form.Item name="fechaRecibo" style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Recibo">
-                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                  disabledDate={(current) => {
+                    if (!current) return false;
+                    const cierre = fechasCierre?.[sucursalActiva];
+                    if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day')) return true;
+                    const cierreInv = fechasCierreInv?.[sucursalActiva];
+                    if (cierreInv && !current.isAfter(dayjs(cierreInv).startOf('day'), 'day')) return true;
+                    return false;
+                  }} />
               </FloatingField>
             </Form.Item>
           </Col>
@@ -2400,8 +2447,17 @@ const EntradaAlmacenFormulario: React.FC = () => {
                 },
                 {
                   key: 'asientos',
-                  label: `Asientos (${data?.asientos?.length || 0})`,
-                  children: (
+                  label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
+                  children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
+                    <AsientosContableEditables
+                      asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
+                      onChange={setAsientosLocales}
+                      editable={true}
+                      scroll={{ x: 700 }}
+                      onGenerar={handleGenerarAsientos}
+                      generando={generandoAsientos}
+                    />
+                  ) : (
                     <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 800 }} />
                   ),
                 },
@@ -2624,8 +2680,17 @@ const EntradaAlmacenFormulario: React.FC = () => {
               },
               {
                 key: 'asientos',
-                label: `Asientos (${data?.asientos?.length || 0})`,
-                children: (
+                label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
+                children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
+                  <AsientosContableEditables
+                    asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
+                    onChange={setAsientosLocales}
+                    editable={true}
+                    scroll={{ x: 700 }}
+                    onGenerar={handleGenerarAsientos}
+                    generando={generandoAsientos}
+                  />
+                ) : (
                   <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 800 }} />
                 ),
               },
@@ -2664,20 +2729,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
       )}
 
       {/* Modal de Fecha de Vencimiento */}
-      <Modal
-        title="Fecha de Vencimiento"
+      <ModalFechaVencimiento
         open={fechaVencimientoModal.open}
-        onCancel={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
-        onOk={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
-        footer={null}
-        destroyOnHidden
-      >
-        <DatePicker
-          style={{ width: '100%' }}
-          format="YYYY-MM-DD"
-          onChange={handleFechaVencimiento}
-        />
-      </Modal>
+        onClose={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
+        onFechaChange={handleFechaVencimiento}
+      />
     </div>
   );
 };

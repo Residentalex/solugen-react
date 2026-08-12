@@ -5,9 +5,12 @@ import {
   SearchOutlined,
   ReloadOutlined,
   FilterOutlined,
+  FileExcelOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { formatCurrency } from '../../utils/formats';
+import PermissionGate from '../../components/PermissionGate';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { movimientoApi } from '../../api/movimientoApi';
@@ -214,6 +217,39 @@ const MovimientosProductos: React.FC = () => {
   const handleRefresh = () => {
     setLoadingError(false);
     cargarDatos();
+  };
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const columnHeaders = ['Fecha', 'Documento', 'Código', 'Artículo', 'Almacén', 'Cantidad', 'Costo', 'Tipo Doc.', 'Entidad'];
+    const dataRows = datosFiltrados.map((r) => [
+      formatDate(r.fecha),
+      r.documento,
+      r.codigo,
+      toTitleCase(r.articulo) || '-',
+      toTitleCase(r.almacen),
+      r.cantidad ?? 0,
+      r.costo ?? 0,
+      r.tipoDocumento || '-',
+      toTitleCase(r.entidad) || '-',
+    ]);
+    exportToExcel({
+      companyName,
+      columnHeaders,
+      dataRows,
+      sheetName: 'MovimientosProductos',
+      columnWidths: [
+        { wch: 14 },
+        { wch: 18 },
+        { wch: 14 },
+        { wch: 30 },
+        { wch: 18 },
+        { wch: 12 },
+        { wch: 14 },
+        { wch: 12 },
+        { wch: 22 },
+      ],
+    });
   };
 
   const handleTableChange = (pagination: any) => {
@@ -588,6 +624,9 @@ const MovimientosProductos: React.FC = () => {
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
             <div style={{ flex: 1 }} />
+            <PermissionGate accion="EXPORTAR">
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+            </PermissionGate>
             <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>
         </div>

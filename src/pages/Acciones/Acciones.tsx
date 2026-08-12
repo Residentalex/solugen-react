@@ -25,6 +25,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { accionApi } from '../../api/accionApi';
 import type { AccionDTO } from '../../types/administracion';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 
@@ -129,6 +130,29 @@ const Acciones: React.FC = () => {
   const toTitleCase = (str: string): string =>
     str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const dataSource = filteredData;
+    const exportCols = columns.filter((col: any) => col.title && col.title !== 'Acciones' && col.title !== '');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        if (col.dataIndex) {
+          const val = item[col.dataIndex];
+          return val != null ? String(val) : '';
+        }
+        return '';
+      })
+    );
+    exportToExcel({
+      fileName: `Acciones_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'Acciones',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
+
   const filteredData = searchText
     ? (data || []).filter(
         (item) =>
@@ -217,6 +241,7 @@ const Acciones: React.FC = () => {
           onPageSizeChange={(v) => { setPageSize(v); }}
           onNuevo={abrirNuevo}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
         />
         <Table<AccionDTO>
           columns={columns}

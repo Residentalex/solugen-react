@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Tag } from 'antd';
-import { IdcardOutlined, PhoneOutlined, EnvironmentOutlined } from '@ant-design/icons';
+import { IdcardOutlined, PhoneOutlined, EnvironmentOutlined, UserOutlined } from '@ant-design/icons';
 import { toTitleCase } from '../utils/formats';
 
 interface EntidadCardData {
@@ -8,6 +8,7 @@ interface EntidadCardData {
   identificacion?: string;
   telefono?: string;
   direccion?: string;
+  beneficiario?: string;
   cuentaContable?: { noCuenta?: string; nombre?: string };
   noCuenta?: string;
 }
@@ -25,9 +26,10 @@ const EntidadCard: React.FC<EntidadCardProps> = ({ titulo, entidad, entidadSecun
   const telefono = entidad?.telefono || entidadSecundaria?.telefono || '';
   const direccion = entidad?.direccion
     ? toTitleCase(entidad.direccion)
-    : entidadSecundaria?.direccion
-      ? toTitleCase(entidadSecundaria.direccion)
-      : '-';
+      : entidadSecundaria?.direccion
+        ? toTitleCase(entidadSecundaria.direccion)
+        : '-';
+  const beneficiario = entidad?.beneficiario || entidadSecundaria?.beneficiario || '';
 
   return (
     <Card
@@ -57,6 +59,12 @@ const EntidadCard: React.FC<EntidadCardProps> = ({ titulo, entidad, entidadSecun
           <div style={{ fontSize: 13, color: '#595959' }}>
             <EnvironmentOutlined style={{ color: '#556ee6', marginRight: 8 }} />
             {direccion}
+          </div>
+        )}
+        {beneficiario && beneficiario !== '-' && (
+          <div style={{ fontSize: 13 }}>
+            <UserOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+            {toTitleCase(beneficiario)}
           </div>
         )}
 

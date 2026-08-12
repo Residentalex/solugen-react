@@ -38,6 +38,8 @@ import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
+import ModalVisorScanner from '../../components/ModalVisorScanner/ModalVisorScanner';
+import ModalMovimientosPosteriores from '../../components/ModalMovimientosPosteriores/ModalMovimientosPosteriores';
 import PermissionGate from '../../components/PermissionGate';
 
 const { Text } = Typography;
@@ -1048,52 +1050,22 @@ const OrdenCompraDetalle: React.FC = () => {
       </Drawer>
 
       {/* ===== Modal de Movimientos Posteriores ===== */}
-      <Modal
-        title={`Movimientos posteriores — ${movimientosSucursal} — ${analisisDetalle?.codigo || ''}`}
+      <ModalMovimientosPosteriores
         open={movimientosModalOpen}
-        onCancel={() => setMovimientosModalOpen(false)}
-        footer={null}
-        width={700}
-        destroyOnHidden
-      >
-        <Table
-          dataSource={movimientosData}
-          rowKey="transacid"
-          size="small"
-          pagination={{ pageSize: 10, showSizeChanger: false }}
-          loading={movimientosLoading}
-          locale={{ emptyText: <Empty description="No hay movimientos posteriores" /> }}
-          columns={[
-            { title: 'Fecha', dataIndex: 'fecha', width: 110, render: (v: string) => formatDate(v) },
-            { title: 'Documento', dataIndex: 'documento', width: 160, ellipsis: true },
-            { title: 'Cantidad', dataIndex: 'cantidad', width: 90, align: 'right' as const, render: (v: number) => formatNumber(v) },
-          ]}
-          scroll={{ x: 600 }}
-        />
-      </Modal>
+        sucursal={movimientosSucursal}
+        codigo={analisisDetalle?.codigo || ''}
+        dataSource={movimientosData}
+        loading={movimientosLoading}
+        onClose={() => setMovimientosModalOpen(false)}
+      />
 
-      {/* Modal de Visor de Scanner */}
-      <Modal
-        title="Factura Escaneada"
+      <ModalVisorScanner
         open={scannerModalOpen}
-        onCancel={() => { setScannerModalOpen(false); if (scannerUrl) URL.revokeObjectURL(scannerUrl); setScannerUrl(null); }}
-        width="80%"
-        style={{ top: 20 }}
-        footer={null}
-        destroyOnHidden
-      >
-        {scannerLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        ) : scannerUrl ? (
-          <iframe src={scannerUrl} style={{ width: '100%', height: '70vh', border: 'none' }} title="Scanner" />
-        ) : (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin />
-          </div>
-        )}
-      </Modal>
+        titulo="Factura Escaneada"
+        url={scannerUrl}
+        loading={scannerLoading}
+        onClose={() => { setScannerModalOpen(false); setScannerUrl(null); }}
+      />
 
       {/* Modal de Progreso para Aplicar/Postear */}
       <ModalProgreso

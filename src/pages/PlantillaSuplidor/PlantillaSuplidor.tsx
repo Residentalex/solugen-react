@@ -10,6 +10,7 @@ import { plantillaSuplidorApi } from '../../api/plantillaSuplidorApi';
 import PermissionGate from '../../components/PermissionGate';
 import type { PlantillaSuplidorDTO } from '../../types/plantillaSuplidor';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 
@@ -69,6 +70,29 @@ const PlantillaSuplidor: React.FC = () => {
       setNuevoCallback(undefined);
     };
   }, [setActiveModule, resetToolbar, setNuevoCallback, navigate]);
+
+  const handleExportarExcel = async () => {
+    const companyName = await getCompanyName(sucursalActiva);
+    const dataSource = data || [];
+    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+    const columnHeaders = exportCols.map((col: any) => col.title);
+    const dataRows = dataSource.map((item: any) =>
+      exportCols.map((col: any) => {
+        if (col.dataIndex) {
+          const val = item[col.dataIndex];
+          return val != null ? String(val) : '';
+        }
+        return '';
+      })
+    );
+    exportToExcel({
+      fileName: `PlantillaSuplidor_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+      sheetName: 'PlantillaSuplidor',
+      companyName,
+      columnHeaders,
+      dataRows,
+    });
+  };
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -146,6 +170,7 @@ const PlantillaSuplidor: React.FC = () => {
           ocultarPageSize
           onNuevo={() => navigate('/mplantillasup/nuevo')}
           onReload={() => refetch()}
+          onExportarExcel={handleExportarExcel}
         />
 
         <Table<PlantillaSuplidorDTO>

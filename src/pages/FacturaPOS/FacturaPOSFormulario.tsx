@@ -128,6 +128,7 @@ const FacturaPOSFormulario: React.FC = () => {
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const authUser = useAuthStore((s) => s.usuario);
+  const clienteDefectoPOS = useAuthStore((s) => s.clienteDefectoPOS);
   const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
@@ -245,13 +246,25 @@ const FacturaPOSFormulario: React.FC = () => {
         diasCredito: 0,
         turno: 'POS-001', // Placeholder: vendrá del contexto de caja
       });
+
+      // Pre-seleccionar cliente por defecto POS si existe
+      if (clienteDefectoPOS && !selectedCliente) {
+        facturaPOSApi.obtenerClientes(sucursalActiva).then((clientes) => {
+          setClientesCache(clientes);
+          const match = clientes.find((c: any) => c.codigo === clienteDefectoPOS.codigo);
+          if (match) {
+            setSelectedCliente(match);
+            form.setFieldsValue({ cliente: match.codigo });
+          }
+        }).catch((err) => console.warn('Error al precargar cliente por defecto POS', err));
+      }
     }
 
     return () => {
       resetToolbar();
       setPageTitleOverride('');
     };
-  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form]);
+  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form, clienteDefectoPOS, selectedCliente]);
 
   // ===== Cargar datos si es modo editar =====
   useEffect(() => {

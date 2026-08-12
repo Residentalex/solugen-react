@@ -18,9 +18,9 @@ export const puntoVentaApi = {
   filtrarPuntosVenta: async (
     sucursal: number,
     filtro: { cantidad?: number; salto?: number; busqueda?: string }
-  ): Promise<PuntoVentaDTO[]> => {
-    const { data } = await apiClient.get<PuntoVentaDTO[]>(`${BASE}/${sucursal}/filtrar`, { params: filtro });
-    return data;
+  ): Promise<{ items: PuntoVentaDTO[]; total: number }> => {
+    const { data } = await apiClient.get<ApiResponse<PuntoVentaDTO[]>>(`${BASE}/${sucursal}/filtrar`, { params: filtro });
+    return { items: data.data ?? [], total: data.total ?? 0 };
   },
 
   filtrarMetodosPago: async (
