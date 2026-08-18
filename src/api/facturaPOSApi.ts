@@ -187,7 +187,7 @@ export const facturaPOSApi = {
   },
 
   obtenerClientes: async (sucursal: number): Promise<any[]> => {
-    const { data } = await apiClient.get<any[]>(`/Cliente/${sucursal}/activos`);
-    return data;
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`/Cliente/${sucursal}/activos`);
+    return data.data ?? [];
   },
 };

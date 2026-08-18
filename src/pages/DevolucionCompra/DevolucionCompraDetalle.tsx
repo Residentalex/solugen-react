@@ -18,6 +18,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
+import { documentoImpresionApi } from '../../api/documentoImpresionApi';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
 import { transaccionApi } from '../../api/transaccionApi';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
@@ -630,6 +631,12 @@ const DevolucionCompraDetalle: React.FC = () => {
         onImprimir={async () => {
           setImprimiendo(true);
           try {
+            try {
+              await documentoImpresionApi.marcarImpreso('DVC', sucursalActiva, parseInt(id));
+            } catch (errImprimir: any) {
+              messageApi.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
+              return;
+            }
             const res = await apiClient.post('/reportes/inventario/devolucion-compra', data, {
               responseType: 'blob',
             });

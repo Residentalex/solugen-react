@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Button, Space, Row, Col, Grid,
+  Card, Table, Tabs, Button, Space, Row, Col, Grid,
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Tag, Alert,
 } from 'antd';
 import {
@@ -10,6 +10,7 @@ import {
   SearchOutlined,
   EditOutlined,
   ExclamationCircleOutlined,
+  BankOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -18,21 +19,30 @@ import { useUIStore } from '../../stores/uiStore';
 import { transaccionApi } from '../../api/transaccionApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
+import { monedaApi } from '../../api/monedaApi';
+import { cuentaBancariaApi, type CuentaBancariaDTO } from '../../api/cuentaBancariaApi';
 import type { TransaccionDTO, TransaccionAsientoDTO } from '../../types/transaccion';
 import type { ConceptoDTO, EntidadDTO } from '../../types/entradaAlmacen';
-import type { CuentaContableResumenDTO } from '../../types/contabilidad';
+import type { CuentaContableResumenDTO, MonedaDTO } from '../../types/contabilidad';
+import { OrigenCuenta } from '../../types/contabilidad';
+import type { DetalleMovimientoDTO } from '../../types/notaCredito';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { toTitleCase, formatNumber, extraerMensajeError, toISOFormat } from '../../utils/formats';
 import { toPeriodoNum } from '../../utils/estadoDocumento';
 import { esDebito, esCredito } from '../../utils/contabilidad';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
+import LogTable from '../../components/LogTable';
+import CobrosCard from '../../components/CobrosCard';
 
 const { TextArea } = Input;
+const { Text } = Typography;
 
 // ===== Helper: asiento vacío =====
 function asientoVacio(): TransaccionAsientoDTO {
@@ -45,11 +55,20 @@ function asientoVacio(): TransaccionAsientoDTO {
   };
 }
 
+// ===== Helper: pendiente efectivo por fila de documento asociado =====
+// DOCASOC.PENDIENTE puede venir mal (0) cuando en realidad DEBITADO - ACREDITADO != 0.
+// El pendiente efectivo se calcula como max(montoOriginal - pagado, saldoPendiente), nunca negativo.
+function pendienteEfectivo(t: any): number {
+  const v = Math.max(0, (t?.montoOriginal || 0) - (t?.pagado || 0), t?.saldoPendiente || t?.pendiente || 0);
+  return Math.round(v * 100) / 100;
+}
+
 // ===== Componente principal =====
 const AsientoContableFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const usuario = useAuthStore((s: any) => s.usuario);
   const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
@@ -71,6 +90,17 @@ const AsientoContableFormulario: React.FC = () => {
   const [conceptoSearchText, setConceptoSearchText] = useState('');
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
   const [selectedEntidad, setSelectedEntidad] = useState<EntidadDTO | null>(null);
+
+  // ===== Campos editables nuevos (Moneda, Sucursal, Cta Bancaria, Beneficiario, Detalles, Docs) =====
+  const [monedasCache, setMonedasCache] = useState<MonedaDTO[]>([]);
+  const [selectedMoneda, setSelectedMoneda] = useState<string>('');
+  const [sucursalesCache, setSucursalesCache] = useState<any[]>([]);
+  const [selectedSucursal, setSelectedSucursal] = useState<string>('');
+  const [cuentasBancarias, setCuentasBancarias] = useState<CuentaBancariaDTO[]>([]);
+  const [selectedCuenta, setSelectedCuenta] = useState<string>('');
+  const [detallesEditable, setDetallesEditable] = useState<DetalleMovimientoDTO[]>([]);
+  const [documentosAsociados, setDocumentosAsociados] = useState<any[]>([]);
+  const [buscarDocModalOpen, setBuscarDocModalOpen] = useState(false);
 
   // Campos rápidos (NCF, Referencia)
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -106,6 +136,17 @@ const AsientoContableFormulario: React.FC = () => {
       .catch((err: any) => {
         console.warn('Error al cargar cuentas contables', err);
       });
+
+    // Cargar catálogos editables: monedas, cuentas bancarias y sucursales
+    monedaApi.obtenerListado(sucursalActiva)
+      .then(setMonedasCache)
+      .catch((err: any) => console.warn('Error al cargar monedas', err));
+    cuentaBancariaApi.obtenerListado(sucursalActiva)
+      .then(setCuentasBancarias)
+      .catch((err: any) => console.warn('Error al cargar cuentas bancarias', err));
+    conceptosApi.obtenerSucursales(sucursalActiva)
+      .then(setSucursalesCache)
+      .catch((err: any) => console.warn('Error al cargar sucursales', err));
 
     // Inicializar fecha en modo crear
     if (mode === 'crear') {
@@ -152,6 +193,26 @@ const AsientoContableFormulario: React.FC = () => {
           : null;
         setSelectedEntidad(entidad);
 
+        // Inicializar campos editables nuevos desde el documento
+        setSelectedMoneda(res.codigoMoneda || getMonedaSucursalActiva().codigo);
+        setSelectedSucursal(res.codigoSucursal || res.sucursal?.codigo || '');
+        setSelectedCuenta(res.ctaBancaria || '');
+        setDocumentosAsociados((res.transaccionesAsociadas || []).map((d: any) => ({
+          id: d.transaccionAsociadaID ?? d.id ?? Math.random(),
+          transaccionAsociadaID: d.transaccionAsociadaID ?? d.id,
+          transaccionID: d.id,
+          fecha: d.fecha ? dayjs(d.fecha).format('YYYY-MM-DD') : '',
+          documento: d.documento || '',
+          nCF: d.nCF || d.ncf || '',
+          montoOriginal: d.montoOriginal ?? 0,
+          monto: d.monto ?? d.montoOriginal ?? 0,
+          descuento: d.descuento ?? 0,
+          retencion: d.retencion ?? 0,
+          pagado: d.pagado ?? 0,
+          pendiente: pendienteEfectivo(d),
+        })));
+        setDetallesEditable(res.detalles || []);
+
         // Poblar formulario
         const fechaDoc = res.fechaDocumento ? dayjs(res.fechaDocumento) : null;
         form.setFieldsValue({
@@ -164,6 +225,10 @@ const AsientoContableFormulario: React.FC = () => {
           nota: res.nota || '',
           tipoDocumento: res.documento?.codigo || documentCode,
           noDocumento: res.noDocumento || '',
+          moneda: res.codigoMoneda || getMonedaSucursalActiva().codigo,
+          sucursal: res.codigoSucursal || res.sucursal?.codigo || '',
+          cuentaBancaria: res.ctaBancaria || '',
+          beneficiario: res.nombreBeneficiario || '',
         });
       })
       .catch((err: any) => {
@@ -281,7 +346,10 @@ const AsientoContableFormulario: React.FC = () => {
       ncfModificado: (base as any).ncfModificado || '',
       referencia: values.referencia || '',
       nota: values.nota || '',
-      codigoSucursal: (base as any).codigoSucursal || '',
+      codigoMoneda: selectedMoneda || getMonedaSucursalActiva().codigo,
+      codigoSucursal: selectedSucursal || (base as any).codigoSucursal || '',
+      ctaBancaria: selectedCuenta || '',
+      nombreBeneficiario: values.beneficiario || '',
       debitos: totalDebitos,
       creditos: totalCreditos,
       subTotal: totalDebitos,
@@ -303,7 +371,32 @@ const AsientoContableFormulario: React.FC = () => {
         descripcion: a.descripcion || '',
         cuentaContable: a.noCuenta ? { noCuenta: a.noCuenta, nombre: cuentasCache.find((c) => c.noCuenta === a.noCuenta)?.nombre || '' } : undefined,
       })),
+      detalles: detallesEditable.map((d) => ({
+        id: d.id || 0,
+        codigo: d.codigo || '',
+        articulo: d.articulo || '',
+        cantidad: d.cantidad || 0,
+        precio: d.precio || 0,
+        subTotal: d.subTotal ?? Math.round((d.cantidad || 0) * (d.precio || 0) * 100) / 100,
+        impuestos: d.impuestos || 0,
+        descuento: d.descuento || 0,
+        total: d.total ?? Math.round(((d.cantidad || 0) * (d.precio || 0) - (d.descuento || 0)) * 100) / 100,
+        referencia: d.referencia || '',
+      })),
+      transaccionesAsociadas: documentosAsociados.map((d) => ({
+        id: d.transaccionID ?? (base as any).id ?? 0,
+        transaccionAsociadaID: d.transaccionAsociadaID ?? d.id,
+        monto: d.monto ?? 0,
+        montoOriginal: d.montoOriginal ?? 0,
+        descuento: d.descuento ?? 0,
+        retencion: d.retencion ?? 0,
+        nCF: d.nCF,
+        documento: d.documento,
+        pagado: d.pagado ?? 0,
+        saldoPendiente: pendienteEfectivo(d),
+      })),
       logs: (base as any).logs || [],
+      impuestosFactura: (base as any).impuestosFactura || [],
     };
   };
 
@@ -381,10 +474,90 @@ const AsientoContableFormulario: React.FC = () => {
     );
   };
 
+  // ===== Handlers de detalles editables =====
+  const handleAgregarDetalle = () => {
+    setDetallesEditable((prev) => [
+      ...prev,
+      {
+        id: -(prev.length + 1),
+        codigo: '',
+        articulo: '',
+        cantidad: 1,
+        precio: 0,
+        subTotal: 0,
+        impuestos: 0,
+        descuento: 0,
+        total: 0,
+      },
+    ]);
+  };
+
+  const handleEliminarDetalle = (idx: number) => {
+    setDetallesEditable((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleDetalleChange = (idx: number, field: string, value: any) => {
+    setDetallesEditable((prev) =>
+      prev.map((d, i) => {
+        if (i !== idx) return d;
+        const next = { ...d, [field]: value };
+        const cantidad = Number(next.cantidad || 0);
+        const precio = Number(next.precio || 0);
+        const descuento = Number(next.descuento || 0);
+        next.subTotal = Math.round(cantidad * precio * 100) / 100;
+        next.total = Math.round((cantidad * precio - descuento) * 100) / 100;
+        return next;
+      })
+    );
+  };
+
+  // ===== Handlers de documentos asociados editables =====
+  const handleMontoChange = (id: number, value: number | null) => {
+    setDocumentosAsociados((prev) =>
+      prev.map((d) => (d.transaccionAsociadaID ?? d.id) === id ? { ...d, monto: Math.min(value ?? 0, pendienteEfectivo(d)) } : d)
+    );
+  };
+
+  const handleDescuentoChange = (id: number, value: number | null) => {
+    setDocumentosAsociados((prev) =>
+      prev.map((d) => (d.transaccionAsociadaID ?? d.id) === id ? { ...d, descuento: value ?? 0 } : d)
+    );
+  };
+
+  const handleRemoveDoc = (id: number) => {
+    setDocumentosAsociados((prev) =>
+      prev.filter((d) => (d.transaccionAsociadaID ?? d.id) !== id)
+    );
+  };
+
+  const handleDocumentosSeleccionados = (docs: any[]) => {
+    setDocumentosAsociados((prev) => {
+      const existingIds = new Set(prev.map((d) => d.transaccionAsociadaID ?? d.id));
+      const nuevos = docs.filter((d: any) => !existingIds.has(d.transaccionAsociadaID ?? d.id));
+      return [...prev, ...nuevos.map((d: any) => ({
+        id: d.transaccionAsociadaID ?? d.id,
+        transaccionAsociadaID: d.transaccionAsociadaID ?? d.id,
+        transaccionID: d.transaccionID,
+        fecha: d.fecha ? dayjs(d.fecha).format('YYYY-MM-DD') : '',
+        documento: d.documento || '',
+        nCF: d.ncf || d.nCF || '',
+        montoOriginal: d.montoOriginal || 0,
+        monto: d.monto ?? d.montoOriginal ?? 0,
+        descuento: 0,
+        retencion: d.retencion ?? 0,
+        pagado: d.pagado ?? d.acreditado ?? 0,
+        pendiente: pendienteEfectivo(d),
+      }))];
+    });
+  };
+
   // ===== Estado y periodo cerrado =====
   const estado = data?.estado ?? 0;
   const estadoNum = typeof estado === 'number' ? estado : 0;
   const esCerrado = toPeriodoNum(data?.periodo) === 6;
+  const permisoModificarAdmin = usuario?.permisosEspeciales?.some(
+    (p: any) => p.codigo === 'pe_modificar_admin' && p.valor === true
+  ) ?? false;
 
   if (loading) return <LoadingSpinner mensaje="Cargando asiento contable..." />;
 
@@ -550,7 +723,7 @@ const AsientoContableFormulario: React.FC = () => {
         />
       )}
 
-      {esCerrado && mode === 'editar' && (
+      {esCerrado && mode === 'editar' && !permisoModificarAdmin && (
         <Alert
           message="Este documento pertenece a un período contable cerrado. Los cambios podrían estar restringidos."
           type="warning"
@@ -565,6 +738,23 @@ const AsientoContableFormulario: React.FC = () => {
         onSelect={handleConceptoSelect}
         sucursal={sucursalActiva}
         documento={documentCode}
+      />
+
+      <BuscarDocumentoModal
+        open={buscarDocModalOpen}
+        onClose={() => setBuscarDocModalOpen(false)}
+        onSelect={handleDocumentosSeleccionados}
+        tipoEntidad={(selectedEntidad?.tipoEntidad?.codigo as 'SUP' | 'CLI') || 'SUP'}
+        codEntidad={selectedEntidad?.codigo || ''}
+        origen={(() => {
+          const { documentos } = useCompanyStore.getState().data;
+          const docCodigo = selectedConcepto?.docAGenerar || data?.documento?.codigo || '';
+          const docConfig = docCodigo ? documentos.find((d: any) => d.codigo === docCodigo) : undefined;
+          const docOrigen = docConfig?.origenCuenta ?? OrigenCuenta.Desconocido;
+          return typeof docOrigen === 'number' ? docOrigen : (docOrigen === 'Credito' ? OrigenCuenta.Credito : OrigenCuenta.Debito);
+        })()}
+        documentosIniciales={documentosAsociados.map((d: any) => d.transaccionAsociadaID ?? d.id)}
+        puedeAsignar={true}
       />
 
       {/* Encabezado */}
@@ -598,6 +788,7 @@ const AsientoContableFormulario: React.FC = () => {
                     <FloatingField label="Fecha" required>
                       <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
                         disabledDate={(current) => {
+                          if (permisoModificarAdmin) return false;
                           if (!current) return false;
                           const cierre = fechasCierre?.[sucursalActiva];
                           if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day')) return true;
@@ -648,6 +839,75 @@ const AsientoContableFormulario: React.FC = () => {
                         placeholder=" "
                         readOnly
                       />
+                    </FloatingField>
+                  </Form.Item>
+                </Col>
+
+                {/* Fila 3.5: Moneda + Sucursal + Cta Bancaria + Beneficiario */}
+                <Col xs={24} sm={12} lg={6}>
+                  <Form.Item name="moneda" style={{ marginBottom: 0 }}>
+                    <FloatingField label="Moneda">
+                      <Select
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        placeholder="Seleccionar moneda"
+                        value={selectedMoneda || undefined}
+                        onChange={(val) => setSelectedMoneda(val || '')}
+                        options={monedasCache.map((m) => ({
+                          value: m.codigo,
+                          label: `${m.codigo} - ${m.nombre}${m.simbolo ? ` (${m.simbolo})` : ''}`,
+                        }))}
+                      />
+                    </FloatingField>
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <Form.Item name="sucursal" style={{ marginBottom: 0 }}>
+                    <FloatingField label="Sucursal">
+                      <Select
+                        allowClear
+                        showSearch
+                        optionFilterProp="children"
+                        placeholder="Seleccionar sucursal"
+                        value={selectedSucursal || undefined}
+                        onChange={(val) => setSelectedSucursal(val || '')}
+                      >
+                        {sucursalesCache.map((s: any) => (
+                          <Select.Option key={s.codigo || s.idExterno} value={s.codigo || s.idExterno}>
+                            {toTitleCase(s.nombre)}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </FloatingField>
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <Form.Item name="cuentaBancaria" style={{ marginBottom: 0 }}>
+                    <FloatingField label="Cuenta Bancaria">
+                      <Select
+                        allowClear
+                        showSearch
+                        optionFilterProp="children"
+                        placeholder="Seleccionar cuenta bancaria"
+                        value={selectedCuenta || undefined}
+                        onChange={(val) => setSelectedCuenta(val || '')}
+                        notFoundContent={cuentasBancarias.length === 0 ? 'No hay cuentas disponibles' : undefined}
+                      >
+                        {cuentasBancarias.map((cta) => (
+                          <Select.Option key={cta.noCuenta} value={cta.noCuenta}>
+                            <BankOutlined style={{ marginRight: 6, color: '#556ee6' }} />
+                            {cta.noCuenta} - {toTitleCase(cta.nombre)} {cta.banco ? `(${toTitleCase(cta.banco)})` : ''}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </FloatingField>
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <Form.Item name="beneficiario" style={{ marginBottom: 0 }}>
+                    <FloatingField label="Beneficiario">
+                      <Input placeholder="Nombre del beneficiario" />
                     </FloatingField>
                   </Form.Item>
                 </Col>
@@ -757,34 +1017,316 @@ const AsientoContableFormulario: React.FC = () => {
         </Row>
       </Card>
 
-      {/* Tabla de Asientos */}
+      {/* Asientos + info secundaria */}
       <Card
         className="paces-card"
         size="small"
         title="Asientos Contables"
         style={{ marginBottom: 16 }}
       >
-        <div style={{ marginBottom: 8 }}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAgregarAsiento}>
-            Agregar asiento
-          </Button>
-        </div>
-        <Table
-          dataSource={asientos}
-          columns={asientoColumns}
-          rowKey={(_, idx) => `${idx}`}
-          size="small"
-          pagination={false}
-          scroll={{ x: 900 }}
-          locale={{
-            emptyText: (
-              <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography.Text className="paces-text-secondary">
-                  No hay asientos. Haga clic en "Agregar asiento" para comenzar.
-                </Typography.Text>
-              </div>
-            ),
-          }}
+        <Tabs
+          defaultActiveKey="asientos"
+          type="card"
+          items={[
+            {
+              key: 'asientos',
+              label: `Asientos (${asientos.length})`,
+              children: (
+                <>
+                  <div style={{ marginBottom: 8 }}>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={handleAgregarAsiento}>
+                      Agregar asiento
+                    </Button>
+                  </div>
+                  <Table
+                    dataSource={asientos}
+                    columns={asientoColumns}
+                    rowKey={(_, idx) => `${idx}`}
+                    size="small"
+                    pagination={false}
+                    scroll={{ x: 900 }}
+                    locale={{
+                      emptyText: (
+                        <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Typography.Text className="paces-text-secondary">
+                            No hay asientos. Haga clic en "Agregar asiento" para comenzar.
+                          </Typography.Text>
+                        </div>
+                      ),
+                    }}
+                  />
+                </>
+              ),
+            },
+            {
+              key: 'detalles',
+              label: `Detalles (${detallesEditable.length})`,
+              children: (
+                <>
+                  <div style={{ marginBottom: 8 }}>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={handleAgregarDetalle}>
+                      Agregar detalle
+                    </Button>
+                  </div>
+                  <Table
+                    dataSource={detallesEditable}
+                    rowKey={(r: any) => String(r.id)}
+                    size="small"
+                    pagination={false}
+                    scroll={{ x: 1000 }}
+                    locale={{
+                      emptyText: (
+                        <Typography.Text className="paces-text-secondary">
+                          No hay detalles. Haga clic en "Agregar detalle" para comenzar.
+                        </Typography.Text>
+                      ),
+                    }}
+                    columns={[
+                      {
+                        title: 'Código',
+                        dataIndex: 'codigo',
+                        key: 'codigo',
+                        width: 120,
+                        render: (v: string, _: any, idx: number) => (
+                          <Input size="small" value={v || ''} onChange={(e) => handleDetalleChange(idx, 'codigo', e.target.value)} />
+                        ),
+                      },
+                      {
+                        title: 'Artículo',
+                        dataIndex: 'articulo',
+                        key: 'articulo',
+                        render: (v: string, _: any, idx: number) => (
+                          <Input size="small" value={v || ''} onChange={(e) => handleDetalleChange(idx, 'articulo', e.target.value)} />
+                        ),
+                      },
+                      {
+                        title: 'Cantidad',
+                        dataIndex: 'cantidad',
+                        key: 'cantidad',
+                        width: 110,
+                        align: 'right' as const,
+                        render: (v: number, _: any, idx: number) => (
+                          <InputNumber
+                            size="small"
+                            style={{ width: '100%' }}
+                            styles={{ input: { textAlign: 'right' } }}
+                            min={0}
+                            step={0.01}
+                            precision={2}
+                            value={v}
+                            onChange={(val) => handleDetalleChange(idx, 'cantidad', val || 0)}
+                          />
+                        ),
+                      },
+                      {
+                        title: 'Costo',
+                        dataIndex: 'precio',
+                        key: 'precio',
+                        width: 120,
+                        align: 'right' as const,
+                        render: (v: number, _: any, idx: number) => (
+                          <InputNumber
+                            size="small"
+                            style={{ width: '100%' }}
+                            styles={{ input: { textAlign: 'right' } }}
+                            min={0}
+                            step={0.01}
+                            precision={2}
+                            value={v}
+                            onChange={(val) => handleDetalleChange(idx, 'precio', val || 0)}
+                          />
+                        ),
+                      },
+                      {
+                        title: 'Total',
+                        dataIndex: 'total',
+                        key: 'total',
+                        width: 120,
+                        align: 'right' as const,
+                        render: (v: number, record: any) => (
+                          <Text strong>{formatNumber(record?.total ?? v ?? 0)}</Text>
+                        ),
+                      },
+                      {
+                        title: '',
+                        key: 'acciones',
+                        width: 50,
+                        render: (_: any, __: any, idx: number) => (
+                          <Button
+                            type="text"
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined />}
+                            onClick={() => handleEliminarDetalle(idx)}
+                          />
+                        ),
+                      },
+                    ]}
+                  />
+                </>
+              ),
+            },
+            {
+              key: 'documentos',
+              label: `Documentos Asociados (${documentosAsociados.length})`,
+              children: (
+                <>
+                  <style>{`.input-number-right .ant-input-number-input { text-align: right !important; }`}</style>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>
+                      <BankOutlined style={{ marginRight: 6, color: '#556ee6' }} />
+                      Documentos Asociados
+                    </span>
+                    <Button
+                      type="primary"
+                      icon={<PlusOutlined />}
+                      onClick={() => {
+                        if (!selectedEntidad?.codigo) {
+                          message.warning('Seleccione una entidad primero');
+                          return;
+                        }
+                        setBuscarDocModalOpen(true);
+                      }}
+                    >
+                      Agregar
+                    </Button>
+                  </div>
+                  <Table
+                    dataSource={documentosAsociados}
+                    rowKey={(r: any) => r.transaccionAsociadaID ?? r.id}
+                    size="small"
+                    pagination={false}
+                    scroll={{ x: 1260 }}
+                    locale={{ emptyText: 'No hay documentos asociados' }}
+                    columns={[
+                      {
+                        title: 'Fecha',
+                        dataIndex: 'fecha',
+                        key: 'fecha',
+                        width: 110,
+                        render: (v: string) => v || '-',
+                      },
+                      {
+                        title: 'Documento',
+                        dataIndex: 'documento',
+                        key: 'documento',
+                        width: 160,
+                      },
+                      {
+                        title: 'NCF',
+                        dataIndex: 'nCF',
+                        key: 'nCF',
+                        width: 130,
+                        render: (v: string) => v || '-',
+                      },
+                      {
+                        title: 'Monto Original',
+                        dataIndex: 'montoOriginal',
+                        key: 'montoOriginal',
+                        width: 130,
+                        align: 'right' as const,
+                        render: (v: number) => formatNumber(v ?? 0),
+                      },
+                      {
+                        title: 'Abonado',
+                        key: 'pagado',
+                        width: 140,
+                        align: 'right' as const,
+                        render: (_: any, record: any) => (
+                          <Text type="secondary">{formatNumber(record.pagado ?? 0)}</Text>
+                        ),
+                      },
+                      {
+                        title: 'Pendiente',
+                        key: 'pendiente',
+                        width: 130,
+                        align: 'right' as const,
+                        render: (_: any, record: any) => (
+                          <Text style={{ color: pendienteEfectivo(record) > 0 ? '#fa8c16' : undefined }}>
+                            {formatNumber(pendienteEfectivo(record))}
+                          </Text>
+                        ),
+                      },
+                      {
+                        title: 'Retenciones',
+                        key: 'retencion',
+                        width: 120,
+                        align: 'right' as const,
+                        render: (_: any, record: any) => formatNumber(record.retencion ?? 0),
+                      },
+                      {
+                        title: 'Descuento',
+                        key: 'descuento',
+                        width: 140,
+                        align: 'right' as const,
+                        render: (_: any, record: any) => (
+                          <InputNumber
+                            size="small"
+                            style={{ width: '100%' }}
+                            inputStyle={{ textAlign: 'right' as const }}
+                            className="input-number-right"
+                            min={0}
+                            step={0.01}
+                            precision={2}
+                            value={record.descuento}
+                            onChange={(val) => handleDescuentoChange(record.transaccionAsociadaID ?? record.id, val)}
+                          />
+                        ),
+                      },
+                      {
+                        title: 'Monto',
+                        key: 'monto',
+                        width: 140,
+                        align: 'right' as const,
+                        render: (_: any, record: any) => (
+                          <InputNumber
+                            size="small"
+                            style={{ width: '100%' }}
+                            inputStyle={{ textAlign: 'right' as const }}
+                            className="input-number-right"
+                            min={0}
+                            max={pendienteEfectivo(record)}
+                            step={0.01}
+                            precision={2}
+                            value={record.monto}
+                            onChange={(val) => handleMontoChange(record.transaccionAsociadaID ?? record.id, val)}
+                          />
+                        ),
+                      },
+                      {
+                        title: '',
+                        key: 'accion',
+                        width: 50,
+                        render: (_: any, record: any) => (
+                          <Button
+                            type="text"
+                            danger
+                            size="small"
+                            icon={<DeleteOutlined />}
+                            onClick={() => handleRemoveDoc(record.transaccionAsociadaID ?? record.id)}
+                          />
+                        ),
+                      },
+                    ]}
+                  />
+                </>
+              ),
+            },
+            {
+              key: 'historial',
+              label: `Historial (${data?.logs?.length || 0})`,
+              children: (
+                <LogTable dataSource={data?.logs || []} scroll={{ x: 800 }} />
+              ),
+            },
+            {
+              key: 'cobros',
+              label: `Cobros (${data?.cobros?.length || 0})`,
+              children: (
+                <CobrosCard cobros={data?.cobros || []} />
+              ),
+            },
+          ]}
         />
       </Card>
     </div>

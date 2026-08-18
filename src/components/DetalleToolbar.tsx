@@ -28,6 +28,7 @@ interface DetalleToolbarProps {
   onReversar?: () => Promise<void>;
   showImprimir?: boolean;
   confirmActions?: boolean;
+  edicionSinRestricciones?: boolean;
   extraButtons?: React.ReactNode;
 }
 
@@ -49,7 +50,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
   saving, imprimiendo, operacionLoading,
   onVolver, onImprimir, onImprimirTicket, onEditar, onAplicar, onAnular,
   onPostear, onRevisado, onDesaplicar, onReversar,
-  showImprimir = true, confirmActions = true,
+  showImprimir = true, confirmActions = true, edicionSinRestricciones = false,
   extraButtons,
 }) => {
   const estadoNum = toEstadoNum(estado);
@@ -84,7 +85,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
 
         {extraButtons}
 
-        {estadoNum === 0 && periodoNum !== 6 && revisado !== true && onEditar && (
+        {((estadoNum === 0 && periodoNum !== 6) || edicionSinRestricciones) && revisado !== true && onEditar && (
           <PermissionGate codigoPantalla={modulo} accion="EDITAR">
             <Button type="primary" icon={<EditOutlined />} onClick={onEditar}>Editar</Button>
           </PermissionGate>

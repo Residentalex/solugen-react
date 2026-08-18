@@ -20,6 +20,7 @@ export interface DocumentoAsociadoItem {
   fecha?: string;
   estado?: number;
   perdida?: number;
+  descuento?: number;
   esDocumentoInventario?: boolean;
 }
 
@@ -31,6 +32,7 @@ export interface TransaccionesAsociadasCardProps {
   emptyText?: string;
   onDocumentoClick?: (doc: DocumentoAsociadoItem) => void;
   rutas?: Record<string, string>;
+  ocultarPerdida?: boolean;
 }
 
 const RUTAS_DEFAULT: Record<string, string> = {
@@ -53,11 +55,12 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
   emptyText,
   onDocumentoClick,
   rutas,
+  ocultarPerdida = false,
 }) => {
   const navigate = useNavigate();
 
   const docsNormalizados = useMemo(() =>
-    documentos.map((d: any) => ({ ...d, nCF: d.nCF || d.ncf || '', perdida: d.perdida || 0, esDocumentoInventario: d.esDocumentoInventario ?? false })),
+    documentos.map((d: any) => ({ ...d, nCF: d.nCF || d.ncf || '', perdida: d.perdida || 0, descuento: d.descuento || 0, esDocumentoInventario: d.esDocumentoInventario ?? false })),
     [documentos]
   );
 
@@ -108,11 +111,12 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
       render: (v: number) => formatNumber(v ?? 0),
     },
     {
-      title: 'Pendiente',
-      key: 'pendienteCalc',
+      title: 'Descuento',
+      dataIndex: 'descuento',
+      key: 'descuento',
       width: 120,
       align: 'right' as const,
-      render: (_: any, record: DocumentoAsociadoItem) => <Text strong>{formatNumber(Math.abs(record.saldoPendiente ?? Math.round(((record.montoOriginal || 0) - (record.pagado || 0)) * 100) / 100))}</Text>,
+      render: (v: number) => formatNumber(v ?? 0),
     },
     {
       title: 'Monto',
@@ -122,14 +126,14 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
       align: 'right' as const,
       render: (v: number) => <Text strong>{formatNumber(v ?? 0)}</Text>,
     },
-    {
+    ...(!ocultarPerdida ? [{
       title: 'Pérdida',
       dataIndex: 'perdida',
       key: 'perdida',
       width: 110,
       align: 'right' as const,
       render: (v: number) => <Text>{formatNumber(v ?? 0)}</Text>,
-    },
+    }] : []),
   ];
 
   const renderContent = () => {
@@ -163,12 +167,12 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
             (acc, d) => {
               acc.montoOriginal += d.montoOriginal || 0;
               acc.pagado += d.pagado || 0;
-              acc.saldoPendiente += d.saldoPendiente ?? Math.round(((d.montoOriginal || 0) - (d.pagado || 0)) * 100) / 100;
+              acc.descuento += d.descuento || 0;
               acc.monto += d.monto || 0;
               acc.perdida += d.perdida || 0;
               return acc;
             },
-            { montoOriginal: 0, pagado: 0, saldoPendiente: 0, monto: 0, perdida: 0 }
+            { montoOriginal: 0, pagado: 0, descuento: 0, monto: 0, perdida: 0 }
           );
 
           return (
@@ -185,14 +189,16 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
                 <Text strong>{formatNumber(totales.pagado)}</Text>
               </Table.Summary.Cell>
               <Table.Summary.Cell align="right">
-                <Text strong>{formatNumber(totales.saldoPendiente)}</Text>
+                <Text strong>{formatNumber(totales.descuento)}</Text>
               </Table.Summary.Cell>
               <Table.Summary.Cell align="right">
                 <Text strong>{formatNumber(totales.monto)}</Text>
               </Table.Summary.Cell>
-              <Table.Summary.Cell align="right">
-                <Text strong>{formatNumber(totales.perdida)}</Text>
-              </Table.Summary.Cell>
+              {!ocultarPerdida && (
+                <Table.Summary.Cell align="right">
+                  <Text strong>{formatNumber(totales.perdida)}</Text>
+                </Table.Summary.Cell>
+              )}
             </Table.Summary.Row>
           );
         }}

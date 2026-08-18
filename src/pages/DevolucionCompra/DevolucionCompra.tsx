@@ -28,6 +28,7 @@ const DevolucionCompra: React.FC = () => {
     fetchFiltrar: (sucursal, params) =>
       devolucionCompraApi.filtrar(sucursal, params),
     reporteUrl: (sucursal, id) => `/reportes/inventario/devolucion-compra/${sucursal}/${id}`,
+    imprimirUrl: (sucursal, id) => `/DVC/${sucursal}/imprimir/${id}`,
     tituloReporte: 'DCP',
     tituloError: 'Error al cargar devoluciones de compra',
   });

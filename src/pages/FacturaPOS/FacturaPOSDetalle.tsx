@@ -18,6 +18,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
+import { documentoImpresionApi } from '../../api/documentoImpresionApi';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
 import { devolucionVentaApi } from '../../api/devolucionVentaApi';
 import { transaccionApi } from '../../api/transaccionApi';
@@ -30,8 +31,9 @@ import { formatNumber, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import { useQZTray } from '../../hooks/useQZTray';
-import { formatTicketPOS, escposQRCode, feed, CMD_CUT } from '../../utils/escpos-formatter';
-import { obtenerConfigPlantilla, CODIGO_PLANTILLA_FPV_TICKET } from '../../utils/ticketPlantilla';
+import { formatTicket, escposQRCode, feed, CMD_CUT } from '../../utils/escpos-formatter';
+import { obtenerConfigPlantilla, obtenerConfigPorId, CODIGO_PLANTILLA_FPV_TICKET } from '../../utils/ticketPlantilla';
+import { reportesConfigApi } from '../../api/reportesConfigApi';
 import { obtenerLogoEscPosBase64 } from '../../utils/logoEscPos';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
@@ -42,6 +44,7 @@ import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLa
 import SucursalField from '../../components/SucursalField';
 
 const { Text } = Typography;
+const { TextArea } = Input;
 
 function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
@@ -83,6 +86,9 @@ const FacturaPOSDetalle: React.FC = () => {
   const [detalleSearch, setDetalleSearch] = useState('');
   const [devolucionesPV, setDevolucionesPV] = useState<any[]>([]);
   const [dtransasocDevueltos, setDtransasocDevueltos] = useState<Set<number>>(new Set());
+  const [modalAnularOpen, setModalAnularOpen] = useState(false);
+  const [razonAnulacion, setRazonAnulacion] = useState('');
+  const [anulando, setAnulando] = useState(false);
   // ═══ Carga progresiva: banderas anti doble fetch por sección ═══
   const [detallesCargados, setDetallesCargados] = useState(false);
   const [cobrosCargados, setCobrosCargados] = useState(false);
@@ -96,6 +102,16 @@ const FacturaPOSDetalle: React.FC = () => {
   const monedaDefault = getMonedaSucursalActiva();
   const screens = Grid.useBreakpoint();
   const qz = useQZTray();
+
+  const [plantillaEntdoc, setPlantillaEntdoc] = useState<{ plantillaId: number; tipo: string } | null>(null);
+
+  useEffect(() => {
+    let activo = true;
+    reportesConfigApi.obtenerPorEntdoc('PV')
+      .then((p) => { if (activo && p) setPlantillaEntdoc({ plantillaId: p.plantillaId, tipo: p.tipo }); })
+      .catch(() => {});
+    return () => { activo = false; };
+  }, []);
 
   useEffect(() => {
     setActiveModule(screenCode);
@@ -531,6 +547,45 @@ const FacturaPOSDetalle: React.FC = () => {
     }
   };
 
+  const handleAnularPV = async () => {
+    if (!razonAnulacion.trim()) {
+      message.error('Debe ingresar una razón para la anulación');
+      return;
+    }
+    setAnulando(true);
+    try {
+      // Cargar la factura completa para obtener todos los detalles
+      const facturaFull = await devolucionVentaApi.obtenerFacturaPOS(sucursalActiva, data!.id);
+      if (!facturaFull?.detalles || facturaFull.detalles.length === 0) {
+        message.error('La factura no tiene detalles para anular');
+        return;
+      }
+      // Mapear todos los detalles con cantidad completa (devolver todo)
+      const detalles = facturaFull.detalles
+        .filter((d: any) => d.id > 0)
+        .map((d: any) => ({
+          idAsociado: d.id,
+          cantidad: d.cantidad || 0,
+          precio: d.precio || 0,
+          porcentajeDescuento: d.porcentajeDescuento || 0,
+          porcentajeImpuesto: d.porcentajeImpuesto || 0,
+        }));
+      const result = await devolucionVentaApi.crearDesdePV(sucursalActiva, data!.id, {
+        detalles,
+        nota: razonAnulacion.trim(),
+      });
+      message.success('Devolución por anulación creada exitosamente');
+      setModalAnularOpen(false);
+      setRazonAnulacion('');
+      navigate(`/FDEV/${result.id}`);
+    } catch (err: any) {
+      const msg = extraerMensajeError(err, 'Error al crear la devolución por anulación');
+      message.error(msg);
+    } finally {
+      setAnulando(false);
+    }
+  };
+
   function extraerMensajeError(err: any, fallback: string): string {
     const data = err?.response?.data;
     if (!data) return fallback;
@@ -563,23 +618,41 @@ const FacturaPOSDetalle: React.FC = () => {
   const handlePrintTicket = async () => {
     setImprimiendo(true);
     try {
-      // Obtener config de plantilla (si falla o no existe, usar formato predeterminado)
-      let config = null;
       try {
-        config = await obtenerConfigPlantilla(CODIGO_PLANTILLA_FPV_TICKET);
-      } catch {
-        config = null;
+        await documentoImpresionApi.marcarImpreso('PV', sucursalActiva, parseInt(id));
+      } catch (errImprimir: any) {
+        message.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
+        return;
+      }
+      // Si hay plantilla asignada via ENTDOC, usar esa; sino fallback al codigo hardcodeado
+      let config = null;
+      let tipoDoc = 'TICKET_POS';
+
+      if (plantillaEntdoc) {
+        try {
+          config = await obtenerConfigPorId(plantillaEntdoc.plantillaId);
+          tipoDoc = plantillaEntdoc.tipo;
+        } catch {
+          config = null;
+        }
+      } else {
+        try {
+          config = await obtenerConfigPlantilla(CODIGO_PLANTILLA_FPV_TICKET);
+        } catch {
+          config = null;
+        }
       }
 
-      // Generar ticket ESC/POS (texto con formato)
-      let ticketText = formatTicketPOS(data, {
+      const companyInfo = {
         nombre: data.sucursal?.nombre || '',
         direccion: data.sucursal?.direccion || '',
         telefono: data.sucursal?.telefono || '',
         rnc: data.sucursal?.rnc || '',
         fax: data.sucursal?.fax || '',
         slogan: data.sucursal?.slogan || '',
-      }, config || undefined);
+      };
+
+      let ticketText = formatTicket(data, companyInfo, config || undefined, tipoDoc);
 
       // QR se genera desde la plantilla configurable (CAMPO:CODIGO_QR)
       // const qrData = data.envioDGII?.codigoQR;
@@ -638,6 +711,12 @@ const FacturaPOSDetalle: React.FC = () => {
   const handlePrintFacturaCliente = async () => {
     setImprimiendo(true);
     try {
+      try {
+        await documentoImpresionApi.marcarImpreso('PV', sucursalActiva, parseInt(id));
+      } catch (errImprimir: any) {
+        message.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
+        return;
+      }
       const res = await apiClient.post(`/reportes/facturacion/pos/factura-cliente`, data, {
         responseType: 'blob',
       });
@@ -685,9 +764,23 @@ const FacturaPOSDetalle: React.FC = () => {
             )}
             {data.estado !== 0 && data.estado !== 3 && dtransasocDevueltos.size < (data.detalles?.length || 0) && (
               <PermissionGate codigoPantalla="FPV" permisoEspecial="pe_crear_devolucion">
-                <Button type="primary" icon={<RollbackOutlined />} onClick={() => navigate(`/FDEV/nuevo?pvId=${data.id}`)}>
-                  Crear Devolución
-                </Button>
+                <Dropdown menu={{
+                  items: [
+                    { key: 'anular', label: 'Anular', icon: <CloseCircleOutlined /> },
+                    { key: 'devolver', label: 'Devolver', icon: <RollbackOutlined /> },
+                  ],
+                  onClick: ({ key }) => {
+                    if (key === 'anular') {
+                      setModalAnularOpen(true);
+                    } else if (key === 'devolver') {
+                      navigate(`/FDEV/nuevo?pvId=${data.id}`);
+                    }
+                  },
+                }} trigger={['click']}>
+                  <Button type="primary" icon={<RollbackOutlined />}>
+                    Crear Devolución
+                  </Button>
+                </Dropdown>
               </PermissionGate>
             )}
           </>
@@ -1096,6 +1189,32 @@ const FacturaPOSDetalle: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de anulación de factura POS */}
+      <Modal
+        title="Anular Factura POS"
+        open={modalAnularOpen}
+        onCancel={() => { setModalAnularOpen(false); setRazonAnulacion(''); }}
+        onOk={handleAnularPV}
+        okText="Confirmar Anulación"
+        cancelText="Cancelar"
+        okButtonProps={{ danger: true, loading: anulando }}
+        confirmLoading={anulando}
+        destroyOnHidden
+      >
+        <p style={{ marginBottom: 12 }}>
+          Se creará una devolución con <strong>todos los artículos</strong> de la factura POS.
+          Ingrese la razón de la anulación:
+        </p>
+        <TextArea
+          rows={4}
+          maxLength={500}
+          showCount
+          value={razonAnulacion}
+          onChange={(e) => setRazonAnulacion(e.target.value)}
+          placeholder="Razón de la anulación..."
+        />
+      </Modal>
 
       {/* Modal selector de impresora POS */}
       <ModalSeleccionarImpresoraPOS

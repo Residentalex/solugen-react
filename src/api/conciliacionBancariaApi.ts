@@ -6,6 +6,9 @@ import type {
   MovimientoBancarioDTO,
   CuentaBancariaDTO,
   TransaccionConciliadaDTO,
+  ResumenGeneralConciliacionDTO,
+  MovimientoLibroExportarDTO,
+  TransitoExportarDTO,
 } from '../types/conciliacionBancaria';
 
 const BASE = '/ConciliacionBancaria';
@@ -218,6 +221,30 @@ export const conciliacionBancariaApi = {
     const { data } = await apiClient.get<ApiResponse<TransaccionConciliadaDTO[]>>(
       `${BASE}/${sucursal}/transacciones-sin-conciliar`,
       { params: { numeroCta, concilID, ...(fecha ? { fecha } : {}) } }
+    );
+    return data.data || [];
+  },
+
+  /** Obtener resumen general de conciliación */
+  obtenerResumenGeneral: async (sucursal: number, concilId: number): Promise<ResumenGeneralConciliacionDTO> => {
+    const { data } = await apiClient.get<ApiResponse<ResumenGeneralConciliacionDTO>>(
+      `${BASE}/${sucursal}/${concilId}/resumen-general`
+    );
+    return data.data!;
+  },
+
+  /** Exportar movimientos del libro del mayor */
+  exportarLibros: async (sucursal: number, concilId: number): Promise<MovimientoLibroExportarDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<MovimientoLibroExportarDTO[]>>(
+      `${BASE}/${sucursal}/${concilId}/exportar-libros`
+    );
+    return data.data || [];
+  },
+
+  /** Exportar documentos en tránsito */
+  exportarTransito: async (sucursal: number, concilId: number): Promise<TransitoExportarDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<TransitoExportarDTO[]>>(
+      `${BASE}/${sucursal}/${concilId}/exportar-transito`
     );
     return data.data || [];
   },

@@ -33,6 +33,7 @@ const DevolucionVenta: React.FC = () => {
     fetchFiltrar: (sucursal, params) =>
       devolucionVentaApi.filtrar(sucursal, params),
     reporteUrl: (sucursal, id) => `/reportes/facturacion/devolucion/${sucursal}/${id}`,
+    imprimirUrl: (sucursal, id) => `/DEV/${sucursal}/imprimir/${id}`,
     tituloReporte: 'DV',
     tituloError: 'Error al cargar devoluciones de venta',
   });

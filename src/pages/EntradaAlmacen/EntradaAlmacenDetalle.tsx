@@ -19,6 +19,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { Sucursal } from '../../types/auth';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
+import { documentoImpresionApi } from '../../api/documentoImpresionApi';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { ordenCompraApi } from '../../api/ordenCompraApi';
 import { devolucionCompraApi } from '../../api/devolucionCompraApi';
@@ -939,6 +940,12 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
         onImprimir={async () => {
           setImprimiendo(true);
           try {
+            try {
+              await documentoImpresionApi.marcarImpreso('ENP', sucursalActiva, parseInt(id));
+            } catch (errImprimir: any) {
+              message.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
+              return;
+            }
             const res = await apiClient.post('/reportes/inventario/entrada', { ...data, facturaAsociada: facturaData }, {
               responseType: 'blob',
             });

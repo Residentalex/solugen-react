@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Table, message, Card, Button, Tooltip, Space, Tag, Modal,
   Descriptions, Typography, Progress, Select, Input, Empty, Grid, Divider,
+  Alert,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -65,7 +66,7 @@ const SecuenciasNCF: React.FC = () => {
   const modalWidth = screens.lg ? 600 : '92vw';
 
   // Carga de datos
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['secuenciasNCF', sucursalActiva],
     queryFn: async () => {
       if (sucursalActiva === undefined) return [];
@@ -364,6 +365,20 @@ const SecuenciasNCF: React.FC = () => {
           </Button>
         </PermissionGate>
       </div>
+
+      {isError && (
+        <Alert
+          message="Error al cargar secuencias NCF"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={() => refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
 
       <Card className="paces-card-erp" style={{ borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
         {/* Barra de búsqueda y filtros */}

@@ -28,6 +28,7 @@ const EntradaAlmacen: React.FC = () => {
     fetchFiltrar: (sucursal, params) =>
       entradaAlmacenApi.filtrar(sucursal, params),
     reporteUrl: (sucursal, id) => `/reportes/inventario/entrada/${sucursal}/${id}`,
+    imprimirUrl: (sucursal, id) => `/ENP/${sucursal}/imprimir/${id}`,
     tituloReporte: 'ENP',
     tituloError: 'Error al cargar entradas de almacén',
   });

@@ -1,0 +1,190 @@
+/* ===== ReportesConfig - selector de plantillas (cards) ===== */
+
+.rc-plantillas-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rc-plantillas-state {
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rc-plantilla-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--paces-bg-container);
+  border: 1px solid #e8ecf0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.rc-plantilla-card:hover {
+  border-color: #556ee6;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.rc-plantilla-card.is-selected {
+  border-color: #556ee6;
+  background: var(--paces-selected-bg);
+  box-shadow: 0 4px 14px rgba(85, 110, 230, 0.25);
+}
+
+.rc-plantilla-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #556ee6, #3b4cb8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rc-plantilla-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rc-plantilla-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.rc-plantilla-check {
+  color: #556ee6;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* ===== Zonas ===== */
+
+.rc-zona {
+  transition: border-color 0.2s;
+}
+
+.rc-zona.is-activa {
+  border-color: #556ee6;
+}
+
+.rc-zona-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.rc-zona-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.rc-zona-body {
+  padding-top: 8px;
+}
+
+.rc-zona-vacia {
+  text-align: center;
+  padding: 16px;
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
+.rc-zona-linea {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--paces-border, #f0f0f0);
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.rc-zona-linea:hover {
+  background: #fafafa;
+}
+
+.rc-zona-linea-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-zona-linea-input {
+  flex: 1;
+  min-width: 100px;
+  max-width: 260px;
+}
+
+.rc-zona-tabular {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rc-zona-agregar-linea {
+  padding: 8px 0 0;
+}
+
+/* ===== Campos (conservado del editor viejo) ===== */
+
+.rc-campo-fila {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--paces-border);
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.rc-campo-fila:hover {
+  background: #fafafa;
+}
+
+.rc-campo-fila-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-campo-fila-input {
+  flex: 1;
+  min-width: 140px;
+  max-width: 320px;
+}
+
+.rc-campo-formato-tag {
+  margin-inline-end: 0;
+  font-size: 10px;
+  line-height: 16px;
+  color: #556ee6;
+  border-color: #c7cff7;
+  background: #f0f3ff;
+}
+
+.rc-campo-formato-btn {
+  color: #8c8c8c;
+}
+
+.rc-campo-formato-btn-activo {
+  color: #556ee6;
+}

@@ -15,6 +15,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
+import { documentoImpresionApi } from '../../api/documentoImpresionApi';
 import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
 import { obtenerNombreEnumSucursal } from '../../utils/sucursalEnumMapper';
 import SucursalField from '../../components/SucursalField';
@@ -542,6 +543,12 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
         onImprimir={async () => {
           setImprimiendo(true);
           try {
+            try {
+              await documentoImpresionApi.marcarImpreso('TRP', sucursalActiva, parseInt(id));
+            } catch (errImprimir: any) {
+              messageApi.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
+              return;
+            }
             const sucursalParam = documentoActivo.codigoSucursal
               ? obtenerNombreEnumSucursal(documentoActivo.codigoSucursal)
               : sucursalActiva;

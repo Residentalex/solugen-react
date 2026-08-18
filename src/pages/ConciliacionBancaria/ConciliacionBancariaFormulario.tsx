@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Button, Space, Row, Col, Grid, Form, Input, InputNumber, Select, DatePicker, Typography, message, Modal, Alert, Spin, Upload, Divider, Checkbox,
+  Card, Table, Tabs, Button, Space, Row, Col, Grid, Form, Input, InputNumber, Select, DatePicker, Typography, message, Modal, Alert, Spin, Upload, Divider, Checkbox, Descriptions,
 } from 'antd';
 import {
-  SaveOutlined, CloseOutlined, UploadOutlined, PlusOutlined, DeleteOutlined, CheckCircleFilled, SearchOutlined, ArrowUpOutlined, ArrowDownOutlined,
+  SaveOutlined, CloseOutlined, UploadOutlined, PlusOutlined, DeleteOutlined, CheckCircleFilled, SearchOutlined, ArrowUpOutlined, ArrowDownOutlined, DownloadOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -12,8 +12,9 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { conciliacionBancariaApi } from '../../api/conciliacionBancariaApi';
 import { extraerMensajeError, formatCurrency, formatNumber, formatDate } from '../../utils/formats';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import type {
-  ConciliacionBancariaDTO, MovimientoBancarioDTO, CuentaBancariaDTO, TransaccionConciliadaDTO, ResumenTipoDocumentoDTO,
+  ConciliacionBancariaDTO, MovimientoBancarioDTO, CuentaBancariaDTO, TransaccionConciliadaDTO, ResumenTipoDocumentoDTO, ResumenGeneralConciliacionDTO,
 } from '../../types/conciliacionBancaria';
 
 const { Text } = Typography;
@@ -36,6 +37,7 @@ const ConciliacionBancariaFormulario: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<ConciliacionBancariaDTO | null>(null);
+  const [resumenGeneral, setResumenGeneral] = useState<ResumenGeneralConciliacionDTO | null>(null);
   const [cuentasBancarias, setCuentasBancarias] = useState<CuentaBancariaDTO[]>([]);
   const [movimientos, setMovimientos] = useState<MovimientoBancarioDTO[]>([]);
   const [archivoImportado, setArchivoImportado] = useState<File | null>(null);
@@ -46,6 +48,11 @@ const ConciliacionBancariaFormulario: React.FC = () => {
   // Carga bajo demanda (modo editar): banderas para no recargar movimientos/tránsito al cambiar de tab.
   const [movimientosCargados, setMovimientosCargados] = useState(false);
   const [transitoCargado, setTransitoCargado] = useState(false);
+  // Transacciones conciliadas + en tránsito de ESTA conciliación (para exportar sin barrer CTRANSAC).
+  const [transaccionesDetalle, setTransaccionesDetalle] = useState<TransaccionConciliadaDTO[]>([]);
+  const [enTransito, setEnTransito] = useState<TransaccionConciliadaDTO[]>([]);
+  const [transaccionesCargadas, setTransaccionesCargadas] = useState(false);
+  const [enTransitoCargado, setEnTransitoCargado] = useState(false);
   // Movimiento cuyo modal de candidatos (mismo monto) está abierto; null = cerrado.
   const [movimientoModal, setMovimientoModal] = useState<MovimientoBancarioDTO | null>(null);
   // Modal de conciliación automática (movimientos con un solo candidato del mismo monto).
@@ -56,6 +63,8 @@ const ConciliacionBancariaFormulario: React.FC = () => {
   const [searchResumen, setSearchResumen] = useState('');
   const [searchResumenTransito, setSearchResumenTransito] = useState('');
   const [searchTransito, setSearchTransito] = useState('');
+  const [exportandoLibros, setExportandoLibros] = useState(false);
+  const [exportandoTransito, setExportandoTransito] = useState(false);
 
   const [form] = Form.useForm();
 
@@ -220,6 +229,95 @@ const ConciliacionBancariaFormulario: React.FC = () => {
       message.error(msg);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleExportarLibros = async () => {
+    if (!id) return;
+    setExportandoLibros(true);
+    try {
+      const datos = await conciliacionBancariaApi.exportarLibros(sucursalActiva, parseInt(id));
+      if (datos.length === 0) {
+        message.warning('No hay movimientos para exportar');
+        return;
+      }
+      const companyName = await getCompanyName(sucursalActiva);
+      const columnHeaders = ['Tipo Doc', 'Número', 'Fecha', 'Déb/Créd', 'Monto', 'TransacID', 'Entidad', 'Conciliado'];
+      const dataRows = datos.map(d => [
+        d.nombreTipoDoc || d.tipoDoc,
+        d.numDoc,
+        d.fecha ? formatDate(d.fecha) : '',
+        d.debCred === 'D' ? 'Débito' : 'Crédito',
+        d.monto,
+        d.transacId,
+        d.entidad || '',
+        d.conciliado === 'T' ? 'Sí' : 'No',
+      ]);
+      exportToExcel({
+        companyName,
+        extraHeaderRows: [[`Libro del Mayor - Conciliación ${id}`]],
+        columnHeaders,
+        dataRows,
+        sheetName: 'Libro del Mayor',
+        fileName: `libro-mayor-${id}.xlsx`,
+        columnWidths: [{ wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 40 }, { wch: 12 }],
+      });
+      message.success('Libro del mayor exportado correctamente');
+    } catch {
+      message.error('Error al exportar libro del mayor');
+    } finally {
+      setExportandoLibros(false);
+    }
+  };
+
+  const handleExportarTransito = async () => {
+    if (!id) return;
+    setExportandoTransito(true);
+    try {
+      // Usar datos ya disponibles (precargados al abrir la conciliación). Si por algún motivo
+      // no están cargados, traerlos bajo demanda para no dejar el botón sin datos.
+      let conciliadas = transaccionesDetalle;
+      let transito = enTransito;
+      if (!transaccionesCargadas) {
+        conciliadas = await conciliacionBancariaApi.obtenerTransaccionesConciliadas(sucursalActiva, parseInt(id));
+        setTransaccionesDetalle(conciliadas);
+        setTransaccionesCargadas(true);
+      }
+      if (!enTransitoCargado) {
+        transito = await conciliacionBancariaApi.obtenerEnTransito(sucursalActiva, parseInt(id));
+        setEnTransito(transito);
+        setEnTransitoCargado(true);
+      }
+      const datos = [...conciliadas, ...transito];
+      if (datos.length === 0) {
+        message.warning('No hay documentos en tránsito para exportar');
+        return;
+      }
+      const companyName = await getCompanyName(sucursalActiva);
+      const columnHeaders = ['Tipo Doc', 'Número', 'Fecha', 'Monto', 'Déb/Créd', 'Entidad', 'Conciliado'];
+      const dataRows = datos.map(d => [
+        d.nombreTipoDoc || d.tipoDoc,
+        d.numDoc,
+        d.fecha ? formatDate(d.fecha) : '',
+        d.monto,
+        d.debCred === 'D' ? 'Débito' : 'Crédito',
+        d.entidad || '',
+        d.concil ? 'Sí' : 'No',
+      ]);
+      exportToExcel({
+        companyName,
+        extraHeaderRows: [[`Tránsito - Conciliación ${id}`]],
+        columnHeaders,
+        dataRows,
+        sheetName: 'Tránsito',
+        fileName: `transito-${id}.xlsx`,
+        columnWidths: [{ wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 40 }, { wch: 12 }],
+      });
+      message.success('Tránsito exportado correctamente');
+    } catch {
+      message.error('Error al exportar tránsito');
+    } finally {
+      setExportandoTransito(false);
     }
   };
 
@@ -496,6 +594,32 @@ const ConciliacionBancariaFormulario: React.FC = () => {
       .finally(() => setCargandoTransito(false));
   }, [cuentaTransito, sucursalActiva, id, fechaConciliacion]);
 
+  // Cargar transacciones conciliadas + en tránsito de ESTA conciliación (para el export de tránsito).
+  // Se precargan al abrir la edición para evitar barrer toda CTRANSAC al pulsar Exportar.
+  const cargarConciliadasYTransito = useCallback(() => {
+    if (!id) return;
+    Promise.all([
+      conciliacionBancariaApi.obtenerTransaccionesConciliadas(sucursalActiva, parseInt(id)),
+      conciliacionBancariaApi.obtenerEnTransito(sucursalActiva, parseInt(id)),
+    ])
+      .then(([conc, trans]) => {
+        setTransaccionesDetalle(conc);
+        setTransaccionesCargadas(true);
+        setEnTransito(trans);
+        setEnTransitoCargado(true);
+      })
+      .catch(() => message.warning('No se pudieron cargar las transacciones conciliadas/tránsito'));
+  }, [id, sucursalActiva]);
+
+  // Cargar resumen general de la conciliación (solo modo editar: la conciliación ya está guardada
+  // con fecha/fechaAnt y el backend puede calcular el resumen).
+  const cargarResumenGeneral = useCallback(() => {
+    if (!id) return;
+    conciliacionBancariaApi.obtenerResumenGeneral(sucursalActiva, parseInt(id))
+      .then(setResumenGeneral)
+      .catch(() => message.error('Error al cargar el resumen general'));
+  }, [id, sucursalActiva]);
+
   // Cargar el tránsito automáticamente en modo editar: la pestaña activa por defecto es 'transito'
   // cuando no hay movimientos (movimientos.length === 0) y el onChange del Tabs solo se dispara al
   // CAMBIAR de pestaña, así que sin este efecto la tabla de tránsito quedaría vacía al abrir la edición.
@@ -507,6 +631,14 @@ const ConciliacionBancariaFormulario: React.FC = () => {
     cargarTransito();
   }, [mode, data, transitoCargado, cargarTransito]);
 
+  // Precargar transacciones conciliadas + en tránsito al abrir la edición (no al exportar).
+  useEffect(() => {
+    if (mode !== 'editar') return;
+    if (!data) return;
+    if (transaccionesCargadas && enTransitoCargado) return;
+    cargarConciliadasYTransito();
+  }, [mode, data, transaccionesCargadas, enTransitoCargado, cargarConciliadasYTransito]);
+
   // Cargar movimientos de DARCHCON automáticamente en modo editar: sin esto, las tabs de
   // movimientos no se renderizan (dependen de movimientos.length > 0) y nunca se dispara
   // la carga bajo demanda del onChange del Tabs.
@@ -516,6 +648,15 @@ const ConciliacionBancariaFormulario: React.FC = () => {
     if (movimientosCargados) return;
     cargarMovimientos().catch(() => {});
   }, [mode, data, movimientosCargados, cargarMovimientos]);
+
+  // Cargar el resumen general automáticamente en modo editar: la pestaña 'resumenGeneral' es la
+  // activa por defecto y el onChange del Tabs solo se dispara al CAMBIAR de pestaña, así que sin
+  // este efecto la pestaña quedaría vacía al abrir la edición.
+  useEffect(() => {
+    if (mode !== 'editar') return;
+    if (!data) return;
+    cargarResumenGeneral();
+  }, [mode, data, cargarResumenGeneral]);
 
   // Claves normalizadas de los movimientos cotejados del preview (para excluir del tránsito).
   // Incluye la referencia del banco (numRef) y el documento completo resuelto (documento).
@@ -1123,7 +1264,7 @@ const ConciliacionBancariaFormulario: React.FC = () => {
             );
         })()}
         <Tabs
-          defaultActiveKey={movimientos.length > 0 ? 'conciliadas' : 'transito'}
+          defaultActiveKey={mode === 'editar' ? 'resumenGeneral' : (movimientos.length > 0 ? 'conciliadas' : 'transito')}
           type="card"
           onChange={(key) => {
             // Carga bajo demanda: movimientos y tránsito se traen al abrir su tab (modo editar).
@@ -1139,6 +1280,126 @@ const ConciliacionBancariaFormulario: React.FC = () => {
             }
           }}
           items={[
+            ...(mode === 'editar' ? [
+              {
+                key: 'resumenGeneral',
+                label: 'Resumen General',
+                children: resumenGeneral ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {/* Sección Libro del Mayor */}
+                    <Card className="paces-card" size="small" title={
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Libro del Mayor</span>
+                        <Button
+                          icon={<DownloadOutlined />}
+                          size="small"
+                          onClick={handleExportarLibros}
+                          loading={exportandoLibros}
+                        >
+                          Exportar
+                        </Button>
+                      </div>
+                    }>
+                      <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
+                        <Descriptions.Item label="Balance inicial en libros">
+                          <Text strong>{formatCurrency(resumenGeneral.balanceInicialLibros)}</Text>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Período">
+                          {data?.fechaAnt ? `${formatDate(data?.fechaAnt ?? '')} → ${formatDate(data?.fecha ?? '')}` : '-'}
+                        </Descriptions.Item>
+                      </Descriptions>
+
+                      {/* Tabla resumen por tipo doc */}
+                      <Table
+                        dataSource={resumenGeneral.resumenLibros}
+                        columns={[
+                          { title: 'Tipo de Documento', key: 'tipo', render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
+                            <Text>{r.nombreTipoDoc || r.tipoDoc}</Text>
+                          )},
+                          { title: 'Cantidad', dataIndex: 'cantidad', align: 'right' as const, width: 120,
+                            render: (v: number) => formatNumber(v) },
+                          { title: 'Monto', dataIndex: 'montoTotal', align: 'right' as const, width: 160,
+                            render: (v: number) => <Text strong>{formatCurrency(v)}</Text> },
+                        ]}
+                        rowKey="tipoDoc"
+                        size="small"
+                        pagination={false}
+                        style={{ marginTop: 12 }}
+                        locale={{ emptyText: 'No hay movimientos en el período' }}
+                      />
+
+                      <Divider style={{ margin: '12px 0' }} />
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 16, fontWeight: 700 }}>
+                        <span>Balance conciliado en libros:</span>
+                        <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneral.balanceConciliadoLibros)}</span>
+                      </div>
+                    </Card>
+
+                    {/* Sección Banco */}
+                    <Card className="paces-card" size="small" title={
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Banco</span>
+                        <Button
+                          icon={<DownloadOutlined />}
+                          size="small"
+                          onClick={handleExportarTransito}
+                          loading={exportandoTransito}
+                        >
+                          Exportar
+                        </Button>
+                      </div>
+                    }>
+                      <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
+                        <Descriptions.Item label="Balance según estado bancario">
+                          <Text strong>{formatCurrency(resumenGeneral.balanceBancos)}</Text>
+                        </Descriptions.Item>
+                      </Descriptions>
+
+                      {/* Tabla tránsito */}
+                      <Table
+                        dataSource={resumenGeneral.resumenTransito}
+                        columns={[
+                          { title: 'Tipo de Documento', key: 'tipo', render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
+                            <Text>{r.nombreTipoDoc || r.tipoDoc}</Text>
+                          )},
+                          { title: 'Cantidad', dataIndex: 'cantidad', align: 'right' as const, width: 120,
+                            render: (v: number) => formatNumber(v) },
+                          { title: 'Monto', dataIndex: 'montoTotal', align: 'right' as const, width: 160,
+                            render: (v: number) => <Text strong>{formatCurrency(v)}</Text> },
+                        ]}
+                        rowKey="tipoDoc"
+                        size="small"
+                        pagination={false}
+                        style={{ marginTop: 12 }}
+                        locale={{ emptyText: 'No hay documentos en tránsito' }}
+                      />
+
+                      <Divider style={{ margin: '12px 0' }} />
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 16, fontWeight: 700 }}>
+                        <span>Balance conciliado banco + tránsito:</span>
+                        <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneral.balanceConciliadoBanco)}</span>
+                      </div>
+                    </Card>
+
+                    {/* Diferencia */}
+                    <Card className="paces-card" size="small"
+                      style={{ borderLeft: `4px solid ${resumenGeneral.diferencia === 0 ? '#34c38f' : '#ff4d4f'}` }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 18, fontWeight: 700 }}>
+                        <span>Diferencia</span>
+                        <span style={{ color: resumenGeneral.diferencia === 0 ? '#34c38f' : '#ff4d4f' }}>
+                          {formatCurrency(resumenGeneral.diferencia)}
+                        </span>
+                      </div>
+                    </Card>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: 40 }}>
+                    <Spin />
+                    <div style={{ marginTop: 8 }} className="paces-text-secondary">Cargando resumen...</div>
+                  </div>
+                ),
+              },
+            ] : []),
             ...(movimientos.length > 0 ? [
               {
                 key: 'conciliadas',

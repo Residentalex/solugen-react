@@ -9,7 +9,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { reporte606Api } from '../../api/reporte606Api';
 import ReporteToolbar from '../../components/ReporteToolbar';
 import FiltrosDocumento from '../../components/FiltrosDocumento/FiltrosDocumento';
-import { formatCurrency, formatDateRaw, formatDateParam, toTitleCase } from '../../utils/formats';
+import { formatCurrency, formatDateRaw, formatDateParam, parseDateRaw, toTitleCase } from '../../utils/formats';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import type { Reporte606DTO } from '../../types/facturacion';
 import dayjs from 'dayjs';
@@ -94,7 +94,7 @@ const Reporte606: React.FC = () => {
       const companyName = await getCompanyName(sucursalActiva);
       const columnHeaders = [
         'Línea', 'RNC/Cédula', 'Tipo ID', 'Clasificación', 'NCF', 'NCF Modificado',
-        'Fecha Comprobante', 'Fecha Pago', 'Monto Servicio', 'Monto Bienes',
+        'Fecha Comprobante Año/Mes', 'Fecha Comprobante Día', 'Fecha Pago Año/Mes', 'Fecha Pago Día', 'Monto Servicio', 'Monto Bienes',
         'Total Facturado', 'ITBIS Facturado', 'ITBIS Retenido', 'ITBIS Proporcional',
         'ITBIS al Costo', 'ITBIS por Adelantar', 'ITBIS Percibido',
         'Tipo Retención ISR', 'Monto Retención Renta', 'ISR Percibido',
@@ -108,8 +108,10 @@ const Reporte606: React.FC = () => {
         item.clasCgncf,
         item.ncf,
         item.ncfModificado || '',
-        item.fechaComprobante,
-        item.fechaPago,
+        (() => { const d = parseDateRaw(item.fechaComprobante); return d ? `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}` : ''; })(),
+        (() => { const d = parseDateRaw(item.fechaComprobante); return d ? String(d.getDate()).padStart(2, '0') : ''; })(),
+        (() => { const d = parseDateRaw(item.fechaPago); return d ? `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}` : ''; })(),
+        (() => { const d = parseDateRaw(item.fechaPago); return d ? String(new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()).padStart(2, '0') : ''; })(),
         item.montoServicio,
         item.montoBienes,
         item.totalFacturado,

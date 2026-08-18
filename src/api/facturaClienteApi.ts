@@ -77,6 +77,11 @@ export const facturaClienteApi = {
     return data.data;
   },
 
+  obtenerReverso: async (sucursal: number, id: number): Promise<FacturaClienteDTO> => {
+    const { data } = await apiClient.get<ApiResponse<FacturaClienteDTO>>(`${BASE}/${sucursal}/${id}/reverso`);
+    return data.data;
+  },
+
   obtenerDetalles: async (sucursal: number, id: number): Promise<DetalleFacturaClienteDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<DetalleFacturaClienteDTO[]>>(`${BASE}/${sucursal}/${id}/detalles`);
     return data.data || [];

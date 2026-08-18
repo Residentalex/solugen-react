@@ -26,6 +26,7 @@ import DevolucionVentaFormulario from './pages/DevolucionVenta/DevolucionVentaFo
 import ReporteDevolucionVenta from './pages/ReporteDevolucionVenta/ReporteDevolucionVenta';
 import GeneradorOrdenCompraReporte from './pages/GeneradorOrdenCompraReporte/GeneradorOrdenCompraReporte';
 import CotizacionVenta from './pages/CotizacionVenta/CotizacionVenta';
+import CotizacionVentaDetalle from './pages/CotizacionVenta/CotizacionVentaDetalle';
 import CotizacionVentaFormulario from './pages/CotizacionVenta/CotizacionVentaFormulario';
 import FacturaPOS from './pages/FacturaPOS/FacturaPOS';
 import FacturaPOSDetalle from './pages/FacturaPOS/FacturaPOSDetalle';
@@ -126,6 +127,7 @@ import Conteos from './pages/Conteos/Conteos';
 import ConteoDetalle from './pages/Conteos/ConteoDetalle';
 import MovimientosProductos from './pages/MovimientosProductos/MovimientosProductos';
 import ImportarInventario from './pages/ImportarInventario/ImportarInventario';
+import ImportarDocBanco from './pages/ImportarDocBanco/ImportarDocBanco';
 import ActualizacionCostos from './pages/ActualizacionCostos/ActualizacionCostos';
 import AntiguedadSaldos from './pages/AntiguedadSaldos/AntiguedadSaldos';
 import DetalleSuplidor from './pages/AntiguedadSaldos/DetalleSuplidor';
@@ -287,6 +289,7 @@ const App: React.FC = () => {
             <Route path="FCotizacion" element={<CotizacionVenta />} />
             <Route path="FCotizacion/nuevo" element={<CotizacionVentaFormulario />} />
             <Route path="FCotizacion/:id/editar" element={<CotizacionVentaFormulario />} />
+            <Route path="FCotizacion/:id" element={<CotizacionVentaDetalle />} />
             <Route path="FPV" element={<FacturaPOS />} />
             <Route path="FPV/nuevo" element={<FacturaPOSFormulario />} />
             <Route path="FPV/:id/editar" element={<FacturaPOSFormulario />} />
@@ -428,6 +431,7 @@ const App: React.FC = () => {
           <Route path="FSPA/:id/editar" element={<SolicitudPagoFormulario />} />
           <Route path="FSPA/:id" element={<SolicitudPagoDetalle />} />
           <Route path="OImportarINV" element={<ImportarInventario />} />
+          <Route path="OImportarDocBanco" element={<ImportarDocBanco />} />
           <Route path="OCierreINV" element={<CierreInventario />} />
           <Route path="OCierreINV/detalle/:cierreId" element={<CierreDetalle />} />
             <Route path="FGORC" element={<GeneradorORC />} />
@@ -527,6 +531,7 @@ const App: React.FC = () => {
             <Route path="FCotizacion" element={<CotizacionVenta />} />
             <Route path="FCotizacion/nuevo" element={<CotizacionVentaFormulario />} />
             <Route path="FCotizacion/:id/editar" element={<CotizacionVentaFormulario />} />
+            <Route path="FCotizacion/:id" element={<CotizacionVentaDetalle />} />
             <Route path="FPV" element={<FacturaPOS />} />
             <Route path="FPV/nuevo" element={<FacturaPOSFormulario />} />
             <Route path="FPV/:id/editar" element={<FacturaPOSFormulario />} />
@@ -668,6 +673,7 @@ const App: React.FC = () => {
           <Route path="FSPA/:id/editar" element={<SolicitudPagoFormulario />} />
           <Route path="FSPA/:id" element={<SolicitudPagoDetalle />} />
           <Route path="OImportarINV" element={<ImportarInventario />} />
+          <Route path="OImportarDocBanco" element={<ImportarDocBanco />} />
           <Route path="OCierreINV" element={<CierreInventario />} />
           <Route path="OCierreINV/detalle/:cierreId" element={<CierreDetalle />} />
             <Route path="FGORC" element={<GeneradorORC />} />

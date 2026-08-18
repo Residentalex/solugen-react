@@ -23,7 +23,7 @@ const ApiTokens: React.FC = () => {
   const [revokingId, setRevokingId] = useState<number | null>(null);
   const [renovarModal, setRenovarModal] = useState<{ open: boolean; token: string; nombre: string }>({ open: false, token: '', nombre: '' });
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['apiTokens'],
     queryFn: async () => {
       const result = await apiTokenApi.listar();
@@ -189,6 +189,19 @@ const ApiTokens: React.FC = () => {
 
   return (
     <>
+      {isError && (
+        <Alert
+          message="Error al cargar API tokens"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={() => refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <Card
         className="paces-card-erp"
         style={{ borderRadius: 8, overflow: 'hidden' }}

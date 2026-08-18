@@ -337,7 +337,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
   ) ?? false;
 
   // ===== Determinar estado =====
-  const estado = toEstadoNum(data?.estado);
+  const estado = data?.estado ?? 0;
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -360,7 +360,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
     facturaSuplidorApi.obtenerTipos(sucursalActiva).then(setTiposCache).catch((err) => console.warn('Error al cargar tipos cache', err));
 
     // Cargar suplidores
-    facturaSuplidorApi.obtenerSuplidores(sucursalActiva).then(setSuplidoresCache).catch((err) => console.warn('Error al cargar suplidores cache', err));
+    facturaSuplidorApi.obtenerSuplidores(sucursalActiva).then((res) => setSuplidoresCache(Array.isArray(res) ? res : [])).catch((err) => console.warn('Error al cargar suplidores cache', err));
 
     // Cargar catálogo de impuestos para compras (usado al seleccionar producto)
     impuestoApi.obtenerParaCompras(sucursalActiva).then(setImpuestosCache).catch((err) => console.warn('Error al cargar impuestos cache', err));
@@ -441,10 +441,11 @@ const FacturaSuplidorFormulario: React.FC = () => {
         // Cargar suplidores y actualizar selectedEntidad con datos completos
         facturaSuplidorApi.obtenerSuplidores(sucursalActiva)
           .then((suplidores) => {
-            setSuplidoresCache(suplidores);
+            const suplidoresArr = Array.isArray(suplidores) ? suplidores : [];
+            setSuplidoresCache(suplidoresArr);
             const codigoEntidad = (res as any).entidad?.codigo || (res as any).suplidor?.codigo || (res as any).codigoEntidad;
             if (codigoEntidad) {
-              const match = suplidores.find((s: any) => s.codigo === codigoEntidad);
+              const match = suplidoresArr.find((s: any) => s.codigo === codigoEntidad);
               if (match) setSelectedEntidad(match);
             }
           })
@@ -620,10 +621,11 @@ const FacturaSuplidorFormulario: React.FC = () => {
 
                 facturaSuplidorApi.obtenerSuplidores(sucursalActiva)
                   .then((suplidores) => {
-                    setSuplidoresCache(suplidores);
+                    const suplidoresArr = Array.isArray(suplidores) ? suplidores : [];
+                    setSuplidoresCache(suplidoresArr);
                     const codigoEntidad = (res as any).entidad?.codigo || (res as any).suplidor?.codigo || (res as any).codigoEntidad;
                     if (codigoEntidad) {
-                      const match = suplidores.find((s: any) => s.codigo === codigoEntidad);
+                      const match = suplidoresArr.find((s: any) => s.codigo === codigoEntidad);
                       if (match) setSelectedEntidad(match);
                     }
                   })
@@ -847,10 +849,11 @@ const FacturaSuplidorFormulario: React.FC = () => {
     // Cargar suplidores y actualizar selectedEntidad con datos completos
     facturaSuplidorApi.obtenerSuplidores(sucursalActiva)
       .then((suplidores) => {
-        setSuplidoresCache(suplidores);
+        const suplidoresArr = Array.isArray(suplidores) ? suplidores : [];
+        setSuplidoresCache(suplidoresArr);
         const codigoEntidad = data?.entidad?.codigo || data?.suplidor?.codigo || data?.codigoEntidad;
         if (codigoEntidad) {
-          const match = suplidores.find((s: any) => s.codigo === codigoEntidad);
+          const match = suplidoresArr.find((s: any) => s.codigo === codigoEntidad);
           if (match) setSelectedEntidad(match);
         }
       })

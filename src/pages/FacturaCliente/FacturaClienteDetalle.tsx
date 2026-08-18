@@ -26,6 +26,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
+import { documentoImpresionApi } from '../../api/documentoImpresionApi';
 import { dgiiApi } from '../../api/dgiiApi';
 import { facturaClienteApi } from '../../api/facturaClienteApi';
 import SucursalField from '../../components/SucursalField';
@@ -125,7 +126,7 @@ const FacturaClienteDetalle: React.FC = () => {
         setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
         if (res.estado === 3 && (res as any).reversoID) {
-          facturaClienteApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+          facturaClienteApi.obtenerReverso(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
         } else {
@@ -182,7 +183,7 @@ const FacturaClienteDetalle: React.FC = () => {
       setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
       // Si el documento está anulado y tiene reversoId, cargar el reverso
       if (res.estado === 3 && (res as any).reversoID) {
-        facturaClienteApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+        facturaClienteApi.obtenerReverso(sucursalActiva, (res as any).reversoID)
           .then((revRes) => setReversoData(revRes))
           .catch(() => setReversoData(null));
       } else {
@@ -556,7 +557,7 @@ const FacturaClienteDetalle: React.FC = () => {
       const res = await facturaClienteApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
       if (res.estado === 3 && (res as any).reversoID) {
-        const revRes = await facturaClienteApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        const revRes = await facturaClienteApi.obtenerReverso(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
         setReversoData(null);
@@ -612,7 +613,7 @@ const FacturaClienteDetalle: React.FC = () => {
       const res = await facturaClienteApi.obtenerPorId(sucursalActiva, parseInt(id!));
       setData(res);
       if (res.estado === 3 && (res as any).reversoID) {
-        const revRes = await facturaClienteApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
+        const revRes = await facturaClienteApi.obtenerReverso(sucursalActiva, (res as any).reversoID);
         setReversoData(revRes);
       } else {
         setReversoData(null);
@@ -745,6 +746,12 @@ const FacturaClienteDetalle: React.FC = () => {
         onImprimir={async () => {
           setImprimiendo(true);
           try {
+            try {
+              await documentoImpresionApi.marcarImpreso('FAC', sucursalActiva, parseInt(id));
+            } catch (errImprimir: any) {
+              message.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
+              return;
+            }
             const dataToPrint = estadoDGII ? { ...data, envioDGII: estadoDGII } : data;
             const res = await apiClient.post('/reportes/contabilidad/factura-cliente', dataToPrint, {
               responseType: 'blob',

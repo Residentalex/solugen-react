@@ -42,7 +42,7 @@ import SeleccionarImpuestosModal from '../../components/SeleccionarImpuestosModa
 import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestosModal';
 import { OrigenCuenta } from '../../types/contabilidad';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
-import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
+import BuscarDocumentoModal, { normalizarOrigen } from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import BuscarEntidadSelect from '../../components/BuscarEntidadSelect/BuscarEntidadSelect';
 import BuscarCuentaContableModal from '../../components/BuscarCuentaContableModal/BuscarCuentaContableModal';
 import AsientosContableTable from '../../components/AsientosContableTable';
@@ -166,7 +166,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   const isLarge = screens.xxl === true;
 
   // Estado
-  const estado = toEstadoNum(data?.estado);
+  const estado = data?.estado ?? 0;
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -268,7 +268,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         if (cloneData.concepto?.codigo) {
           entidadApi.obtenerActivos(sucursalActiva, cloneData.concepto.codigo, tipoEntidad)
             .then((res) => {
-              if (res && res.length > 0) setEntidadesCache(res as any);
+              if (Array.isArray(res) && res.length > 0) setEntidadesCache(res as any);
             })
             .catch(() => {});
         }
@@ -395,16 +395,16 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
     try {
       // Cargar desde el endpoint de entidades
       const res = await entidadApi.obtenerActivos(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo, tipoEntidad);
-      setEntidadesCache(res || []);
+      setEntidadesCache(Array.isArray(res) ? res : []);
     } catch {
       // Fallback: cargar clientes o suplidores
       try {
         if (tipoEntidad === 'CLI') {
           const clientes = await clienteApi.obtenerActivos(sucursalActiva);
-          setEntidadesCache(clientes || []);
+          setEntidadesCache(Array.isArray(clientes) ? clientes : []);
         } else {
           const suplidores = await conceptosApi.obtenerSuplidores(sucursalActiva);
-          setEntidadesCache(suplidores || []);
+          setEntidadesCache(Array.isArray(suplidores) ? suplidores : []);
         }
       } catch {
         message.error(`Error al cargar ${entidadLabel.toLowerCase()}s`);
@@ -1538,7 +1538,11 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         onSelect={handleDocRelacionadoSelect}
         tipoEntidad={tipoEntidad}
         codEntidad={selectedEntidad?.idExterno || selectedEntidad?.codigo || ''}
-        origen={(() => { const { documentos } = useCompanyStore.getState().data; const docConfig = documentos.find((d: any) => d.codigo === 'NC'); const docOrigen = docConfig?.origenCuenta ?? OrigenCuenta.Desconocido; return typeof docOrigen === 'number' ? docOrigen : (docOrigen === 'Credito' ? OrigenCuenta.Credito : OrigenCuenta.Debito); })()}
+        origen={(() => {
+          const { documentos } = useCompanyStore.getState().data;
+          const docConfig = documentos.find((d: any) => d.codigo === documentCode);
+          return normalizarOrigen(docConfig?.origenCuenta ?? OrigenCuenta.Desconocido);
+        })()}
         montoTotal={Number(form.getFieldValue('total') || 0)}
       />
 

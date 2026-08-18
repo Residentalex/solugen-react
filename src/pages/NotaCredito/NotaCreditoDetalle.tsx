@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Tooltip, Modal, Alert, App, QRCode, Input, Typography, Switch
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Tooltip, Modal, Alert, App, QRCode, Input, Typography, Switch, Dropdown
 } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   ExclamationCircleOutlined,
   LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
   FileTextOutlined, FileSearchOutlined, ReloadOutlined,
-  SendOutlined, CheckCircleOutlined,
+  SendOutlined, CheckCircleOutlined, PrinterOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import PermissionGate from '../../components/PermissionGate';
@@ -31,6 +32,13 @@ import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import type { NotaCreditoFullDTO, DetalleMovimientoDTO } from '../../types/notaCredito';
+import { useQZTray } from '../../hooks/useQZTray';
+import { formatTicket, feed, CMD_CUT } from '../../utils/escpos-formatter';
+import { obtenerConfigPlantilla, obtenerConfigPorId, CODIGO_PLANTILLA_NC_TICKET } from '../../utils/ticketPlantilla';
+import { obtenerLogoEscPosBase64 } from '../../utils/logoEscPos';
+import { reportesConfigApi } from '../../api/reportesConfigApi';
+import { companiaApi } from '../../api/companiaApi';
+import ModalSeleccionarImpresoraPOS from '../../components/ModalSeleccionarImpresoraPOS/ModalSeleccionarImpresoraPOS';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
@@ -70,8 +78,13 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
   const [mostrandoReverso, setMostrandoReverso] = useState(false);
   const [reversoData, setReversoData] = useState<any>(null);
   const screens = Grid.useBreakpoint();
+  const qz = useQZTray();
 
   const [detalleSearch, setDetalleSearch] = useState('');
+  const [printerModalOpen, setPrinterModalOpen] = useState(false);
+  const [printerList, setPrinterList] = useState<string[]>([]);
+  const [selectedPrinter, setSelectedPrinter] = useState<string>('');
+  const [plantillaEntdoc, setPlantillaEntdoc] = useState<{ plantillaId: number; tipo: string } | null>(null);
   const monedaDefault = getMonedaSucursalActiva();
 
   // ═══ Carga progresiva: banderas anti doble fetch por sección ═══
@@ -109,6 +122,15 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
     setActiveModule(codigoPantalla);
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride, codigoPantalla]);
+
+  // Plantilla de ticket asignada via ENTDOC 'NC' (fallback al codigo fijo NC_TICKET)
+  useEffect(() => {
+    let activo = true;
+    reportesConfigApi.obtenerPorEntdoc('NC')
+      .then((p) => { if (activo && p?.plantillaId) setPlantillaEntdoc({ plantillaId: p.plantillaId, tipo: p.tipo }); })
+      .catch(() => {});
+    return () => { activo = false; };
+  }, []);
 
   const marcarSeccionesCompletas = useCallback(() => {
     setRelacionadosCargados(true);
@@ -522,6 +544,121 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
     }
   };
 
+  const printMenuItems: MenuProps['items'] = [
+    { key: 'ticket', label: 'Ticket' },
+    { key: 'nota-credito', label: 'Nota Crédito' },
+  ];
+
+  const handlePrintMenuClick: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'ticket') {
+      handleImprimirTicket();
+    } else if (key === 'nota-credito') {
+      imprimirPDF();
+    }
+  };
+
+  const imprimirPDF = async () => {
+    setImprimiendo(true);
+    try {
+      const res = await apiClient.post('/reportes/contabilidad/nota-credito', data, {
+        responseType: 'blob',
+      });
+      const blobUrl = URL.createObjectURL(res.data);
+      window.open(blobUrl, '_blank');
+    } catch {
+      message.error('Error al generar el PDF');
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
+  const handleImprimirTicket = async () => {
+    if (!id || !data) return;
+    setImprimiendo(true);
+    try {
+      // Asegurar detalles (carga perezosa por pestañas)
+      let datosTicket: NotaCreditoFullDTO = data;
+      if (!(data.detalles || data.detallesMovimiento)?.length) {
+        const detalles = await notaCreditoApi.obtenerDetalles(sucursalActiva, parseInt(id));
+        datosTicket = { ...data, detalles };
+      }
+
+      // Datos de la compañía desde la sucursal activa
+      let companyInfo = { nombre: '', direccion: '', telefono: '', rnc: '', fax: '', slogan: '' };
+      try {
+        const lista = await companiaApi.obtenerTodas(sucursalActiva);
+        if (lista.length > 0) {
+          companyInfo = {
+            nombre: lista[0].nombre ?? '',
+            direccion: lista[0].direccion ?? '',
+            telefono: lista[0].telefono ?? '',
+            rnc: lista[0].rnc ?? '',
+            fax: lista[0].fax ?? '',
+            slogan: lista[0].slogan ?? '',
+          };
+        }
+      } catch {
+        const sucursales = useAuthStore.getState().sucursalesPermitidas;
+        companyInfo.nombre = sucursales.find((sp) => sp.sucursal === sucursalActiva)?.nombre || '';
+      }
+
+      // Config de plantilla: por ENTDOC 'NC', fallback al codigo fijo NC_TICKET
+      let config = null;
+      let tipoDoc: string = 'TICKET_NC';
+      if (plantillaEntdoc) {
+        try {
+          config = await obtenerConfigPorId(plantillaEntdoc.plantillaId);
+          tipoDoc = plantillaEntdoc.tipo;
+        } catch {
+          config = null;
+        }
+      } else {
+        try {
+          config = await obtenerConfigPlantilla(CODIGO_PLANTILLA_NC_TICKET);
+        } catch {
+          config = null;
+        }
+      }
+
+      // Generar ticket ESC/POS (texto con formato)
+      let ticketText = formatTicket(datosTicket, companyInfo, config || undefined, tipoDoc);
+
+      // Avance y corte DESPUÉS del QR
+      ticketText += feed(config?.opciones?.feedCorte ?? 4);
+      ticketText += CMD_CUT;
+
+      // Logo configurable: generar comando GS v 0 (base64) si la plantilla lo activa.
+      let logoBase64 = '';
+      if (config?.logo?.mostrar) {
+        logoBase64 = await obtenerLogoEscPosBase64(config.logo);
+      }
+
+      // Enviar a QZ Tray como texto raw ESC/POS
+      await qz.print(ticketText, logoBase64 || undefined);
+      message.success(`Imprimiendo en: ${qz.printerName || 'Impresora POS'}`);
+    } catch (err: any) {
+      if (err.code === 'NO_PRINTER_SELECTED') {
+        try {
+          const list = await qz.fetchPrinters();
+          if (list.length === 0) {
+            await imprimirPDF();
+          } else {
+            setPrinterList(list);
+            setSelectedPrinter(list[0] || '');
+            setPrinterModalOpen(true);
+          }
+        } catch {
+          await imprimirPDF();
+        }
+      } else {
+        message.error('QZ Tray: ' + (err.message || 'Error'));
+        await imprimirPDF();
+      }
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
   function extraerMensajeError(err: any, fallback: string): string {
     const data = err?.response?.data;
     if (!data) return fallback;
@@ -692,20 +829,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
         onVolver={() => navigate(`/${codigoPantalla}`)}
-        onImprimir={async () => {
-          setImprimiendo(true);
-          try {
-            const res = await apiClient.post('/reportes/contabilidad/nota-credito', data, {
-              responseType: 'blob',
-            });
-            const blobUrl = URL.createObjectURL(res.data);
-            window.open(blobUrl, '_blank');
-          } catch {
-            message.error('Error al generar el PDF');
-          } finally {
-            setImprimiendo(false);
-          }
-        }}
+        showImprimir={false}
         onEditar={() => navigate(`/${codigoPantalla}/${id}/editar`)}
         confirmActions={true}
         onAplicar={handleAplicar}
@@ -716,6 +840,16 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
         onReversar={handleReversar}
         extraButtons={id ? (
           <>
+            <PermissionGate codigoPantalla={codigoPantalla} accion="IMPRIMIR">
+              <Dropdown menu={{ items: printMenuItems, onClick: handlePrintMenuClick }} trigger={['click']}>
+                <Button icon={<PrinterOutlined />} loading={imprimiendo} />
+              </Dropdown>
+              {qz.printerName && (
+                <Tag color="success" style={{ marginLeft: 2, fontSize: 11, lineHeight: '18px' }}>
+                  QZ: {qz.printerName}
+                </Tag>
+              )}
+            </PermissionGate>
             {toEstadoNum(data?.estado) === 3 && reversoData && (
               <Switch
                 checked={mostrandoReverso}
@@ -1099,6 +1233,21 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
         documento={`${data?.documento?.codigo || rutaBase}-${data?.noDocumento || ''}`}
         fechaDocumento={data?.fechaDocumento || ''}
         periodoCerrado={toPeriodoNum(data?.periodo) === 6}
+      />
+
+      {/* Modal selector de impresora POS */}
+      <ModalSeleccionarImpresoraPOS
+        open={printerModalOpen}
+        impresoras={printerList}
+        seleccionada={selectedPrinter}
+        onSelect={setSelectedPrinter}
+        onConfirm={async () => {
+          if (!selectedPrinter) return;
+          qz.selectPrinter(selectedPrinter);
+          setPrinterModalOpen(false);
+          handleImprimirTicket();
+        }}
+        onClose={() => { setPrinterModalOpen(false); }}
       />
     </div>
   );

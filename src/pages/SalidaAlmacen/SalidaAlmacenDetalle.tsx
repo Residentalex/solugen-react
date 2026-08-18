@@ -25,6 +25,7 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import PermissionGate from '../../components/PermissionGate';
 import { apiClient } from '../../api/client';
+import { documentoImpresionApi } from '../../api/documentoImpresionApi';
 import { salidaAlmacenApi } from '../../api/salidaAlmacenApi';
 import type { SalidaAlmacenFullDTO, DetalleSalidaAlmacenDTO } from '../../types/salidaAlmacen';
 import LogTable from '../../components/LogTable';
@@ -611,6 +612,12 @@ const SalidaAlmacenDetalle: React.FC = () => {
   const imprimirConFormato = async (formato: string) => {
     setImprimiendo(true);
     try {
+      try {
+        await documentoImpresionApi.marcarImpreso('SAP', sucursalActiva, parseInt(id));
+      } catch (errImprimir: any) {
+        message.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
+        return;
+      }
       const res = await apiClient.post(`/reportes/inventario/salida?formato=${formato}`, data, {
         responseType: 'blob',
       });

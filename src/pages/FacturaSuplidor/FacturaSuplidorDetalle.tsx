@@ -18,6 +18,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
+import { documentoImpresionApi } from '../../api/documentoImpresionApi';
 import { facturaSuplidorApi } from '../../api/facturaSuplidorApi';
 import { transaccionApi } from '../../api/transaccionApi';
 import LogTable from '../../components/LogTable';
@@ -600,6 +601,12 @@ const FacturaSuplidorDetalle: React.FC = () => {
         onImprimir={async () => {
           setImprimiendo(true);
           try {
+            try {
+              await documentoImpresionApi.marcarImpreso('RDE', sucursalActiva, parseInt(id));
+            } catch (errImprimir: any) {
+              messageApi.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
+              return;
+            }
             const res = await apiClient.get(`/reportes/contabilidad/facturaSuplidor/${sucursalActiva}/${id}`, {
               responseType: 'blob',
             });

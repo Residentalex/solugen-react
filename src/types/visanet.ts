@@ -19,6 +19,14 @@ export interface VisanetVoucherDTO {
   origen?: string;
 }
 
+/** DTO de entrada para el formatter del voucher Visanet: respuesta de venta + datos de impresion */
+export interface VisanetVoucherInputDTO extends VisanetResponseDTO {
+  montoPesos: number;
+  simMoneda: string;
+  sucursalName: string;
+  subsidioLabel: string;
+}
+
 export interface VisanetResponseDTO {
   exitoso: boolean;
   codigoRespuesta?: string;

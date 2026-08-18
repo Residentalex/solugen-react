@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Typography, Tooltip, Descriptions, Alert, Table, Switch
+  Card, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Tooltip, Descriptions, Alert, Switch
 } from 'antd';
 import {
   LockFilled,
@@ -14,12 +14,12 @@ import DetalleToolbar from '../../components/DetalleToolbar';
 import type { TransaccionDTO, TransaccionAsientoDTO } from '../../types/transaccion';
 import { ErrorDetalle } from '../../components';
 import AsientosContableTable from '../../components/AsientosContableTable';
+import DetalleMovimientoTable from '../../components/DetalleMovimientoTable';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import LogTable from '../../components/LogTable';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
-import { formatNumber } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { obtenerNombreSucursal } from '../../utils/sucursalEnumMapper';
 
@@ -29,8 +29,6 @@ import SucursalField from '../../components/SucursalField';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import CobrosCard from '../../components/CobrosCard';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
-
-const { Text } = Typography;
 
 function toTitleCase(str: string): string {
   if (!str) return '';
@@ -48,6 +46,7 @@ const AsientoContableDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+  const usuario = useAuthStore((s: any) => s.usuario);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
   const { screenCode, documentCode } = useScreenConfig();
@@ -192,6 +191,9 @@ const AsientoContableDetalle: React.FC = () => {
   const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(documentoActivo.estado)] || { label: 'Desconocido', color: 'default' };
   const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
+  const permisoModificarAdmin = usuario?.permisosEspeciales?.some(
+    (p: any) => p.codigo === 'pe_modificar_admin' && p.valor === true
+  ) ?? false;
   const esReverso = data.reversoID != null && data.reversoID > 0;
 
   const handlePostear = async () => {
@@ -262,94 +264,6 @@ const AsientoContableDetalle: React.FC = () => {
     }
   };
 
-  const detalleColumns = [
-    {
-      title: 'Código',
-      key: 'codigo',
-      width: 100,
-      fixed: 'left' as const,
-      onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: any) => (
-        <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <span>{record.codigo || '-'}</span>
-          {record.referencia && (
-            <Tooltip title={record.referencia}>
-              <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
-                {record.referencia}
-              </div>
-            </Tooltip>
-          )}
-        </div>
-      ),
-    },
-    {
-      title: 'Artículo',
-      key: 'articulo',
-      ellipsis: true,
-      onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: any) => (
-        <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <span>{toTitleCase(record.articulo || '')}</span>
-          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between', marginTop: 'auto' }}>
-            {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: 'Cantidad',
-      dataIndex: 'cantidad',
-      key: 'cantidad',
-      width: 100,
-      align: 'right' as const,
-      render: (val: number) => formatNumber(val || 0),
-    },
-    {
-      title: 'Costo',
-      dataIndex: 'costo',
-      key: 'costo',
-      width: 110,
-      align: 'right' as const,
-      responsive: ['md' as const],
-      render: (val: number) => formatNumber(val || 0),
-    },
-    {
-      title: 'SubTotal',
-      dataIndex: 'subTotal',
-      key: 'subTotal',
-      width: 110,
-      align: 'right' as const,
-      responsive: ['lg' as const],
-      render: (val: number) => formatNumber(val || 0),
-    },
-    {
-      title: 'Descuento',
-      dataIndex: 'descuento',
-      key: 'descuento',
-      width: 100,
-      align: 'right' as const,
-      responsive: ['lg' as const],
-      render: (val: number) => formatNumber(val || 0),
-    },
-    {
-      title: 'Impuestos',
-      dataIndex: 'impuestos',
-      key: 'impuestos',
-      width: 120,
-      align: 'right' as const,
-      responsive: ['lg' as const],
-      render: (val: number) => formatNumber(val || 0),
-    },
-    {
-      title: 'Total',
-      dataIndex: 'total',
-      key: 'total',
-      width: 110,
-      align: 'right' as const,
-      render: (val: number) => <Text strong>{formatNumber(val || 0)}</Text>,
-    },
-  ];
-
   return (
     <div>
       {loadingError && (
@@ -384,6 +298,7 @@ const AsientoContableDetalle: React.FC = () => {
           }
         }}
         onEditar={() => navigate(`/FAsientoContable/${data.id}/editar`)}
+        edicionSinRestricciones={permisoModificarAdmin}
         onAplicar={handleAplicar}
         onAnular={async () => setModalAnularOpen(true)}
         onPostear={handlePostear}
@@ -460,7 +375,7 @@ const AsientoContableDetalle: React.FC = () => {
                   key: 'detalles',
                   label: `Detalles (${documentoActivo.detalles?.length || 0})`,
                   children: (
-                    <Table dataSource={documentoActivo.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} />
+                    <DetalleMovimientoTable detalles={documentoActivo.detalles || []} scroll={{ x: 1000 }} />
                   ),
                 },
                 {
@@ -558,7 +473,7 @@ const AsientoContableDetalle: React.FC = () => {
                 key: 'detalles',
                 label: `Detalles (${documentoActivo.detalles?.length || 0})`,
                 children: (
-                  <Table dataSource={documentoActivo.detalles || []} columns={detalleColumns} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} />
+                  <DetalleMovimientoTable detalles={documentoActivo.detalles || []} scroll={{ x: 1000 }} />
                 ),
               },
               {

@@ -26,6 +26,7 @@ const FacturaSuplidor: React.FC = () => {
     fetchFiltrar: (sucursal, params) =>
       facturaSuplidorApi.filtrar(sucursal, params),
     reporteUrl: (sucursal, id) => `/reportes/contabilidad/facturaSuplidor/${sucursal}/${id}`,
+    imprimirUrl: (sucursal, id) => `/RDE/${sucursal}/imprimir/${id}`,
     tituloReporte: 'FS',
     tituloError: 'Error al cargar facturas de suplidor',
   });

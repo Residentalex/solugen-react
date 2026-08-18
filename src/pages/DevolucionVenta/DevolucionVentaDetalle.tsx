@@ -28,6 +28,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
+import { documentoImpresionApi } from '../../api/documentoImpresionApi';
 import { devolucionVentaApi } from '../../api/devolucionVentaApi';
 import type { DevolucionVentaDTO, AsientoContableDTO } from '../../types/devolucionVenta';
 import LogTable from '../../components/LogTable';
@@ -161,7 +162,12 @@ const DevolucionVentaDetalle: React.FC = () => {
         setLoadingError(true);
         return;
       }
-      setData(res);
+      setData(prev => ({
+        ...(prev ?? {} as DevolucionVentaDTO),
+        ...res,
+        detalles: prev?.detalles?.length ? prev.detalles : res.detalles,
+        asientos: prev?.asientos?.length ? prev.asientos : res.asientos,
+      }));
       setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
       // Verificar factura escaneada
       devolucionVentaApi.verificarScan(sucursalActiva, parseInt(id))
@@ -637,6 +643,12 @@ const DevolucionVentaDetalle: React.FC = () => {
         onImprimir={async () => {
           setImprimiendo(true);
           try {
+            try {
+              await documentoImpresionApi.marcarImpreso('DEV', sucursalActiva, parseInt(id));
+            } catch (errImprimir: any) {
+              messageApi.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
+              return;
+            }
             const res = await apiClient.get('/reportes/facturacion/devolucion', {
               responseType: 'blob',
             });

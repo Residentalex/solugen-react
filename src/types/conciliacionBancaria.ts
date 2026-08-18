@@ -84,10 +84,46 @@ export interface ResumenTipoDocumentoDTO {
   montoTotal: number;
 }
 
+/** Resumen general de conciliación (GET .../resumen-general) */
+export interface ResumenGeneralConciliacionDTO {
+  balanceInicialLibros: number;
+  resumenLibros: ResumenTipoDocumentoDTO[];
+  balanceConciliadoLibros: number;
+  balanceBancos: number;
+  resumenTransito: ResumenTipoDocumentoDTO[];
+  balanceConciliadoBanco: number;
+  diferencia: number;
+}
+
 /** Cuenta bancaria (CTASBANC) para selector */
 export interface CuentaBancariaDTO {
   numeroCta: string;
   nombre: string;
   banco: string;
   idExterno?: string;
+}
+
+/** DTO para exportar movimientos del libro del mayor (DTRANS_CONT) */
+export interface MovimientoLibroExportarDTO {
+  tipoDoc: string;
+  numDoc: string;
+  fecha: string;
+  debCred: string;
+  monto: number;
+  transacId: number;
+  nombreTipoDoc: string;
+  entidad: string;
+  conciliado: string;
+}
+
+/** DTO para exportar documentos en tránsito (CTRANSAC) */
+export interface TransitoExportarDTO {
+  tipoDoc: string;
+  numDoc: string;
+  fecha: string;
+  monto: number;
+  debCred: string;
+  entidad: string;
+  nombreTipoDoc: string;
+  conciliado: string;
 }

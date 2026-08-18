@@ -48,7 +48,7 @@ const BuscarEntidadSelect: React.FC<BuscarEntidadSelectProps> = ({
   onOpenChange,
   conceptoSeleccionado = true,
 }) => {
-  const entidadesActivas = entidades.filter((e) => e.activo !== false);
+  const entidadesActivas = (Array.isArray(entidades) ? entidades : []).filter((e) => e.activo !== false);
 
   const handleChange = (val: string | undefined) => {
     if (!val) {

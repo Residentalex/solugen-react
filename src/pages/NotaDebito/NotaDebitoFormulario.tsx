@@ -43,7 +43,7 @@ import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestos
 import { OrigenCuenta } from '../../types/contabilidad';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import BuscarTipoModal from '../../components/BuscarTipoModal/BuscarTipoModal';
-import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
+import BuscarDocumentoModal, { normalizarOrigen } from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import BuscarEntidadSelect from '../../components/BuscarEntidadSelect/BuscarEntidadSelect';
 import BuscarCuentaContableModal from '../../components/BuscarCuentaContableModal/BuscarCuentaContableModal';
 import AsientosContableTable from '../../components/AsientosContableTable';
@@ -255,7 +255,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   };
 
   // ===== Estado info =====
-  const estado = toEstadoNum(data?.estado);
+  const estado = data?.estado ?? 0;
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -289,7 +289,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       if (cloneData.concepto?.codigo) {
         entidadApi.obtenerActivos(sucursalActiva, cloneData.concepto.codigo, tipoEntidad)
           .then((ents) => {
-            if (ents && ents.length > 0) setEntidadesCache(ents);
+            if (Array.isArray(ents) && ents.length > 0) setEntidadesCache(ents);
           })
           .catch(() => {});
       }
@@ -527,9 +527,10 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
         // Cargar entidades según el concepto
         if (full.concepto?.codigo) {
           entidadApi.obtenerActivos(sucursalActiva, full.concepto.codigo, tipoEntidad)
-            .then((ents: any[]) => {
+            .then((res: any) => {
+              const ents = Array.isArray(res) ? res : [];
               if (full.entidad && !ents.find((e: any) => e.codigo === entidadCodigo)) {
-                ents = [entidadNormalizada as any, ...ents];
+                return setEntidadesCache([entidadNormalizada as any, ...ents]);
               }
               setEntidadesCache(ents);
             })
@@ -574,7 +575,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
 
     // Cargar entidades según el concepto
     entidadApi.obtenerActivos(sucursalActiva, concepto.codigo, tipoEntidad)
-      .then((ents) => setEntidadesCache(ents))
+      .then((ents) => setEntidadesCache(Array.isArray(ents) ? ents : []))
       .catch((err) => console.warn('Error al cargar entidades cache', err));
 
     // === ConfigurarMoneda (siempre desde concepto) ===
@@ -1832,7 +1833,11 @@ render: (v: number) => formatNumber(v ?? 0),
         onSelect={handleDocRelacionadoSelect}
         tipoEntidad={tipoEntidad}
         codEntidad={selectedEntidad?.codigo || ''}
-        origen={(() => { const { documentos } = useCompanyStore.getState().data; const ndConfig = documentos.find((d: any) => d.codigo === 'ND'); const ndOrigen = ndConfig?.origenCuenta ?? OrigenCuenta.Desconocido; return typeof ndOrigen === 'number' ? ndOrigen : (ndOrigen === 'Credito' ? OrigenCuenta.Credito : OrigenCuenta.Debito); })()}
+        origen={(() => {
+          const { documentos } = useCompanyStore.getState().data;
+          const docConfig = documentos.find((d: any) => d.codigo === 'ND');
+          return normalizarOrigen(docConfig?.origenCuenta ?? OrigenCuenta.Desconocido);
+        })()}
         montoTotal={Number(form.getFieldValue('total')) || 0}
       />
       {tipoEntidad === 'SUP' && (
@@ -1842,7 +1847,11 @@ render: (v: number) => formatNumber(v ?? 0),
           onSelect={handleDevolucionSelect}
           tipoEntidad={tipoEntidad}
           codEntidad={selectedEntidad?.codigo || ''}
-          origen={(() => { const { documentos } = useCompanyStore.getState().data; const ndConfig = documentos.find((d: any) => d.codigo === 'ND'); const ndOrigen = ndConfig?.origenCuenta ?? OrigenCuenta.Desconocido; return typeof ndOrigen === 'number' ? ndOrigen : (ndOrigen === 'Credito' ? OrigenCuenta.Credito : OrigenCuenta.Debito); })()}
+          origen={(() => {
+            const { documentos } = useCompanyStore.getState().data;
+            const docConfig = documentos.find((d: any) => d.codigo === 'ND');
+            return normalizarOrigen(docConfig?.origenCuenta ?? OrigenCuenta.Desconocido);
+          })()}
           esDocumentoInventario={true}
           montoTotal={Number(form.getFieldValue('total')) || 0}
         />

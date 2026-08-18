@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
+  Alert,
   Card,
   Table,
   Button,
@@ -39,7 +40,7 @@ const TiposCuenta: React.FC = () => {
   const [guardando, setGuardando] = useState(false);
   const [form] = Form.useForm();
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['tiposCuenta', sucursalActiva, page, pageSize, searchText],
     queryFn: async () => {
       if (sucursalActiva === undefined) return { datos: [], total: 0 };
@@ -166,6 +167,19 @@ const TiposCuenta: React.FC = () => {
 
   return (
     <>
+      {isError && (
+        <Alert
+          message="Error al cargar tipos de cuenta"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={() => refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
       <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
         <CatalogoListadoToolbar
           onSearch={handleSearch}

@@ -110,6 +110,7 @@ const pageTitles: Record<string, string> = {
   CMovimientosProductos: 'Movimientos de Productos',
   CDocRevisados: 'Documentos Revisados',
   OImportarINV: 'Importar Inventario',
+  OImportarDocBanco: 'Importar Doc. Banco',
   OActualizacionCostos: 'Actualización de Costos',
   OCierreINV: 'Cierre de Inventario',
   OCierreMes: 'Cierre de Mes',

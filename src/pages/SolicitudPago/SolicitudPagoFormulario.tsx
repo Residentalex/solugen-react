@@ -33,6 +33,8 @@ import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import AsientosContableTable from '../../components/AsientosContableTable';
+import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
+import BuscarCuentaContableModal from '../../components/BuscarCuentaContableModal/BuscarCuentaContableModal';
 import LogTable from '../../components/LogTable';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
@@ -96,13 +98,16 @@ const SolicitudPagoFormulario: React.FC = () => {
   const [transaccionesAsociadas, setTransaccionesAsociadas] = useState<TransaccionAsociadaDTO[]>([]);
   const [documentoModalOpen, setDocumentoModalOpen] = useState(false);
 
+  // Cuenta contable para asientos manuales
+  const [cuentaModalAsientoOpen, setCuentaModalAsientoOpen] = useState(false);
+
   // Asientos e historial
   const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
   const [logs, setLogs] = useState<LogDTO[]>([]);
 
   // ===== Totales calculados desde documentos seleccionados =====
   const totalesDocs = React.useMemo(() => ({
-    subTotal: transaccionesAsociadas.reduce((s, t) => s + (t.monto || 0), 0),
+    subTotal: transaccionesAsociadas.reduce((s, t) => s + (t.monto || 0) + (t.descuento || 0), 0),
     descuento: transaccionesAsociadas.reduce((s, t) => s + (t.descuento || 0), 0),
     impuestos: transaccionesAsociadas.reduce((s, t) => s + (t.impuesto || 0), 0),
     // Las retenciones ya vienen descontadas en el monto de cada documento relacionado: no sumar ni restar.
@@ -110,7 +115,7 @@ const SolicitudPagoFormulario: React.FC = () => {
   }), [transaccionesAsociadas]);
 
   const totalCalculado = Math.round(
-    (totalesDocs.subTotal + totalesDocs.impuestos - totalesDocs.retenciones) * 100
+    (totalesDocs.subTotal - totalesDocs.descuento + totalesDocs.impuestos - totalesDocs.retenciones) * 100
   ) / 100;
 
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
@@ -360,7 +365,7 @@ const SolicitudPagoFormulario: React.FC = () => {
     const monto = nuevoMonto ?? 0;
     setTransaccionesAsociadas((prev) =>
       prev.map((t) =>
-        (t.transaccionAsociadaID || t.id) === id ? { ...t, monto: Math.min(monto, pendienteEfectivo(t)) } : t
+        (t.transaccionAsociadaID || t.id) === id ? { ...t, monto: Math.min(monto, Math.max(0, pendienteEfectivo(t) - (t.descuento || 0))) } : t
       )
     );
   };
@@ -368,9 +373,12 @@ const SolicitudPagoFormulario: React.FC = () => {
   const handleDescuentoChange = (id: number | undefined, nuevoDescuento: number | null) => {
     if (!id) return;
     setTransaccionesAsociadas((prev) =>
-      prev.map((t) =>
-        (t.transaccionAsociadaID || t.id) === id ? { ...t, descuento: nuevoDescuento || 0 } : t
-      )
+      prev.map((t) => {
+        if ((t.transaccionAsociadaID || t.id) !== id) return t;
+        const pendiente = pendienteEfectivo(t);
+        const descuento = Math.min(Math.max(nuevoDescuento || 0, 0), pendiente);
+        return { ...t, descuento, monto: Math.max(0, pendiente - descuento) };
+      })
     );
   };
 
@@ -439,6 +447,7 @@ const SolicitudPagoFormulario: React.FC = () => {
       entidad,
       moneda,
       cuentaBancaria: values.cuentaBancaria || '',
+      numeroCuenta: base.numeroCuenta || selectedEntidad?.numeroCuenta || selectedEntidad?.cuentaContable?.noCuenta || '',
       codigoTipo: tipoValue || '',
       codigoEntidad: entidad.codigo || base.codigoEntidad || '',
       codigoConcepto: concepto.codigo || base.codigoConcepto || '',
@@ -461,7 +470,10 @@ const SolicitudPagoFormulario: React.FC = () => {
     try {
       const dto = construirDTOGenerarAsientos();
       const asientosGenerados = await solicitudPagoApi.generarAsientos(sucursalActiva, dto);
-      setAsientos(asientosGenerados);
+      setAsientos((prev) => {
+        const manuales = prev.filter((a) => a.generado === false);
+        return [...manuales, ...asientosGenerados];
+      });
       message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
@@ -471,8 +483,21 @@ const SolicitudPagoFormulario: React.FC = () => {
     }
   };
 
+  // ===== Handler para agregar asiento manual =====
+  const handleAgregarAsientoManual = (cuenta: any) => {
+    const nuevoAsiento = {
+      id: Date.now(),
+      cuentaContable: { noCuenta: cuenta.noCuenta, nombre: cuenta.nombre },
+      monto: 0,
+      tipoAsiento: 'D',
+      generado: false,
+      descripcion: '',
+    };
+    setAsientos((prev: any[]) => [...prev, nuevoAsiento]);
+  };
+
   // ===== Totales calculados para documentos relacionados =====
-  const totalDistribuido = totalesDocs.subTotal;
+  const totalDistribuido = totalesDocs.subTotal - totalesDocs.descuento;
   const totalRetencionesDocs = transaccionesAsociadas.reduce((s, t) => s + (t.retencion || 0), 0);
   const porDistribuir = totalCalculado - totalDistribuido;
 
@@ -653,7 +678,7 @@ const SolicitudPagoFormulario: React.FC = () => {
   }
 
   // ===== Estado info =====
-  const estado = toEstadoNum(data?.estado);
+  const estado = data?.estado ?? 0;
   const periodo = data?.periodo;
 
   // ===== Encabezado del formulario =====
@@ -858,24 +883,6 @@ const SolicitudPagoFormulario: React.FC = () => {
       ),
     },
     {
-      title: 'Pendiente',
-      key: 'pendiente',
-      width: 130,
-      align: 'right' as const,
-      render: (_: any, record: TransaccionAsociadaDTO) => (
-        <Text style={{ color: pendienteEfectivo(record) > 0 ? '#fa8c16' : undefined }}>
-          {formatNumber(pendienteEfectivo(record))}
-        </Text>
-      ),
-    },
-    {
-      title: 'Retenciones',
-      key: 'retencion',
-      width: 120,
-      align: 'right' as const,
-      render: (_: any, record: TransaccionAsociadaDTO) => formatNumber(record.retencion ?? 0),
-    },
-    {
       title: 'Descuento',
       key: 'descuento',
       width: 140,
@@ -894,6 +901,13 @@ const SolicitudPagoFormulario: React.FC = () => {
       ),
     },
     {
+      title: 'Retenciones',
+      key: 'retencion',
+      width: 120,
+      align: 'right' as const,
+      render: (_: any, record: TransaccionAsociadaDTO) => formatNumber(record.retencion ?? 0),
+    },
+    {
       title: 'Monto',
       key: 'monto',
       width: 140,
@@ -904,7 +918,7 @@ const SolicitudPagoFormulario: React.FC = () => {
           style={{ width: '100%' }}
           className="input-number-right"
           min={0}
-          max={pendienteEfectivo(record)}
+          max={Math.max(0, pendienteEfectivo(record) - (record.descuento || 0))}
           step={0.01}
           precision={2}
           value={record.monto}
@@ -967,18 +981,20 @@ const SolicitudPagoFormulario: React.FC = () => {
       key: 'asientos',
       label: `Asientos Contables (${asientos.length})`,
       children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
-        <div>
-          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              icon={<ExclamationCircleOutlined />}
-              onClick={handleGenerarAsientos}
-              loading={saving}
-            >
-              GENERAR
+        <>
+          <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
+            <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)}>
+              Agregar asiento manual
             </Button>
           </div>
-          <AsientosContableTable asientos={asientos} scroll={{ x: 700 }} rowKey={(r: any) => r.id || Math.random()} />
-        </div>
+          <AsientosContableEditables
+            asientos={asientos}
+            onChange={setAsientos}
+            editable={true}
+            onGenerar={handleGenerarAsientos}
+            generando={saving}
+          />
+        </>
       ) : (
         <AsientosContableTable asientos={asientos} scroll={{ x: 700 }} rowKey={(r: any) => r.id || Math.random()} />
       ),
@@ -1043,6 +1059,17 @@ const SolicitudPagoFormulario: React.FC = () => {
         documentosIniciales={transaccionesAsociadas
           .map(t => t.id || t.transaccionAsociadaID)
           .filter((id): id is number => id != null && id > 0)}
+      />
+
+      {/* Modal de búsqueda de cuenta contable para asientos manuales */}
+      <BuscarCuentaContableModal
+        open={cuentaModalAsientoOpen}
+        onClose={() => setCuentaModalAsientoOpen(false)}
+        onSelect={(cuenta) => {
+          handleAgregarAsientoManual(cuenta);
+          setCuentaModalAsientoOpen(false);
+        }}
+        sucursal={sucursalActiva}
       />
 
       {isLarge ? (

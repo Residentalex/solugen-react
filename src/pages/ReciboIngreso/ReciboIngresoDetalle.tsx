@@ -38,7 +38,7 @@ import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import { useQZTray } from '../../hooks/useQZTray';
-import { formatTicketReciboIngreso, escposQRCode, feed, CMD_CUT } from '../../utils/escpos-formatter';
+import { formatTicket, escposQRCode, feed, CMD_CUT } from '../../utils/escpos-formatter';
 import { obtenerConfigPlantilla, CODIGO_PLANTILLA_FRI_TICKET } from '../../utils/ticketPlantilla';
 import { obtenerLogoEscPosBase64 } from '../../utils/logoEscPos';
 
@@ -395,14 +395,14 @@ const ReciboIngresoDetalle: React.FC = () => {
       }
 
       // Generar ticket ESC/POS (texto con formato)
-      let ticketText = formatTicketReciboIngreso(data, {
+      let ticketText = formatTicket(data, {
         nombre: sucursalNombre,
         direccion: data.sucursal?.direccion || '',
         telefono: data.sucursal?.telefono || '',
         rnc: data.sucursal?.rnc || '',
         fax: data.sucursal?.fax || '',
         slogan: data.sucursal?.slogan || '',
-      }, config || undefined);
+      }, config || undefined, 'TICKET_RI');
 
       // QR se genera desde la plantilla configurable (CAMPO:CODIGO_QR)
       // const qrData = data.envioDGII?.codigoQR;

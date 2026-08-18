@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Button, Form, Input, InputNumber, Switch, Checkbox, Spin, message, Grid, Collapse, Alert, Modal } from 'antd';
+import { Card, Row, Col, Button, Form, Input, InputNumber, Switch, Checkbox, Spin, message, Grid, Collapse, Alert, Modal, Tag } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -333,6 +333,22 @@ const RolFormulario: React.FC = () => {
                 <Switch checkedChildren="Activo" unCheckedChildren="Inactivo" />
               </Form.Item>
             </Form>
+            {id && (
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--paces-border)' }}>
+                <div className="paces-text-muted" style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                  Usuarios Asignados ({rolData?.nombresUsuarios?.length || 0})
+                </div>
+                {(rolData?.nombresUsuarios || []).length === 0 ? (
+                  <span className="paces-text-muted" style={{ fontSize: 13 }}>Sin usuarios</span>
+                ) : (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {(rolData?.nombresUsuarios || []).map((nombre, i) => (
+                      <Tag key={i} color="geekblue">{nombre}</Tag>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </Card>
         </Col>
         <Col xs={24} md={16} style={{ height: '100%' }}>

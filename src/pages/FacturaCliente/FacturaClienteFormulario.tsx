@@ -263,7 +263,7 @@ const FacturaClienteFormulario: React.FC = () => {
   const isLarge = screens.xxl === true;
 
   // ===== Determinar estado =====
-  const estado = toEstadoNum(data?.estado);
+  const estado = data?.estado ?? 0;
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -375,7 +375,7 @@ const FacturaClienteFormulario: React.FC = () => {
     // Cargar clientes si hay concepto
     if (cloneData.concepto?.codigo) {
       facturaClienteApi.obtenerClientes(sucursalActiva)
-        .then(setClientesCache)
+        .then((res) => setClientesCache(Array.isArray(res) ? res : []))
         .catch((err) => console.warn('Error al cargar clientes cache en clone', err));
     }
   }, [mode, cloneData, sucursalActiva, form]);
@@ -451,7 +451,7 @@ const FacturaClienteFormulario: React.FC = () => {
         // Cargar clientes según el concepto
         if (full.concepto?.codigo) {
           facturaClienteApi.obtenerClientes(sucursalActiva)
-            .then(setClientesCache)
+            .then((res) => setClientesCache(Array.isArray(res) ? res : []))
             .catch((err) => console.warn('Error al cargar clientes cache en editar', err));
         }
       })
@@ -564,7 +564,7 @@ const FacturaClienteFormulario: React.FC = () => {
 
                 if (full.concepto?.codigo) {
                   facturaClienteApi.obtenerClientes(sucursalActiva)
-                    .then(setClientesCache)
+                    .then((res) => setClientesCache(Array.isArray(res) ? res : []))
                     .catch((err) => console.warn('Error al cargar clientes cache al recargar', err));
                 }
               })
@@ -734,7 +734,7 @@ const FacturaClienteFormulario: React.FC = () => {
 
     // Cargar clientes
     facturaClienteApi.obtenerClientes(sucursalActiva)
-      .then((ents) => setClientesCache(ents))
+      .then((ents) => setClientesCache(Array.isArray(ents) ? ents : []))
       .catch((err) => console.warn('Error al cargar clientes cache al cambiar concepto', err));
 
     // Si el concepto es NoImpuesto y hay detalles con impuestos, limpiarlos

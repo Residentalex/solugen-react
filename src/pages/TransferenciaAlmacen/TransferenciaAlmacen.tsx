@@ -27,6 +27,7 @@ const TransferenciaAlmacen: React.FC = () => {
     fetchFiltrar: (sucursal, params) =>
       transferenciaAlmacenApi.filtrar(sucursal, params),
     reporteUrl: (sucursal, id) => `/reportes/inventario/transferencia/${sucursal}/${id}`,
+    imprimirUrl: (sucursal, id) => `/TRP/${sucursal}/imprimir/${id}`,
     tituloReporte: 'TRP',
     tituloError: 'Error al cargar transferencias de almacén',
   });

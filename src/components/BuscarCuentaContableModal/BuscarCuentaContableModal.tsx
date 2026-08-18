@@ -1,5 +1,5 @@
-﻿import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { Modal, Input, Table, Empty, message } from 'antd';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { Modal, Input, Table, Empty, message, Button } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
 import type { CuentaContableResumenDTO } from '../../types/contabilidad';
@@ -11,6 +11,10 @@ interface BuscarCuentaContableModalProps {
   sucursal: number;
   /** Modo servidor: si se pasa, no carga auxiliares al abrir y la busqueda se delega en esta funcion. */
   buscar?: (filtro: string) => Promise<CuentaContableResumenDTO[]>;
+  /** Modo seleccion multiple: habilita checkboxes y el boton Aceptar; el clic en fila alterna la seleccion sin cerrar. */
+  multiple?: boolean;
+  /** Se invoca en modo multiple al presionar Aceptar con la lista de cuentas seleccionadas. */
+  onSeleccionarMultiples?: (cuentas: CuentaContableResumenDTO[]) => void;
 }
 
 const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
@@ -19,9 +23,12 @@ const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
   onSelect,
   sucursal,
   buscar,
+  multiple = false,
+  onSeleccionarMultiples,
 }) => {
   const [cuentas, setCuentas] = useState<CuentaContableResumenDTO[]>([]);
   const [searchText, setSearchText] = useState('');
+  const [seleccionadas, setSeleccionadas] = useState<CuentaContableResumenDTO[]>([]);
   const searchRef = useRef<any>(null);
 
   // Ref para estabilizar `buscar` en el useEffect de limpieza: evita que
@@ -34,6 +41,7 @@ const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
   useEffect(() => {
     if (!open) return;
     setSearchText('');
+    setSeleccionadas([]);
     if (buscarRef.current) {
       setCuentas([]);
       return;
@@ -73,6 +81,19 @@ const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
     }
   };
 
+  const toggleSeleccion = (cuenta: CuentaContableResumenDTO) => {
+    setSeleccionadas((prev) => {
+      const existe = prev.some((c) => c.noCuenta === cuenta.noCuenta);
+      return existe ? prev.filter((c) => c.noCuenta !== cuenta.noCuenta) : [...prev, cuenta];
+    });
+  };
+
+  const handleAceptar = () => {
+    if (seleccionadas.length === 0) return;
+    onSeleccionarMultiples?.(seleccionadas);
+    onClose();
+  };
+
   const columnas = [
     {
       title: 'No. Cuenta',
@@ -90,12 +111,33 @@ const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
 
   const dataSource = buscar ? cuentas : cuentasFiltradas;
 
+  const rowSelection = multiple
+    ? {
+        selectedRowKeys: seleccionadas.map((c) => c.noCuenta),
+        onChange: (_keys: React.Key[], rows: CuentaContableResumenDTO[]) => setSeleccionadas(rows),
+      }
+    : undefined;
+
   return (
     <Modal
       title="Buscar Cuenta Contable"
       open={open}
       onCancel={onClose}
-      footer={null}
+      footer={
+        multiple
+          ? () => (
+              <div style={{ textAlign: 'right' }}>
+                <Button
+                  type="primary"
+                  disabled={seleccionadas.length === 0}
+                  onClick={handleAceptar}
+                >
+                  Aceptar
+                </Button>
+              </div>
+            )
+          : null
+      }
       width={700}
       destroyOnClose
     >
@@ -129,10 +171,15 @@ const BuscarCuentaContableModal: React.FC<BuscarCuentaContableModalProps> = ({
         size="small"
         pagination={{ pageSize: 10, showSizeChanger: false }}
         scroll={{ y: 400 }}
+        rowSelection={rowSelection}
         onRow={(record) => ({
           onClick: () => {
-            onSelect(record);
-            onClose();
+            if (multiple) {
+              toggleSeleccion(record);
+            } else {
+              onSelect(record);
+              onClose();
+            }
           },
           style: { cursor: 'pointer' },
         })}

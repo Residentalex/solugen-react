@@ -9,7 +9,7 @@ import {
   ArrowLeftOutlined, ReloadOutlined, FilterOutlined, FilterFilled,
   DollarCircleOutlined, FileTextOutlined, SwapOutlined,
   CreditCardOutlined, CreditCardFilled, GiftOutlined,
-  TagOutlined, RollbackOutlined
+  TagOutlined, RollbackOutlined, PrinterOutlined
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../../stores/authStore';
@@ -21,6 +21,13 @@ import DetalleToolbar from '../../components/DetalleToolbar';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import LogTable from '../../components/LogTable';
 import FiltroSeleccionDropdown from '../../components/FiltroSeleccionDropdown';
+import PermissionGate from '../../components/PermissionGate';
+import ModalSeleccionarImpresoraPOS from '../../components/ModalSeleccionarImpresoraPOS/ModalSeleccionarImpresoraPOS';
+import { useQZTray } from '../../hooks/useQZTray';
+import { formatTicket, feed, CMD_CUT } from '../../utils/escpos-formatter';
+import { obtenerConfigPlantilla, CODIGO_PLANTILLA_TURNO_CIERRE } from '../../utils/ticketPlantilla';
+import { obtenerLogoEscPosBase64 } from '../../utils/logoEscPos';
+import { companiaApi } from '../../api/companiaApi';
 
 const { Text } = Typography;
 
@@ -124,6 +131,75 @@ const TurnoDetalle: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleImprimirTicket = async () => {
+    if (!data) return;
+    setImprimiendo(true);
+    try {
+      // Datos de la compañía desde la sucursal activa
+      let companyInfo = { nombre: '', direccion: '', telefono: '', rnc: '', fax: '', slogan: '' };
+      try {
+        const lista = await companiaApi.obtenerTodas(sucursalActiva);
+        if (lista.length > 0) {
+          companyInfo = {
+            nombre: lista[0].nombre ?? '',
+            direccion: lista[0].direccion ?? '',
+            telefono: lista[0].telefono ?? '',
+            rnc: lista[0].rnc ?? '',
+            fax: lista[0].fax ?? '',
+            slogan: lista[0].slogan ?? '',
+          };
+        }
+      } catch {
+        const sucursales = useAuthStore.getState().sucursalesPermitidas;
+        companyInfo.nombre = sucursales.find((sp: any) => sp.sucursal === sucursalActiva)?.nombre || '';
+      }
+
+      // Config de plantilla de cierre de turno (por codigo fijo TURNO_CIERRE)
+      let config = null;
+      try {
+        config = await obtenerConfigPlantilla(CODIGO_PLANTILLA_TURNO_CIERRE);
+      } catch {
+        config = null;
+      }
+
+      // Generar ticket ESC/POS (texto con formato)
+      let ticketText = formatTicket(data, companyInfo, config || undefined, 'TICKET_TC');
+
+      // Avance y corte DESPUÉS del contenido
+      ticketText += feed(config?.opciones?.feedCorte ?? 4);
+      ticketText += CMD_CUT;
+
+      // Logo configurable: generar comando GS v 0 (base64) si la plantilla lo activa.
+      let logoBase64 = '';
+      if (config?.logo?.mostrar) {
+        logoBase64 = await obtenerLogoEscPosBase64(config.logo);
+      }
+
+      // Enviar a QZ Tray como texto raw ESC/POS
+      await qz.print(ticketText, logoBase64 || undefined);
+      message.success(`Imprimiendo en: ${qz.printerName || 'Impresora POS'}`);
+    } catch (err: any) {
+      if (err.code === 'NO_PRINTER_SELECTED') {
+        try {
+          const list = await qz.fetchPrinters();
+          if (list.length === 0) {
+            message.error('No hay impresoras POS disponibles.');
+          } else {
+            setPrinterList(list);
+            setSelectedPrinter(list[0] || '');
+            setPrinterModalOpen(true);
+          }
+        } catch {
+          message.error('QZ Tray: ' + (err.message || 'Error'));
+        }
+      } else {
+        message.error('QZ Tray: ' + (err.message || 'Error'));
+      }
+    } finally {
+      setImprimiendo(false);
+    }
   };
 
   // Calcular cobros totales
@@ -423,6 +499,11 @@ const TurnoDetalle: React.FC = () => {
   const [costosSearch, setCostosSearch] = useState('');
   const [ingresosSearch, setIngresosSearch] = useState('');
   const [posteando, setPosteando] = useState(false);
+  const qz = useQZTray();
+  const [imprimiendo, setImprimiendo] = useState(false);
+  const [printerModalOpen, setPrinterModalOpen] = useState(false);
+  const [printerList, setPrinterList] = useState<string[]>([]);
+  const [selectedPrinter, setSelectedPrinter] = useState<string>('');
   const asientos = data?.factura?.asientos || [];
   const logs = data?.factura?.logs || [];
   const detalles = data?.factura?.detalles || [];
@@ -1173,13 +1254,41 @@ const TurnoDetalle: React.FC = () => {
         saving={posteando}
         onVolver={() => navigate(-1)}
         onPostear={handlePostear}
-        extraButtons={<Button icon={<ReloadOutlined />} onClick={handleRefresh} />}
+        extraButtons={
+          <Space>
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+            <PermissionGate codigoPantalla="FTURNOS" accion="IMPRIMIR">
+              <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={handleImprimirTicket}>
+                Ticket Cierre
+              </Button>
+              {qz.printerName && (
+                <Tag color="success" style={{ marginLeft: 2, fontSize: 11, lineHeight: '18px' }}>
+                  QZ: {qz.printerName}
+                </Tag>
+              )}
+            </PermissionGate>
+          </Space>
+        }
       />
 
       <div>
         {contentCard}
         <Tabs defaultActiveKey="documentos" type="card" items={tabsItems} />
       </div>
+
+      <ModalSeleccionarImpresoraPOS
+        open={printerModalOpen}
+        impresoras={printerList}
+        seleccionada={selectedPrinter}
+        onSelect={setSelectedPrinter}
+        onConfirm={async () => {
+          if (!selectedPrinter) return;
+          qz.selectPrinter(selectedPrinter);
+          setPrinterModalOpen(false);
+          handleImprimirTicket();
+        }}
+        onClose={() => { setPrinterModalOpen(false); }}
+      />
     </div>
   );
 };

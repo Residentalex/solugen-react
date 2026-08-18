@@ -219,7 +219,7 @@ const FacturaPOSFormulario: React.FC = () => {
   const isLarge = screens.xxl === true;
 
   // ===== Determinar estado =====
-  const estado = toEstadoNum(data?.estado);
+  const estado = data?.estado ?? 0;
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -646,15 +646,13 @@ const FacturaPOSFormulario: React.FC = () => {
     setVisanetProcessing(true);
 
     try {
-      // El monto va como entero (150000 = 1,500.00)
-      const montoEntero = Math.round(totales.total * 100);
-
-      const response = await visanetApi.vender(sucursalActiva, idFactura, montoEntero);
+      // El monto va directo en pesos (el backend lo convierte a centavos)
+      const response = await visanetApi.vender(sucursalActiva, idFactura, totales.total);
       setVisanetResult(response);
 
       if (response.exitoso) {
         // Si la transacción fue exitosa, llenar el cobro con tarjeta
-        const montoPagado = parseFloat(response.totalAmount || '0') / 100;
+        const montoPagado = parseFloat(response.totalAmount || '0');
         setCobros((prev) => ({
           ...prev,
           tarjetaCredito: (prev.tarjetaCredito || 0) + montoPagado,
@@ -1434,7 +1432,7 @@ const FacturaPOSFormulario: React.FC = () => {
                       <p><strong>Autorización:</strong> {visanetResult.autorizacion}</p>
                       <p><strong>Tarjeta:</strong> {visanetResult.panMasked}</p>
                       <p><strong>Titular:</strong> {visanetResult.cardHolderName || 'N/A'}</p>
-                      <p><strong>Monto:</strong> {visanetResult.totalAmount ? (parseInt(visanetResult.totalAmount) / 100).toFixed(2) : '0.00'}</p>
+                      <p><strong>Monto:</strong> {visanetResult.totalAmount ? parseFloat(visanetResult.totalAmount).toFixed(2) : '0.00'}</p>
                       <p><strong>Voucher:</strong> {visanetResult.stan}</p>
                       <p><strong>RRN:</strong> {visanetResult.rrn}</p>
                       <p><strong>Lote:</strong> {visanetResult.batchNumber}</p>

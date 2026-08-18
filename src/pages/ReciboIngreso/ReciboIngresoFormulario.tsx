@@ -181,7 +181,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   ) ?? false;
 
   // Estado
-  const estado = toEstadoNum(data?.estado);
+  const estado = data?.estado ?? 0;
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -340,12 +340,12 @@ const ReciboIngresoFormulario: React.FC = () => {
   const cargarEntidades = async (conceptoCodigo?: string) => {
     try {
       const res = await conceptosApi.obtenerEntidadesActivas(sucursalActiva, conceptoCodigo || selectedConcepto?.codigo);
-      setEntidadesCache((res || []).filter((e) => e.activo !== false));
+      setEntidadesCache((Array.isArray(res) ? res : []).filter((e) => e.activo !== false));
     } catch {
       // Fallback: cargar clientes
       try {
         const clientes = await clienteApi.obtenerActivos(sucursalActiva);
-        setEntidadesCache(clientes || []);
+        setEntidadesCache(Array.isArray(clientes) ? clientes : []);
       } catch {
         message.error('Error al cargar entidades');
       }

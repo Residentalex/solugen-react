@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Table, Button, Empty, Modal, Descriptions, Typography } from 'antd';
+import { Alert, Card, Table, Button, Empty, Modal, Descriptions, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -27,7 +27,7 @@ const PuntosVenta: React.FC = () => {
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [detalleItem, setDetalleItem] = useState<PuntoVentaDTO | null>(null);
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['puntosVenta', sucursalActiva, page, pageSize, searchText],
     queryFn: async () => {
       if (sucursalActiva === undefined) return { datos: [], total: 0 };
@@ -109,7 +109,21 @@ const PuntosVenta: React.FC = () => {
   ];
 
   return (
-    <><Card
+    <>
+      {isError && (
+        <Alert
+          message="Error al cargar puntos de venta"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={() => refetch()}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+      <Card
       className="paces-card-erp"
       style={{ borderRadius: 8, overflow: 'hidden' }}
       styles={{ body: { padding: 0 } }}

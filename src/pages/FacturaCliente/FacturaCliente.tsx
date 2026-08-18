@@ -51,6 +51,7 @@ const FacturaCliente: React.FC = () => {
       };
     },
     reporteUrl: (sucursal, id) => `/reportes/contabilidad/factura-cliente/${sucursal}/${id}`,
+    imprimirUrl: (sucursal, id) => `/FAC/${sucursal}/imprimir/${id}`,
     tituloReporte: 'FC',
     tituloError: 'Error al cargar facturas de cliente',
   });

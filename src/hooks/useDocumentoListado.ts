@@ -28,6 +28,7 @@ export interface DocumentoListadoConfig<T> {
   ) => Promise<{ data: T[]; total: number }>;
 
   reporteUrl: (sucursal: number, id: number) => string;
+  imprimirUrl?: (sucursal: number, id: number) => string;
   tituloReporte: string;
   tituloError: string;
 }
@@ -169,6 +170,15 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
     }
     const cfg = configRef.current;
     try {
+      if (cfg.imprimirUrl) {
+        try {
+          await apiClient.put(cfg.imprimirUrl(sucursalActiva, selectedRow.id));
+        } catch (errImprimir: any) {
+          const msg = errImprimir?.response?.data?.errorMessage || 'Error al marcar el documento como impreso';
+          message.error(msg);
+          return;
+        }
+      }
       const res = await apiClient.get(cfg.reporteUrl(sucursalActiva, selectedRow.id), {
         responseType: 'blob',
       });

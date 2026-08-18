@@ -20,8 +20,11 @@ export const visanetApi = {
     return data.data;
   },
 
-  cerrarLote: async (sucursal: number): Promise<string> => {
-    const { data } = await apiClient.post<ApiResponse<string>>(`${BASE}/${sucursal}/cerrar-lote`);
+  cerrarLote: async (sucursal: number, ipTerminal?: string, puertoTerminal?: number): Promise<string> => {
+    const { data } = await apiClient.post<ApiResponse<string>>(`${BASE}/${sucursal}/cerrar-lote`, {
+      ...(ipTerminal ? { ipTerminal } : {}),
+      ...(puertoTerminal ? { puertoTerminal } : {}),
+    });
     return data.data;
   },
 

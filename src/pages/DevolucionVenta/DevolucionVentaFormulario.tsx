@@ -246,7 +246,7 @@ const DevolucionVentaFormulario: React.FC = () => {
   const isLarge = screens.xxl === true;
 
   // ===== Determinar estado =====
-  const estado = toEstadoNum(data?.estado);
+  const estado = data?.estado ?? 0;
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;
@@ -540,6 +540,10 @@ const DevolucionVentaFormulario: React.FC = () => {
       const excedido = detalles.find((d) => (d.cantidadOriginal || 0) > 0 && (d.cantidad || 0) > (d.cantidadOriginal || 0));
       if (excedido) {
         return `La cantidad a devolver del artículo "${excedido.articulo}" (${excedido.cantidad}) excede la cantidad original de la factura (${excedido.cantidadOriginal})`;
+      }
+      // La nota es obligatoria para devoluciones desde factura POS
+      if (!values.nota || !values.nota.trim()) {
+        return 'La nota es obligatoria para devoluciones desde factura POS';
       }
     }
 
@@ -1079,7 +1083,7 @@ const DevolucionVentaFormulario: React.FC = () => {
         const fila = detalles[idx];
         if (!fila) return null;
         const docPermiteDesc = documentoConfig?.modificaDescripcion ?? data?.documento?.modificaDescripcion ?? true;
-        if (docPermiteDesc) {
+        if (docPermiteDesc && !desdePV) {
           return (
             <div style={{ fontSize: 13 }}>
               <Input
@@ -1140,6 +1144,7 @@ const DevolucionVentaFormulario: React.FC = () => {
             style={{ width: '100%' }}
             styles={{ input: { textAlign: 'right' } }}
             min={0}
+            max={desdePV ? (detalles[idx]?.cantidadOriginal ?? undefined) : undefined}
             step={0.01}
             precision={2}
             controls={false}
@@ -1162,6 +1167,11 @@ const DevolucionVentaFormulario: React.FC = () => {
       width: 160,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any, _idx: number) => {
+        if (desdePV) {
+          return (
+            <Text style={{ fontSize: 13 }}>{toTitleCase(record.medida?.nombre || '')}</Text>
+          );
+        }
         const curId = record.medida?.idExterno;
         const hasMatch = medidasCache.some((m) => m.idExterno === curId);
         return (
@@ -1209,7 +1219,7 @@ const DevolucionVentaFormulario: React.FC = () => {
         const precioConDescuento = precioBase - ((precioBase * pctDesc) / 100);
         const precioUnitario = precioConDescuento / factor;
         const docPermiteEditar = documentoConfig?.modificaPrecio ?? data?.documento?.modificaPrecio ?? true;
-        if (docPermiteEditar) {
+        if (docPermiteEditar && !desdePV) {
           return (
             <div>
               <InputNumber
@@ -1261,7 +1271,11 @@ const DevolucionVentaFormulario: React.FC = () => {
       width: 90,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, _record: DetalleDevolucionVentaDTO, idx: number) => (
+      render: (_: any, _record: DetalleDevolucionVentaDTO, idx: number) => {
+        if (desdePV) {
+          return <Text>{formatNumber(detalles[idx]?.porcentajeDescuento || 0)}%</Text>;
+        }
+        return (
         <InputNumber
           size="small"
           style={{ width: '100%' }}
@@ -1275,7 +1289,8 @@ const DevolucionVentaFormulario: React.FC = () => {
           onPressEnter={() => { const val = editValuesRef.current[`${detalles[idx].id}_porcentajeDescuento`] ?? detalles[idx]?.porcentajeDescuento; handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', val); }}
           addonAfter="%"
         />
-      ),
+        );
+      },
     },
     {
       title: 'Desc.',
@@ -1327,6 +1342,7 @@ const DevolucionVentaFormulario: React.FC = () => {
       width: 50,
       onCell: () => ({ style: { paddingRight: 8 } }),
       render: (_: any, _record: DetalleDevolucionVentaDTO, idx: number) => {
+        if (desdePV) return null;
         const items = [
           {
             key: 'eliminar',
@@ -1363,12 +1379,14 @@ const DevolucionVentaFormulario: React.FC = () => {
                     : ''}
                   readOnly
                   suffix={
+                    !desdePV ? (
                     <Space size={4}>
                       <SearchOutlined onClick={() => setFacturaModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
                       {selectedFactura && <ClearOutlined onClick={handleFacturaClear} style={{ cursor: 'pointer' }} />}
                     </Space>
+                    ) : undefined
                   }
-                  onClick={() => setFacturaModalOpen(true)}
+                  onClick={desdePV ? undefined : () => setFacturaModalOpen(true)}
                 />
               </FloatingField>
             </div>
@@ -1383,12 +1401,14 @@ const DevolucionVentaFormulario: React.FC = () => {
                   value={selectedConcepto ? `${selectedConcepto.codigo || ''} - ${toTitleCase(selectedConcepto.nombre)}` : conceptoSearchText}
                   readOnly
                   suffix={
+                    !desdePV ? (
                     <Space size={4}>
                       <SearchOutlined onClick={handleConceptoSearchClick} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
                       {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
                     </Space>
+                    ) : undefined
                   }
-                  onClick={handleConceptoSearchClick}
+                  onClick={desdePV ? undefined : handleConceptoSearchClick}
                 />
               </FloatingField>
               <ConceptoInfoLabel concepto={selectedConcepto} />
@@ -1401,6 +1421,7 @@ const DevolucionVentaFormulario: React.FC = () => {
             <Form.Item name="fechaDocumento" required style={{ marginBottom: 0 }}>
               <FloatingField label="Fecha Documento" required>
                 <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD"
+                  disabled={desdePV}
                   disabledDate={(current) => {
                     if (!current) return false;
                     const cierre = fechasCierre?.[sucursalActiva];
@@ -1421,6 +1442,7 @@ const DevolucionVentaFormulario: React.FC = () => {
                     allowClear
                     showSearch
                     optionFilterProp="children"
+                    disabled={desdePV}
                     onChange={(val) => {
                       const ent = clientesCache.find((e) => e.codigo === val);
                       setSelectedCliente(ent || null);
@@ -1458,6 +1480,7 @@ const DevolucionVentaFormulario: React.FC = () => {
                   allowClear
                   showSearch
                   optionFilterProp="children"
+                  disabled={desdePV}
                   onChange={(val) => {
                     const alm = almacenesCache.find((a) => a.codigo === val);
                     setSelectedAlmacen(alm || null);
@@ -1488,13 +1511,15 @@ const DevolucionVentaFormulario: React.FC = () => {
                       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); } }}
                     />
                   ) : ncfValue ? (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
-                      NCF: {ncfValue} <EditOutlined />
+                    <Tag style={{ fontSize: 14, padding: '6px 16px', cursor: desdePV ? 'default' : 'pointer' }} onClick={desdePV ? undefined : () => openFieldEditor('ncf')}>
+                      NCF: {ncfValue} {!desdePV && <EditOutlined />}
                     </Tag>
                   ) : (
+                    !desdePV ? (
                     <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
                       <PlusOutlined /> NCF
                     </Tag>
+                    ) : null
                   )}
                 </div>
                 {/* Tasa */}
@@ -1508,8 +1533,8 @@ const DevolucionVentaFormulario: React.FC = () => {
                       onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); } }}
                     />
                   ) : (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
-                      Tasa: {tasaValue} <EditOutlined />
+                    <Tag style={{ fontSize: 14, padding: '6px 16px', cursor: desdePV ? 'default' : 'pointer' }} onClick={desdePV ? undefined : () => openFieldEditor('tasa')}>
+                      Tasa: {tasaValue} {!desdePV && <EditOutlined />}
                     </Tag>
                   )}
                 </div>
@@ -1624,6 +1649,7 @@ const DevolucionVentaFormulario: React.FC = () => {
                   children: (
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        {!desdePV && (
                         <Space>
                           <Button
                             type="dashed"
@@ -1639,6 +1665,7 @@ const DevolucionVentaFormulario: React.FC = () => {
                             Buscar Producto
                           </Button>
                         </Space>
+                        )}
                         <Input.Search
                           placeholder="Buscar detalle..."
                           allowClear
@@ -1742,21 +1769,23 @@ const DevolucionVentaFormulario: React.FC = () => {
                 children: (
                   <>
                     <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      {!desdePV && (
                       <Space>
-                        <Button
-                          type="dashed"
-                          icon={<PlusOutlined />}
-                          onClick={handleAgregarFila}
-                        >
-                          Agregar fila
+                      <Button
+                      type="dashed"
+                      icon={<PlusOutlined />}
+                        onClick={handleAgregarFila}
+                      >
+                        Agregar fila
+                      </Button>
+                      <Button
+                      icon={<SearchOutlined />}
+                        onClick={() => setProductoModalOpen(true)}
+                      >
+                        Buscar Prod.
                         </Button>
-                        <Button
-                          icon={<SearchOutlined />}
-                          onClick={() => setProductoModalOpen(true)}
-                        >
-                          Buscar Prod.
-                        </Button>
-                      </Space>
+                        </Space>
+                        )}
                       <Input.Search
                         placeholder="Buscar detalle..."
                         allowClear

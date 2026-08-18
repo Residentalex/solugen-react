@@ -74,7 +74,7 @@ export const devolucionVentaApi = {
     return data.data;
   },
 
-  crearDesdePV: async (sucursal: number, pvId: number, body?: { detalles?: DetalleDevolucionVentaDTO[] }): Promise<DevolucionVentaDTO> => {
+  crearDesdePV: async (sucursal: number, pvId: number, body?: { detalles?: DetalleDevolucionVentaDTO[]; nota?: string }): Promise<DevolucionVentaDTO> => {
     const { data } = await apiClient.post<ApiResponse<DevolucionVentaDTO>>(`${BASE}/${sucursal}/desde-pv/${pvId}`, body || {});
     return data.data;
   },

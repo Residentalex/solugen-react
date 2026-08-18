@@ -126,7 +126,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const isLarge = screens.xxl === true;
 
   // Estado
-  const estado = toEstadoNum(data?.estado);
+  const estado = data?.estado ?? 0;
   const esCerrado = data?.periodo === 6;
   const esBorrador = estado === 0;
   const esAplicado = estado === 1;

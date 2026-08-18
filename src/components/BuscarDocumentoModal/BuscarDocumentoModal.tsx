@@ -3,6 +3,7 @@ import { Modal, Table, Button, Space, message, InputNumber } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
 import { apiClient } from '../../api/client';
 import { formatDate, formatNumber } from '../../utils/formats';
+import { OrigenCuenta } from '../../types/contabilidad';
 
 interface BuscarDocumentoModalProps {
   open: boolean;
@@ -20,6 +21,16 @@ interface BuscarDocumentoModalProps {
   /** Si false, el monto se asigna automaticamente y el InputNumber es readonly */
   puedeAsignar?: boolean;
 }
+
+/** Normaliza origenCuenta (string o number) al enum numerico OrigenCuenta */
+export const normalizarOrigen = (val: any): number => {
+  if (val == null) return OrigenCuenta.Desconocido;
+  if (typeof val === 'number') return val;
+  const s = String(val).trim().toLowerCase();
+  if (s === 'debito' || s === 'd' || s === '0') return OrigenCuenta.Debito;
+  if (s === 'credito' || s === 'c' || s === '1') return OrigenCuenta.Credito;
+  return OrigenCuenta.Desconocido;
+};
 
 const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   open, onClose, onSelect, tipoEntidad, codEntidad, origen,
@@ -100,6 +111,18 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       // ===== Filtrar documentos con pendiente real != 0 (tanto saldo como sobrepago) =====
       docs = docs.filter((d: any) => _obtenerPendienteReal(d) !== 0);
 
+      // ===== Filtrar por origen (0=Debito, 1=Credito) si se proporciona =====
+      // Logica replicada del desktop (VTransaccionesPendientes.cs):
+      // - Mostrar docs del TIPO OPUESTO que tengan saldo (pendienteReal != 0, ya filtrado arriba)
+      // - Mostrar docs del MISMO TIPO solo si tienen sobrepago (pendienteReal < 0)
+      if (origen !== undefined && origen !== null) {
+        docs = docs.filter((d: any) => {
+          const docOrigen = normalizarOrigen(d.documento?.origenCuenta);
+          if (docOrigen === OrigenCuenta.Desconocido) return true;
+          return docOrigen !== origen;
+        });
+      }
+
       // ===== Filtrar documentoEnviado =====
       if (documentoEnviado) {
         docs = docs.filter((d: any) => obtenerCodigoCompleto(d) !== documentoEnviado);
@@ -113,7 +136,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [sucursalActiva, tipoEntidad, codEntidad, esDocumentoInventario, documentoEnviado, obtenerCodigoCompleto, _obtenerPendienteReal]);
+  }, [sucursalActiva, tipoEntidad, codEntidad, esDocumentoInventario, documentoEnviado, obtenerCodigoCompleto, _obtenerPendienteReal, origen]);
 
   // ===== Pre-seleccionar filas y precargar montos al abrir el modal =====
   useEffect(() => {

@@ -131,9 +131,8 @@ const CFacturasElectronicas: React.FC = () => {
   const METODO_ELECTRONICA = 1;
 
   function getSelectedItems(ids: React.Key[]): EnvioDGIIDTO[] {
-    return ids
-      .map((id) => pendientes.find((p) => p.id === id))
-      .filter((x): x is EnvioDGIIDTO => x != null);
+    const set = new Set(ids.map(String));
+    return pendientes.filter((p) => set.has(`${p.sucursal}-${p.transaccionID}`));
   }
 
   function determinarTipoNCF(item: EnvioDGIIDTO, metodoFacturacion: number): string {
@@ -672,7 +671,7 @@ const CFacturasElectronicas: React.FC = () => {
           }}
           columns={columns}
           dataSource={dataTabla}
-          rowKey="id"
+          rowKey={(record) => `${record.sucursal}-${record.transaccionID}`}
           loading={cargandoTabla}
           locale={{
             emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>

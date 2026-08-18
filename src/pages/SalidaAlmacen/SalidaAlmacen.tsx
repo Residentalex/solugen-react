@@ -28,6 +28,7 @@ const SalidaAlmacen: React.FC = () => {
     fetchFiltrar: (sucursal, params) =>
       salidaAlmacenApi.filtrar(sucursal, params),
     reporteUrl: (sucursal, id) => `/reportes/inventario/salida/${sucursal}/${id}`,
+    imprimirUrl: (sucursal, id) => `/SAP/${sucursal}/imprimir/${id}`,
     tituloReporte: 'SAP',
     tituloError: 'Error al cargar salidas de almacén',
   });

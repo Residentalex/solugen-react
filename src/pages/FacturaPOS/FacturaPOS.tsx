@@ -50,6 +50,7 @@ const FacturaPOS: React.FC = () => {
       }
     },
     reporteUrl: (sucursal, id) => `/reportes/facturacion/pos/${sucursal}/${id}`,
+    imprimirUrl: (sucursal, id) => `/PV/${sucursal}/imprimir/${id}`,
     tituloReporte: 'POS',
     tituloError: 'Error al cargar facturas POS',
   });

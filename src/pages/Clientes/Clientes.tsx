@@ -9,9 +9,10 @@ import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { clienteApi } from '../../api/clienteApi';
-import { toTitleCase, formatCurrency } from '../../utils/formats';
+import { formatCurrency } from '../../utils/formats';
 import type { ClienteVistaDTO } from '../../types/facturacion';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import EntidadColumnCell from '../../components/EntidadColumnCell';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
@@ -111,11 +112,8 @@ const Clientes: React.FC = () => {
       dataIndex: 'nombre',
       key: 'nombre',
       width: 320,
-      render: (name: string) => (
-        <Space>
-          <div className="paces-avatar-initials">{(name || '?').charAt(0).toUpperCase()}</div>
-          <Text>{toTitleCase(name || '')}</Text>
-        </Space>
+      render: (name: string, record: ClienteVistaDTO) => (
+        <EntidadColumnCell name={name} diasCredito={record.diasCredito} identificacion={record.identificacion} />
       ),
     },
     {
@@ -206,6 +204,20 @@ const Clientes: React.FC = () => {
             showTotal: (t) => `${t} registros`,
           }}
         />
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', padding: '8px 16px' }}>
+          <Space size={4}>
+            <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#E05252' }} />
+            <Text type="secondary" style={{ fontSize: 12 }}>0-14 días</Text>
+          </Space>
+          <Space size={4}>
+            <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#4A8FD4' }} />
+            <Text type="secondary" style={{ fontSize: 12 }}>15-29 días</Text>
+          </Space>
+          <Space size={4}>
+            <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#2BA88C' }} />
+            <Text type="secondary" style={{ fontSize: 12 }}>30+ días</Text>
+          </Space>
+        </div>
       </Card>
     </>
   );

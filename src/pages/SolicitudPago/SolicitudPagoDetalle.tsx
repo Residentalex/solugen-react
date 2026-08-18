@@ -350,14 +350,17 @@ const SolicitudPagoDetalle: React.FC = () => {
             {toEstadoNum(data?.estado) === 2 && (data as any)?.tipoPagoCodigo && (
               <>
                 <Divider type="vertical" />
-                <Button
-                  type="primary"
-                  icon={<BankOutlined />}
-                  onClick={handleGenerarPago}
-                  loading={saving}
-                >
-                  Generar {(data as any)?.tipoPagoCodigo}
-                </Button>
+                <Tooltip title={data.pagoGenerado ? 'Ya existe un pago generado' : 'Generar documento de pago'}>
+                  <Button
+                    type="primary"
+                    icon={<BankOutlined />}
+                    onClick={handleGenerarPago}
+                    loading={saving}
+                    disabled={!!data.pagoGenerado}
+                  >
+                    {data.pagoGenerado ? 'Pago generado' : `Generar ${(data as any)?.tipoPagoCodigo}`}
+                  </Button>
+                </Tooltip>
               </>
             )}
           </>
@@ -421,6 +424,7 @@ const SolicitudPagoDetalle: React.FC = () => {
                     <TransaccionesAsociadasCard
                       documentos={(data as any)?.transaccionesAsociadas || []}
                       readOnly={false}
+                      ocultarPerdida
                     />
                   ),
                 },
@@ -508,6 +512,7 @@ const SolicitudPagoDetalle: React.FC = () => {
                   <TransaccionesAsociadasCard
                     documentos={(data as any)?.transaccionesAsociadas || []}
                     readOnly={false}
+                    ocultarPerdida
                   />
                 ),
               },

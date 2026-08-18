@@ -5,6 +5,7 @@ export interface TipoEntidadDTO {
   codigo: string;
   nombre: string;
   idExterno?: string;
+  origenCuenta?: string | number;
 }
 
 export interface CategoriaEntidadDTO {
@@ -92,6 +93,7 @@ export interface ClienteVistaDTO {
   activo: boolean;
   vendedorNombre: string;
   balance: number;
+  diasCredito?: number;
 }
 
 // Basado en PuntoVentaDTO.cs

@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Card, Input, Button, Typography, message, Spin, DatePicker, Checkbox,
-  Space, Row, Col, Table, Empty, Statistic,
+  Space, Row, Col, Table, Empty, Statistic, Tag,
 } from 'antd';
 import { PrinterOutlined, SearchOutlined, CloseOutlined, TableOutlined, ArrowUpOutlined, ArrowDownOutlined, SwapOutlined, FileExcelOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -49,7 +49,7 @@ const MayorAuxiliar: React.FC = () => {
 
   // Filtros
   const [fechas, setFechas] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().startOf('month'), dayjs()]);
-  const [noCuenta, setNoCuenta] = useState('');
+  const [cuentasSeleccionadas, setCuentasSeleccionadas] = useState<CuentaContableResumenDTO[]>([]);
   const [nomCuenta, setNomCuenta] = useState('');
   const [tipoDocumento, setTipoDocumento] = useState('');
   const [balanceAnterior, setBalanceAnterior] = useState(true);
@@ -82,8 +82,8 @@ const MayorAuxiliar: React.FC = () => {
   /* â”€â”€â”€â”€â”€ Handlers â”€â”€â”€â”€â”€ */
 
   const handlePrint = useCallback(async () => {
-    if (!noCuenta) {
-      message.warning('Debe seleccionar una cuenta contable');
+    if (cuentasSeleccionadas.length === 0) {
+      message.warning('Debe seleccionar al menos una cuenta contable');
       return;
     }
     setGenerando(true);
@@ -91,7 +91,7 @@ const MayorAuxiliar: React.FC = () => {
       const filtros = {
         fechaInicial: formatDateParam(fechas[0].toDate()),
         fechaFinal: formatDateParam(fechas[1].toDate()),
-        noCuenta: noCuenta || undefined,
+        noCuentas: cuentasSeleccionadas.map((c) => c.noCuenta),
         tipoDocumento: tipoDocumento || undefined,
         balanceAnterior,
         detallado,
@@ -107,11 +107,11 @@ const MayorAuxiliar: React.FC = () => {
     } finally {
       setGenerando(false);
     }
-  }, [sucursalActiva, fechas, noCuenta, tipoDocumento, balanceAnterior, detallado, datos, balances]);
+  }, [sucursalActiva, fechas, cuentasSeleccionadas, tipoDocumento, balanceAnterior, detallado, datos, balances]);
 
   const handleConsultar = useCallback(async () => {
-    if (!noCuenta) {
-      message.warning('Debe seleccionar una cuenta contable');
+    if (cuentasSeleccionadas.length === 0) {
+      message.warning('Debe seleccionar al menos una cuenta contable');
       return;
     }
     setConsultando(true);
@@ -120,7 +120,7 @@ const MayorAuxiliar: React.FC = () => {
       const filtros = {
         fechaInicial: formatDateParam(fechas[0].toDate()),
         fechaFinal: formatDateParam(fechas[1].toDate()),
-        noCuenta: noCuenta || undefined,
+        noCuentas: cuentasSeleccionadas.map((c) => c.noCuenta),
         tipoDocumento: tipoDocumento || undefined,
         balanceAnterior,
         detallado,
@@ -149,7 +149,7 @@ const MayorAuxiliar: React.FC = () => {
     } finally {
       setConsultando(false);
     }
-  }, [sucursalActiva, fechas, noCuenta, tipoDocumento, balanceAnterior, detallado]);
+  }, [sucursalActiva, fechas, cuentasSeleccionadas, tipoDocumento, balanceAnterior, detallado]);
 
   /* â”€â”€â”€â”€â”€ KPIs y filtro de tabla â”€â”€â”€â”€â”€ */
 
@@ -215,7 +215,9 @@ const MayorAuxiliar: React.FC = () => {
 
     const desdeStr = dayjs(fechas[0]).format('DD/MM/YYYY');
     const hastaStr = dayjs(fechas[1]).format('DD/MM/YYYY');
-    const filtroCta = nomCuenta || 'Todas';
+    const filtroCta = cuentasSeleccionadas.length > 0
+      ? cuentasSeleccionadas.map((c) => `${c.noCuenta} - ${toTitleCase(c.nombre)}`).join(' | ')
+      : 'Todas';
     const filtroDoc = tipoDocumento || 'Todos';
 
     if (detallado) {
@@ -272,18 +274,42 @@ const MayorAuxiliar: React.FC = () => {
         columnWidths: [{ wch: 8 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 }],
       });
     }
-  }, [sucursalActiva, datosFiltrados, gruposDocumento, detallado, fechas, nomCuenta, tipoDocumento]);
+  }, [sucursalActiva, datosFiltrados, gruposDocumento, detallado, fechas, cuentasSeleccionadas, tipoDocumento]);
 
   /* â”€â”€â”€â”€â”€ Handlers de busqueda de cuenta â”€â”€â”€â”€â”€ */
 
+  const actualizarDisplayCuentas = (cuentas: CuentaContableResumenDTO[]) => {
+    if (cuentas.length === 0) {
+      setNomCuenta('');
+      return;
+    }
+    if (cuentas.length === 1) {
+      setNomCuenta(`${cuentas[0].noCuenta} - ${toTitleCase(cuentas[0].nombre)}`);
+    } else {
+      setNomCuenta(`${cuentas.length} cuentas (${cuentas.map((c) => c.noCuenta).join(', ')})`);
+    }
+  };
+
   const seleccionarCuenta = (item: CuentaContableResumenDTO) => {
-    setNoCuenta(item.noCuenta);
-    setNomCuenta(`${item.noCuenta} - ${toTitleCase(item.nombre)}`);
+    const cuentas = [item];
+    setCuentasSeleccionadas(cuentas);
+    actualizarDisplayCuentas(cuentas);
     setModalCuentaAbierto(false);
   };
 
+  const seleccionarMultiples = (cuentas: CuentaContableResumenDTO[]) => {
+    setCuentasSeleccionadas(cuentas);
+    actualizarDisplayCuentas(cuentas);
+  };
+
+  const quitarCuenta = (noCuentaAEliminar: string) => {
+    const nuevas = cuentasSeleccionadas.filter((c) => c.noCuenta !== noCuentaAEliminar);
+    setCuentasSeleccionadas(nuevas);
+    actualizarDisplayCuentas(nuevas);
+  };
+
   const limpiarCuenta = () => {
-    setNoCuenta('');
+    setCuentasSeleccionadas([]);
     setNomCuenta('');
   };
 
@@ -321,7 +347,7 @@ const MayorAuxiliar: React.FC = () => {
 
             <Col xs={24} sm={12} md={6}>
               <div style={{ marginBottom: 4 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Cuenta</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>Cuenta(s)</Text>
               </div>
               <Space.Compact style={{ width: '100%' }}>
                 <Input
@@ -331,10 +357,27 @@ const MayorAuxiliar: React.FC = () => {
                   style={{ width: '100%' }}
                 />
                 <Button icon={<SearchOutlined />} onClick={() => setModalCuentaAbierto(true)} />
-                {nomCuenta ? (
+                {cuentasSeleccionadas.length > 0 ? (
                   <Button icon={<CloseOutlined />} onClick={limpiarCuenta} />
                 ) : null}
               </Space.Compact>
+              {cuentasSeleccionadas.length > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {cuentasSeleccionadas.map((c) => (
+                    <Tag
+                      key={c.noCuenta}
+                      closable
+                      onClose={(e) => {
+                        e.preventDefault();
+                        quitarCuenta(c.noCuenta);
+                      }}
+                      style={{ marginInlineEnd: 0 }}
+                    >
+                      {c.noCuenta} - {toTitleCase(c.nombre)}
+                    </Tag>
+                  ))}
+                </div>
+              )}
             </Col>
 
             <Col xs={24} sm={12} md={6}>
@@ -523,6 +566,8 @@ const MayorAuxiliar: React.FC = () => {
         open={modalCuentaAbierto}
         onClose={() => setModalCuentaAbierto(false)}
         onSelect={seleccionarCuenta}
+        onSeleccionarMultiples={seleccionarMultiples}
+        multiple
         sucursal={sucursalActiva}
       />
     </>

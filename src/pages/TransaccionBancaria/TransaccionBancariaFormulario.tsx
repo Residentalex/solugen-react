@@ -731,7 +731,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
   }
 
   // ===== Estado info =====
-  const estado = toEstadoNum(data?.estado);
+  const estado = data?.estado ?? 0;
   const periodo = data?.periodo;
 
   // ===== Encabezado del formulario =====
