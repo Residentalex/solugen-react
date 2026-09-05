@@ -71,16 +71,44 @@ const { Text } = Typography;
 const { TextArea } = Input;
 
 // ===== Cálculo de fila FRDE =====
-function calcularFila(fila: DetalleFacturaSuplidorDTO, otros = 0): DetalleFacturaSuplidorDTO {
+function calcularFila(fila: DetalleFacturaSuplidorDTO): DetalleFacturaSuplidorDTO {
   const cantidad = fila.cantidad || 0;
   const costo = fila.costo || 0;
   const pctDesc = fila.porcentajeDescuento || 0;
-  const pctImp = fila.impuesto?.porcentaje ?? (fila.porcentajeImpuesto || 0);
 
   const subTotal = Math.round(cantidad * costo * 100) / 100;
   const descuento = Math.round(subTotal * (pctDesc / 100) * 100) / 100;
   const baseImponible = subTotal - descuento;
-  const impuestos = Math.round(baseImponible * (pctImp / 100) * 100) / 100;
+
+  // Determinar tipo y porcentaje de impuesto principal
+  let tipoImpuesto: string | undefined = fila.impuesto?.tipo;
+  let pctImp = fila.impuesto?.porcentaje ?? (fila.porcentajeImpuesto || 0);
+
+  // Si impuestosDetalle tiene datos, usar para determinar el tipo principal
+  if (fila.impuestosDetalle && fila.impuestosDetalle.length > 0) {
+    const impPrincipal = fila.impuestosDetalle.find(idt => idt.tipo === 'I');
+    if (impPrincipal) {
+      tipoImpuesto = 'I';
+      pctImp = impPrincipal.tasa;
+    } else {
+      const impInformativo = fila.impuestosDetalle.find(idt =>
+        idt.tipo === 'V' || idt.tipo === 'Informativo' || idt.tipo === 3
+      );
+      if (impInformativo) {
+        tipoImpuesto = impInformativo.tipo;
+        pctImp = impInformativo.tasa;
+      }
+    }
+  }
+
+  const esInformativo = tipoImpuesto === 'V' || tipoImpuesto === 'Informativo' || tipoImpuesto === 3;
+  const impuestos = esInformativo ? 0 : Math.round(baseImponible * (pctImp / 100) * 100) / 100;
+
+  // Calcular otros desde impuestosDetalle (tipo 'V'/'Informativo')
+  const otros = (fila.impuestosDetalle || [])
+    .filter((idt) => idt.tipo === 'V' || idt.tipo === 'Informativo' || idt.tipo === 3)
+    .reduce((sum, idt) => sum + Math.round(baseImponible * (idt.tasa / 100) * 100) / 100, 0);
+
   const total = Math.round((baseImponible + impuestos + otros) * 100) / 100;
 
   return {
@@ -90,6 +118,7 @@ function calcularFila(fila: DetalleFacturaSuplidorDTO, otros = 0): DetalleFactur
     subTotal,
     descuento,
     impuestos,
+    otros,
     total,
   };
 }
@@ -333,7 +362,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
 
   const usuario = useAuthStore((s) => s.usuario);
   const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
-    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+    (p: any) => p.codigo?.toUpperCase() === 'PE_MODIFICAR_ASIENTOS' && p.valor === true
   ) ?? false;
 
   // ===== Determinar estado =====
@@ -696,8 +725,13 @@ const FacturaSuplidorFormulario: React.FC = () => {
 
     const totalSub = detalles.reduce((s, d) => s + (d.subTotal || 0), 0);
     const totalDesc = detalles.reduce((s, d) => s + (d.descuento || 0), 0);
-    const totalImp = detalles.reduce((s, d) => s + (d.impuestos || 0), 0);
-    const nuevosDetalles = detalles.map((d) => calcularFila(d, calcularOtros(d)));
+    const totalImp = detalles.reduce((s, d) => {
+      const tipo = d.impuesto?.tipo;
+      const esInformativo = tipo === 'V' || tipo === 'Informativo' || tipo === 3;
+      if (esInformativo) return s;
+      return s + (d.impuestos || 0);
+    }, 0);
+    const nuevosDetalles = detalles.map((d) => calcularFila(d));
     const totalCalculado = nuevosDetalles.reduce((s, d) => s + (d.total || 0), 0);
     const total = detallesModificados || !data?.total
       ? totalCalculado
@@ -1189,7 +1223,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
         modificaPrecio: producto.modificaPrecio ?? false,
         modificaDescripcion: producto.modificaDescripcion ?? false,
       };
-      setDetalles((prev) => [calcularFila(filled, 0), ...prev]);
+      setDetalles((prev) => [calcularFila(filled), ...prev]);
     } else {
       setDetalles((prev) =>
         prev.map((d) => {
@@ -1211,7 +1245,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
             modificaDescripcion: producto.modificaDescripcion ?? false,
             idExterno: d.id || nuevoId,
           };
-          return calcularFila(filled, 0);
+          return calcularFila(filled);
         })
       );
     }
@@ -1282,22 +1316,6 @@ const FacturaSuplidorFormulario: React.FC = () => {
     return t === 'V' || t === 'Informativo' || t === 3;
   }
 
-  const calcularOtros = useCallback((detalle: DetalleFacturaSuplidorDTO): number => {
-    const baseImponible = (detalle.subTotal || 0) - (detalle.descuento || 0);
-    // Solo sumar impuestos informativos que el detalle tenga en impuestosDetalle
-    const otrosPct = impuestosFactura
-      .filter((imp: any) => esImpuestoInformativo(imp))
-      .filter((imp: any) => {
-        if (!detalle.impuestosDetalle || detalle.impuestosDetalle.length === 0) return false;
-        return detalle.impuestosDetalle.some((idt: any) => {
-          return idt.impuestoID > 0 && idt.impuestoID === Number(imp.idExterno || imp.impuesto?.idExterno);
-        });
-      })
-      .reduce((sum: number, imp: any) => sum + (imp.porcentaje || 0), 0);
-    if (otrosPct <= 0) return 0;
-    return Math.round(baseImponible * (otrosPct / 100) * 100) / 100;
-  }, [impuestosFactura]);
-
   // ===== Impuestos informativos para TotalesCard =====
   const impuestosInformativos = React.useMemo(() =>
     impuestosFactura
@@ -1319,8 +1337,8 @@ const FacturaSuplidorFormulario: React.FC = () => {
     subTotal: detalles.reduce((s, d) => s + (d.subTotal || 0), 0),
     descuento: detalles.reduce((s, d) => s + (d.descuento || 0), 0),
     impuestos: detalles.reduce((s, d) => s + (d.impuestos || 0), 0),
-    otros: detalles.reduce((s, d) => s + calcularOtros(d), 0),
-    total: detalles.reduce((s, d) => s + (d.total || 0) + calcularOtros(d), 0),
+    otros: detalles.reduce((s, d) => s + (d.otros || 0), 0),
+    total: detalles.reduce((s, d) => s + (d.total || 0), 0),
   };
 
   // ===== Funciones auxiliares para asientos =====
@@ -1909,12 +1927,20 @@ const FacturaSuplidorFormulario: React.FC = () => {
       width: 120,
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
-      render: (_: any, record: DetalleFacturaSuplidorDTO) => (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <Text>{formatNumber(calcularOtros(record))}</Text>
-          <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto' }}>&nbsp;</div>
-        </div>
-      ),
+      render: (_: any, record: DetalleFacturaSuplidorDTO) => {
+        const otros = record.otros ?? (record.impuestosDetalle || [])
+          .filter((idt: any) => idt.tipo === 'V' || idt.tipo === 'Informativo' || idt.tipo === 3)
+          .reduce((sum: number, idt: any) => {
+            const base = (record.subTotal || 0) - (record.descuento || 0);
+            return sum + Math.round(base * (idt.tasa / 100) * 100) / 100;
+          }, 0);
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <Text>{formatNumber(otros)}</Text>
+            <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto' }}>&nbsp;</div>
+          </div>
+        );
+      },
     },
     {
       title: 'Total',
@@ -1925,7 +1951,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: DetalleFacturaSuplidorDTO) => (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <Text strong>{formatNumber((record.total || 0) + calcularOtros(record))}</Text>
+          <Text strong>{formatNumber(record.total || 0)}</Text>
           <div style={{ fontSize: 11, lineHeight: 1.5, marginTop: 'auto' }}>&nbsp;</div>
         </div>
       ),

@@ -391,7 +391,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
   // NOTA: el campo `pagado` de transaccionesAsociadas viene en 0; el monto realmente aplicado
   // (coincide con CTRANSAC.ACREDITADO) esta en `monto` (y opcionalmente `descuento`).
   const totalPagado = (documentoActivo?.transaccionesAsociadas || []).reduce((s: number, t: any) => s + (t.monto || 0) + (t.descuento || 0), 0);
-  const totalPendiente = Math.max(0, (documentoActivo?.total || 0) - totalPagado);
+  const totalPendiente = Math.max(0, (documentoActivo?.total || 0) - totalPagado - (documentoActivo?.retenciones || 0));
 
   const detallesFuente = documentoActivo?.entradaAlmacen?.detalles?.length
     ? documentoActivo.entradaAlmacen.detalles
@@ -530,18 +530,12 @@ const FacturaSuplidorDetalle: React.FC = () => {
       responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
       render: (_: any, record: any) => {
         const base = (record.subTotal || 0) - (record.descuento || 0);
-        // Sumar solo impuestos informativos que el detalle tenga en impuestosDetalle
-        const otrosPct = data?.impuestosFactura
-          ?.filter((imp: any) => {
-            const t = imp.tipo || imp.impuesto?.tipo || '';
-            const esInfo = t === 'V' || t === 'Informativo' || t === 3;
-            if (!esInfo || !record.impuestosDetalle) return false;
-            return record.impuestosDetalle.some((idt: any) => {
-              return idt.impuestoID > 0 && idt.impuestoID === Number(imp.idExterno || imp.impuesto?.idExterno);
-            });
-          })
-          ?.reduce((sum: number, imp: any) => sum + (imp.impuesto?.porcentaje || 0), 0) || 0;
-        const otros = Math.round(base * (otrosPct / 100) * 100) / 100;
+        const otros = (record.impuestosDetalle || [])
+          .filter((idt: any) => idt.tipo === 'V' || idt.tipo === 'Informativo' || idt.tipo === 3)
+          .reduce((sum: number, idt: any) => {
+            const tasa = idt.tasa || idt.impuesto?.porcentaje || 0;
+            return sum + Math.round(base * (tasa / 100) * 100) / 100;
+          }, 0);
         return <span>{formatNumber(otros)}</span>;
       },
     },
