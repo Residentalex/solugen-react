@@ -1,10 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Typography, Descriptions, Alert, message, Modal, Input, Divider,
+  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Typography, Descriptions, Alert, message, Modal, Input, Divider, Tooltip,
 } from 'antd';
 import {
-  ArrowLeftOutlined, EditOutlined, CheckCircleOutlined, CheckCircleFilled, CloseCircleFilled, SearchOutlined, PrinterOutlined, DownloadOutlined,
+  ArrowLeftOutlined, EditOutlined, CheckCircleOutlined, CheckCircleFilled, CloseCircleFilled, SearchOutlined, PrinterOutlined, DownloadOutlined, FileExcelOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -12,6 +12,7 @@ import { apiClient } from '../../api/client';
 import { conciliacionBancariaApi } from '../../api/conciliacionBancariaApi';
 import PermissionGate from '../../components/PermissionGate';
 import { formatCurrency, formatNumber, formatDate, extraerMensajeError, toTitleCase } from '../../utils/formats';
+import dayjs from 'dayjs';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import type { ConciliacionBancariaDTO, MovimientoBancarioDTO, TransaccionConciliadaDTO, ResumenTipoDocumentoDTO, ResumenGeneralConciliacionDTO } from '../../types/conciliacionBancaria';
 
@@ -39,6 +40,8 @@ const ConciliacionBancariaDetalle: React.FC = () => {
   const [resumenGeneral, setResumenGeneral] = useState<ResumenGeneralConciliacionDTO | null>(null);
   const [exportandoLibros, setExportandoLibros] = useState(false);
   const [exportandoTransito, setExportandoTransito] = useState(false);
+  const [exportandoMovimientos, setExportandoMovimientos] = useState(false);
+  const [exportandoConciliadas, setExportandoConciliadas] = useState(false);
   const [movimientosDetalle, setMovimientosDetalle] = useState<MovimientoBancarioDTO[]>([]);
   const [transaccionesDetalle, setTransaccionesDetalle] = useState<TransaccionConciliadaDTO[]>([]);
   const [movimientosCargados, setMovimientosCargados] = useState(false);
@@ -64,17 +67,32 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
-  const cargarEnTransito = useCallback(() => {
-    if (!id) return;
+  const cargarEnTransito = useCallback(async () => {
+    if (!id || !data) return;
     setLoadingTransito(true);
-    conciliacionBancariaApi.obtenerEnTransito(sucursalActiva, parseInt(id))
-      .then((res) => {
-        setEnTransito(res);
-        setTransitoCargado(true);
-      })
-      .catch(() => message.error('Error al cargar documentos en tránsito'))
-      .finally(() => setLoadingTransito(false));
-  }, [id, sucursalActiva]);
+    const fechaStr = dayjs(data.fecha).format('YYYY-MM-DD');
+    try {
+      // Cargar tanto DOCTRANS (documentos en tránsito) como CTRANSAC sin conciliar
+      const [sinConciliar, enTransitoDoctrans] = await Promise.all([
+        conciliacionBancariaApi.obtenerTransaccionesSinConciliarSimple(sucursalActiva, data.numeroCta, fechaStr),
+        conciliacionBancariaApi.obtenerEnTransito(sucursalActiva, parseInt(id))
+      ]);
+      // Combinar ambos resultados: transacciones sin conciliar de CTRANSAC + documentos en tránsito de DOCTRANS
+      // Eliminar duplicados por transacId
+      const combined = [...sinConciliar, ...enTransitoDoctrans];
+      const combinado = combined.filter((item, index, self) =>
+        index === self.findIndex(t => t.transacId === item.transacId)
+      );
+      setEnTransito(combinado);
+      setTransitoCargado(true);
+      // Recargar resumen general después de cargar los datos de tránsito
+      await cargarResumenGeneral();
+    } catch {
+      message.error('Error al cargar documentos en tránsito');
+    } finally {
+      setLoadingTransito(false);
+    }
+  }, [id, sucursalActiva, data]);
 
   const cargarMovimientosDetalle = useCallback(() => {
     if (!id) return;
@@ -108,6 +126,46 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       .then(setResumenGeneral)
       .catch(() => message.error('Error al cargar el resumen general'));
   }, [id, sucursalActiva]);
+
+  // Resumen "en vivo": combina los valores del backend con los datos locales de tránsito
+  // para que el resumen refleje tanto DOCTRANS como CTRANSAC sin conciliar.
+  const resumenGeneralEnVivo = useMemo<ResumenGeneralConciliacionDTO | null>(() => {
+    if (!resumenGeneral) return null;
+
+    // Resumen de tránsito en vivo agrupado por tipo de documento
+    const resumenTransitoEnVivo: ResumenTipoDocumentoDTO[] = (() => {
+      const map = new Map<string, ResumenTipoDocumentoDTO>();
+      enTransito.forEach((t) => {
+        if (!t.tipoDoc) return;
+        const montoConSigno = t.debCred === 'D' ? -t.monto : t.monto;
+        const existing = map.get(t.tipoDoc);
+        if (existing) {
+          existing.cantidad += 1;
+          existing.montoTotal += montoConSigno;
+        } else {
+          map.set(t.tipoDoc, {
+            tipoDoc: t.tipoDoc,
+            nombreTipoDoc: t.nombreTipoDoc || '',
+            cantidad: 1,
+            montoTotal: montoConSigno,
+          });
+        }
+      });
+      return Array.from(map.values());
+    })();
+
+    const balanceConciliadoBanco = resumenGeneral.balanceBancos + resumenTransitoEnVivo.reduce((s, r) => s + r.montoTotal, 0);
+
+    return {
+      balanceInicialLibros: resumenGeneral.balanceInicialLibros,
+      resumenLibros: resumenGeneral.resumenLibros,
+      balanceConciliadoLibros: resumenGeneral.balanceConciliadoLibros,
+      balanceBancos: resumenGeneral.balanceBancos,
+      resumenTransito: resumenTransitoEnVivo,
+      balanceConciliadoBanco,
+      diferencia: balanceConciliadoBanco - resumenGeneral.balanceConciliadoLibros,
+    };
+  }, [resumenGeneral, enTransito]);
 
   useEffect(() => {
     setActiveModule('FConcil');
@@ -226,7 +284,16 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       }
       let transito = enTransito;
       if (!transitoCargado) {
-        transito = await conciliacionBancariaApi.obtenerEnTransito(sucursalActiva, parseInt(id));
+        // Cargar tanto DOCTRANS como CTRANSAC sin conciliar para exportar
+        const fechaStr = dayjs(data!.fecha).format('YYYY-MM-DD');
+        const [sinConciliar, enTransitoDoctrans] = await Promise.all([
+          conciliacionBancariaApi.obtenerTransaccionesSinConciliarSimple(sucursalActiva, data!.numeroCta, fechaStr),
+          conciliacionBancariaApi.obtenerEnTransito(sucursalActiva, parseInt(id))
+        ]);
+        transito = [...sinConciliar, ...enTransitoDoctrans];
+        transito = transito.filter((item, index, self) =>
+          index === self.findIndex(t => t.transacId === item.transacId)
+        );
         setEnTransito(transito);
         setTransitoCargado(true);
       }
@@ -255,6 +322,133 @@ const ConciliacionBancariaDetalle: React.FC = () => {
         sheetName: 'Tránsito',
         fileName: `transito-${id}.xlsx`,
         columnWidths: [{ wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 40 }, { wch: 12 }],
+      });
+      message.success('Tránsito exportado correctamente');
+    } catch {
+      message.error('Error al exportar tránsito');
+    } finally {
+      setExportandoTransito(false);
+    }
+  };
+
+  const handleExportarMovimientos = async () => {
+    if (!id) return;
+    setExportandoMovimientos(true);
+    try {
+      const datos = movimientosDetalle;
+      if (datos.length === 0) {
+        message.warning('No hay movimientos bancarios para exportar');
+        return;
+      }
+      const companyName = await getCompanyName(sucursalActiva);
+      const columnHeaders = ['Fecha', 'Referencia', 'Concepto', 'Total', 'Déb/Créd', 'Cotejado', 'Documento', 'Entidad'];
+      const dataRows = datos.map(d => [
+        d.fecha ? formatDate(d.fecha) : '',
+        d.numRef || '',
+        d.concepto || '',
+        d.monto,
+        d.debCred === 'D' ? 'Débito' : 'Crédito',
+        d.cotejado ? 'Sí' : 'No',
+        d.documento || '',
+        d.entidad || '',
+      ]);
+      exportToExcel({
+        companyName,
+        extraHeaderRows: [[`Movimientos Bancarios - Conciliación ${id}`]],
+        columnHeaders,
+        dataRows,
+        sheetName: 'Movimientos Bancarios',
+        fileName: `movimientos-bancarios-${id}.xlsx`,
+        columnWidths: [{ wch: 12 }, { wch: 15 }, { wch: 40 }, { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 15 }, { wch: 30 }],
+      });
+      message.success('Movimientos bancarios exportados correctamente');
+    } catch {
+      message.error('Error al exportar movimientos');
+    } finally {
+      setExportandoMovimientos(false);
+    }
+  };
+
+  const handleExportarConciliadas = async () => {
+    if (!id) return;
+    setExportandoConciliadas(true);
+    try {
+      let datos = transaccionesDetalle;
+      if (!transaccionesCargadas) {
+        datos = await conciliacionBancariaApi.obtenerTransaccionesConciliadas(sucursalActiva, parseInt(id));
+        setTransaccionesDetalle(datos);
+        setTransaccionesCargadas(true);
+      }
+      if (datos.length === 0) {
+        message.warning('No hay transacciones conciliadas para exportar');
+        return;
+      }
+      const companyName = await getCompanyName(sucursalActiva);
+      const columnHeaders = ['Fecha', 'Documento', 'Entidad', 'Total', 'Déb/Créd'];
+      const dataRows = datos.map(d => [
+        d.fecha ? formatDate(d.fecha) : '',
+        `${d.tipoDoc}-${d.numDoc}`,
+        d.entidad || '',
+        d.monto,
+        d.debCred === 'D' ? 'Débito' : 'Crédito',
+      ]);
+      exportToExcel({
+        companyName,
+        extraHeaderRows: [[`Transacciones Conciliadas - Conciliación ${id}`]],
+        columnHeaders,
+        dataRows,
+        sheetName: 'Conciliadas',
+        fileName: `transacciones-conciliadas-${id}.xlsx`,
+        columnWidths: [{ wch: 12 }, { wch: 18 }, { wch: 30 }, { wch: 15 }, { wch: 10 }],
+      });
+      message.success('Transacciones conciliadas exportadas correctamente');
+    } catch {
+      message.error('Error al exportar transacciones conciliadas');
+    } finally {
+      setExportandoConciliadas(false);
+    }
+  };
+
+  const handleExportarTransitoTab = async () => {
+    if (!id || !data) return;
+    setExportandoTransito(true);
+    try {
+      let datos = enTransito;
+      if (!transitoCargado) {
+        // Cargar tanto DOCTRANS como CTRANSAC sin conciliar
+        const fechaStr = dayjs(data.fecha).format('YYYY-MM-DD');
+        const [sinConciliar, enTransitoDoctrans] = await Promise.all([
+          conciliacionBancariaApi.obtenerTransaccionesSinConciliarSimple(sucursalActiva, data.numeroCta, fechaStr),
+          conciliacionBancariaApi.obtenerEnTransito(sucursalActiva, parseInt(id))
+        ]);
+        datos = [...sinConciliar, ...enTransitoDoctrans];
+        datos = datos.filter((item, index, self) =>
+          index === self.findIndex(t => t.transacId === item.transacId)
+        );
+        setEnTransito(datos);
+        setTransitoCargado(true);
+      }
+      if (datos.length === 0) {
+        message.warning('No hay transacciones en tránsito para exportar');
+        return;
+      }
+      const companyName = await getCompanyName(sucursalActiva);
+      const columnHeaders = ['Fecha', 'Documento', 'Entidad', 'Total', 'Déb/Créd'];
+      const dataRows = datos.map(d => [
+        d.fecha ? formatDate(d.fecha) : '',
+        `${d.tipoDoc}-${d.numDoc}`,
+        d.entidad || '',
+        d.monto,
+        d.debCred === 'D' ? 'Débito' : 'Crédito',
+      ]);
+      exportToExcel({
+        companyName,
+        extraHeaderRows: [[`Transacciones en Tránsito - Conciliación ${id}`]],
+        columnHeaders,
+        dataRows,
+        sheetName: 'Tránsito',
+        fileName: `transito-${id}.xlsx`,
+        columnWidths: [{ wch: 12 }, { wch: 18 }, { wch: 30 }, { wch: 15 }, { wch: 10 }],
       });
       message.success('Tránsito exportado correctamente');
     } catch {
@@ -339,11 +533,24 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       dataIndex: 'cotejado',
       key: 'cotejado',
       width: 100,
-      render: (cotejado: boolean) => (
-        cotejado
-          ? <CheckCircleFilled style={{ color: '#34c38f', fontSize: 16 }} />
-          : <CloseCircleFilled style={{ color: '#d9d9d9', fontSize: 16 }} />
-      ),
+      render: (cotejado: boolean, record: MovimientoBancarioDTO) => {
+        if (!cotejado) {
+          return <CloseCircleFilled style={{ color: '#d9d9d9', fontSize: 16 }} />;
+        }
+        // Tooltip con info del documento conciliado
+        const docConciliado = record.tipoDocConciliado && record.numDocConciliado
+          ? `${record.tipoDocConciliado}-${record.numDocConciliado}`
+          : record.documento || '';
+        const entidad = record.entidadConciliada || record.entidad || '';
+        const tooltipContent = docConciliado
+          ? entidad ? `Conciliado con: ${docConciliado} (${entidad})` : `Conciliado con: ${docConciliado}`
+          : 'Conciliado';
+        return (
+          <Tooltip title={tooltipContent}>
+            <CheckCircleFilled style={{ color: '#34c38f', fontSize: 16, cursor: 'pointer' }} />
+          </Tooltip>
+        );
+      },
     },
   ];
 
@@ -505,7 +712,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               {
                 key: 'resumen',
                 label: 'Resumen General',
-                children: resumenGeneral ? (
+                children: resumenGeneralEnVivo ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     {/* Sección Libro del Mayor */}
                     <Card className="paces-card" size="small" title={
@@ -523,7 +730,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                     }>
                       <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
                         <Descriptions.Item label="Balance inicial en libros">
-                          <Text strong>{formatCurrency(resumenGeneral.balanceInicialLibros)}</Text>
+                          <Text strong>{formatCurrency(resumenGeneralEnVivo!.balanceInicialLibros)}</Text>
                         </Descriptions.Item>
                         <Descriptions.Item label="Período">
                           {data.fechaAnt ? `${formatDate(data.fechaAnt)} → ${formatDate(data.fecha)}` : '-'}
@@ -532,7 +739,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
 
                       {/* Tabla resumen por tipo doc */}
                       <Table
-                        dataSource={resumenGeneral.resumenLibros}
+                        dataSource={resumenGeneralEnVivo!.resumenLibros}
                         columns={[
                           { title: 'Tipo de Documento', key: 'tipo', render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
                             <Text>{r.nombreTipoDoc || r.tipoDoc}</Text>
@@ -552,7 +759,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                       <Divider style={{ margin: '12px 0' }} />
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 16, fontWeight: 700 }}>
                         <span>Balance conciliado en libros:</span>
-                        <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneral.balanceConciliadoLibros)}</span>
+                        <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneralEnVivo!.balanceConciliadoLibros)}</span>
                       </div>
                     </Card>
 
@@ -572,13 +779,13 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                     }>
                       <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
                         <Descriptions.Item label="Balance según estado bancario">
-                          <Text strong>{formatCurrency(resumenGeneral.balanceBancos)}</Text>
+                          <Text strong>{formatCurrency(resumenGeneralEnVivo!.balanceBancos)}</Text>
                         </Descriptions.Item>
                       </Descriptions>
 
                       {/* Tabla tránsito */}
                       <Table
-                        dataSource={resumenGeneral.resumenTransito}
+                        dataSource={resumenGeneralEnVivo!.resumenTransito}
                         columns={[
                           { title: 'Tipo de Documento', key: 'tipo', render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
                             <Text>{r.nombreTipoDoc || r.tipoDoc}</Text>
@@ -598,17 +805,17 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                       <Divider style={{ margin: '12px 0' }} />
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 16, fontWeight: 700 }}>
                         <span>Balance conciliado banco + tránsito:</span>
-                        <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneral.balanceConciliadoBanco)}</span>
+                        <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneralEnVivo!.balanceConciliadoBanco)}</span>
                       </div>
                     </Card>
 
                     {/* Diferencia */}
                     <Card className="paces-card" size="small"
-                      style={{ borderLeft: `4px solid ${resumenGeneral.diferencia === 0 ? '#34c38f' : '#ff4d4f'}` }}>
+                      style={{ borderLeft: `4px solid ${resumenGeneralEnVivo!.diferencia === 0 ? '#34c38f' : '#ff4d4f'}` }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 18, fontWeight: 700 }}>
                         <span>Diferencia</span>
-                        <span style={{ color: resumenGeneral.diferencia === 0 ? '#34c38f' : '#ff4d4f' }}>
-                          {formatCurrency(resumenGeneral.diferencia)}
+                        <span style={{ color: resumenGeneralEnVivo!.diferencia === 0 ? '#34c38f' : '#ff4d4f' }}>
+                          {formatCurrency(resumenGeneralEnVivo!.diferencia)}
                         </span>
                       </div>
                     </Card>
@@ -625,15 +832,23 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               label: `Movimientos Bancarios (${movimientosDetalle.length})`,
               children: (
               <>
-              <Input.Search
-                placeholder="Buscar en movimientos..."
-                allowClear
-                onSearch={(v) => setSearchMov(v)}
-                onChange={(e) => { if (!e.target.value) setSearchMov(''); }}
-                style={{ width: 300, marginBottom: 12 }}
-                prefix={<SearchOutlined className="paces-text-icon" />}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 12 }}>
+                <Input.Search
+                  placeholder="Buscar en movimientos..."
+                  allowClear
+                  onSearch={(v) => setSearchMov(v)}
+                  onChange={(e) => { if (!e.target.value) setSearchMov(''); }}
+                  style={{ width: 300 }}
+                  prefix={<SearchOutlined className="paces-text-icon" />}
                 />
-                  <Table
+                <div style={{ flex: 1 }} />
+                <Button
+                  icon={<FileExcelOutlined />}
+                  onClick={handleExportarMovimientos}
+                  loading={exportandoMovimientos}
+                />
+              </div>
+                <Table
                       dataSource={(() => {
                         const items = movimientosDetalle;
                       if (!searchMov) return items;
@@ -650,6 +865,28 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                   pagination={{ pageSize: 50, showSizeChanger: true }}
                     scroll={{ x: 800 }}
                       locale={{ emptyText: 'No hay movimientos bancarios importados' }}
+                      summary={() => {
+                        const items = searchMov ? movimientosDetalle.filter((m) =>
+                          (m.concepto && m.concepto.toLowerCase().includes(searchMov.toLowerCase())) ||
+                          (m.numRef && m.numRef.toLowerCase().includes(searchMov.toLowerCase())) ||
+                          (m.documento && m.documento.toLowerCase().includes(searchMov.toLowerCase()))
+                        ) : movimientosDetalle;
+const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.monto), 0);
+                        return (
+                          <Table.Summary fixed="bottom">
+                            <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                              <Table.Summary.Cell index={0} colSpan={3}>
+                                <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={3} align="right">
+                                <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={4} />
+                              <Table.Summary.Cell index={5} />
+                            </Table.Summary.Row>
+                          </Table.Summary>
+                        );
+                      }}
                       />
                         </>
                         ),
@@ -685,6 +922,29 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                     pagination={{ pageSize: 50, showSizeChanger: true }}
                     scroll={{ x: 800 }}
                     locale={{ emptyText: 'No hay movimientos sin conciliar' }}
+                    summary={() => {
+                      const items = searchSinConcil ? movimientosDetalle.filter((m) => !m.cotejado && (
+                        (m.concepto && m.concepto.toLowerCase().includes(searchSinConcil.toLowerCase())) ||
+                        (m.numRef && m.numRef.toLowerCase().includes(searchSinConcil.toLowerCase())) ||
+                        (m.documento && m.documento.toLowerCase().includes(searchSinConcil.toLowerCase())) ||
+                        (m.entidad && m.entidad.toLowerCase().includes(searchSinConcil.toLowerCase()))
+                      )) : movimientosDetalle.filter((m) => !m.cotejado);
+                      const total = items.reduce((sum, m) => sum + (m.monto || 0), 0);
+                      return (
+                        <Table.Summary fixed="bottom">
+                          <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                            <Table.Summary.Cell index={0} colSpan={3}>
+                              <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right">
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={4} />
+                            <Table.Summary.Cell index={5} />
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      );
+                    }}
                   />
                 </>
               ),
@@ -694,14 +954,22 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               label: `Transacciones Conciliadas (${transaccionesDetalle.length})`,
               children: (
                 <>
-                  <Input.Search
-                    placeholder="Buscar en documentos..."
-                    allowClear
-                    onSearch={(v) => setSearchTrans(v)}
-                    onChange={(e) => { if (!e.target.value) setSearchTrans(''); }}
-                    style={{ width: 300, marginBottom: 12 }}
-                    prefix={<SearchOutlined className="paces-text-icon" />}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 12 }}>
+                    <Input.Search
+                      placeholder="Buscar en documentos..."
+                      allowClear
+                      onSearch={(v) => setSearchTrans(v)}
+                      onChange={(e) => { if (!e.target.value) setSearchTrans(''); }}
+                      style={{ width: 300 }}
+                      prefix={<SearchOutlined className="paces-text-icon" />}
+                    />
+                    <div style={{ flex: 1 }} />
+                    <Button
+                      icon={<FileExcelOutlined />}
+                      onClick={handleExportarConciliadas}
+                      loading={exportandoConciliadas}
+                    />
+                  </div>
                   <Table
                     dataSource={(() => {
                       const items = transaccionesDetalle;
@@ -719,23 +987,57 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                     pagination={{ pageSize: 10, showTotal: (t) => `${t} registros`, size: 'small' }}
                     scroll={{ x: 700 }}
                     locale={{ emptyText: 'No hay transacciones conciliadas' }}
+                    summary={() => {
+                      const items = searchTrans ? transaccionesDetalle.filter((t) =>
+                        (t.tipoDoc && t.tipoDoc.toLowerCase().includes(searchTrans.toLowerCase())) ||
+                        (t.numDoc && t.numDoc.toLowerCase().includes(searchTrans.toLowerCase())) ||
+                        (t.entidad && t.entidad.toLowerCase().includes(searchTrans.toLowerCase()))
+                      ) : transaccionesDetalle;
+                      const total = items.reduce((sum, t) => sum + (t.monto || 0), 0);
+                      return (
+                        <Table.Summary fixed="bottom">
+                          <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                            <Table.Summary.Cell index={0} colSpan={3}>
+                              <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right">
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={4} />
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      );
+                    }}
                   />
                 </>
               ),
             },
             {
               key: 'transito',
-              label: `Transacciones en Tránsito (${enTransito.length})`,
+              label: (
+                <>
+                  Transacciones en Tránsito ({enTransito.length})
+                  {loadingTransito && <Spin size="small" style={{ marginLeft: 8 }} />}
+                </>
+              ),
               children: (
                 <>
-                  <Input.Search
-                    placeholder="Buscar en tránsito..."
-                    allowClear
-                    onSearch={(v) => setSearchTransito(v)}
-                    onChange={(e) => { if (!e.target.value) setSearchTransito(''); }}
-                    style={{ width: 300, marginBottom: 12 }}
-                    prefix={<SearchOutlined className="paces-text-icon" />}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 12 }}>
+                    <Input.Search
+                      placeholder="Buscar en tránsito..."
+                      allowClear
+                      onSearch={(v) => setSearchTransito(v)}
+                      onChange={(e) => { if (!e.target.value) setSearchTransito(''); }}
+                      style={{ width: 300 }}
+                      prefix={<SearchOutlined className="paces-text-icon" />}
+                    />
+                    <div style={{ flex: 1 }} />
+                    <Button
+                      icon={<FileExcelOutlined />}
+                      onClick={handleExportarTransitoTab}
+                      loading={exportandoTransito}
+                    />
+                  </div>
                   <Table
                     dataSource={(() => {
                       const items = enTransito;
@@ -754,6 +1056,27 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                     pagination={{ pageSize: 50, showSizeChanger: true }}
                     scroll={{ x: 700 }}
                     locale={{ emptyText: 'No hay documentos en tránsito' }}
+                    summary={() => {
+                      const items = searchTransito ? enTransito.filter((t) =>
+                        (t.tipoDoc && t.tipoDoc.toLowerCase().includes(searchTransito.toLowerCase())) ||
+                        (t.numDoc && t.numDoc.toLowerCase().includes(searchTransito.toLowerCase())) ||
+                        (t.entidad && t.entidad.toLowerCase().includes(searchTransito.toLowerCase()))
+                      ) : enTransito;
+                      const total = items.reduce((sum, t) => sum + (t.monto || 0), 0);
+                      return (
+                        <Table.Summary fixed="bottom">
+                          <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                            <Table.Summary.Cell index={0} colSpan={3}>
+                              <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right">
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={4} />
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      );
+                    }}
                   />
                 </>
               ),
@@ -879,7 +1202,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                    }>
                      <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
                        <Descriptions.Item label="Balance inicial en libros">
-                         <Text strong>{formatCurrency(resumenGeneral.balanceInicialLibros)}</Text>
+                         <Text strong>{formatCurrency(resumenGeneralEnVivo!.balanceInicialLibros)}</Text>
                        </Descriptions.Item>
                        <Descriptions.Item label="Período">
                          {data.fechaAnt ? `${formatDate(data.fechaAnt)} → ${formatDate(data.fecha)}` : '-'}
@@ -888,7 +1211,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
 
                      {/* Tabla resumen por tipo doc */}
                      <Table
-                       dataSource={resumenGeneral.resumenLibros}
+                       dataSource={resumenGeneralEnVivo!.resumenLibros}
                        columns={[
                          { title: 'Tipo de Documento', key: 'tipo', render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
                            <Text>{r.nombreTipoDoc || r.tipoDoc}</Text>
@@ -908,7 +1231,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                      <Divider style={{ margin: '12px 0' }} />
                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 16, fontWeight: 700 }}>
                        <span>Balance conciliado en libros:</span>
-                       <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneral.balanceConciliadoLibros)}</span>
+                       <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneralEnVivo!.balanceConciliadoLibros)}</span>
                      </div>
                    </Card>
 
@@ -928,13 +1251,13 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                    }>
                      <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
                        <Descriptions.Item label="Balance según estado bancario">
-                         <Text strong>{formatCurrency(resumenGeneral.balanceBancos)}</Text>
+                         <Text strong>{formatCurrency(resumenGeneralEnVivo!.balanceBancos)}</Text>
                        </Descriptions.Item>
                      </Descriptions>
 
                      {/* Tabla tránsito */}
                      <Table
-                       dataSource={resumenGeneral.resumenTransito}
+                       dataSource={resumenGeneralEnVivo!.resumenTransito}
                        columns={[
                          { title: 'Tipo de Documento', key: 'tipo', render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
                            <Text>{r.nombreTipoDoc || r.tipoDoc}</Text>
@@ -954,17 +1277,17 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                      <Divider style={{ margin: '12px 0' }} />
                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 16, fontWeight: 700 }}>
                        <span>Balance conciliado banco + tránsito:</span>
-                       <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneral.balanceConciliadoBanco)}</span>
+                       <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneralEnVivo!.balanceConciliadoBanco)}</span>
                      </div>
                    </Card>
 
                   {/* Diferencia */}
                   <Card className="paces-card" size="small"
-                    style={{ borderLeft: `4px solid ${resumenGeneral.diferencia === 0 ? '#34c38f' : '#ff4d4f'}` }}>
+                    style={{ borderLeft: `4px solid ${resumenGeneralEnVivo!.diferencia === 0 ? '#34c38f' : '#ff4d4f'}` }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 18, fontWeight: 700 }}>
                       <span>Diferencia</span>
-                      <span style={{ color: resumenGeneral.diferencia === 0 ? '#34c38f' : '#ff4d4f' }}>
-                        {formatCurrency(resumenGeneral.diferencia)}
+                      <span style={{ color: resumenGeneralEnVivo!.diferencia === 0 ? '#34c38f' : '#ff4d4f' }}>
+                        {formatCurrency(resumenGeneralEnVivo!.diferencia)}
                       </span>
                     </div>
                   </Card>
@@ -981,14 +1304,22 @@ const ConciliacionBancariaDetalle: React.FC = () => {
             label: `Movimientos Bancarios (${movimientosDetalle.length})`,
             children: (
             <>
-            <Input.Search
-              placeholder="Buscar en movimientos..."
-              allowClear
-              onSearch={(v) => setSearchMov(v)}
-              onChange={(e) => { if (!e.target.value) setSearchMov(''); }}
-              style={{ width: 300, marginBottom: 12 }}
-              prefix={<SearchOutlined className="paces-text-icon" />}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 12 }}>
+              <Input.Search
+                placeholder="Buscar en movimientos..."
+                allowClear
+                onSearch={(v) => setSearchMov(v)}
+                onChange={(e) => { if (!e.target.value) setSearchMov(''); }}
+                style={{ width: 300 }}
+                prefix={<SearchOutlined className="paces-text-icon" />}
               />
+              <div style={{ flex: 1 }} />
+              <Button
+                icon={<FileExcelOutlined />}
+                onClick={handleExportarMovimientos}
+                loading={exportandoMovimientos}
+              />
+            </div>
                 <Table
                     dataSource={(() => {
                       const items = movimientosDetalle;
@@ -1004,10 +1335,32 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               rowKey="orden"
               size="small"
                 pagination={{ pageSize: 50, showSizeChanger: true }}
-                  scroll={{ x: 800 }}
-                    locale={{ emptyText: 'No hay movimientos bancarios importados' }}
-                    />
-                    </>
+                scroll={{ x: 800 }}
+                locale={{ emptyText: 'No hay movimientos bancarios importados' }}
+                  summary={() => {
+                      const items = searchMov ? movimientosDetalle.filter((m) =>
+                          (m.concepto && m.concepto.toLowerCase().includes(searchMov.toLowerCase())) ||
+                          (m.numRef && m.numRef.toLowerCase().includes(searchMov.toLowerCase())) ||
+                        (m.documento && m.documento.toLowerCase().includes(searchMov.toLowerCase()))
+                      ) : movimientosDetalle;
+                      const total = items.reduce((sum, m) => sum + (m.monto || 0), 0);
+                      return (
+                        <Table.Summary fixed="bottom">
+                          <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                            <Table.Summary.Cell index={0} colSpan={3}>
+                              <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right">
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={4} />
+                            <Table.Summary.Cell index={5} />
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      );
+                    }}
+                  />
+                </>
               ),
               },
             {
@@ -1041,6 +1394,29 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                     pagination={{ pageSize: 50, showSizeChanger: true }}
                     scroll={{ x: 800 }}
                     locale={{ emptyText: 'No hay movimientos sin conciliar' }}
+                    summary={() => {
+                      const items = searchSinConcil ? movimientosDetalle.filter((m) => !m.cotejado && (
+                        (m.concepto && m.concepto.toLowerCase().includes(searchSinConcil.toLowerCase())) ||
+                        (m.numRef && m.numRef.toLowerCase().includes(searchSinConcil.toLowerCase())) ||
+                        (m.documento && m.documento.toLowerCase().includes(searchSinConcil.toLowerCase())) ||
+                        (m.entidad && m.entidad.toLowerCase().includes(searchSinConcil.toLowerCase()))
+                      )) : movimientosDetalle.filter((m) => !m.cotejado);
+                      const total = items.reduce((sum, m) => sum + (m.monto || 0), 0);
+                      return (
+                        <Table.Summary fixed="bottom">
+                          <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                            <Table.Summary.Cell index={0} colSpan={3}>
+                              <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right">
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={4} />
+                            <Table.Summary.Cell index={5} />
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      );
+                    }}
                   />
                 </>
               ),
@@ -1050,14 +1426,22 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               label: `Transacciones Conciliadas (${transaccionesDetalle.length})`,
               children: (
                 <>
-                  <Input.Search
-                    placeholder="Buscar en documentos..."
-                    allowClear
-                    onSearch={(v) => setSearchTrans(v)}
-                    onChange={(e) => { if (!e.target.value) setSearchTrans(''); }}
-                    style={{ width: 300, marginBottom: 12 }}
-                    prefix={<SearchOutlined className="paces-text-icon" />}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 12 }}>
+                    <Input.Search
+                      placeholder="Buscar en documentos..."
+                      allowClear
+                      onSearch={(v) => setSearchTrans(v)}
+                      onChange={(e) => { if (!e.target.value) setSearchTrans(''); }}
+                      style={{ width: 300 }}
+                      prefix={<SearchOutlined className="paces-text-icon" />}
+                    />
+                    <div style={{ flex: 1 }} />
+                    <Button
+                      icon={<FileExcelOutlined />}
+                      onClick={handleExportarConciliadas}
+                      loading={exportandoConciliadas}
+                    />
+                  </div>
                   <Table
                     dataSource={(() => {
                       const items = transaccionesDetalle;
@@ -1075,23 +1459,57 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                     pagination={{ pageSize: 10, showTotal: (t) => `${t} registros`, size: 'small' }}
                     scroll={{ x: 700 }}
                     locale={{ emptyText: 'No hay transacciones conciliadas' }}
+                    summary={() => {
+                      const items = searchTrans ? transaccionesDetalle.filter((t) =>
+                        (t.tipoDoc && t.tipoDoc.toLowerCase().includes(searchTrans.toLowerCase())) ||
+                        (t.numDoc && t.numDoc.toLowerCase().includes(searchTrans.toLowerCase())) ||
+                        (t.entidad && t.entidad.toLowerCase().includes(searchTrans.toLowerCase()))
+                      ) : transaccionesDetalle;
+                      const total = items.reduce((sum, t) => sum + (t.monto || 0), 0);
+                      return (
+                        <Table.Summary fixed="bottom">
+                          <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                            <Table.Summary.Cell index={0} colSpan={3}>
+                              <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right">
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={4} />
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      );
+                    }}
                   />
                 </>
               ),
             },
             {
               key: 'transito',
-              label: `Transacciones en Tránsito (${enTransito.length})`,
+              label: (
+                <>
+                  Transacciones en Tránsito ({enTransito.length})
+                  {loadingTransito && <Spin size="small" style={{ marginLeft: 8 }} />}
+                </>
+              ),
               children: (
                 <>
-                  <Input.Search
-                    placeholder="Buscar en tránsito..."
-                    allowClear
-                    onSearch={(v) => setSearchTransito(v)}
-                    onChange={(e) => { if (!e.target.value) setSearchTransito(''); }}
-                    style={{ width: 300, marginBottom: 12 }}
-                    prefix={<SearchOutlined className="paces-text-icon" />}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 12 }}>
+                    <Input.Search
+                      placeholder="Buscar en tránsito..."
+                      allowClear
+                      onSearch={(v) => setSearchTransito(v)}
+                      onChange={(e) => { if (!e.target.value) setSearchTransito(''); }}
+                      style={{ width: 300 }}
+                      prefix={<SearchOutlined className="paces-text-icon" />}
+                    />
+                    <div style={{ flex: 1 }} />
+                    <Button
+                      icon={<FileExcelOutlined />}
+                      onClick={handleExportarTransitoTab}
+                      loading={exportandoTransito}
+                    />
+                  </div>
                   <Table
                     dataSource={(() => {
                       const items = enTransito;
@@ -1110,6 +1528,27 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                     pagination={{ pageSize: 50, showSizeChanger: true }}
                     scroll={{ x: 700 }}
                     locale={{ emptyText: 'No hay documentos en tránsito' }}
+                    summary={() => {
+                      const items = searchTransito ? enTransito.filter((t) =>
+                        (t.tipoDoc && t.tipoDoc.toLowerCase().includes(searchTransito.toLowerCase())) ||
+                        (t.numDoc && t.numDoc.toLowerCase().includes(searchTransito.toLowerCase())) ||
+                        (t.entidad && t.entidad.toLowerCase().includes(searchTransito.toLowerCase()))
+                      ) : enTransito;
+                      const total = items.reduce((sum, t) => sum + (t.monto || 0), 0);
+                      return (
+                        <Table.Summary fixed="bottom">
+                          <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                            <Table.Summary.Cell index={0} colSpan={3}>
+                              <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right">
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={4} />
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      );
+                    }}
                   />
                 </>
               ),
