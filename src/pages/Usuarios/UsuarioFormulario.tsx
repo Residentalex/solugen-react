@@ -18,6 +18,14 @@ import type { RolDTO, PantallaDTO, UsuarioSucursalRolDTO, AuthSucursalPermitidaD
 import BuscarEmpleadoModal from '../../components/BuscarEmpleadoModal/BuscarEmpleadoModal';
 import EntidadImagen from '../../components/EntidadImagen';
 
+function sanitizeHtml(text: string): string {
+  if (!text) return text;
+  const map: Record<string, string> = {
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;', '/': '&#x2F;',
+  };
+  return text.replace(/[&<>"'\/]/g, (m) => map[m]);
+}
+
 interface PantallaConRoles extends PantallaDTO {
   rolesAcceso: string[];
 }
@@ -397,12 +405,12 @@ const UsuarioFormulario: React.FC = () => {
                 <Row gutter={16}>
                   <Col xs={24} sm={12} lg={8}>
                     <Form.Item name="nombreUsuario" label="Usuario" rules={[{ required: true, message: 'Obligatorio' }]}>
-                      <Input placeholder="Nombre de cuenta" />
+                      <Input placeholder="Nombre de cuenta" onChange={(e) => form.setFieldValue('nombreUsuario', sanitizeHtml(e.target.value))} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={8}>
                     <Form.Item name="nombre" label="Nombre completo" rules={[{ required: true, message: 'Obligatorio' }]}>
-                      <Input placeholder="Nombre y apellidos" />
+                      <Input placeholder="Nombre y apellidos" onChange={(e) => form.setFieldValue('nombre', sanitizeHtml(e.target.value))} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
