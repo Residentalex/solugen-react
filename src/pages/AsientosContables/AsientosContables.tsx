@@ -75,21 +75,20 @@ const AsientosContables: React.FC = () => {
   const defaultLoadedRef = useRef(false);
   useEffect(() => {
     if (sucursalActiva === undefined) return;
+    if (defaultLoadedRef.current) return; // ya se cargó
+    defaultLoadedRef.current = true;
     pantallaApi.obtenerPantallasConEntidades(sucursalActiva).then((pantallas) => {
       const pantalla = pantallas.find(
         (p) => p.codigo?.toUpperCase() === screenCode.toUpperCase()
       );
       const codDoc = pantalla?.entidades?.[0]?.entidadCodigo;
-      if (codDoc && !defaultLoadedRef.current) {
-        defaultLoadedRef.current = true;
-        if (!tipoDoc) {
-          actions.handleSetTipoDoc(codDoc);
-        }
+      if (codDoc && !tipoDoc) {
+        actions.handleSetTipoDoc(codDoc);
       }
     }).catch(() => {
-      defaultLoadedRef.current = true; /* marcar cargado aunque falle */
+      /* marcar cargado aunque falle */
     });
-  }, [sucursalActiva, screenCode, tipoDoc, actions]);
+  }, [sucursalActiva, screenCode]); // solo cargar una vez al montar
 
   const handleClonar = async () => {
     if (!state.selectedRow) return;

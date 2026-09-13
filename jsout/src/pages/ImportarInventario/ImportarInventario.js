@@ -1,0 +1,725 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Card, Table, Button, Space, Row, Col, Grid, message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, } from 'antd';
+import { SaveOutlined, CloseOutlined, DeleteOutlined, PlusOutlined, SearchOutlined, UploadOutlined, DownloadOutlined, ExclamationCircleOutlined, } from '@ant-design/icons';
+import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
+import { useAuthStore } from '../../stores/authStore';
+import { useCompanyStore } from '../../stores/companyStore';
+import { useUIStore } from '../../stores/uiStore';
+import { importarInventarioApi } from '../../api/importarInventarioApi';
+import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
+import { salidaAlmacenApi } from '../../api/salidaAlmacenApi';
+import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
+import { devolucionCompraApi } from '../../api/devolucionCompraApi';
+import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
+import TotalesCard from '../../components/TotalesCard';
+import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
+import { TIPO_DOC_LABELS, TIPO_DOC_ROUTES } from '../../types/importarInventario';
+const { Text } = Typography;
+const { TextArea } = Input;
+// ===== Helpers =====
+function formatNumber(n) {
+    return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+function toTitleCase(str) {
+    if (!str)
+        return str;
+    return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+function toISOFormat(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+function extraerMensajeError(err, fallback) {
+    const data = err?.response?.data;
+    if (!data)
+        return fallback;
+    if (data.errorMessage)
+        return data.errorMessage;
+    if (data.errors && typeof data.errors === 'object') {
+        const mensajes = [];
+        for (const key of Object.keys(data.errors)) {
+            const val = data.errors[key];
+            if (Array.isArray(val))
+                mensajes.push(...val);
+            else if (typeof val === 'string')
+                mensajes.push(val);
+        }
+        if (mensajes.length > 0)
+            return mensajes.join('; ');
+    }
+    return fallback;
+}
+// ===== Columnas de plantilla por tipo de documento =====
+const columnasPorTipo = {
+    ENP: ['codigo', 'articulo', 'cantidad', 'costo', 'porcentajedescuento', 'porcentajeimpuesto', 'fechaVencimiento'],
+    SAP: ['codigo', 'articulo', 'cantidad', 'costo', 'porcentajedescuento', 'porcentajeimpuesto'],
+    TRP: ['codigo', 'articulo', 'cantidad', 'costo'],
+    DVC: ['codigo', 'articulo', 'cantidad', 'costo', 'porcentajedescuento', 'porcentajeimpuesto'],
+};
+// ===== Generación de plantilla CSV =====
+function generarPlantillaCSV(tipo) {
+    const columnas = columnasPorTipo[tipo] || columnasPorTipo.ENP;
+    const sep = (1.1).toLocaleString().indexOf(',') >= 0 ? ';' : ',';
+    return '\uFEFF' + columnas.join(sep) + '\n';
+}
+function handleDescargarPlantilla(tipo) {
+    const columnas = columnasPorTipo[tipo] || columnasPorTipo.ENP;
+    const data = [columnas.reduce((acc, col) => ({ ...acc, [col]: '' }), {})];
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    worksheet['!cols'] = columnas.map(() => ({ wch: 20 }));
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Plantilla');
+    const label = TIPO_DOC_LABELS[tipo];
+    XLSX.writeFile(workbook, `plantilla_${label.replace(/\s+/g, '_')}.xlsx`);
+}
+// ===== Cálculo de fila =====
+function calcularFila(fila) {
+    const cantidad = fila.cantidad || 0;
+    const costo = fila.costo || 0;
+    const pctDesc = fila.porcentajeDescuento || 0;
+    const pctImp = fila.porcentajeImpuesto || 0;
+    const subTotal = Math.round(cantidad * costo * 100) / 100;
+    const descuento = Math.round(subTotal * (pctDesc / 100) * 100) / 100;
+    const baseImponible = subTotal - descuento;
+    const impuestos = Math.round(baseImponible * (pctImp / 100) * 100) / 100;
+    const total = Math.round((baseImponible + impuestos) * 100) / 100;
+    return {
+        ...fila,
+        subTotal,
+        descuento,
+        impuestos,
+        total,
+    };
+}
+function filaVacia() {
+    return {
+        id: 0,
+        codigo: '',
+        articulo: '',
+        referencia: '',
+        cantidad: 0,
+        costo: 0,
+        precio: 0,
+        subTotal: 0,
+        descuento: 0,
+        porcentajeDescuento: 0,
+        impuestos: 0,
+        porcentajeImpuesto: 0,
+        total: 0,
+        tipoArticulo: 'Producto',
+    };
+}
+// ===== Parser CSV básico =====
+function parseCSV(text) {
+    const lines = text.split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2)
+        return [];
+    // Inferir headers de la primera línea
+    const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
+    const idxCodigo = headers.indexOf('codigo');
+    const idxArticulo = headers.indexOf('articulo');
+    const idxRef = headers.indexOf('referencia');
+    const idxCant = headers.indexOf('cantidad');
+    const idxCosto = headers.indexOf('costo');
+    const idxPctDesc = headers.indexOf('porcentajedescuento');
+    const idxPctImp = headers.indexOf('porcentajeimpuesto');
+    const resultados = [];
+    for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map((c) => c.trim());
+        const fila = {
+            ...filaVacia(),
+            id: -(i),
+            codigo: idxCodigo >= 0 ? cols[idxCodigo] || '' : '',
+            articulo: idxArticulo >= 0 ? cols[idxArticulo] || '' : '',
+            referencia: idxRef >= 0 ? cols[idxRef] || '' : '',
+            cantidad: idxCant >= 0 ? parseFloat(cols[idxCant]) || 0 : 0,
+            costo: idxCosto >= 0 ? parseFloat(cols[idxCosto]) || 0 : 0,
+            porcentajeDescuento: idxPctDesc >= 0 ? parseFloat(cols[idxPctDesc]) || 0 : 0,
+            porcentajeImpuesto: idxPctImp >= 0 ? parseFloat(cols[idxPctImp]) || 0 : 0,
+        };
+        resultados.push(calcularFila(fila));
+    }
+    return resultados;
+}
+// ===== Componente principal =====
+const ImportarInventario = () => {
+    const navigate = useNavigate();
+    const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+    const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
+    const resetToolbar = useUIStore((s) => s.resetToolbar);
+    const setActiveModule = useUIStore((s) => s.setActiveModule);
+    const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+    const screens = Grid.useBreakpoint();
+    const isLarge = screens.lg ?? true;
+    const monedaDefault = getMonedaSucursalActiva();
+    // ===== States =====
+    const [saving, setSaving] = useState(false);
+    const [detalles, setDetalles] = useState([]);
+    // Tipo documento
+    const [tipoDocumento, setTipoDocumento] = useState('ENP');
+    // Concepto
+    const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
+    const [selectedConcepto, setSelectedConcepto] = useState(null);
+    const [conceptoSearchText, setConceptoSearchText] = useState('');
+    // Catálogo de entidades
+    const [suplidoresCache, setSuplidoresCache] = useState([]);
+    const [almacenesCache, setAlmacenesCache] = useState([]);
+    // Entidad Desde/Hasta
+    const [entidadDesdeVal, setEntidadDesdeVal] = useState('');
+    const [entidadHastaVal, setEntidadHastaVal] = useState('');
+    const impuestosBackupRef = useRef(new Map());
+    // File input ref
+    const fileInputRef = useRef(null);
+    const [form] = Form.useForm();
+    // ===== Determinar labels de entidad según tipo de documento =====
+    const entidadLabels = useMemo(() => {
+        switch (tipoDocumento) {
+            case 'ENP': return { desde: 'Proveedor', hasta: 'Almacén Destino' };
+            case 'SAP': return { desde: 'Almacén Origen', hasta: 'Suplidor' };
+            case 'TRP': return { desde: 'Almacén Origen', hasta: 'Almacén Destino' };
+            case 'DVC': return { desde: 'Proveedor', hasta: 'Almacén' };
+            default: return { desde: 'Desde', hasta: 'Hasta' };
+        }
+    }, [tipoDocumento]);
+    // ===== Al cambiar tipo de documento =====
+    const handleTipoDocumentoChange = (value) => {
+        setTipoDocumento(value);
+        // Limpiar selecciones dependientes
+        setSelectedConcepto(null);
+        setConceptoSearchText('');
+        setEntidadDesdeVal('');
+        setEntidadHastaVal('');
+        setDetalles([]);
+        form.setFieldsValue({
+            conceptoNombre: '',
+            entidadDesde: undefined,
+            entidadHasta: undefined,
+        });
+    };
+    // ===== Cargar catálogos al montar =====
+    useEffect(() => {
+        setActiveModule('OImportarINV');
+        setPageTitleOverride('Importar Inventario');
+        importarInventarioApi.obtenerSuplidores(sucursalActiva)
+            .then(setSuplidoresCache)
+            .catch((err) => console.warn('Error al cargar suplidores cache', err));
+        importarInventarioApi.obtenerAlmacenes(sucursalActiva)
+            .then(setAlmacenesCache)
+            .catch((err) => console.warn('Error al cargar almacenes cache', err));
+        form.setFieldsValue({ fechaDocumento: dayjs() });
+        return () => {
+            resetToolbar();
+            setPageTitleOverride('');
+        };
+    }, [setActiveModule, setPageTitleOverride, resetToolbar, sucursalActiva, form]);
+    // ===== Handlers =====
+    const handleCancelar = () => {
+        Modal.confirm({
+            title: 'Cancelar',
+            icon: _jsx(ExclamationCircleOutlined, {}),
+            content: '¿Está seguro que desea cancelar? Se perderán los datos ingresados.',
+            okText: 'Si, cancelar',
+            cancelText: 'No, continuar',
+            okButtonProps: { danger: true },
+            onOk: () => navigate('/'),
+        });
+    };
+    // ===== Concepto =====
+    const handleConceptoSelect = (concepto) => {
+        setSelectedConcepto(concepto);
+        setConceptoSearchText(`${concepto.codigo || ''} - ${toTitleCase(concepto.nombre)}`);
+        // === ConfigurarMoneda ===
+        const monedaObj = concepto.moneda || getMonedaSucursalActiva();
+        form.setFieldsValue({
+            conceptoNombre: concepto.nombre,
+            moneda: monedaObj.nombre,
+            tasa: monedaObj.tasa ?? 1,
+        });
+        // === NoImpuesto: si el concepto no acepta impuestos, limpiarlos ===
+        const prevNoImpuesto = selectedConcepto?.noImpuesto;
+        if (concepto.noImpuesto) {
+            const hayImpuestos = detalles.some((d) => (d.porcentajeImpuesto || 0) > 0);
+            if (hayImpuestos) {
+                const backup = new Map();
+                detalles.forEach((d) => {
+                    if ((d.porcentajeImpuesto || 0) > 0) {
+                        backup.set(d.id, { impuesto: d.impuesto, porcentajeImpuesto: d.porcentajeImpuesto || 0 });
+                    }
+                });
+                impuestosBackupRef.current = backup;
+                message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
+                setDetalles((prev) => prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined })));
+            }
+        }
+        else if (prevNoImpuesto && !concepto.noImpuesto) {
+            const backup = impuestosBackupRef.current;
+            if (backup.size > 0) {
+                setDetalles((prev) => prev.map((d) => {
+                    const saved = backup.get(d.id);
+                    if (saved) {
+                        return calcularFila({ ...d, impuesto: saved.impuesto, porcentajeImpuesto: saved.porcentajeImpuesto });
+                    }
+                    return d;
+                }));
+                impuestosBackupRef.current = new Map();
+            }
+        }
+    };
+    const handleConceptoSearchClick = () => {
+        setConceptoModalOpen(true);
+    };
+    // ===== Detalles =====
+    const handleAgregarFila = () => {
+        setDetalles((prev) => [{ ...filaVacia(), id: -(prev.length + 1) }, ...prev]);
+    };
+    const handleEliminarFila = (id) => {
+        setDetalles((prev) => prev.filter((d) => d.id !== id));
+    };
+    const handleDetalleUpdate = (id, field, value) => {
+        setDetalles((prev) => prev.map((d) => (d.id !== id ? d : { ...d, [field]: value })));
+    };
+    const handleDetalleCalculate = (id, field, value) => {
+        setDetalles((prev) => prev.map((d) => {
+            if (d.id !== id)
+                return d;
+            const updated = { ...d, [field]: value };
+            return calcularFila(updated);
+        }));
+    };
+    // ===== Carga de CSV/Excel =====
+    const handleFileChange = (e) => {
+        const file = e.target.files?.[0];
+        if (!file)
+            return;
+        const reader = new FileReader();
+        const isExcel = file.name.endsWith('.xlsx');
+        reader.onload = (evt) => {
+            try {
+                let parsed;
+                if (isExcel) {
+                    const data = new Uint8Array(evt.target?.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+                    if (rows.length < 2) {
+                        message.warning('El archivo no contiene datos válidos.');
+                        return;
+                    }
+                    const headers = rows[0].map((h) => String(h).trim().toLowerCase());
+                    const idxCodigo = headers.indexOf('codigo');
+                    const idxArticulo = headers.indexOf('articulo');
+                    const idxRef = headers.indexOf('referencia');
+                    const idxCant = headers.indexOf('cantidad');
+                    const idxCosto = headers.indexOf('costo');
+                    const idxPctDesc = headers.indexOf('porcentajedescuento');
+                    const idxPctImp = headers.indexOf('porcentajeimpuesto');
+                    parsed = [];
+                    for (let i = 1; i < rows.length; i++) {
+                        const cols = rows[i].map((c) => String(c ?? '').trim());
+                        if (cols.every((c) => !c))
+                            continue;
+                        const fila = {
+                            ...filaVacia(),
+                            id: -i,
+                            codigo: idxCodigo >= 0 ? cols[idxCodigo] || '' : '',
+                            articulo: idxArticulo >= 0 ? cols[idxArticulo] || '' : '',
+                            referencia: idxRef >= 0 ? cols[idxRef] || '' : '',
+                            cantidad: idxCant >= 0 ? parseFloat(cols[idxCant]) || 0 : 0,
+                            costo: idxCosto >= 0 ? parseFloat(cols[idxCosto]) || 0 : 0,
+                            porcentajeDescuento: idxPctDesc >= 0 ? parseFloat(cols[idxPctDesc]) || 0 : 0,
+                            porcentajeImpuesto: idxPctImp >= 0 ? parseFloat(cols[idxPctImp]) || 0 : 0,
+                        };
+                        parsed.push(calcularFila(fila));
+                    }
+                }
+                else {
+                    const text = evt.target?.result;
+                    if (!text) {
+                        message.error('No se pudo leer el archivo');
+                        return;
+                    }
+                    parsed = parseCSV(text);
+                }
+                if (parsed.length === 0) {
+                    message.warning('El archivo no contiene datos válidos.');
+                    return;
+                }
+                setDetalles((prev) => {
+                    const maxId = prev.length > 0 ? Math.min(...prev.map((d) => d.id)) : 0;
+                    const nuevos = parsed.map((d, idx) => ({ ...d, id: maxId - 1 - idx }));
+                    return [...prev, ...nuevos];
+                });
+                message.success(`${parsed.length} filas cargadas desde ${isExcel ? 'Excel' : 'CSV'}`);
+            }
+            catch (err) {
+                message.error('Error al leer el archivo. Verifique el formato.');
+            }
+        };
+        reader.onerror = () => {
+            message.error('Error al leer el archivo');
+        };
+        if (isExcel) {
+            reader.readAsArrayBuffer(file);
+        }
+        else {
+            reader.readAsText(file, 'UTF-8');
+        }
+        // Resetear input para permitir recargar el mismo archivo
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+    // ===== Totales calculados con useMemo =====
+    const totales = useMemo(() => ({
+        subTotal: detalles.reduce((s, d) => s + (d.subTotal || 0), 0),
+        descuento: detalles.reduce((s, d) => s + (d.descuento || 0), 0),
+        impuestos: detalles.reduce((s, d) => s + (d.impuestos || 0), 0),
+        total: detalles.reduce((s, d) => s + (d.total || 0), 0),
+    }), [detalles]);
+    // ===== Validación =====
+    const validarFormulario = () => {
+        if (!selectedConcepto)
+            return 'El concepto es requerido';
+        if (!entidadDesdeVal)
+            return `La entidad "${entidadLabels.desde}" es requerida`;
+        if (!entidadHastaVal)
+            return `La entidad "${entidadLabels.hasta}" es requerida`;
+        if (detalles.length === 0)
+            return 'Debe agregar al menos un detalle';
+        if (!detalles.some((d) => (d.cantidad || 0) > 0))
+            return 'Debe tener al menos un detalle con cantidad > 0';
+        return null;
+    };
+    // ===== Construir DTO según tipo =====
+    const construirDTO = () => {
+        const values = form.getFieldsValue();
+        const fechaDoc = values.fechaDocumento
+            ? (typeof values.fechaDocumento === 'object' && values.fechaDocumento.toDate
+                ? toISOFormat(values.fechaDocumento.toDate())
+                : values.fechaDocumento)
+            : toISOFormat(new Date());
+        const encabezadoBase = {
+            id: 0,
+            noDocumento: '',
+            estado: 0,
+            periodo: new Date().getMonth() + 1,
+            referencia: '',
+            ncf: '',
+            nota: values.nota || '',
+            tasa: 1,
+            fechaDocumento: fechaDoc,
+            documento: { codigo: tipoDocumento },
+        };
+        switch (tipoDocumento) {
+            case 'ENP': {
+                const suplidorSel = suplidoresCache.find((s) => s.codigo === entidadDesdeVal);
+                const almacenSel = almacenesCache.find((a) => a.codigo === entidadHastaVal);
+                return {
+                    ...encabezadoBase,
+                    tipoDocumento: 0,
+                    ncfModificado: '',
+                    diasCredito: 0,
+                    retenciones: 0,
+                    subTotal: detalles.reduce((s, d) => s + (d.subTotal || 0), 0),
+                    descuento: detalles.reduce((s, d) => s + (d.descuento || 0), 0),
+                    impuestos: detalles.reduce((s, d) => s + (d.impuestos || 0), 0),
+                    total: detalles.reduce((s, d) => s + (d.total || 0), 0),
+                    concepto: selectedConcepto || { nombre: '', codigo: '' },
+                    suplidor: suplidorSel || { nombre: '', codigo: '', identificacion: '' },
+                    almacen: almacenSel || { nombre: '', codigo: '' },
+                    entidad: suplidorSel
+                        ? { nombre: suplidorSel.nombre, codigo: suplidorSel.codigo, identificacion: suplidorSel.identificacion || '', telefono: suplidorSel.telefono, direccion: suplidorSel.direccion }
+                        : { nombre: '', codigo: '', identificacion: '' },
+                    moneda: getMonedaSucursalActiva(),
+                    sucursal: (() => {
+                        const sucActual = useAuthStore.getState().sucursalesPermitidas
+                            .find(s => s.sucursal === sucursalActiva);
+                        return sucActual
+                            ? { nombre: sucActual.nombre, codigo: String(sucActual.sucursal), identificacion: '' }
+                            : { nombre: '', codigo: '', identificacion: '' };
+                    })(),
+                    ordenCompra: { id: 0, noDocumento: '' },
+                    detalles: detalles.map((d) => ({
+                        id: d.id,
+                        codigo: d.codigo,
+                        articulo: d.articulo,
+                        referencia: d.referencia,
+                        cantidad: d.cantidad || 0,
+                        costo: d.costo || 0,
+                        precio: d.costo || 0,
+                        subTotal: d.subTotal || 0,
+                        descuento: d.descuento || 0,
+                        porcentajeDescuento: d.porcentajeDescuento || 0,
+                        impuestos: d.impuestos || 0,
+                        porcentajeImpuesto: d.porcentajeImpuesto || 0,
+                        total: d.total || 0,
+                        tipoArticulo: d.tipoArticulo || 'Producto',
+                        flete: 0,
+                        costoActual: 0,
+                        ajustado: false,
+                        cantidadBonificable: 0,
+                    })),
+                    asientos: [],
+                    logs: [],
+                };
+            }
+            case 'SAP': {
+                const almacenSel = almacenesCache.find((a) => a.codigo === entidadDesdeVal);
+                const suplidorSel = suplidoresCache.find((s) => s.codigo === entidadHastaVal);
+                return {
+                    ...encabezadoBase,
+                    fechaRecibo: undefined,
+                    subTotal: detalles.reduce((s, d) => s + (d.subTotal || 0), 0),
+                    descuento: detalles.reduce((s, d) => s + (d.descuento || 0), 0),
+                    impuestos: detalles.reduce((s, d) => s + (d.impuestos || 0), 0),
+                    total: detalles.reduce((s, d) => s + (d.total || 0), 0),
+                    concepto: selectedConcepto || { nombre: '', codigo: '' },
+                    almacen: almacenSel || { nombre: '', codigo: '' },
+                    suplidor: suplidorSel || { nombre: entidadHastaVal || '', codigo: '', identificacion: '' },
+                    entidad: suplidorSel
+                        ? { nombre: suplidorSel.nombre, codigo: suplidorSel.codigo, identificacion: suplidorSel.identificacion || '' }
+                        : { nombre: entidadHastaVal || '', codigo: '', identificacion: '' },
+                    moneda: getMonedaSucursalActiva(),
+                    detalles: detalles.map((d) => ({
+                        id: d.id,
+                        codigo: d.codigo,
+                        articulo: d.articulo,
+                        referencia: d.referencia,
+                        cantidad: d.cantidad || 0,
+                        costo: d.costo || 0,
+                        subTotal: d.subTotal || 0,
+                        porcentajeDescuento: d.porcentajeDescuento || 0,
+                        descuento: d.descuento || 0,
+                        porcentajeImpuesto: d.porcentajeImpuesto || 0,
+                        impuestos: d.impuestos || 0,
+                        total: d.total || 0,
+                        tipoArticulo: d.tipoArticulo || 'Producto',
+                    })),
+                    asientos: [],
+                    logs: [],
+                };
+            }
+            case 'TRP': {
+                const almacenOrigenSel = almacenesCache.find((a) => a.codigo === entidadDesdeVal);
+                const almacenDestinoSel = almacenesCache.find((a) => a.codigo === entidadHastaVal);
+                return {
+                    ...encabezadoBase,
+                    subTotal: detalles.reduce((s, d) => s + (d.subTotal || 0), 0),
+                    total: detalles.reduce((s, d) => s + (d.total || 0), 0),
+                    concepto: selectedConcepto || { nombre: '', codigo: '' },
+                    almacen: almacenOrigenSel || { nombre: '', codigo: '' },
+                    almacenDestino: almacenDestinoSel || { nombre: '', codigo: '' },
+                    moneda: getMonedaSucursalActiva(),
+                    detalles: detalles.map((d) => ({
+                        id: d.id,
+                        codigo: d.codigo,
+                        articulo: d.articulo,
+                        referencia: d.referencia,
+                        cantidad: d.cantidad || 0,
+                        subTotal: d.subTotal || 0,
+                        total: d.total || 0,
+                        tipoArticulo: d.tipoArticulo || 'Producto',
+                    })),
+                    asientos: [],
+                    logs: [],
+                };
+            }
+            case 'DVC': {
+                const suplidorSel = suplidoresCache.find((s) => s.codigo === entidadDesdeVal);
+                const almacenSel = almacenesCache.find((a) => a.codigo === entidadHastaVal);
+                return {
+                    ...encabezadoBase,
+                    subTotal: detalles.reduce((s, d) => s + (d.subTotal || 0), 0),
+                    descuento: detalles.reduce((s, d) => s + (d.descuento || 0), 0),
+                    impuestos: detalles.reduce((s, d) => s + (d.impuestos || 0), 0),
+                    total: detalles.reduce((s, d) => s + (d.total || 0), 0),
+                    concepto: selectedConcepto || { nombre: '', codigo: '' },
+                    almacen: almacenSel || { nombre: '', codigo: '' },
+                    suplidor: suplidorSel || { nombre: '', codigo: '', identificacion: '' },
+                    entidad: suplidorSel
+                        ? { nombre: suplidorSel.nombre, codigo: suplidorSel.codigo, identificacion: suplidorSel.identificacion || '', telefono: suplidorSel.telefono, direccion: suplidorSel.direccion }
+                        : { nombre: '', codigo: '', identificacion: '' },
+                    tipo: null,
+                    entrada: null,
+                    moneda: getMonedaSucursalActiva(),
+                    detalles: detalles.map((d) => ({
+                        id: d.id,
+                        codigo: d.codigo,
+                        articulo: d.articulo,
+                        referencia: d.referencia,
+                        cantidad: d.cantidad || 0,
+                        devuelto: 0,
+                        costo: d.costo || 0,
+                        subTotal: d.subTotal || 0,
+                        porcentajeDescuento: d.porcentajeDescuento || 0,
+                        descuento: d.descuento || 0,
+                        impuestos: d.impuestos || 0,
+                        total: d.total || 0,
+                        tipoArticulo: d.tipoArticulo || 'Producto',
+                        nota: '',
+                    })),
+                    asientos: [],
+                    logs: [],
+                };
+            }
+            default:
+                throw new Error(`Tipo de documento no soportado: ${tipoDocumento}`);
+        }
+    };
+    // ===== Guardar =====
+    const handleGuardar = async () => {
+        const error = validarFormulario();
+        if (error) {
+            message.error(error);
+            return;
+        }
+        setSaving(true);
+        try {
+            const dto = construirDTO();
+            let result;
+            switch (tipoDocumento) {
+                case 'ENP':
+                    result = await entradaAlmacenApi.crear(sucursalActiva, dto);
+                    break;
+                case 'SAP':
+                    result = await salidaAlmacenApi.crear(sucursalActiva, dto);
+                    break;
+                case 'TRP':
+                    result = await transferenciaAlmacenApi.crear(sucursalActiva, dto);
+                    break;
+                case 'DVC':
+                    result = await devolucionCompraApi.crear(sucursalActiva, dto);
+                    break;
+                default:
+                    throw new Error(`Tipo de documento no soportado: ${tipoDocumento}`);
+            }
+            message.success(`${TIPO_DOC_LABELS[tipoDocumento]} creada exitosamente`);
+            const ruta = TIPO_DOC_ROUTES[tipoDocumento] + result.id;
+            navigate(ruta);
+        }
+        catch (err) {
+            const msg = extraerMensajeError(err, 'Error al guardar');
+            message.error(msg);
+        }
+        finally {
+            setSaving(false);
+        }
+    };
+    // ===== Toolbar inline =====
+    const renderToolbar = () => (_jsxs("div", { style: { display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }, children: [_jsx("div", { style: { flex: 1 } }), _jsxs(Space, { wrap: true, children: [_jsx(Button, { type: "primary", icon: _jsx(SaveOutlined, {}), loading: saving, onClick: handleGuardar, children: "Guardar" }), _jsx(Button, { icon: _jsx(CloseOutlined, {}), onClick: handleCancelar, children: "Cancelar" })] })] }));
+    // ===== Columnas de detalles =====
+    const detalleColumns = [
+        {
+            title: 'Artículo',
+            key: 'articulo',
+            ellipsis: true,
+            render: (_, record) => (_jsxs("div", { style: { fontSize: 13 }, children: [_jsx(Input, { size: "small", style: { width: '100%' }, placeholder: "C\u00F3digo", value: record.codigo, onChange: (e) => handleDetalleUpdate(record.id, 'codigo', e.target.value) }), _jsxs("div", { className: "paces-text-secondary", style: { fontSize: 11, marginTop: 2 }, children: [record.articulo && _jsx("span", { children: toTitleCase(record.articulo) }), record.articulo && record.referencia && _jsx("span", { children: " | " }), record.referencia && _jsx("span", { children: record.referencia })] })] })),
+        },
+        {
+            title: 'Cantidad',
+            dataIndex: 'cantidad',
+            key: 'cantidad',
+            width: 100,
+            align: 'right',
+            render: (_, _record, idx) => (_jsx(InputNumber, { size: "small", style: { width: '100%' }, min: 0, step: 0.01, precision: 2, value: detalles[idx]?.cantidad, onChange: (val) => handleDetalleUpdate(detalles[idx].id, 'cantidad', val || 0), onBlur: () => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0), onPressEnter: () => handleDetalleCalculate(detalles[idx].id, 'cantidad', detalles[idx]?.cantidad || 0) })),
+        },
+        {
+            title: 'Costo',
+            dataIndex: 'costo',
+            key: 'costo',
+            width: 110,
+            align: 'right',
+            responsive: ['sm', 'md', 'lg'],
+            render: (_, _record, idx) => (_jsx(InputNumber, { size: "small", style: { width: '100%' }, min: 0, step: 0.01, precision: 2, value: detalles[idx]?.costo, onChange: (val) => handleDetalleUpdate(detalles[idx].id, 'costo', val || 0), onBlur: () => handleDetalleCalculate(detalles[idx].id, 'costo', detalles[idx]?.costo || 0), onPressEnter: () => handleDetalleCalculate(detalles[idx].id, 'costo', detalles[idx]?.costo || 0) })),
+        },
+        {
+            title: 'Desc %',
+            key: 'descuento',
+            width: 100,
+            align: 'right',
+            render: (_, _record, idx) => (_jsxs("div", { children: [_jsx(InputNumber, { size: "small", style: { width: '100%' }, min: 0, max: 100, step: 0.01, precision: 2, value: detalles[idx]?.porcentajeDescuento, onChange: (val) => handleDetalleUpdate(detalles[idx].id, 'porcentajeDescuento', val || 0), onBlur: () => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0), onPressEnter: () => handleDetalleCalculate(detalles[idx].id, 'porcentajeDescuento', detalles[idx]?.porcentajeDescuento || 0), addonAfter: "%" }), _jsx("div", { className: "paces-text-secondary", style: { fontSize: 12, marginTop: 2 }, children: formatNumber(detalles[idx]?.descuento || 0) })] })),
+        },
+        {
+            title: 'Imp %',
+            key: 'impuestos',
+            width: 100,
+            align: 'right',
+            render: (_, _record, idx) => (_jsxs("div", { children: [_jsx(InputNumber, { size: "small", style: { width: '100%' }, min: 0, max: 100, step: 0.01, precision: 2, value: detalles[idx]?.porcentajeImpuesto, onChange: (val) => handleDetalleUpdate(detalles[idx].id, 'porcentajeImpuesto', val || 0), onBlur: () => handleDetalleCalculate(detalles[idx].id, 'porcentajeImpuesto', detalles[idx]?.porcentajeImpuesto || 0), onPressEnter: () => handleDetalleCalculate(detalles[idx].id, 'porcentajeImpuesto', detalles[idx]?.porcentajeImpuesto || 0), addonAfter: "%" }), _jsx("div", { className: "paces-text-secondary", style: { fontSize: 12, marginTop: 2 }, children: formatNumber(detalles[idx]?.impuestos || 0) })] })),
+        },
+        {
+            title: 'SubTotal',
+            dataIndex: 'subTotal',
+            key: 'subTotal',
+            width: 110,
+            align: 'right',
+            responsive: ['md', 'lg'],
+            render: (_, record) => (_jsx(Text, { children: formatNumber(record.subTotal || 0) })),
+        },
+        {
+            title: 'Total',
+            dataIndex: 'total',
+            key: 'total',
+            width: 110,
+            align: 'right',
+            render: (_, record) => (_jsx(Text, { strong: true, children: formatNumber(record.total || 0) })),
+        },
+        {
+            title: '',
+            key: 'acciones',
+            width: 50,
+            render: (_, record) => (_jsx(Button, { type: "text", danger: true, size: "small", icon: _jsx(DeleteOutlined, {}), onClick: () => handleEliminarFila(record.id) })),
+        },
+    ];
+    // ===== Opciones para entidad Desde/Hasta según tipo =====
+    const opcionesDesde = useMemo(() => {
+        if (tipoDocumento === 'ENP' || tipoDocumento === 'DVC') {
+            return suplidoresCache.map((s) => ({
+                value: s.codigo,
+                label: `${toTitleCase(s.nombre)}${s.identificacion ? ` (${s.identificacion})` : ''}`,
+            }));
+        }
+        // TRP, SAP: desde = Almacén
+        return almacenesCache.map((a) => ({
+            value: a.codigo,
+            label: toTitleCase(a.nombre),
+        }));
+    }, [tipoDocumento, suplidoresCache, almacenesCache]);
+    const opcionesHasta = useMemo(() => {
+        if (tipoDocumento === 'SAP') {
+            return suplidoresCache.map((s) => ({
+                value: s.codigo,
+                label: `${toTitleCase(s.nombre)}${s.identificacion ? ` (${s.identificacion})` : ''}`,
+            }));
+        }
+        // ENP, DVC, TRP: hasta = Almacén
+        return almacenesCache.map((a) => ({
+            value: a.codigo,
+            label: toTitleCase(a.nombre),
+        }));
+    }, [tipoDocumento, almacenesCache, suplidoresCache]);
+    // ===== Encabezado del formulario =====
+    const renderEncabezado = () => (_jsx(Card, { className: "paces-card", size: "small", title: "Datos del Documento", style: { marginBottom: 16 }, children: _jsx(Form, { form: form, layout: "vertical", size: "small", style: { paddingTop: 24 }, children: _jsxs(Row, { gutter: [16, 24], children: [_jsx(Col, { xs: 24, sm: 12, lg: 8, children: _jsx(Form.Item, { label: "Tipo Documento", required: true, style: { marginBottom: 0 }, children: _jsx(Select, { value: tipoDocumento, onChange: handleTipoDocumentoChange, options: [
+                                    { value: 'ENP', label: 'Entrada de Almacén (ENP)' },
+                                    { value: 'SAP', label: 'Salida de Almacén (SAP)' },
+                                    { value: 'TRP', label: 'Transferencia (TRP)' },
+                                    { value: 'DVC', label: 'Devolución Compra (DVC)' },
+                                ] }) }) }), _jsxs(Col, { xs: 24, sm: 12, lg: 16, children: [_jsxs("div", { style: { display: 'flex', alignItems: 'flex-end', gap: 0 }, children: [_jsx("div", { style: { flex: 1 }, children: _jsx(Form.Item, { label: "Concepto", required: true, style: { marginBottom: 0 }, children: _jsx(Input, { placeholder: "Buscar concepto...", value: conceptoSearchText, readOnly: true }) }) }), _jsx(Button, { icon: _jsx(SearchOutlined, {}), onClick: handleConceptoSearchClick })] }), _jsx(Form.Item, { name: "conceptoNombre", hidden: true, children: _jsx(Input, {}) }), _jsx(ConceptoInfoLabel, { concepto: selectedConcepto })] }), _jsx(Col, { xs: 24, sm: 12, lg: 8, children: _jsx(Form.Item, { label: entidadLabels.desde, required: true, style: { marginBottom: 0 }, children: tipoDocumento === 'SAP' || tipoDocumento === 'TRP' ? (_jsx(Select, { value: entidadDesdeVal || undefined, onChange: setEntidadDesdeVal, allowClear: true, showSearch: true, optionFilterProp: "label", placeholder: `Seleccionar ${entidadLabels.desde}`, options: opcionesDesde })) : (_jsx(Select, { value: entidadDesdeVal || undefined, onChange: setEntidadDesdeVal, allowClear: true, showSearch: true, optionFilterProp: "label", placeholder: `Seleccionar ${entidadLabels.desde}`, options: opcionesDesde })) }) }), _jsx(Col, { xs: 24, sm: 12, lg: 8, children: _jsx(Form.Item, { label: entidadLabels.hasta, required: true, style: { marginBottom: 0 }, children: _jsx(Select, { value: entidadHastaVal || undefined, onChange: setEntidadHastaVal, allowClear: true, showSearch: true, optionFilterProp: "label", placeholder: `Seleccionar ${entidadLabels.hasta}`, options: opcionesHasta }) }) }), _jsx(Col, { xs: 24, sm: 12, lg: 8, children: _jsx(Form.Item, { name: "fechaDocumento", label: "Fecha", required: true, style: { marginBottom: 0 }, children: _jsx(DatePicker, { style: { width: '100%' }, format: "YYYY-MM-DD", disabledDate: (current) => {
+                                    if (!current)
+                                        return false;
+                                    const cierre = fechasCierre?.[sucursalActiva];
+                                    if (cierre && !current.isAfter(dayjs(cierre).startOf('day'), 'day'))
+                                        return true;
+                                    const cierreInv = fechasCierreInv?.[sucursalActiva];
+                                    if (cierreInv && !current.isAfter(dayjs(cierreInv).startOf('day'), 'day'))
+                                        return true;
+                                    return false;
+                                } }) }) }), _jsx(Col, { xs: 24, children: _jsx(Form.Item, { name: "nota", label: "Nota", style: { marginBottom: 0 }, children: _jsx(TextArea, { rows: 3, placeholder: "Nota opcional del documento..." }) }) })] }) }) }));
+    return (_jsxs("div", { children: [renderToolbar(), _jsx(BuscarConceptoModal, { open: conceptoModalOpen, onClose: () => setConceptoModalOpen(false), onSelect: handleConceptoSelect, sucursal: sucursalActiva, documento: tipoDocumento }), isLarge ? (_jsxs(Row, { gutter: 16, children: [_jsxs(Col, { lg: 18, children: [renderEncabezado(), _jsxs(Card, { className: "paces-card", size: "small", title: `Detalles (${detalles.length})`, style: { marginBottom: 16 }, children: [_jsxs("div", { style: { marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }, children: [_jsxs(Space, { children: [_jsx(Button, { type: "dashed", icon: _jsx(PlusOutlined, {}), onClick: handleAgregarFila, children: "Agregar fila" }), _jsx("input", { type: "file", accept: ".csv,.txt,.xlsx", ref: fileInputRef, onChange: handleFileChange, style: { display: 'none' } }), _jsx(Button, { icon: _jsx(DownloadOutlined, {}), onClick: () => handleDescargarPlantilla(tipoDocumento), children: "Descargar plantilla" }), _jsx(Button, { icon: _jsx(UploadOutlined, {}), onClick: () => fileInputRef.current?.click(), children: "Cargar archivo" })] }), _jsx(Text, { type: "secondary", style: { fontSize: 12 }, children: "Formato CSV: codigo,articulo,referencia,cantidad,costo,porcentajedescuento,porcentajeimpuesto" })] }), _jsx(Table, { dataSource: detalles, columns: detalleColumns, rowKey: "id", size: "small", pagination: false, scroll: { x: 1000 } })] })] }), _jsx(Col, { lg: 6, children: _jsx(TotalesCard, { subTotal: totales.subTotal, descuento: totales.descuento, impuestos: totales.impuestos, total: totales.total, monedaSimbolo: selectedConcepto?.moneda?.simbolo || monedaDefault.simbolo, monedaNombre: selectedConcepto?.moneda?.nombre || monedaDefault.nombre, tasa: 1 }) })] })) : (_jsxs("div", { children: [renderEncabezado(), _jsxs(Card, { className: "paces-card", size: "small", title: `Detalles (${detalles.length})`, style: { marginBottom: 16 }, children: [_jsx("div", { style: { marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }, children: _jsxs(Space, { children: [_jsx(Button, { type: "dashed", icon: _jsx(PlusOutlined, {}), onClick: handleAgregarFila, children: "Agregar fila" }), _jsx("input", { type: "file", accept: ".csv,.txt,.xlsx", ref: fileInputRef, onChange: handleFileChange, style: { display: 'none' } }), _jsx(Button, { icon: _jsx(DownloadOutlined, {}), onClick: () => handleDescargarPlantilla(tipoDocumento), children: "Descargar plantilla" }), _jsx(Button, { icon: _jsx(UploadOutlined, {}), onClick: () => fileInputRef.current?.click(), children: "Cargar archivo" })] }) }), _jsx(Table, { dataSource: detalles, columns: detalleColumns, rowKey: "id", size: "small", pagination: false, scroll: { x: 1000 } })] }), _jsx(TotalesCard, { subTotal: totales.subTotal, descuento: totales.descuento, impuestos: totales.impuestos, total: totales.total, monedaSimbolo: selectedConcepto?.moneda?.simbolo || monedaDefault.simbolo, monedaNombre: selectedConcepto?.moneda?.nombre || monedaDefault.nombre, tasa: 1, alignRight: true })] }))] }));
+};
+export default ImportarInventario;

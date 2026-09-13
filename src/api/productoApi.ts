@@ -1,6 +1,6 @@
 import { apiClient } from './client';
-import type { ProductoListaDTO, ProductoDTO, ProductoVistaDTO, FiltroProducto, ResultadoImportacionDTO, ProductoImportadoDTO } from '../types/productos';
-import type { ApiResponse } from '../types/auth';
+import type { ProductoListaDTO, ProductoDTO, ProductoVistaDTO, FiltroProducto, ResultadoImportacionDTO, ProductoImportadoDTO, ProductoSucursalDTO } from '../types/productos';
+import { type ApiResponse, Sucursal } from '../types/auth';
 
 const BASE = '/Producto';
 
@@ -28,6 +28,24 @@ export const productoApi = {
     params?: { codigo?: string; activo?: boolean }
   ): Promise<number> => {
     const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/total/${sucursal}`, { params });
+    return data.data;
+  },
+
+  /** Listado basico sin JOINs para modal de busqueda */
+  obtenerListadoBasico: async (
+    sucursal: number,
+    params?: { cantidad?: number; salto?: number; codigo?: string; activo?: boolean }
+  ): Promise<ProductoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<ProductoDTO[]>>(`${BASE}/${sucursal}/basico`, { params });
+    return data.data;
+  },
+
+  /** Total del listado basico */
+  obtenerTotalListadoBasico: async (
+    sucursal: number,
+    params?: { codigo?: string; activo?: boolean }
+  ): Promise<number> => {
+    const { data } = await apiClient.get<ApiResponse<number>>(`${BASE}/${sucursal}/basico/total`, { params });
     return data.data;
   },
 
@@ -141,5 +159,25 @@ export const productoApi = {
   actualizar: async (sucursal: number, producto: ProductoDTO): Promise<ProductoDTO> => {
     const { data } = await apiClient.put<ApiResponse<ProductoDTO>>(`${BASE}/${sucursal}`, producto);
     return data.data;
+  },
+
+  /** Precio y oferta actual de un producto en la sucursal activa */
+  precioSucursal: async (sucursal: number, codigo: string): Promise<ProductoSucursalDTO | null> => {
+    const { data } = await apiClient.get<ApiResponse<ProductoSucursalDTO[]>>(`${BASE}/precioSucursal`, { params: { codigo } });
+    const items = data.data ?? [];
+    const nombreActiva = Object.keys(Sucursal).find((k) => (Sucursal as Record<string, number>)[k] === sucursal);
+    return items.find((p) => p.sucursal === nombreActiva) ?? null;
+  },
+
+  /** Precios (regular + oferta) de múltiples productos en una sola llamada */
+  preciosPorSucursal: async (sucursal: number, codigos: string[]): Promise<Map<string, ProductoSucursalDTO>> => {
+    const { data } = await apiClient.get<ApiResponse<ProductoSucursalDTO[]>>(
+      `${BASE}/precioSucursal/${sucursal}`,
+      { params: { codigos: codigos.join(',') } }
+    );
+    const items = data.data ?? [];
+    const mapa = new Map<string, ProductoSucursalDTO>();
+    items.forEach((p) => mapa.set(p.codigo, p));
+    return mapa;
   },
 };

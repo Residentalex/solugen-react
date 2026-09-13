@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Modal, Typography, Tooltip, Alert, App, DatePicker
+  Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Modal, Typography, Tooltip, Alert, App, DatePicker, Dropdown
 } from 'antd';
+import type { MenuProps } from 'antd';
 import dayjs from 'dayjs';
 import ColumnVisibilityToggle from '../../components/ColumnVisibilityToggle';
 import type { ColumnConfig } from '../../components/ColumnVisibilityToggle';
@@ -20,6 +21,7 @@ import {
   UserOutlined,
   DollarOutlined,
   TeamOutlined,
+  PrinterOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import PermissionGate from '../../components/PermissionGate';
@@ -30,6 +32,9 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { documentoImpresionApi } from '../../api/documentoImpresionApi';
 import { devolucionVentaApi } from '../../api/devolucionVentaApi';
+import { reportesConfigApi } from '../../api/reportesConfigApi';
+import { companiaApi } from '../../api/companiaApi';
+import { obtenerLogoEscPosBase64 } from '../../utils/logoEscPos';
 import type { DevolucionVentaDTO, AsientoContableDTO } from '../../types/devolucionVenta';
 import LogTable from '../../components/LogTable';
 import AsientosContableTable from '../../components/AsientosContableTable';
@@ -367,6 +372,18 @@ const DevolucionVentaDetalle: React.FC = () => {
       })
     : (data?.detalles || []);
 
+  // ===== Totales de detalles filtrados =====
+  const totalesDetalles = detallesFiltrados.reduce(
+    (acc, item: any) => ({
+      cantidad: acc.cantidad + (item.cantidad || 0),
+      subTotal: acc.subTotal + (item.subTotal || 0),
+      descuento: acc.descuento + (item.descuento || 0),
+      impuestos: acc.impuestos + (item.impuestos || 0),
+      total: acc.total + (item.total || 0),
+    }),
+    { cantidad: 0, subTotal: 0, descuento: 0, impuestos: 0, total: 0 }
+  );
+
   const detalleColumns = [
     {
       title: 'Código',
@@ -616,6 +633,116 @@ const DevolucionVentaDetalle: React.FC = () => {
     }
   };
 
+  const handlePrintTicket = async () => {
+    if (!id || !data) return;
+    setImprimiendo(true);
+    try {
+      // Marcar como impreso es best-effort: no bloquea la impresion fisica.
+      await documentoImpresionApi.marcarImpreso('DEV', sucursalActiva, parseInt(id)).catch(
+        (errImprimir: any) => {
+          console.warn('No se pudo marcar como impreso:', errImprimir?.response?.data?.errorMessage || errImprimir?.message);
+        }
+      );
+
+      // Plantilla ESC/POS asignada al documento DEV via /reportes/config.
+      const plantilla = await reportesConfigApi.obtenerPorEntdoc('DEV');
+      if (!plantilla) {
+        messageApi.error('No hay plantilla ESC/POS asignada al documento DEV.');
+        return;
+      }
+
+      // El logo se rasteriza en el navegador (canvas) y viaja como comando ESC/POS en base64;
+      // el servicio lo antepone a los bytes generados por el formateador.
+      const logoEscPosBase64 = await obtenerLogoEscPosBase64(plantilla.config?.logo);
+
+      // Datos de la compañía para el encabezado de la plantilla. La sucursal del
+      // documento (EntidadDTO) no trae rnc/fax/slogan, por lo que la fuente
+      // principal es companiaApi (mismo enfoque que NotaCreditoDetalle).
+      let companyInfo = { nombre: '', direccion: '', telefono: '', rnc: '', fax: '', slogan: '' };
+      try {
+        const lista = await companiaApi.obtenerTodas(sucursalActiva);
+        if (lista.length > 0) {
+          companyInfo = {
+            nombre: lista[0].nombre ?? '',
+            direccion: lista[0].direccion ?? '',
+            telefono: lista[0].telefono ?? '',
+            rnc: lista[0].rnc ?? '',
+            fax: lista[0].fax ?? '',
+            slogan: lista[0].slogan ?? '',
+          };
+        }
+      } catch {
+        const sucursales = useAuthStore.getState().sucursalesPermitidas;
+        companyInfo.nombre = sucursales.find((sp) => sp.sucursal === sucursalActiva)?.nombre || '';
+      }
+
+      // Obtener el payload serializado que el frontend enviara directamente
+      // al servicio local Solugen.Impresion.Service de la maquina cliente.
+      // Ya no pasa por localhost:5010 en el backend.
+      const payload = await reportesConfigApi.obtenerPayloadImpresion(plantilla.plantillaId, {
+        tipoDoc: 'TICKET_NC',
+        data,
+        company: companyInfo,
+        logoEscPosBase64: logoEscPosBase64 || undefined,
+        feedLines: 3,
+        cut: true,
+        copias: 1,
+      });
+
+      // URL del servicio local de impresion.
+      // Se lee de VITE_IMPRESSION_SERVICE_URL o usa el default http://localhost:5010/imprimir
+      // En produccion debe configurarse el dominio del servicio (ej: https://genesis.ade.com/imprimir)
+      const servicioLocalUrl = import.meta.env.VITE_IMPRESSION_SERVICE_URL || 'http://localhost:5010/imprimir';
+      const resultado = await reportesConfigApi.imprimirLocal(payload, servicioLocalUrl);
+      if (resultado.ok) {
+        messageApi.success(`Ticket enviado a la impresora`);
+      } else {
+        messageApi.error(resultado.error ?? 'Error al imprimir: el servicio local no respondio');
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al imprimir el ticket';
+      messageApi.error(msg);
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
+  const imprimirPDF = async () => {
+    if (!id) return;
+    setImprimiendo(true);
+    try {
+      try {
+        await documentoImpresionApi.marcarImpreso('DEV', sucursalActiva, parseInt(id));
+      } catch (errImprimir: any) {
+        messageApi.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
+        return;
+      }
+      const res = await apiClient.get('/reportes/facturacion/devolucion', {
+        responseType: 'blob',
+      });
+
+      const blobUrl = URL.createObjectURL(res.data);
+      window.open(blobUrl, '_blank');
+    } catch {
+      messageApi.error('Error al generar el PDF');
+    } finally {
+      setImprimiendo(false);
+    }
+  };
+
+  const printMenuItems: MenuProps['items'] = [
+    { key: 'ticket', label: 'Ticket' },
+    { key: 'devolucion', label: 'Devolución' },
+  ];
+
+  const handlePrintMenuClick: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'ticket') {
+      handlePrintTicket();
+    } else if (key === 'devolucion') {
+      imprimirPDF();
+    }
+  };
+
   return (
     <div>
       {loadingError && (
@@ -640,27 +767,7 @@ const DevolucionVentaDetalle: React.FC = () => {
         imprimiendo={imprimiendo}
         operacionLoading={operacion?.loading}
         onVolver={() => navigate(-1)}
-        onImprimir={async () => {
-          setImprimiendo(true);
-          try {
-            try {
-              await documentoImpresionApi.marcarImpreso('DEV', sucursalActiva, parseInt(id));
-            } catch (errImprimir: any) {
-              messageApi.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
-              return;
-            }
-            const res = await apiClient.get('/reportes/facturacion/devolucion', {
-              responseType: 'blob',
-            });
-
-            const blobUrl = URL.createObjectURL(res.data);
-            window.open(blobUrl, '_blank');
-          } catch {
-            messageApi.error('Error al generar el PDF');
-          } finally {
-            setImprimiendo(false);
-          }
-        }}
+        showImprimir={false}
         onEditar={() => navigate(`/FDEV/${id}/editar`)}
         onAplicar={handleAplicar}
         onAnular={handleAnular}
@@ -669,18 +776,25 @@ const DevolucionVentaDetalle: React.FC = () => {
         onDesaplicar={handleDesaplicar}
         onReversar={handleReversar}
         extraButtons={
-          (data?.transaccionesAsociadas?.length ?? 0) === 0 &&
-          (toEstadoNum(data.estado) === 1 || toEstadoNum(data.estado) === 2) ? (
-            <PermissionGate permisoEspecial="pe_generar_ndcli">
-              <Button
-                type="primary"
-                icon={<FileTextOutlined />}
-                onClick={handleGenerarND}
-              >
-                Generar ND
-              </Button>
+          <>
+            <PermissionGate codigoPantalla="FDEV" accion="IMPRIMIR">
+              <Dropdown menu={{ items: printMenuItems, onClick: handlePrintMenuClick }} trigger={['click']}>
+                <Button icon={<PrinterOutlined />} loading={imprimiendo} />
+              </Dropdown>
             </PermissionGate>
-          ) : undefined
+            {(data?.transaccionesAsociadas?.length ?? 0) === 0 &&
+            (toEstadoNum(data.estado) === 1 || toEstadoNum(data.estado) === 2) && (
+              <PermissionGate permisoEspecial="pe_generar_ndcli">
+                <Button
+                  type="primary"
+                  icon={<FileTextOutlined />}
+                  onClick={handleGenerarND}
+                >
+                  Generar ND
+                </Button>
+              </PermissionGate>
+            )}
+          </>
         }
       />
 
@@ -781,7 +895,39 @@ const DevolucionVentaDetalle: React.FC = () => {
                   children: (
                     <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                       <div style={{ minHeight: 220 }}>
-                        <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey={(r: any, i?: number) => r.id || i} size="small" pagination={false} scroll={{ x: 1200 }} />
+                        <Table
+                          dataSource={detallesFiltrados}
+                          columns={detalleColumnsFiltered}
+                          rowKey={(r: any, i?: number) => r.id || i}
+                          size="small"
+                          pagination={false}
+                          scroll={{ x: 1200 }}
+                          summary={() => (
+                            <Table.Summary fixed="bottom">
+                              <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                                <Table.Summary.Cell index={0} colSpan={2}>
+                                  <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={2} align="right">
+                                  {formatNumber(totalesDetalles.cantidad)}
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={3} align="right" responsive={['md', 'lg', 'xl', 'xxl']}>
+                                  {formatNumber(totalesDetalles.subTotal)}
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={4} align="right" responsive={['lg', 'xl', 'xxl']}>
+                                  {formatNumber(totalesDetalles.descuento)}
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={5} align="right" responsive={['lg', 'xl', 'xxl']}>
+                                  {formatNumber(totalesDetalles.impuestos)}
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={6} align="right">
+                                  <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalesDetalles.total)}</Text>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={7} />
+                              </Table.Summary.Row>
+                            </Table.Summary>
+                          )}
+                        />
                       </div>
                     </Spin>
                   ),
@@ -993,7 +1139,39 @@ const DevolucionVentaDetalle: React.FC = () => {
                 children: (
                   <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                     <div style={{ minHeight: 220 }}>
-                      <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey={(r: any, i?: number) => r.id || i} size="small" pagination={false} scroll={{ x: 1200 }} />
+                      <Table
+                        dataSource={detallesFiltrados}
+                        columns={detalleColumnsFiltered}
+                        rowKey={(r: any, i?: number) => r.id || i}
+                        size="small"
+                        pagination={false}
+                        scroll={{ x: 1200 }}
+                        summary={() => (
+                          <Table.Summary fixed="bottom">
+                            <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                              <Table.Summary.Cell index={0} colSpan={2}>
+                                <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={2} align="right">
+                                {formatNumber(totalesDetalles.cantidad)}
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={3} align="right" responsive={['md', 'lg', 'xl', 'xxl']}>
+                                {formatNumber(totalesDetalles.subTotal)}
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={4} align="right" responsive={['lg', 'xl', 'xxl']}>
+                                {formatNumber(totalesDetalles.descuento)}
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={5} align="right" responsive={['lg', 'xl', 'xxl']}>
+                                {formatNumber(totalesDetalles.impuestos)}
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={6} align="right">
+                                <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalesDetalles.total)}</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={7} />
+                            </Table.Summary.Row>
+                          </Table.Summary>
+                        )}
+                      />
                     </div>
                   </Spin>
                 ),

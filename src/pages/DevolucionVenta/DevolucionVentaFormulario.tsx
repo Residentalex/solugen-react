@@ -49,6 +49,7 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
+import { useCargaDocumento } from '../../hooks/useCargaDocumento';
 import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
@@ -192,11 +193,59 @@ const DevolucionVentaFormulario: React.FC = () => {
   const { screenCode, documentCode } = useScreenConfig('FDEV');
   const documentoConfig = useDocumentoConfig(sucursalActiva, documentCode);
 
+  // ===== Hook de carga de documento (encabezado primero + auto secciones) =====
+  const { data, setData: setFullData, loading, loadingError, recargar } = useCargaDocumento<DevolucionVentaFullDTO>({
+    id,
+    sucursal: sucursalActiva,
+    obtenerEncabezado: async (suc: number, docId: number) => {
+      return await devolucionVentaApi.obtenerEncabezado(suc, docId) as any;
+    },
+    secciones: {
+      detalles: {
+        cargar: (suc: number, docId: number) => devolucionVentaApi.obtenerDetalles(suc, docId),
+        prop: 'detalles',
+      },
+      asientos: {
+        cargar: (suc: number, docId: number) => devolucionVentaApi.obtenerAsientos(suc, docId),
+        prop: 'asientos',
+      },
+    },
+    onEncabezadoCargado: (enc) => {
+      const full: any = enc;
+      setDetalles((full.detalles || []).map((d: any) => ({
+        ...d,
+        porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
+        tieneVencimiento: d.tieneVencimiento ?? false,
+      })));
+      setAsientosLocales(full.asientos || []);
+      setSelectedConcepto(full.concepto || null);
+      setSelectedCliente(full.cliente || null);
+      setSelectedAlmacen(full.almacen || null);
+      setSelectedFactura(full.factura || null);
+
+      const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
+      form.setFieldsValue({
+        concepto: full.concepto?.codigo || '',
+        cliente: full.cliente?.codigo || '',
+        almacen: full.almacen?.codigo || '',
+        fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+        ncf: full.ncf || '',
+        referencia: full.referencia || '',
+        moneda: full.moneda?.nombre || '',
+        tasa: full.tasa || 1,
+        nota: full.nota || '',
+      });
+
+      if (full.concepto?.codigo) {
+        devolucionVentaApi.obtenerClientes(sucursalActiva)
+          .then((res: any) => setClientesCache(Array.isArray(res) ? res : []))
+          .catch(() => {});
+      }
+    },
+  });
+
   // ===== States =====
-  const [loading, setLoading] = useState(false);
-  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [data, setData] = useState<DevolucionVentaFullDTO | null>(null);
   const [detalles, setDetalles] = useState<DetalleDevolucionVentaDTO[]>([]);
   const [clientesCache, setClientesCache] = useState<{ nombre: string; codigo: string; identificacion: string; telefono?: string; direccion?: string }[]>([]);
   const [almacenesCache, setAlmacenesCache] = useState<AlmacenDTO[]>([]);
@@ -254,7 +303,7 @@ const DevolucionVentaFormulario: React.FC = () => {
 
   const usuario = useAuthStore((s: any) => s.usuario);
   const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
-    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+    (p: any) => p.codigo?.toUpperCase() === 'PE_MODIFICAR_ASIENTOS' && p.valor === true
   ) ?? false;
   const [generandoAsientos, setGenerandoAsientos] = useState(false);
 
@@ -281,84 +330,14 @@ const DevolucionVentaFormulario: React.FC = () => {
     };
   }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form]);
 
-  // ===== Cargar datos si es modo editar =====
-  useEffect(() => {
-    if (mode === 'crear') return;
-    if (!id) return;
-
-    setLoading(true);
-    devolucionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        // Convertir a FullDTO
-        const full: DevolucionVentaFullDTO = {
-          id: res.id,
-          fechaDocumento: res.fechaDocumento,
-          noDocumento: res.noDocumento,
-          estado: res.estado,
-          periodo: res.periodo,
-          ncf: res.ncf,
-          referencia: res.referencia,
-          nota: res.nota,
-          tasa: res.tasa,
-          tipoDocumento: res.tipoDocumento,
-          concepto: res.concepto,
-          almacen: res.almacen,
-          cliente: res.cliente,
-          entidad: res.entidad,
-          factura: res.factura || null,
-          moneda: res.moneda,
-          documento: res.documento,
-          subTotal: res.subTotal,
-          descuento: res.descuento,
-          impuestos: res.impuestos,
-          total: res.total,
-          detalles: res.detalles || [],
-          asientos: res.asientos || [],
-          logs: res.logs || [],
-        };
-        setData(full);
-        setDetalles(res.detalles || []);
-        setSelectedConcepto(res.concepto || null);
-        setSelectedCliente(res.cliente || null);
-        setSelectedAlmacen(res.almacen || null);
-        setSelectedFactura(res.factura || null);
-
-        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
-
-        form.setFieldsValue({
-          concepto: res.concepto?.codigo || '',
-          cliente: res.cliente?.codigo || '',
-          almacen: res.almacen?.codigo || '',
-          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          ncf: res.ncf || '',
-          referencia: res.referencia || '',
-          moneda: res.moneda?.nombre || '',
-          tasa: res.tasa || 1,
-          nota: res.nota || '',
-        });
-
-        // Cargar clientes según el concepto
-        if (res.concepto?.codigo) {
-          devolucionVentaApi.obtenerClientes(sucursalActiva)
-            .then(setClientesCache)
-            .catch((err) => console.warn('Error al cargar clientes cache en editar', err));
-        }
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
-        message.error(msg);
-        setLoadingError(true);
-        navigate('/FDEV', { replace: true });
-      })
-      .finally(() => setLoading(false));
-  }, [mode, id, sucursalActiva, form, navigate]);
+  // ===== Asientos editables locales =====
+  const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
 
   // ===== Precarga desde PV (si viene query param pvId) =====
   useEffect(() => {
     if (mode !== 'crear' || !pvId) return;
 
     const cargarDesdePV = async () => {
-      setLoading(true);
       try {
         const facturaFull = await devolucionVentaApi.obtenerFacturaPOS(sucursalActiva, parseInt(pvId));
         if (!facturaFull) {
@@ -407,7 +386,7 @@ const DevolucionVentaFormulario: React.FC = () => {
         });
 
         // Actualizar data para moneda en TotalesCard
-        setData((prev) => {
+        setFullData((prev: any) => {
           if (!prev) return prev;
           return { ...prev, moneda: facturaFull.moneda || null };
         });
@@ -443,8 +422,6 @@ const DevolucionVentaFormulario: React.FC = () => {
       } catch (err: any) {
         const msg = extraerMensajeError(err, 'Error al cargar la factura POS');
         message.error(msg);
-      } finally {
-        setLoading(false);
       }
     };
 
@@ -461,66 +438,13 @@ const DevolucionVentaFormulario: React.FC = () => {
       cancelText: 'No, continuar editando',
       okButtonProps: { danger: true },
       onOk: () => {
+        setEditingField(null);
         if (mode === 'crear') {
           navigationConfirmedRef.current = true;
           navigate('/FDEV', { replace: true });
-        } else if (id) {
-          setLoading(true);
-          devolucionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
-            .then((res) => {
-              const full: DevolucionVentaFullDTO = {
-                id: res.id,
-                fechaDocumento: res.fechaDocumento,
-                noDocumento: res.noDocumento,
-                estado: res.estado,
-                periodo: res.periodo,
-                ncf: res.ncf,
-                referencia: res.referencia,
-                nota: res.nota,
-                tasa: res.tasa,
-                tipoDocumento: res.tipoDocumento,
-                concepto: res.concepto,
-                almacen: res.almacen,
-                cliente: res.cliente,
-                entidad: res.entidad,
-                factura: res.factura || null,
-                moneda: res.moneda,
-                documento: res.documento,
-                subTotal: res.subTotal,
-                descuento: res.descuento,
-                impuestos: res.impuestos,
-                total: res.total,
-                detalles: res.detalles || [],
-                asientos: res.asientos || [],
-                logs: res.logs || [],
-              };
-              setData(full);
-              setDetalles(res.detalles || []);
-              setSelectedConcepto(res.concepto || null);
-              setSelectedCliente(res.cliente || null);
-              setSelectedAlmacen(res.almacen || null);
-              setSelectedFactura(res.factura || null);
-
-              const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
-              form.setFieldsValue({
-                concepto: res.concepto?.codigo || '',
-                cliente: res.cliente?.codigo || '',
-                almacen: res.almacen?.codigo || '',
-                fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-                ncf: res.ncf || '',
-                referencia: res.referencia || '',
-                moneda: res.moneda?.nombre || '',
-                tasa: res.tasa || 1,
-                nota: res.nota || '',
-              });
-            })
-            .catch((err: any) => {
-              const msg = err?.response?.data?.errorMessage || 'Error al recargar el documento';
-              message.error(msg);
-            })
-.finally(() => setLoading(false));
-           navigationConfirmedRef.current = true;
-           navigate(`/FDEV/${id}`, { replace: true });
+        } else {
+          navigationConfirmedRef.current = true;
+          navigate(`/FDEV/${id}`, { replace: true });
         }
       },
     });
@@ -716,7 +640,7 @@ const DevolucionVentaFormulario: React.FC = () => {
       tasa: monedaObj.tasa ?? 1,
     });
     // Actualizar data local para que la UI lo refleje
-    setData((prev) => {
+    setFullData((prev: any) => {
       if (!prev) return prev;
       return { ...prev, moneda: monedaObj };
     });
@@ -970,7 +894,7 @@ const DevolucionVentaFormulario: React.FC = () => {
     try {
       const dto = construirDTO();
       const asientosGenerados = await transaccionApi.generarAsientos(sucursalActiva, dto);
-      setData((prev) => prev ? { ...prev, asientos: asientosGenerados } : prev);
+      setAsientosLocales(asientosGenerados);
       message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       message.error(err?.message || 'Error al generar asientos');
@@ -982,63 +906,8 @@ const DevolucionVentaFormulario: React.FC = () => {
   const handleRefresh = useCallback(() => {
     if (mode === 'crear') return;
     if (!id) return;
-    setLoadingError(false);
-    setLoading(true);
-    devolucionVentaApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        const full: DevolucionVentaFullDTO = {
-          id: res.id,
-          fechaDocumento: res.fechaDocumento,
-          noDocumento: res.noDocumento,
-          estado: res.estado,
-          periodo: res.periodo,
-          ncf: res.ncf,
-          referencia: res.referencia,
-          nota: res.nota,
-          tasa: res.tasa,
-          tipoDocumento: res.tipoDocumento,
-          concepto: res.concepto,
-          almacen: res.almacen,
-          cliente: res.cliente,
-          entidad: res.entidad,
-          factura: res.factura || null,
-          moneda: res.moneda,
-          documento: res.documento,
-          subTotal: res.subTotal,
-          descuento: res.descuento,
-          impuestos: res.impuestos,
-          total: res.total,
-          detalles: res.detalles || [],
-          asientos: res.asientos || [],
-          logs: res.logs || [],
-        };
-        setData(full);
-        setDetalles(res.detalles || []);
-        setSelectedConcepto(res.concepto || null);
-        setSelectedCliente(res.cliente || null);
-        setSelectedAlmacen(res.almacen || null);
-        setSelectedFactura(res.factura || null);
-
-        const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
-        form.setFieldsValue({
-          concepto: res.concepto?.codigo || '',
-          cliente: res.cliente?.codigo || '',
-          almacen: res.almacen?.codigo || '',
-          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          ncf: res.ncf || '',
-          referencia: res.referencia || '',
-          moneda: res.moneda?.nombre || '',
-          tasa: res.tasa || 1,
-          nota: res.nota || '',
-        });
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg);
-        setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form, mode]);
+    recargar();
+  }, [id, mode, recargar]);
 
   // ===== Loading state =====
   if (loading) {
@@ -1727,18 +1596,18 @@ const DevolucionVentaFormulario: React.FC = () => {
                 },
                 {
                   key: 'asientos',
-                  label: `Asientos (${data?.asientos?.length || 0})`,
+                  label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
                   children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
                     <AsientosContableEditables
-                      asientos={data?.asientos || []}
-                      onChange={(nuevosAsientos) => setData((prev) => prev ? { ...prev, asientos: nuevosAsientos } : prev)}
+                      asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
+                      onChange={setAsientosLocales}
                       editable={true}
                       scroll={{ x: 900 }}
                       onGenerar={handleGenerarAsientos}
                       generando={generandoAsientos}
                     />
                   ) : (
-                    <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
+                    <AsientosContableTable asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])} scroll={{ x: 900 }} />
                   ),
                 },
                 {
@@ -1847,18 +1716,18 @@ const DevolucionVentaFormulario: React.FC = () => {
               },
               {
                 key: 'asientos',
-                label: `Asientos (${data?.asientos?.length || 0})`,
+                label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
                 children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
                   <AsientosContableEditables
-                    asientos={data?.asientos || []}
-                    onChange={(nuevosAsientos) => setData((prev) => prev ? { ...prev, asientos: nuevosAsientos } : prev)}
+                    asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
+                    onChange={setAsientosLocales}
                     editable={true}
                     scroll={{ x: 900 }}
                     onGenerar={handleGenerarAsientos}
                     generando={generandoAsientos}
                   />
                 ) : (
-                  <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
+                  <AsientosContableTable asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])} scroll={{ x: 900 }} />
                 ),
               },
               {

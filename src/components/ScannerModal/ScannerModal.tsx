@@ -13,6 +13,10 @@ export interface ScannerProducto {
   cantidad?: number;
   familia?: any;
   medida?: any;
+  impuesto?: any;
+  tieneVencimiento?: boolean;
+  modificaPrecio?: boolean;
+  modificaDescripcion?: boolean;
 }
 
 interface ScannerModalProps {
@@ -60,6 +64,10 @@ const ScannerModal: React.FC<ScannerModalProps> = ({ open, onClose, onSelect }) 
         medida: res.unidadMedida
           ? { nombre: res.unidadMedida.nombre || '', codigo: '', factor: 1, idExterno: res.unidadMedida.idExterno || 0 }
           : undefined,
+        impuesto: (res.impuestos?.[0]?.impuesto as any) || undefined,
+        tieneVencimiento: res.pesado || false,
+        modificaPrecio: res.modificaPrecio ?? false,
+        modificaDescripcion: res.modificaDescripcion ?? false,
       });
     } catch {
       message.error('Producto no encontrado');

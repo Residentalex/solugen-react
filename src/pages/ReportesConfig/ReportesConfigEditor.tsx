@@ -4,12 +4,13 @@ import {
 } from 'antd';
 import {
   ArrowUpOutlined, ArrowDownOutlined, SaveOutlined, UndoOutlined, RollbackOutlined, EyeOutlined, EyeInvisibleOutlined,
+  CodeOutlined, FileTextOutlined, CopyOutlined,
   ApartmentOutlined, ProfileOutlined, TableOutlined, CalculatorOutlined, WalletOutlined, SettingOutlined,
   LineOutlined, VerticalAlignMiddleOutlined, FontSizeOutlined, DatabaseOutlined, DeleteOutlined,
-  EditOutlined, FormatPainterOutlined, PlusOutlined, DownOutlined, RightOutlined,   AppstoreOutlined,
+  EditOutlined, FormatPainterOutlined, PlusOutlined, DownOutlined, RightOutlined, AppstoreOutlined,
   AlignLeftOutlined, AlignCenterOutlined, AlignRightOutlined, BoldOutlined,
   LinkOutlined, DisconnectOutlined, QrcodeOutlined, SyncOutlined, SignatureOutlined,
-  UploadOutlined,
+  UploadOutlined, ReloadOutlined,
 } from '@ant-design/icons';
 import './ReportesConfig.css';
 import { reportesConfigApi } from '../../api/reportesConfigApi';
@@ -29,6 +30,9 @@ import type {
   TipoZonaTicket,
   ClaveCampoTicket,
   CaracterSeparadorTicket,
+  TipoAnchoCampo,
+  TipoCalculoCampo,
+  CalculoCampo,
 } from '../../types/reportesConfig';
 import {
   normalizarConfig,
@@ -42,6 +46,7 @@ import {
   CAMPOS_DETALLE_LABELS,
   CAMPOS_DTO_DISPONIBLES,
   ANCHO_LINEA_OPCIONES,
+  calcularAnchosLinea as calcularAnchosLineaCompartida,
 } from '../../utils/ticketPlantillaConfig';
 import {
   limpiarCachePlantilla,
@@ -52,9 +57,31 @@ import {
   CODIGO_PLANTILLA_VSNT_CIERRE,
 } from '../../utils/ticketPlantilla';
 import { escposToHtml } from '../../utils/escposToHtml';
-import { formatTicketPOS, formatTicketReciboIngreso, formatTicketVoucherVisanet } from '../../utils/escpos-formatter';
+import { formatTicketPOS, formatTicketReciboIngreso, formatTicketVoucherVisanet, resolverRuta } from '../../utils/escpos-formatter';
 
 const { Text } = Typography;
+
+const TAMANO_FUENTE_PREVIEW = 14;
+const TAMANO_FUENTE_B_PREVIEW = 11;
+const FACTOR_ANCHO_CARACTER_MONOESPACIADO = 0.61;
+const PADDING_HORIZONTAL_PREVIEW = 40;
+
+/* ===== Campos calculados (líneas ESQUEMA) ===== */
+const OPCIONES_CALCULO: { label: string; value: TipoCalculoCampo }[] = [
+  { label: 'Suma (SUM)', value: 'SUM' },
+  { label: 'Promedio (AVG)', value: 'AVG' },
+  { label: 'Cantidad (COUNT)', value: 'COUNT' },
+  { label: 'Mínimo (MIN)', value: 'MIN' },
+  { label: 'Máximo (MAX)', value: 'MAX' },
+];
+
+const VERBOS_CALCULO: Record<TipoCalculoCampo, string> = {
+  SUM: 'Suma de',
+  AVG: 'Promedio de',
+  COUNT: 'Cantidad de',
+  MIN: 'Mínimo de',
+  MAX: 'Máximo de',
+};
 
 /* ===== Datos de ejemplo ===== */
 const companyEjemplo = {
@@ -218,6 +245,78 @@ const LINEAS_SUGERIDAS: Record<TipoZonaTicket, LineaZonaConfig[]> = {
 /* ===== Helpers ===== */
 function actualizarOpcion(prev: PlantillaConfig, patch: Partial<PlantillaConfig>): PlantillaConfig {
   return { ...prev, ...patch };
+}
+
+function migrarLinea(linea: LineaZonaConfig, grupoIdx: number): LineaZonaConfig {
+  if (linea.lineaNum !== undefined) return linea;
+  if (linea.mismaLinea) {
+    return {
+      ...linea,
+      lineaNum: grupoIdx,
+      anchoTipo: linea.anchoCampo ? 'fijo' : 'porcentual',
+      anchoValor: linea.anchoCampo ?? 100,
+      mismaLinea: undefined,
+      anchoCampo: undefined,
+    };
+  }
+  return { ...linea, lineaNum: grupoIdx + 1 };
+}
+
+/**
+ * Extrae las rutas (notacion de puntos) disponibles de un esquema JSON.
+ * - Objetos anidados se recorren recursivamente (ej: `cliente.nombre`).
+ * - Arrays de objetos exponen las subclaves sin indice (ej: `detalles.articulo`)
+ *   porque el formateador aplana arrays al resolver; ademas se expone el array
+ *   en si para imprimir los valores concatenados (ej: `detalles`).
+ * - Arrays de primitivos u objetos vacios solo exponen la ruta del array.
+ */
+function extraerRutasEsquema(esquema: unknown, prefijo = ''): string[] {
+  const rutas: string[] = [];
+  const recorrer = (obj: any, pref: string) => {
+    if (obj == null) return;
+    if (Array.isArray(obj)) {
+      if (pref) rutas.push(pref);
+      const primero = obj[0];
+      if (primero && typeof primero === 'object' && !Array.isArray(primero)) recorrer(primero, pref);
+      return;
+    }
+    if (typeof obj !== 'object') {
+      if (pref) rutas.push(pref);
+      return;
+    }
+    for (const [k, v] of Object.entries(obj)) {
+      const ruta = pref ? `${pref}.${k}` : k;
+      if (v !== null && typeof v === 'object') {
+        recorrer(v, ruta);
+      } else {
+        rutas.push(ruta);
+      }
+    }
+  };
+  recorrer(esquema, prefijo);
+  return rutas;
+}
+
+function migrarConfig(cfg: PlantillaConfig): PlantillaConfig {
+  if (!cfg.zonas) return cfg;
+  let grupoActual = 0;
+  const zonas = cfg.zonas.map((zona) => {
+    const lineas = zona.lineas.map((linea, idx) => {
+      if (linea.ref === 'ESPACIO' || linea.ref === 'SEPARADOR') {
+        if (linea.lineaNum !== undefined) return linea;
+        grupoActual++;
+        return { ...linea, lineaNum: grupoActual };
+      }
+      if (linea.mismaLinea) {
+        const migrada = migrarLinea(linea, grupoActual);
+        return migrada;
+      }
+      grupoActual++;
+      return { ...linea, lineaNum: linea.lineaNum ?? grupoActual };
+    });
+    return { ...zona, lineas };
+  });
+  return { ...cfg, zonas };
 }
 
 function construirFormato(
@@ -483,28 +582,46 @@ const ModalFirma = React.memo(function ModalFirma({
   );
 });
 
-interface ReportesConfigEditorProps { plantilla: ReportePlantillaListaDTO; onVolver: () => void; onGuardado: () => void; }
+interface ReportesConfigEditorProps {
+  plantillas: ReportePlantillaListaDTO[];
+  entdocAsignaciones: Record<string, number | null>;
+  onSelectPlantilla: (id: number) => void;
+  onNuevaPlantilla: () => void;
+  onAsignarEntdoc: (plantillaId: number, entdocCodigo: string | null) => void;
+  onRefresh: () => void;
+}
 
-const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, onVolver, onGuardado }) => {
+const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({
+  plantillas,
+  entdocAsignaciones,
+  onNuevaPlantilla,
+  onAsignarEntdoc,
+  onRefresh,
+}) => {
   const screens = Grid.useBreakpoint();
   const isLarge = screens.xxl === true;
-  const esFPV = plantilla.codigo === CODIGO_PLANTILLA_FPV_TICKET;
-  const esFRI = plantilla.codigo === CODIGO_PLANTILLA_FRI_TICKET;
-  const esVSNT = plantilla.codigo === CODIGO_PLANTILLA_VSNT_VOUCHER;
-  const esVSNT_ANULACION = plantilla.codigo === CODIGO_PLANTILLA_VSNT_ANULACION;
-  const esVSNT_CIERRE = plantilla.codigo === CODIGO_PLANTILLA_VSNT_CIERRE;
+
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const plantillaActual = plantillas.find((p) => p.plantillaId === selectedId) ?? null;
+
+  const esFPV = plantillaActual?.codigo === CODIGO_PLANTILLA_FPV_TICKET;
+  const esFRI = plantillaActual?.codigo === CODIGO_PLANTILLA_FRI_TICKET;
+  const esVSNT = plantillaActual?.codigo === CODIGO_PLANTILLA_VSNT_VOUCHER;
+  const esVSNT_ANULACION = plantillaActual?.codigo === CODIGO_PLANTILLA_VSNT_ANULACION;
+  const esVSNT_CIERRE = plantillaActual?.codigo === CODIGO_PLANTILLA_VSNT_CIERRE;
   const esVSNT_PLANTILLA = esVSNT || esVSNT_ANULACION || esVSNT_CIERRE;
 
   const [detalle, setDetalle] = useState<ReportePlantillaDetalleDTO | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [config, setConfig] = useState<PlantillaConfig>(() =>
-    esVSNT_CIERRE ? normalizarConfigVSNT_CIERRE(null) : esVSNT_ANULACION ? normalizarConfigVSNT_ANULACION(null) : esVSNT ? normalizarConfigVSNT(null) : esFRI ? normalizarConfigRI(null) : normalizarConfig(null));
+    migrarConfig(esVSNT_CIERRE ? normalizarConfigVSNT_CIERRE(null) : esVSNT_ANULACION ? normalizarConfigVSNT_ANULACION(null) : esVSNT ? normalizarConfigVSNT(null) : esFRI ? normalizarConfigRI(null) : normalizarConfig(null)));
   const [configInicial, setConfigInicial] = useState<PlantillaConfig>(() =>
-    esVSNT_CIERRE ? normalizarConfigVSNT_CIERRE(null) : esVSNT_ANULACION ? normalizarConfigVSNT_ANULACION(null) : esVSNT ? normalizarConfigVSNT(null) : esFRI ? normalizarConfigRI(null) : normalizarConfig(null));
+    migrarConfig(esVSNT_CIERRE ? normalizarConfigVSNT_CIERRE(null) : esVSNT_ANULACION ? normalizarConfigVSNT_ANULACION(null) : esVSNT ? normalizarConfigVSNT(null) : esFRI ? normalizarConfigRI(null) : normalizarConfig(null)));
   const [saving, setSaving] = useState(false);
   const [restableciendo, setRestableciendo] = useState(false);
   const [zonasColapsadas, setZonasColapsadas] = useState<Record<string, boolean>>({});
+  const [lineaActiva, setLineaActiva] = useState<{ zonaIdx: number; lineaIdx: number } | null>(null);
 
   // Modales
   const [modalLibreAbierto, setModalLibreAbierto] = useState(false);
@@ -525,26 +642,88 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
   const [firmaTempZonaIdx, setFirmaTempZonaIdx] = useState<number | undefined>(undefined);
   const [firmaTempValorInicial, setFirmaTempValorInicial] = useState<FirmaConfig | undefined>(undefined);
 
+  // Modales JSON
+  const [modalJsonConfigOpen, setModalJsonConfigOpen] = useState(false);
+  const [modalJsonPayloadOpen, setModalJsonPayloadOpen] = useState(false);
+  const [jsonPayloadContent, setJsonPayloadContent] = useState('');
+  const [loadingPayload, setLoadingPayload] = useState(false);
+
   const labelsDefault = esVSNT_PLANTILLA ? CAMPOS_TICKET_LABELS_VSNT : esFRI ? CAMPOS_TICKET_LABELS_RI : CAMPOS_TICKET_LABELS;
   const catalogoDTO = esVSNT_PLANTILLA ? CAMPOS_DTO_DISPONIBLES.VSNT : esFRI ? CAMPOS_DTO_DISPONIBLES.FRI : CAMPOS_DTO_DISPONIBLES.FPV;
   const normalizarSegunPlantilla = (cfg: PlantillaConfig | null | undefined): PlantillaConfig =>
     esVSNT_CIERRE ? normalizarConfigVSNT_CIERRE(cfg) : esVSNT_ANULACION ? normalizarConfigVSNT_ANULACION(cfg) : esVSNT ? normalizarConfigVSNT(cfg) : esFRI ? normalizarConfigRI(cfg) : normalizarConfig(cfg);
 
+  const obtenerEtiquetaPredeterminada = (referencia: string): string | undefined => {
+    if (referencia.startsWith('CAMPO:')) {
+      const campo = referencia.slice(6);
+      return labelsDefault[campo] || campo;
+    }
+    if (referencia.startsWith('DETALLE:')) {
+      const campo = referencia.slice(8);
+      return CAMPOS_DETALLE_LABELS[campo] || campo;
+    }
+    if (referencia.startsWith('TOTAL:') || referencia.startsWith('COBRO:')) {
+      return referencia.slice(referencia.indexOf(':') + 1).replace(/_/g, ' ');
+    }
+    if (referencia.startsWith('ESQUEMA:')) {
+      return referencia.slice(8);
+    }
+    return undefined;
+  };
+
+  const completarEtiquetasPredeterminadas = (configuracion: PlantillaConfig): PlantillaConfig => ({
+    ...configuracion,
+    zonas: (configuracion.zonas || []).map((zona) => ({
+      ...zona,
+      lineas: (zona.lineas || []).map((linea) => {
+        if (linea.label?.trim()) return linea;
+        const etiqueta = obtenerEtiquetaPredeterminada(linea.ref || '');
+        return etiqueta ? { ...linea, label: etiqueta } : linea;
+      }),
+    })),
+  });
+
   useEffect(() => {
+    if (!selectedId) { setDetalle(null); setConfig(migrarConfig(esVSNT_CIERRE ? normalizarConfigVSNT_CIERRE(null) : esVSNT_ANULACION ? normalizarConfigVSNT_ANULACION(null) : esVSNT ? normalizarConfigVSNT(null) : esFRI ? normalizarConfigRI(null) : normalizarConfig(null))); setConfigInicial(config); return; }
     let activo = true; setLoading(true); setLoadingError(false);
-    reportesConfigApi.obtenerPorId(plantilla.plantillaId)
-      .then((d) => { if (!activo) return; setDetalle(d); const cfg = normalizarSegunPlantilla(d.config); setConfig(cfg); setConfigInicial(cfg); setPreviewConfig({ ...cfg }); })
+    reportesConfigApi.obtenerPorId(selectedId)
+      .then((d) => { if (!activo) return; setDetalle(d); const cfg = migrarConfig(normalizarSegunPlantilla(d.config)); setConfig(cfg); setConfigInicial(cfg); setPreviewConfig({ ...cfg }); })
       .catch(() => { if (activo) setLoadingError(true); })
       .finally(() => { if (activo) setLoading(false); });
     return () => { activo = false; };
-  }, [plantilla.plantillaId]);
+  }, [selectedId, esVSNT_CIERRE, esVSNT_ANULACION, esVSNT, esFRI]);
+
+  useEffect(() => {
+    if (!selectedId && plantillas.length > 0) {
+      setSelectedId(plantillas[0].plantillaId);
+    }
+  }, [plantillas, selectedId]);
 
   const tieneConfig = detalle?.config != null;
   const dirty = useMemo(() => JSON.stringify(config) !== JSON.stringify(configInicial), [config, configInicial]);
-  const anchoLineaPreview = config.opciones?.anchoLinea ?? 48;
+  const rutasEsquema = useMemo(() => extraerRutasEsquema(config.esquema), [config.esquema]);
+  // Solo rutas que resuelven a un array: únicas seleccionables como campo calculado.
+  const rutasArrayEsquema = useMemo(
+    () => rutasEsquema.filter((r) => Array.isArray(resolverRuta(config.esquema, r))),
+    [rutasEsquema, config.esquema],
+  );
+  const hayLineasEsquema = useMemo(
+    () => (config.zonas || []).some((z) => (z.lineas || []).some((l) => l.ref.startsWith('ESQUEMA:'))),
+    [config.zonas],
+  );
+const anchoLineaPreview = config.opciones?.anchoLinea ?? 48;
+const anchoPapelPreview = Math.ceil(
+  anchoLineaPreview * TAMANO_FUENTE_PREVIEW * FACTOR_ANCHO_CARACTER_MONOESPACIADO,
+) + PADDING_HORIZONTAL_PREVIEW;
 
   const [previewConfig, setPreviewConfig] = useState(config);
+  const [previewAgenteUrl, setPreviewAgenteUrl] = useState<string | null>(null);
+  const [previewAgenteCargando, setPreviewAgenteCargando] = useState(false);
+  const [previewAgenteError, setPreviewAgenteError] = useState<string | null>(null);
   const prevPreviewRef = useRef('');
+  const previewAgenteUrlRef = useRef<string | null>(null);
+  const previewSolicitudRef = useRef(0);
+  const previewErrorNotificadoRef = useRef<string | null>(null);
   const configRef = useRef(config);
   configRef.current = config;
 
@@ -552,17 +731,13 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
     setPreviewConfig({ ...configRef.current });
   }, []);
 
-  // Auto-refrescar preview solo al cerrar modales
+  // Vista previa en vivo: sincroniza con cada cambio de config, manteniendo el
+  // congelado mientras un modal de edicion esta abierto (se libera al cerrar).
   useEffect(() => {
     if (!modalLibreAbierto && !modalDTOAbierto && !modalFirmaAbierto) {
-      setPreviewConfig({ ...configRef.current });
+      setPreviewConfig({ ...config });
     }
-  }, [modalLibreAbierto, modalDTOAbierto, modalFirmaAbierto]);
-
-  // Sincronizar previewConfig cuando cambian propiedades del logo (no pasan por modales)
-  useEffect(() => {
-    setPreviewConfig({ ...config });
-  }, [config.logo?.mostrar, config.logo?.base64, config.logo?.url, config.logo?.anchoPx, config.logo?.alineacion, config.logo?.altoPx]);
+  }, [config, modalLibreAbierto, modalDTOAbierto, modalFirmaAbierto]);
 
   const previewHtml = useMemo(() => {
     if (!detalle) return '';
@@ -576,7 +751,11 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
             : esFRI
           ? formatTicketReciboIngreso(datosEjemploRecibo, companyEjemplo, previewConfig)
           : formatTicketPOS(datosEjemploPOS, companyEjemplo, previewConfig);
-      const html = escposToHtml(raw);
+      const html = escposToHtml(raw, {
+        fontSizeBase: TAMANO_FUENTE_PREVIEW,
+        fontSizeFuenteB: TAMANO_FUENTE_B_PREVIEW,
+        escalaCondensada: 0.75,
+      });
       // Logo configurable: anteponer al contenido convertido si esta activo y hay fuente.
       const logo = previewConfig.logo;
       let logoHtml = '';
@@ -595,7 +774,10 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
       const htmlConLogo = logoHtml + html;
       prevPreviewRef.current = htmlConLogo;
       return htmlConLogo;
-    } catch { return prevPreviewRef.current; }
+    } catch (error) {
+      console.error('No se pudo generar la vista previa del ticket:', error);
+      return prevPreviewRef.current || '<div style="padding:16px;color:#b42318;font-family:sans-serif">No se pudo generar la vista previa.</div>';
+    }
   }, [detalle, previewConfig, esFRI, esVSNT, esVSNT_ANULACION, esVSNT_CIERRE]);
 
   // Congelar preview visualmente mientras el modal esta abierto
@@ -650,6 +832,14 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
     });
   }, [updZonas]);
 
+  const setZonaArrayOrigen = useCallback((zIdx: number, arrayOrigen: string) => {
+    updZonas((zs) => {
+      const copia = [...zs];
+      copia[zIdx] = { ...copia[zIdx], arrayOrigen: arrayOrigen || undefined };
+      return copia;
+    });
+  }, [updZonas]);
+
   const toggleZona = (id: string) => {
     setZonasColapsadas((prev) => {
       const expandida = !prev[id]; // va a expandirse
@@ -672,10 +862,6 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
     updZonas((z) => { z[zIdx] = { ...z[zIdx], lineas: fn([...z[zIdx].lineas]) }; return z; });
   };
 
-  const agregarLinea = (zIdx: number, ref: string) => {
-    updZonaLineas(zIdx, (l) => [...l, { ref: ref as LineaZonaConfig['ref'] }]);
-  };
-
   const quitarLinea = (zIdx: number, lIdx: number) => {
     updZonaLineas(zIdx, (l) => { l.splice(lIdx, 1); return l; });
     limpiarHuerfanos();
@@ -692,7 +878,38 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
   };
 
   const setLineaLabel = (zIdx: number, lIdx: number, label: string) => {
-    updZonaLineas(zIdx, (l) => { l[lIdx] = { ...l[lIdx], label: label || undefined }; return l; });
+    setConfig(prev => {
+      const zonas = [...(prev.zonas || [])];
+      const zonaActual = zonas[zIdx];
+      const lineaActual = zonaActual?.lineas?.[lIdx];
+      if (!zonaActual || !lineaActual) return prev;
+
+      const lineas = [...zonaActual.lineas];
+      lineas[lIdx] = { ...lineaActual, label: label || undefined };
+      zonas[zIdx] = { ...zonaActual, lineas };
+
+      // Para LIBRE:, el label (etiqueta) es independiente del contenido
+      return actualizarOpcion(prev, { zonas });
+    });
+  };
+
+  const setContenidoLibre = (zIdx: number, lIdx: number, contenido: string) => {
+    setConfig(prev => {
+      const zonas = [...(prev.zonas || [])];
+      const zonaActual = zonas[zIdx];
+      const lineaActual = zonaActual?.lineas?.[lIdx];
+      if (!zonaActual || !lineaActual) return prev;
+      const ref = String(lineaActual.ref || '');
+      if (!ref.startsWith('LIBRE:')) return actualizarOpcion(prev, { zonas });
+      const id = ref.slice('LIBRE:'.length);
+      const textos = { ...(prev.textosLibres || prev.campos?.textosLibres || {}) };
+      const actual = textos[id] as TextoLibreConfig;
+      textos[id] = {
+        ...(actual && typeof actual !== 'string' ? actual : {}),
+        texto: contenido,
+      };
+      return actualizarOpcion(prev, { zonas, textosLibres: textos });
+    });
   };
 
   const setLineaFormato = (zIdx: number, lIdx: number, fmt: FormatoItemTicket | null) => {
@@ -705,6 +922,10 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
 
   const setLineaFormatoValor = (zIdx: number, lIdx: number, fmt: FormatoItemTicket | null) => {
     updZonaLineas(zIdx, (l) => { l[lIdx] = { ...l[lIdx], formatoValor: fmt || undefined }; return l; });
+  };
+
+  const setLineaCalculo = (zIdx: number, lIdx: number, calculo: CalculoCampo | null | undefined) => {
+    updZonaLineas(zIdx, (l) => { l[lIdx] = { ...l[lIdx], calculo: calculo || undefined }; return l; });
   };
 
   const setLineaTabular = (zIdx: number, lIdx: number, active: boolean, ancho?: number) => {
@@ -728,6 +949,58 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
       return copia;
     });
   }, [updZonas]);
+
+  const getSiguienteLineaNum = useCallback((zIdx: number): number => {
+    const zona = zonas[zIdx];
+    if (!zona || !zona.lineas || zona.lineas.length === 0) return 1;
+    const maxNum = zona.lineas.reduce((max, l) => Math.max(max, l.lineaNum ?? 0), 0);
+    return maxNum + 1;
+  }, [zonas]);
+
+  const agregarLinea = useCallback((zIdx: number, ref: string) => {
+    const sigNum = getSiguienteLineaNum(zIdx);
+    updZonaLineas(zIdx, (l) => [...l, { ref: ref as LineaZonaConfig['ref'], lineaNum: sigNum }]);
+  }, [getSiguienteLineaNum, updZonaLineas]);
+
+  const setLineaNum = useCallback((zIdx: number, lIdx: number, nuevoNum: number): Promise<'empujar' | 'compartir' | 'cancel'> => {
+    return new Promise((resolve) => {
+      const zona = zonas[zIdx];
+      if (!zona) { resolve('cancel'); return; }
+      const lineasEnNuevoNum = zona.lineas.filter((l, i) => i !== lIdx && l.lineaNum === nuevoNum);
+      if (lineasEnNuevoNum.length === 0) {
+        updZonaLineas(zIdx, (l) => { l[lIdx] = { ...l[lIdx], lineaNum: nuevoNum }; return l; });
+        resolve('compartir');
+        return;
+      }
+      Modal.confirm({
+        title: `Línea ${nuevoNum} ya existe`,
+        content: `¿Qué desea hacer con los campos en la línea ${nuevoNum}?`,
+        okText: 'Empujar', cancelText: 'Compartir', okButtonProps: { danger: false },
+        onOk: () => {
+          updZonaLineas(zIdx, (l) => {
+            l.forEach((linea, idx) => {
+              if (idx !== lIdx && linea.lineaNum !== undefined && linea.lineaNum >= nuevoNum) {
+                l[idx] = { ...l[idx], lineaNum: linea.lineaNum + 1 };
+              }
+            });
+            l[lIdx] = { ...l[lIdx], lineaNum: nuevoNum };
+            return [...l];
+          });
+          resolve('empujar');
+        },
+        onCancel: () => {
+          updZonaLineas(zIdx, (l) => { l[lIdx] = { ...l[lIdx], lineaNum: nuevoNum }; return l; });
+          resolve('compartir');
+        },
+      });
+    });
+  }, [zonas, updZonaLineas]);
+
+  const calcularAnchosLinea = useCallback((zIdx: number, lineaNum: number): Map<number, number> => {
+    const zona = zonas[zIdx];
+    if (!zona) return new Map();
+    return calcularAnchosLineaCompartida(zona.lineas, lineaNum, config.opciones?.anchoLinea ?? 48);
+  }, [zonas, config.opciones?.anchoLinea]);
 
   /** Limpia definiciones huerfanas de LIBRE:/DTO:/FIRMA: al quitar zonas o lineas */
   const limpiarHuerfanos = () => {
@@ -895,35 +1168,111 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
 
   /* ===== Acciones ===== */
   const handleGuardar = async () => {
+    if (!plantillaActual) { message.warning('Seleccione una plantilla primero'); return; }
     // Validaciones no bloqueantes
-    if (!(config.zonas || []).some((z) => z.tipo === 'detalle')) message.warning('No hay zona de tipo "Detalle"');
-    if (!(config.zonas || []).some((z) => z.tipo === 'totales')) message.warning('No hay zona de tipo "Totales"');
-    setSaving(true);
-    try {
-      const toSave = (config.zonas && config.zonas.length > 0) ? config : null;
-      const d = await reportesConfigApi.actualizarConfig(plantilla.plantillaId, toSave as any);
+  if (!(config.zonas || []).some((z) => z.tipo === 'detalle')) message.warning('No hay zona de tipo "Detalle"');
+  if (!(config.zonas || []).some((z) => z.tipo === 'totales')) message.warning('No hay zona de tipo "Totales"');
+  const configuracionParaGuardar = completarEtiquetasPredeterminadas(config);
+  setConfig(configuracionParaGuardar);
+  setSaving(true);
+  try {
+    const toSave = (configuracionParaGuardar.zonas && configuracionParaGuardar.zonas.length > 0) ? configuracionParaGuardar : null;
+      const d = await reportesConfigApi.actualizarConfig(plantillaActual.plantillaId, toSave as any);
       limpiarCachePlantilla(); message.success('Configuración guardada correctamente');
       // Recargar desde API para confirmar persistencia
       setDetalle(d); const cfg = normalizarSegunPlantilla(d.config); setConfig(cfg); setConfigInicial(cfg);
       setPreviewConfig({ ...cfg });
-      onGuardado();
+      onRefresh();
     } catch (err: any) { message.error(err?.response?.data?.errorMessage || 'Error al guardar'); }
     finally { setSaving(false); }
+  };
+
+  const handleVerJsonConfig = () => {
+    setModalJsonConfigOpen(true);
+  };
+
+  const handleCargarEsquema = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const esquema = JSON.parse(String(reader.result));
+        if (esquema === null || typeof esquema !== 'object' || Array.isArray(esquema)) {
+          message.error('El archivo debe contener un objeto JSON');
+          return;
+        }
+        const rutas = extraerRutasEsquema(esquema);
+        setConfig((c) => ({ ...c, esquema }));
+        message.success(rutas.length > 0 ? `Esquema cargado: ${rutas.length} campos disponibles` : 'Esquema cargado (objeto sin campos)');
+      } catch {
+        message.error('JSON inválido');
+      }
+    };
+    reader.readAsText(file);
+    return false; // no subir al servidor
+  };
+
+  const handleVerJsonPayload = async () => {
+    if (!plantillaActual) { message.warning('Seleccione una plantilla primero'); return; }
+    setLoadingPayload(true);
+    try {
+      const datosEjemplo = esVSNT_ANULACION
+        ? datosEjemploAnulacion
+        : esVSNT_CIERRE
+          ? datosEjemploCierre
+          : esVSNT
+            ? datosEjemploVoucher
+            : esFRI
+              ? datosEjemploRecibo
+              : datosEjemploPOS;
+
+      const payload = await reportesConfigApi.obtenerPayloadImpresion(plantillaActual.plantillaId, {
+        PlantillaId: plantillaActual.plantillaId,
+        Data: datosEjemplo,
+        Company: companyEjemplo,
+      });
+      setJsonPayloadContent(JSON.stringify(payload, null, 2));
+      setModalJsonPayloadOpen(true);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al obtener payload');
+    } finally {
+      setLoadingPayload(false);
+    }
+  };
+
+  const handleCopiarJson = (json: string) => {
+    navigator.clipboard.writeText(json).then(() => {
+      message.success('Copiado al portapapeles');
+    });
+  };
+
+  const handleProbarPayload = async () => {
+    if (!jsonPayloadContent) return;
+    try {
+      const payload = JSON.parse(jsonPayloadContent);
+      const resultado = await reportesConfigApi.imprimirLocal(payload);
+      if (resultado.ok) {
+        message.success(`Impresión enviada a ${resultado.impresora || 'impresora'}`);
+      } else {
+        message.error(resultado.error || 'Error al enviar a impresión');
+      }
+    } catch (err: any) {
+      message.error('Error al procesar payload: ' + (err?.message || 'Error desconocido'));
+    }
   };
 
   const handleRestablecer = () => {
     Modal.confirm({
       title: 'Restablecer plantilla',
-      content: `¿Desea restablecer "${plantilla.nombre}" a su configuración predeterminada?`,
+      content: `¿Desea restablecer "${plantillaActual?.nombre}" a su configuración predeterminada?`,
       okText: 'Restablecer', okButtonProps: { danger: true }, cancelText: 'Cancelar',
       onOk: async () => {
         setRestableciendo(true);
         try {
-          await reportesConfigApi.actualizarConfig(plantilla.plantillaId, null);
+          await reportesConfigApi.actualizarConfig(plantillaActual?.plantillaId ?? 0, null);
           limpiarCachePlantilla(); message.success('Plantilla restablecida');
-          const d = await reportesConfigApi.obtenerPorId(plantilla.plantillaId);
+          const d = await reportesConfigApi.obtenerPorId(plantillaActual?.plantillaId ?? 0);
           setDetalle(d); const cfg = normalizarSegunPlantilla(d.config); setConfig(cfg); setConfigInicial(cfg);
-          onGuardado();
+          onRefresh();
         } catch (err: any) { message.error(err?.response?.data?.errorMessage || 'Error al restablecer'); }
         finally { setRestableciendo(false); }
       },
@@ -942,10 +1291,14 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 280 }}><Spin /></div>
     </Card>;
   }
-  if (loadingError || !detalle) {
+  if (!selectedId) {
     return <Card className="paces-card-erp paces-card-erp-padded" style={{ borderRadius: 8 }}>
-      <Alert message="Error al cargar la plantilla" type="error" showIcon
-        action={<Button size="small" onClick={onVolver}>Volver</Button>} />
+      <Alert message="Selecciona una plantilla para comenzar a editarla" type="info" showIcon />
+    </Card>;
+  }
+  if (loadingError) {
+    return <Card className="paces-card-erp paces-card-erp-padded" style={{ borderRadius: 8 }}>
+      <Alert message="Error al cargar la plantilla" type="error" showIcon />
     </Card>;
   }
 
@@ -958,6 +1311,7 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
     if (ref.startsWith('DTO:')) return <DatabaseOutlined />;
     if (ref.startsWith('FIRMA:')) return <SignatureOutlined />;
     if (ref.startsWith('DETALLE:')) return <TableOutlined />;
+    if (ref.startsWith('ESQUEMA:')) return <ApartmentOutlined />;
     return null;
   };
 
@@ -970,227 +1324,57 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
     if (ref.startsWith('COBRO:')) return ref.slice(6).replace(/_/g, ' ');
     if (ref.startsWith('DETALLE:')) return CAMPOS_DETALLE_LABELS[ref.slice(8)] || ref.slice(8);
     if (ref.startsWith('FIRMA:')) return 'Firma';
+    if (ref.startsWith('ESQUEMA:')) return ref.slice(8);
     return ref;
   };
 
   /* ===== Componente FilaLinea: render unificado de linea ===== */
   const FilaLinea = React.memo(function FilaLinea({
-    zonaIdx, lineaIdx, linea, zonaLineas, tipo,
+    zonaIdx, lineaIdx, linea, zonaLineas, tipo, esActiva, onSeleccionarLinea,
   }: {
     zonaIdx: number; lineaIdx: number; linea: LineaZonaConfig;
     zonaLineas: LineaZonaConfig[]; tipo: TipoZonaTicket;
+    esActiva?: boolean; onSeleccionarLinea?: () => void;
   }) {
     const ref = linea.ref;
-    const esCampo = ref.startsWith('CAMPO:');
-    const esTotal = ref.startsWith('TOTAL:');
-    const esCobro = ref.startsWith('COBRO:');
-    const tieneFormato = esCampo || esTotal || esCobro;
-    const tieneTabular = esCampo || esTotal || esCobro;
 
-    // Contenido variable segun tipo
-    let contenido: React.ReactNode;
-    let formato: React.ReactNode = null;
-    let tabularControl: React.ReactNode = null;
-
+    let labelMostrar = '';
     if (ref === 'ESPACIO') {
-      contenido = (
-        <Text>Espacio (línea en blanco)</Text>
-      );
+      labelMostrar = 'Espacio';
     } else if (ref === 'SEPARADOR') {
-      const car = (linea as any).caracter || '-';
-      contenido = (
-        <>
-          <Text>Separador</Text>
-          <Select<CaracterSeparadorTicket> size="small" style={{ width: 80 }}
-            value={car} onChange={(v) => setLineaSeparador(zonaIdx, lineaIdx, v)}
-            options={[{ label: '─ (guion fino)', value: '─' as CaracterSeparadorTicket },
-              { label: '- (guion)', value: '-' as CaracterSeparadorTicket },
-              { label: '= (igual)', value: '=' as CaracterSeparadorTicket }]} />
-          <Text type="secondary" style={{ fontSize: 11 }}>Margen</Text>
-          <InputNumber size="small" min={0} max={48} style={{ width: 56 }}
-            value={(linea as any).margen ?? 0}
-            onChange={(v) => {
-              updZonaLineas(zonaIdx, (l) => { l[lineaIdx] = { ...l[lineaIdx], margen: v ?? 0 } as any; return l; });
-            }} />
-          <Text type="secondary" style={{ fontSize: 11 }}>dots</Text>
-        </>
-      );
-      formato = (
-        <FormatoPopoverDual
-          formatoLabel={linea.formato}
-          formatoValor={undefined}
-          onAplicarLabel={(f) => setLineaFormato(zonaIdx, lineaIdx, f)}
-          onAplicarValor={() => {}}
-          dual={false}
-        />
-      );
+      labelMostrar = 'Separador';
     } else if (ref === 'CAMPO:CODIGO_QR') {
-      contenido = (
-        <Text>Código QR (se imprime si hay datos disponibles)</Text>
-      );
-      formato = (
-        <FormatoPopoverDual
-          formatoLabel={linea.formato}
-          formatoValor={undefined}
-          onAplicarLabel={(f) => setLineaFormato(zonaIdx, lineaIdx, f)}
-          onAplicarValor={() => {}}
-          dual={false}
-        />
-      );
+      labelMostrar = 'Código QR';
     } else if (ref.startsWith('LIBRE:')) {
       const id = ref.slice(6);
       const libreObj = textoLibrePorId(id);
-      contenido = (
-        <Input size="small" className="rc-zona-linea-input" value={libreObj?.texto ?? ''}
-          onChange={(e) => {
-            const t = e.target.value;
-            setConfig((prev) => {
-              const textos = { ...(prev.textosLibres || {}) };
-              if (!t) delete textos[id];
-              else textos[id] = { ...(textos[id] as any || {}), texto: t };
-              return { ...prev, textosLibres: textos };
-            });
-          }}
-          placeholder="Texto libre" />
-      );
-      formato = (
-        <>
-          {tagsFormato(libreObj)}
-          <Tooltip title="Editar formato"><Button size="small" type="text" icon={<EditOutlined />} onClick={() => abrirModalLibre(id)} /></Tooltip>
-        </>
-      );
+      labelMostrar = libreObj?.texto || 'Texto libre';
     } else if (ref.startsWith('DTO:')) {
       const id = ref.slice(6);
       const def = dtoDefPorId(id);
-      contenido = (
-        <div className="rc-zona-linea-label">
-          <Text style={{ display: 'block' }}>{def?.label || 'Campo DTO'}</Text>
-          <Text type="secondary" style={{ fontSize: 11 }}>{def ? `${def.ruta} · ${def.tipo}` : 'Definición no encontrada'}</Text>
-        </div>
-      );
-      formato = (
-        <>
-          {tagsFormato(def)}
-          <Tooltip title="Editar formato"><Button size="small" type="text" icon={<EditOutlined />} onClick={() => abrirModalDTO(id)} /></Tooltip>
-        </>
-      );
+      labelMostrar = def?.label || 'Campo DTO';
     } else if (ref.startsWith('FIRMA:')) {
       const id = ref.slice(6);
       const firma = config.firmas?.[id];
-      contenido = (
-        <div className="rc-zona-linea-label">
-          <Text style={{ display: 'block' }}>{firma?.texto || 'Firma'}</Text>
-          <Text type="secondary" style={{ fontSize: 11 }}>{firma ? (firma.linea === 'arriba' ? 'Línea de guiones arriba' : 'Línea de guiones al lado') : 'Definición no encontrada'}</Text>
-        </div>
-      );
-      formato = (
-        <>
-          {firma && <Tag className="rc-campo-formato-tag">{firma.linea === 'arriba' ? 'Arriba' : 'Al lado'}</Tag>}
-          <Tooltip title="Editar firma"><Button size="small" type="text" icon={<EditOutlined />} onClick={() => abrirModalFirma(id)} /></Tooltip>
-        </>
-      );
+      labelMostrar = firma?.texto || 'Firma';
     } else if (ref.startsWith('DETALLE:')) {
       const clave = ref.slice(8);
-      const labelDefault = CAMPOS_DETALLE_LABELS[clave] || clave;
-      contenido = (
-        <>
-          <Tooltip title={linea.mostrarLabel !== false ? 'Ocultar label' : 'Mostrar label'}>
-            <Button size="small" type="text"
-              icon={linea.mostrarLabel !== false ? <EyeOutlined /> : <EyeInvisibleOutlined />}
-              onClick={(e) => { e.stopPropagation(); setLineaMostrarLabel(zonaIdx, lineaIdx, linea.mostrarLabel === false); }} />
-          </Tooltip>
-          <Input size="small" className="rc-zona-linea-input"
-            value={linea.label || labelDefault}
-            onChange={(e) => setLineaLabel(zonaIdx, lineaIdx, e.target.value)}
-            placeholder={labelDefault} />
-        </>
-      );
-      formato = (
-        <FormatoPopoverDual
-          formatoLabel={linea.formato}
-          formatoValor={undefined}
-          onAplicarLabel={(f) => setLineaFormato(zonaIdx, lineaIdx, f)}
-          onAplicarValor={() => {}}
-          dual={false}
-        />
-      );
-      tabularControl = (
-        <div className="rc-zona-tabular">
-          <Switch size="small" checked={!!linea.tabular} onChange={(v) => setLineaTabular(zonaIdx, lineaIdx, v)} />
-          {linea.tabular && (
-            <InputNumber size="small" min={4} max={config.opciones?.anchoLinea ?? 48}
-              value={linea.tabular.ancho ?? 12} style={{ width: 64 }}
-              onChange={(v) => setLineaTabular(zonaIdx, lineaIdx, true, v ?? 12)} />
-          )}
-        </div>
-      );
+      labelMostrar = linea.label || CAMPOS_DETALLE_LABELS[clave] || clave;
     } else {
-      // CAMPO, TOTAL, COBRO
       const clave = ref.slice(ref.indexOf(':') + 1);
-      const labelDefault = esCampo ? (labelsDefault[clave] || clave) : labelRef(ref);
-      contenido = (
-        <>
-          <Tooltip title={linea.mostrarLabel !== false ? 'Ocultar label en el ticket' : 'Mostrar label en el ticket'}>
-            <Button size="small" type="text"
-              icon={linea.mostrarLabel !== false ? <EyeOutlined /> : <EyeInvisibleOutlined />}
-              onClick={(e) => { e.stopPropagation(); setLineaMostrarLabel(zonaIdx, lineaIdx, linea.mostrarLabel === false); }} />
-          </Tooltip>
-          <Input size="small" className="rc-zona-linea-input"
-            value={linea.label || labelDefault}
-            onChange={(e) => setLineaLabel(zonaIdx, lineaIdx, e.target.value)}
-            placeholder={labelDefault} />
-        </>
-      );
-      formato = (
-        <FormatoPopoverDual
-          formatoLabel={linea.formatoLabel || linea.formato}
-          formatoValor={linea.formatoValor}
-          onAplicarLabel={(f) => setLineaFormatoLabel(zonaIdx, lineaIdx, f)}
-          onAplicarValor={(f) => setLineaFormatoValor(zonaIdx, lineaIdx, f)}
-          dual={true}
-        />
-      );
-      tabularControl = (
-        <div className="rc-zona-tabular">
-          <Switch size="small" checked={!!linea.tabular} onChange={(v) => setLineaTabular(zonaIdx, lineaIdx, v)} />
-          {linea.tabular && (
-            <InputNumber size="small" min={4} max={config.opciones?.anchoLinea ?? 48}
-              value={linea.tabular.ancho ?? 12} style={{ width: 64 }}
-              onChange={(v) => setLineaTabular(zonaIdx, lineaIdx, true, v ?? 12)} />
-          )}
-        </div>
-      );
+      const esCampo = ref.startsWith('CAMPO:');
+      labelMostrar = linea.label || (esCampo ? (labelsDefault[clave] || clave) : labelRef(ref));
     }
 
     return (
-      <div className="rc-zona-linea">
-        <Tooltip title="Mover arriba"><Button size="small" type="text" icon={<ArrowUpOutlined />} disabled={lineaIdx === 0} onClick={() => moverLinea(zonaIdx, lineaIdx, -1)} /></Tooltip>
-        <Tooltip title="Mover abajo"><Button size="small" type="text" icon={<ArrowDownOutlined />} disabled={lineaIdx === zonaLineas.length - 1} onClick={() => moverLinea(zonaIdx, lineaIdx, 1)} /></Tooltip>
+      <div className={`rc-zona-linea ${esActiva ? 'is-activa' : ''}`} onClick={onSeleccionarLinea}>
+        <Tag color="orange" style={{ margin: 0, fontSize: 11, minWidth: 20, textAlign: 'center' }}>
+          {linea.lineaNum ?? '?'}
+        </Tag>
         <span style={{ color: '#556ee6' }}>{iconoLinea(ref)}</span>
-        {contenido}
-        {formato}
-        <Tooltip title={linea.mismaLinea ? 'Separar de línea anterior' : 'Juntar con línea anterior'}>
-          <Button
-            size="small"
-            type="text"
-            icon={linea.mismaLinea ? <LinkOutlined /> : <DisconnectOutlined />}
-            style={{ color: linea.mismaLinea ? '#556ee6' : '#8c8c8c' }}
-            onClick={() => {
-              const nuevoValor = !linea.mismaLinea;
-              updZonas((zs) => {
-                const copia = [...zs];
-                const lineas = [...copia[zonaIdx].lineas];
-                lineas[lineaIdx] = { ...lineas[lineaIdx], mismaLinea: nuevoValor || undefined };
-                copia[zonaIdx] = { ...copia[zonaIdx], lineas };
-                return copia;
-              });
-            }}
-          />
-        </Tooltip>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          {tabularControl}
-          <Tooltip title="Quitar"><Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => quitarLinea(zonaIdx, lineaIdx)} /></Tooltip>
-        </div>
+        <Text ellipsis style={{ flex: 1, minWidth: 0 }}>{labelMostrar}</Text>
+        {linea.tabular && <Tag style={{ margin: 0, fontSize: 10 }}>Tab</Tag>}
+        {linea.anchoTipo === 'fijo' && <Tag style={{ margin: 0, fontSize: 10 }}>🔒</Tag>}
       </div>
     );
   }, (prev, next) => prev.zonaIdx === next.zonaIdx && prev.lineaIdx === next.lineaIdx && prev.tipo === next.tipo && prev.zonaLineas === next.zonaLineas && JSON.stringify(prev.linea) === JSON.stringify(next.linea));
@@ -1213,18 +1397,81 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
       {/* Toolbar */}
       <Card className="paces-card-erp paces-card-erp-padded" style={{ borderRadius: 8, marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <Button icon={<RollbackOutlined />} onClick={onVolver}>Volver</Button>
+          <Select
+            showSearch
+            size="small"
+            style={{ width: 280 }}
+            placeholder="Seleccionar plantilla"
+            value={selectedId}
+            onChange={(id) => setSelectedId(id as number)}
+            filterOption={(input, option) =>
+              (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+            }
+            options={plantillas.map((p) => ({
+              value: p.plantillaId,
+              label: (
+                <span>
+                  {p.nombre}
+                  {(() => {
+                    const asignacion = Object.entries(entdocAsignaciones).find(([, pid]) => pid === p.plantillaId)?.[0];
+                    return asignacion ? <Tag color="blue" style={{ marginLeft: 8, fontSize: 10 }}>{asignacion}</Tag> : null;
+                  })()}
+                </span>
+              ),
+            }))}
+          />
+          <Button size="small" icon={<PlusOutlined />} onClick={onNuevaPlantilla}>Nueva</Button>
           <div style={{ flex: 1 }} />
-          {tieneConfig ? <Tag color="blue">Personalizada</Tag> : <Tag color="default">Predeterminada</Tag>}
-          {dirty && <Tag color="orange">Cambios sin guardar</Tag>}
-          <Button icon={<UndoOutlined />} loading={restableciendo} onClick={handleRestablecer}>Restablecer predeterminado</Button>
-          <Tooltip title="Refrescar vista previa"><Button icon={<SyncOutlined />} onClick={handleRefreshPreview} /></Tooltip>
-          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>Guardar</Button>
+          {plantillaActual && (
+            <>
+              <Tag color={plantillaActual.tieneConfig ? 'blue' : 'default'} style={{ margin: 0, fontSize: 11 }}>
+                {plantillaActual.tieneConfig ? 'Personalizada' : 'Predeterminada'}
+              </Tag>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                {plantillaActual.codigo}
+              </Text>
+            </>
+          )}
+          {dirty && <Tag color="orange" style={{ margin: 0, fontSize: 11 }}>Sin guardar</Tag>}
+          <Tooltip title="Refrescar vista previa">
+            <Button size="small" icon={<SyncOutlined />} onClick={handleRefreshPreview} />
+          </Tooltip>
+          <Tooltip title="Recargar plantillas">
+            <Button size="small" icon={<ReloadOutlined />} onClick={onRefresh} />
+          </Tooltip>
+          <Tooltip title="Cargar Esquema JSON">
+            <Upload accept="application/json,.json" showUploadList={false} beforeUpload={handleCargarEsquema}>
+              <Button size="small" icon={<UploadOutlined />} />
+            </Upload>
+          </Tooltip>
+          {config.esquema !== undefined && (
+            <Tag color="green" style={{ margin: 0, fontSize: 11 }}>
+              Esquema: {rutasEsquema.length} campos
+            </Tag>
+          )}
+          <Tooltip title="Ver JSON Config">
+            <Button size="small" icon={<CodeOutlined />} onClick={handleVerJsonConfig} />
+          </Tooltip>
+          <Tooltip title="Ver JSON Payload">
+            <Button size="small" icon={<FileTextOutlined />} loading={loadingPayload} onClick={handleVerJsonPayload} />
+          </Tooltip>
+          <Button size="small" type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
+            Guardar
+          </Button>
+          {dirty && (
+            <Button size="small" danger icon={<RollbackOutlined />} onClick={() => { setConfig({ ...configInicial }); setPreviewConfig({ ...configInicial }); message.info('Cambios descartados'); }}>
+              Descartar
+            </Button>
+          )}
         </div>
       </Card>
 
-      <Row gutter={16}>
-        <Col xxl={15} span={24}>
+      {!plantillaActual && (
+        <Alert type="info" message="Selecciona una plantilla para comenzar a editarla" showIcon style={{ marginBottom: 16 }} />
+      )}
+
+      <div className="rc-editor-secciones">
+        <div className="rc-editor-seccion rc-editor-seccion-campos">
           {/* Zonas */}
           {zonas.map((zona, zIdx) => {
             const colapsada = zonasColapsadas[zona.id] === true;
@@ -1272,13 +1519,27 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
               >
                 {!colapsada && (
                   <div className="rc-zona-body">
+                    {/* Campo arrayOrigen para zonas de detalle */}
+                    {zona.tipo === 'detalle' && (
+                      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>Origen array:</Text>
+                        <Select size="small" style={{ width: 260 }} bordered={false}
+                          value={zona.arrayOrigen || undefined}
+                          placeholder={rutasArrayEsquema.length > 0 ? 'Seleccione un array…' : 'No hay arrays en el esquema'}
+                          options={rutasArrayEsquema.map((r) => ({ label: r, value: r }))}
+                          allowClear
+                          onChange={(v) => setZonaArrayOrigen(zIdx, v || '')}
+                          onClick={(e: any) => e.stopPropagation()} />
+                      </div>
+                    )}
+
                     {/* Lineas de la zona */}
                     {zona.lineas.length === 0 && (
                       <div className="rc-zona-vacia">
                         Zona vacía — agregue líneas con el botón de abajo
                       </div>
                     )}
-                    {zona.lineas.map((linea, lIdx) => <FilaLinea key={`${zIdx}-${lIdx}`} zonaIdx={zIdx} lineaIdx={lIdx} linea={linea} zonaLineas={zona.lineas} tipo={zona.tipo} />)}
+                    {zona.lineas.map((linea, lIdx) => <FilaLinea key={`${zIdx}-${lIdx}`} zonaIdx={zIdx} lineaIdx={lIdx} linea={linea} zonaLineas={zona.lineas} tipo={zona.tipo} esActiva={lineaActiva?.zonaIdx === zIdx && lineaActiva?.lineaIdx === lIdx} onSeleccionarLinea={() => setLineaActiva({ zonaIdx: zIdx, lineaIdx: lIdx })} />)}
 
                     {/* Boton agregar linea */}
                     <div className="rc-zona-agregar-linea">
@@ -1328,7 +1589,13 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
                             items.push({ key: 'cobros', label: 'Cobros', icon: <WalletOutlined />, children: cobrosChildren });
                           }
 
-                          // 6. Especiales (Texto libre, Campo DTO y Firma)
+                          // 6. Esquema (campo del JSON de ejemplo importado; la propiedad se elige en Propiedades)
+                          if (rutasEsquema.length > 0) {
+                            const ref = `ESQUEMA:${rutasEsquema[0]}`;
+                            items.push({ key: 'esquema', label: 'Campo de esquema', icon: <ApartmentOutlined />, onClick: () => agregarLinea(zIdx, ref) });
+                          }
+
+                          // 7. Especiales (Texto libre, Campo DTO y Firma)
                           const especialesChildren = [
                             { key: 'TEXTO_LIBRE', icon: <FontSizeOutlined />, label: 'Texto libre', onClick: () => abrirModalLibre(undefined, zIdx) },
                             { key: 'CAMPO_DTO', icon: <DatabaseOutlined />, label: 'Campo DTO', onClick: () => abrirModalDTO(undefined, zIdx) },
@@ -1476,29 +1743,354 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
               )}
             </Space>
           </Card>
-        </Col>
+        </div>
+
+        {/* Panel de propiedades */}
+        <div className="rc-editor-seccion rc-editor-seccion-propiedades">
+          <Card className="paces-card-erp paces-card-erp-padded" style={{ borderRadius: 8, position: isLarge ? 'sticky' : undefined, top: 16 }}>
+            <div style={{ fontWeight: 600, marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Propiedades</span>
+              {lineaActiva && <Button size="small" type="text" onClick={() => setLineaActiva(null)}>×</Button>}
+            </div>
+            {lineaActiva ? (() => {
+              const zona = config.zonas?.[lineaActiva.zonaIdx];
+              const linea = zona?.lineas[lineaActiva.lineaIdx];
+              if (!linea) return <Text type="secondary">Línea no encontrada</Text>;
+              const ref = linea.ref;
+              const esCampo = ref.startsWith('CAMPO:');
+              const esTotal = ref.startsWith('TOTAL:');
+              const esCobro = ref.startsWith('COBRO:');
+              const esSeparador = ref === 'SEPARADOR';
+              const esEspacio = ref === 'ESPACIO';
+              const esDetalle = ref.startsWith('DETALLE:');
+              const esEsquema = ref.startsWith('ESQUEMA:');
+              const tieneLabel = !esEspacio && !esSeparador && ref !== 'CAMPO:CODIGO_QR' && ref !== 'CAMPO:CODIGO_BARRAS';
+              const puedeVincularEsquema = tieneLabel && rutasEsquema.length > 0;
+              const clave = ref.includes(':') ? ref.slice(ref.indexOf(':') + 1) : '';
+              const labelDefault = esCampo ? (labelsDefault[clave] || clave) : esEsquema && linea.calculo ? `${VERBOS_CALCULO[linea.calculo.tipo]} ${linea.calculo.ruta}` : esDetalle ? (CAMPOS_DETALLE_LABELS[clave] || clave) : labelRef(ref);
+
+              return (
+                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                  <div>
+                    <Text type="secondary" style={{ fontSize: 11 }}>Referencia</Text>
+                    <Select size="small" style={{ width: '100%', marginTop: 2 }} value={ref.startsWith('LIBRE:') ? 'texto_libre' : 'referencia'} onChange={(v) => {
+                      if (v === 'texto_libre') {
+                        const nuevoId = `LIBRE-${Date.now()}`;
+                        updZonaLineas(lineaActiva.zonaIdx, (l) => {
+                          l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], ref: `LIBRE:${nuevoId}` } as any;
+                          return l;
+                        });
+                      }
+                    }} options={[{ label: 'Referencia', value: 'referencia' }, { label: 'Texto libre', value: 'texto_libre' }]} />
+                    {ref.startsWith('LIBRE:') ? (
+                      <div style={{ marginTop: 6 }}>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Contenido libre</Text>
+                        <Input.TextArea rows={3} style={{ width: '100%', marginTop: 2 }} value={(textoLibrePorId(ref.slice('LIBRE:'.length))?.texto || '')} onChange={(e) => setContenidoLibre(lineaActiva.zonaIdx, lineaActiva.lineaIdx, e.target.value)} placeholder="Escribe el texto libre (Enter para varias líneas)..." />
+                      </div>
+                    ) : (
+                      <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#556ee6', marginTop: 2 }}>{ref}</div>
+                    )}
+                    {puedeVincularEsquema && (
+                      <div style={{ marginTop: 6 }}>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Campo del esquema</Text>
+                        <Select
+                          size="small"
+                          style={{ width: '100%', marginTop: 2 }}
+                          showSearch
+                          optionFilterProp="label"
+                          placeholder={esEsquema ? undefined : 'Asociar campo del esquema…'}
+                          value={esEsquema ? clave : undefined}
+                          onChange={(v) => updZonaLineas(lineaActiva.zonaIdx, (l) => {
+                            l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], ref: `ESQUEMA:${v}` } as any;
+                            return l;
+                          })}
+                          options={rutasEsquema.map((r) => ({ label: r, value: r }))}
+                        />
+                      </div>
+                    )}
+                    {esEsquema && (
+                      <div style={{ marginTop: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <Text type="secondary" style={{ fontSize: 11 }}>Campo calculado</Text>
+                          <Switch size="small" checked={!!linea.calculo} onChange={(v) => setLineaCalculo(lineaActiva.zonaIdx, lineaActiva.lineaIdx, v ? { tipo: 'SUM', ruta: rutasArrayEsquema.includes(clave) ? clave : (rutasArrayEsquema[0] || '') } : null)} />
+                        </div>
+                        {linea.calculo && (
+                          <Space direction="vertical" style={{ width: '100%', marginTop: 4 }} size={4}>
+                            <Text type="secondary" style={{ fontSize: 11 }}>Operación</Text>
+                            <Select size="small" style={{ width: '100%' }} value={linea.calculo.tipo}
+                              onChange={(tipo) => setLineaCalculo(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.calculo, tipo })}
+                              options={OPCIONES_CALCULO} />
+                            <Text type="secondary" style={{ fontSize: 11 }}>Ruta (array del esquema)</Text>
+                            <Select size="small" style={{ width: '100%' }} showSearch optionFilterProp="label" value={linea.calculo.ruta}
+                              onChange={(ruta) => setLineaCalculo(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.calculo, ruta })}
+                              options={rutasArrayEsquema.map((r) => ({ label: r, value: r }))} placeholder={rutasArrayEsquema.length > 0 ? 'Seleccione un array…' : 'No hay arrays en el esquema'} />
+                          </Space>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <Divider style={{ margin: '4px 0' }} />
+
+                  <div>
+                    <Text strong style={{ fontSize: 12 }}>Etiqueta</Text>
+                    <Space direction="vertical" style={{ width: '100%', marginTop: 6 }} size={6}>
+                      <Input size="small" style={{ width: '100%' }} value={linea.label || ''}
+                        onChange={(e) => setLineaLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, e.target.value)}
+                        placeholder={labelDefault} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Switch size="small" checked={linea.mostrarLabel !== false} onChange={(v) => setLineaMostrarLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, v)} />
+                        <span style={{ fontSize: 12 }}>Mostrar</span>
+                      </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Alineación</Text>
+                        <Space size={4} style={{ marginTop: 2 }}>
+                          <Button size="small" type={linea.formatoLabel?.alineacion === 'izquierda' ? 'primary' : 'default'} icon={<AlignLeftOutlined />} onClick={() => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, alineacion: 'izquierda' } as FormatoItemTicket)} />
+                          <Button size="small" type={linea.formatoLabel?.alineacion === 'centro' ? 'primary' : 'default'} icon={<AlignCenterOutlined />} onClick={() => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, alineacion: 'centro' } as FormatoItemTicket)} />
+                          <Button size="small" type={linea.formatoLabel?.alineacion === 'derecha' ? 'primary' : 'default'} icon={<AlignRightOutlined />} onClick={() => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, alineacion: 'derecha' } as FormatoItemTicket)} />
+                        </Space>
+                      </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Estilo</Text>
+                        <Space size={4} style={{ marginTop: 2 }}>
+                          <Button size="small" type={linea.formatoLabel?.negrita ? 'primary' : 'default'} onClick={() => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, negrita: !linea.formatoLabel?.negrita } as FormatoItemTicket)}>N</Button>
+                        </Space>
+                      </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Tamaño</Text>
+                        <Select size="small" style={{ width: '100%', marginTop: 2 }} value={linea.formatoLabel?.tamano || 'normal'}
+                          onChange={(v) => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, tamano: v } as FormatoItemTicket)}
+                          options={[
+                            { label: 'Normal', value: 'normal' },
+                            { label: 'Doble', value: 'doble' },
+                            { label: 'Doble alto', value: 'doble_altura' },
+                            { label: 'Doble ancho', value: 'doble_ancho' },
+                            { label: 'Triple', value: 'triple' },
+                            { label: 'Condensada', value: 'condensada' },
+                          ]} />
+                      </div>
+                    </Space>
+                  </div>
+
+                  <Divider style={{ margin: '4px 0' }} />
+
+                  <div>
+                    <Text strong style={{ fontSize: 12 }}>Valor</Text>
+                    <Space direction="vertical" style={{ width: '100%', marginTop: 6 }} size={6}>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Tipo de dato</Text>
+                        <Select size="small" style={{ width: '100%', marginTop: 2 }} value={linea.tipoDato || 'texto'}
+                          onChange={(v) => updZonaLineas(lineaActiva.zonaIdx, (l) => { l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], tipoDato: v } as any; return l; })}
+                          options={[
+                            { label: 'Texto', value: 'texto' },
+                            { label: 'Fecha', value: 'fecha' },
+                            { label: 'Número', value: 'numero' },
+                            { label: 'Dinero', value: 'dinero' },
+                          ]} />
+                      </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Formato</Text>
+                        <Input size="small" style={{ width: '100%', marginTop: 2 }} value={linea.formatoDato || ''}
+                          onChange={(e) => updZonaLineas(lineaActiva.zonaIdx, (l) => { l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], formatoDato: e.target.value } as any; return l; })}
+                          placeholder={linea.tipoDato === 'fecha' ? 'dd/MM/yyyy' : '#,##0.00'} />
+                      </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Alineación</Text>
+                        <Space size={4} style={{ marginTop: 2 }}>
+                          <Button size="small" type={linea.formatoValor?.alineacion === 'izquierda' || (!linea.formatoValor && linea.formato?.alineacion === 'izquierda') ? 'primary' : 'default'} icon={<AlignLeftOutlined />} onClick={() => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, alineacion: 'izquierda' } as FormatoItemTicket)} />
+                          <Button size="small" type={linea.formatoValor?.alineacion === 'centro' || (!linea.formatoValor && linea.formato?.alineacion === 'centro') ? 'primary' : 'default'} icon={<AlignCenterOutlined />} onClick={() => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, alineacion: 'centro' } as FormatoItemTicket)} />
+                          <Button size="small" type={linea.formatoValor?.alineacion === 'derecha' || (!linea.formatoValor && linea.formato?.alineacion === 'derecha') ? 'primary' : 'default'} icon={<AlignRightOutlined />} onClick={() => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, alineacion: 'derecha' } as FormatoItemTicket)} />
+                        </Space>
+                      </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Estilo</Text>
+                        <Space size={4} style={{ marginTop: 2 }}>
+                          <Button size="small" type={linea.formatoValor?.negrita || linea.formato?.negrita ? 'primary' : 'default'} onClick={() => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, negrita: !linea.formatoValor?.negrita } as FormatoItemTicket)}>N</Button>
+                        </Space>
+                      </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Tamaño</Text>
+                        <Select size="small" style={{ width: '100%', marginTop: 2 }} value={linea.formatoValor?.tamano || linea.formato?.tamano || 'normal'}
+                          onChange={(v) => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, tamano: v } as FormatoItemTicket)}
+                          options={[
+                            { label: 'Normal', value: 'normal' },
+                            { label: 'Doble', value: 'doble' },
+                            { label: 'Doble alto', value: 'doble_altura' },
+                            { label: 'Doble ancho', value: 'doble_ancho' },
+                            { label: 'Triple', value: 'triple' },
+                            { label: 'Condensada', value: 'condensada' },
+                          ]} />
+                      </div>
+                    </Space>
+                  </div>
+
+                  <Divider style={{ margin: '4px 0' }} />
+
+                  <div>
+                    <Text strong style={{ fontSize: 12 }}>General</Text>
+                    <Space direction="vertical" style={{ width: '100%', marginTop: 6 }} size={4}>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Número de línea</Text>
+                        <Select
+                          size="small"
+                          style={{ width: '100%', marginTop: 2 }}
+                          value={linea.lineaNum ?? 1}
+                          onChange={async (v) => {
+                            await setLineaNum(lineaActiva.zonaIdx, lineaActiva.lineaIdx, v);
+                          }}
+                          options={Array.from({ length: getSiguienteLineaNum(lineaActiva.zonaIdx) + 2 }, (_, i) => ({
+                            label: `Línea ${i + 1}`,
+                            value: i + 1,
+                          }))}
+                          dropdownRender={(menu) => (
+                            <>
+                              {menu}
+                              <Divider style={{ margin: '4px 0' }} />
+                              <Button size="small" type="link" icon={<PlusOutlined />} style={{ padding: '0 8px' }}
+                                onClick={() => {
+                                  const sig = getSiguienteLineaNum(lineaActiva.zonaIdx);
+                                  setLineaNum(lineaActiva.zonaIdx, lineaActiva.lineaIdx, sig);
+                                }}>
+                                Nueva línea {getSiguienteLineaNum(lineaActiva.zonaIdx)}
+                              </Button>
+                            </>
+                          )}
+                        />
+                      </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Tipo de ancho</Text>
+                        <Select<TipoAnchoCampo>
+                          size="small"
+                          style={{ width: '100%', marginTop: 2 }}
+                          value={linea.anchoTipo ?? 'porcentual'}
+                          onChange={(v) => {
+                            const maximo = v === 'fijo' ? (config.opciones?.anchoLinea ?? 48) : 100;
+                            updZonaLineas(lineaActiva.zonaIdx, (l) => {
+                              l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], anchoTipo: v, anchoValor: v === 'porcentual' ? 100 : maximo };
+                              return l;
+                            });
+                          }}
+                          options={[
+                            { label: 'Porcentual (%)', value: 'porcentual' },
+                            { label: 'Fijo (caracteres)', value: 'fijo' },
+                          ]}
+                        />
+                      </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                          Ancho {linea.anchoTipo === 'fijo' ? '(caracteres)' : '(%)'}
+                        </Text>
+                        <InputNumber
+                          size="small"
+                          min={5}
+                          max={linea.anchoTipo === 'fijo' ? (config.opciones?.anchoLinea ?? 48) : 100}
+                          style={{ width: '100%', marginTop: 2 }}
+                          value={linea.anchoValor ?? (() => {
+                            const enLinea = (config.zonas?.[lineaActiva.zonaIdx]?.lineas ?? []).filter(l => l.lineaNum === linea.lineaNum);
+                            return enLinea.length <= 1 ? 100 : Math.round(100 / enLinea.length);
+                          })()}
+                          onChange={(v) => {
+                            updZonaLineas(lineaActiva.zonaIdx, (l) => {
+                              l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], anchoValor: v ?? undefined };
+                              return l;
+                            });
+                          }}
+                        />
+                      </div>
+                      {(() => {
+                        const anchoPagina = config.opciones?.anchoLinea ?? 48;
+                        const totalFijo = (config.zonas?.[lineaActiva.zonaIdx]?.lineas ?? [])
+                          .filter((item) =>
+                            item.lineaNum === linea.lineaNum &&
+                            item.anchoTipo === 'fijo' &&
+                            item.ref !== 'ESPACIO' &&
+                            item.ref !== 'SEPARADOR')
+                          .reduce((total, item) => total + (item.anchoValor ?? 0), 0);
+
+                        return totalFijo > anchoPagina ? (
+                          <Text type="warning" style={{ display: 'block', fontSize: 11 }}>
+                            Los anchos fijos suman {totalFijo} y exceden el ancho de linea ({anchoPagina}). Al imprimir se repartiran proporcionalmente.
+                          </Text>
+                        ) : null;
+                      })()}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Switch size="small" checked={!!linea.tabular} onChange={(v) => setLineaTabular(lineaActiva.zonaIdx, lineaActiva.lineaIdx, v)} />
+                        <span style={{ fontSize: 12 }}>Espacio label-valor</span>
+                        {linea.tabular && (
+                          <InputNumber size="small" min={1} max={48} style={{ width: 50, marginLeft: 4 }}
+                            value={linea.tabular.ancho ?? 12}
+                            onChange={(v) => setLineaTabular(lineaActiva.zonaIdx, lineaActiva.lineaIdx, true, v ?? 12)} />
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Switch size="small" checked={!!linea.ocultarSiVacio} onChange={(v) => updZonaLineas(lineaActiva.zonaIdx, (l) => { l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], ocultarSiVacio: v || undefined }; return l; })} />
+                        <span style={{ fontSize: 12 }}>Ocultar si vacío</span>
+                      </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Ubicación (padding izq)</Text>
+                        <InputNumber size="small" min={0} max={48} style={{ width: 60, marginTop: 2 }}
+                          value={(linea as any).margen ?? 0}
+                          onChange={(v) => updZonaLineas(lineaActiva.zonaIdx, (l) => { l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], margen: v ?? 0 } as any; return l; })} />
+                      </div>
+                    </Space>
+                  </div>
+
+                  <Divider style={{ margin: '4px 0' }} />
+
+                  <Space>
+                    <Button size="small" icon={<ArrowUpOutlined />} disabled={lineaActiva.lineaIdx === 0}
+                      onClick={() => moverLinea(lineaActiva.zonaIdx, lineaActiva.lineaIdx, -1)} />
+                    <Button size="small" icon={<ArrowDownOutlined />} disabled={lineaActiva.lineaIdx === (config.zonas?.[lineaActiva.zonaIdx]?.lineas.length ?? 0) - 1}
+                      onClick={() => moverLinea(lineaActiva.zonaIdx, lineaActiva.lineaIdx, 1)} />
+                    <Button size="small" danger icon={<DeleteOutlined />}
+                      onClick={() => { quitarLinea(lineaActiva.zonaIdx, lineaActiva.lineaIdx); setLineaActiva(null); }} />
+                  </Space>
+                </Space>
+              );
+})() : (
+              <Text type="secondary">Selecciona una línea para editar sus propiedades</Text>
+            )}
+          </Card>
+        </div>
 
         {/* Vista previa */}
-        <Col xxl={9} span={24}>
+        <div className="rc-editor-seccion rc-editor-seccion-preview">
           <Card className="paces-card-erp paces-card-erp-padded"
             style={{ borderRadius: 8, position: isLarge ? 'sticky' : undefined, top: 16 }}
-            title={<Space size={6}><EyeOutlined /><span>Vista previa</span><Tag color="green">En vivo</Tag></Space>}
+            title={
+  <Space size={6}>
+    <EyeOutlined />
+    <span>Vista previa</span>
+    <Tag color="green">En vivo</Tag>
+  </Space>
+}
             extra={<Text type="secondary" style={{ fontSize: 12 }}>{esVSNT_ANULACION ? 'Anulación Visanet' : esVSNT_CIERRE ? 'Cierre Lote Visanet' : esVSNT ? 'Voucher Visanet' : esFRI ? 'Recibo Ingreso' : 'Factura POS'}</Text>}>
-            <div style={{
-              background: '#fff', width: `${anchoLineaPreview * 10}px`, minWidth: `${anchoLineaPreview * 8.5}px`, maxWidth: '100%', margin: '0 auto',
-              padding: '16px 20px', fontFamily: config.opciones?.fontFamily ? `'${config.opciones.fontFamily}', monospace` : "'Courier New', Courier, monospace", fontSize: 14, lineHeight: 1.5,
-              border: '1px solid #d9d9d9', borderRadius: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            }} dangerouslySetInnerHTML={{ __html: frozenPreview }} />
+            {hayLineasEsquema && !config.esquema && (
+              <Alert
+                style={{ marginBottom: 12 }}
+                type="warning"
+                showIcon
+                message="Esquema no cargado"
+                description="Hay líneas ESQUEMA (incluidos campos calculados) pero aún no se ha cargado el JSON de ejemplo. Use 'Cargar esquema' para ver su contenido en la vista previa."
+              />
+            )}
+                  <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+                    <div style={{
+                      background: '#fff', width: `${anchoPapelPreview}px`, minWidth: `${anchoPapelPreview}px`, boxSizing: 'border-box', margin: '0 auto',
+                      padding: '16px 20px', fontFamily: config.opciones?.fontFamily ? `'${config.opciones.fontFamily}', monospace` : "'Courier New', Courier, monospace", fontSize: TAMANO_FUENTE_PREVIEW, lineHeight: 1.2,
+                      border: '1px solid #d9d9d9', borderRadius: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    }} dangerouslySetInnerHTML={{ __html: frozenPreview }} />
+                  </div>
             <Divider style={{ margin: '12px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <Tag color={esVSNT_CIERRE ? 'red' : esVSNT_ANULACION ? 'volcano' : esVSNT ? 'orange' : esFPV ? 'blue' : 'purple'}>{esVSNT_ANULACION ? 'VSNT_ANULACION' : esVSNT_CIERRE ? 'VSNT_CIERRE' : esVSNT ? 'VSNT_VOUCHER' : esFPV ? 'FPV_TICKET' : 'FRI_TICKET'}</Tag>
               <Text type="secondary" style={{ fontSize: 12 }}>
-                Última actualización: {detalle.fechaActualizacion ? new Date(detalle.fechaActualizacion).toLocaleString('es-DO') : '—'}
+                Última actualización: {detalle?.fechaActualizacion ? new Date(detalle.fechaActualizacion).toLocaleString('es-DO') : '—'}
               </Text>
             </div>
           </Card>
-        </Col>
-      </Row>
+        </div>
+      </div>
 
       {/* Modal: texto libre */}
       <ModalTextoLibre
@@ -1555,6 +2147,55 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({ plantilla, 
             }
             setDtoTempTamano(f?.tamano ?? 'normal');
           }} />
+      </Modal>
+
+      {/* Modal: Ver JSON Config */}
+      <Modal
+        title="JSON Config"
+        open={modalJsonConfigOpen}
+        onCancel={() => setModalJsonConfigOpen(false)}
+        footer={[
+          <Button key="copy" icon={<CopyOutlined />} onClick={() => handleCopiarJson(JSON.stringify(config, null, 2))}>
+            Copiar
+          </Button>,
+          <Button key="close" onClick={() => setModalJsonConfigOpen(false)}>
+            Cerrar
+          </Button>,
+        ]}
+        width={800}
+      >
+        <Input.TextArea
+          readOnly
+          value={JSON.stringify(config, null, 2)}
+          style={{ fontFamily: 'monospace', minHeight: 400 }}
+          rows={20}
+        />
+      </Modal>
+
+      {/* Modal: Ver JSON Payload */}
+      <Modal
+        title="JSON Payload"
+        open={modalJsonPayloadOpen}
+        onCancel={() => setModalJsonPayloadOpen(false)}
+        footer={[
+          <Button key="copy" icon={<CopyOutlined />} onClick={() => handleCopiarJson(jsonPayloadContent)}>
+            Copiar
+          </Button>,
+          <Button key="test" type="primary" onClick={handleProbarPayload}>
+            Probar Impresión
+          </Button>,
+          <Button key="close" onClick={() => setModalJsonPayloadOpen(false)}>
+            Cerrar
+          </Button>,
+        ]}
+        width={800}
+      >
+        <Input.TextArea
+          value={jsonPayloadContent}
+          onChange={(e) => setJsonPayloadContent(e.target.value)}
+          style={{ fontFamily: 'monospace', minHeight: 400 }}
+          rows={20}
+        />
       </Modal>
     </>
   );

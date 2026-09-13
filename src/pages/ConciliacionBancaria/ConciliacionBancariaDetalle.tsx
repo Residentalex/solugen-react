@@ -4,7 +4,7 @@ import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Typography, Descriptions, Alert, message, Modal, Input, Divider, Tooltip,
 } from 'antd';
 import {
-  ArrowLeftOutlined, EditOutlined, CheckCircleOutlined, CheckCircleFilled, CloseCircleFilled, SearchOutlined, PrinterOutlined, DownloadOutlined, FileExcelOutlined,
+  ArrowLeftOutlined, EditOutlined, CheckCircleOutlined, CheckCircleFilled, CloseCircleOutlined, CloseCircleFilled, SearchOutlined, PrinterOutlined, DownloadOutlined, FileExcelOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -209,6 +209,33 @@ const ConciliacionBancariaDetalle: React.FC = () => {
           if (transaccionesCargadas) cargarTransaccionesDetalle();
         } catch (err: any) {
           const msg = extraerMensajeError(err, 'Error al aplicar');
+          message.error(msg);
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
+  };
+
+  const handleDesaplicar = () => {
+    if (!data) return;
+
+    Modal.confirm({
+      title: 'Desaplicar conciliación',
+      content: `¿Está seguro de desaplicar la conciliación N° ${data.concilID}? Esto revertirá el estado aplicado y eliminará los documentos en tránsito.`,
+      okText: 'Sí, desaplicar',
+      cancelText: 'Cancelar',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setSaving(true);
+        try {
+          await conciliacionBancariaApi.desaplicar(sucursalActiva, data.concilID);
+          message.success('Conciliación desaplicada exitosamente');
+          cargarData();
+          if (movimientosCargados) cargarMovimientosDetalle();
+          if (transaccionesCargadas) cargarTransaccionesDetalle();
+        } catch (err: any) {
+          const msg = extraerMensajeError(err, 'Error al desaplicar');
           message.error(msg);
         } finally {
           setSaving(false);
@@ -493,6 +520,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
+      sorter: (a: MovimientoBancarioDTO, b: MovimientoBancarioDTO) => (a.fecha || '').localeCompare(b.fecha || ''),
       render: (f: string) => formatDate(f),
     },
     {
@@ -500,6 +528,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       dataIndex: 'numRef',
       key: 'numRef',
       width: 130,
+      sorter: (a: MovimientoBancarioDTO, b: MovimientoBancarioDTO) => (a.numRef || '').localeCompare(b.numRef || ''),
       render: (val: string) => <Text>{val || '-'}</Text>,
     },
     {
@@ -507,6 +536,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       dataIndex: 'concepto',
       key: 'concepto',
       ellipsis: true,
+      sorter: (a: MovimientoBancarioDTO, b: MovimientoBancarioDTO) => (a.concepto || '').localeCompare(b.concepto || ''),
       render: (val: string) => <Text>{val || '-'}</Text>,
     },
     {
@@ -515,6 +545,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       key: 'monto',
       width: 130,
       align: 'right' as const,
+      sorter: (a: MovimientoBancarioDTO, b: MovimientoBancarioDTO) => Number(a.monto || 0) - Number(b.monto || 0),
       render: (val: number) => <Text strong>{formatNumber(val)}</Text>,
     },
     {
@@ -522,6 +553,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       dataIndex: 'debCred',
       key: 'debCred',
       width: 100,
+      sorter: (a: MovimientoBancarioDTO, b: MovimientoBancarioDTO) => (a.debCred || '').localeCompare(b.debCred || ''),
       render: (val: string) => (
         <Tag color={val === 'D' ? '#f50' : '#87d068'}>
           {val === 'D' ? 'Débito' : 'Crédito'}
@@ -561,12 +593,15 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => (a.fecha || '').localeCompare(b.fecha || ''),
       render: (f: string) => formatDate(f),
     },
     {
       title: 'Documento',
       key: 'documento',
       width: 160,
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) =>
+        `${a.tipoDoc}-${a.numDoc}`.localeCompare(`${b.tipoDoc}-${b.numDoc}`),
       render: (_: unknown, record: TransaccionConciliadaDTO) => (
         <Text>{record.tipoDoc}-{record.numDoc}</Text>
       ),
@@ -575,6 +610,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       title: 'Entidad',
       dataIndex: 'entidad',
       key: 'entidad',
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => (a.entidad || '').localeCompare(b.entidad || ''),
       render: (val: string) => <Text>{toTitleCase(val || '-')}</Text>,
     },
     {
@@ -583,6 +619,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       key: 'monto',
       width: 130,
       align: 'right' as const,
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => Number(a.monto || 0) - Number(b.monto || 0),
       render: (val: number) => <Text strong>{formatNumber(val)}</Text>,
     },
     {
@@ -590,6 +627,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
       dataIndex: 'debCred',
       key: 'debCred',
       width: 100,
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => (a.debCred || '').localeCompare(b.debCred || ''),
       render: (val: string) => (
         <Tag color={val === 'D' ? '#f50' : '#87d068'}>
           {val === 'D' ? 'Débito' : 'Crédito'}
@@ -637,17 +675,30 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               Imprimir
             </Button>
           </PermissionGate>
-          <PermissionGate accion="APLICAR">
-            <Button
-              icon={<CheckCircleOutlined />}
-              onClick={handleAplicar}
-              loading={saving}
-              disabled={data.aplicada}
-              style={data.aplicada ? undefined : { background: '#389e0d', borderColor: '#389e0d', color: '#fff' }}
-            >
-              Aplicar
-            </Button>
-          </PermissionGate>
+          {!data.aplicada && (
+            <PermissionGate accion="APLICAR">
+              <Button
+                icon={<CheckCircleOutlined />}
+                onClick={handleAplicar}
+                loading={saving}
+                style={{ background: '#389e0d', borderColor: '#389e0d', color: '#fff' }}
+              >
+                Aplicar
+              </Button>
+            </PermissionGate>
+          )}
+          {data.aplicada && (
+            <PermissionGate accion="DESAPLICAR">
+              <Button
+                icon={<CloseCircleOutlined />}
+                onClick={handleDesaplicar}
+                loading={saving}
+                danger
+              >
+                Desaplicar
+              </Button>
+            </PermissionGate>
+          )}
         </Space>
       </div>
 
@@ -741,12 +792,17 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                       <Table
                         dataSource={resumenGeneralEnVivo!.resumenLibros}
                         columns={[
-                          { title: 'Tipo de Documento', key: 'tipo', render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
+                          { title: 'Tipo de Documento', key: 'tipo',
+                            sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) =>
+                              (a.nombreTipoDoc || a.tipoDoc || '').localeCompare(b.nombreTipoDoc || b.tipoDoc || ''),
+                            render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
                             <Text>{r.nombreTipoDoc || r.tipoDoc}</Text>
                           )},
                           { title: 'Cantidad', dataIndex: 'cantidad', align: 'right' as const, width: 120,
+                            sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.cantidad || 0) - Number(b.cantidad || 0),
                             render: (v: number) => formatNumber(v) },
                           { title: 'Monto', dataIndex: 'montoTotal', align: 'right' as const, width: 160,
+                            sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.montoTotal || 0) - Number(b.montoTotal || 0),
                             render: (v: number) => <Text strong>{formatCurrency(v)}</Text> },
                         ]}
                         rowKey="tipoDoc"
@@ -787,12 +843,17 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                       <Table
                         dataSource={resumenGeneralEnVivo!.resumenTransito}
                         columns={[
-                          { title: 'Tipo de Documento', key: 'tipo', render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
+                          { title: 'Tipo de Documento', key: 'tipo',
+                            sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) =>
+                              (a.nombreTipoDoc || a.tipoDoc || '').localeCompare(b.nombreTipoDoc || b.tipoDoc || ''),
+                            render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
                             <Text>{r.nombreTipoDoc || r.tipoDoc}</Text>
                           )},
                           { title: 'Cantidad', dataIndex: 'cantidad', align: 'right' as const, width: 120,
+                            sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.cantidad || 0) - Number(b.cantidad || 0),
                             render: (v: number) => formatNumber(v) },
                           { title: 'Monto', dataIndex: 'montoTotal', align: 'right' as const, width: 160,
+                            sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.montoTotal || 0) - Number(b.montoTotal || 0),
                             render: (v: number) => <Text strong>{formatCurrency(v)}</Text> },
                         ]}
                         rowKey="tipoDoc"
@@ -1213,12 +1274,17 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                      <Table
                        dataSource={resumenGeneralEnVivo!.resumenLibros}
                        columns={[
-                         { title: 'Tipo de Documento', key: 'tipo', render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
+                         { title: 'Tipo de Documento', key: 'tipo',
+                           sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) =>
+                             (a.nombreTipoDoc || a.tipoDoc || '').localeCompare(b.nombreTipoDoc || b.tipoDoc || ''),
+                           render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
                            <Text>{r.nombreTipoDoc || r.tipoDoc}</Text>
                          )},
                          { title: 'Cantidad', dataIndex: 'cantidad', align: 'right' as const, width: 120,
+                           sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.cantidad || 0) - Number(b.cantidad || 0),
                            render: (v: number) => formatNumber(v) },
                          { title: 'Monto', dataIndex: 'montoTotal', align: 'right' as const, width: 160,
+                           sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.montoTotal || 0) - Number(b.montoTotal || 0),
                            render: (v: number) => <Text strong>{formatCurrency(v)}</Text> },
                        ]}
                        rowKey="tipoDoc"
@@ -1259,12 +1325,17 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                      <Table
                        dataSource={resumenGeneralEnVivo!.resumenTransito}
                        columns={[
-                         { title: 'Tipo de Documento', key: 'tipo', render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
+                         { title: 'Tipo de Documento', key: 'tipo',
+                           sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) =>
+                             (a.nombreTipoDoc || a.tipoDoc || '').localeCompare(b.nombreTipoDoc || b.tipoDoc || ''),
+                           render: (_: unknown, r: ResumenTipoDocumentoDTO) => (
                            <Text>{r.nombreTipoDoc || r.tipoDoc}</Text>
                          )},
                          { title: 'Cantidad', dataIndex: 'cantidad', align: 'right' as const, width: 120,
+                           sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.cantidad || 0) - Number(b.cantidad || 0),
                            render: (v: number) => formatNumber(v) },
                          { title: 'Monto', dataIndex: 'montoTotal', align: 'right' as const, width: 160,
+                           sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.montoTotal || 0) - Number(b.montoTotal || 0),
                            render: (v: number) => <Text strong>{formatCurrency(v)}</Text> },
                        ]}
                        rowKey="tipoDoc"

@@ -36,6 +36,7 @@ export interface RolDTO {
 export interface ModuloDTO {
   id: number;
   nombre: string;
+  codigo?: string;
   orden: number;
 }
 

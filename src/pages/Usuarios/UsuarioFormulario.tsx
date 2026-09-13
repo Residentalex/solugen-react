@@ -357,7 +357,8 @@ const UsuarioFormulario: React.FC = () => {
   if (esEditar && !data) return null;
 
   return (
-    <div>
+    <Spin spinning={guardando} tip="Guardando usuario..." size="large">
+      <div>
       {loadingError && (
         <Alert message="Error al cargar detalle de usuario" type="error" showIcon style={{ marginBottom: 16 }}
           action={<Button size="small" onClick={() => id && cargarUsuario(parseInt(id))}>Reintentar</Button>}
@@ -532,7 +533,7 @@ const UsuarioFormulario: React.FC = () => {
           form.setFieldValue('nombre', emp.nombre);
         }}
       />
-    </div>
+    </Spin>
   );
 };
 

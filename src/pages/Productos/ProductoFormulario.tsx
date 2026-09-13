@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Row, Col, Button, Form, Input, InputNumber, Switch, Select, Tag, Table, Space,
   message, Spin, Alert, Modal, Typography, Grid, Upload,
@@ -46,7 +46,9 @@ function formatNumber(n: number): string {
 const ProductoFormulario: React.FC = () => {
   const { codigo } = useParams<{ codigo: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const mode = codigo ? 'editar' : 'crear';
+  const isCloning = !codigo && location.state?.codigoClonar;
 
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
@@ -105,6 +107,8 @@ const ProductoFormulario: React.FC = () => {
 
       if (mode === 'editar' && codigo) {
         await cargarProducto(codigo);
+      } else if (isCloning && location.state?.codigoClonar) {
+        await cargarProducto(location.state.codigoClonar);
       } else {
         form.setFieldsValue({
           activo: true,
@@ -580,6 +584,15 @@ const ProductoFormulario: React.FC = () => {
                 <span style={{ color: 'var(--paces-text)' }}>{toTitleCase(imp.nombre)}</span>
                 <Space size={4}>
                   <Tag>{imp.porcentaje}%</Tag>
+                  <Button
+                    type="link"
+                    size="small"
+                    danger
+                    onClick={() => setSelectedImpuestos(prev => prev.filter(i => i.codigo !== imp.codigo))}
+                    style={{ padding: 0, height: 'auto' }}
+                  >
+                    <DeleteOutlined />
+                  </Button>
                 </Space>
               </div>
             ))}

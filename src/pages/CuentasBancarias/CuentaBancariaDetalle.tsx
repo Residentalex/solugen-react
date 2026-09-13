@@ -134,7 +134,7 @@ const SummarySidebar: React.FC<SummarySidebarProps> = ({ cuenta }) => {
   const hasBalance = cuenta.balance !== undefined && cuenta.balance !== null;
 
   return (
-    <Card className="paces-card" styles={{ body: { padding: '20px 24px' } }}>
+    <Card className="paces-card" styles={{ body: { padding: '20px 24px' }}}>
       <div style={{ marginBottom: 24 }}>
         <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 4 }}>
           Balance actual
@@ -192,7 +192,7 @@ const CompactSummary: React.FC<CompactSummaryProps> = ({ cuenta }) => {
 
   return (
     <div style={{ padding: '0 24px 12px' }}>
-      <Card className="paces-card" size="small" styles={{ body: { padding: '12px 16px' } }}>
+      <Card className="paces-card" size="small" styles={{ body: { padding: '12px 16px' }}}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
           <div>
             <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Balance actual</Text>
@@ -278,7 +278,7 @@ const FTransBanco: React.FC = () => {
     if (cuentas.length > 0) {
       const preSelected = (location.state as any)?.cuentaCodigo;
       if (preSelected) {
-        const idx = cuentas.findIndex((c) => c.codigo === preSelected);
+        const idx = cuentas.findIndex((c) => c.noCuenta === preSelected);
         if (idx >= 0) {
           setActiveIndex(idx);
           return;
@@ -294,10 +294,12 @@ const FTransBanco: React.FC = () => {
 
   const handlePrev = () => {
     setActiveIndex((prev) => Math.max(0, prev - 1));
+    setCurrentPage(1); // Reset paginación al cambiar cuenta
   };
 
   const handleNext = () => {
     setActiveIndex((prev) => Math.min(cuentas.length - 1, prev + 1));
+    setCurrentPage(1); // Reset paginación al cambiar cuenta
   };
 
   const handleRefresh = () => {
@@ -323,12 +325,11 @@ const FTransBanco: React.FC = () => {
 
   const cargarMovimientos = useCallback(async (pagina: number, filas: number) => {
     if (!cuentaActiva?.noCuenta) return;
+
     setLoadingMov(true);
     try {
-      const desde = filtros.desde ?? '19000101000000';
-      const hasta = filtros.hasta ?? '20991231235959';
       const result = await cuentaBancariaApi.obtenerMovimientos(sucursalActiva, cuentaActiva.noCuenta, {
-        desde, hasta, cantidad: filas, salto: (pagina - 1) * filas,
+        desde: filtros.desde, hasta: filtros.hasta, cantidad: filas, salto: (pagina - 1) * filas,
         busqueda: searchText || undefined,
         estado: filtros.estado,
       });
@@ -339,7 +340,7 @@ const FTransBanco: React.FC = () => {
     } finally {
       setLoadingMov(false);
     }
-  }, [sucursalActiva, cuentaActiva?.codigo, filtros, searchText]);
+  }, [sucursalActiva, cuentaActiva?.noCuenta, filtros, searchText]);
 
   /* ---- Load movimientos on dependency change ---- */
 
@@ -539,7 +540,7 @@ const FTransBanco: React.FC = () => {
               onRow={(record) => ({
                 onClick: () => {
                   if (record.id) {
-                    navigate(`/FTransBanco/${record.id}`, { state: { cuentaCodigo: cuentaActiva?.codigo } });
+                    navigate(`/FTransBanco/${record.id}`, { state: { cuentaCodigo: cuentaActiva?.noCuenta } });
                   }
                 },
                 style: { cursor: record.id ? 'pointer' : 'default' },

@@ -224,7 +224,7 @@ const makeKey = (codigo: string) => `${moduloNombre}__${codigo}`;
         const modulo = pantalla?.modulos?.find((m: any) => m.nombre === moduloNombre);
         moduloID = modulo?.id;
       }
-      const params = moduloID ? `?modulo=${moduloID}` : '';
+      const params = moduloID !== undefined ? `?modulo=${moduloID}` : '';
       navigate(`/${codigo}${params}`);
     }
   };

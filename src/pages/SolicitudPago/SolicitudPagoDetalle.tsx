@@ -13,6 +13,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
+import { transaccionApi } from '../../api/transaccionApi';
 import { apiClient } from '../../api/client';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard/TransaccionesAsociadasCard';
 import SucursalField from '../../components/SucursalField';
@@ -155,7 +156,7 @@ const SolicitudPagoDetalle: React.FC = () => {
     setSaving(true);
     try {
       const documento = `${data.documento?.codigo || data.documento || ''}-${data.noDocumento}`;
-      await solicitudPagoApi.desaplicar(sucursalActiva, documento);
+      await transaccionApi.desaplicar(sucursalActiva, documento);
       message.success('Documento desaplicado exitosamente');
       handleRefresh();
     } catch (err: any) {
@@ -316,7 +317,6 @@ const SolicitudPagoDetalle: React.FC = () => {
         onEditar={() => navigate(`/FSPA/${id}/editar`)}
         onAplicar={handleAplicar}
         onAnular={handleAnular}
-        onPostear={handlePostear}
         onRevisado={handleRevisado}
         onDesaplicar={handleDesaplicar}
         onReversar={handleReversar}
@@ -449,6 +449,7 @@ const SolicitudPagoDetalle: React.FC = () => {
           <Col xxl={6}>
             <EntidadCard entidad={{
               nombre: typeof documentoActivo.entidad === 'string' ? documentoActivo.entidad : documentoActivo.entidad?.nombre || '',
+              codigo: documentoActivo.entidad?.codigo || '',
               identificacion: documentoActivo.entidad?.identificacion || '',
               telefono: documentoActivo.entidad?.telefono || '',
               direccion: documentoActivo.entidad?.direccion || '',
@@ -498,6 +499,7 @@ const SolicitudPagoDetalle: React.FC = () => {
               <Descriptions.Item label="Nota">
                 <span style={{ whiteSpace: 'pre-wrap' }}>{toTitleCase(documentoActivo.nota || '') || '-'}</span>
               </Descriptions.Item>
+              <Descriptions.Item label="Beneficiario">{(data as any)?.nombreBeneficiario || '-'}</Descriptions.Item>
             </Descriptions>
           </Card>
 

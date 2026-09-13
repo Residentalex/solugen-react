@@ -79,6 +79,32 @@ export const transaccionApi = {
     return data.data || { data: [], total: 0 };
   },
 
+  /** Obtener transacciones aplicadas / no aplicadas (paginado, genérico por módulo) */
+  obtenerAplicados: async (
+    sucursal: number,
+    desde: string,
+    hasta: string,
+    aplicado: boolean = true,
+    tipoDoc?: string,
+    moduloDocs?: string,
+    page: number = 1,
+    pageSize: number = 25,
+    tipoEntidad?: string
+  ): Promise<{ data: TransaccionVistaDTO[]; total: number }> => {
+    const params: Record<string, string> = { desde, hasta, aplicado: String(aplicado) };
+    if (tipoDoc) params.tipoDoc = tipoDoc;
+    if (moduloDocs) params.moduloDocs = moduloDocs;
+    if (tipoEntidad) params.tipoEntidad = tipoEntidad;
+    params.cantidad = String(pageSize);
+    params.salto = String((page - 1) * pageSize);
+
+    const { data } = await apiClient.get<ApiResponse<{ data: TransaccionVistaDTO[]; total: number }>>(
+      `${BASE}/${sucursal}/aplicados`,
+      { params }
+    );
+    return data.data || { data: [], total: 0 };
+  },
+
   /** Postear una transacción individual */
   postear: async (
     sucursal: number,
@@ -196,6 +222,12 @@ export const transaccionApi = {
     return data.data || [];
   },
 
+  /** Obtener documentos relacionados desde DOCASOCB por TRANSACID_ASOC (sin filtro DEB_CRED) */
+  obtenerDocumentosRelacionados: async (sucursal: number, id: number): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/documentosRelacionados/${id}`);
+    return data.data || [];
+  },
+
   /** Obtener transacciones asociadas desde DOCASOC */
   obtenerAsociadas: async (sucursal: number, id: number, origen?: string, todas?: boolean): Promise<any[]> => {
     const params: Record<string, string> = {};
@@ -262,6 +294,11 @@ export const transaccionApi = {
   anular: async (sucursal: number, transaccion: TransaccionDTO): Promise<TransaccionDTO> => {
     const { data } = await apiClient.post<ApiResponse<TransaccionDTO>>(`${BASE}/${sucursal}/anular`, transaccion);
     return data.data;
+  },
+
+  /** Eliminar físicamente una transacción (solo admin, borra CTRANSAC + DOCASOC y su reverso si está anulada) */
+  eliminar: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.post(`${BASE}/${sucursal}/eliminar/${id}`);
   },
 
   /** Generar asientos contables para un documento */

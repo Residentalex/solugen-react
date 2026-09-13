@@ -52,3 +52,35 @@ export interface VisanetResponseDTO {
   transactionCurrency?: string;
   totalTransactionAmount?: string;
 }
+
+/** Respuesta de CLOSE usada exclusivamente para la vista de prueba del cierre. */
+export interface VisanetCierrePruebaTransaccionDTO {
+  datetime?: string;
+  approval?: string;
+  acquirerName?: string;
+  transactionName?: string;
+  authorization?: string;
+  rrn?: string;
+  pan?: string;
+  totalAmount?: number;
+  batchNumber?: string;
+  merchantId?: string;
+  transactionDate?: string;
+  transactionTime?: string;
+  terminalId?: string;
+}
+
+export interface VisanetCierrePruebaAdquirenteDTO {
+  responseCode?: number;
+  responseMessage?: string;
+  processingHost?: number;
+  batchNumber?: number | string;
+  data?: VisanetCierrePruebaTransaccionDTO[];
+}
+
+export interface VisanetCierrePruebaRespuestaDTO {
+  authorization?: string;
+  responseCode?: string;
+  responseMessage?: string;
+  acquirers?: VisanetCierrePruebaAdquirenteDTO[];
+}

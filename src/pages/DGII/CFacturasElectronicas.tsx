@@ -8,6 +8,7 @@ import {
   Table,
   Button,
   Select,
+  Input,
   message,
   Modal,
   Spin,
@@ -23,6 +24,7 @@ import {
   SwapOutlined,
   CheckOutlined,
   FileExcelOutlined,
+  SearchOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
@@ -80,6 +82,7 @@ const CFacturasElectronicas: React.FC = () => {
   const [pagina, setPagina] = useState(1);
   const [tamanoPagina, setTamanoPagina] = useState(25);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const cargarDashboard = useCallback(async () => {
     const desde = fechaRango[0];
@@ -458,6 +461,17 @@ const CFacturasElectronicas: React.FC = () => {
 
   const dataTabla = vista === 'emitidos' ? emitidos : pendientes;
 
+  const filteredData = useMemo(() => {
+    const term = searchTerm != null ? String(searchTerm).trim() : '';
+    return dataTabla.filter(
+      (item) =>
+        !searchTerm ||
+        (item.documento && item.documento.toLowerCase().includes(term.toLowerCase())) ||
+        (item.ncf && item.ncf.toLowerCase().includes(term.toLowerCase())) ||
+        (item.cliente && item.cliente.toLowerCase().includes(term.toLowerCase()))
+    );
+  }, [dataTabla, searchTerm]);
+
   const columns = useMemo(() => {
     const base: any[] = [
       { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => v?.split('T')[0] },
@@ -489,7 +503,7 @@ const CFacturasElectronicas: React.FC = () => {
 
     base.push({
       title: 'Sucursal', dataIndex: 'sucursal', key: 'sucursal', width: 140,
-      render: (v: number) => SUCURSAL_NOMBRE[v] || `Sucursal ${v}`,
+      render: (v: number) => SUCURSAL_NOMBRE[v] || String(v)
     });
 
     return base;
@@ -631,6 +645,11 @@ const CFacturasElectronicas: React.FC = () => {
         style={{ borderRadius: 12 }}
         styles={{ body: { padding: 0 } }}
       >
+        <Row gutter={[16, 16]}>
+          <Col xs={24}>
+            <Input.Search placeholder="Buscar NCF o Cliente" allowClear onSearch={(value) => { setSearchTerm(value); setPagina(1); }} style={{ width: 400, borderRadius: 8, border: '1px solid #e0e0e0', padding: '6px 12px' }} />
+          </Col>
+        </Row>
         {vista === 'pendientes' && selectedRowKeys.length > 0 && (
           <div className="paces-border-bottom-light paces-bg-light-2" style={{
             padding: '10px 16px',
@@ -670,7 +689,7 @@ const CFacturasElectronicas: React.FC = () => {
             onChange: (keys) => setSelectedRowKeys(keys),
           }}
           columns={columns}
-          dataSource={dataTabla}
+          dataSource={filteredData}
           rowKey={(record) => `${record.sucursal}-${record.transaccionID}`}
           loading={cargandoTabla}
           locale={{

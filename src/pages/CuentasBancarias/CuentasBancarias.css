@@ -231,6 +231,7 @@
   padding: 6px 10px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
 }
 
 .cuenta-footer-btn {

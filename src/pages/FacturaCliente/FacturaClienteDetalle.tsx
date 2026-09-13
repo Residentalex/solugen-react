@@ -137,9 +137,7 @@ const FacturaClienteDetalle: React.FC = () => {
         // Datos ya disponibles desde el DTO principal
         setPagosAsociados(res.transaccionesAsociadas || []);
 
-        if (res.envioDGII) {
-          setEstadoDGII(res.envioDGII);
-        }
+        setEstadoDGII(res.envioDGII || null);
 
         // Cargar documentos relacionados (única llamada extra necesaria)
         documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva)
@@ -190,9 +188,7 @@ const FacturaClienteDetalle: React.FC = () => {
         setReversoData(null);
         setMostrandoReverso(false);
       }
-      if (res.envioDGII) {
-        setEstadoDGII(res.envioDGII);
-      }
+      setEstadoDGII(res.envioDGII || null);
       // Verificar scanner (ruta real: /Transaccion/...)
       facturaClienteApi.verificarScan(sucursalActiva, parseInt(id))
         .then((r) => setTieneScan(r?.existe ?? false))
@@ -784,32 +780,24 @@ const FacturaClienteDetalle: React.FC = () => {
               />
             )}
             <Space>
-              {!documentoActivo?.ncf ? (
-                <PermissionGate codigoPantalla="FFAC" permisoEspecial="pe_preasignar_ncf">
-                  <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF}
-                    disabled={toEstadoNum(documentoActivo.estado) !== 1}>
-                    Reasignar NCF
-                  </Button>
-                </PermissionGate>
-              ) : !codigoQR ? (
-                <>
-                  <PermissionGate codigoPantalla="FFAC" permisoEspecial="pe_marcar_enviado">
-                    <Button icon={<SendOutlined />} size="small" onClick={handleEnviarDGII}
-                      loading={enviandoDGII}
-                      disabled={toEstadoNum(documentoActivo.estado) !== 1}>
-                      Enviar DGII
-                    </Button>
-                  </PermissionGate>
-                  <PermissionGate codigoPantalla="FFAC" permisoEspecial="pe_preasignar_ncf">
-                    <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF}
-                      disabled={toEstadoNum(documentoActivo.estado) !== 1}>
-                      Reasignar NCF
-                    </Button>
-                  </PermissionGate>
-                </>
-              ) : (
+              {codigoQR && (
                 <Tag color="success" icon={<CheckCircleOutlined />}>DGII OK</Tag>
               )}
+              {!codigoQR && !!documentoActivo?.ncf && (
+                <PermissionGate codigoPantalla="FFAC" permisoEspecial="pe_marcar_enviado">
+                  <Button icon={<SendOutlined />} size="small" onClick={handleEnviarDGII}
+                    loading={enviandoDGII}
+                    disabled={toEstadoNum(documentoActivo.estado) !== 1}>
+                    Enviar DGII
+                  </Button>
+                </PermissionGate>
+              )}
+              <PermissionGate codigoPantalla="FFAC" permisoEspecial="pe_preasignar_ncf">
+                <Button icon={<FileTextOutlined />} size="small" onClick={handleReasignarNCF}
+                  disabled={toEstadoNum(documentoActivo.estado) !== 1}>
+                  Reasignar NCF
+                </Button>
+              </PermissionGate>
               <Divider type="vertical" />
               {!data?.transaccionesAsociadas?.some(t => t.tipoDocumento === 'NC' || (t.documento && t.documento.startsWith('NC-'))) && (
                 <PermissionGate codigoPantalla="FFAC" permisoEspecial="pe_generar_nccli">

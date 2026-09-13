@@ -18,6 +18,10 @@ export interface TransaccionVistaDTO {
   estado: string | number;
   periodo: number;
   codigoSucursal: string;
+  fechaAccion?: string;
+  creadoPor?: string;
+  autorizado?: boolean;
+  pagoGenerado?: boolean;
 }
 
 export interface TransaccionBancariaVistaDTO extends TransaccionVistaDTO {

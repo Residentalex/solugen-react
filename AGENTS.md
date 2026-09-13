@@ -306,8 +306,17 @@ En todo formulario con `Form.Item name="sucursal"`, el campo debe preseleccionar
 
 ## Conciliación Bancaria
 
-- En `ConciliacionBancariaFormulario.tsx`, los campos `numeroCta` y `fecha` deben estar bloqueados en modo edición: `disabled={mode === 'editar'}` (sin condiciones adicionales), en los bloques desktop y mobile.
- - Solo son editables al crear la conciliación.
+- En `ConciliacionBancariaFormulario.tsx`, el campo `numeroCta` debe estar bloqueado en modo edición: `disabled={mode === 'editar'}` (sin condiciones adicionales), en los bloques desktop y mobile.
+- El campo `fecha` es editable en modo edición. Al cambiarla se muestra un loading (`Spin`) y se recargan automáticamente: transacciones en tránsito, resumen general, conciliadas/transito, y se recalcula `balLibros`.
+- El campo `balLibros` NO es editable en modo edición (`disabled={mode === 'editar' || cargandoSaldoLibros}`). Solo se recalcula automáticamente al cambiar la fecha.
+- `fechaAnt` sigue bloqueado en modo edición (solo autocalcula al crear).
+
+## Tab de Devoluciones en Nota Débito Suplidor (FNDSUP)
+
+- En `NotaDebitoFormulario.tsx` con `tipoEntidad="SUP"`, el tab "Devoluciones" debe usar `BuscarDocumentoModal` con `esDocumentoInventario={true}`.
+- Esto hace que el modal consulte el endpoint `pendienteInv` (documentos de inventario pendientes / devoluciones DVC), no el endpoint `pendiente` regular (documentos CxP).
+- No debe cambiarse `esDocumentoInventario` a `false` ni removerse esta prop.
+- En documentos de inventario el filtro por `origen` no aplica: el SQL de `pendienteInv` ya filtra por `tipo_doc = 'DVC'`.
 
 ## Tab de Asientos Contables
 

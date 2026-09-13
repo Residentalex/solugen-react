@@ -264,6 +264,25 @@ const AsientoContableDetalle: React.FC = () => {
     }
   };
 
+  const handleEliminar = async () => {
+    if (!data) return;
+    if (!permisoModificarAdmin) {
+      message.error('No tiene permiso para eliminar documentos (pe_modificar_admin).');
+      return;
+    }
+    setSaving(true);
+    try {
+      await transaccionApi.eliminar(sucursalActiva, data.id);
+      message.success('Documento eliminado correctamente');
+      navigate('/FAsientoContable');
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al eliminar el documento';
+      message.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div>
       {loadingError && (
@@ -303,6 +322,7 @@ const AsientoContableDetalle: React.FC = () => {
         onAnular={async () => setModalAnularOpen(true)}
         onPostear={handlePostear}
         onDesaplicar={async () => setModalDesaplicarOpen(true)}
+        onEliminar={handleEliminar}
         extraButtons={id ? (
           <>
             {toEstadoNum(data?.estado) === 3 && reversoData && (

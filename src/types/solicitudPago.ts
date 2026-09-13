@@ -62,7 +62,9 @@ export interface SolicitudPagoCrearDTO {
   tasa: number;
   simboloMoneda: string;
   nombreMoneda: string;
+  nombreBeneficiario?: string;
   transaccionesAsociadas?: import('./reciboIngreso').TransaccionAsociadaDTO[];
+  asientos?: import('./entradaAlmacen').AsientoContableDTO[];
 }
 
 /** DTO para actualizar una Solicitud de Pago */

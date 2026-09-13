@@ -8,6 +8,7 @@ import CambiarClave from './pages/CambiarClave/CambiarClave';
 import MainLayout from './layouts/MainLayout';
 import SaasMainLayout from './layouts/SaasMainLayout';
 import Dashboard from './pages/Dashboard/Dashboard';
+import DashboardConfig from './pages/Dashboard/DashboardConfig';
 import EntradaAlmacen from './pages/EntradaAlmacen/EntradaAlmacen';
 import EntradaAlmacenDetalle from './pages/EntradaAlmacen/EntradaAlmacenDetalle';
 import EntradaAlmacenFormulario from './pages/EntradaAlmacen/EntradaAlmacenFormulario';
@@ -103,6 +104,7 @@ import Bancos from './pages/Bancos/Bancos';
 import Ofertas from './pages/Ofertas/Ofertas';
 import CuentasBancarias from './pages/CuentasBancarias/CuentasBancarias';
 import FTransBanco from './pages/CuentasBancarias/CuentaBancariaDetalle';
+import CuentaBancariaFormulario from './pages/CuentasBancarias/CuentaBancariaFormulario';
 import TransaccionBancariaDetalle from './pages/TransaccionBancaria/TransaccionBancariaDetalle';
 import TransaccionBancariaFormulario from './pages/TransaccionBancaria/TransaccionBancariaFormulario';
 import UnidadesMedida from './pages/UnidadesMedida/UnidadesMedida';
@@ -125,6 +127,7 @@ import Turnos from './pages/Turnos/Turnos';
 import TurnoDetalle from './pages/Turnos/TurnoDetalle';
 import Conteos from './pages/Conteos/Conteos';
 import ConteoDetalle from './pages/Conteos/ConteoDetalle';
+import ConteoFisicoFormulario from './pages/Conteos/ConteoFisicoFormulario';
 import MovimientosProductos from './pages/MovimientosProductos/MovimientosProductos';
 import ImportarInventario from './pages/ImportarInventario/ImportarInventario';
 import ImportarDocBanco from './pages/ImportarDocBanco/ImportarDocBanco';
@@ -145,6 +148,8 @@ import CierreDetalle from './pages/CierreInventario/CierreDetalle';
 import GeneradorORC from './pages/GeneradorORC/GeneradorORC';
 import GeneradorORCDetalle from './pages/GeneradorORC/GeneradorORCDetalle';
 import GeneradorORCFormulario from './pages/GeneradorORC/GeneradorORCFormulario';
+import Rmovdoc from './pages/Rmovdoc/Rmovdoc';
+import RMovimientosPorFecha from './pages/RMovimientosPorFecha/RMovimientosPorFecha';
 import Tickets from './pages/Tickets/Tickets';
 import Empleados from './pages/Empleados/Empleados';
 import EmpleadoDetalle from './pages/Empleados/EmpleadoDetalle';
@@ -155,6 +160,7 @@ import PlantillaSuplidorDetalle from './pages/PlantillaSuplidor/PlantillaSuplido
 import PlantillaSuplidorFormulario from './pages/PlantillaSuplidor/PlantillaSuplidorFormulario';
 import MovimientoPorPlantilla from './pages/MovimientoPorPlantilla/MovimientoPorPlantilla';
 import DocumentacionPage from './pages/Documentacion/DocumentacionPage';
+import RDocNoAutorizado from './pages/RDocNoAutorizado/RDocNoAutorizado';
 import Store from './pages/Ecommerce/Store';
 import StoreProductoDetalle from './pages/Ecommerce/StoreProductoDetalle';
 import HomePage from './pages/Ecommerce/HomePage';
@@ -214,7 +220,7 @@ const PantallaGuard: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   if (searchParams.get('skipGuard') === '1') {
     return <>{children}</>;
   }
-  if (codigoRuta && !['dashboard', 'cambiar-clave', 'MPERFIL', 'MPerfil', 'notificaciones', 'MTicket', 'visualizar-consulta', 'MApiToken', 'Modulos', 'RGORC', 'Reportes', 'TVISANET'].includes(codigoRuta) && !codigoRuta.startsWith('Reportes_')) {
+  if (codigoRuta && !['dashboard', 'dashboardconfig', 'cambiar-clave', 'MPERFIL', 'MPerfil', 'notificaciones', 'MTicket', 'visualizar-consulta', 'MApiToken', 'Mmodulo', 'RGORC', 'Reportes', 'TVISANET'].includes(codigoRuta) && !codigoRuta.startsWith('Reportes_')) {
     const tieneAcceso =
       pantallas.some((p) => p.codigo.toLowerCase() === codigoRuta.toLowerCase()) ||
       pantallas.some((p) => p.codigo.toLowerCase() === codigoRutaCompleto.toLowerCase()) ||
@@ -252,6 +258,7 @@ const App: React.FC = () => {
         >
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="dashboardconfig" element={<DashboardConfig />} />
             <Route path="Reportes/:modulo" element={<ReportesModulo />} />
             <Route path="FENP" element={<EntradaAlmacen />} />
             <Route path="FENP/nuevo" element={<EntradaAlmacenFormulario />} />
@@ -285,6 +292,7 @@ const App: React.FC = () => {
             <Route path="RDocAplicado" element={<DocumentosAplicados />} />
             <Route path="RDocCxPAutorizado" element={<DocumentosCxPAutorizados />} />
             <Route path="RDocCxPAplicado" element={<DocumentosCxPAplicados />} />
+            <Route path="ASPA" element={<RDocNoAutorizado />} />
             <Route path="RSAPENP" element={<TransferenciaSucursales />} />
             <Route path="FCotizacion" element={<CotizacionVenta />} />
             <Route path="FCotizacion/nuevo" element={<CotizacionVentaFormulario />} />
@@ -356,10 +364,10 @@ const App: React.FC = () => {
             <Route path="MPantalla/nuevo" element={<PantallaFormulario />} />
             <Route path="MPantalla/:id/editar" element={<PantallaFormulario />} />
             <Route path="MPantalla/:id" element={<PantallaDetalle />} />
-            <Route path="Modulos" element={<Modulos />} />
-            <Route path="Modulos/nuevo" element={<ModuloFormulario />} />
-            <Route path="Modulos/:id" element={<ModuloDetalle />} />
-            <Route path="Modulos/:id/editar" element={<ModuloFormulario />} />
+            <Route path="Mmodulo" element={<Modulos />} />
+            <Route path="Mmodulo/nuevo" element={<ModuloFormulario />} />
+            <Route path="Mmodulo/:id" element={<ModuloDetalle />} />
+            <Route path="Mmodulo/:id/editar" element={<ModuloFormulario />} />
             <Route path="MTipoCuenta" element={<TiposCuenta />} />
             <Route path="MCuentaContable" element={<CuentasContables />} />
             <Route path="MCuentaContable/:noCuenta" element={<CuentaContableDetalle />} />
@@ -396,6 +404,8 @@ const App: React.FC = () => {
             <Route path="MBanco" element={<Bancos />} />
             <Route path="FOfertas" element={<Ofertas />} />
             <Route path="MCuentaBanco" element={<CuentasBancarias />} />
+            <Route path="MCuentaBanco/nuevo" element={<CuentaBancariaFormulario mode="crear" />} />
+            <Route path="MCuentaBanco/editar/:codigo" element={<CuentaBancariaFormulario mode="editar" />} />
             <Route path="FTransBanco" element={<FTransBanco />} />
             <Route path="FTransBanco/nuevo" element={<TransaccionBancariaFormulario />} />
             <Route path="FTransBanco/:id/editar" element={<TransaccionBancariaFormulario />} />
@@ -421,6 +431,7 @@ const App: React.FC = () => {
           <Route path="FTURNOS" element={<Turnos />} />
           <Route path="FConteos" element={<Conteos />} />
           <Route path="FConteos/:documento" element={<ConteoDetalle />} />
+          <Route path="FConteos/editar/:documento" element={<ConteoFisicoFormulario />} />
             <Route path="CMovimientosProductos" element={<MovimientosProductos />} />
             <Route path="CDocRevisados" element={<Proximamente modulo="Documentos Revisados" codigo="CDocRevisados" />} />
             <Route path="FPRODPEND" element={<Proximamente modulo="Productos Pendientes" codigo="FPRODPEND" />} />
@@ -438,6 +449,8 @@ const App: React.FC = () => {
             <Route path="FGORC/nuevo" element={<GeneradorORCFormulario />} />
             <Route path="FGORC/:id/editar" element={<GeneradorORCFormulario />} />
           <Route path="FGORC/:id" element={<GeneradorORCDetalle />} />
+          <Route path="RMOVDOC" element={<Rmovdoc />} />
+          <Route path="RMovimientosPorFecha" element={<RMovimientosPorFecha />} />
           <Route path="OActualizacionCostos" element={<ActualizacionCostos />} />
           <Route path="RAntiguedaCXC" element={<AntiguedadSaldos tipoEntidad="CLI" />} />
           <Route path="RAntiguedadCXP" element={<AntiguedadSaldos tipoEntidad="SUP" />} />
@@ -598,10 +611,10 @@ const App: React.FC = () => {
             <Route path="MPantalla/nuevo" element={<PantallaFormulario />} />
             <Route path="MPantalla/:id/editar" element={<PantallaFormulario />} />
             <Route path="MPantalla/:id" element={<PantallaDetalle />} />
-            <Route path="Modulos" element={<Modulos />} />
-            <Route path="Modulos/nuevo" element={<ModuloFormulario />} />
-            <Route path="Modulos/:id" element={<ModuloDetalle />} />
-            <Route path="Modulos/:id/editar" element={<ModuloFormulario />} />
+            <Route path="Mmodulo" element={<Modulos />} />
+            <Route path="Mmodulo/nuevo" element={<ModuloFormulario />} />
+            <Route path="Mmodulo/:id" element={<ModuloDetalle />} />
+            <Route path="Mmodulo/:id/editar" element={<ModuloFormulario />} />
             <Route path="MTipoCuenta" element={<TiposCuenta />} />
             <Route path="MCuentaContable" element={<CuentasContables />} />
             <Route path="MCuentaContable/:noCuenta" element={<CuentaContableDetalle />} />
@@ -638,6 +651,8 @@ const App: React.FC = () => {
             <Route path="MBanco" element={<Bancos />} />
             <Route path="FOfertas" element={<Ofertas />} />
             <Route path="MCuentaBanco" element={<CuentasBancarias />} />
+            <Route path="MCuentaBanco/nuevo" element={<CuentaBancariaFormulario mode="crear" />} />
+            <Route path="MCuentaBanco/editar/:codigo" element={<CuentaBancariaFormulario mode="editar" />} />
             <Route path="FTransBanco" element={<FTransBanco />} />
             <Route path="FTransBanco/nuevo" element={<TransaccionBancariaFormulario />} />
             <Route path="FTransBanco/:id/editar" element={<TransaccionBancariaFormulario />} />
@@ -663,6 +678,7 @@ const App: React.FC = () => {
           <Route path="FTURNOS" element={<Turnos />} />
           <Route path="FConteos" element={<Conteos />} />
           <Route path="FConteos/:documento" element={<ConteoDetalle />} />
+          <Route path="FConteos/editar/:documento" element={<ConteoFisicoFormulario />} />
             <Route path="CMovimientosProductos" element={<MovimientosProductos />} />
             <Route path="CDocRevisados" element={<Proximamente modulo="Documentos Revisados" codigo="CDocRevisados" />} />
             <Route path="FPRODPEND" element={<Proximamente modulo="Productos Pendientes" codigo="FPRODPEND" />} />
@@ -680,6 +696,7 @@ const App: React.FC = () => {
             <Route path="FGORC/nuevo" element={<GeneradorORCFormulario />} />
             <Route path="FGORC/:id/editar" element={<GeneradorORCFormulario />} />
           <Route path="FGORC/:id" element={<GeneradorORCDetalle />} />
+          <Route path="RMOVDOC" element={<Rmovdoc />} />
           <Route path="OActualizacionCostos" element={<ActualizacionCostos />} />
           <Route path="RAntiguedaCXC" element={<AntiguedadSaldos tipoEntidad="CLI" />} />
           <Route path="RAntiguedadCXP" element={<AntiguedadSaldos tipoEntidad="SUP" />} />

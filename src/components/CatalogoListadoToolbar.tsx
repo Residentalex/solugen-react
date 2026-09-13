@@ -1,6 +1,6 @@
 import React from 'react';
 import { Input, Button } from 'antd';
-import { SearchOutlined, ReloadOutlined, PlusOutlined, FileExcelOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined, FileExcelOutlined, CopyOutlined } from '@ant-design/icons';
 import PageSizeSelect from './PageSizeSelect';
 import PermissionGate from './PermissionGate';
 
@@ -15,6 +15,9 @@ interface CatalogoListadoToolbarProps {
   filtros?: React.ReactNode;
   onNuevo?: () => void;
   acciones?: React.ReactNode;
+  showClonar?: boolean;
+  clonarDisabled?: boolean;
+  onClonar?: () => void;
   onReload: () => void;
   onExportarExcel?: () => void;
 }
@@ -28,6 +31,9 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
   filtros,
   onNuevo,
   acciones,
+  showClonar,
+  clonarDisabled,
+  onClonar,
   onReload,
   onExportarExcel,
 }) => {
@@ -52,6 +58,11 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
           </PermissionGate>
         )}
         {acciones}
+        {showClonar && onClonar && (
+          <PermissionGate accion="CLONAR">
+            <Button icon={<CopyOutlined />} disabled={clonarDisabled} onClick={onClonar} />
+          </PermissionGate>
+        )}
         {onExportarExcel && (
           <PermissionGate accion="EXPORTAR">
             <Button icon={<FileExcelOutlined />} onClick={onExportarExcel} />

@@ -53,6 +53,7 @@ import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useCargaDocumento } from '../../hooks/useCargaDocumento';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
@@ -141,14 +142,138 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const pantallaActiva = usuario?.pantallas?.find((p: any) => p.codigo?.toUpperCase() === codigoPantalla?.toUpperCase());
   const tienePermisoPostear = pantallaActiva?.acciones?.includes('POSTEAR') ?? false;
   const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
-    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+    (p: any) => p.codigo?.toUpperCase() === 'PE_MODIFICAR_ASIENTOS' && p.valor === true
   ) ?? false;
 
+  // ===== Hook de carga de documento (encabezado primero + auto secciones) =====
+  const { data, setData, loading, loadingError, recargar } = useCargaDocumento<NotaDebitoFullDTO>({
+    id,
+    sucursal: sucursalActiva,
+    obtenerEncabezado: async (suc: number, docId: number) => {
+      return await notaDebitoApi.obtenerEncabezado(suc, docId);
+    },
+    secciones: {
+      asientos: {
+        cargar: (suc: number, docId: number) => notaDebitoApi.obtenerAsientos(suc, docId),
+        prop: 'asientos',
+      },
+      impuestos: {
+        cargar: (suc: number, docId: number) => notaDebitoApi.obtenerImpuestos(suc, docId),
+        prop: 'impuestosFactura',
+      },
+    },
+    onEncabezadoCargado: (enc) => {
+      // Sincronizar estado local editable
+      setSelectedConcepto(enc.concepto || null);
+      setSelectedTipo(enc.tipo || null);
+      const entidadNorm = enc.entidad ? {
+        ...enc.entidad,
+        codigo: enc.entidad.codigo || enc.entidad.idExterno || '',
+      } : null;
+      setSelectedEntidad(entidadNorm);
+      setEntidadesCache(entidadNorm ? [entidadNorm as any] : []);
+
+      // Normalizar sucursal
+      const sucursalData = enc.sucursal ? {
+        ...enc.sucursal,
+        codigo: enc.sucursal.codigo || enc.sucursal.idExterno || '',
+      } : null;
+      if (sucursalData) {
+        setSucursalesCache(prev => {
+          const existe = prev.find((x: any) => x.codigo === sucursalData!.codigo || x.idExterno === sucursalData!.codigo);
+          if (existe) return prev;
+          return [...prev, sucursalData as any];
+        });
+        setSelectedSucursal(sucursalData);
+      }
+
+      // Normalizar impuestos: estructura anidada → plana para la UI
+      setImpuestosRetenciones((enc.impuestosFactura || []).map((imp: any) => ({
+        codigo: imp.impuesto?.codigo,
+        idExterno: imp.impuesto?.idExterno,
+        nombre: imp.impuesto?.nombre,
+        porcentaje: imp.impuesto?.porcentaje,
+        tipo: imp.tipo,
+        monto: imp.monto,
+      })));
+
+      setAsientos(enc.asientos || []);
+      setNcfModificadoVal(enc.ncfModificado || '');
+      setNcfTipo(enc.ncfModificado ? 'modificado' : 'documento');
+
+      // Sincronizar Form
+      const fechaDoc = enc.fechaDocumento ? parseDateRaw(enc.fechaDocumento) : null;
+      const entidadCodigo = enc.entidad?.codigo || enc.entidad?.idExterno || '';
+      form.setFieldsValue({
+        concepto: enc.concepto?.codigo || '',
+        tipo: enc.tipo?.codigo || '',
+        entidad: entidadCodigo,
+        fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+        total: enc.total || 0,
+        ncf: enc.ncf || '',
+        tasa: enc.tasa || 1,
+        referencia: enc.referencia || '',
+        nota: enc.nota || '',
+        sucursal: sucursalData?.codigo || '',
+        bienes: enc.bienes || 0,
+        servicios: enc.servicios || 0,
+      });
+      setMontoTotalConfirmado(Number(enc.total) || 0);
+
+      // Cargar entidades según el concepto
+      if (enc.concepto?.codigo) {
+        entidadApi.obtenerActivos(sucursalActiva, enc.concepto.codigo, tipoEntidad)
+          .then((res: any) => {
+            const ents = Array.isArray(res) ? res : [];
+            if (enc.entidad && !ents.find((e: any) => e.codigo === entidadCodigo)) {
+              return setEntidadesCache([entidadNorm as any, ...ents]);
+            }
+            setEntidadesCache(ents);
+          })
+          .catch(() => {
+            if (enc.entidad) {
+              setEntidadesCache([enc.entidad as any]);
+            }
+          });
+      }
+
+      // Cargar documentos relacionados (asíncrono, después del encabezado)
+      notaDebitoApi.obtenerRelacionados(sucursalActiva, enc.id)
+        .then((todas: any) => {
+          const docsPago = (todas || [])
+            .filter((x: any) => !x.esDocumentoInventario)
+            .map((x: any) => ({ ...x, nCF: x.nCF || x.ncf || '' }));
+          const docsInv = (todas || []).filter((x: any) => x.esDocumentoInventario);
+          const devsMapeadas = docsInv.map((x: any) => ({
+            transaccionAsociadaID: x.transaccionAsociadaID || x.id,
+            documento: x.documento,
+            fecha: x.fecha,
+            montoOriginal: x.montoOriginal,
+            monto: x.monto,
+            pagado: x.pagado || 0,
+            impuesto: x.impuesto || 0,
+            esDocumentoInventario: true,
+            perdida: x.perdida || 0,
+            generarPerdida: false,
+          }));
+          setDocumentosRelacionados(docsPago);
+          setDevoluciones(devsMapeadas);
+
+          // Auto-asignar NCF Modificado desde el primer doc relacionado con NCF
+          if (!enc.ncfModificado && docsPago.length > 0) {
+            const docNcf = docsPago[0].ncf || docsPago[0].nCF || '';
+            if (docNcf) {
+              setNcfModificadoVal(docNcf);
+              setNcfTipo('modificado');
+            }
+          }
+        })
+        .catch(() => {});
+    },
+  });
+
   // ===== States =====
-  const [loading, setLoading] = useState(false);
-  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [data, setData] = useState<NotaDebitoFullDTO | null>(null);
   const [entidadesCache, setEntidadesCache] = useState<EntidadDTO[]>([]);
   const [selectedConcepto, setSelectedConcepto] = useState<ConceptoDTO | null>(null);
   const [selectedTipo, setSelectedTipo] = useState<TipoDTO | null>(null);
@@ -397,159 +522,6 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     }
   }, [sucursalesCache, mode, sucursalActiva, selectedSucursal, form]);
 
-  // ===== Cargar datos si es modo editar =====
-  useEffect(() => {
-    if (mode === 'crear') return;
-    if (!id) return;
-
-    setLoading(true);
-    notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res: any) => {
-        const full: NotaDebitoFullDTO = {
-          id: res.id,
-          fechaDocumento: res.fechaDocumento,
-          noDocumento: res.noDocumento,
-          estado: res.estado,
-          periodo: res.periodo,
-          referencia: res.referencia || '',
-          ncf: res.ncf || '',
-          ncfModificado: res.ncfModificado || '',
-          nota: res.nota || '',
-          total: res.total || 0,
-          subTotal: res.subTotal || 0,
-          descuento: res.descuento || 0,
-          impuestos: res.impuestos || 0,
-          retenciones: res.retenciones || 0,
-          tasa: res.tasa || 1,
-          debitos: res.debitos || 0,
-          creditos: res.creditos || 0,
-          tipoDocumento: res.tipoDocumento ?? 42,
-          tipoEntidad: res.tipoEntidad || tipoEntidad,
-          documento: res.documento || { codigo: 'ND' },
-          concepto: res.concepto || null,
-          tipo: res.tipo || null,
-          entidad: res.entidad || null,
-          moneda: res.moneda || null,
-          transaccionesAsociadas: res.transaccionesAsociadas || [],
-          impuestosFactura: res.impuestosFactura || [],
-          asientos: res.asientos || [],
-          logs: res.logs || [],
-          sucursal: res.sucursal,
-          bienes: res.bienes || 0,
-          servicios: res.servicios || 0,
-        };
-        setData(full);
-        setSelectedConcepto(full.concepto || null);
-        setSelectedTipo(full.tipo || null);
-        const entidadNormalizada = full.entidad ? {
-          ...full.entidad,
-          codigo: full.entidad.codigo || full.entidad.idExterno || '',
-        } : null;
-        setSelectedEntidad(entidadNormalizada);
-        setEntidadesCache(entidadNormalizada ? [entidadNormalizada as any] : []);
-        // Separar transaccionesAsociadas en pagos (esDocumentoInventario=false) y devoluciones (esDocumentoInventario=true)
-        const todasAsociadas = res.transaccionesAsociadas || [];
-        const docsPago = todasAsociadas
-          .filter((x: any) => !x.esDocumentoInventario)
-          .map((x: any) => ({ ...x, nCF: x.nCF || x.ncf || '' }));
-        const docsInventario = todasAsociadas.filter((x: any) => x.esDocumentoInventario);
-        const devsMapeadas = docsInventario.map((x: any) => ({
-          transaccionAsociadaID: x.transaccionAsociadaID || x.id,
-          documento: x.documento,
-          fecha: x.fecha,
-          montoOriginal: x.montoOriginal,
-          monto: x.monto,
-          pagado: x.pagado || 0,
-          impuesto: x.impuesto || 0,
-          esDocumentoInventario: true,
-          perdida: x.perdida || 0,
-          generarPerdida: false,
-        }));
-        setDocumentosRelacionados(docsPago);
-        setDevoluciones(devsMapeadas);
-        // Normalizar de estructura anidada → plana para la UI
-        setImpuestosRetenciones((full.impuestosFactura || []).map((imp: any) => ({
-          codigo: imp.impuesto?.codigo,
-          idExterno: imp.impuesto?.idExterno,
-          nombre: imp.impuesto?.nombre,
-          porcentaje: imp.impuesto?.porcentaje,
-          tipo: imp.tipo,
-          monto: imp.monto,
-        })));
-        setAsientos(full.asientos || []);
-        setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);
-        setNcfModificadoVal(full.ncfModificado || '');
-        setNcfTipo(full.ncfModificado ? 'modificado' : 'documento');
-        // Auto-asignar ncfModificado desde el primer documento relacionado (no inventario) que tenga NCF
-        if (!full.ncfModificado && docsPago.length > 0) {
-          const docNcf = docsPago[0].ncf || docsPago[0].nCF || '';
-          if (docNcf) {
-            setNcfModificadoVal(docNcf);
-            setNcfTipo('modificado');
-          }
-        }
-
-        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
-
-        const entidadCodigo = full.entidad?.codigo || full.entidad?.idExterno || '';
-
-        // Normalizar sucursal
-        const sucursalData = full.sucursal ? {
-          ...full.sucursal,
-          codigo: full.sucursal.codigo || full.sucursal.idExterno || '',
-        } : null;
-
-        if (sucursalData) {
-          setSucursalesCache(prev => {
-            const existe = prev.find((x: any) => x.codigo === sucursalData!.codigo || x.idExterno === sucursalData!.codigo);
-            if (existe) return prev;
-            return [...prev, sucursalData as any];
-          });
-          setSelectedSucursal(sucursalData);
-        }
-
-        form.setFieldsValue({
-          concepto: full.concepto?.codigo || '',
-          tipo: full.tipo?.codigo || '',
-          entidad: entidadCodigo,
-          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          total: full.total || 0,
-          ncf: full.ncf || '',
-          tasa: full.tasa || 1,
-          referencia: full.referencia || '',
-          nota: full.nota || '',
-          sucursal: sucursalData?.codigo || '',
-          bienes: full.bienes || 0,
-          servicios: full.servicios || 0,
-        });
-        setMontoTotalConfirmado(Number(full.total) || 0);
-
-        // Cargar entidades según el concepto
-        if (full.concepto?.codigo) {
-          entidadApi.obtenerActivos(sucursalActiva, full.concepto.codigo, tipoEntidad)
-            .then((res: any) => {
-              const ents = Array.isArray(res) ? res : [];
-              if (full.entidad && !ents.find((e: any) => e.codigo === entidadCodigo)) {
-                return setEntidadesCache([entidadNormalizada as any, ...ents]);
-              }
-              setEntidadesCache(ents);
-            })
-            .catch(() => {
-              if (full.entidad) {
-                setEntidadesCache([full.entidad as any]);
-              }
-            });
-        }
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
-        message.error(msg);
-        setLoadingError(true);
-        navigate(`/${codigoPantalla}`, { replace: true });
-      })
-      .finally(() => setLoading(false));
-  }, [mode, id, sucursalActiva, form, navigate, codigoPantalla]);
-
   // ===== Handlers =====
   const handleCancelar = () => {
     Modal.confirm({
@@ -648,6 +620,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       pagado: d.pagado,
       saldoPendiente: d.saldoPendiente,
       monto: d.monto,
+      tipoDocumento: d.tipoDocumento,
+      origenCuenta: d.origenCuenta,
     }]);
     // Auto-asignar NCF Modificado desde el documento
     if (d.nCF) {
@@ -1025,109 +999,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const handleRefresh = useCallback(() => {
     if (mode === 'crear') return;
     if (!id) return;
-    setLoadingError(false);
-    setLoading(true);
-    notaDebitoApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res: any) => {
-        const full: NotaDebitoFullDTO = {
-          id: res.id, fechaDocumento: res.fechaDocumento, noDocumento: res.noDocumento,
-          estado: res.estado, periodo: res.periodo, referencia: res.referencia || '',
-          ncf: res.ncf || '', ncfModificado: res.ncfModificado || '', nota: res.nota || '',
-          total: res.total || 0, subTotal: res.subTotal || 0, descuento: res.descuento || 0,
-          impuestos: res.impuestos || 0, retenciones: res.retenciones || 0, tasa: res.tasa || 1,
-          debitos: res.debitos || 0, creditos: res.creditos || 0,
-          tipoDocumento: res.tipoDocumento ?? 42,
-          tipoEntidad: res.tipoEntidad || tipoEntidad,
-          documento: res.documento || { codigo: 'ND' }, concepto: res.concepto || null,
-          tipo: res.tipo || null, entidad: res.entidad || null, moneda: res.moneda || null,
-          transaccionesAsociadas: res.transaccionesAsociadas || [],
-          impuestosFactura: res.impuestosFactura || [],
-          asientos: res.asientos || [], logs: res.logs || [],
-          sucursal: res.sucursal,
-          bienes: res.bienes || 0,
-          servicios: res.servicios || 0,
-        };
-        setData(full); setSelectedConcepto(full.concepto || null);
-        setSelectedTipo(full.tipo || null);
-        const entidadRefreshNorm = full.entidad ? {
-          ...full.entidad,
-          codigo: full.entidad.codigo || full.entidad.idExterno || '',
-        } : null;
-        setSelectedEntidad(entidadRefreshNorm);
-        // Separar transaccionesAsociadas en pagos y devoluciones
-        const todasAsociadasRefresh = res.transaccionesAsociadas || [];
-        const docsPagoRefresh = todasAsociadasRefresh
-          .filter((x: any) => !x.esDocumentoInventario)
-          .map((x: any) => ({ ...x, nCF: x.nCF || x.ncf || '' }));
-        const docsInventarioRefresh = todasAsociadasRefresh.filter((x: any) => x.esDocumentoInventario);
-        const devsMapeadasRefresh = docsInventarioRefresh.map((x: any) => ({
-          transaccionAsociadaID: x.transaccionAsociadaID || x.id,
-          documento: x.documento,
-          fecha: x.fecha,
-          montoOriginal: x.montoOriginal,
-          monto: x.monto,
-          pagado: x.pagado || 0,
-          impuesto: x.impuesto || 0,
-          esDocumentoInventario: true,
-          perdida: x.perdida || 0,
-          generarPerdida: false,
-        }));
-        setDocumentosRelacionados(docsPagoRefresh);
-        setDevoluciones(devsMapeadasRefresh);
-        // Normalizar de estructura anidada → plana para la UI
-        setImpuestosRetenciones((full.impuestosFactura || []).map((imp: any) => ({
-          codigo: imp.impuesto?.codigo,
-          idExterno: imp.impuesto?.idExterno,
-          nombre: imp.impuesto?.nombre,
-          porcentaje: imp.impuesto?.porcentaje,
-          tipo: imp.tipo,
-          monto: imp.monto,
-        })));
-        setAsientos(full.asientos || []);
-        setDetallesMovimiento(res.detallesMovimiento || res.detalles || []);
-        setNcfModificadoVal(full.ncfModificado || '');
-        setNcfTipo(full.ncfModificado ? 'modificado' : 'documento');
-        // Auto-asignar ncfModificado desde el primer documento relacionado (no inventario) que tenga NCF
-        if (!full.ncfModificado && docsPagoRefresh.length > 0) {
-          const docNcf = docsPagoRefresh[0].ncf || docsPagoRefresh[0].nCF || '';
-          if (docNcf) {
-            setNcfModificadoVal(docNcf);
-            setNcfTipo('modificado');
-          }
-        }
-        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
-
-        // Normalizar sucursal (handleRefresh)
-        const sucursalRefreshData = full.sucursal ? {
-          ...full.sucursal,
-          codigo: full.sucursal.codigo || full.sucursal.idExterno || '',
-        } : null;
-
-        if (sucursalRefreshData) {
-          setSucursalesCache(prev => {
-            const existe = prev.find((x: any) => x.codigo === sucursalRefreshData!.codigo || x.idExterno === sucursalRefreshData!.codigo);
-            if (existe) return prev;
-            return [...prev, sucursalRefreshData as any];
-          });
-          setSelectedSucursal(sucursalRefreshData);
-        }
-
-        form.setFieldsValue({
-          concepto: full.concepto?.codigo || '', tipo: full.tipo?.codigo || '',
-          entidad: entidadRefreshNorm?.codigo || '', fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          total: full.total || 0, ncf: full.ncf || '', tasa: full.tasa || 1,
-          referencia: full.referencia || '', nota: full.nota || '',
-          sucursal: sucursalRefreshData?.codigo || '',
-          bienes: full.bienes || 0, servicios: full.servicios || 0,
-        });
-        setMontoTotalConfirmado(Number(full.total) || 0);
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg); setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form, mode]);
+    recargar();
+  }, [id, mode, recargar]);
 
   // ===== Loader =====
   if (loading) {

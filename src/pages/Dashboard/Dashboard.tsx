@@ -27,6 +27,8 @@ import EntidadImagen from '../../components/EntidadImagen';
 import { formatDateParam, formatCurrency, formatNumber, extraerMensajeError } from '../../utils/formats';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import type { PantallaDTO } from '../../types/auth';
+import type { DashboardWidgetDto } from '../../types/dashboard';
+import { useDashboardWidgetStore } from '../../stores/dashboardWidgetStore';
 
 const { Text } = Typography;
 
@@ -60,6 +62,7 @@ const Dashboard: React.FC = () => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const companyData = useCompanyStore((s) => s.data);
   const { token: themeToken } = theme.useToken();
+  const { misWidgets, fetchMisWidgets } = useDashboardWidgetStore();
 
   // ── Estados ──────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
@@ -239,6 +242,22 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
       .catch(() => message.error('Error al cargar stock negativo'))
       .finally(() => setLoadingStock(false));
   }, [sucursalStock, paginaStock]);
+
+  // ── Cargar widgets del dashboard configurados para el rol ──
+  useEffect(() => {
+    fetchMisWidgets();
+  }, [fetchMisWidgets]);
+
+  // ── Helper: verificar si un widget es visible para el usuario ──
+  const isWidgetVisible = useCallback((codigo: string): boolean => {
+    // Si no hay configuración de widgets, mostrar todo (compatibilidad hacia atrás)
+    if (misWidgets.length === 0) return true;
+    const widget = misWidgets.find(w => w.codigo === codigo);
+    // Si el widget no está en la config del rol, no mostrarlo
+    if (!widget) return false;
+    // Aceptar tanto booleano como número (0/1)
+    return widget.visible === true || widget.visible === 1;
+  }, [misWidgets]);
 
   // ── Handlers ────────────────────────────────────────────
   const navegarKPI = useCallback((path: string) => {
@@ -455,6 +474,23 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 Últ. act.: {lastUpdated}
               </span>
             )}
+            {(() => {
+              const puedeVerDashboard = usuario?.pantallas?.some(p => p.codigo === 'pdashboard');
+              const tienePermisoConfig = usuario?.permisosEspeciales?.some(
+                p => p.codigo === 'PE_DASHBOARD_CONFIG' && p.valor === true
+              );
+              if (!puedeVerDashboard || !tienePermisoConfig) return null;
+              return (
+                <Tooltip title="Configurar dashboard">
+                  <Button
+                    type="text"
+                    icon={<SettingOutlined />}
+                    onClick={() => navigate('/dashboardconfig')}
+                    style={{ color: '#556ee6' }}
+                  />
+                </Tooltip>
+              );
+            })()}
           </div>
           <Segmented
             value={periodo}
@@ -493,6 +529,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
       ) : (
         <>
           {/* ========== FILA 1: KPIs ========== */}
+          {isWidgetVisible('KPI_SUMMARY') && (
           <Row gutter={[16, 16]}>
             {kpiVisibles.map((kpi) => (
               <Col xs={12} sm={8} lg={6} xl={4} key={kpi.key}>
@@ -542,9 +579,11 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
               </Col>
             ))}
           </Row>
+          )}
 
           {/* ========== FILA 2: Gráficos ========== */}
           <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+            {isWidgetVisible('GRAFICO_VENTAS_COMPRAS') && (
             <Col xs={24} lg={8}>
               <div className="dashboard-chart-card">
                   <h3 className="dashboard-section-title">
@@ -571,6 +610,8 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 )}
               </div>
             </Col>
+            )}
+            {isWidgetVisible('GRAFICO_COMPARATIVO') && (
             <Col xs={24} lg={8}>
               <div className="dashboard-chart-card dashboard-chart-card-compact">
                 <div className="dashboard-panel-header-minimal" style={{ padding: '16px 20px 8px' }}>
@@ -616,6 +657,8 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 )}
               </div>
             </Col>
+            )}
+            {isWidgetVisible('GRAFICO_EVOLUCION') && (
             <Col xs={24} lg={8}>
               <div className="dashboard-chart-card">
                   <h3 className="dashboard-section-title">
@@ -648,9 +691,11 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 )}
               </div>
             </Col>
+            )}
           </Row>
 
           {/* ========== FILA 3: NCF Pendientes ========== */}
+          {isWidgetVisible('NCF_PENDIENTES') && (
           <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
             <Col xs={24}>
               <div className="dashboard-chart-card dashboard-chart-card-compact">
@@ -686,8 +731,10 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
               </div>
             </Col>
           </Row>
+          )}
 
           {/* ========== FILA 4B: Docs No Cuadrados ========== */}
+          {isWidgetVisible('DOCS_NO_CUADRADOS') && (
           <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
             <Col xs={24}>
               <div className="dashboard-chart-card dashboard-chart-card-compact">
@@ -726,8 +773,10 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
               </div>
             </Col>
           </Row>
+          )}
 
           {/* ========== FILA 5: Recientes ========== */}
+          {isWidgetVisible('DOCS_RECIENTES') && (
           <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
             <Col xs={24}>
               <div className="dashboard-chart-card dashboard-chart-card-compact">
@@ -753,9 +802,10 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
               </div>
             </Col>
           </Row>
+          )}
 
           {/* ========== FILA 5: Stock Negativo ========== */}
-          {sucursalesActivas.length > 0 && (
+          {isWidgetVisible('STOCK_NEGATIVO') && sucursalesActivas.length > 0 && (
             <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
               <Col xs={24}>
                 <div className="dashboard-chart-card dashboard-chart-card-compact">
@@ -813,7 +863,9 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
           )}
 
           {/* ========== FILA 4: Info Usuario + Accesos Rápidos ========== */}
+          {(isWidgetVisible('INFO_USUARIO') || isWidgetVisible('ACCESOS_RAPIDOS')) && (
           <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+            {isWidgetVisible('INFO_USUARIO') && (
             <Col xs={24} lg={12}>
               <div className="dashboard-side-card">
                 <div className="dashboard-side-card-header">
@@ -862,6 +914,8 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 </div>
               </div>
             </Col>
+            )}
+            {isWidgetVisible('ACCESOS_RAPIDOS') && (
             <Col xs={24} lg={12}>
               <div className="dashboard-side-card">
                 <div className="dashboard-side-card-header">
@@ -906,7 +960,9 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 </div>
               </div>
             </Col>
+            )}
           </Row>
+          )}
         </>
       )}
 

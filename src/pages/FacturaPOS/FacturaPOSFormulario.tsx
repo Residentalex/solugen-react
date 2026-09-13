@@ -46,6 +46,7 @@ import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useCargaDocumento } from '../../hooks/useCargaDocumento';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
@@ -139,11 +140,63 @@ const FacturaPOSFormulario: React.FC = () => {
   const { screenCode, documentCode } = useScreenConfig('FPV');
   const documentoConfig = useDocumentoConfig(sucursalActiva, documentCode);
 
-  // ===== States =====
-  const [loading, setLoading] = useState(false);
-  const [loadingError, setLoadingError] = useState(false);
+  // ===== Hook de carga de documento =====
+  const { data, setData, loading, loadingError, recargar: recargarDocumento } = useCargaDocumento<FacturaPOSFormularioDTO>({
+    id: mode === 'editar' ? id : undefined,
+    sucursal: sucursalActiva,
+    obtenerEncabezado: async (suc, docId) => {
+      const res = await facturaPOSApi.obtenerPorId(suc, docId);
+      return {
+        id: res.id, fechaDocumento: res.fechaDocumento, noDocumento: res.noDocumento,
+        estado: res.estado, periodo: res.periodo, ncf: res.ncf || '', nota: res.nota || '',
+        referencia: res.referencia || '', tasa: res.tasa || 1, diasCredito: res.diasCredito || 0,
+        turno: res.turno || '', concepto: res.concepto || null, cliente: res.cliente || null,
+        almacen: res.almacen || null, moneda: res.moneda || null, documento: res.documento,
+        subTotal: res.subTotal, descuento: res.descuento, impuestos: res.impuestos, total: res.total,
+        detalles: (res.detalles || []).map((d: any) => ({
+          ...d, porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
+          tieneVencimiento: d.tieneVencimiento ?? false,
+        })),
+        cobros: (res.cobros || cobrosVacios()) as unknown as CobroDTO,
+        asientos: res.asientos || [], logs: res.logs || [],
+      } as FacturaPOSFormularioDTO;
+    },
+    onEncabezadoCargado: (res) => {
+      setPageTitleOverride(`${res.documento?.codigo || 'FPV'}-${res.noDocumento || ''}`);
+      // Sincronizar estado local editable
+      setDetalles(res.detalles || []);
+      setCobros((res.cobros || cobrosVacios()) as unknown as CobroDTO);
+      setSelectedConcepto(res.concepto);
+      setSelectedCliente(res.cliente);
+      setSelectedAlmacen(res.almacen);
+      const fechaDoc = res.fechaDocumento ? parseDateRaw(res.fechaDocumento) : null;
+      form.setFieldsValue({
+        concepto: res.concepto?.codigo || '', cliente: res.cliente?.codigo || '',
+        almacen: res.almacen?.codigo || '', fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+        turno: res.turno || '', ncf: res.ncf || '', referencia: res.referencia || '',
+        diasCredito: res.diasCredito || 0, tasa: res.tasa || 1, nota: res.nota || '',
+      });
+      // Enriquecer detalles con batch pricing
+      const codigosUnicos = Array.from(new Set((res.detalles || []).map((d: any) => d.codigo).filter(Boolean))) as string[];
+      if (codigosUnicos.length > 0) {
+        productoApi.preciosPorSucursal(sucursalActiva, codigosUnicos)
+          .then((mapaPrecios) => {
+            setDetalles((res.detalles || []).map((d: any) => ({
+              ...d,
+              precioOferta: mapaPrecios.get(d.codigo)?.precioOferta ?? 0,
+              precioRegularOferta: mapaPrecios.get(d.codigo)?.precio ?? 0,
+            })));
+          })
+          .catch(() => undefined);
+      }
+      if (res.concepto?.codigo) {
+        facturaPOSApi.obtenerClientes(sucursalActiva)
+          .then(setClientesCache)
+          .catch(() => undefined);
+      }
+    },
+  });
   const [saving, setSaving] = useState(false);
-  const [data, setData] = useState<FacturaPOSFormularioDTO | null>(null);
   const [detalles, setDetalles] = useState<DetalleFacturaPOSDTO[]>([]);
   const [cobros, setCobros] = useState<CobroDTO>(cobrosVacios());
   const [clientesCache, setClientesCache] = useState<any[]>([]);
@@ -266,80 +319,7 @@ const FacturaPOSFormulario: React.FC = () => {
     };
   }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form, clienteDefectoPOS, selectedCliente]);
 
-  // ===== Cargar datos si es modo editar =====
-  useEffect(() => {
-    if (mode === 'crear') return;
-    if (!id) return;
 
-    setLoading(true);
-    facturaPOSApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        const full: FacturaPOSFormularioDTO = {
-          id: res.id,
-          fechaDocumento: res.fechaDocumento,
-          noDocumento: res.noDocumento,
-          estado: res.estado,
-          periodo: res.periodo,
-          ncf: res.ncf || '',
-          nota: res.nota || '',
-          referencia: res.referencia || '',
-          tasa: res.tasa || 1,
-          diasCredito: res.diasCredito || 0,
-          turno: res.turno || '',
-          concepto: res.concepto || null,
-          cliente: res.cliente || null,
-          almacen: res.almacen || null,
-          moneda: res.moneda || null,
-          documento: res.documento,
-          subTotal: res.subTotal,
-          descuento: res.descuento,
-          impuestos: res.impuestos,
-          total: res.total,
-          detalles: (res.detalles || []).map((d) => ({
-            ...d,
-            porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
-            tieneVencimiento: d.tieneVencimiento ?? false,
-          })),
-          cobros: (res.cobros || cobrosVacios()) as unknown as CobroDTO,
-          asientos: res.asientos || [],
-          logs: res.logs || [],
-        };
-        setData(full);
-        setDetalles(full.detalles);
-        setCobros(full.cobros || cobrosVacios());
-        setSelectedConcepto(full.concepto);
-        setSelectedCliente(full.cliente);
-        setSelectedAlmacen(full.almacen);
-
-        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
-
-        form.setFieldsValue({
-          concepto: full.concepto?.codigo || '',
-          cliente: full.cliente?.codigo || '',
-          almacen: full.almacen?.codigo || '',
-          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          turno: full.turno || '',
-          ncf: full.ncf || '',
-          referencia: full.referencia || '',
-          diasCredito: full.diasCredito || 0,
-          tasa: full.tasa || 1,
-          nota: full.nota || '',
-        });
-
-        if (full.concepto?.codigo) {
-          facturaPOSApi.obtenerClientes(sucursalActiva)
-            .then(setClientesCache)
-            .catch((err) => console.warn('Error al cargar clientes cache en editar', err));
-        }
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
-        message.error(msg);
-        setLoadingError(true);
-        navigate('/FPV', { replace: true });
-      })
-      .finally(() => setLoading(false));
-  }, [mode, id, sucursalActiva, form, navigate]);
 
   // ===== Handlers =====
   const handleCancelar = () => {
@@ -569,7 +549,17 @@ const FacturaPOSFormulario: React.FC = () => {
     );
   };
 
-  const handleProductoSelect = (producto: any) => {
+  const handleProductoSelect = async (producto: any) => {
+    let precioOferta = 0;
+    let precioRegularOferta = 0;
+    try {
+      const oferta = await productoApi.precioSucursal(sucursalActiva, producto.codigo);
+      precioOferta = oferta?.precioOferta ?? 0;
+      precioRegularOferta = oferta?.precio ?? 0;
+    } catch {
+      precioOferta = 0;
+      precioRegularOferta = 0;
+    }
     const filaVaciaIdx = detalles.findIndex((d) => !d.codigo);
     if (filaVaciaIdx === -1) {
       const nuevaFila = filaVacia();
@@ -582,6 +572,8 @@ const FacturaPOSFormulario: React.FC = () => {
           articulo: producto.articulo,
           referencia: producto.referencia || '',
           precio: producto.precio || 0,
+          precioOferta,
+          precioRegularOferta,
           familia: producto.familia,
           medida: producto.medida,
           impuesto: producto.impuesto,
@@ -602,6 +594,8 @@ const FacturaPOSFormulario: React.FC = () => {
             articulo: producto.articulo,
             referencia: producto.referencia || '',
             precio: producto.precio || 0,
+            precioOferta,
+            precioRegularOferta,
             familia: producto.familia,
             medida: producto.medida,
             impuesto: producto.impuesto,
@@ -738,42 +732,8 @@ const FacturaPOSFormulario: React.FC = () => {
   ];
 
   const handleRefresh = useCallback(() => {
-    if (mode === 'crear') return;
-    if (!id) return;
-    setLoadingError(false);
-    setLoading(true);
-    facturaPOSApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        const full: FacturaPOSFormularioDTO = {
-          id: res.id, fechaDocumento: res.fechaDocumento, noDocumento: res.noDocumento,
-          estado: res.estado, periodo: res.periodo, ncf: res.ncf || '', nota: res.nota || '',
-          referencia: res.referencia || '', tasa: res.tasa || 1, diasCredito: res.diasCredito || 0,
-          turno: res.turno || '', concepto: res.concepto || null, cliente: res.cliente || null,
-          almacen: res.almacen || null, moneda: res.moneda || null, documento: res.documento,
-          subTotal: res.subTotal, descuento: res.descuento, impuestos: res.impuestos, total: res.total,
-          detalles: (res.detalles || []).map((d: any) => ({
-            ...d, porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
-            tieneVencimiento: d.tieneVencimiento ?? false,
-          })),
-          cobros: (res.cobros || cobrosVacios()) as unknown as CobroDTO,
-          asientos: res.asientos || [], logs: res.logs || [],
-        };
-        setData(full); setDetalles(full.detalles); setCobros(full.cobros || cobrosVacios());
-        setSelectedConcepto(full.concepto); setSelectedCliente(full.cliente); setSelectedAlmacen(full.almacen);
-        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
-        form.setFieldsValue({
-          concepto: full.concepto?.codigo || '', cliente: full.cliente?.codigo || '',
-          almacen: full.almacen?.codigo || '', fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          turno: full.turno || '', ncf: full.ncf || '', referencia: full.referencia || '',
-          diasCredito: full.diasCredito || 0, tasa: full.tasa || 1, nota: full.nota || '',
-        });
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg); setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form, mode]);
+    recargarDocumento();
+  }, [recargarDocumento]);
 
   // ===== Loading state =====
   if (loading) {
@@ -939,6 +899,9 @@ const FacturaPOSFormulario: React.FC = () => {
               />
               <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
                 {formatNumber(precioUnitario)} × {factor}
+                {fila.precioOferta > 0 && fila.precioOferta < (fila.precioRegularOferta ?? fila.precio) && (
+                  <Tag color="red" style={{ marginLeft: 4 }}>Oferta</Tag>
+                )}
               </div>
             </div>
           );
@@ -948,6 +911,9 @@ const FacturaPOSFormulario: React.FC = () => {
             <Text>{formatNumber(precioBase)}</Text>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
               {formatNumber(precioUnitario)} × {factor}
+              {fila.precioOferta > 0 && fila.precioOferta < (fila.precioRegularOferta ?? fila.precio) && (
+                <Tag color="red" style={{ marginLeft: 4 }}>Oferta</Tag>
+              )}
             </div>
           </div>
         );

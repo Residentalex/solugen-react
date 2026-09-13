@@ -3,7 +3,7 @@ import { Space, Button, Modal } from 'antd';
 import {
   ArrowLeftOutlined, PrinterOutlined, EditOutlined,
   CheckCircleOutlined, CloseCircleOutlined, RedoOutlined,
-  ExclamationCircleOutlined,
+  ExclamationCircleOutlined, DeleteOutlined,
 } from '@ant-design/icons';
 import PermissionGate from './PermissionGate';
 import { toEstadoNum, toPeriodoNum } from '../utils/estadoDocumento';
@@ -26,6 +26,7 @@ interface DetalleToolbarProps {
   onRevisado?: () => Promise<void>;
   onDesaplicar?: () => Promise<void>;
   onReversar?: () => Promise<void>;
+  onEliminar?: () => Promise<void>;
   showImprimir?: boolean;
   confirmActions?: boolean;
   edicionSinRestricciones?: boolean;
@@ -49,7 +50,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
   modulo, estado, periodo, revisado,
   saving, imprimiendo, operacionLoading,
   onVolver, onImprimir, onImprimirTicket, onEditar, onAplicar, onAnular,
-  onPostear, onRevisado, onDesaplicar, onReversar,
+  onPostear, onRevisado, onDesaplicar, onReversar, onEliminar,
   showImprimir = true, confirmActions = true, edicionSinRestricciones = false,
   extraButtons,
 }) => {
@@ -162,6 +163,19 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
               onClick={wrapConfirm('Reversar', onReversar)}
             >
               Reversar
+            </Button>
+          </PermissionGate>
+        )}
+
+        {onEliminar && (
+          <PermissionGate codigoPantalla={modulo} permisoEspecial="pe_modificar_admin">
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              loading={saving}
+              onClick={wrapConfirm('Eliminar', onEliminar)}
+            >
+              Eliminar
             </Button>
           </PermissionGate>
         )}

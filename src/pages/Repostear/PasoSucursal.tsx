@@ -29,22 +29,53 @@ function sucursalKey(valor: number): string | undefined {
   );
 }
 
-const PasoSucursal: React.FC<Props> = ({ value, onChange }) => {
-  const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
-  const isDarkMode = useUIStore((s) => s.isDarkMode);
-  const primaryColor = useUIStore((s) => s.primaryColor);
-  const sucursalesData = useCompanyStore((s) => s.data.sucursales);
-
-  const sucursalId = (nombre: string): Sucursal | undefined =>
-    Sucursal[nombre as keyof typeof Sucursal];
-
-  const SUCURSALES: { value: Sucursal; label: string; icon: React.ReactNode }[] = (sucursalesData || [])
+/** Obtiene la lista de sucursales incluyendo siempre la Consolidado al inicio */
+function obtenerSucursalesConConsolidado(sucursalesData: any[]): {
+  value: Sucursal;
+  label: string;
+  icon: React.ReactNode;
+}[] {
+  // 1. Obtener sucursales de la empresa como de costumbre
+  const baseSucursales: {
+    value: Sucursal;
+    label: string;
+    icon: React.ReactNode;
+  }[] = (sucursalesData || [])
     .filter((s: any) => s.sucursal !== undefined && s.sucursal !== null)
     .map((s: any) => ({
       value: s.sucursal as Sucursal,
       label: s.nombre,
       icon: ICONOS_SUCURSAL[sucursalKey(s.sucursal) || ''] || <BankOutlined />,
     }));
+
+  // 2. Verificar si ya viene Consolidado de la empresa
+  const yaTieneConsolidado = baseSucursales.some(
+    (s) => s.value === Sucursal.Consolidado,
+  );
+
+  // 3. Si no, agregarlo al inicio con su etiqueta y ícono
+  if (!yaTieneConsolidado) {
+    return [
+      {
+        value: Sucursal.Consolidado,
+        label: 'Consolidado',
+        icon: ICONOS_SUCURSAL.Consolidado || <PieChartOutlined />,
+      },
+      ...baseSucursales,
+    ];
+  }
+
+  // 4. Si ya venía, devolver tal como está
+  return baseSucursales;
+}
+
+const PasoSucursal: React.FC<Props> = ({ value, onChange }) => {
+  const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
+  const isDarkMode = useUIStore((s) => s.isDarkMode);
+  const primaryColor = useUIStore((s) => s.primaryColor);
+  const sucursalesData = useCompanyStore((s) => s.data.sucursales);
+
+  const SUCURSALES: { value: Sucursal; label: string; icon: React.ReactNode }[] = obtenerSucursalesConConsolidado(sucursalesData);
 
   const sucursalesMostrar = SUCURSALES.filter((s) =>
     sucursalesPermitidas.some((sp) =>

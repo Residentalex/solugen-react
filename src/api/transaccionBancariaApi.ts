@@ -81,6 +81,11 @@ export const transaccionBancariaApi = {
     return data.data;
   },
 
+  postearDocumentoBancario: async (sucursal: number, dto: Partial<TransaccionDTO>): Promise<any> => {
+    const { data } = await apiClient.post<ApiResponse<any>>(`${BASE}/${sucursal}/postearDocumentoBancario`, dto);
+    return data.data;
+  },
+
   desaplicar: async (origen: number, documento: string, destino?: number): Promise<void> => {
     const params: Record<string, string | number> = { origen, documento };
     if (destino !== undefined) params.destino = destino;

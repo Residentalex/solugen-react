@@ -1,0 +1,54 @@
+import { Fragment as _Fragment, jsx as _jsx } from "react/jsx-runtime";
+import React from 'react';
+import { useAuthStore } from '../stores/authStore';
+import { useUIStore } from '../stores/uiStore';
+const PermissionGate = ({ codigoPantalla, accion, permisoEspecial, children }) => {
+    const usuario = useAuthStore((s) => s.usuario);
+    const activeModule = useUIStore((s) => s.activeModule);
+    if (!usuario) {
+        return null;
+    }
+    // Si se pasa permisoEspecial, verifica contra permisosEspeciales del usuario
+    if (permisoEspecial) {
+        const permiso = usuario.permisosEspeciales?.find((p) => p.codigo?.toUpperCase() === permisoEspecial.toUpperCase());
+        if (!permiso)
+            return null;
+        // Si el permiso tiene pantallaId > 0, verificar que coincida con la pantalla actual
+        if (permiso.pantallaId !== undefined && permiso.pantallaId > 0) {
+            const codigo = codigoPantalla || activeModule;
+            if (codigo) {
+                const pantallaActual = usuario.pantallas.find((p) => p.codigo?.toUpperCase() === codigo?.toUpperCase());
+                if (!pantallaActual || pantallaActual.id !== permiso.pantallaId) {
+                    return null;
+                }
+            }
+        }
+        // BOOLEANO: valor debe ser true
+        // NUMERICO: valorNumerico debe ser > 0
+        const activo = permiso.tipoValor === 'NUMERICO'
+            ? (permiso.valorNumerico ?? 0) > 0
+            : permiso.valor === true;
+        if (!activo)
+            return null;
+        return _jsx(_Fragment, { children: children });
+    }
+    // Si no hay permisoEspecial pero tampoco accion, no se puede verificar
+    if (!accion) {
+        return null;
+    }
+    // Compatibilidad hacia atrás: verifica accion contra la pantalla
+    const codigo = codigoPantalla || activeModule;
+    if (!codigo) {
+        return null;
+    }
+    const pantalla = usuario.pantallas.find((p) => p.codigo?.toUpperCase() === codigo?.toUpperCase());
+    if (!pantalla) {
+        return null;
+    }
+    const tienePermiso = pantalla.acciones.some((a) => a.toUpperCase() === accion.toUpperCase());
+    if (!tienePermiso) {
+        return null;
+    }
+    return _jsx(_Fragment, { children: children });
+};
+export default PermissionGate;

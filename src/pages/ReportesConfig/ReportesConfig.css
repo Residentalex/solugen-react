@@ -118,6 +118,15 @@
   background: #fafafa;
 }
 
+.rc-zona-linea.is-activa {
+  background: #e8f0ff;
+  border-color: #556ee6;
+}
+
+.rc-zona-linea.is-activa:hover {
+  background: #d8e4ff;
+}
+
 .rc-zona-linea-label {
   flex: 1;
   min-width: 0;
@@ -187,4 +196,57 @@
 
 .rc-campo-formato-btn-activo {
   color: #556ee6;
+}
+
+/* ===== Editor de plantillas: scroll independiente por seccion ===== */
+
+/* Contenedor flex de las 3 secciones (campos, propiedades, preview) */
+.rc-editor-secciones {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* Cada seccion: columna con scroll independiente */
+.rc-editor-seccion {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Solo aplica scroll interno en pantallas grandes (>=1600px) */
+@media (min-width: 1600px) {
+  .rc-editor-secciones {
+    height: calc(100vh - 240px);
+    min-height: 420px;
+    overflow: hidden;
+  }
+
+  .rc-editor-seccion-campos {
+    flex: 0 0 40%;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .rc-editor-seccion-propiedades {
+    flex: 0 0 25%;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .rc-editor-seccion-preview {
+    flex: 1 1 0;
+    overflow-y: auto;
+  }
+}
+
+/* En pantallas menores: apilado normal sin scroll interno */
+@media (max-width: 1599.98px) {
+  .rc-editor-secciones {
+    flex-direction: column;
+  }
+
+  .rc-editor-seccion {
+    width: 100%;
+  }
 }

@@ -64,7 +64,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const usuario = useAuthStore((s: any) => s.usuario);
   const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
-    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+    (p: any) => p.codigo?.toUpperCase() === 'PE_MODIFICAR_ASIENTOS' && p.valor === true
   ) ?? false;
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
@@ -144,11 +144,21 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const totalDebitosDBA = debitos.reduce((s, t) => s + (t.monto || 0), 0);
   const totalCreditosDBA = creditos.reduce((s, t) => s + (t.monto || 0), 0);
   const pendienteDBA = totalDebitosDBA - totalCreditosDBA;
+
+  // Auto-calcular totalDistribucion: el mayor entre débitos y créditos
+  useEffect(() => {
+    if (totalDebitosDBA > totalCreditosDBA) {
+      setTotalDistribucion(totalDebitosDBA);
+    } else if (totalCreditosDBA > totalDebitosDBA) {
+      setTotalDistribucion(totalCreditosDBA);
+    }
+  }, [totalDebitosDBA, totalCreditosDBA]);
+
   const totales = {
     subTotal: data?.subTotal || 0,
     descuento: data?.descuento || 0,
     impuestos: data?.impuestos || 0,
-    total: data?.total || 0,
+    total: totalDistribucion,
   };
 
   // ===== Quick field editors =====
@@ -864,19 +874,6 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
                     <PlusOutlined /> Tasa
                   </Tag>
                 )}
-
-                {/* Total */}
-                <InputNumber
-                  size="small"
-                  style={{ width: 150 }}
-                  min={0}
-                  step={0.01}
-                  precision={2}
-                  placeholder="Total"
-                  value={totalDistribucion}
-                  onChange={(val) => setTotalDistribucion(val || 0)}
-                  addonBefore="Total"
-                />
               </Space>
             </div>
             <Form.Item name="ncf" hidden><Input /></Form.Item>

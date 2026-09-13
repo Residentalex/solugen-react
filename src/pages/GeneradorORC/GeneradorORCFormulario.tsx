@@ -543,6 +543,7 @@ const GeneradorORCFormulario: React.FC = () => {
           fecha: fechaVal,
           notas: res.notas || '',
         });
+        setRedondeoComercial(res.redondeo ?? false);
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';

@@ -1,12 +1,11 @@
 import React from 'react';
 import { Card, Tag, Typography, Button, Tooltip, Space, App } from 'antd';
-import { CopyOutlined, FileTextOutlined } from '@ant-design/icons';
+import { CopyOutlined, FileTextOutlined, EditOutlined } from '@ant-design/icons';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
+import PermissionGate from '../../components/PermissionGate';
 import type { CuentaBancariaDTO } from '../../api/cuentaBancariaApi';
 
 const { Text } = Typography;
-
-/* ===== Bank Color Palette (deterministic by hash) ===== */
 
 const BANK_COLORS = [
   { bg: 'linear-gradient(135deg, #556ee6 0%, #6c7ff0 100%)' },
@@ -60,15 +59,14 @@ function getMonedaInfo(moneda: string | undefined): { label: string; color: stri
   return { label: monedaDefault.codigo || 'DOP', color: '#556ee6' };
 }
 
-/* ===== Component ===== */
-
 interface CuentaBancariaCardProps {
   cuenta: CuentaBancariaDTO;
   onClick?: () => void;
+  onEditar?: () => void;
   index?: number;
 }
 
-const CuentaBancariaCard: React.FC<CuentaBancariaCardProps> = ({ cuenta, onClick, index = 0 }) => {
+const CuentaBancariaCard: React.FC<CuentaBancariaCardProps> = ({ cuenta, onClick, onEditar, index = 0 }) => {
   const { message } = App.useApp();
   const isActive = cuenta.activo;
   const esUSD = cuenta.moneda?.toUpperCase() === 'DOLAR' || cuenta.moneda?.toUpperCase() === 'USD';
@@ -94,11 +92,8 @@ const CuentaBancariaCard: React.FC<CuentaBancariaCardProps> = ({ cuenta, onClick
     <div className="cuenta-card-wrapper" style={{ animationDelay: staggerDelay }}>
       <Card
         className={cardClassName}
-        hoverable
-        onClick={onClick}
         styles={{ body: { padding: 0 } }}
       >
-        {/* Header with gradient + chip */}
         <div className="cuenta-card-header" style={{ background: getBankColor(cuenta.banco) }}>
           <div className="cuenta-card-chip" />
           <div className="cuenta-card-header-top">
@@ -117,9 +112,7 @@ const CuentaBancariaCard: React.FC<CuentaBancariaCardProps> = ({ cuenta, onClick
           <div className="cuenta-card-number">{maskAccountNumber(cuenta.noCuenta)}</div>
         </div>
 
-        {/* Body */}
         <div className="cuenta-card-body">
-          {/* Hero balance */}
           <div className="cuenta-card-balance-section">
             {hasBalance ? (
               <>
@@ -139,12 +132,10 @@ const CuentaBancariaCard: React.FC<CuentaBancariaCardProps> = ({ cuenta, onClick
 
           <div className="cuenta-card-divider" />
 
-          {/* Account name */}
           <Text strong className="cuenta-card-nombre" ellipsis={{ tooltip: cuenta.nombre }}>
             {toTitleCase(cuenta.nombre ?? '')}
           </Text>
 
-          {/* Secondary data */}
           <div className="cuenta-card-datos">
             <div>
               <span className="cuenta-card-dato-label">Cta. Contable</span>
@@ -157,16 +148,20 @@ const CuentaBancariaCard: React.FC<CuentaBancariaCardProps> = ({ cuenta, onClick
           </div>
         </div>
 
-        {/* Footer with inline actions */}
         <div className="cuenta-card-footer">
           <Space size={2}>
             <Tooltip title="Copiar número de cuenta">
               <Button type="text" size="small" icon={<CopyOutlined />} onClick={handleCopyNumber} className="cuenta-footer-btn" />
             </Tooltip>
-            <Tooltip title="Ver movimientos">
-              <Button type="text" size="small" icon={<FileTextOutlined />} onClick={handleViewTransactions} className="cuenta-footer-btn" />
-            </Tooltip>
+            <PermissionGate accion="EDITAR">
+              <Tooltip title="Editar cuenta">
+                <Button type="text" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); onEditar?.(); }} className="cuenta-footer-btn" />
+              </Tooltip>
+            </PermissionGate>
           </Space>
+          <Button size="small" icon={<FileTextOutlined />} onClick={handleViewTransactions}>
+            Ver movimientos
+          </Button>
         </div>
       </Card>
     </div>

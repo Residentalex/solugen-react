@@ -1,6 +1,6 @@
 import React from 'react';
 import { Input, Button } from 'antd';
-import { SearchOutlined, ReloadOutlined, PlusOutlined, EditOutlined, CopyOutlined, PrinterOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined, EditOutlined, CopyOutlined, PrinterOutlined, FileExcelOutlined } from '@ant-design/icons';
 import FiltrosDocumento from './FiltrosDocumento/FiltrosDocumento';
 import PageSizeSelect from './PageSizeSelect';
 import PermissionGate from './PermissionGate';
@@ -35,11 +35,15 @@ interface DocumentListadoToolbarProps {
   showImprimir?: boolean;
   imprimirDisabled?: boolean;
   onImprimir?: () => void;
+  showExportarExcel?: boolean;
+  exportarExcelDisabled?: boolean;
+  onExportarExcel?: () => void;
   ocultarSearch?: boolean;
   onRefresh: () => void;
 
   extraLeft?: React.ReactNode;
   extraRight?: React.ReactNode;
+  extraToolbar?: React.ReactNode;
 }
 
 const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
@@ -64,10 +68,14 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
   showImprimir,
   imprimirDisabled,
   onImprimir,
+  showExportarExcel,
+  exportarExcelDisabled,
+  onExportarExcel,
   ocultarSearch,
   onRefresh,
   extraLeft,
   extraRight,
+  extraToolbar,
 }) => {
   return (
     <div style={{
@@ -101,6 +109,7 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
         prefix={<SearchOutlined className="paces-text-icon" />}
       />}
       <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
+      {extraToolbar}
       <div style={{ flex: 1 }} />
       {showCrear && onCrear && (
         <PermissionGate accion="CREAR">
@@ -124,6 +133,11 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
       {showImprimir && onImprimir && (
         <PermissionGate accion="IMPRIMIR">
           <Button icon={<PrinterOutlined />} onClick={onImprimir} disabled={imprimirDisabled} />
+        </PermissionGate>
+      )}
+      {showExportarExcel && onExportarExcel && (
+        <PermissionGate accion="EXPORTAR">
+          <Button icon={<FileExcelOutlined />} onClick={onExportarExcel} disabled={exportarExcelDisabled} />
         </PermissionGate>
       )}
       <Button icon={<ReloadOutlined />} onClick={onRefresh} />

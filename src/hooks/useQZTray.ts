@@ -16,6 +16,8 @@ export interface UseQZTrayReturn {
   print: (text: string, logoBase64?: string) => Promise<void>;
   /** Imprime un PDF en la impresora POS via QZ Tray (lo renderiza como imagen) */
   printPDF: (pdfBlob: Blob) => Promise<void>;
+  /** Imprime bytes crudos ESC/POS (en base64) directamente a la impresora térmica via QZ Tray */
+  printRawBase64: (contenidoBase64: string) => Promise<void>;
   /** Obtiene la lista de impresoras disponibles desde QZ Tray */
   fetchPrinters: () => Promise<string[]>;
   /** Guarda la impresora seleccionada en localStorage */
@@ -171,10 +173,16 @@ export function useQZTray(): UseQZTrayReturn {
 
       // El texto ya incluye comandos ESC/POS (init, formato, corte) desde el formateador.
       // El logo (GS v 0) supera 127 en sus bytes, por eso va como base64; el texto sigue como plain.
+      // Cuando hay logo, quitar CMD_INIT (ESC @) del inicio del ticket para evitar feed de papel
+      // entre el logo y el contenido. CMD_NORMALIZAR (que sigue despues) ajusta margenes sin feed.
+      let ticketText = text;
+      if (logoBase64 && ticketText.startsWith('\x1B\x40')) {
+        ticketText = ticketText.slice(2);
+      }
       const data = logoBase64
         ? [
             { type: 'raw', format: 'base64', data: logoBase64 },
-            { type: 'raw', format: 'plain', data: text },
+            { type: 'raw', format: 'plain', data: ticketText },
           ]
         : [{ type: 'raw', format: 'plain', data: text }];
 
@@ -204,10 +212,13 @@ export function useQZTray(): UseQZTrayReturn {
 
       // Conectar con QZ Tray (si no está conectado)
       if (!connectedRef.current) {
+        const isSecure = window.location.protocol === 'https:';
         await qz.websocket.connect({
           host: ['localhost'],
-          usingSecure: false,
-          port: { insecure: [8182, 8283, 8384, 8485] },
+          usingSecure: isSecure,
+          port: isSecure
+            ? { secure: [8181, 8282, 8383, 8484] }
+            : { insecure: [8182, 8283, 8384, 8485] },
         });
         connectedRef.current = true;
         setReady(true);
@@ -222,20 +233,50 @@ export function useQZTray(): UseQZTrayReturn {
       }
       const base64 = btoa(binary);
 
-      // Configurar impresión optimizada para POS térmica
-      const config = qz.configs.create(name, {
-        density: 203,              // DPI máximo de impresora POS
-        units: 'mm',               // Usar milímetros para mejor precisión
-        margins: 0,                // Sin márgenes
-        rasterize: false,          // QZ ya renderiza el PDF
-        size: { width: 80, height: 200 },  // Ancho rollo 80mm
-      });
+      // Enviar PDF a impresora: type='pixel' format='pdf' es la forma correcta en QZ Tray
+      const config = qz.configs.create(name, { rasterize: true, margins: 0 });
       const data = [{ type: 'pixel', format: 'pdf', flavor: 'base64', data: base64 }];
       await qz.print(config, data);
       setError(null);
     } catch (err: any) {
       if (err.code === 'NO_PRINTER_SELECTED') throw err;
       const msg = err.message || 'Error al imprimir PDF con QZ Tray';
+      setError(msg);
+      throw err;
+    }
+  }, [printerName]);
+
+  const printRawBase64 = useCallback(async (contenidoBase64: string) => {
+    try {
+      const name = printerName || localStorage.getItem(STORAGE_KEY);
+      if (!name) {
+        const err = new Error('NO_PRINTER_SELECTED') as any;
+        err.code = 'NO_PRINTER_SELECTED';
+        throw err;
+      }
+
+      await loadQZScript();
+
+      if (!connectedRef.current) {
+        const isSecure = window.location.protocol === 'https:';
+        await qz.websocket.connect({
+          host: ['localhost'],
+          usingSecure: isSecure,
+          port: isSecure
+            ? { secure: [8181, 8282, 8383, 8484] }
+            : { insecure: [8182, 8283, 8384, 8485] },
+        });
+        connectedRef.current = true;
+        setReady(true);
+      }
+
+      const config = qz.configs.create(name);
+      const data = [{ type: 'raw', format: 'base64', data: contenidoBase64 }];
+      await qz.print(config, data);
+      setError(null);
+    } catch (err: any) {
+      if (err.code === 'NO_PRINTER_SELECTED') throw err;
+      const msg = err.message || 'Error al imprimir raw ESC/POS con QZ Tray';
       setError(msg);
       throw err;
     }
@@ -255,5 +296,5 @@ export function useQZTray(): UseQZTrayReturn {
     };
   }, []);
 
-  return { print, printPDF, fetchPrinters, selectPrinter, ready, error, printerName, availablePrinters };
+  return { print, printPDF, printRawBase64, fetchPrinters, selectPrinter, ready, error, printerName, availablePrinters };
 }

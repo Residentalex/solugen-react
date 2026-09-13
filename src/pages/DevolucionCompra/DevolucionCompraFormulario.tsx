@@ -166,7 +166,7 @@ const DevolucionCompraFormulario: React.FC = () => {
 
   const usuario = useAuthStore((s: any) => s.usuario);
   const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
-    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+    (p: any) => p.codigo?.toUpperCase() === 'PE_MODIFICAR_ASIENTOS' && p.valor === true
   ) ?? false;
   const [generandoAsientos, setGenerandoAsientos] = useState(false);
   const [asientosLocales, setAsientosLocales] = useState<any[]>([]);

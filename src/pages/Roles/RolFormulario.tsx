@@ -24,6 +24,8 @@ const RolFormulario: React.FC = () => {
 
   const navigationConfirmedRef = useFormularioNavigation();
 
+  const [dashboardPermisoChecked, setDashboardPermisoChecked] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -133,6 +135,11 @@ const RolFormulario: React.FC = () => {
             map[key] = { valor: p.valor, valorNumerico: p.valorNumerico };
           }
           setPermisosPorPantalla(map);
+          // Cargar valor del permiso Dashboard si existe
+          const dashboardPerm = result.find((p: any) => p.codigo === 'PE_DASHBOARD_CONFIG' && (p.pantallaId === 0 || p.pantallaId == null));
+          if (dashboardPerm) {
+            setDashboardPermisoChecked(dashboardPerm.valor);
+          }
         } catch {
           // no crítico, los permisos especiales se cargan aparte
         } finally {
@@ -176,6 +183,19 @@ const RolFormulario: React.FC = () => {
       ...prev,
       [pantallaId]: checked ? todasAcciones : [],
     }));
+  };
+
+  const handleToggleDashboardPermiso = (checked: boolean) => {
+    setDashboardPermisoChecked(checked);
+    // Also update the global permisosPorPantalla for consistency
+    const permisoCatalogo = catalogoPermisosEspeciales.find(p => p.codigo === 'PE_DASHBOARD_CONFIG');
+    if (permisoCatalogo) {
+      const key = `0-${permisoCatalogo.id}`;
+      setPermisosPorPantalla((prev) => ({
+        ...prev,
+        [key]: { valor: checked, valorNumerico: prev[key]?.valorNumerico },
+      }));
+    }
   };
 
   const handleTogglePermisoEspecial = (pantallaId: number, permisoId: number, checked: boolean, valorNumerico?: number) => {
@@ -352,6 +372,36 @@ const RolFormulario: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} md={16} style={{ height: '100%' }}>
+          {/* Dashboard global permission */}
+          {(() => {
+            const dashboardPermisoCatalogo = catalogoPermisosEspeciales.find(p => p.codigo === 'PE_DASHBOARD_CONFIG');
+            if (!dashboardPermisoCatalogo) return null;
+            return (
+              <Card
+                className="paces-card"
+                title={
+                  <span style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 18 }}>◈</span>
+                    Dashboard
+                  </span>
+                }
+                style={{ marginBottom: 16 }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Checkbox
+                    checked={dashboardPermisoChecked}
+                    onChange={(e) => handleToggleDashboardPermiso(e.target.checked)}
+                  >
+                    <span style={{ fontSize: 13 }}>{dashboardPermisoCatalogo.nombre || 'PE_DASHBOARD_CONFIG'}</span>
+                  </Checkbox>
+                  <Tag color="purple" style={{ fontSize: 11 }}>Global</Tag>
+                </div>
+                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--paces-text-muted)' }}>
+                  Permite configurar qué widgets del dashboard son visibles por rol.
+                </div>
+              </Card>
+            );
+          })()}
           {/* Permisos por Pantalla */}
           <Card className="paces-card" title="Permisos por Pantalla" style={{ height: '100%', display: 'flex', flexDirection: 'column' }} styles={{ body: { flex: 1, overflow: 'auto', padding: 16 } }}>
         {pantallasUnicas.length === 0 ? (

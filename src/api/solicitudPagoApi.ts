@@ -86,8 +86,29 @@ export const solicitudPagoApi = {
     return data.data;
   },
 
+  obtenerNoAutorizados: async (
+    sucursal: number,
+    desde?: string,
+    hasta?: string,
+    cantidad?: number,
+    salto?: number
+  ): Promise<TransaccionBancariaVistaDTO[]> => {
+    const params: Record<string, string | number> = {};
+    if (desde) params.desde = desde;
+    if (hasta) params.hasta = hasta;
+    if (cantidad !== undefined) params.cantidad = cantidad;
+    if (salto !== undefined) params.salto = salto;
+    const { data } = await apiClient.get<ApiResponse<TransaccionBancariaVistaDTO[]>>(`${BASE}/${sucursal}/no-autorizados`, { params });
+    return data.data || [];
+  },
+
   aplicar: async (sucursal: number, id: number): Promise<SolicitudPagoDTO> => {
     const { data } = await apiClient.put<ApiResponse<SolicitudPagoDTO>>(`${BASE}/${sucursal}/aplicar/${id}`);
+    return data.data;
+  },
+
+  autorizar: async (sucursal: number, id: number): Promise<SolicitudPagoDTO> => {
+    const { data } = await apiClient.put<ApiResponse<SolicitudPagoDTO>>(`${BASE}/${sucursal}/autorizar/${id}`);
     return data.data;
   },
 

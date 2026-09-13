@@ -310,16 +310,19 @@ const AsientoContableFormulario: React.FC = () => {
     if (!values.fechaDocumento) return 'La fecha es requerida';
     if (!selectedConcepto) return 'El concepto es requerido';
     if (!selectedEntidad) return 'La entidad es requerida';
-    if (asientos.length === 0) return 'Debe agregar al menos un asiento';
-    if (!esCuadrado) return `Los asientos no cuadran. Diferencia: ${formatNumber(diferencia)}`;
+    // Permiso gerencial: permite guardar sin asientos o sin cuadrar
+    if (!permisoModificarAdmin) {
+      if (asientos.length === 0) return 'Debe agregar al menos un asiento';
+      if (!esCuadrado) return `Los asientos no cuadran. Diferencia: ${formatNumber(diferencia)}`;
 
-    // Validar que todos los asientos tengan cuenta contable
-    const sinCuenta = asientos.some((a) => !a.noCuenta);
-    if (sinCuenta) return 'Todos los asientos deben tener una cuenta contable';
+      // Validar que todos los asientos tengan cuenta contable
+      const sinCuenta = asientos.some((a) => !a.noCuenta);
+      if (sinCuenta) return 'Todos los asientos deben tener una cuenta contable';
 
-    // Validar que todos los asientos tengan monto > 0
-    const sinMonto = asientos.some((a) => !a.monto || a.monto <= 0);
-    if (sinMonto) return 'Todos los asientos deben tener un monto mayor a 0';
+      // Validar que todos los asientos tengan monto > 0
+      const sinMonto = asientos.some((a) => a.monto !== undefined && a.monto !== null && a.monto <= 0);
+      if (sinMonto) return 'Todos los asientos deben tener un monto mayor a 0';
+    }
 
     return null;
   };

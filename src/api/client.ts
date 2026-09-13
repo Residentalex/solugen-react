@@ -87,7 +87,8 @@ apiClient.interceptors.response.use(
         };
 
         const { data } = await axios.post(`${apiUrl}/auth/refresh`, refreshData);
-        const sesion: AuthSesionDTO = data.data;
+        const sesion: AuthSesionDTO | undefined = data?.data;
+        if (!sesion?.accessToken) throw new Error('Sesión inválida');
 
         useAuthStore.getState().setSession({
           accessToken: sesion.accessToken,
@@ -98,7 +99,7 @@ apiClient.interceptors.response.use(
           sucursalesPermitidas: sesion.sucursalesPermitidas,
         });
 
-        originalRequest.headers.Authorization = `Bearer ${sesion.accessToken}`;
+        originalRequest.headers.Authorization = `Bearer ${sesion!.accessToken}`;
         return apiClient(originalRequest);
       } catch {
         const sucursalActual = useAuthStore.getState().sucursalActiva;

@@ -59,7 +59,7 @@ const SolicitudPagoFormulario: React.FC = () => {
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
   const usuario = useAuthStore((s: any) => s.usuario);
   const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
-    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+    (p: any) => p.codigo?.toUpperCase() === 'PE_MODIFICAR_ASIENTOS' && p.valor === true
   ) ?? false;
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
@@ -254,6 +254,7 @@ const SolicitudPagoFormulario: React.FC = () => {
           impuestos: res.impuestos ?? 0,
           retenciones: res.retenciones ?? 0,
           tasa: res.tasa ?? 1,
+          nombreBeneficiario: res.nombreBeneficiario || '',
         });
       })
       .catch((err: any) => {
@@ -453,6 +454,7 @@ const SolicitudPagoFormulario: React.FC = () => {
       codigoConcepto: concepto.codigo || base.codigoConcepto || '',
       codigoMoneda: moneda.codigo || '',
       nombreEntidad: entidad.nombre || base.nombreEntidad || '',
+      nombreBeneficiario: values.nombreBeneficiario || '',
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
         ...t,
         transaccionAsociadaID: t.transaccionAsociadaID || t.id,
@@ -466,6 +468,11 @@ const SolicitudPagoFormulario: React.FC = () => {
 
   const handleGenerarAsientos = async () => {
     if (sucursalActiva === undefined) return;
+    const values = form.getFieldsValue();
+    if (!values.cuentaBancaria) {
+      message.error('Debe ingresar una Cuenta Bancaria para generar los asientos.');
+      return;
+    }
     setSaving(true);
     try {
       const dto = construirDTOGenerarAsientos();
@@ -560,6 +567,7 @@ const SolicitudPagoFormulario: React.FC = () => {
       tasa: tasaValue,
       simboloMoneda: monedaSimbolo,
       nombreMoneda: monedaNombre,
+        nombreBeneficiario: values.nombreBeneficiario || '',
     };
 
     const dtoConAsociadas = {
@@ -575,7 +583,7 @@ const SolicitudPagoFormulario: React.FC = () => {
       return { ...dtoConAsociadas, id: data.id || parseInt(id), asientos: asientos || [] };
     }
 
-    return dtoConAsociadas;
+    return { ...dtoConAsociadas, asientos: asientos || [] };
   };
 
   // ===== Guardar =====
@@ -662,6 +670,7 @@ const SolicitudPagoFormulario: React.FC = () => {
           impuestos: res.impuestos ?? 0,
           retenciones: res.retenciones ?? 0,
           tasa: res.tasa ?? 1,
+          nombreBeneficiario: res.nombreBeneficiario || '',
         });
       })
       .catch((err: any) => {
@@ -828,11 +837,19 @@ const SolicitudPagoFormulario: React.FC = () => {
                 </Form.Item>
               </Col>
 
-              {/* Fila 3: Nota */}
-              <Col xs={24}>
+              {/* Fila 3: Nota + Beneficiario */}
+              <Col xs={24} sm={12} lg={16}>
                 <Form.Item name="nota" style={{ marginBottom: 0 }}>
                   <FloatingField label="Nota">
                     <TextArea rows={3} maxLength={500} showCount />
+                  </FloatingField>
+                </Form.Item>
+              </Col>
+
+              <Col xs={24} sm={12} lg={8}>
+                <Form.Item name="nombreBeneficiario" style={{ marginBottom: 0 }}>
+                  <FloatingField label="Beneficiario">
+                    <Input placeholder="Nombre del beneficiario" />
                   </FloatingField>
                 </Form.Item>
               </Col>

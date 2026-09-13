@@ -25,6 +25,15 @@ export interface ProductoListaDTO {
   categoria: { nombre?: string; codigo?: string; idExterno?: string } | null;
   categoriaCodigo: string;
   unidadMedida: { nombre?: string; idExterno?: string } | null;
+  precioOferta?: number;
+}
+
+export interface ProductoSucursalDTO {
+  sucursal: string;
+  codigo: string;
+  articulo: string;
+  precio: number;
+  precioOferta: number;
 }
 
 export interface FiltroProducto {

@@ -61,6 +61,7 @@ const GeneradorORCDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+  const usuario = useAuthStore((s) => s.usuario);
 
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
@@ -137,6 +138,11 @@ const GeneradorORCDetalle: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  const handleSeleccionarProductoAnalisis = useCallback((record: DetalleGeneradorDTO) => {
+    setAnalisisDetalle(record);
+    setAnalisisOpen(true);
+  }, []);
 
   const handleGenerarOC = async () => {
     if (!id) return;
@@ -236,7 +242,7 @@ const GeneradorORCDetalle: React.FC = () => {
     if (!data?.numero) return;
     setAdpLoading(true);
     apiClient.get(`/ADP/${sucursalActiva}/filtrar`, {
-      params: { docReferencia: data.numero, cantidad: 20 }
+      params: { docReferencia: 'GDO-' + data.numero, cantidad: 20 }
     })
       .then((res) => setAdpList(res.data?.data || []))
       .catch((err: any) => {
@@ -605,6 +611,10 @@ const GeneradorORCDetalle: React.FC = () => {
         size="small"
         pagination={false}
         scroll={{ x: 1100 }}
+        onRow={(record) => ({
+          onClick: () => handleSeleccionarProductoAnalisis(record),
+          style: { cursor: 'pointer' },
+        })}
         summary={() => (
           <Table.Summary fixed="bottom">
             <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>

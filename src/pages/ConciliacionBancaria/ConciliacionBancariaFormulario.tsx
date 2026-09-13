@@ -247,7 +247,7 @@ const balLibrosInicialCargado = useRef(false);
             hashParaCheck = await conciliacionBancariaApi.obtenerHashImportacion(sucursalActiva, parseInt(id!)) || '';
           } catch { /* si falla, se omite el precheck */ }
         }
-        if (movimientos.length > 0 && hashParaCheck) {
+        if (movimientos.length > 0 && hashParaCheck && archivoImportado !== null) {
           try {
             const hayMovimientos = await conciliacionBancariaApi.tieneMovimientosImportados(sucursalActiva, parseInt(id!));
             if (hayMovimientos) {
@@ -349,7 +349,7 @@ const balLibrosInicialCargado = useRef(false);
             hashParaCheckYG = await conciliacionBancariaApi.obtenerHashImportacion(sucursalActiva, parseInt(id!)) || '';
           } catch { /* si falla, se omite el precheck */ }
         }
-        if (movimientos.length > 0 && hashParaCheckYG) {
+        if (movimientos.length > 0 && hashParaCheckYG && archivoImportado !== null) {
           try {
             const hayMovimientos = await conciliacionBancariaApi.tieneMovimientosImportados(sucursalActiva, parseInt(id!));
             if (hayMovimientos) {
@@ -719,17 +719,38 @@ const balLibrosInicialCargado = useRef(false);
                     }
                     const { movimientos: movsDesdeApi, hashArchivo } = await conciliacionBancariaApi.importarPreview(sucursalActiva, file, parseInt(id), undefined, fechaConciliacion?.format('YYYY-MM-DD'));
                     if (hashesImportadosRef.current.has(hashArchivo)) {
-                      message.warning('Este archivo ya fue importado en esta edición. No se cargará de nuevo.');
-                      return;
+                      const reemplazar = await new Promise<boolean>((resolve) => {
+                        Modal.confirm({
+                          title: 'Archivo ya importado',
+                          icon: <ExclamationCircleOutlined />,
+                          content: 'Este archivo ya fue importado en esta edición. ¿Desea reemplazar los movimientos actuales con este archivo?',
+                          okText: 'Reemplazar',
+                          cancelText: 'Cancelar',
+                          onOk: () => resolve(true),
+                          onCancel: () => resolve(false),
+                        });
+                      });
+                      if (!reemplazar) return;
+                      // Limpiar DOCTRANS del backend + movimientos en memoria y reimportar desde cero
+                      await conciliacionBancariaApi.limpiarDoctrans(sucursalActiva, parseInt(id));
+                      setMovimientos(movsDesdeApi.map((m, i) => ({ ...m, orden: i + 1 })));
+                      setHashArchivoImportado(hashArchivo);
+                      setArchivoImportado(file);
+                      hashesImportadosRef.current.clear();
+                      hashesImportadosRef.current.add(hashArchivo);
+                      setMovimientosCargados(true);
+                      cantidadImportada = movsDesdeApi.length;
+                      cargarTodo();
+                    } else {
+                      hashesImportadosRef.current.add(hashArchivo);
+                      setHashArchivoImportado(hashArchivo);
+                      setMovimientos(prev => {
+                        const maxOrden = prev.length > 0 ? Math.max(...prev.map(m => m.orden)) : 0;
+                        return [...prev, ...movsDesdeApi.map((m, i) => ({ ...m, orden: maxOrden + i + 1 }))];
+                      });
+                      setMovimientosCargados(true);
+                      cantidadImportada = movsDesdeApi.length;
                     }
-                    hashesImportadosRef.current.add(hashArchivo);
-                    setHashArchivoImportado(hashArchivo);
-                    setMovimientos(prev => {
-                      const maxOrden = prev.length > 0 ? Math.max(...prev.map(m => m.orden)) : 0;
-                      return [...prev, ...movsDesdeApi.map((m, i) => ({ ...m, orden: maxOrden + i + 1 }))];
-                    });
-                    setMovimientosCargados(true);
-                    cantidadImportada = movsDesdeApi.length;
                   } else {
                     const movsLocal = parseCSVaMovimientos(text);
                     setMovimientos(movsLocal);
@@ -772,17 +793,38 @@ const balLibrosInicialCargado = useRef(false);
         // Preview: backend parsea + matching CTRANSAC + calcula hash SHA256
         const { movimientos: movsDesdeApi, hashArchivo } = await conciliacionBancariaApi.importarPreview(sucursalActiva, file, parseInt(id), undefined, fechaConciliacion?.format('YYYY-MM-DD'));
         if (hashesImportadosRef.current.has(hashArchivo)) {
-          message.warning('Este archivo ya fue importado en esta edición. No se cargará de nuevo.');
-          return;
+          const reemplazar = await new Promise<boolean>((resolve) => {
+            Modal.confirm({
+              title: 'Archivo ya importado',
+              icon: <ExclamationCircleOutlined />,
+              content: 'Este archivo ya fue importado en esta edición. ¿Desea reemplazar los movimientos actuales con este archivo?',
+              okText: 'Reemplazar',
+              cancelText: 'Cancelar',
+              onOk: () => resolve(true),
+              onCancel: () => resolve(false),
+            });
+          });
+          if (!reemplazar) return;
+          // Limpiar DOCTRANS del backend + movimientos en memoria y reimportar desde cero
+          await conciliacionBancariaApi.limpiarDoctrans(sucursalActiva, parseInt(id));
+          setMovimientos(movsDesdeApi.map((m, i) => ({ ...m, orden: i + 1 })));
+          setHashArchivoImportado(hashArchivo);
+          setArchivoImportado(file);
+          hashesImportadosRef.current.clear();
+          hashesImportadosRef.current.add(hashArchivo);
+          setMovimientosCargados(true);
+          cantidadImportada = movsDesdeApi.length;
+          cargarTodo();
+        } else {
+          hashesImportadosRef.current.add(hashArchivo);
+          setHashArchivoImportado(hashArchivo);
+          setMovimientos(prev => {
+            const maxOrden = prev.length > 0 ? Math.max(...prev.map(m => m.orden)) : 0;
+            return [...prev, ...movsDesdeApi.map((m, i) => ({ ...m, orden: maxOrden + i + 1 }))];
+          });
+          setMovimientosCargados(true);
+          cantidadImportada = movsDesdeApi.length;
         }
-        hashesImportadosRef.current.add(hashArchivo);
-        setHashArchivoImportado(hashArchivo);
-        setMovimientos(prev => {
-          const maxOrden = prev.length > 0 ? Math.max(...prev.map(m => m.orden)) : 0;
-          return [...prev, ...movsDesdeApi.map((m, i) => ({ ...m, orden: maxOrden + i + 1 }))];
-        });
-        setMovimientosCargados(true);
-        cantidadImportada = movsDesdeApi.length;
       } else {
         // Creación: usar backend con numeroCta para parseo con plantilla
         const { movimientos: movsDesdeApi, hashArchivo } = await conciliacionBancariaApi.importarPreview(sucursalActiva, file, undefined, cuentaTransito, fechaConciliacion?.format('YYYY-MM-DD'));
@@ -1660,6 +1702,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
+      sorter: (a: MovimientoBancarioDTO, b: MovimientoBancarioDTO) => (a.fecha || '').localeCompare(b.fecha || ''),
       render: (f: string) => formatDate(f),
       filterDropdown: ({ confirm, clearFilters }: any) => (
         <FiltroSeleccionDropdown
@@ -1683,6 +1726,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       dataIndex: 'numRef',
       key: 'numRef',
       width: 120,
+      sorter: (a: MovimientoBancarioDTO, b: MovimientoBancarioDTO) => (a.numRef || '').localeCompare(b.numRef || ''),
       filterDropdown: ({ confirm, clearFilters }: any) => (
         <FiltroSeleccionDropdown
           dataSource={movimientos}
@@ -1704,6 +1748,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       dataIndex: 'concepto',
       key: 'concepto',
       ellipsis: true,
+      sorter: (a: MovimientoBancarioDTO, b: MovimientoBancarioDTO) => (a.concepto || '').localeCompare(b.concepto || ''),
       render: (val: string) => <Text>{val || '-'}</Text>,
     },
     {
@@ -1711,6 +1756,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       dataIndex: 'debCred',
       key: 'debCred',
       width: 80,
+      sorter: (a: MovimientoBancarioDTO, b: MovimientoBancarioDTO) => (a.debCred || '').localeCompare(b.debCred || ''),
       render: (val: string) => (
         <Space size={4}>
           {val === 'C'
@@ -1725,6 +1771,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       dataIndex: 'documento',
       key: 'documento',
       width: 160,
+      sorter: (a: MovimientoBancarioDTO, b: MovimientoBancarioDTO) => (a.documento || '').localeCompare(b.documento || ''),
       filterDropdown: ({ confirm, clearFilters }: any) => (
         <FiltroSeleccionDropdown
           dataSource={movimientos}
@@ -1772,6 +1819,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       key: 'monto',
       width: 200,
       align: 'right' as const,
+      sorter: (a: MovimientoBancarioDTO, b: MovimientoBancarioDTO) => Number(a.monto || 0) - Number(b.monto || 0),
       render: (val: number, record: MovimientoBancarioDTO) => {
         const monto = Number(val) || 0;
         const signo = (record.debCred === 'C' ? 1 : -1);
@@ -1833,6 +1881,8 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
     {
       title: 'Tipo / Nombre',
       key: 'tipo',
+      sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) =>
+        (a.nombreTipoDoc || a.tipoDoc || '').localeCompare(b.nombreTipoDoc || b.tipoDoc || ''),
       filterDropdown: ({ confirm, clearFilters }: any) => (
         <FiltroSeleccionDropdown
           dataSource={dataSource}
@@ -1859,6 +1909,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       key: 'cantidad',
       width: 180,
       align: 'right' as const,
+      sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.cantidad || 0) - Number(b.cantidad || 0),
       render: (val: number) => <Text>{formatNumber(val)}</Text>,
     },
     {
@@ -1867,6 +1918,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       key: 'montoTotal',
       width: 150,
       align: 'right' as const,
+      sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.montoTotal || 0) - Number(b.montoTotal || 0),
       render: (val: number) => <Text strong>{formatCurrency(val)}</Text>,
     },
   ];
@@ -1889,6 +1941,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => (a.fecha || '').localeCompare(b.fecha || ''),
       render: (f: string) => formatDate(f),
       filterDropdown: ({ confirm, clearFilters }: any) => (
         <FiltroSeleccionDropdown
@@ -1911,6 +1964,8 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       title: 'Documento',
       key: 'documento',
       width: 160,
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) =>
+        `${a.tipoDoc}-${a.numDoc}`.localeCompare(`${b.tipoDoc}-${b.numDoc}`),
       filterDropdown: ({ confirm, clearFilters }: any) => (
         <FiltroSeleccionDropdown
           dataSource={transaccionesEnTransito}
@@ -1936,6 +1991,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       dataIndex: 'referencia',
       key: 'referencia',
       width: 140,
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => (a.referencia || '').localeCompare(b.referencia || ''),
       filterDropdown: ({ confirm, clearFilters }: any) => (
         <FiltroSeleccionDropdown
           dataSource={transaccionesEnTransito}
@@ -1957,6 +2013,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       title: 'Entidad',
       dataIndex: 'entidad',
       key: 'entidad',
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => (a.entidad || '').localeCompare(b.entidad || ''),
       filterDropdown: ({ confirm, clearFilters }: any) => (
         <FiltroSeleccionDropdown
           dataSource={transaccionesEnTransito}
@@ -1980,6 +2037,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       key: 'monto',
       width: 130,
       align: 'right' as const,
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => Number(a.monto || 0) - Number(b.monto || 0),
       render: (val: number) => <Text strong>{formatCurrency(val)}</Text>,
     },
     {
@@ -1987,6 +2045,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       dataIndex: 'debCred',
       key: 'debCred',
       width: 80,
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => (a.debCred || '').localeCompare(b.debCred || ''),
       filterDropdown: ({ confirm, clearFilters }: any) => (
         <FiltroSeleccionDropdown
           dataSource={transaccionesEnTransito}
@@ -2012,6 +2071,8 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
     {
       title: 'Documento',
       key: 'documento',
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) =>
+        `${a.tipoDoc}-${a.numDoc}`.localeCompare(`${b.tipoDoc}-${b.numDoc}`),
       render: (_: unknown, r: TransaccionConciliadaDTO) => (
         <Text>{r.tipoDoc}-{r.numDoc}</Text>
       ),
@@ -2021,12 +2082,14 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => (a.fecha || '').localeCompare(b.fecha || ''),
       render: (f: string) => formatDate(f),
     },
     {
       title: 'Beneficiario',
       dataIndex: 'entidad',
       key: 'entidad',
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => (a.entidad || '').localeCompare(b.entidad || ''),
       render: (val: string, r: TransaccionConciliadaDTO) => (
         <div>
           <Text>{val || '-'}</Text>
@@ -2042,6 +2105,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       key: 'monto',
       width: 130,
       align: 'right' as const,
+      sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => Number(a.monto || 0) - Number(b.monto || 0),
       render: (val: number) => <Text strong>{formatCurrency(val)}</Text>,
     },
     {

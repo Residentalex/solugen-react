@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Modal, Table, Button, Space, message, InputNumber } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
 import { apiClient } from '../../api/client';
@@ -56,6 +56,8 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   const [montosPorFila, setMontosPorFila] = useState<Record<string, number>>({});
   const [montoADistribuir, setMontoADistribuir] = useState(0);
   const [distribuido, setDistribuido] = useState(0);
+  // Evita warning duplicado cuando antd re-dispara onChange al re-sincronizar la selección controlada
+  const warnAsociadoRef = useRef<Set<string>>(new Set());
 
   // ===== Helper: construir codigo completo del documento =====
   const obtenerCodigoCompleto = useCallback((doc: any): string => {
@@ -115,7 +117,8 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       // Logica replicada del desktop (VTransaccionesPendientes.cs):
       // - Mostrar docs del TIPO OPUESTO que tengan saldo (pendienteReal != 0, ya filtrado arriba)
       // - Mostrar docs del MISMO TIPO solo si tienen sobrepago (pendienteReal < 0)
-      if (origen !== undefined && origen !== null) {
+      // - En documentos de inventario (DVC) el origen no aplica: se omiten ambos filtros.
+      if (!esDocumentoInventario && origen !== undefined && origen !== null) {
         docs = docs.filter((d: any) => {
           const docOrigen = normalizarOrigen(d.documento?.origenCuenta);
           if (docOrigen === OrigenCuenta.Desconocido) return true;
@@ -145,6 +148,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       setMontoADistribuir(montoTotal || 0);
       setDistribuido(0);
       setMontosPorFila({});
+      warnAsociadoRef.current = new Set();
 
       cargar().then((docs) => {
         const montosIniciales: Record<string, number> = {};
@@ -188,14 +192,34 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     const added = keys.filter((k) => !prevKeys.includes(k));
     const removed = prevKeys.filter((k) => !keys.includes(k));
 
+    // Filas con doc asociado no editable (replicar desktop GridView_SelectionChanged)
+    const clavesConAsociado = new Set(keys.filter((k) => {
+      const doc = documentos.find((d) => d.id === k);
+      return doc?.referencia && (!documentoEnviado || doc.referencia !== documentoEnviado);
+    }));
+    const keysValidas = keys.filter((k) => !clavesConAsociado.has(k));
+
     setMontosPorFila((prev) => {
       const nuevos = { ...prev };
       // Filas removidas → monto 0 (el disponible se recalculará automáticamente con la suma)
       removed.forEach((key) => {
         nuevos[String(key)] = 0;
       });
-      // Filas agregadas → asignar pendiente limitado por el disponible restante
-      added.forEach((key) => {
+      // Filas agregadas con doc asociado → deseleccionar (replicar desktop GridView_SelectionChanged)
+      const addedValidos = added.filter((key) => {
+        if (clavesConAsociado.has(key)) {
+          const doc = documentos.find((d) => d.id === key);
+          const strKey = String(key);
+          if (!warnAsociadoRef.current.has(strKey)) {
+            warnAsociadoRef.current.add(strKey);
+            message.warning(`El documento ${obtenerCodigoCompleto(doc)} ya tiene ${doc?.referencia} asociado. No puede asignarse.`);
+          }
+          return false;
+        }
+        return true;
+      });
+      // Filas agregadas válidas → asignar pendiente limitado por el disponible restante
+      addedValidos.forEach((key) => {
         const doc = documentos.find((d) => d.id === key);
         if (!doc) return;
         const pendienteReal = _obtenerPendienteReal(doc);
@@ -219,7 +243,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     });
 
     // Sincronizar state distribuido con el total calculado
-    const totalNuevo = keys.reduce<number>((s, id) => {
+    const totalNuevo = keysValidas.reduce<number>((s, id) => {
       const doc = documentos.find((d) => d.id === id);
       if (!doc) return s;
       const pendienteReal = _obtenerPendienteReal(doc);
@@ -230,7 +254,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       return s + Math.min(p, Math.max(0, montoADistribuir - s));
     }, 0);
     setDistribuido(totalNuevo);
-    setSelectedRowKeys(keys);
+    setSelectedRowKeys(keysValidas);
   };
 
   // ===== Asignar montos automáticamente =====
@@ -245,6 +269,11 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       const key = String(id);
       if (restante <= 0) { nuevosMontos[key] = 0; continue; }
       const doc = documentos.find(d => d.id === id);
+      // Doc con asociado y no reasignable → no asignar monto (replicar desktop bAsignar_Click)
+      if (doc?.referencia && !esDocumentoInventario && (!documentoEnviado || doc.referencia !== documentoEnviado)) {
+        nuevosMontos[key] = 0;
+        continue;
+      }
       const pendienteReal = _obtenerPendienteReal(doc);
       const pendiente = calcularPendiente(doc);
       if (pendienteReal < 0) {
@@ -296,6 +325,12 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
         const pendienteReal = _obtenerPendienteReal(r);
         return <strong>{formatNumber(Math.abs(pendienteReal))}</strong>;
       },
+    },
+    {
+      title: 'Doc. Asociado',
+      key: 'referencia',
+      width: 150,
+      render: (_: any, r: any) => r.referencia ? <strong>{r.referencia}</strong> : '-',
     },
     {
       title: 'Monto a Asignar',
@@ -393,7 +428,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
           </Space>
         </div>
       }
-      width={1000}
+      width={1280}
       destroyOnHidden
     >
       <Table
@@ -407,7 +442,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
           selectedRowKeys,
           onChange: handleSelectionChange,
         }}
-        scroll={{ x: 900 }}
+        scroll={{ x: 1200 }}
       />
     </Modal>
   );

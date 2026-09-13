@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Modal, Input, Table, Tabs, message } from 'antd';
+import { Modal, Input, Table, Tabs, Tag, message } from 'antd';
 import { formatCurrency } from '../../utils/formats';
 import { productoApi } from '../../api/productoApi';
 import { servicioApi } from '../../api/servicioApi';
@@ -20,6 +20,7 @@ export interface ProductoSeleccionado {
   tieneVencimiento?: boolean;
   modificaPrecio?: boolean;
   modificaDescripcion?: boolean;
+  tipoArticulo?: string;
 }
 
 interface BuscarProductoModalProps {
@@ -75,10 +76,10 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
          // Filtro para productos activos
          params.activo = true;
 
-         const [res, totalCount] = await Promise.all([
-           productoApi.obtenerListado(sucursalActiva, params),
-           productoApi.obtenerTotal(sucursalActiva, filtro ? { codigo: filtro, activo: true } : { activo: true }),
-         ]);
+          const [res, totalCount] = await Promise.all([
+            productoApi.obtenerListadoBasico(sucursalActiva, params),
+            productoApi.obtenerTotalListadoBasico(sucursalActiva, filtro ? { codigo: filtro, activo: true } : { activo: true }),
+          ]);
          setProductos(res || []);
          setTotal(totalCount || 0);
          setPage(pageActual);
@@ -150,7 +151,14 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
       key: 'precio',
       width: 130,
       align: 'right' as const,
-      render: (_: any, record: any) => formatCurrency(record.precio || record.ultimoCosto || 0),
+      render: (_: any, record: any) => (
+        <span>
+          {formatCurrency(record.precio || record.ultimoCosto || 0)}
+          {record.precioOferta > 0 && record.precioOferta < (record.precio || record.ultimoCosto || 0) && (
+            <Tag color="red" style={{ marginLeft: 4 }}>Oferta</Tag>
+          )}
+        </span>
+      ),
     });
   }
 
@@ -167,7 +175,14 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
       key: 'precio',
       width: 130,
       align: 'right' as const,
-      render: (v: number) => formatCurrency(v || 0),
+      render: (_: any, record: any) => (
+        <span>
+          {formatCurrency(record.precio || 0)}
+          {record.precioOferta > 0 && record.precioOferta < (record.precio || 0) && (
+            <Tag color="red" style={{ marginLeft: 4 }}>Oferta</Tag>
+          )}
+        </span>
+      ),
     },
   ];
 
@@ -235,6 +250,7 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
                           tieneVencimiento: detalle.pesado || false,
                           modificaPrecio: detalle.modificaPrecio ?? false,
                           modificaDescripcion: detalle.modificaDescripcion ?? false,
+                          tipoArticulo: 'Producto',
                         });
                       } catch {
                         onSelect({
@@ -251,6 +267,7 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
                           tieneVencimiento: false,
                           modificaPrecio: false,
                           modificaDescripcion: false,
+                          tipoArticulo: 'Producto',
                         });
                       }
                       onClose();
@@ -288,6 +305,7 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
                         tieneVencimiento: false,
                         modificaPrecio: false,
                         modificaDescripcion: false,
+                        tipoArticulo: 'Servicio',
                       });
                     } catch {
                       onSelect({
@@ -302,6 +320,7 @@ const BuscarProductoModal: React.FC<BuscarProductoModalProps> = ({ open, onClose
                         tieneVencimiento: false,
                         modificaPrecio: false,
                         modificaDescripcion: false,
+                        tipoArticulo: 'Servicio',
                       });
                     }
                     onClose();

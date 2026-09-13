@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import type { MovimientoDTO } from '../types/movimiento';
-import type { MovimientoArticuloDTO } from '../types/movimientoPorPlantilla';
+import type { MovimientoArticuloDTO, MovimientoArticuloAgrupadoDTO } from '../types/movimientoPorPlantilla';
+import type { DetallePlantillaConteoFisicoDTO } from '../types/plantilla';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/Movimiento';
@@ -54,6 +55,35 @@ export const movimientoApi = {
     const { data } = await apiClient.get<ApiResponse<MovimientoArticuloDTO[]>>(
       `${BASE}/${sucursal}/plantilla`,
       { params: { plantilla, fecha: fecha || new Date().toISOString() } }
+    );
+    return data.data;
+  },
+
+  obtenerProductosPlantilla: async (
+    sucursal: number,
+    plantilla: string
+  ): Promise<DetallePlantillaConteoFisicoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<DetallePlantillaConteoFisicoDTO[]>>(
+      `${BASE}/${sucursal}/plantilla-productos`,
+      { params: { plantilla } }
+    );
+    return data.data;
+  },
+
+  obtenerMovimientosPorFecha: async (
+    sucursal: number,
+    params: {
+      desde: string;
+      hasta: string;
+      codigo?: string;
+      familia?: string;
+      suplidor?: string;
+      categoria?: string;
+    }
+  ): Promise<MovimientoArticuloDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<MovimientoArticuloDTO[]>>(
+      `${BASE}/${sucursal}/movimientos-fecha`,
+      { params }
     );
     return data.data;
   },

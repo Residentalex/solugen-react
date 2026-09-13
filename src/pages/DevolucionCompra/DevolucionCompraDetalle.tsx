@@ -84,6 +84,7 @@ const DevolucionCompraDetalle: React.FC = () => {
   const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
   const [pagosAsociados, setPagosAsociados] = useState<any[]>([]);
   const [loadingPagos, setLoadingPagos] = useState(false);
+  const [docsRelacionadosPago, setDocsRelacionadosPago] = useState<any[]>([]);
   const monedaDefault = getMonedaSucursalActiva();
   const [visibleDetalleKeys, setVisibleDetalleKeys] = useState<string[]>(() => {
     try {
@@ -190,6 +191,14 @@ const DevolucionCompraDetalle: React.FC = () => {
         messageApi.warning('No se pudieron cargar los pagos asociados');
       })
       .finally(() => setLoadingPagos(false));
+  }, [data?.id, sucursalActiva]);
+
+  // Cargar documentos relacionados (DOCASOCB) para mostrar en Distribución de Pagos
+  useEffect(() => {
+    if (!data?.id) return;
+    transaccionApi.obtenerDocumentosRelacionados(sucursalActiva, data.id)
+      .then((docs) => setDocsRelacionadosPago(docs || []))
+      .catch(() => setDocsRelacionadosPago([]));
   }, [data?.id, sucursalActiva]);
 
   const handleDocumentoPagoClick = (doc: any) => {
@@ -801,6 +810,7 @@ const DevolucionCompraDetalle: React.FC = () => {
             />
             <DistribucionPagosCard
               documentos={pagosAsociados}
+              documentosRelacionados={docsRelacionadosPago}
               totalDocumento={documentoActivo.total}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               loading={loadingPagos}
@@ -918,6 +928,7 @@ const DevolucionCompraDetalle: React.FC = () => {
             />
             <DistribucionPagosCard
               documentos={pagosAsociados}
+              documentosRelacionados={docsRelacionadosPago}
               totalDocumento={documentoActivo.total}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               loading={loadingPagos}

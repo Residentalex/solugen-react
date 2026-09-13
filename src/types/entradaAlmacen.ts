@@ -39,6 +39,7 @@ export interface EntidadDTO {
   nombre: string;
   codigo: string;
   identificacion: string;
+  tipoIdentificacion?: string;
   telefono?: string;
   direccion?: string;
   requiereORC?: boolean;
@@ -116,6 +117,7 @@ export interface SuplidorDTO {
   codigo: string;
   idExterno?: string;
   identificacion: string;
+  tipoIdentificacion?: string;
   telefono?: string;
   direccion?: string;
   requiereORC?: boolean;

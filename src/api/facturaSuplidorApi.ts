@@ -59,6 +59,11 @@ export const facturaSuplidorApi = {
     return data.data;
   },
 
+  obtenerReverso: async (sucursal: number, id: number): Promise<TransaccionVistaDTO> => {
+    const { data } = await apiClient.get<ApiResponse<TransaccionVistaDTO>>(`/RDE/${sucursal}/reverso/${id}`);
+    return data.data;
+  },
+
   crear: async <T>(sucursal: number, transaccion: T): Promise<T> => {
     const { data } = await apiClient.post<ApiResponse<T>>(`${BASE}/${sucursal}`, transaccion);
     return data.data;

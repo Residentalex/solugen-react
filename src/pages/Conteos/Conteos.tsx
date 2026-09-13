@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -20,6 +20,7 @@ import { conteoApi } from '../../api/conteoApi';
 import type { ConteoFisicoDTO } from '../../types/conteo';
 import { formatCurrency } from '../../utils/formats';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
+import { message } from 'antd';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const { Text } = Typography;
@@ -163,6 +164,23 @@ const Conteos: React.FC = () => {
     navigate(`/FConteos/${record.documento}`, { state: record });
   };
 
+  const puedeEditar = (record: ConteoFisicoDTO) => {
+    // Permitir edición si no está bloqueado y el periodo está abierto (periodo != cerrado)
+    // En el backend, Periodo = Cerrado cuando fecha <= fechaCierre
+    // Asumimos: 0=Borrador, 1=Cerrado, 2=Abierto
+    const periodoAbierto = record.periodo !== 1; // 1 = Cerrado
+    const noBloqueado = !record.bloqueado;
+    return periodoAbierto && noBloqueado;
+  };
+
+  const manejarEditar = (record: ConteoFisicoDTO) => {
+    if (!puedeEditar(record)) {
+      message.error('No se puede editar: el periodo está cerrado o el conteo está bloqueado');
+      return;
+    }
+    navigate(`/FConteos/editar/${record.documento}`, { state: record });
+  };
+
   const columns: ColumnsType<ConteoFisicoDTO> = [
     {
       title: 'Documento',
@@ -234,6 +252,27 @@ const Conteos: React.FC = () => {
       render: (val: boolean) => (
         <Tag color={val ? 'red' : 'green'}>{val ? 'Sí' : 'No'}</Tag>
       ),
+    },
+    {
+      title: 'Acciones',
+      dataIndex: 'documento',
+      key: 'acciones',
+      width: 100,
+      render: (doc: string, record: ConteoFisicoDTO) => {
+        const puede = puedeEditar(record);
+        return (
+          <div style={{ display: 'flex', gap: 4 }}>
+            <a
+              href="javascript:void(0)"
+              onClick={() => manejarEditar(record)}
+              style={{ color: puede ? '#1890ff' : '#aaa', cursor: puede ? 'pointer' : 'not-allowed' }}
+              title={puede ? 'Editar' : 'No se puede editar'}
+            >
+              <SearchOutlined />
+            </a>
+          </div>
+        );
+      },
     },
   ];
 

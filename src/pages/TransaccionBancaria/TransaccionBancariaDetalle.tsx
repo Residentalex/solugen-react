@@ -90,12 +90,14 @@ const TransaccionBancariaDetalle: React.FC = () => {
   const screens = Grid.useBreakpoint();
 
   const [data, setData] = useState<any>(null);
+  const [rawData, setRawData] = useState<TransaccionDTO | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const monedaDefault = getMonedaSucursalActiva();
   const [mostrandoReverso, setMostrandoReverso] = useState(false);
   const [reversoData, setReversoData] = useState<any>(null);
+  const [rawReversoData, setRawReversoData] = useState<TransaccionDTO | null>(null);
 
   // Módulo activo
   useEffect(() => {
@@ -116,14 +118,22 @@ const TransaccionBancariaDetalle: React.FC = () => {
         }
         const normalizado = normalizarTransaccion(res);
         setData(normalizado);
+        setRawData(res);
         setPageTitleOverride(`${strVal(normalizado.documento)}-${normalizado.noDocumento || id}`);
         // Si el documento está anulado y tiene reversoID, cargar el reverso
         if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           transaccionBancariaApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
-            .then((revRes) => setReversoData(normalizarTransaccion(revRes)))
-            .catch(() => setReversoData(null));
+            .then((revRes) => {
+              setReversoData(normalizarTransaccion(revRes));
+              setRawReversoData(revRes);
+            })
+            .catch(() => {
+              setReversoData(null);
+              setRawReversoData(null);
+            });
         } else {
           setReversoData(null);
+          setRawReversoData(null);
           setMostrandoReverso(false);
         }
       })
@@ -147,13 +157,21 @@ const TransaccionBancariaDetalle: React.FC = () => {
         }
         const normalizado = normalizarTransaccion(res);
         setData(normalizado);
+        setRawData(res);
         setPageTitleOverride(`${strVal(normalizado.documento)}-${normalizado.noDocumento || id}`);
         if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
           transaccionBancariaApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
-            .then((revRes) => setReversoData(normalizarTransaccion(revRes)))
-            .catch(() => setReversoData(null));
+            .then((revRes) => {
+              setReversoData(normalizarTransaccion(revRes));
+              setRawReversoData(revRes);
+            })
+            .catch(() => {
+              setReversoData(null);
+              setRawReversoData(null);
+            });
         } else {
           setReversoData(null);
+          setRawReversoData(null);
           setMostrandoReverso(false);
         }
       })
@@ -210,11 +228,14 @@ const TransaccionBancariaDetalle: React.FC = () => {
       const res = await transaccionBancariaApi.obtenerPorId(sucursalActiva, parseInt(id!));
       const normalizado = normalizarTransaccion(res);
       setData(normalizado);
+      setRawData(res);
       if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
         const revRes = await transaccionBancariaApi.obtenerPorId(sucursalActiva, (res as any).reversoID);
         setReversoData(normalizarTransaccion(revRes));
+        setRawReversoData(revRes);
       } else {
         setReversoData(null);
+        setRawReversoData(null);
       }
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al anular');
@@ -225,10 +246,10 @@ const TransaccionBancariaDetalle: React.FC = () => {
   };
 
   const handlePostear = async () => {
-    if (!data) return;
+    if (!rawData) return;
     setSaving(true);
     try {
-      await transaccionBancariaApi.postear(sucursalActiva, data as any);
+      await transaccionBancariaApi.postearDocumentoBancario(sucursalActiva, rawData as any);
       message.success('Documento posteado exitosamente');
       handleRefresh();
     } catch (err: any) {
@@ -403,6 +424,7 @@ const TransaccionBancariaDetalle: React.FC = () => {
           <Col xxl={6}>
             <EntidadCard entidad={{
               nombre: typeof documentoActivo.entidad === 'string' ? documentoActivo.entidad : documentoActivo.entidad?.nombre || '',
+              codigo: documentoActivo.entidad?.codigo || '',
               identificacion: documentoActivo.entidad?.identificacion || '',
               telefono: documentoActivo.entidad?.telefono || '',
               direccion: documentoActivo.entidad?.direccion || '',

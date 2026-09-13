@@ -73,6 +73,8 @@ export interface DocumentoRelacionadoDTO {
   pagado?: number;
   saldoPendiente?: number;
   monto: number;
+  tipoDocumento?: number;
+  origenCuenta?: number;
 }
 
 export interface DevolucionAsociadaDTO {

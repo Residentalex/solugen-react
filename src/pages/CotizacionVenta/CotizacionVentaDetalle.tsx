@@ -102,7 +102,7 @@ const CotizacionVentaDetalle: React.FC = () => {
         return;
       }
       setData(res as any);
-      setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+      setPageTitleOverride(res.documento?.codigo ?? res.noDocumento);
       // Verificar scanner
       cotizacionVentaApi.verificarScan(sucursalActiva, parseInt(id))
         .then((scanRes) => setTieneScan(scanRes.existe))

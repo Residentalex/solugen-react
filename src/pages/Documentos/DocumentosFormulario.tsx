@@ -10,7 +10,9 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { documentosApi } from '../../api/documentosApi';
+import { reportesConfigApi } from '../../api/reportesConfigApi';
 import type { DocumentoDTO } from '../../types/documento';
+import type { ReportePlantillaListaDTO } from '../../types/reportesConfig';
 import FormularioToolbar from '../../components/FormularioToolbar';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
@@ -107,6 +109,10 @@ const DocumentosFormulario: React.FC = () => {
   const [tipoNumeracion, setTipoNumeracion] = useState<number>(0);
   const [metodoAplicar, setMetodoAplicar] = useState<number>(0);
 
+  // ----- Impresión -----
+  const [plantillas, setPlantillas] = useState<ReportePlantillaListaDTO[]>([]);
+  const [plantillaId, setPlantillaId] = useState<number | null>(null);
+
   /** Convierte un valor enum del backend (string o number) a número */
   const toEnum = (value: any, mapping: Record<string, number>, defaultVal: number): number => {
     if (value === null || value === undefined) return defaultVal;
@@ -151,6 +157,13 @@ const DocumentosFormulario: React.FC = () => {
         setIdExterno(doc.idExterno ?? '');
         setTipoNumeracion(toEnum(doc.tipoNumeracion, { Manual: 0, Automatica: 1 }, 0));
         setMetodoAplicar(toEnum(doc.metodoAplicar, { Manualmente: 0, Guardar: 1, Imprimir: 2 }, 0));
+        // Asignación actual de plantilla ticket (ENTDOC.PLANTILLA via /reportes/config)
+        reportesConfigApi.obtenerPorEntdoc(doc.codigo || '')
+          .then((p) => setPlantillaId(p?.plantillaId ?? null))
+          .catch((errP: any) => {
+            setPlantillaId(null);
+            console.warn('Error al cargar plantilla asignada:', errP?.message);
+          });
       })
       .catch((err: any) => {
         const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
@@ -158,6 +171,16 @@ const DocumentosFormulario: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [mode, id, sucursalActiva]);
+
+  // ----- Cargar plantillas disponibles para el Select -----
+  useEffect(() => {
+    reportesConfigApi.obtenerListado()
+      .then((data) => setPlantillas(data || []))
+      .catch((err: any) => {
+        console.warn('Error al cargar plantillas:', err?.message);
+        setPlantillas([]);
+      });
+  }, []);
 
   // ----- Danger zone -----
   const handleDesactivarDocumento = () => {
@@ -232,6 +255,13 @@ const DocumentosFormulario: React.FC = () => {
       }
 
       message.success('Tipo de documento guardado');
+
+      // Asignar/remover plantilla ticket (best-effort: el documento ya quedó guardado)
+      try {
+        await reportesConfigApi.asignarEntdoc(codigo.trim(), plantillaId);
+      } catch (errAsignar: any) {
+        message.warning(extraerMensajeError(errAsignar, 'El documento se guardó, pero no se pudo asignar la plantilla'));
+      }
 
       if (primerResultado) {
         setIdGuardado(primerResultado.id);
@@ -778,7 +808,40 @@ const DocumentosFormulario: React.FC = () => {
           </HoverableCard>
 
           {/* ========================================================== */}
-          {/* 5. Danger Zone                                             */}
+          {/* 5. Impresión                                                */}
+          {/* ========================================================== */}
+          <Title level={5} style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>
+            Impresión
+          </Title>
+
+          <HoverableCard style={{ marginBottom: 32 }}>
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <div>
+                  <Text style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500, color: '#374151' }}>
+                    Plantilla ticket
+                  </Text>
+                  <Select
+                    showSearch
+                    allowClear
+                    placeholder="Sin asignar"
+                    optionFilterProp="label"
+                    value={plantillaId ?? undefined}
+                    onChange={(val) => setPlantillaId(val ?? null)}
+                    style={{ width: '100%' }}
+                    options={plantillas.map((p) => ({ value: p.plantillaId, label: `${p.nombre} (${p.codigo})` }))}
+                    disabled={guardado}
+                  />
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                    Plantilla ESC/POS que se usa al imprimir tickets de este tipo de documento.
+                  </Text>
+                </div>
+              </Col>
+            </Row>
+          </HoverableCard>
+
+          {/* ========================================================== */}
+          {/* 6. Danger Zone                                             */}
           {/* ========================================================== */}
           <Title level={5} style={{ marginBottom: 16, fontSize: 15, fontWeight: 600, color: '#ef4444' }}>
             Danger Zone

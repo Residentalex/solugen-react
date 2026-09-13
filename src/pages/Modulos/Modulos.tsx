@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Table, Button, Alert, message, Modal } from 'antd';
+import { Card, Table, Button, Alert, Modal, Form, Input, InputNumber, message } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -17,7 +17,7 @@ const Modulos: React.FC = () => {
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
-  const { screenCode } = useScreenConfig('MODULOS');
+  const { screenCode } = useScreenConfig('Mmodulo');
 
   const [data, setData] = useState<ModuloDTO[]>([]);
   const [loading, setLoading] = useState(false);
@@ -25,6 +25,9 @@ const Modulos: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [selectedRow, setSelectedRow] = useState<ModuloDTO | null>(null);
   const [pageSize, setPageSize] = useState(25);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingModulo, setEditingModulo] = useState<ModuloDTO | null>(null);
+  const [form] = Form.useForm();
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -45,6 +48,20 @@ const Modulos: React.FC = () => {
     cargar();
     return () => { resetToolbar(); setPageTitleOverride(''); };
   }, [setActiveModule, setPageTitleOverride, resetToolbar, cargar, screenCode]);
+
+  useEffect(() => {
+    if (modalOpen) {
+      if (editingModulo) {
+        form.setFieldsValue({
+          codigo: editingModulo.codigo,
+          nombre: editingModulo.nombre,
+          orden: editingModulo.orden,
+        });
+      } else {
+        form.resetFields();
+      }
+    }
+  }, [modalOpen, editingModulo, form]);
 
   const handleExportarExcel = async () => {
     const companyName = await getCompanyName(sucursalActiva);
@@ -71,6 +88,34 @@ const Modulos: React.FC = () => {
   const handlePageSizeChange = useCallback((value: number) => {
     setPageSize(value);
   }, []);
+
+  const handleNuevo = () => {
+    setEditingModulo(null);
+    setModalOpen(true);
+  };
+
+  const handleGuardar = async () => {
+    try {
+      const values = await form.validateFields();
+      if (editingModulo) {
+        await moduloApi.actualizar(sucursalActiva, editingModulo.id, values);
+        message.success('Módulo actualizado correctamente');
+      } else {
+        await moduloApi.crear(sucursalActiva, values);
+        message.success('Módulo creado correctamente');
+      }
+      setModalOpen(false);
+      cargar();
+    } catch (err: any) {
+      if (err?.errorFields) return;
+      message.error(err?.response?.data?.errorMessage || 'Error al guardar');
+    }
+  };
+
+  const handleCancelar = () => {
+    setModalOpen(false);
+    form.resetFields();
+  };
 
   const filtered = searchText.trim()
     ? data.filter((r) =>
@@ -106,11 +151,17 @@ const Modulos: React.FC = () => {
       width: 80,
     },
     {
+      title: 'Código',
+      dataIndex: 'codigo',
+      key: 'codigo',
+      width: 120,
+    },
+    {
       title: 'Nombre',
       dataIndex: 'nombre',
       key: 'nombre',
       render: (v: string, record: ModuloDTO) => (
-        <a onClick={() => navigate(`/Modulos/${record.id}`)}>
+        <a onClick={() => navigate(`/Mmodulo/${record.id}`)}>
           {toTitleCase(v || '')}
         </a>
       ),
@@ -143,7 +194,7 @@ const Modulos: React.FC = () => {
           placeholder="Buscar módulo..."
           pageSize={pageSize}
           onPageSizeChange={handlePageSizeChange}
-          onNuevo={() => navigate('/Modulos/nuevo')}
+          onNuevo={handleNuevo}
           onReload={cargar}
           onExportarExcel={handleExportarExcel}
         />
@@ -156,12 +207,46 @@ const Modulos: React.FC = () => {
           rowClassName={(record) => selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'}
           onRow={(record) => ({
             onClick: () => setSelectedRow(record),
-            onDoubleClick: () => navigate(`/Modulos/${record.id}`),
+            onDoubleClick: () => navigate(`/Mmodulo/${record.id}`),
           })}
           pagination={{ showTotal: (t) => `${t} registros` }}
           locale={{ emptyText: 'No hay módulos registrados' }}
         />
       </Card>
+
+      <Modal
+        open={modalOpen}
+        title={editingModulo ? 'Editar Módulo' : 'Nuevo Módulo'}
+        okText="Guardar"
+        cancelText="Cancelar"
+        onOk={handleGuardar}
+        onCancel={handleCancelar}
+        width={600}
+      >
+        <Form form={form} layout="vertical">
+          <Form.Item
+            name="codigo"
+            label="Código"
+            rules={[{ required: true, message: 'El código es obligatorio' }]}
+          >
+            <Input placeholder="Código del módulo (ej: CONTAB)" />
+          </Form.Item>
+          <Form.Item
+            name="nombre"
+            label="Nombre"
+            rules={[{ required: true, message: 'El nombre es obligatorio' }]}
+          >
+            <Input placeholder="Nombre del módulo" />
+          </Form.Item>
+          <Form.Item
+            name="orden"
+            label="Orden"
+            rules={[{ required: true, message: 'El orden es obligatorio' }]}
+          >
+            <InputNumber min={0} placeholder="Orden de aparición" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   );
 };

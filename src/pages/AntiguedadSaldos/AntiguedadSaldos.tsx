@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
-  SearchOutlined, ReloadOutlined, PrinterOutlined, DownloadOutlined, CloseOutlined,
+  SearchOutlined, ReloadOutlined, PrinterOutlined, DownloadOutlined, CloseOutlined, EyeOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useSearchParams } from 'react-router-dom';
@@ -116,6 +116,11 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
   const [codSucursalFiltro, setCodSucursalFiltro] = useState<string>('');
   const [nomSucursalFiltro, setNomSucursalFiltro] = useState<string>('');
 
+  // Modal de documentos relacionados
+  const [modalRelacionadosAbierto, setModalRelacionadosAbierto] = useState(false);
+  const [documentosRelacionados, setDocumentosRelacionados] = useState<any[]>([]);
+  const [documentoActual, setDocumentoActual] = useState<TransaccionBalanceDTO | null>(null);
+
   const entidadSearchRef = useRef<any>(null);
   const categoriaSearchRef = useRef<any>(null);
   const sucursalSearchRef = useRef<any>(null);
@@ -214,6 +219,16 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
 
   const handleRefresh = () => {
     generarReporte();
+  };
+
+  const verDocumentosRelacionados = (record: TransaccionBalanceDTO) => {
+    setDocumentoActual(record);
+    setModalRelacionadosAbierto(true);
+    setDocumentosRelacionados(
+      ((record as any).transaccionesAsociadas || [])
+        .slice()
+        .sort((a: any, b: any) => (a.fecha || '').localeCompare(b.fecha || ''))
+    );
   };
 
   const handlePrint = async () => {
@@ -646,6 +661,20 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       width: 120,
       align: 'right',
       render: (val: number) => <Text>{formatCurrency(val ?? 0)}</Text>,
+    },
+    {
+      title: 'Acción',
+      key: 'accion',
+      width: 80,
+      align: 'center',
+      render: (_: any, record: TransaccionBalanceDTO) => (
+        <Button
+          type="text"
+          icon={<EyeOutlined />}
+          title="Ver documentos relacionados"
+          onClick={() => verDocumentosRelacionados(record)}
+        />
+      ),
     },
   ];
 
@@ -1172,6 +1201,51 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
             style: { cursor: 'pointer' },
           })}
           locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
+        />
+      </Modal>
+
+      {/* Modal de documentos relacionados */}
+      <Modal
+        title="Documentos Relacionados"
+        open={modalRelacionadosAbierto}
+        onCancel={() => setModalRelacionadosAbierto(false)}
+        footer={null}
+        width={900}
+        destroyOnHidden
+      >
+        {documentoActual && (
+          <div style={{ marginBottom: 16, padding: 12, background: '#f6f8fa', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div>
+              <Text strong style={{ fontSize: 15 }}>
+                Documento original: {documentoActual.tipoDocumento}-{documentoActual.noDocumento}
+              </Text>
+              <div style={{ marginTop: 4 }}>
+                <Text type="secondary">Monto original: {formatCurrency((documentoActual as any)?.creditos ?? (documentoActual as any)?.total ?? 0)}</Text>
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <Text strong style={{ fontSize: 15 }}>
+                Pendiente
+              </Text>
+              <div style={{ marginTop: 4 }}>
+                <Text type="secondary">{formatCurrency(((documentoActual as any)?.creditos || 0) - ((documentoActual as any)?.debitos || 0))}</Text>
+              </div>
+            </div>
+          </div>
+        )}
+        <Table
+          columns={[
+            { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 200 },
+            { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 120, render: (v: string) => v ? v.slice(0, 10) : '' },
+            { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 140, align: 'right', render: (v: number) => v?.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+            { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right', render: (v: number) => v?.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+            { title: 'Pendiente', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right', render: (v: number) => v?.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) },
+          ]}
+          dataSource={documentosRelacionados}
+          rowKey={(r: any) => r.transaccionAsociadaID || r.id || JSON.stringify(r)}
+          size="small"
+          pagination={{ pageSize: 5 }}
+          scroll={{ y: 200 }}
         />
       </Modal>
     </>

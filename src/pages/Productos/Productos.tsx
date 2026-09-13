@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Table, Tag, Button, Card, Select, Typography, Tooltip, Alert, Empty, Space } from 'antd';
-import { UploadOutlined } from '@ant-design/icons';
+import { UploadOutlined, CopyOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -28,6 +28,7 @@ const Productos: React.FC = () => {
   const [filtroActivo, setFiltroActivo] = useState<string>('todos');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [selectedRow, setSelectedRow] = useState<ProductoVistaDTO | null>(null);
 
   const usuario = useAuthStore((s: any) => s.usuario);
   const pantallaActual = usuario?.pantallas.find((p: any) => p.codigo === 'MProducto');
@@ -101,6 +102,15 @@ const Productos: React.FC = () => {
     } else {
       setPage(newPage);
     }
+  };
+
+  const handleClonar = () => {
+    if (!selectedRow) return;
+    navigate('/MProducto/nuevo', { state: { codigoClonar: selectedRow.codigo } });
+  };
+
+  const handleRowClick = (record: ProductoVistaDTO) => {
+    setSelectedRow(record);
   };
 
   const columns: ColumnsType<ProductoVistaDTO> = [
@@ -209,6 +219,9 @@ const Productos: React.FC = () => {
           onReload={() => refetch()}
           onNuevo={() => navigate('/MProducto/nuevo')}
           onExportarExcel={handleExportarExcel}
+          showClonar
+          clonarDisabled={!selectedRow}
+          onClonar={handleClonar}
           filtros={
             <Select
               value={filtroActivo}
@@ -239,10 +252,11 @@ const Productos: React.FC = () => {
         loading={isLoading}
         scroll={{ x: 1240 }}
         size="middle"
-        rowClassName="paces-row-hover"
+        rowClassName={(record) => selectedRow?.codigo === record.codigo ? 'paces-row-selected' : 'paces-row-hover'}
         className="paces-border-top paces-list-table"
-        onRow={() => ({
-          style: { cursor: 'default' },
+        onRow={(record) => ({
+          onClick: () => handleRowClick(record),
+          style: { cursor: 'pointer' },
         })}
         locale={{
           emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>

@@ -2,7 +2,7 @@ import React from 'react';
 import { Button, Modal } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import type { VisanetResponseDTO } from '../types/visanet';
-import { formatFechaCorta } from '../utils/escpos-formatter';
+import { formatFechaHoraCorta } from '../utils/escpos-formatter';
 
 interface VisanetVoucherProps {
   visible: boolean;
@@ -59,7 +59,7 @@ const VisanetVoucher: React.FC<VisanetVoucherProps> = ({ visible, onClose, respu
 
         {/* Detalle */}
         <div style={{ marginBottom: 12 }}>
-          <div>FECHA: {formatFechaCorta(respuesta.transactionDate) || ''}</div>
+          <div>FECHA: {formatFechaHoraCorta(respuesta.transactionDate) || ''}</div>
           <div>{respuesta.issuerName || ''}</div>
           <div>Trans # {respuesta.tokenECR || ''}</div>
           <div>Autorización #: {respuesta.autorizacion || ''}</div>

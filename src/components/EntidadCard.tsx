@@ -1,11 +1,22 @@
 import React from 'react';
 import { Card, Tag } from 'antd';
-import { IdcardOutlined, PhoneOutlined, EnvironmentOutlined, UserOutlined } from '@ant-design/icons';
+import { IdcardOutlined, PhoneOutlined, EnvironmentOutlined, UserOutlined, TagOutlined } from '@ant-design/icons';
 import { toTitleCase } from '../utils/formats';
+
+const TIPO_IDENTIFICACION_LABEL: Record<string, string> = {
+  '0': 'RNC',
+  '1': 'Cédula',
+  '2': 'Pasaporte',
+  rnc: 'RNC',
+  cedula: 'Cédula',
+  pasaporte: 'Pasaporte',
+};
 
 interface EntidadCardData {
   nombre?: string;
+  codigo?: string;
   identificacion?: string;
+  tipoIdentificacion?: string | number;
   telefono?: string;
   direccion?: string;
   beneficiario?: string;
@@ -22,7 +33,12 @@ interface EntidadCardProps {
 
 const EntidadCard: React.FC<EntidadCardProps> = ({ titulo, entidad, entidadSecundaria, fallbackTitulo }) => {
   const nombre = entidad?.nombre || entidadSecundaria?.nombre || fallbackTitulo || '';
+  const codigo = entidad?.codigo || entidadSecundaria?.codigo || '';
   const identificacion = entidad?.identificacion || entidadSecundaria?.identificacion || '';
+  const tipoIdentificacionRaw = entidad?.tipoIdentificacion ?? entidadSecundaria?.tipoIdentificacion;
+  const tipoIdentLabel = tipoIdentificacionRaw !== undefined && tipoIdentificacionRaw !== null && tipoIdentificacionRaw !== ''
+    ? TIPO_IDENTIFICACION_LABEL[String(tipoIdentificacionRaw).toLowerCase()]
+    : undefined;
   const telefono = entidad?.telefono || entidadSecundaria?.telefono || '';
   const direccion = entidad?.direccion
     ? toTitleCase(entidad.direccion)
@@ -43,9 +59,16 @@ const EntidadCard: React.FC<EntidadCardProps> = ({ titulo, entidad, entidadSecun
         ) : fallbackTitulo && entidad?.nombre ? (
           <Tag style={{ marginBottom: 4 }}>{fallbackTitulo}</Tag>
         ) : null}
+        {codigo && (
+          <div style={{ fontSize: 13 }}>
+            <TagOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+            {codigo}
+          </div>
+        )}
         {identificacion && identificacion !== '-' && (
           <div style={{ fontSize: 13 }}>
             <IdcardOutlined style={{ color: '#556ee6', marginRight: 8 }} />
+            {tipoIdentLabel && <span style={{ color: '#8c8c8c', marginRight: 4 }}>{tipoIdentLabel}:</span>}
             {identificacion}
           </div>
         )}

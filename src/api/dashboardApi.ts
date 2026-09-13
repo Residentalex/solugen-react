@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
+import type { DashboardWidgetDto, DashboardWidgetConfigDto, DashboardConfiguracionRequestDto } from '../types/dashboard';
 
 // ============================================================
 // DTOs
@@ -222,5 +223,31 @@ export const dashboardApi = {
       { params: { cantidad, salto } }
     );
     return data.data ?? { items: [], total: 0 };
+  },
+
+  // ──────────────────────────────────────────────────────────────
+  // Widgets por rol
+  // ──────────────────────────────────────────────────────────────
+
+  obtenerCatalogoWidgets: async (): Promise<DashboardWidgetDto[]> => {
+    const { data } = await apiClient.get<ApiResponse<DashboardWidgetDto[]>>(`${BASE}/widgets`);
+    return data.data ?? [];
+  },
+
+  obtenerWidgetsPorRol: async (rolId: number): Promise<DashboardWidgetDto[]> => {
+    const { data } = await apiClient.get<ApiResponse<DashboardWidgetDto[]>>(`${BASE}/widgets-por-rol/${rolId}`);
+    return data.data ?? [];
+  },
+
+  obtenerMisWidgets: async (rolIds: number[], sucursal?: number): Promise<DashboardWidgetDto[]> => {
+    const params: Record<string, number | string> = { rolIds: rolIds.join(',') };
+    if (sucursal !== undefined) params.sucursal = sucursal;
+    const { data } = await apiClient.get<ApiResponse<DashboardWidgetDto[]>>(`${BASE}/mis-widgets`, { params });
+    return data.data ?? [];
+  },
+
+  guardarConfiguracion: async (rolId: number, configs: DashboardWidgetConfigDto[]): Promise<void> => {
+    const request: DashboardConfiguracionRequestDto = { widgets: configs };
+    await apiClient.put(`${BASE}/configuracion/${rolId}`, request);
   },
 };

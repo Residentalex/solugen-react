@@ -21,6 +21,7 @@ export interface DocumentoPago {
 
 export interface DistribucionPagosCardProps {
   documentos: DocumentoPago[];
+  documentosRelacionados?: DocumentoPago[];
   totalDocumento: number;
   monedaSimbolo?: string;
   loading?: boolean;
@@ -30,14 +31,31 @@ export interface DistribucionPagosCardProps {
 
 const DistribucionPagosCard: React.FC<DistribucionPagosCardProps> = ({
   documentos = [],
+  documentosRelacionados = [],
   totalDocumento,
   monedaSimbolo,
   loading = false,
   onDocumentoClick,
   title = 'Distribuci\u00f3n de Pagos',
 }) => {
+  // Transformar los datos del backend a la interfaz DocumentoPago esperada por el componente.
+  // Soporta tanto el DTO serializado (camelCase) como columnas SQL crudas.
+  const toDocumentoPago = (doc: any): DocumentoPago => ({
+    id: doc.id ?? doc.ID ?? doc.TRANSACID,
+    tipoDocumento: doc.tipoDocumento ?? doc.tipo_doc,
+    noDocumento: doc.noDocumento ?? doc.DOCUMENTO,
+    documento: doc.documento ?? doc.DOCUMENTO,
+    fechaDocumento: doc.fechaDocumento ?? doc.fecha,
+    monto: doc.monto ?? doc.MONTO,
+    montoTotal: doc.montoTotal ?? doc.monto ?? doc.MONTO,
+    estado: doc.estado,
+  });
+
+  const documentosTransformados = documentos.map(toDocumentoPago);
+  const relacionadosTransformados = documentosRelacionados.map(toDocumentoPago);
+
   const monedaSimboloFinal = monedaSimbolo || getMonedaSucursalActiva().simbolo;
-  const distribuido = documentos.reduce((acc, doc) => {
+  const distribuido = [...documentosTransformados, ...relacionadosTransformados].reduce((acc, doc) => {
     const monto = doc.monto ?? doc.montoTotal ?? 0;
     return acc + monto;
   }, 0);
@@ -101,7 +119,7 @@ const DistribucionPagosCard: React.FC<DistribucionPagosCardProps> = ({
       );
     }
 
-    if (!documentos.length) {
+    if (!documentosTransformados.length && !relacionadosTransformados.length) {
       return (
         <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Empty
@@ -118,9 +136,14 @@ const DistribucionPagosCard: React.FC<DistribucionPagosCardProps> = ({
       );
     }
 
+    // Sin pagos pero con documentos relacionados: la lista se muestra debajo
+    if (!documentosTransformados.length) {
+      return null;
+    }
+
     return (
       <Table
-        dataSource={documentos}
+        dataSource={documentosTransformados}
         rowKey="id"
         size="small"
         pagination={false}
@@ -145,6 +168,35 @@ const DistribucionPagosCard: React.FC<DistribucionPagosCardProps> = ({
       }
     >
       {renderContent()}
+
+      {/* Documentos relacionados (DOCASOCB): lista simple, documento + monto */}
+      {relacionadosTransformados.length > 0 && (
+        <>
+          <Divider style={{ margin: '12px 0' }} />
+          <Text className="paces-text-secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+            Documentos relacionados
+          </Text>
+          {relacionadosTransformados.map((doc) => (
+            <div
+              key={doc.id}
+              onClick={() => onDocumentoClick?.(doc)}
+              className="paces-row-hover"
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '4px 0',
+                cursor: onDocumentoClick ? 'pointer' : 'default',
+              }}
+            >
+              <span className="paces-doc-link" style={{ fontSize: 13 }}>
+                {doc.documento || `${doc.tipoDocumento || '?'}-${doc.noDocumento || '?'}`}
+              </span>
+              <Text strong style={{ fontSize: 13 }}>{formatCurrency(doc.monto ?? doc.montoTotal ?? 0)}</Text>
+            </div>
+          ))}
+        </>
+      )}
 
       {/* Footer de totales - se muestra siempre */}
       <Divider style={{ margin: '12px 0' }} />

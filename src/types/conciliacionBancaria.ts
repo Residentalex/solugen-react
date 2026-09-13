@@ -48,6 +48,20 @@ export interface MovimientoBancarioDTO {
   nombreTipoDoc?: string;
   /** Nombre del beneficiario (NOMBRE de CTRANSAC) resuelto por el backend */
   entidad?: string;
+  /** TransacID del documento con el que se concilió este movimiento */
+  transacIdConciliado?: number;
+  /** Tipo de documento conciliado (ej: FAC) */
+  tipoDocConciliado?: string;
+  /** Número de documento conciliado */
+  numDocConciliado?: string;
+  /** Nombre del tipo de documento conciliado */
+  nombreTipoDocConciliado?: string;
+  /** Entidad/beneficiario del documento conciliado */
+  entidadConciliada?: string;
+  /** Indica si el movimiento fue creado manualmente (checkbox) vs importado de CSV */
+  esManual?: boolean;
+  /** ID del registro en CONCIL_ARCHIVOS_IMPORTADOS (NULL si es manual) */
+  archivoImportadoId?: number;
 }
 
 /** Ajuste de conciliación (AJUSTCON) */
@@ -74,6 +88,8 @@ export interface TransaccionConciliadaDTO {
   nombreTipoDoc?: string;
   /** Nota del documento (NOTAS de CTRANSAC) */
   nota?: string;
+  /** Referencia del documento (DOC_REF de CTRANSAC) */
+  referencia?: string;
 }
 
 /** Resumen de movimientos conciliados agrupados por tipo de documento */
@@ -126,4 +142,20 @@ export interface TransitoExportarDTO {
   entidad: string;
   nombreTipoDoc: string;
   conciliado: string;
+}
+
+/** DTO para plantilla de importación CSV (DPLANTIMP) */
+export interface PlantillaImportacionDTO {
+  id: number;
+  cuentaContable: string;
+  nombre: string;
+  mapeoCampos: string; // JSON: {"0":"ctaBanc","1":"fecha",...}
+  separador: string;
+  decimalSeparator: string;
+  usarHeader: boolean;
+  filaInicio: number;
+  activo: boolean;
+  fechaCreacion?: string;
+  fechaModificacion?: string;
+  creadoPor?: number;
 }

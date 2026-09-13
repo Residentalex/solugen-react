@@ -644,6 +644,39 @@ const TurnoDetalle: React.FC = () => {
     return result;
   }, [ingresosSearch, detalles, ingresosFiltrosActivos]);
 
+  // ===== Totales de tablas =====
+  const totalesDocumentos = React.useMemo(() => {
+    return documentosFiltrados.reduce(
+      (acc, doc: any) => ({
+        total: acc.total + (doc.total || 0),
+      }),
+      { total: 0 }
+    );
+  }, [documentosFiltrados]);
+
+  const totalesCostos = React.useMemo(() => {
+    return costosFiltrados.reduce(
+      (acc, item: any) => ({
+        cantidad: acc.cantidad + (item.cantidad || 0),
+        total: acc.total + (item.total || 0),
+      }),
+      { cantidad: 0, total: 0 }
+    );
+  }, [costosFiltrados]);
+
+  const totalesIngresos = React.useMemo(() => {
+    return ingresosFiltrados.reduce(
+      (acc, item: any) => ({
+        cantidad: acc.cantidad + (item.cantidad || 0),
+        subTotal: acc.subTotal + (item.subTotal || 0),
+        descuento: acc.descuento + (item.descuento || 0),
+        impuestos: acc.impuestos + (item.impuestos || 0),
+        total: acc.total + (item.total || 0),
+      }),
+      { cantidad: 0, subTotal: 0, descuento: 0, impuestos: 0, total: 0 }
+    );
+  }, [ingresosFiltrados]);
+
   if (loading || (!data && !loadingError)) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
@@ -1068,6 +1101,18 @@ const TurnoDetalle: React.FC = () => {
             }}
             scroll={{ x: 1100 }}
             locale={{ emptyText: 'Sin facturas registradas' }}
+            summary={() => (
+              <Table.Summary fixed="bottom">
+                <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                  <Table.Summary.Cell index={0} colSpan={3}>
+                    <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={3} align="right">
+                    <Text strong>{formatNumber(totalesDocumentos.total)}</Text>
+                  </Table.Summary.Cell>
+                </Table.Summary.Row>
+              </Table.Summary>
+            )}
           />
         </div>
       ),
@@ -1116,6 +1161,24 @@ const TurnoDetalle: React.FC = () => {
             }}
             scroll={{ x: 900 }}
             locale={{ emptyText: 'Sin detalles de costo' }}
+            summary={() => (
+              <Table.Summary fixed="bottom">
+                <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                  <Table.Summary.Cell index={0} colSpan={2}>
+                    <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={2} align="right">
+                    {formatNumber(totalesCostos.cantidad)}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={3} align="right">
+                    {formatNumber(totalesCostos.total)}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={4} align="right">
+                    <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalesCostos.total)}</Text>
+                  </Table.Summary.Cell>
+                </Table.Summary.Row>
+              </Table.Summary>
+            )}
           />
         </div>
       ),
@@ -1164,6 +1227,30 @@ const TurnoDetalle: React.FC = () => {
             }}
             scroll={{ x: 1100 }}
             locale={{ emptyText: 'Sin detalles de ingreso' }}
+            summary={() => (
+              <Table.Summary fixed="bottom">
+                <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                  <Table.Summary.Cell index={0} colSpan={2}>
+                    <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={2} align="right">
+                    {formatNumber(totalesIngresos.cantidad)}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={3} align="right" responsive={['md', 'lg', 'xl', 'xxl']}>
+                    {formatNumber(totalesIngresos.subTotal)}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={4} align="right" responsive={['lg', 'xl', 'xxl']}>
+                    {formatNumber(totalesIngresos.descuento)}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={5} align="right" responsive={['lg', 'xl', 'xxl']}>
+                    {formatNumber(totalesIngresos.impuestos)}
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={6} align="right">
+                    <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalesIngresos.total)}</Text>
+                  </Table.Summary.Cell>
+                </Table.Summary.Row>
+              </Table.Summary>
+            )}
           />
         </div>
       ),

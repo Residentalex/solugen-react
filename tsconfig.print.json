@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "commonjs",
+    "moduleResolution": "node10",
+    "ignoreDeprecations": "6.0",
+    "rootDir": "./src",
+    "outDir": "../Solugen.Impresion.Service/node",
+    "strict": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": ["src/utils/escpos-formatter.ts", "src/utils/expresiones.ts"]
+}

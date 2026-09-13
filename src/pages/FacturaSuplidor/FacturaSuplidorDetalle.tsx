@@ -98,7 +98,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
         setPageTitleOverride(`${data.documento.codigo}-${data.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
         if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-          facturaSuplidorApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+          facturaSuplidorApi.obtenerReverso(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
         } else {
@@ -141,7 +141,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
         setPageTitleOverride(`${data.documento.codigo}-${data.noDocumento}`);
         // Si el documento está anulado y tiene reversoId, cargar el reverso
         if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-          facturaSuplidorApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+          facturaSuplidorApi.obtenerReverso(sucursalActiva, (res as any).reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
         } else {

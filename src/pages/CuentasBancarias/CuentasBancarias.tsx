@@ -97,6 +97,10 @@ const CuentasBancarias: React.FC = () => {
     navigate('/FTransBanco', { state: { cuentaCodigo: codigo } });
   };
 
+  const handleEditar = (cuenta: CuentaBancariaDTO) => {
+    navigate(`/MCuentaBanco/editar/${cuenta.noCuenta}`, { state: { cuenta } });
+  };
+
   /* ---- Client-side filter ---- */
 
   const filteredData = useMemo(() => {
@@ -105,7 +109,6 @@ const CuentasBancarias: React.FC = () => {
     return data.filter(
       (item) =>
         item.codigo?.toLowerCase().includes(lower) ||
-        item.nombre?.toLowerCase().includes(lower) ||
         item.noCuenta?.toLowerCase().includes(lower) ||
         item.banco?.toLowerCase().includes(lower)
     );
@@ -169,7 +172,7 @@ const CuentasBancarias: React.FC = () => {
           />
           <div style={{ flex: 1 }} />
           <PermissionGate accion="CREAR">
-            <Button type="primary" icon={<PlusOutlined />}>Nuevo</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MCuentaBanco/nuevo')}>Nuevo</Button>
           </PermissionGate>
           <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
         </div>
@@ -225,10 +228,11 @@ const CuentasBancarias: React.FC = () => {
           <>
             <Row gutter={[16, 16]}>
               {paginatedData.map((cuenta, i) => (
-                <Col key={cuenta.codigo} xs={24} sm={12} lg={8} xxl={6}>
+                <Col key={cuenta.noCuenta} xs={24} sm={12} lg={8} xxl={6}>
                   <CuentaBancariaCard
                     cuenta={cuenta}
-                    onClick={() => handleNavigate(cuenta.codigo)}
+                    onClick={() => handleNavigate(cuenta.noCuenta)}
+                    onEditar={() => handleEditar(cuenta)}
                     index={i}
                   />
                 </Col>

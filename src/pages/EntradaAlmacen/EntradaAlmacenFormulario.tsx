@@ -19,6 +19,7 @@ import {
   BarcodeOutlined,
   PercentageOutlined,
   RollbackOutlined,
+  GiftOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -41,6 +42,7 @@ import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConc
 import EntradaAlmacenGuide from './EntradaAlmacenGuide';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import ModalFechaVencimiento from '../../components/ModalFechaVencimiento/ModalFechaVencimiento';
+import ModalBonificacion from '../../components/ModalBonificacion/ModalBonificacion';
 import ScannerModal from '../../components/ScannerModal/ScannerModal';
 import ProductosOrigenModal from '../../components/ProductosOrigenModal/ProductosOrigenModal';
 import FloatingField from '../../components/FloatingLabel/FloatingField';
@@ -181,6 +183,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
   const [agregarFilaBloqueado, setAgregarFilaBloqueado] = useState(false);
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
+  const [bonificacionModal, setBonificacionModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
   const [detalleSearch, setDetalleSearch] = useState('');
   const [activeId, setActiveId] = useState<number | null>(null);
   const [productoModalOpen, setProductoModalOpen] = useState(false);
@@ -295,7 +298,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
 
   const usuario = useAuthStore((s: any) => s.usuario);
   const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
-    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+    (p: any) => p.codigo?.toUpperCase() === 'PE_MODIFICAR_ASIENTOS' && p.valor === true
   ) ?? false;
   const [generandoAsientos, setGenerandoAsientos] = useState(false);
   const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
@@ -1110,6 +1113,19 @@ const EntradaAlmacenFormulario: React.FC = () => {
     setFechaVencimientoModal({ open: false, detalleId: 0 });
   };
 
+  const handleBonificacion = (valor: number) => {
+    if (bonificacionModal.detalleId) {
+      setDetalles((prev) =>
+        prev.map((d) => {
+          if (d.id !== bonificacionModal.detalleId) return d;
+          const updated = { ...d, cantidadBonificable: valor };
+          return calcularFila(updated);
+        })
+      );
+    }
+    setBonificacionModal({ open: false, detalleId: 0 });
+  };
+
   const handleDragEnd = (event: any) => {
     setActiveId(null);
     const { active, over } = event;
@@ -1625,6 +1641,14 @@ const EntradaAlmacenFormulario: React.FC = () => {
             onClick: () => handleEliminarFila(record.id),
           },
         ];
+
+        items.unshift({
+          key: 'bonificacion',
+          label: record.cantidadBonificable ? `Bonif: ${formatNumber(record.cantidadBonificable)}` : 'Bonificación',
+          icon: <GiftOutlined />,
+          danger: false,
+          onClick: () => setBonificacionModal({ open: true, detalleId: record.id }),
+        });
 
         items.unshift({
           key: 'vencimiento',
@@ -2733,6 +2757,14 @@ const EntradaAlmacenFormulario: React.FC = () => {
         open={fechaVencimientoModal.open}
         onClose={() => setFechaVencimientoModal({ open: false, detalleId: 0 })}
         onFechaChange={handleFechaVencimiento}
+      />
+
+      {/* Modal de Bonificación */}
+      <ModalBonificacion
+        open={bonificacionModal.open}
+        valorActual={detalles.find((d) => d.id === bonificacionModal.detalleId)?.cantidadBonificable ?? 0}
+        onClose={() => setBonificacionModal({ open: false, detalleId: 0 })}
+        onBonificacionChange={handleBonificacion}
       />
     </div>
   );

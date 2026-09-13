@@ -50,6 +50,7 @@ import SeleccionarImpuestosModal from '../../components/SeleccionarImpuestosModa
 import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestosModal';
 import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useCargaDocumento } from '../../hooks/useCargaDocumento';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
 import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
@@ -135,11 +136,63 @@ const FacturaClienteFormulario: React.FC = () => {
   const cloneData = (location.state as any)?.cloneData;
   const monedaDefault = getMonedaSucursalActiva();
 
+  // ===== Hook de carga de documento (encabezado primero + auto secciones) =====
+  const { data, setData, loading, loadingError, recargar } = useCargaDocumento<FacturaClienteFullDTO>({
+    id,
+    sucursal: sucursalActiva,
+    obtenerEncabezado: async (suc: number, docId: number) => {
+      return await facturaClienteApi.obtenerEncabezado(suc, docId) as any;
+    },
+    secciones: {
+      detalles: {
+        cargar: (suc: number, docId: number) => facturaClienteApi.obtenerDetalles(suc, docId),
+        prop: 'detalles',
+      },
+      asientos: {
+        cargar: (suc: number, docId: number) => facturaClienteApi.obtenerAsientos(suc, docId),
+        prop: 'asientos',
+      },
+    },
+    onEncabezadoCargado: (enc) => {
+      // Sync local editable state
+      const full: any = enc;
+      setDetalles((full.detalles || []).map((d: any) => ({
+        ...d,
+        porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
+        tieneVencimiento: d.tieneVencimiento ?? false,
+      })));
+      setAsientosLocales(full.asientos || []);
+      setImpuestosFactura(full.impuestosFactura || []);
+      setSelectedConcepto(full.concepto);
+      setSelectedCliente(full.cliente);
+      setSelectedAlmacen(full.almacen);
+      setSelectedTipo(full.tipo);
+      setSelectedSucursal(full.sucursal || null);
+
+      const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
+      form.setFieldsValue({
+        concepto: full.concepto?.codigo || '',
+        cliente: full.cliente?.codigo || '',
+        almacen: full.almacen?.codigo || '',
+        tipo: full.tipo?.codigo || '',
+        fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
+        ncf: full.ncf || '',
+        referencia: full.referencia || '',
+        tasa: full.tasa || 1,
+        nota: full.nota || '',
+      });
+
+      // Load clients by concept
+      if (full.concepto?.codigo) {
+        facturaClienteApi.obtenerClientes(sucursalActiva)
+          .then((res: any) => setClientesCache(Array.isArray(res) ? res : []))
+          .catch(() => {});
+      }
+    },
+  });
+
   // ===== States =====
-  const [loading, setLoading] = useState(false);
-  const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [data, setData] = useState<FacturaClienteFullDTO | null>(null);
   const [detalles, setDetalles] = useState<DetalleFacturaClienteDTO[]>([]);
   const [clientesCache, setClientesCache] = useState<ClienteDTO[]>([]);
   const [almacenesCache, setAlmacenesCache] = useState<AlmacenDTO[]>([]);
@@ -272,7 +325,7 @@ const FacturaClienteFormulario: React.FC = () => {
   // ===== Permisos especiales =====
   const usuario = useAuthStore((s: any) => s.usuario);
   const permisoModificarAsientos = usuario?.permisosEspeciales?.some(
-    (p: any) => p.codigo === 'pe_modificar_asientos' && p.valor === true
+    (p: any) => p.codigo?.toUpperCase() === 'PE_MODIFICAR_ASIENTOS' && p.valor === true
   ) ?? false;
   const [generandoAsientos, setGenerandoAsientos] = useState(false);
 
@@ -380,90 +433,6 @@ const FacturaClienteFormulario: React.FC = () => {
     }
   }, [mode, cloneData, sucursalActiva, form]);
 
-  // ===== Cargar datos si es modo editar =====
-  useEffect(() => {
-    if (mode === 'crear') return;
-    if (!id) return;
-
-    setLoading(true);
-    facturaClienteApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        // Mapear de FacturaClienteDTO a FacturaClienteFullDTO
-        const full: FacturaClienteFullDTO = {
-          id: res.id,
-          fechaDocumento: res.fechaDocumento,
-          fechaVencimiento: (res as any).fechaVencimiento || '',
-          noDocumento: res.noDocumento,
-          estado: res.estado,
-          periodo: res.periodo,
-          ncf: res.ncf || '',
-          nota: res.nota || '',
-          referencia: res.referencia || '',
-          tasa: res.tasa || 1,
-          diasCredito: res.diasCredito || 0,
-          concepto: res.concepto || null,
-          cliente: res.cliente || null,
-          almacen: res.almacen || null,
-          tipo: (res as any).tipo || null,
-          moneda: res.moneda || null,
-          documento: res.documento,
-          subTotal: res.subTotal,
-          descuento: res.descuento,
-          impuestos: res.impuestos,
-          total: res.total,
-          detalles: (res.detalles || []).map((d) => ({
-            ...d,
-            porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
-            tieneVencimiento: d.tieneVencimiento ?? false,
-          })),
-          asientos: res.asientos || [],
-          logs: res.logs || [],
-        };
-        setData(full);
-        setDetalles(full.detalles);
-        setAsientosLocales(full.asientos || []);
-        setImpuestosFactura((full as any).impuestosFactura || []);
-        setSelectedConcepto(full.concepto);
-        setSelectedCliente(full.cliente);
-        setSelectedAlmacen(full.almacen);
-        setSelectedTipo(full.tipo);
-
-        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
-        const fechaVenc = full.fechaVencimiento ? parseDateRaw(full.fechaVencimiento) : null;
-
-        form.setFieldsValue({
-          concepto: full.concepto?.codigo || '',
-          cliente: full.cliente?.codigo || '',
-          almacen: full.almacen?.codigo || '',
-          tipo: full.tipo?.codigo || '',
-          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          ncf: full.ncf || '',
-          referencia: full.referencia || '',
-          tasa: full.tasa || 1,
-          nota: full.nota || '',
-        });
-
-        // Restaurar sucursal
-        if ((full as any).sucursal) {
-          setSelectedSucursal((full as any).sucursal);
-        }
-
-        // Cargar clientes según el concepto
-        if (full.concepto?.codigo) {
-          facturaClienteApi.obtenerClientes(sucursalActiva)
-            .then((res) => setClientesCache(Array.isArray(res) ? res : []))
-            .catch((err) => console.warn('Error al cargar clientes cache en editar', err));
-        }
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al cargar el documento';
-        message.error(msg);
-        setLoadingError(true);
-        navigate('/FFAC', { replace: true });
-      })
-      .finally(() => setLoading(false));
-  }, [mode, id, sucursalActiva, form, navigate]);
-
   // ===== Handler del modal de impuestos compartido =====
   const handleConfirmarImpuestos = (items: ImpuestoSeleccionado[]) => {
     const mapeados = items.map((i) => ({
@@ -503,77 +472,6 @@ const FacturaClienteFormulario: React.FC = () => {
         if (mode === 'crear') {
           navigate('/FFAC', { replace: true });
         } else {
-          if (id) {
-            setLoading(true);
-            facturaClienteApi.obtenerPorId(sucursalActiva, parseInt(id))
-              .then((res) => {
-                const full: FacturaClienteFullDTO = {
-                  id: res.id,
-                  fechaDocumento: res.fechaDocumento,
-                  fechaVencimiento: (res as any).fechaVencimiento || '',
-                  noDocumento: res.noDocumento,
-                  estado: res.estado,
-                  periodo: res.periodo,
-                  ncf: res.ncf || '',
-                  nota: res.nota || '',
-                  referencia: res.referencia || '',
-                  tasa: res.tasa || 1,
-                  diasCredito: res.diasCredito || 0,
-                  concepto: res.concepto || null,
-                  cliente: res.cliente || null,
-                  almacen: res.almacen || null,
-                  tipo: (res as any).tipo || null,
-                  moneda: res.moneda || null,
-                  documento: res.documento,
-                  subTotal: res.subTotal,
-                  descuento: res.descuento,
-                  impuestos: res.impuestos,
-                  total: res.total,
-                  detalles: (res.detalles || []).map((d) => ({
-                    ...d,
-                    porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
-                    tieneVencimiento: d.tieneVencimiento ?? false,
-                  })),
-                  asientos: res.asientos || [],
-                  logs: res.logs || [],
-                };
-                setData(full);
-                setDetalles(full.detalles);
-                setAsientosLocales(full.asientos || []);
-                setImpuestosFactura((full as any).impuestosFactura || []);
-                setSelectedConcepto(full.concepto);
-                setSelectedCliente(full.cliente);
-                setSelectedAlmacen(full.almacen);
-                setSelectedTipo(full.tipo);
-                setSelectedSucursal((full as any).sucursal || null);
-
-                const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
-                const fechaVenc = full.fechaVencimiento ? parseDateRaw(full.fechaVencimiento) : null;
-
-                form.setFieldsValue({
-                  concepto: full.concepto?.codigo || '',
-                  cliente: full.cliente?.codigo || '',
-                  almacen: full.almacen?.codigo || '',
-                  tipo: full.tipo?.codigo || '',
-                  fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-                  ncf: full.ncf || '',
-                  referencia: full.referencia || '',
-                  tasa: full.tasa || 1,
-                  nota: full.nota || '',
-                });
-
-                if (full.concepto?.codigo) {
-                  facturaClienteApi.obtenerClientes(sucursalActiva)
-                    .then((res) => setClientesCache(Array.isArray(res) ? res : []))
-                    .catch((err) => console.warn('Error al cargar clientes cache al recargar', err));
-                }
-              })
-              .catch((err: any) => {
-                const msg = err?.response?.data?.errorMessage || 'Error al recargar el documento';
-                message.error(msg);
-              })
-              .finally(() => setLoading(false));
-          }
           navigate(`/FFAC/${id}`, { replace: true });
         }
       },
@@ -586,6 +484,7 @@ const FacturaClienteFormulario: React.FC = () => {
 
     if (!selectedConcepto) return 'Debe elegir un Concepto para poder continuar';
     if (!values.cliente && !selectedCliente) return 'Debe elegir un Cliente para poder continuar';
+    if (!selectedSucursal && !values.sucursal) return 'La sucursal es requerida';
     // FC16 - Almacén requerido solo si hay productos (no servicios)
     if (!selectedAlmacen && !values.almacen && detalles.some((d) => (d.tipoArticulo || 'Producto') === 'Producto')) {
       return 'El almacén es requerido para productos.';
@@ -842,6 +741,7 @@ const FacturaClienteFormulario: React.FC = () => {
           tieneVencimiento: producto.tieneVencimiento,
           modificaPrecio: producto.modificaPrecio ?? false,
           modificaDescripcion: producto.modificaDescripcion ?? false,
+          tipoArticulo: producto.tipoArticulo || 'Producto',
         };
         return [calcularFila(filled), ...prev];
       });
@@ -862,6 +762,7 @@ const FacturaClienteFormulario: React.FC = () => {
             tieneVencimiento: producto.tieneVencimiento,
             modificaPrecio: producto.modificaPrecio ?? false,
             modificaDescripcion: producto.modificaDescripcion ?? false,
+            tipoArticulo: producto.tipoArticulo || 'Producto',
           };
           return calcularFila(filled);
         })
@@ -927,46 +828,8 @@ const FacturaClienteFormulario: React.FC = () => {
   const handleRefresh = useCallback(() => {
     if (mode === 'crear') return;
     if (!id) return;
-    setLoadingError(false);
-    setLoading(true);
-    facturaClienteApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        const full: FacturaClienteFullDTO = {
-          id: res.id, fechaDocumento: res.fechaDocumento,
-          fechaVencimiento: (res as any).fechaVencimiento || '', noDocumento: res.noDocumento,
-          estado: res.estado, periodo: res.periodo, ncf: res.ncf || '', nota: res.nota || '',
-          referencia: res.referencia || '', tasa: res.tasa || 1, diasCredito: res.diasCredito || 0,
-          concepto: res.concepto || null, cliente: res.cliente || null, almacen: res.almacen || null,
-          tipo: (res as any).tipo || null, moneda: res.moneda || null, documento: res.documento,
-          subTotal: res.subTotal, descuento: res.descuento, impuestos: res.impuestos, total: res.total,
-          detalles: (res.detalles || []).map((d: any) => ({
-            ...d, porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
-            tieneVencimiento: d.tieneVencimiento ?? false,
-          })),
-          asientos: res.asientos || [], logs: res.logs || [],
-        };
-        setData(full); setDetalles(full.detalles);
-        setAsientosLocales(full.asientos || []);
-        setImpuestosFactura((full as any).impuestosFactura || []);
-        setSelectedConcepto(full.concepto); setSelectedCliente(full.cliente);
-        setSelectedAlmacen(full.almacen); setSelectedTipo(full.tipo);
-        setSelectedSucursal((full as any).sucursal || null);
-        const fechaDoc = full.fechaDocumento ? parseDateRaw(full.fechaDocumento) : null;
-        const fechaVenc = full.fechaVencimiento ? parseDateRaw(full.fechaVencimiento) : null;
-        form.setFieldsValue({
-          concepto: full.concepto?.codigo || '', cliente: full.cliente?.codigo || '',
-          almacen: full.almacen?.codigo || '', tipo: full.tipo?.codigo || '',
-          fechaDocumento: fechaDoc ? dayjs(fechaDoc) : null,
-          ncf: full.ncf || '', referencia: full.referencia || '',
-          tasa: full.tasa || 1, nota: full.nota || '',
-        });
-      })
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al recargar';
-        message.error(msg); setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, form, mode]);
+    recargar();
+  }, [id, mode, recargar]);
 
   // ===== Loading state =====
   if (loading) {

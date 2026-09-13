@@ -18,11 +18,11 @@ export const ordenCompraApi = {
       salto?: number;
     }
   ): Promise<{ data: OrdenCompraVistaDTO[]; total: number }> => {
-    const { data } = await apiClient.get<ApiResponse<OrdenCompraVistaDTO[]>>(
+    const { data } = await apiClient.get<OrdenCompraVistaDTO[]>(
       `${BASE}/${sucursal}/filtrar`,
       { params: { ...params, destino } }
     );
-    return { data: data.data || [], total: data.total ?? 0 };
+    return { data: data || [], total: data?.length ?? 0 };
   },
 
   obtenerResumido: async (

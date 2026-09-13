@@ -3,7 +3,7 @@
  * Corresponde a /reportes/config del backend (ReportePlantillaDTO).
  */
 
-export type AnchoLineaTicket = 32 | 42 | 48;
+export type AnchoLineaTicket = 32 | 42 | 48 | 54;
 
 /** Secciones opcionales de la plantilla (todas opcionales: el backend guarda el JSON tal cual). */
 export interface PlantillaEncabezadoConfig {
@@ -28,11 +28,11 @@ export interface PlantillaTituloConfig {
   formato?: FormatoItemTicket;
 }
 
-export type TipoCampoDTO = 'texto' | 'fecha' | 'hora' | 'dinero' | 'numero';
+export type TipoCampoDTO = 'texto' | 'fecha' | 'hora' | 'dinero' | 'numero' | 'dias_restantes';
 
 export type AlineacionTicket = 'izquierda' | 'centro' | 'derecha';
 
-export type TamanoLetraTicket = 'normal' | 'doble' | 'doble_altura' | 'doble_ancho' | 'triple' | 'condensada';
+export type TamanoLetraTicket = 'normal' | 'doble' | 'doble_b' | 'doble_altura' | 'doble_ancho' | 'triple' | 'condensada';
 
 /** Formato de impresión opcional de un ítem del ticket. Todos opcionales = formato actual. */
 export interface FormatoItemTicket {
@@ -193,7 +193,7 @@ export type ClaveCampoTicket =
   | 'TITULO'
   | 'CAJERO' | 'CAJA' | 'TURNO' | 'NO' | 'CLIENTE' | 'RNC_CLIENTE'
   | 'FECHA_IMPRESION' | 'HORA_IMPRESION' | 'NUM_DETALLES'
-  | 'CODIGO_SEGURIDAD' | 'FECHA_FIRMA_DIGITAL' | 'CODIGO_QR'
+  | 'CODIGO_SEGURIDAD' | 'FECHA_FIRMA_DIGITAL' | 'CODIGO_QR' | 'CODIGO_BARRAS'
   | 'FAX' | 'SLOGAN'
   // Voucher Visanet
   | 'SUCURSAL' | 'ID_COMERCIO' | 'TIPO_OP' | 'ISSUER' | 'TRANS' | 'AUTORIZACION' | 'TOTAL' | 'RESULTADO';
@@ -208,7 +208,7 @@ export type ClaveCobroTicket =
   | 'BONO' | 'TARJETA_REGALO' | 'NOTA_CREDITO' | 'DEVUELTA' | 'MEDIO_COBRO';
 
 /** Caracteres de línea disponibles para SEPARADOR. */
-export type CaracterSeparadorTicket = '-' | '=' | '─';
+export type CaracterSeparadorTicket = '-' | '=' | '─' | '_' | 'linea' | 'linea_gruesa';
 
 /** Claves de campos de detalle: DETALLE:<clave>. */
 export type ClaveCampoDetalleTicket =
@@ -225,11 +225,19 @@ export type RefLineaTicket =
   | `CAMPO:${ClaveCampoTicket}`     // campo del documento
   | `TOTAL:${ClaveTotalTicket}`     // línea suelta de total
   | `COBRO:${ClaveCobroTicket}`     // línea suelta de cobro
-  | `DETALLE:${ClaveCampoDetalleTicket}`;
+  | `DETALLE:${string}`            // clave fija (CODIGO, ARTICULO...) o ruta dinámica (impuesto.nombre, monto...)
+  | `ESQUEMA:${string}`;           // campo del esquema JSON importado (config.esquema)
+
+/** Tipo de ancho para campos en línea compartida. */
+export type TipoAnchoCampo = 'porcentual' | 'fijo';
 
 /** Línea manipulable dentro de una zona. */
 export interface LineaZonaConfig {
   ref: RefLineaTicket;
+  /** Expresión booleana. Si evalúa a falsy, la línea no se imprime. Ej: 'impuestosFactura.length > 0'. */
+  condicion?: string;
+  /** Si true, la línea no se imprime cuando el valor resuelto está vacío. */
+  ocultarSiVacio?: boolean;
   /** Label editable (CAMPO / TOTAL / COBRO). Ausente = label natural. */
   label?: string;
   /** Si es false, no se emite el label (solo el valor). Default true. */
@@ -244,8 +252,45 @@ export interface LineaZonaConfig {
   tabular?: { ancho?: number };
   /** Carácter de la línea SEPARADOR. Default '-'. */
   caracter?: CaracterSeparadorTicket;
-  /** Si true, el contenido se junta con la línea anterior (separado por espacio) en vez de ocupar una línea nueva. */
+  /** Ancho del separador. Número = caracteres exactos. String '50%' = porcentaje del ancho. Ausente = ancho completo. */
+  ancho?: number | string;
+  /** Alineación horizontal del separador parcial. Default: 'centro'. */
+  alineacionSep?: AlineacionTicket;
+  /** Grosor (cantidad de líneas) para separadores 'linea' y 'linea_gruesa'. 1-3. Default: 1. */
+  grosor?: number;
+  /** Número de línea visual (1-indexed). Campos con mismo lineaNum van en la misma línea. Default: siguiente disponible. */
+  lineaNum?: number;
+  /** Tipo de ancho cuando está en línea compartida. 'porcentual' = % del espacio restante. 'fijo' = caracteres fijos. Default: 'porcentual'. */
+  anchoTipo?: TipoAnchoCampo;
+  /** Valor del ancho: 5-100 (%) o 1-anchoPagina (caracteres). Default: 100 si solo, equitativo si compartido. */
+  anchoValor?: number;
+  /** @deprecated Renombrado a lineaNum. Mantenido por compatibilidad. */
   mismaLinea?: boolean;
+  /** @deprecated Renombrado a anchoTipo/anchoValor. Mantenido por compatibilidad. */
+  anchoCampo?: number;
+  /** Ruta JSON (puntos) para código de barras (CAMPO:CODIGO_BARRAS). Si ausente usa la secuencia del NCF. */
+  ruta?: string;
+  /** Tipo de código de barras para CAMPO:CODIGO_BARRAS. Default: 'CODE128'. */
+  tipoBarcode?: 'CODE' | 'CODE128' | 'EAN13';
+  /** Tipo de dato para formateo de valor: texto | fecha | numero | dinero. */
+  tipoDato?: 'texto' | 'fecha' | 'numero' | 'dinero';
+  /** Formato de presentación según tipo:
+   * - fecha: 'dd/MM/yyyy', 'yyyy-MM-dd', etc.
+   * - numero/dinero: '#,##0.00', '#,##0', etc.
+   */
+  formatoDato?: string;
+  /** Campo calculado sobre un array del esquema (solo líneas ESQUEMA). Si está definido, el valor se obtiene agregando el array de `calculo.ruta`. */
+  calculo?: CalculoCampo;
+}
+
+/** Operación de agregación para campos calculados (líneas ESQUEMA). */
+export type TipoCalculoCampo = 'SUM' | 'AVG' | 'COUNT' | 'MIN' | 'MAX';
+
+/** Campo calculado estructurado: agrega el array del esquema indicado en `ruta`. */
+export interface CalculoCampo {
+  tipo: TipoCalculoCampo;
+  /** Ruta (notación de puntos) del array en el esquema, ej: 'data.pagos'. */
+  ruta: string;
 }
 
 /** Zona ordenable del ticket con sus líneas. */
@@ -257,6 +302,10 @@ export interface ZonaTicketConfig {
   lineas: LineaZonaConfig[];
   /** Alineacion por defecto de toda la zona (cada linea puede override). */
   alineacion?: AlineacionTicket;
+  /** Dibuja un cuadro ┌─┐│└┘ alrededor de la zona, ajustado al contenido y centrado. */
+  enmarcar?: boolean;
+  /** Ruta del array del esquema JSON que alimenta esta zona de detalle (ej: 'data.detalles'). */
+  arrayOrigen?: string;
 }
 
 export interface PlantillaConfig {
@@ -281,6 +330,8 @@ export interface PlantillaConfig {
   opciones?: PlantillaOpcionesConfig;
   /** Logo configurable por plantilla (se imprime al inicio del ticket). */
   logo?: LogoPlantillaConfig;
+  /** Esquema de campos disponibles importado desde JSON. No afecta el diseño. */
+  esquema?: unknown;
 }
 
 /** Item del listado /reportes/config (sin el JSON completo). */
@@ -308,4 +359,27 @@ export interface ReportePlantillaDetalleDTO {
 /** Body de PUT /reportes/config/{plantillaId}: `{ "config": {...} | null }`. */
 export interface ReportePlantillaConfigRequest {
   config: PlantillaConfig | null;
+}
+
+/** Body de POST /reportes/config/{plantillaId}/imprimir. */
+export interface PlantillaImprimirRequest {
+  tipoDoc?: string;
+  data?: unknown;
+  company?: unknown;
+  /** Si se omite, el backend usa la config guardada en la plantilla. */
+  config?: PlantillaConfig | null;
+  /** Comando ESC/POS del logo (alineacion + GS v 0) en base64, generado por obtenerLogoEscPosBase64. */
+  logoEscPosBase64?: string;
+  feedLines?: number;
+  cut?: boolean;
+  copias?: number;
+}
+
+/** Respuesta de POST /reportes/config/{plantillaId}/imprimir. */
+export interface ImprimirResultadoDTO {
+  ok: boolean;
+  bytes: number;
+  tipoDoc: string | null;
+  copias: number;
+  impresora: string | null;
 }

@@ -9,6 +9,7 @@ import type {
   ResumenGeneralConciliacionDTO,
   MovimientoLibroExportarDTO,
   TransitoExportarDTO,
+  PlantillaImportacionDTO,
 } from '../types/conciliacionBancaria';
 
 const BASE = '/ConciliacionBancaria';
@@ -94,6 +95,19 @@ export const conciliacionBancariaApi = {
     return data.data;
   },
 
+  /** Obtener transacciones sin conciliar de CTRANSAC (CONCIL='F') - versión simple */
+  obtenerTransaccionesSinConciliarSimple: async (
+    sucursal: number,
+    numeroCta: string,
+    fecha?: string
+  ): Promise<TransaccionConciliadaDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<TransaccionConciliadaDTO[]>>(
+      `${BASE}/${sucursal}/transacciones-sin-conciliar/simple`,
+      { params: { numeroCta, ...(fecha ? { fecha } : {}) } }
+    );
+    return data.data || [];
+  },
+
   /** Obtener solo el encabezado de la conciliación (rápido: sin movimientos ni transacciones) */
   obtenerEncabezado: async (sucursal: number, id: number): Promise<ConciliacionBancariaDTO> => {
     const { data } = await apiClient.get<ApiResponse<ConciliacionBancariaDTO>>(
@@ -133,6 +147,11 @@ export const conciliacionBancariaApi = {
     await apiClient.post(`${BASE}/${sucursal}/${id}/aplicar`);
   },
 
+  /** Desaplicar conciliación (reversa aplicación) */
+  desaplicar: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.put(`${BASE}/${sucursal}/${id}/desaplicar`);
+  },
+
   /** Importar movimientos bancarios desde archivo (multipart/form-data) */
   importarMovimientos: async (
     sucursal: number,
@@ -149,36 +168,77 @@ export const conciliacionBancariaApi = {
     return data.data || [];
   },
 
-  /** Preview: sube archivo, devuelve movimientos con Documento resuelto */
+  /** Preview: sube archivo, devuelve movimientos con Documento resuelto + hash SHA256 calculado en backend */
   importarPreview: async (
     sucursal: number,
     file: File,
-    concilId?: number
-  ): Promise<MovimientoBancarioDTO[]> => {
+    concilId?: number,
+    numeroCta?: string,
+    fecha?: string
+  ): Promise<{ movimientos: MovimientoBancarioDTO[], hashArchivo: string }> => {
     const formData = new FormData();
     formData.append('archivo', file);
-    const url = concilId
-      ? `${BASE}/${sucursal}/importar/preview?concilId=${concilId}`
-      : `${BASE}/${sucursal}/importar/preview`;
-    const { data } = await apiClient.post<ApiResponse<MovimientoBancarioDTO[]>>(
+    const params = new URLSearchParams();
+    if (concilId !== undefined) params.append('concilId', concilId.toString());
+    if (numeroCta) params.append('numeroCta', numeroCta);
+    if (fecha) params.append('fecha', fecha);
+    const url = `${BASE}/${sucursal}/importar/preview?${params.toString()}`;
+    const { data } = await apiClient.post<ApiResponse<{ movimientos: MovimientoBancarioDTO[], hashArchivo: string }>>(
       url,
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } }
     );
-    return data.data || [];
+    return data.data || { movimientos: [], hashArchivo: '' };
   },
 
-  /** Guardar: envía movimientos (JSON) para insertar en DARCHCON */
+  /** Guardar: envía movimientos (JSON) para insertar en DARCHCON junto con el nombre del archivo y hash SHA256 */
   guardarMovimientosImportados: async (
     sucursal: number,
     concilId: number,
-    movimientos: MovimientoBancarioDTO[]
+    movimientos: MovimientoBancarioDTO[],
+    nombreArchivo: string = '',
+    hashArchivo: string = '',
+    force: boolean = false,
+    fecha?: string
   ): Promise<number> => {
     const { data } = await apiClient.post<ApiResponse<number>>(
       `${BASE}/${sucursal}/importar/guardar/${concilId}`,
-      movimientos
+      { movimientos, nombreArchivo, hashArchivo, force, ...(fecha ? { fecha } : {}) }
     );
     return data.data || 0;
+  },
+
+  /** Validar si un archivo (por hash SHA256 del contenido) ya fue importado para esta conciliación */
+  validarImportacion: async (
+    sucursal: number,
+    concilId: number,
+    hashArchivo: string,
+    nombreArchivo: string
+  ): Promise<boolean> => {
+    const { data } = await apiClient.post<ApiResponse<boolean>>(
+      `${BASE}/${sucursal}/importar/validar/${concilId}`,
+      { hashArchivo, nombreArchivo }
+    );
+    return data.data ?? false;
+  },
+
+  /** Limpiar DOCTRANS (documentos en tránsito) de una conciliación */
+  limpiarDoctrans: async (sucursal: number, concilId: number): Promise<void> => {
+    await apiClient.delete(`${BASE}/${sucursal}/importar/doctrans/${concilId}`);
+  },
+
+  /** Verifica si existen DOCTRANS en la conciliación para un rango de fechas específico */
+  verificarOverlapFechas: async (
+    sucursal: number,
+    concilId: number,
+    fechaDesde: string,
+    fechaHasta: string
+  ): Promise<boolean> => {
+    const { data } = await apiClient.post<ApiResponse<boolean>>(
+      `${BASE}/${sucursal}/importar/verificar-overlap/${concilId}`,
+      { fechaDesde, fechaHasta }
+    );
+    return data.data ?? false;
   },
 
   /** Obtener cuentas bancarias disponibles (CTASBANC) */
@@ -187,6 +247,15 @@ export const conciliacionBancariaApi = {
       `${BASE}/${sucursal}/cuentas`
     );
     return data.data || [];
+  },
+
+  /** Obtener saldo según libros (DTRANS_CONT) hasta la fecha indicada para una cuenta bancaria */
+  obtenerSaldoLibros: async (sucursal: number, ctaBanc: string, fecha: string): Promise<number> => {
+    const { data } = await apiClient.get<ApiResponse<number>>(
+      `${BASE}/${sucursal}/saldo-libros`,
+      { params: { ctaBanc, fecha } }
+    );
+    return data.data ?? 0;
   },
 
   /** Obtener transacciones del sistema relacionadas con el CONCILID */
@@ -247,5 +316,44 @@ export const conciliacionBancariaApi = {
       `${BASE}/${sucursal}/${concilId}/exportar-transito`
     );
     return data.data || [];
+  },
+
+  /** Obtener cuenta contable asociada a una cuenta bancaria */
+  obtenerCuentaContable: async (sucursal: number, ctaBanc: string): Promise<string> => {
+    const { data } = await apiClient.get<ApiResponse<string>>(
+      `${BASE}/${sucursal}/cuenta-contable/${ctaBanc}`
+    );
+    return data.data || '';
+  },
+
+  /** Obtener plantilla de importación activa para una cuenta contable */
+  obtenerPlantillaActiva: async (sucursal: number, cuentaContable: string): Promise<PlantillaImportacionDTO | null> => {
+    const { data } = await apiClient.get<ApiResponse<PlantillaImportacionDTO | null>>(
+      `${BASE}/${sucursal}/plantillas/activa/${cuentaContable}`
+    );
+    return data.data ?? null;
+  },
+
+  /** Verifica si ya hay movimientos importados para una conciliación */
+  tieneMovimientosImportados: async (sucursal: number, concilId: number): Promise<boolean> => {
+    const { data } = await apiClient.get<ApiResponse<boolean>>(
+      `${BASE}/${sucursal}/conciliacion/${concilId}/movimientos-importados`
+    );
+    return data.data ?? false;
+  },
+
+  /** Obtiene el hash SHA256 del último archivo importado para una conciliación */
+  obtenerHashImportacion: async (sucursal: number, concilId: number): Promise<string> => {
+    const { data } = await apiClient.get<ApiResponse<string>>(
+      `${BASE}/${sucursal}/conciliacion/${concilId}/hash-importacion`
+    );
+    return data.data ?? '';
+  },
+
+  conciliarTransacciones: async (sucursal: number, concilId: number, transacIds: number[]): Promise<void> => {
+    await apiClient.post(
+      `${BASE}/${sucursal}/${concilId}/conciliar`,
+      { transacIds }
+    );
   },
 };

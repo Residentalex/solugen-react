@@ -1,0 +1,305 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { Table, Select, Button, message, Card, Typography, DatePicker, InputNumber, Empty, Input } from 'antd';
+import { SaveOutlined, SearchOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+import { useUIStore } from '../../stores/uiStore';
+import { useAuthStore } from '../../stores/authStore';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
+import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
+import PermissionGate from '../../components/PermissionGate';
+import { actualizacionCostoApi } from '../../api/actualizacionCostoApi';
+import { parametrosApi } from '../../api/parametrosApi';
+const { Text } = Typography;
+const { RangePicker } = DatePicker;
+const DIAS_POR_DEFECTO = 30;
+const OPCIONES_DOCUMENTO = [
+    { value: 'SAP', label: 'SAP' },
+    { value: 'TRP', label: 'TRP' },
+    { value: 'PV', label: 'PV' },
+];
+// ===== Helpers =====
+function toTitleCase(str) {
+    if (!str)
+        return '';
+    return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+function formatCurrency(n) {
+    return new Intl.NumberFormat('es-DO', {
+        style: 'currency',
+        currency: getMonedaSucursalActiva().codigo,
+        minimumFractionDigits: 2,
+    }).format(n);
+}
+function formatDate(dateStr) {
+    if (!dateStr)
+        return '-';
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime()))
+            return dateStr;
+        return d.toLocaleDateString('es-DO', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+        });
+    }
+    catch {
+        return dateStr;
+    }
+}
+function formatDateParam(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dy = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    return `${y}${m}${dy}${hh}${mm}${ss}`;
+}
+const ActualizacionCostos = () => {
+    const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
+    const usuario = useAuthStore((s) => s.usuario);
+    const setActiveModule = useUIStore((s) => s.setActiveModule);
+    const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
+    const resetToolbar = useUIStore((s) => s.resetToolbar);
+    // ===== Estados =====
+    const [tiposDocumento, setTiposDocumento] = useState([]);
+    const [data, setData] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [hasGenerated, setHasGenerated] = useState(false);
+    const [fechaCierre, setFechaCierre] = useState(null);
+    const [pageSize, setPageSize] = useState(50);
+    const [searchText, setSearchText] = useState('');
+    const dateParamsRef = useRef({
+        desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
+        hasta: formatDateParam(new Date()),
+    });
+    // ===== Lifecycle =====
+    useEffect(() => {
+        setActiveModule('OActualizacionCostos');
+        setPageTitleOverride('Actualización de Costos');
+        parametrosApi.obtenerFechaCierreInventario(sucursalActiva)
+            .then((fecha) => {
+            const d = dayjs(fecha);
+            if (d.isValid())
+                setFechaCierre(d);
+        })
+            .catch((err) => console.warn('Error al obtener fecha cierre inventario', err));
+        return () => {
+            resetToolbar();
+            setPageTitleOverride('');
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [setActiveModule, resetToolbar, setPageTitleOverride]);
+    // ===== Handlers =====
+    const handleDateChange = (dates) => {
+        if (dates && dates[0] && dates[1]) {
+            dateParamsRef.current = {
+                desde: dates[0].format('YYYYMMDD') + '000000',
+                hasta: dates[1].format('YYYYMMDD') + '000000',
+            };
+        }
+        else {
+            dateParamsRef.current = {
+                desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
+                hasta: formatDateParam(new Date()),
+            };
+        }
+    };
+    const datosFiltrados = useMemo(() => {
+        if (!searchText)
+            return data;
+        const f = searchText.toLowerCase();
+        return data.filter((d) => d.documento?.toLowerCase().includes(f) ||
+            d.documentoReferencia?.toLowerCase().includes(f) ||
+            d.codigo?.toLowerCase().includes(f) ||
+            d.producto?.toLowerCase().includes(f));
+    }, [data, searchText]);
+    const handleSearch = (value) => setSearchText(value);
+    const handleGenerar = useCallback(async () => {
+        if (tiposDocumento.length === 0) {
+            message.warning('Selecciona al menos un tipo de documento');
+            return;
+        }
+        const { desde, hasta } = dateParamsRef.current;
+        const docs = tiposDocumento.map((t) => `'${t}'`).join(',');
+        setLoading(true);
+        setHasGenerated(true);
+        try {
+            const resultados = await actualizacionCostoApi.obtenerPendientes(sucursalActiva, desde, hasta, docs);
+            setData([...resultados].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '')));
+            if (resultados.length === 0) {
+                message.info('Todos los costos están actualizados');
+            }
+        }
+        catch (err) {
+            message.error(err?.response?.data?.errorMessage || 'Error al obtener pendientes');
+            setData([]);
+        }
+        finally {
+            setLoading(false);
+        }
+    }, [sucursalActiva, tiposDocumento]);
+    const handleActualizar = async () => {
+        if (data.length === 0) {
+            message.warning('No hay datos para actualizar');
+            return;
+        }
+        setSaving(true);
+        try {
+            const { desde, hasta } = dateParamsRef.current;
+            const toISO = (s) => `${s.substring(0, 4)}-${s.substring(4, 6)}-${s.substring(6, 8)}T${s.substring(8, 10)}:${s.substring(10, 12)}:${s.substring(12, 14)}`;
+            await actualizacionCostoApi.aplicar(sucursalActiva, {
+                fechaDesde: toISO(desde),
+                fechaHasta: toISO(hasta),
+                nota: '',
+                usuario: { id: usuario?.id },
+                detalles: data,
+            });
+            message.success('Actualización de costos aplicada exitosamente');
+            setData([]);
+            setHasGenerated(false);
+        }
+        catch (err) {
+            message.error(err?.response?.data?.errorMessage || 'Error al aplicar actualización de costos');
+        }
+        finally {
+            setSaving(false);
+        }
+    };
+    const handleCostoNuevoChange = (id, value) => {
+        setData((prev) => prev.map((item) => item.id === id ? { ...item, costoNuevo: value ?? 0 } : item));
+    };
+    const exportarExcel = useCallback(async () => {
+        if (datosFiltrados.length === 0) {
+            message.warning('No hay datos para exportar');
+            return;
+        }
+        const companyName = await getCompanyName(sucursalActiva);
+        const columnHeaders = ['Fecha', 'Documento', 'Código', 'Producto', 'Costo Anterior', 'Costo Nuevo', '% Dif.', 'Doc. Origen', 'Fec. Origen'];
+        const dataRows = datosFiltrados.map((item) => [
+            formatDate(item.fecha),
+            item.documento || '',
+            item.codigo || '',
+            toTitleCase(item.producto),
+            item.costoAntiguo || 0,
+            item.costoNuevo || 0,
+            item.costoAntiguo
+                ? Number((((item.costoNuevo - item.costoAntiguo) / item.costoAntiguo) * 100).toFixed(2))
+                : 0,
+            item.documentoReferencia || '-',
+            item.fechaDocumento ? formatDate(item.fechaDocumento) : '-',
+        ]);
+        exportToExcel({
+            companyName,
+            columnHeaders,
+            dataRows,
+            sheetName: 'Actualización Costos',
+            columnWidths: [
+                { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 30 },
+                { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 12 },
+            ],
+        });
+    }, [sucursalActiva, datosFiltrados]);
+    // ===== Columnas =====
+    const columns = [
+        {
+            title: 'Fecha',
+            dataIndex: 'fecha',
+            key: 'fecha',
+            width: 85,
+            render: (val) => _jsx(Text, { children: formatDate(val) }),
+        },
+        {
+            title: 'Documento',
+            dataIndex: 'documento',
+            key: 'documento',
+            width: 95,
+            render: (val) => _jsx(Text, { strong: true, children: val }),
+        },
+        {
+            title: 'Código',
+            dataIndex: 'codigo',
+            key: 'codigo',
+            width: 75,
+            render: (val) => _jsx(Text, { children: val }),
+        },
+        {
+            title: 'Producto',
+            dataIndex: 'producto',
+            key: 'producto',
+            width: 250,
+            ellipsis: true,
+            render: (val) => _jsx(Text, { children: toTitleCase(val) }),
+        },
+        {
+            title: 'Costo Anterior',
+            dataIndex: 'costoAntiguo',
+            key: 'costoAntiguo',
+            width: 130,
+            align: 'right',
+            render: (val) => (_jsx(Text, { type: "secondary", style: { fontFamily: 'monospace' }, children: formatCurrency(val) })),
+        },
+        {
+            title: '% Dif.',
+            key: 'diferencia',
+            width: 80,
+            align: 'right',
+            render: (_, record) => {
+                const pct = record.costoAntiguo
+                    ? ((record.costoNuevo - record.costoAntiguo) / record.costoAntiguo) * 100
+                    : 0;
+                const color = pct > 0 ? '#34c38f' : pct < 0 ? '#f46a6a' : undefined;
+                return _jsxs(Text, { style: { color, fontFamily: 'monospace' }, children: [pct >= 0 ? '+' : '', pct.toFixed(2), "%"] });
+            },
+        },
+        {
+            title: 'Costo Nuevo',
+            dataIndex: 'costoNuevo',
+            key: 'costoNuevo',
+            width: 130,
+            align: 'right',
+            render: (_, record) => (_jsx(InputNumber, { size: "small", style: { width: '100%', fontFamily: 'monospace' }, min: 0, step: 0.01, precision: 2, defaultValue: record.costoNuevo, onBlur: (e) => handleCostoNuevoChange(record.id, parseFloat(e.target.value) || 0), onPressEnter: (e) => handleCostoNuevoChange(record.id, parseFloat(e.target.value) || 0), disabled: saving })),
+        },
+        {
+            title: 'Doc. Origen',
+            dataIndex: 'documentoReferencia',
+            key: 'documentoReferencia',
+            width: 140,
+            render: (val) => _jsx(Text, { strong: true, children: val || '-' }),
+        },
+        {
+            title: 'Fec. Origen',
+            dataIndex: 'fechaDocumento',
+            key: 'fechaDocumento',
+            width: 85,
+            render: (val) => _jsx(Text, { children: val ? formatDate(val) : '-' }),
+        },
+    ];
+    // ===== Empty description según estado =====
+    const emptyDescription = !hasGenerated
+        ? 'Selecciona filtros y presiona Generar'
+        : loading
+            ? ' '
+            : 'Todos los costos están actualizados';
+    return (_jsxs("div", { children: [_jsx(Card, { className: "paces-card", size: "small", style: { marginBottom: 16 }, children: _jsxs("div", { style: { display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }, children: [_jsx(Select, { mode: "multiple", style: { minWidth: 260 }, placeholder: "Tipos de documento", value: tiposDocumento, onChange: setTiposDocumento, options: OPCIONES_DOCUMENTO, allowClear: true }), _jsx(RangePicker, { style: { width: 240 }, format: "YYYY-MM-DD", onChange: handleDateChange, placeholder: ['Desde', 'Hasta'], disabledDate: (current) => !!fechaCierre && current <= fechaCierre.endOf('day') }), _jsx(PermissionGate, { accion: "PROCESAR", children: _jsx(Button, { type: "primary", onClick: handleGenerar, children: "Generar" }) }), data.length > 0 && (_jsx(PermissionGate, { accion: "PROCESAR", children: _jsx(Button, { type: "primary", icon: _jsx(SaveOutlined, {}), loading: saving, onClick: handleActualizar, children: "Actualizar" }) })), data.length > 0 && (_jsx(PermissionGate, { accion: "EXPORTAR", children: _jsx(Button, { icon: _jsx(DownloadOutlined, {}), onClick: exportarExcel }) })), _jsx("div", { style: { flex: 1 } }), _jsx(Select, { style: { width: 65 }, value: pageSize, onChange: (v) => setPageSize(v), options: [
+                                { value: 25, label: '25' },
+                                { value: 50, label: '50' },
+                                { value: 100, label: '100' },
+                            ] })] }) }), hasGenerated && (_jsx("div", { style: { marginBottom: 12 }, children: _jsx(Input.Search, { placeholder: "Buscar por doc. origen, c\u00F3digo, documento o producto...", allowClear: true, onSearch: handleSearch, onChange: (e) => { if (!e.target.value)
+                        setSearchText(''); }, onKeyDown: (e) => {
+                        if (e.key === 'Escape') {
+                            e.target.blur();
+                            handleSearch('');
+                        }
+                    }, style: { width: 450 }, prefix: _jsx(SearchOutlined, { className: "paces-text-icon" }) }) })), _jsx(Card, { className: "paces-card-erp", style: { borderRadius: 8 }, styles: { body: { padding: 0 } }, children: _jsx(Table, { columns: columns, dataSource: datosFiltrados, rowKey: "id", loading: loading, scroll: { x: 1050 }, size: "middle", locale: {
+                        emptyText: _jsx("div", { style: { minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }, children: _jsx(Empty, { description: emptyDescription }) }),
+                    }, pagination: {
+                        pageSize,
+                        showSizeChanger: false,
+                        showTotal: (t) => `${t} registros`,
+                    } }) })] }));
+};
+export default ActualizacionCostos;

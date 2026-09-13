@@ -1,0 +1,87 @@
+import { jsx as _jsx } from "react/jsx-runtime";
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import GuidePopover from '../../components/GuidePopover/GuidePopover';
+export const NotaCreditoGuide = ({ tipo, concepto, entidad, total, detallesCount, ncf, requiereNCF, tipoRef, conceptoRef, entidadRef, montoRef, documentosRef, ncfRef, sucursal, sucursalRef, }) => {
+    const [open, setOpen] = useState(false);
+    const dismissedStepRef = useRef(null);
+    const currentStepRef = useRef(null);
+    const getCurrentStep = useCallback(() => {
+        const steps = [
+            {
+                key: 'sucursal',
+                title: 'Paso 1: Sucursal',
+                description: 'Seleccione la sucursal contable a la que pertenece la nota de crédito.',
+                target: () => sucursalRef.current,
+            },
+            {
+                key: 'tipo',
+                title: 'Tipo de Documento',
+                description: 'Debe elegir un tipo de Documento para poder continuar. Los tipos determinan ciertas acciones del documento, por ejemplo si este documento se visualizará en los estados de cuentas, un reporte en específico, etc.',
+                target: () => tipoRef.current,
+            },
+            {
+                key: 'concepto',
+                title: 'Concepto',
+                description: 'Debe elegir un concepto para poder continuar. Los conceptos determinan ciertas acciones del documento, por ejemplo qué documento se va a generar, el almacén por defecto, o si va a generar asientos o no, etc.',
+                target: () => conceptoRef.current,
+            },
+            {
+                key: 'entidad',
+                title: 'Entidad',
+                description: 'Debe elegir una entidad para poder continuar.',
+                target: () => entidadRef.current,
+            },
+            {
+                key: 'monto',
+                title: 'Monto',
+                description: 'Digite el Monto para poder continuar.',
+                target: () => montoRef.current,
+            },
+            {
+                key: 'documentos',
+                title: 'Documentos',
+                description: 'Seleccione Documentos para acreditar.',
+                target: () => documentosRef.current,
+            },
+            {
+                key: 'ncf',
+                title: 'NCF',
+                description: 'Debe digitar un NCF.',
+                target: () => ncfRef?.current || null,
+            },
+        ];
+        if (!sucursal)
+            return steps[0];
+        if (!tipo)
+            return steps[1];
+        if (!concepto)
+            return steps[2];
+        if (!entidad)
+            return steps[3];
+        if (total === 0)
+            return steps[4];
+        if (detallesCount === 0)
+            return steps[5];
+        if (requiereNCF && !ncf)
+            return steps[6];
+        return null;
+    }, [tipo, concepto, entidad, total, detallesCount, ncf, requiereNCF, tipoRef, conceptoRef, entidadRef, montoRef, documentosRef, ncfRef, sucursal, sucursalRef]);
+    currentStepRef.current = getCurrentStep();
+    useEffect(() => {
+        const current = getCurrentStep();
+        if (current) {
+            if (dismissedStepRef.current !== current.key) {
+                setOpen(true);
+            }
+        }
+        else {
+            setOpen(false);
+            dismissedStepRef.current = null;
+        }
+    }, [getCurrentStep]);
+    const currentStep = getCurrentStep();
+    if (!currentStep)
+        return null;
+    return (_jsx(GuidePopover, { title: currentStep.title, description: currentStep.description, targetElement: currentStep.target(), open: open, onClose: () => { setOpen(false); dismissedStepRef.current = currentStepRef.current?.key || ''; } }));
+};
+export default NotaCreditoGuide;

@@ -6,7 +6,7 @@ import { conciliacionBancariaApi } from '../../api/conciliacionBancariaApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { useDocumentoListado } from '../../hooks/useDocumentoListado';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
-import { formatCurrency, formatDate } from '../../utils/formats';
+import { formatCurrency, formatDate, formatDateParam } from '../../utils/formats';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -31,6 +31,10 @@ const ConciliacionBancaria: React.FC = () => {
   const { screenCode } = useScreenConfig('FConcil');
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<ConciliacionRow>({
     modulo: screenCode,
+    rangoDefaultOverride: {
+      desde: formatDateParam(new Date(Date.now() - 90 * 86400000)),
+      hasta: formatDateParam(new Date()),
+    },
     fetchVista: async (sucursal, desde, hasta, filas, salto, estado) => {
       const res = await conciliacionBancariaApi.obtenerVistaDocumento(sucursal, desde, hasta, filas, salto, estado);
       return {

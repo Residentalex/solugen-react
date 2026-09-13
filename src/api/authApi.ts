@@ -10,6 +10,7 @@ export interface CambiarClaveRequest {
 export const authApi = {
   login: async (request: AuthLoginRequest): Promise<AuthSesionDTO> => {
     const { data } = await apiClient.post('/auth/login', request);
+    if (!data?.data) throw new Error('Respuesta inválida del servidor');
     return data.data;
   },
 
@@ -20,6 +21,7 @@ export const authApi = {
     sucursal: number;
   }): Promise<AuthSesionDTO> => {
     const { data } = await apiClient.post('/auth/refresh', request);
+    if (!data?.data) throw new Error('Respuesta inválida del servidor');
     return data.data;
   },
 

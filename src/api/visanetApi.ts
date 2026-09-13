@@ -28,8 +28,9 @@ export const visanetApi = {
     return data.data;
   },
 
-  obtenerVouchersDelDia: async (sucursal: number): Promise<VisanetVoucherDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<VisanetVoucherDTO[]>>(`${BASE}/${sucursal}/vouchers-dia`);
+  obtenerVouchersDelDia: async (sucursal: number, fecha?: string): Promise<VisanetVoucherDTO[]> => {
+    const params = fecha ? `?fecha=${fecha}` : '';
+    const { data } = await apiClient.get<ApiResponse<VisanetVoucherDTO[]>>(`${BASE}/${sucursal}/vouchers-dia${params}`);
     return data.data;
   },
 };

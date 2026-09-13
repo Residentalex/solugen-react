@@ -105,7 +105,11 @@ const ReportesModulo: React.FC = () => {
                   e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)';
                   e.currentTarget.style.borderColor = '#e8ecf0';
                 }}
-                onClick={() => navigate(prefix + reporte.codigo)}
+                onClick={() => {
+                  const moduloActual = reporte.modulos?.find((m) => m.nombre === moduloNombre);
+                  const query = moduloActual ? `?modulo=${moduloActual.id}` : '';
+                  navigate(`${prefix}${reporte.codigo}${query}`);
+                }}
               >
                 <Space direction="vertical" style={{ width: '100%' }} size={12}>
                   {/* Icono grande con fondo degradado */}

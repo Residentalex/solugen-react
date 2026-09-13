@@ -37,6 +37,7 @@ interface DocumentListadoLayoutProps<T> {
     onPageSizeChange: (value: number) => void;
     extraLeft?: React.ReactNode;
     extraRight?: React.ReactNode;
+    extraToolbar?: React.ReactNode;
     showCrear?: boolean;
     onCrear?: () => void;
     showEditar?: boolean;
@@ -48,6 +49,9 @@ interface DocumentListadoLayoutProps<T> {
     showImprimir?: boolean;
     imprimirDisabled?: boolean;
     onImprimir?: () => void;
+    showExportarExcel?: boolean;
+    exportarExcelDisabled?: boolean;
+    onExportarExcel?: () => void;
     onRefresh: () => void;
   };
 

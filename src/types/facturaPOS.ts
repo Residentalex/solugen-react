@@ -1,4 +1,5 @@
 // Tipos compartidos usados por Factura POS, Factura Cliente y Devolucion Venta
+import type { VisanetVoucherDTO } from './visanet';
 
 export interface ClienteDTO {
   nombre: string;
@@ -62,6 +63,8 @@ export interface DetalleFacturaPOSDTO {
   costo: number;
   costoAlterno?: number;
   precio: number;
+  precioOferta?: number;
+  precioRegularOferta?: number;
   precioNeto?: number;
   montoBase?: number;
   subTotal: number;
@@ -210,4 +213,14 @@ export interface FacturaPOSDTO {
   cobros?: any[];
   transaccionesAsociadas?: DocumentoRelacionadoDTO[];
   impuestosFactura?: ImpuestoFacturaDTO[];
+  vouchers?: VisanetVoucherDTO[];
+}
+
+export interface ReporteEscPosDTO {
+  nombreDocumento: string;
+  mimeType: string;
+  encoding: string;
+  charset: string;
+  contenidoBase64: string;
+  cantidadBytes: number;
 }

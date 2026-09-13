@@ -1,16 +1,21 @@
-﻿import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Card, Table, Input, Button, DatePicker, Row, Col, Modal, Space,
-  message, Alert, Empty, Tag,
+  message, Alert, Empty, Tag, Avatar, Divider, Skeleton, Typography,
 } from 'antd';
-import { ThunderboltOutlined, SearchOutlined } from '@ant-design/icons';
+import {
+  ThunderboltOutlined, SearchOutlined, ReloadOutlined,
+  EyeOutlined, ShopOutlined,
+} from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { movimientoApi } from '../../api/movimientoApi';
 import { conteoApi } from '../../api/conteoApi';
-import type { MovimientoArticuloAgrupadoDTO, MovimientoArticuloDTO } from '../../types/movimientoPorPlantilla';
+import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
+import ModalMovimientosPosteriores from '../../components/ModalMovimientosPosteriores/ModalMovimientosPosteriores';
 import type { PlantillaConteoFisicoDTO } from '../../api/conteoApi';
+import type { DetallePlantillaConteoFisicoDTO } from '../../types/plantilla';
 import dayjs, { Dayjs } from 'dayjs';
 
 
@@ -38,29 +43,6 @@ function formatNumber(n: number): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(n);
-}
-
-function calcularTiempo(ultimaVenta: string | null, ultimaCompra: string | null): string {
-  const fechas: Date[] = [];
-  if (ultimaVenta) {
-    const d = new Date(ultimaVenta);
-    if (!isNaN(d.getTime())) fechas.push(d);
-  }
-  if (ultimaCompra) {
-    const d = new Date(ultimaCompra);
-    if (!isNaN(d.getTime())) fechas.push(d);
-  }
-  if (fechas.length === 0) return '-';
-
-  const masReciente = new Date(Math.max(...fechas.map(f => f.getTime())));
-  const ahora = new Date();
-  const diffMs = ahora.getTime() - masReciente.getTime();
-  const diffHoras = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDias >= 1) return `${diffDias} día${diffDias !== 1 ? 's' : ''}`;
-  if (diffHoras >= 1) return `${diffHoras} hora${diffHoras !== 1 ? 's' : ''}`;
-  return 'Hoy';
 }
 
 function extraerMensajeError(err: any, fallback: string): string {
@@ -187,6 +169,49 @@ const BuscarPlantillaModal: React.FC<BuscarPlantillaModalProps> = ({
 
 
 // ---------------------------------------------------------------------------
+// Columnas para la tabla de productos
+// ---------------------------------------------------------------------------
+interface ColumnasProducto {
+  dataIndex: string;
+  key: string;
+  width?: number;
+  ellipsis?: boolean;
+  align?: 'left' | 'right' | 'center';
+  render?: (value: any, record: DetallePlantillaConteoFisicoDTO, index: number) => React.ReactNode;
+}
+
+const columnasProducto: ColumnasProducto[] = [
+  {
+    title: 'Código',
+    dataIndex: 'codigo',
+    key: 'codigo',
+    width: 120,
+  },
+  {
+    title: 'Artículo',
+    dataIndex: 'producto',
+    key: 'producto',
+    ellipsis: true,
+    render: (value: string) => toTitleCase(value || ''),
+  },
+  {
+    title: 'Presentación',
+    dataIndex: 'presentacion',
+    key: 'presentacion',
+    width: 140,
+    render: (value: string) => value || '-',
+  },
+  {
+    title: 'Familia',
+    dataIndex: 'familia',
+    key: 'familia',
+    width: 140,
+    render: (value: string) => value || '-',
+  },
+];
+
+
+// ---------------------------------------------------------------------------
 // Página principal: Movimiento por Plantilla
 // ---------------------------------------------------------------------------
 const MovimientoPorPlantilla: React.FC = () => {
@@ -200,8 +225,8 @@ const MovimientoPorPlantilla: React.FC = () => {
   const [suplidorNombre, setSuplidorNombre] = useState<string>('');
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Datos
-  const [data, setData] = useState<MovimientoArticuloAgrupadoDTO[] | null>(null);
+  // Datos - productos de la plantilla
+  const [productos, setProductos] = useState<DetallePlantillaConteoFisicoDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
 
@@ -210,6 +235,19 @@ const MovimientoPorPlantilla: React.FC = () => {
 
   // Búsqueda local en resultados
   const [searchText, setSearchText] = useState('');
+
+  // Producto seleccionado para análisis
+  const [selectedItem, setSelectedItem] = useState<DetallePlantillaConteoFisicoDTO | null>(null);
+  const [analisisLoading, setAnalisisLoading] = useState(false);
+  const [analisisError, setAnalisisError] = useState(false);
+  const [analisisData, setAnalisisData] = useState<any[]>([]);
+  const [analisisResumenLoading, setAnalisisResumenLoading] = useState(false);
+
+  // Modal movimientos posteriores
+  const [movimientosModalOpen, setMovimientosModalOpen] = useState(false);
+  const [movimientosSucursal, setMovimientosSucursal] = useState('');
+  const [movimientosData, setMovimientosData] = useState<any[]>([]);
+  const [movimientosLoading, setMovimientosLoading] = useState(false);
 
   useEffect(() => {
     setActiveModule('RMOVPLAN');
@@ -224,7 +262,7 @@ const MovimientoPorPlantilla: React.FC = () => {
     }
   }, [plantillaCodigo, setPageTitleOverride]);
 
-  // Generar reporte
+  // Cargar productos de la plantilla
   const handleGenerar = useCallback(async () => {
     if (!plantillaCodigo) {
       message.warning('Debe seleccionar una plantilla primero');
@@ -232,69 +270,23 @@ const MovimientoPorPlantilla: React.FC = () => {
     }
     setLoadingError(false);
     setLoading(true);
+    setSelectedItem(null);
+    setAnalisisData([]);
     try {
-      const res = await movimientoApi.obtenerPorPlantilla(
-        sucursalActiva, 
-        plantillaCodigo, 
-        fechaSeleccionada.format('YYYYMMDD') + '000000'
-      );
-
-      // Agrupar los movimientos individuales en el formato que espera la tabla
-      const agrupadoMap = new Map<string, MovimientoArticuloAgrupadoDTO>();
-      res.forEach((item: MovimientoArticuloDTO) => {
-        const key = `${item.codigo}|${item.sucursal}`;
-        if (!agrupadoMap.has(key)) {
-          agrupadoMap.set(key, {
-            codigo: item.codigo,
-            articulo: item.articulo || '',
-            sucursal: item.sucursal || '',
-            prefijo: '',
-            compras: 0,
-            ventas: 0,
-            transferencias: 0,
-            ultimaCompra: null,
-            ultimaVenta: null,
-            existencia: 0,
-            tiempo: '-',
-          });
-        }
-        const entry = agrupadoMap.get(key)!;
-        const tipoDoc = (item.tipoDocumento || '').toUpperCase();
-        if (tipoDoc === 'ENP') {
-          entry.compras += Math.abs(item.cantidad);
-          if (!entry.ultimaCompra || item.fecha > entry.ultimaCompra) {
-            entry.ultimaCompra = item.fecha;
-          }
-        } else if (tipoDoc === 'SAP' || tipoDoc === 'TRP') {
-          entry.transferencias += Math.abs(item.cantidad);
-        } else if (tipoDoc === 'PV' || tipoDoc === 'FAC') {
-          entry.ventas += Math.abs(item.cantidad);
-          if (!entry.ultimaVenta || item.fecha > entry.ultimaVenta) {
-            entry.ultimaVenta = item.fecha;
-          }
-        }
-        entry.existencia += item.cantidad;
-      });
-
-      // Calcular tiempo para cada grupo
-      const dataAgrupada = Array.from(agrupadoMap.values());
-      dataAgrupada.forEach((item) => {
-        item.tiempo = calcularTiempo(item.ultimaVenta, item.ultimaCompra);
-      });
-
-      setData(dataAgrupada);
-      if (!dataAgrupada || dataAgrupada.length === 0) {
-        message.info('No se encontraron resultados para esta plantilla');
+      const res = await movimientoApi.obtenerProductosPlantilla(sucursalActiva, plantillaCodigo);
+      setProductos(res || []);
+      if (!res || res.length === 0) {
+        message.info('No se encontraron productos para esta plantilla');
       }
     } catch (err: any) {
       setLoadingError(true);
-      setData(null);
-      const msg = extraerMensajeError(err, 'Error al cargar los datos');
+      setProductos([]);
+      const msg = extraerMensajeError(err, 'Error al cargar los productos');
       message.error(msg);
     } finally {
       setLoading(false);
     }
-  }, [plantillaCodigo, sucursalActiva, fechaSeleccionada]);
+  }, [plantillaCodigo, sucursalActiva]);
 
   // Seleccionar plantilla desde el modal
   const handleSeleccionarPlantilla = useCallback(
@@ -316,106 +308,316 @@ const MovimientoPorPlantilla: React.FC = () => {
     [sucursalActiva]
   );
 
-  // Datos a mostrar (tal cual vienen del API, con sucursal)
-  const displayData = useMemo(() => data ?? [], [data]);
+  // Cargar análisis de producto cuando se selecciona
+  useEffect(() => {
+    if (!selectedItem) return;
+    const codigo = selectedItem.codigo;
+
+    setAnalisisData([]);
+    setAnalisisLoading(true);
+    setAnalisisError(false);
+
+    const SUCURSALES_ANALISIS = [
+      { id: 0, nombre: 'OP' },
+      { id: 1, nombre: 'HR' },
+      { id: 2, nombre: 'VH' },
+    ];
+
+    Promise.allSettled(
+      SUCURSALES_ANALISIS.map((s) =>
+        entradaAlmacenApi.obtenerUltimasEntradasPorSucursal(s.id, codigo)
+          .then((data) => {
+            if (data && data.length > 0) {
+              const item = data[0];
+              return { ...item, sucursal: s.id, sucursalNombre: s.nombre };
+            }
+            return { sucursal: s.id, sucursalNombre: s.nombre, codigo, nombre: '', fecha: null as any, documento: '', cantidad: 0 };
+          })
+          .catch(() => ({
+            sucursal: s.id, sucursalNombre: s.nombre, codigo, nombre: '', fecha: null as any, documento: '', cantidad: 0,
+          }))
+      )
+    ).then((results) => {
+      const datos = results
+        .map((r) => (r.status === 'fulfilled' ? r.value : null))
+        .filter((d): d is NonNullable<typeof d> => d !== null);
+      setAnalisisData(datos);
+      setAnalisisLoading(false);
+
+      const conDatos = datos.filter((d) => d?.fecha);
+      if (conDatos.length > 0) {
+        setAnalisisResumenLoading(true);
+        Promise.allSettled(
+          conDatos.map((item) =>
+            entradaAlmacenApi.obtenerResumenMovimientosPosteriores(
+              item.sucursal, codigo, dayjs(item.fecha).format('YYYYMMDDHHmmss'), item.sucursal
+            )
+              .then((resumen) => ({ sucursal: item.sucursal, resumen }))
+              .catch(() => ({ sucursal: item.sucursal, resumen: null }))
+          )
+        ).then((res) => {
+          setAnalisisData((prev) =>
+            prev.map((item) => {
+              const found = res.find((r) => r.status === 'fulfilled' && r.value?.sucursal === item?.sucursal);
+              return found?.status === 'fulfilled' && found.value?.resumen
+                ? { ...item, resumen: found.value.resumen }
+                : item;
+            })
+          );
+          setAnalisisResumenLoading(false);
+        });
+      }
+    }).catch(() => {
+      setAnalisisError(true);
+      setAnalisisLoading(false);
+    });
+  }, [selectedItem]);
+
+  // Ver movimientos posteriores
+  const handleVerMovimientos = useCallback(async (item: any) => {
+    if (!selectedItem) return;
+    setMovimientosSucursal(item.sucursalNombre);
+    setMovimientosModalOpen(true);
+    setMovimientosLoading(true);
+    setMovimientosData([]);
+    try {
+      const data = await entradaAlmacenApi.obtenerDetalleMovimientosPosteriores(
+        item.sucursal,
+        selectedItem.codigo,
+        dayjs(item.fecha).format('YYYYMMDDHHmmss'),
+        item.sucursal
+      );
+      setMovimientosData(data ?? []);
+    } catch {
+      message.error('Error al cargar movimientos');
+      setMovimientosData([]);
+    } finally {
+      setMovimientosLoading(false);
+    }
+  }, [selectedItem]);
 
   // Datos filtrados por búsqueda local
   const filteredData = useMemo(() => {
-    if (!data) return [];
-    if (!searchText.trim()) return data;
+    if (!productos.length) return [];
+    if (!searchText.trim()) return productos;
     const term = searchText.trim().toLowerCase();
-    return data.filter(
+    return productos.filter(
       (item) =>
         (item.codigo || '').toLowerCase().includes(term) ||
-        (item.articulo || '').toLowerCase().includes(term) ||
-        (item.sucursal || '').toLowerCase().includes(term)
+        (item.producto || '').toLowerCase().includes(term) ||
+        (item.familia || '').toLowerCase().includes(term)
     );
-  }, [data, searchText]);
+  }, [productos, searchText]);
 
-  // Columnas de la tabla
-  const columns = useMemo(() => {
-    const cols: any[] = [
-      {
-        title: 'Sucursal',
-        dataIndex: 'sucursal',
-        key: 'sucursal',
-        width: 140,
-        render: (v: string) => toTitleCase(v || ''),
-      },
-      
-      {
-        title: 'Código',
-        key: 'codigo',
-        width: 130,
-        render: (_: any, record: MovimientoArticuloAgrupadoDTO) => record.codigo,
-      },
-      {
-        title: 'Artículo',
-        dataIndex: 'articulo',
-        key: 'articulo',
-        ellipsis: true,
-        render: (v: string) => toTitleCase(v || ''),
-      },
-      {
-        title: 'Compras',
-        dataIndex: 'compras',
-        key: 'compras',
-        width: 110,
-        align: 'right' as const,
-        render: (v: number) => formatNumber(v || 0),
-      },
-      {
-        title: 'Ventas',
-        dataIndex: 'ventas',
-        key: 'ventas',
-        width: 110,
-        align: 'right' as const,
-        render: (v: number) => formatNumber(v || 0),
-      },
-      {
-        title: 'Transferencias',
-        dataIndex: 'transferencias',
-        key: 'transferencias',
-        width: 120,
-        align: 'right' as const,
-        render: (v: number) => formatNumber(v || 0),
-      },
-      {
-        title: 'Última Compra',
-        dataIndex: 'ultimaCompra',
-        key: 'ultimaCompra',
-        width: 120,
-        render: (v: string | null) => formatDate(v),
-      },
-      {
-        title: 'Última Venta',
-        dataIndex: 'ultimaVenta',
-        key: 'ultimaVenta',
-        width: 120,
-        render: (v: string | null) => formatDate(v),
-      },
-      {
-        title: 'Tiempo',
-        dataIndex: 'tiempo',
-        key: 'tiempo',
-        width: 100,
-      },
-      {
-        title: 'Existencia',
-        dataIndex: 'existencia',
-        key: 'existencia',
-        width: 110,
-        align: 'right' as const,
-        render: (v: number) => formatNumber(v || 0),
-      },
-    ];
+  // Card de análisis de producto (sidebar derecho)
+  const analisisCard = (
+    <Card className="paces-card" size="small" title="Análisis de Producto">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {/* Identidad del producto */}
+        {selectedItem ? (
+          <Space align="start" size={12} style={{ marginBottom: 16, width: '100%' }}>
+            <Avatar size={40} style={{ backgroundColor: 'rgba(85,110,230,0.12)', color: 'var(--paces-primary)', fontWeight: 600, flexShrink: 0 }}>
+              {(selectedItem?.producto || '?')[0].toUpperCase()}
+            </Avatar>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Typography.Title level={5} style={{ margin: 0 }}>{toTitleCase(selectedItem?.producto || '')}</Typography.Title>
+              <Typography.Text className="paces-text-secondary" style={{ fontSize: 12 }}>
+                Código: {selectedItem?.codigo}
+              </Typography.Text>
+              <br />
+              <Typography.Text className="paces-text-secondary" style={{ fontSize: 11 }}>
+                {selectedItem?.presentacion ? `Presentación: ${selectedItem.presentacion}` : ''}
+                {selectedItem?.familia ? ` | Familia: ${selectedItem.familia}` : ''}
+              </Typography.Text>
+            </div>
+          </Space>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <Avatar size={40} style={{ backgroundColor: 'rgba(0,0,0,0.04)', color: '#8c8c8c', fontWeight: 600, flexShrink: 0 }}>?</Avatar>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Typography.Title level={5} style={{ margin: 0, color: '#8c8c8c' }}>Sin producto seleccionado</Typography.Title>
+              <Typography.Text className="paces-text-secondary" style={{ fontSize: 12 }}>
+                Seleccione un producto de la lista para ver su análisis.
+              </Typography.Text>
+            </div>
+          </div>
+        )}
+        <Divider style={{ margin: '0 0 16px 0' }} />
 
-    return cols;
-  }, []);
+        {/* Análisis por sucursal */}
+        {!selectedItem ? (
+          <Alert type="info" message="Seleccione un producto para ver su análisis de movimientos." style={{ marginBottom: 16 }} />
+        ) : analisisError ? (
+          <Alert type="error" message="Error al cargar datos" style={{ marginBottom: 16 }}
+            action={<Button size="small" onClick={() => setSelectedItem({ ...selectedItem })}><ReloadOutlined />Reintentar</Button>} />
+        ) : analisisLoading ? (
+          <Skeleton active paragraph={{ rows: 3 }} style={{ marginBottom: 16 }} />
+        ) : analisisData.length > 0 ? (
+          <>
+            {analisisData.some((d) => d.resumen) && (
+              <Card
+                className="paces-card"
+                size="small"
+                style={{
+                  borderRadius: 6,
+                  border: '1px solid #d9d9d9',
+                  borderTop: '3px solid #556ee6',
+                  background: 'rgba(85,110,230,0.04)',
+                  marginBottom: 12,
+                }}
+              >
+                <Typography.Text strong style={{ fontSize: 12, color: '#556ee6', display: 'block', marginBottom: 6 }}>
+                  📊 Resumen total
+                </Typography.Text>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+                  {(() => {
+                    const totales = analisisData.reduce(
+                      (acc: any, item: any) => {
+                        const r = item.resumen;
+                        if (!r) return acc;
+                        return {
+                          ventasSinComponentes: acc.ventasSinComponentes + (r.ventasSinComponentes || 0),
+                          ventasConComponentes: acc.ventasConComponentes + (r.ventasConComponentes || 0),
+                          salidas: acc.salidas + (r.salidas || 0),
+                          devCompra: acc.devCompra + (r.devolucionesCompra || 0),
+                          devVenta: acc.devVenta + (r.devolucionesVenta || 0),
+                        };
+                      },
+                      { ventasSinComponentes: 0, ventasConComponentes: 0, salidas: 0, devCompra: 0, devVenta: 0 }
+                    );
+                    return [
+                      { label: 'Ventas (sin comp.)', value: totales.ventasSinComponentes },
+                      { label: 'Ventas (con comp.)', value: totales.ventasConComponentes },
+                      { label: 'Salidas', value: totales.salidas },
+                      { label: 'Dev. Compra', value: totales.devCompra },
+                      { label: 'Dev. Venta', value: totales.devVenta },
+                    ].map((kpi) => (
+                      <div key={kpi.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                        <Typography.Text style={{ fontSize: 12, color: '#8c8c8c' }}>{kpi.label}</Typography.Text>
+                        <Typography.Text strong style={{ fontSize: 14, color: '#556ee6' }}>
+                          {formatNumber(kpi.value)}
+                        </Typography.Text>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </Card>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {analisisData.map((item: any) => {
+                const SUCURSAL_COLORS: Record<number, { color: string; bg: string }> = {
+                  0: { color: '#1677ff', bg: 'rgba(22,119,255,0.06)' },
+                  1: { color: '#52c41a', bg: 'rgba(82,196,26,0.06)' },
+                  2: { color: '#fa8c16', bg: 'rgba(250,140,22,0.06)' },
+                };
+                const style = SUCURSAL_COLORS[item.sucursal] || { color: '#556ee6', bg: 'rgba(85,110,230,0.06)' };
+                const sinRegistro = !item.fecha;
+
+                return (
+                  <Card
+                    key={item.sucursal}
+                    className="paces-card"
+                    size="small"
+                    style={{
+                      borderRadius: 6,
+                      border: '1px solid #f0f0f0',
+                      borderTop: `3px solid ${style.color}`,
+                      background: style.bg,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <Space>
+                        <ShopOutlined style={{ color: style.color, fontSize: 15 }} />
+                        <Typography.Text strong style={{ fontSize: 13, color: style.color }}>{item.sucursalNombre}</Typography.Text>
+                        {sinRegistro && <Tag color="default" style={{ margin: 0, fontSize: 10 }}>Sin compras</Tag>}
+                      </Space>
+                      {!sinRegistro && (
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<EyeOutlined />}
+                          onClick={() => handleVerMovimientos(item)}
+                          style={{ fontSize: 12 }}
+                        >
+                          Ver movimientos →
+                        </Button>
+                      )}
+                    </div>
+
+                    {!sinRegistro ? (
+                      <>
+                        <div style={{ marginBottom: 10 }}>
+                          <Typography.Text strong style={{ fontSize: 12, color: '#262626', display: 'block', marginBottom: 6 }}>
+                            📦 Última compra  <Typography.Text strong style={{ fontSize: 13, color: '#556ee6' }}>{item.fecha ? formatDate(item.fecha) : '-'}</Typography.Text>
+                          </Typography.Text>
+                          <div style={{ marginTop: 8 }}>
+                            <Typography.Text style={{ fontSize: 12, color: '#8c8c8c', marginRight: 8 }}>
+                              {item.documento}
+                            </Typography.Text>
+                            <Tag color="blue" style={{ fontSize: 11 }}>{formatNumber(item.cantidad)}</Tag>
+                          </div>
+                        </div>
+
+                        <div style={{ borderTop: '1px dashed #e8e8e8', marginBottom: 10 }} />
+
+                        <div style={{ marginBottom: 10 }}>
+                          <Typography.Text strong style={{ fontSize: 12, color: '#262626', display: 'block', marginBottom: 6 }}>
+                            📊 Movimientos posteriores
+                          </Typography.Text>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', marginBottom: 6 }}>
+                            {[
+                              { label: 'Ventas (sin comp.)', value: item.resumen?.ventasSinComponentes },
+                              { label: 'Ventas (con comp.)', value: item.resumen?.ventasConComponentes },
+                              { label: 'Salidas', value: item.resumen?.salidas },
+                              { label: 'Dev. Compra', value: item.resumen?.devolucionesCompra },
+                              { label: 'Dev. Venta', value: item.resumen?.devolucionesVenta },
+                            ].map((kpi) => (
+                              <div key={kpi.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                <Typography.Text style={{ fontSize: 12, color: '#8c8c8c' }}>{kpi.label}</Typography.Text>
+                                {kpi.value !== undefined ? (
+                                  <Typography.Text strong style={{ fontSize: 14, color: style.color }}>
+                                    {formatNumber(kpi.value)}
+                                  </Typography.Text>
+                                ) : analisisResumenLoading ? (
+                                  <Skeleton.Input active size="small" style={{ width: 30, height: 16 }} />
+                                ) : (
+                                  <Typography.Text style={{ fontSize: 13 }}>0</Typography.Text>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+
+                          {item.resumen?.ultimaVentaFecha && (
+                            <div style={{ background: 'rgba(85,110,230,0.04)', borderRadius: 4, padding: '6px 8px', marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Typography.Text style={{ fontSize: 11, color: '#595959' }}>
+                                🕐 Última venta: {formatDate(item.resumen.ultimaVentaFecha)}
+                              </Typography.Text>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <Typography.Text className="paces-text-secondary" style={{ fontSize: 12, fontStyle: 'italic' }}>
+                        No hay registros de compra para esta sucursal.
+                      </Typography.Text>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <Alert type="info" message="No se encontraron entradas para este producto" style={{ marginBottom: 16 }} />
+        )}
+      </div>
+    </Card>
+  );
 
   return (
     <div>
-      {/* Card 1 â€” Filtros de consulta */}
+      {/* Card 1 — Filtros de consulta */}
       <Card
         className="paces-card"
         style={{ borderRadius: 8, marginBottom: 16 }}
@@ -488,7 +690,7 @@ const MovimientoPorPlantilla: React.FC = () => {
         </Row>
       </Card>
 
-      {/* Alert de error entre los dos Cards */}
+      {/* Alert de error */}
       {loadingError && (
         <Alert
           message="Error al cargar los datos"
@@ -503,66 +705,82 @@ const MovimientoPorPlantilla: React.FC = () => {
         />
       )}
 
-      {/* Card 2 â€” Resultados */}
-      <Card
-        className="paces-card"
-        style={{ borderRadius: 8 }}
-        title={
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 16, fontWeight: 600 }}>Resultados</span>
-            {filteredData.length > 0 && (
-              <Tag color="blue">{filteredData.length} registros</Tag>
+      {/* Card 2 — Resultados con sidebar */}
+      <Row gutter={16}>
+        <Col xxl={18}>
+          <Card
+            className="paces-card"
+            style={{ borderRadius: 8 }}
+            title={
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 16, fontWeight: 600 }}>Productos ({filteredData.length})</span>
+                {filteredData.length > 0 && (
+                  <Tag color="blue">{filteredData.length} registros</Tag>
+                )}
+              </div>
+            }
+          >
+            <div style={{ padding: '0 0 16px' }}>
+              <Input.Search
+                placeholder="Buscar por código, artículo o familia..."
+                allowClear
+                onSearch={(value) => setSearchText(value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    (e.target as HTMLInputElement).blur();
+                    setSearchText('');
+                  }
+                }}
+                style={{ width: 400 }}
+                prefix={<SearchOutlined className="paces-text-icon" />}
+              />
+            </div>
+            {filteredData.length === 0 && !loading ? (
+              <div style={{ minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={
+                    <span>
+                      {!plantillaCodigo
+                        ? 'Seleccione una plantilla usando el botón buscar y presione Generar'
+                        : searchText.trim()
+                          ? 'No hay resultados que coincidan con la búsqueda'
+                          : 'No se encontraron productos para esta plantilla'}
+                    </span>
+                  }
+                />
+              </div>
+            ) : (
+              <Table
+                dataSource={filteredData}
+                columns={columnasProducto as any}
+                rowKey={(record, index) => `${record.codigo}-${index}`}
+                loading={loading}
+                size="small"
+                scroll={{ x: 600 }}
+                style={{ minHeight: 420 }}
+                pagination={{
+                  pageSize: 20,
+                  showSizeChanger: false,
+                  showTotal: (total) => `${total} registros`,
+                }}
+                rowClassName={(record, index) =>
+                  selectedItem && selectedItem.codigo === record.codigo
+                    ? 'paces-row-selected'
+                    : ''
+                }
+                onRow={(record, index) => ({
+                  onClick: () => setSelectedItem(record),
+                  style: { cursor: 'pointer' },
+                })}
+              />
             )}
-          </div>
-        }
-      >
-        <div style={{ padding: '0 0 16px' }}>
-          <Input.Search
-            placeholder="Buscar por código, artículo o sucursal..."
-            allowClear
-            onSearch={(value) => setSearchText(value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                (e.target as HTMLInputElement).blur();
-                setSearchText('');
-              }
-            }}
-            style={{ width: 400 }}
-            prefix={<SearchOutlined className="paces-text-icon" />}
-          />
-        </div>
-        {filteredData.length === 0 && !loading ? (
-          <div style={{ minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <span>
-                  {!plantillaCodigo
-                    ? 'Seleccione una plantilla usando el botón ðŸ” y presione Generar'
-                    : searchText.trim()
-                      ? 'No hay resultados que coincidan con la búsqueda'
-                      : 'No se encontraron movimientos para esta plantilla'}
-                </span>
-              }
-            />
-          </div>
-        ) : (
-          <Table
-            dataSource={filteredData}
-            columns={columns}
-            rowKey={(record, idx) => `${record.codigo}-${record.sucursal}-${idx}`}
-            loading={loading && !data}
-            size="small"
-            scroll={{ x: 900 }}
-            style={{ minHeight: 420 }}
-            pagination={{
-              pageSize: 20,
-              showSizeChanger: false,
-              showTotal: (total) => `${total} registros`,
-            }}
-          />
-        )}
-      </Card>
+          </Card>
+        </Col>
+        <Col xxl={6}>
+          {analisisCard}
+        </Col>
+      </Row>
 
       {/* Modal de búsqueda de plantillas */}
       <BuscarPlantillaModal
@@ -571,6 +789,15 @@ const MovimientoPorPlantilla: React.FC = () => {
         onSelect={handleSeleccionarPlantilla}
       />
 
+      {/* Modal de movimientos posteriores */}
+      <ModalMovimientosPosteriores
+        open={movimientosModalOpen}
+        sucursal={movimientosSucursal}
+        codigo={selectedItem?.codigo || ''}
+        dataSource={movimientosData}
+        loading={movimientosLoading}
+        onClose={() => setMovimientosModalOpen(false)}
+      />
     </div>
   );
 };

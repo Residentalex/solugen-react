@@ -23,7 +23,7 @@ const ModuloDetalle: React.FC = () => {
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
-  const { screenCode } = useScreenConfig('MODULOS');
+  const { screenCode } = useScreenConfig('Mmodulo');
 
   const [modulo, setModulo] = useState<any>(null);
   const [configs, setConfigs] = useState<ConfigModuloDTO[]>([]);
@@ -45,7 +45,7 @@ const ModuloDetalle: React.FC = () => {
       const found = modulos.find((m) => m.id === Number(id));
       if (!found) {
         message.error('Módulo no encontrado');
-        navigate('/Modulos');
+        navigate('/Mmodulo');
         return;
       }
       setModulo(found);
@@ -156,14 +156,14 @@ const ModuloDetalle: React.FC = () => {
 
   return (
     <DetalleCatalogoLayout
-      rutaVolver="/Modulos"
+      rutaVolver="/Mmodulo"
       loading={loading}
       mensajeLoading="Cargando módulo..."
       loadingError={error}
       mensajeError="Error al cargar el módulo"
       onRecargar={cargar}
       dataDisponible={!!modulo}
-      onEditar={() => navigate(`/Modulos/${modulo.id}/editar`)}
+      onEditar={() => navigate(`/Mmodulo/${modulo.id}/editar`)}
     >
       {/* Datos generales */}
       <Card className="paces-card" style={{ marginBottom: 16 }}>

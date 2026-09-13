@@ -100,7 +100,7 @@ export const CAMPOS_DETALLE_RI_LABELS: Record<string, string> = {
 };
 
 /** Anchos de linea soportados. */
-export const ANCHO_LINEA_OPCIONES: AnchoLineaTicket[] = [32, 42, 48];
+export const ANCHO_LINEA_OPCIONES: AnchoLineaTicket[] = [32, 42, 48, 54];
 
 export const PLANTILLA_CONFIG_DEFAULT: PlantillaConfig = {
   encabezado: {
@@ -289,6 +289,7 @@ function mergeConfig(base: PlantillaConfig, config: PlantillaConfig): PlantillaC
   out.opciones = { ...(base.opciones || {}), ...(config.opciones || {}) };
   if (config.firmas) out.firmas = { ...config.firmas };
   if (config.logo) out.logo = { ...config.logo };
+  if (config.esquema !== undefined) out.esquema = config.esquema;
 
   return out;
 }
@@ -308,6 +309,24 @@ function esItemOrdenRI(item: string): boolean {
  * Normaliza una config guardada (puede venir parcial o null) contra el default FPV.
  * Si `config` es null/undefined, devuelve el default completo FPV.
  */
+/**
+ * Migra el formato de las líneas DETALLE: que, por un bug del editor, se
+ * guardaron en `formatoLabel` en lugar de `formato`. El formateador ESC/POS
+ * solo lee `linea.formato` para DETALLE:, por lo que la negrita (y el resto
+ * del formato) editada en el detalle no se imprimía. Se copia formatoLabel →
+ * formato solo cuando `formato` está ausente, preservando lo ya existente.
+ */
+function migrarFormatoDetalleZonas(zonas: ZonaTicketConfig[]): ZonaTicketConfig[] {
+  return zonas.map((z) => ({
+    ...z,
+    lineas: z.lineas.map((l) =>
+      l.ref.startsWith('DETALLE:') && !l.formato && l.formatoLabel
+        ? { ...l, formato: l.formatoLabel }
+        : l,
+    ),
+  }));
+}
+
 export function normalizarConfig(config?: PlantillaConfig | null): PlantillaConfig {
   if (!config) return { ...PLANTILLA_CONFIG_DEFAULT, zonas: [...ZONAS_DEFAULT_FPV] };
   const out = mergeConfig(PLANTILLA_CONFIG_DEFAULT, config);
@@ -323,7 +342,7 @@ export function normalizarConfig(config?: PlantillaConfig | null): PlantillaConf
     out.zonas = [...ZONAS_DEFAULT_FPV];
   } else if (config.zonas && config.zonas.length > 0) {
     // Tiene zonas → usar tal cual
-    out.zonas = config.zonas;
+    out.zonas = migrarFormatoDetalleZonas(config.zonas);
     // Preservar textos libres y campos DTO del config guardado
     if (config.textosLibres) out.textosLibres = { ...config.textosLibres };
     if (config.camposDTO) out.camposDTO = { ...config.camposDTO };
@@ -341,6 +360,7 @@ export function normalizarConfig(config?: PlantillaConfig | null): PlantillaConf
     if (config.firmas) out.firmas = { ...config.firmas };
     if (config.logo) out.logo = { ...config.logo };
   }
+
 
   return out;
 }
@@ -368,7 +388,7 @@ export function normalizarConfigRI(config?: PlantillaConfig | null): PlantillaCo
   if (config.zonas === null) {
     out.zonas = [...ZONAS_DEFAULT_FRI];
   } else if (config.zonas && config.zonas.length > 0) {
-    out.zonas = config.zonas;
+    out.zonas = migrarFormatoDetalleZonas(config.zonas);
     // Preservar textos libres y campos DTO del config guardado
     if (config.textosLibres) out.textosLibres = { ...config.textosLibres };
     if (config.camposDTO) out.camposDTO = { ...config.camposDTO };
@@ -429,7 +449,7 @@ function finalizarNormalizacionVSNT(
   if (config.zonas === null) {
     out.zonas = [...zonasDefault];
   } else if (config.zonas && config.zonas.length > 0) {
-    out.zonas = config.zonas;
+    out.zonas = migrarFormatoDetalleZonas(config.zonas);
     if (config.textosLibres) out.textosLibres = { ...config.textosLibres };
     if (config.camposDTO) out.camposDTO = { ...config.camposDTO };
     if (config.firmas) out.firmas = { ...config.firmas };
@@ -445,6 +465,7 @@ function finalizarNormalizacionVSNT(
     if (config.firmas) out.firmas = { ...config.firmas };
     if (config.logo) out.logo = { ...config.logo };
   }
+
   return out;
 }
 
@@ -1027,4 +1048,73 @@ export function migrarConfigAZonas(config: PlantillaConfig, tipo: 'FPV' | 'FRI' 
   });
 
   return zonas;
+}
+
+/**
+ * Calcula el ancho en caracteres de cada linea de un grupo visual (lineaNum).
+ * Regla unica del contrato compartido (editor, formatter y agente):
+ * - 'fijo' consume `anchoValor` caracteres.
+ * - 'porcentual' aplica `anchoValor%` sobre el resto tras restar los fijos.
+ * - sin tipo reparte equitativamente el sobrante.
+ * - si los anchos fijos exceden la pagina, se redistribuyen proporcionalmente.
+ * - Cada columna respeta un minimo de 5% del ancho de pagina.
+ * Devuelve Map<idxDelCampoEnLaLista, anchoEnCaracteres>.
+ */
+export function calcularAnchosLinea(
+  lineas: Pick<LineaZonaConfig, 'ref' | 'lineaNum' | 'anchoTipo' | 'anchoValor'>[],
+  lineaNum: number,
+  anchoPagina: number,
+  indiceInicio?: number,
+): Map<number, number> {
+  const esLineaEstructural = (linea: Pick<LineaZonaConfig, 'ref'>) =>
+    linea.ref === 'ESPACIO' || linea.ref === 'SEPARADOR';
+  const deLineaIdx: number[] = [];
+  if (indiceInicio === undefined) {
+    lineas.forEach((linea, indice) => {
+      if (linea.lineaNum === lineaNum && !esLineaEstructural(linea)) {
+        deLineaIdx.push(indice);
+      }
+    });
+  } else {
+    for (let indice = indiceInicio; indice < lineas.length; indice += 1) {
+      const linea = lineas[indice];
+      if (esLineaEstructural(linea)) break;
+      if (linea.lineaNum === lineaNum) deLineaIdx.push(indice);
+    }
+  }
+  const resultado = new Map<number, number>();
+  if (deLineaIdx.length === 0) return resultado;
+
+  const pagina = Math.max(0, anchoPagina);
+  const fijos = deLineaIdx.map(i => lineas[i].anchoTipo === 'fijo' ? Math.max(0, lineas[i].anchoValor ?? 12) : 0);
+  const restante = Math.max(0, pagina - fijos.reduce((a, b) => a + b, 0));
+  const porcentajes = deLineaIdx.map(i => lineas[i].anchoTipo === 'porcentual' ? Math.max(0, lineas[i].anchoValor ?? 100) : 0);
+  const totalPct = porcentajes.reduce((a, b) => a + b, 0);
+  const factorPct = Math.max(100, totalPct);
+  const autos = deLineaIdx.filter(i => lineas[i].anchoTipo === undefined).length;
+  const libre = restante * (1 - totalPct / factorPct);
+  const solicitados = deLineaIdx.map((i, k) => lineas[i].anchoTipo === 'fijo' ? fijos[k]
+    : lineas[i].anchoTipo === 'porcentual' ? restante * porcentajes[k] / factorPct
+      : autos > 0 ? libre / autos : 0);
+  // Reserva espacio para todas las columnas, incluso cuando los fijos exceden la página.
+  const minimo = Math.min(1, pagina / deLineaIdx.length);
+  const pedidos = solicitados.map(ancho => Math.max(minimo, ancho));
+  const total = pedidos.reduce((a, b) => a + b, 0);
+  const objetivo = Math.min(pagina, total);
+  const disponible = Math.max(0, objetivo - minimo * pedidos.length);
+  const peso = pedidos.reduce((a, b) => a + b - minimo, 0);
+  const exactos = total > pagina
+    ? pedidos.map(ancho => minimo + (peso > 0 ? (ancho - minimo) * disponible / peso : 0))
+    : pedidos;
+  if (pagina < pedidos.length) {
+    deLineaIdx.forEach((indice, k) => resultado.set(indice, exactos[k]));
+    return resultado;
+  }
+  const enteros = exactos.map(Math.floor);
+  const faltantes = Math.max(0, Math.floor(objetivo) - enteros.reduce((a, b) => a + b, 0));
+  const orden = exactos.map((ancho, k) => ({ k, resto: ancho - enteros[k] }))
+    .sort((a, b) => b.resto - a.resto || a.k - b.k);
+  orden.slice(0, faltantes).forEach(({ k }) => { enteros[k] += 1; });
+  deLineaIdx.forEach((indice, k) => resultado.set(indice, enteros[k]));
+  return resultado;
 }

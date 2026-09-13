@@ -1,9 +1,10 @@
 import { apiClient } from './client';
 import type { FacturaVistaDTO, FiltroFacturacion } from '../types/facturacion';
-import type { FacturaPOSDTO, FacturaPOSResumenDTO, FacturaPOSFormularioDTO, DetalleFacturaPOSDTO } from '../types/facturaPOS';
+import type { FacturaPOSDTO, FacturaPOSResumenDTO, FacturaPOSFormularioDTO, DetalleFacturaPOSDTO, ReporteEscPosDTO } from '../types/facturaPOS';
 import type { ImpuestoFacturaDTO } from '../types/impuestos';
 import type { AsientoContableDTO } from '../types/entradaAlmacen';
 import type { DocumentoRelacionadoDTO } from '../types/notaDebito';
+import type { VisanetVoucherDTO } from '../types/visanet';
 import type { ApiResponse } from '../types/auth';
 
 const BASE = '/PV';
@@ -132,6 +133,16 @@ export const facturaPOSApi = {
     return data.data || [];
   },
 
+  obtenerRelacionadosPV: async (sucursal: number, id: number): Promise<DocumentoRelacionadoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<DocumentoRelacionadoDTO[]>>(`${BASE}/${sucursal}/${id}/relacionados-pv`);
+    return data.data || [];
+  },
+
+  obtenerVouchers: async (sucursal: number, id: number): Promise<VisanetVoucherDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<VisanetVoucherDTO[]>>(`${BASE}/${sucursal}/${id}/vouchers`);
+    return data.data || [];
+  },
+
   obtenerTotal: async (sucursal: number, desde?: string, hasta?: string): Promise<number> => {
     const params: Record<string, string> = {};
     if (desde) params.desde = desde;
@@ -189,5 +200,21 @@ export const facturaPOSApi = {
   obtenerClientes: async (sucursal: number): Promise<any[]> => {
     const { data } = await apiClient.get<ApiResponse<any[]>>(`/Cliente/${sucursal}/activos`);
     return data.data ?? [];
+  },
+
+  // ===== ESC/POS (impresión térmica raw) =====
+  obtenerEscPos: async (sucursal: number, id: number): Promise<ReporteEscPosDTO> => {
+    const { data } = await apiClient.get<ApiResponse<ReporteEscPosDTO>>(`/reportes/facturacion/pos/${sucursal}/${id}/escpos`);
+    return data.data;
+  },
+
+  generarEscPos: async (dto: FacturaPOSDTO): Promise<ReporteEscPosDTO> => {
+    const { data } = await apiClient.post<ApiResponse<ReporteEscPosDTO>>(`/reportes/facturacion/pos/escpos`, dto);
+    return data.data;
+  },
+
+  generarEscPosConSucursal: async (sucursal: number, dto: FacturaPOSDTO): Promise<ReporteEscPosDTO> => {
+    const { data } = await apiClient.post<ApiResponse<ReporteEscPosDTO>>(`/reportes/facturacion/pos/${sucursal}/escpos`, dto);
+    return data.data;
   },
 };

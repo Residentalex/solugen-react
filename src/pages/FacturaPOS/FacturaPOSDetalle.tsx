@@ -18,12 +18,15 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
+import { companiaApi } from '../../api/companiaApi';
 import { documentoImpresionApi } from '../../api/documentoImpresionApi';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
 import { devolucionVentaApi } from '../../api/devolucionVentaApi';
 import { transaccionApi } from '../../api/transaccionApi';
+import { productoApi } from '../../api/productoApi';
 
 import type { FacturaPOSDTO } from '../../types/facturaPOS';
+import type { VisanetVoucherDTO } from '../../types/visanet';
 import PermissionGate from '../../components/PermissionGate';
 import LogTable from '../../components/LogTable';
 import ModalSeleccionarImpresoraPOS from '../../components/ModalSeleccionarImpresoraPOS/ModalSeleccionarImpresoraPOS';
@@ -31,17 +34,18 @@ import { formatNumber, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import { useQZTray } from '../../hooks/useQZTray';
-import { formatTicket, escposQRCode, feed, CMD_CUT } from '../../utils/escpos-formatter';
-import { obtenerConfigPlantilla, obtenerConfigPorId, CODIGO_PLANTILLA_FPV_TICKET } from '../../utils/ticketPlantilla';
+import { useCargaDocumento } from '../../hooks/useCargaDocumento';
 import { reportesConfigApi } from '../../api/reportesConfigApi';
 import { obtenerLogoEscPosBase64 } from '../../utils/logoEscPos';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import CobrosMinimal from '../../components/CobrosCard/CobrosMinimal';
+import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import SucursalField from '../../components/SucursalField';
+import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -66,6 +70,22 @@ function formatDateTime(val: string): string {
   return `${date} ${time}`;
 }
 
+/** Enriquecer detalles con la oferta actual del producto en la sucursal activa */
+async function enriquecerDetallesConOferta(detalles: any[], sucursal: number): Promise<any[]> {
+  if (!detalles?.length) return detalles;
+  const codigosUnicos = Array.from(new Set(detalles.map((d) => d.codigo).filter(Boolean))) as string[];
+  if (codigosUnicos.length === 0) return detalles;
+  const mapaPrecios = await productoApi.preciosPorSucursal(sucursal, codigosUnicos);
+  return detalles.map((d) => {
+    const precio = mapaPrecios.get(d.codigo);
+    return {
+      ...d,
+      precioOferta: precio?.precioOferta ?? 0,
+      precioRegularOferta: precio?.precio ?? 0,
+    };
+  });
+}
+
 const FacturaPOSDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -75,76 +95,70 @@ const FacturaPOSDetalle: React.FC = () => {
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
   const { screenCode, documentCode } = useScreenConfig();
 
-  const [data, setData] = useState<FacturaPOSDTO | null>(null);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loadingError, setLoadingError] = useState(false);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [previsualizando, setPrevisualizando] = useState(false);
+  const [vistaPreviaUrl, setVistaPreviaUrl] = useState<string | null>(null);
+  const vistaPreviaUrlRef = useRef<string | null>(null);
   const [printerModalOpen, setPrinterModalOpen] = useState(false);
   const [printerList, setPrinterList] = useState<string[]>([]);
   const [selectedPrinter, setSelectedPrinter] = useState<string>('');
   const [detalleSearch, setDetalleSearch] = useState('');
   const [devolucionesPV, setDevolucionesPV] = useState<any[]>([]);
   const [dtransasocDevueltos, setDtransasocDevueltos] = useState<Set<number>>(new Set());
+  const [documentosRelacionados, setDocumentosRelacionados] = useState<DocumentoRelacionDTO[]>([]);
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const [razonAnulacion, setRazonAnulacion] = useState('');
   const [anulando, setAnulando] = useState(false);
-  // ═══ Carga progresiva: banderas anti doble fetch por sección ═══
-  const [detallesCargados, setDetallesCargados] = useState(false);
-  const [cobrosCargados, setCobrosCargados] = useState(false);
-  const [impuestosCargados, setImpuestosCargados] = useState(false);
-  const [relacionadosCargados, setRelacionadosCargados] = useState(false);
-  const [seccionesCargando, setSeccionesCargando] = useState<Set<string>>(new Set());
-  const detallesCargadosRef = useRef(false);
-  const cobrosCargadosRef = useRef(false);
-  const impuestosCargadosRef = useRef(false);
-  const relacionadosCargadosRef = useRef(false);
   const monedaDefault = getMonedaSucursalActiva();
   const screens = Grid.useBreakpoint();
   const qz = useQZTray();
-
-  const [plantillaEntdoc, setPlantillaEntdoc] = useState<{ plantillaId: number; tipo: string } | null>(null);
-
-  useEffect(() => {
-    let activo = true;
-    reportesConfigApi.obtenerPorEntdoc('PV')
-      .then((p) => { if (activo && p) setPlantillaEntdoc({ plantillaId: p.plantillaId, tipo: p.tipo }); })
-      .catch(() => {});
-    return () => { activo = false; };
-  }, []);
 
   useEffect(() => {
     setActiveModule(screenCode);
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
-  const marcarSeccionesCompletas = React.useCallback(() => {
-    setDetallesCargados(true);
-    setCobrosCargados(true);
-    setImpuestosCargados(true);
-    setRelacionadosCargados(true);
-  }, []);
+  // ═══ Carga estandar: encabezado primero + todas las secciones en paralelo ═══
+  const { data, setData, loading, loadingError, seccionesCargando, recargar: recargarDocumento, reintentarSeccion } = useCargaDocumento<FacturaPOSDTO>({
+    id,
+    sucursal: sucursalActiva,
+    obtenerEncabezado: facturaPOSApi.obtenerEncabezado,
+    secciones: {
+      detalles: {
+        cargar: async (suc, docId) => {
+          const detalles = await facturaPOSApi.obtenerDetalles(suc, docId);
+          return enriquecerDetallesConOferta(detalles, suc);
+        },
+        prop: 'detalles',
+      },
+      cobros: { cargar: facturaPOSApi.obtenerCobros, prop: 'cobros' },
+      impuestos: { cargar: facturaPOSApi.obtenerImpuestos, prop: 'impuestosFactura' },
+      relacionados: { cargar: facturaPOSApi.obtenerRelacionadosPV, prop: 'transaccionesAsociadas' },
+      vouchers: { cargar: facturaPOSApi.obtenerVouchers, prop: 'vouchers' },
+    },
+    onEncabezadoCargado: (res) => {
+      setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
+    },
+  });
 
   const handleRefresh = React.useCallback(() => {
-    if (!id) return;
-    setLoading(true);
-    setLoadingError(false);
-    facturaPOSApi.obtenerPorId(sucursalActiva, parseInt(id))
-      .then((res) => {
-        if (!res) {
-          message.error('Documento no encontrado en la sucursal seleccionada.');
-          setLoadingError(true);
-          return;
-        }
-        setData(res);
-        setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
-        // Recarga completa: todas las secciones quedan cargadas
-        marcarSeccionesCompletas();
-        // Cargar devoluciones vinculadas via DTRANSIDASOC
-        transaccionApi.obtenerDevolucionesPorPV(sucursalActiva, res.id)
-          .then((devs) => {
-            setDevolucionesPV(devs);
-            if (devs.length > 0) {
+    recargarDocumento();
+  }, [recargarDocumento]);
+
+  useEffect(() => () => {
+    if (vistaPreviaUrlRef.current) {
+      URL.revokeObjectURL(vistaPreviaUrlRef.current);
+    }
+  }, []);
+
+  // Cargar devoluciones vinculadas via DTRANSIDASOC cuando cambie el documento
+  useEffect(() => {
+    if (!data?.id) return;
+    transaccionApi.obtenerDevolucionesPorPV(sucursalActiva, data.id)
+      .then((devs) => {
+        setDevolucionesPV(devs);
+        if (devs.length > 0) {
           Promise.all(
             devs.map((d: any) =>
               devolucionVentaApi.obtenerPorId(sucursalActiva, d.id)
@@ -152,119 +166,21 @@ const FacturaPOSDetalle: React.FC = () => {
                 .catch(() => [] as number[])
             )
           ).then((results) => {
-                const set = new Set<number>();
-                for (const ids of results) ids.forEach((id: number) => set.add(id));
-                setDtransasocDevueltos(set);
-              });
-            }
-          })
-          .catch((err: any) => console.error('Error cargando devoluciones PV:', err));
+            const set = new Set<number>();
+            for (const ids of results) ids.forEach((id: number) => set.add(id));
+            setDtransasocDevueltos(set);
+          });
+        }
       })
-      .catch((err: any) => {
-        const msg = extraerMensajeError(err, 'Error al cargar el documento');
-        message.error(msg);
-        setLoadingError(true);
-      })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, setPageTitleOverride, marcarSeccionesCompletas]);
+      .catch((err: any) => console.error('Error cargando devoluciones PV:', err));
+  }, [data?.id, sucursalActiva]);
 
-  // ═══════════════════════════════════════════════════════════════
-  // Carga progresiva: encabezado primero + secciones críticas
-  // ═══════════════════════════════════════════════════════════════
-  const cargarEncabezado = React.useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    setLoadingError(false);
-    try {
-      const res = await facturaPOSApi.obtenerEncabezado(sucursalActiva, parseInt(id));
-      if (!res) {
-        message.error('Documento no encontrado en la sucursal seleccionada.');
-        setLoadingError(true);
-        return;
-      }
-      setData(prev => ({ ...(prev ?? {} as FacturaPOSDTO), ...res, detalles: prev?.detalles?.length ? prev.detalles : res.detalles, cobros: prev?.cobros?.length ? prev.cobros : res.cobros }));
-      setPageTitleOverride(`${res.documento.codigo}-${res.noDocumento}`);
-      // Cargar devoluciones vinculadas via DTRANSIDASOC
-      transaccionApi.obtenerDevolucionesPorPV(sucursalActiva, res.id)
-        .then((devs) => {
-          setDevolucionesPV(devs);
-          if (devs.length > 0) {
-            Promise.all(
-              devs.map((d: any) =>
-                devolucionVentaApi.obtenerPorId(sucursalActiva, d.id)
-                  .then((dev: any) => (dev.detalles || []).map((det: any) => Number(det.idAsociado)))
-                  .catch(() => [] as number[])
-              )
-            ).then((results) => {
-              const set = new Set<number>();
-              for (const ids of results) ids.forEach((id: number) => set.add(id));
-              setDtransasocDevueltos(set);
-            });
-          }
-        })
-        .catch((err: any) => console.error('Error cargando devoluciones PV:', err));
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al cargar el documento');
-      message.error(msg);
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [id, sucursalActiva, setPageTitleOverride, message]);
-
-  const cargarSeccion = React.useCallback(async (seccion: 'detalles' | 'cobros' | 'impuestos' | 'relacionados') => {
-    if (!id) return;
-    // Guard anti doble fetch ANTES de cualquier setState: si la sección ya está
-    // cargada, salir sin re-render. Esto corta los loops de "Maximum update depth".
-    if (
-      (seccion === 'detalles' && detallesCargadosRef.current) ||
-      (seccion === 'cobros' && cobrosCargadosRef.current) ||
-      (seccion === 'impuestos' && impuestosCargadosRef.current) ||
-      (seccion === 'relacionados' && relacionadosCargadosRef.current)
-    ) {
-      return;
-    }
-    setSeccionesCargando(prev => new Set(prev).add(seccion));
-    try {
-      const suc = sucursalActiva;
-      const numId = parseInt(id);
-      switch (seccion) {
-        case 'detalles': {
-          const detalles = await facturaPOSApi.obtenerDetalles(suc, numId);
-          setData(prev => ({ ...(prev ?? {} as FacturaPOSDTO), detalles }));
-          setDetallesCargados(true);
-          break;
-        }
-        case 'cobros': {
-          const cobros = await facturaPOSApi.obtenerCobros(suc, numId);
-          setData(prev => (prev ? { ...prev, cobros } : prev));
-          setCobrosCargados(true);
-          break;
-        }
-        case 'impuestos': {
-          const impuestosFactura = await facturaPOSApi.obtenerImpuestos(suc, numId);
-          setData(prev => (prev ? { ...prev, impuestosFactura } : prev));
-          setImpuestosCargados(true);
-          break;
-        }
-        case 'relacionados': {
-          const transaccionesAsociadas = await facturaPOSApi.obtenerRelacionados(suc, numId);
-          setData(prev => (prev ? { ...prev, transaccionesAsociadas } : prev));
-          setRelacionadosCargados(true);
-          break;
-        }
-      }
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, `Error al cargar ${seccion}`);
-      message.error(msg);
-    } finally {
-      setSeccionesCargando(prev => {
-        const next = new Set(prev);
-        next.delete(seccion);
-        return next;
-      });
-    }
-  }, [id, sucursalActiva, message]);
+  useEffect(() => {
+    if (!data?.id) return;
+    documentoRelacionApi.obtenerPorTransaccion(data.id, sucursalActiva)
+      .then(rel => setDocumentosRelacionados(rel || []))
+      .catch((err) => console.warn('Error al cargar documentos relacionados', err));
+  }, [data?.id, sucursalActiva]);
 
   const handleGenerarPVC = React.useCallback(async () => {
     if (!id || !data) return;
@@ -288,20 +204,6 @@ const FacturaPOSDetalle: React.FC = () => {
       },
     });
   }, [id, data, sucursalActiva, handleRefresh]);
-
-  // Montaje: encabezado primero, luego secciones críticas. Ant Design no dispara
-  // onChange con defaultActiveKey, por eso la pestaña por defecto se carga aquí.
-  useEffect(() => {
-    cargarEncabezado();
-    cargarSeccion('detalles');
-    cargarSeccion('cobros');
-  }, [cargarEncabezado, cargarSeccion]);
-
-  // Sincronizar refs de banderas para evitar stale closures en cargarSeccion
-  useEffect(() => { detallesCargadosRef.current = detallesCargados; }, [detallesCargados]);
-  useEffect(() => { cobrosCargadosRef.current = cobrosCargados; }, [cobrosCargados]);
-  useEffect(() => { impuestosCargadosRef.current = impuestosCargados; }, [impuestosCargados]);
-  useEffect(() => { relacionadosCargadosRef.current = relacionadosCargados; }, [relacionadosCargados]);
 
   if (loading) {
     return (
@@ -328,8 +230,9 @@ const FacturaPOSDetalle: React.FC = () => {
   const totalPagado = (data.cobros || []).reduce((sum: number, c: any) => sum + (Number(c.pago) || 0), 0);
   const saldoPendiente = (data.total || 0) - totalPagado;
 
+  // ═══ Filtrado y totales de detalles ═══
   const detallesFiltrados = detalleSearch
-    ? (data.detalles || []).filter((d) => {
+    ? (data.detalles || []).filter((d: any) => {
         const q = detalleSearch.toLowerCase();
         return (
           (d.codigo || '').toLowerCase().includes(q) ||
@@ -338,6 +241,17 @@ const FacturaPOSDetalle: React.FC = () => {
         );
       })
     : (data.detalles || []);
+
+  const totalesDetalles = detallesFiltrados.reduce(
+    (acc, item: any) => ({
+      cantidad: acc.cantidad + (item.cantidad || 0),
+      subTotal: acc.subTotal + (item.subTotal || 0),
+      descuento: acc.descuento + (item.descuento || 0),
+      impuestos: acc.impuestos + (item.impuestos || 0),
+      total: acc.total + (item.total || 0),
+    }),
+    { cantidad: 0, subTotal: 0, descuento: 0, impuestos: 0, total: 0 }
+  );
 
   const detalleColumns = [
     {
@@ -424,6 +338,9 @@ const FacturaPOSDetalle: React.FC = () => {
             <div>{formatNumber(precioBase)}</div>
             <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
               {formatNumber(precioUnitario)} × {factor}
+              {record.precioOferta > 0 && record.precioOferta < (record.precioRegularOferta ?? record.precio) && (
+                <Tag color="red" style={{ marginLeft: 4 }}>Oferta</Tag>
+              )}
             </div>
           </div>
         );
@@ -604,99 +521,144 @@ const FacturaPOSDetalle: React.FC = () => {
 
   const printMenuItems: MenuProps['items'] = [
     { key: 'ticket', label: 'Ticket' },
+    {
+      key: 'vista-previa-termica',
+      label: previsualizando ? 'Generando vista previa...' : 'Vista previa termica',
+      disabled: previsualizando,
+    },
     { key: 'factura-cliente', label: 'Factura Cliente' },
   ];
 
   const handlePrintMenuClick: MenuProps['onClick'] = ({ key }) => {
     if (key === 'ticket') {
       handlePrintTicket();
+    } else if (key === 'vista-previa-termica') {
+      handlePrevisualizarTicket();
     } else if (key === 'factura-cliente') {
       handlePrintFacturaCliente();
     }
   };
 
+  const prepararPayloadTicket = async () => {
+    // Plantilla ESC/POS asignada al documento PV via /reportes/config.
+    const plantilla = await reportesConfigApi.obtenerPorEntdoc('PV');
+    if (!plantilla) {
+      throw new Error('No hay plantilla ESC/POS asignada al documento PV.');
+    }
+
+    // El logo se rasteriza en el navegador (canvas) y viaja como comando ESC/POS en base64;
+    // el servicio lo antepone a los bytes generados por el formateador.
+    const logoEscPosBase64 = await obtenerLogoEscPosBase64(plantilla.config?.logo);
+
+    // Datos de la compañía para el encabezado de la plantilla.
+    const sucDoc = data?.sucursal;
+    let companyInfo = {
+      nombre: sucDoc?.nombre || '',
+      direccion: sucDoc?.direccion || '',
+      telefono: sucDoc?.telefono || '',
+      rnc: sucDoc?.rnc || '',
+      fax: sucDoc?.fax || '',
+      slogan: sucDoc?.slogan || '',
+    };
+    if (!companyInfo.nombre && !companyInfo.rnc) {
+      try {
+        const lista = await companiaApi.obtenerTodas(sucursalActiva);
+        if (lista.length > 0) {
+          companyInfo = {
+            nombre: lista[0].nombre ?? '',
+            direccion: lista[0].direccion ?? '',
+            telefono: lista[0].telefono ?? '',
+            rnc: lista[0].rnc ?? '',
+            fax: lista[0].fax ?? '',
+            slogan: lista[0].slogan ?? '',
+          };
+        }
+      } catch {
+        const sucursales = useAuthStore.getState().sucursalesPermitidas;
+        companyInfo.nombre = sucursales.find((sp) => sp.sucursal === sucursalActiva)?.nombre || '';
+      }
+    }
+
+    // Los impuestos ya se cargan automaticamente junto al encabezado.
+    const dataPrint = data;
+
+    // Obtener el payload serializado que el frontend enviara directamente
+    // al servicio local de la maquina cliente.
+    const payload = await reportesConfigApi.obtenerPayloadImpresion(plantilla.plantillaId, {
+      tipoDoc: 'TICKET_POS',
+      data: dataPrint,
+      company: companyInfo,
+      logoEscPosBase64: logoEscPosBase64 || undefined,
+      feedLines: 3,
+      cut: true,
+      copias: 1,
+    });
+
+    // URL del servicio local de impresion.
+    const servicioLocalUrl = import.meta.env.VITE_IMPRESSION_SERVICE_URL || 'http://localhost:5010/imprimir';
+    return { payload, servicioLocalUrl };
+  };
+
   const handlePrintTicket = async () => {
     setImprimiendo(true);
     try {
-      try {
-        await documentoImpresionApi.marcarImpreso('PV', sucursalActiva, parseInt(id));
-      } catch (errImprimir: any) {
-        message.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
-        return;
-      }
-      // Si hay plantilla asignada via ENTDOC, usar esa; sino fallback al codigo hardcodeado
-      let config = null;
-      let tipoDoc = 'TICKET_POS';
-
-      if (plantillaEntdoc) {
-        try {
-          config = await obtenerConfigPorId(plantillaEntdoc.plantillaId);
-          tipoDoc = plantillaEntdoc.tipo;
-        } catch {
-          config = null;
+      // Marcar como impreso es best-effort: no bloquea la impresion fisica.
+      await documentoImpresionApi.marcarImpreso('PV', sucursalActiva, parseInt(id)).catch(
+        (errImprimir: any) => {
+          console.warn('No se pudo marcar como impreso:', errImprimir?.response?.data?.errorMessage || errImprimir?.message);
         }
+      );
+
+      const { payload, servicioLocalUrl } = await prepararPayloadTicket();
+      const resultado = await reportesConfigApi.imprimirLocal(payload, servicioLocalUrl);
+      if (resultado.ok) {
+        message.success(`Ticket enviado a la impresora`);
       } else {
-        try {
-          config = await obtenerConfigPlantilla(CODIGO_PLANTILLA_FPV_TICKET);
-        } catch {
-          config = null;
-        }
+        message.error(resultado.error ?? 'Error al imprimir: el servicio local no respondio');
       }
-
-      const companyInfo = {
-        nombre: data.sucursal?.nombre || '',
-        direccion: data.sucursal?.direccion || '',
-        telefono: data.sucursal?.telefono || '',
-        rnc: data.sucursal?.rnc || '',
-        fax: data.sucursal?.fax || '',
-        slogan: data.sucursal?.slogan || '',
-      };
-
-      let ticketText = formatTicket(data, companyInfo, config || undefined, tipoDoc);
-
-      // QR se genera desde la plantilla configurable (CAMPO:CODIGO_QR)
-      // const qrData = data.envioDGII?.codigoQR;
-      // if (qrData) {
-      //   ticketText += escposQRCode(qrData);
-      // }
-
-      // Avance y corte DESPUÉS del QR
-      ticketText += feed(config?.opciones?.feedCorte ?? 4);
-      ticketText += CMD_CUT;
-
-      // Logo configurable: generar comando GS v 0 (base64) si la plantilla lo activa.
-      let logoBase64 = '';
-      if (config?.logo?.mostrar) {
-        logoBase64 = await obtenerLogoEscPosBase64(config.logo);
-      }
-
-      // Enviar a QZ Tray como texto raw ESC/POS
-      console.log('QZ: Intentando imprimir en:', qz.printerName);
-      await qz.print(ticketText, logoBase64 || undefined);
-      console.log('QZ: Impresión exitosa');
-      message.success(`Imprimiendo en: ${qz.printerName || 'Impresora POS'}`);
     } catch (err: any) {
-      console.log('QZ: Error capturado:', err.code, err.message);
-      if (err.code === 'NO_PRINTER_SELECTED') {
-        // Mostrar selector de impresora
-        try {
-          const list = await qz.fetchPrinters();
-          if (list.length === 0) {
-            await imprimirPDF();
-          } else {
-            setPrinterList(list);
-            setSelectedPrinter(list[0] || '');
-            setPrinterModalOpen(true);
-          }
-        } catch {
-          await imprimirPDF();
-        }
-      } else {
-        message.error('QZ Tray: ' + (err.message || 'Error'));
-        await imprimirPDF();
-      }
+      const msg =
+        err?.response?.data?.errorMessage ||
+        err?.response?.data?.ErrorMessage ||
+        err?.message ||
+        'Error al imprimir el ticket';
+      message.error(msg);
     } finally {
       setImprimiendo(false);
+    }
+  };
+
+  const cerrarVistaPreviaTicket = () => {
+    if (vistaPreviaUrlRef.current) {
+      URL.revokeObjectURL(vistaPreviaUrlRef.current);
+      vistaPreviaUrlRef.current = null;
+    }
+    setVistaPreviaUrl(null);
+  };
+
+  const handlePrevisualizarTicket = async () => {
+    setPrevisualizando(true);
+    try {
+      const { payload, servicioLocalUrl } = await prepararPayloadTicket();
+      const resultado = await reportesConfigApi.previsualizarLocal(payload, servicioLocalUrl);
+      if (!resultado.ok || !resultado.imagen) {
+        message.error(resultado.error ?? 'No se pudo generar la vista previa del ticket.');
+        return;
+      }
+
+      cerrarVistaPreviaTicket();
+      const urlImagen = URL.createObjectURL(resultado.imagen);
+      vistaPreviaUrlRef.current = urlImagen;
+      setVistaPreviaUrl(urlImagen);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.errorMessage ||
+        err?.response?.data?.ErrorMessage ||
+        err?.message ||
+        'Error al generar la vista previa del ticket';
+      message.error(msg);
+    } finally {
+      setPrevisualizando(false);
     }
   };
 
@@ -720,8 +682,39 @@ const FacturaPOSDetalle: React.FC = () => {
       const res = await apiClient.post(`/reportes/facturacion/pos/factura-cliente`, data, {
         responseType: 'blob',
       });
-      const blobUrl = URL.createObjectURL(res.data);
-      window.open(blobUrl, '_blank');
+      const pdfBlob: Blob = res.data;
+
+      // Intentar imprimir directo a la impresora térmica via QZ Tray
+      try {
+        await qz.printPDF(pdfBlob);
+        message.success(`Factura Cliente imprimiendo en: ${qz.printerName || 'Impresora POS'}`);
+      } catch (errQZ: any) {
+        if (errQZ.code === 'NO_PRINTER_SELECTED') {
+          // Mostrar selector de impresora; al seleccionar, reintentar
+          try {
+            const list = await qz.fetchPrinters();
+            if (list.length === 0) {
+              // Sin impresoras: abrir PDF en navegador como fallback
+              const blobUrl = URL.createObjectURL(pdfBlob);
+              window.open(blobUrl, '_blank');
+            } else {
+              setPrinterList(list);
+              setSelectedPrinter(list[0] || '');
+              setPrinterModalOpen(true);
+              // NOTA: al cerrar el modal con una impresora seleccionada,
+              // el usuario debe volver a dar click en Factura Cliente para reintentar.
+            }
+          } catch {
+            const blobUrl = URL.createObjectURL(pdfBlob);
+            window.open(blobUrl, '_blank');
+          }
+        } else {
+          // Otro error de QZ (impresora no encontrada, etc.): fallback a navegador
+          console.warn('QZ Tray error en Factura Cliente:', errQZ.message);
+          const blobUrl = URL.createObjectURL(pdfBlob);
+          window.open(blobUrl, '_blank');
+        }
+      }
     } catch (err: any) {
       const msg = err?.response?.data?.ErrorMessage || 'Error al generar el PDF';
       message.error(msg);
@@ -757,7 +750,7 @@ const FacturaPOSDetalle: React.FC = () => {
                 </Tag>
               )}
             </PermissionGate>
-            {data.documento?.codigo === 'PV' && data.estado !== 0 && data.estado !== 3 && saldoPendiente > 0.01 && (
+            {data.documento?.codigo === 'PV' && data.estado !== 0 && data.estado !== 3 && saldoPendiente > 0.01 && data.diasCredito > 0 && (
               <Button icon={<CreditCardOutlined />} onClick={handleGenerarPVC}>
                 Generar PVC
               </Button>
@@ -841,9 +834,9 @@ const FacturaPOSDetalle: React.FC = () => {
               defaultActiveKey="detalles"
               type="card"
               onChange={(key) => {
-                // Secciones perezosas bajo demanda con guards anti doble fetch
-                if (key === 'impuestos') cargarSeccion('impuestos');
-                if (key === 'relacionados') cargarSeccion('relacionados');
+                // Las secciones se cargan automaticamente junto al encabezado
+                // (useCargaDocumento); aqui solo reintentos defensivos si faltaran.
+                if (key === 'vouchers' && !data?.vouchers) reintentarSeccion('vouchers');
               }}
               tabBarExtraContent={
                 <Input.Search
@@ -861,7 +854,38 @@ const FacturaPOSDetalle: React.FC = () => {
                   children: (
                     <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                       <div style={{ minHeight: 220 }}>
-                        <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey={(r: any, i?: number) => r.id || i} size="small" pagination={false} scroll={{ x: 1100 }} />
+                        <Table
+                          dataSource={detallesFiltrados}
+                          columns={detalleColumns}
+                          rowKey={(r: any, i?: number) => r.id || i}
+                          size="small"
+                          pagination={false}
+                          scroll={{ x: 1100 }}
+                          summary={() => (
+                            <Table.Summary fixed="bottom">
+                              <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                                <Table.Summary.Cell index={0} colSpan={2}>
+                                  <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={2} align="right">
+                                  {formatNumber(totalesDetalles.cantidad)}
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={3} align="right" responsive={['md', 'lg', 'xl', 'xxl']}>
+                                  {formatNumber(totalesDetalles.subTotal)}
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={4} align="right" responsive={['lg', 'xl', 'xxl']}>
+                                  {formatNumber(totalesDetalles.descuento)}
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={5} align="right" responsive={['lg', 'xl', 'xxl']}>
+                                  {formatNumber(totalesDetalles.impuestos)}
+                                </Table.Summary.Cell>
+                                <Table.Summary.Cell index={6} align="right">
+                                  <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalesDetalles.total)}</Text>
+                                </Table.Summary.Cell>
+                              </Table.Summary.Row>
+                            </Table.Summary>
+                          )}
+                        />
                       </div>
                     </Spin>
                   ),
@@ -891,6 +915,71 @@ const FacturaPOSDetalle: React.FC = () => {
                             { title: 'Monto', key: 'monto', width: 130, align: 'right' as const, render: (_: any, r: any) => <Text strong>{formatNumber(r.monto || 0)}</Text> },
                             { title: 'Tipo', key: 'tipo', width: 110, render: (_: any, r: any) => r.tipo || '-' },
                           ]}
+                          summary={() => {
+                            const totalMonto = (data.impuestosFactura || []).reduce((sum: number, r: any) => sum + (r.monto || 0), 0);
+                            return (
+                              <Table.Summary fixed="bottom">
+                                <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                                  <Table.Summary.Cell index={0} colSpan={2}>
+                                    <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={2} align="right">
+                                    <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalMonto)}</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={3} />
+                                </Table.Summary.Row>
+                              </Table.Summary>
+                            );
+                          }}
+                        />
+                      </div>
+                    </Spin>
+                  ),
+                },
+                {
+                  key: 'vouchers',
+                  label: `Vouchers (${data.vouchers?.length || 0})`,
+                  children: (
+                    <Spin spinning={seccionesCargando.has('vouchers')} tip="Cargando vouchers...">
+                      <div style={{ minHeight: 120 }}>
+                        <Table
+                          dataSource={data.vouchers || []}
+                          rowKey={(r: any) => r.noSec || Math.random()}
+                          size="small"
+                          pagination={false}
+                          scroll={{ x: 700 }}
+                          columns={[
+                            { title: 'No. Secuencia', dataIndex: 'noSec', key: 'noSec', width: 150 },
+                            { title: 'No. Aprobación', dataIndex: 'noAprob', key: 'noAprob', width: 130, render: (v: string) => v || '-' },
+                            { title: 'Tarjeta', key: 'tarjeta', render: (_: any, r: any) => (
+                              <div>
+                                <div>{r.notarjeta || '-'}</div>
+                                {r.nombtar && <div className="paces-text-secondary" style={{ fontSize: 11 }}>{toTitleCase(r.nombtar)}</div>}
+                              </div>
+                            )},
+                            { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const,
+                              render: (v: number) => <Text strong>{formatNumber(v || 0)}</Text>,
+                            },
+                            { title: 'Estado', dataIndex: 'anulado', key: 'anulado', width: 100,
+                              render: (v: string) => v === 'S' ? <Tag color="red">Anulado</Tag> : <Tag color="green">Activo</Tag>,
+                            },
+                          ]}
+                          summary={() => {
+                            const totalMonto = (data.vouchers || []).reduce((sum: number, r: any) => sum + (r.monto || 0), 0);
+                            return (
+                              <Table.Summary fixed="bottom">
+                                <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                                  <Table.Summary.Cell index={0} colSpan={3}>
+                                    <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={3} align="right">
+                                    <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalMonto)}</Text>
+                                  </Table.Summary.Cell>
+                                  <Table.Summary.Cell index={4} />
+                                </Table.Summary.Row>
+                              </Table.Summary>
+                            );
+                          }}
                         />
                       </div>
                     </Spin>
@@ -983,6 +1072,10 @@ const FacturaPOSDetalle: React.FC = () => {
               tasa={data.tasa ?? 1}
             />
             <CobrosMinimal cobrosPOS={data.cobros?.[0]} loading={loading} />
+            <DocumentosRelacionadosCard
+              documentos={documentosRelacionados}
+              currentId={data?.id}
+            />
             {data?.envioDGII?.codigoQR && (
               <div style={{ textAlign: 'center', marginBottom: 16 }}>
                 <QRCode value={data.envioDGII.codigoQR} size={140} />
@@ -1045,9 +1138,9 @@ const FacturaPOSDetalle: React.FC = () => {
             defaultActiveKey="detalles"
             type="card"
             onChange={(key) => {
-              // Secciones perezosas bajo demanda con guards anti doble fetch
-              if (key === 'impuestos') cargarSeccion('impuestos');
-              if (key === 'relacionados') cargarSeccion('relacionados');
+              // Las secciones se cargan automaticamente junto al encabezado
+              // (useCargaDocumento); aqui solo reintentos defensivos si faltaran.
+              if (key === 'vouchers' && !data?.vouchers) reintentarSeccion('vouchers');
             }}
             tabBarExtraContent={
               <Input.Search
@@ -1065,7 +1158,38 @@ const FacturaPOSDetalle: React.FC = () => {
                 children: (
                   <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                     <div style={{ minHeight: 220 }}>
-                      <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey={(r: any, i?: number) => r.id || i} size="small" pagination={false} scroll={{ x: 1100 }} />
+                      <Table
+                        dataSource={detallesFiltrados}
+                        columns={detalleColumns}
+                        rowKey={(r: any, i?: number) => r.id || i}
+                        size="small"
+                        pagination={false}
+                        scroll={{ x: 1100 }}
+                        summary={() => (
+                          <Table.Summary fixed="bottom">
+                            <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                              <Table.Summary.Cell index={0} colSpan={2}>
+                                <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={2} align="right">
+                                {formatNumber(totalesDetalles.cantidad)}
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={3} align="right" responsive={['md', 'lg', 'xl', 'xxl']}>
+                                {formatNumber(totalesDetalles.subTotal)}
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={4} align="right" responsive={['lg', 'xl', 'xxl']}>
+                                {formatNumber(totalesDetalles.descuento)}
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={5} align="right" responsive={['lg', 'xl', 'xxl']}>
+                                {formatNumber(totalesDetalles.impuestos)}
+                              </Table.Summary.Cell>
+                              <Table.Summary.Cell index={6} align="right">
+                                <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalesDetalles.total)}</Text>
+                              </Table.Summary.Cell>
+                            </Table.Summary.Row>
+                          </Table.Summary>
+                        )}
+                      />
                     </div>
                   </Spin>
                 ),
@@ -1093,6 +1217,67 @@ const FacturaPOSDetalle: React.FC = () => {
                       { title: 'Monto', key: 'monto', width: 130, align: 'right' as const, render: (_: any, r: any) => <Text strong>{formatNumber(r.monto || 0)}</Text> },
                       { title: 'Tipo', key: 'tipo', width: 110, render: (_: any, r: any) => r.tipo || '-' },
                     ]}
+                    summary={() => {
+                      const totalMonto = (data.impuestosFactura || []).reduce((sum: number, r: any) => sum + (r.monto || 0), 0);
+                      return (
+                        <Table.Summary fixed="bottom">
+                          <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                            <Table.Summary.Cell index={0} colSpan={2}>
+                              <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={2} align="right">
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalMonto)}</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} />
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      );
+                    }}
+                  />
+                ),
+              },
+              {
+                key: 'vouchers',
+                label: `Vouchers (${data.vouchers?.length || 0})`,
+                children: (
+                  <Table
+                    dataSource={data.vouchers || []}
+                    rowKey={(r: any) => r.noSec || Math.random()}
+                    size="small"
+                    pagination={false}
+                    scroll={{ x: 700 }}
+                    columns={[
+                      { title: 'No. Secuencia', dataIndex: 'noSec', key: 'noSec', width: 150 },
+                      { title: 'No. Aprobación', dataIndex: 'noAprob', key: 'noAprob', width: 130, render: (v: string) => v || '-' },
+                      { title: 'Tarjeta', key: 'tarjeta', render: (_: any, r: any) => (
+                        <div>
+                          <div>{r.notarjeta || '-'}</div>
+                          {r.nombtar && <div className="paces-text-secondary" style={{ fontSize: 11 }}>{toTitleCase(r.nombtar)}</div>}
+                        </div>
+                      )},
+                      { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const,
+                        render: (v: number) => <Text strong>{formatNumber(v || 0)}</Text>,
+                      },
+                      { title: 'Estado', dataIndex: 'anulado', key: 'anulado', width: 100,
+                        render: (v: string) => v === 'S' ? <Tag color="red">Anulado</Tag> : <Tag color="green">Activo</Tag>,
+                      },
+                    ]}
+                    summary={() => {
+                      const totalMonto = (data.vouchers || []).reduce((sum: number, r: any) => sum + (r.monto || 0), 0);
+                      return (
+                        <Table.Summary fixed="bottom">
+                          <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                            <Table.Summary.Cell index={0} colSpan={3}>
+                              <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={3} align="right">
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalMonto)}</Text>
+                            </Table.Summary.Cell>
+                            <Table.Summary.Cell index={4} />
+                          </Table.Summary.Row>
+                        </Table.Summary>
+                      );
+                    }}
                   />
                 ),
               },
@@ -1189,6 +1374,44 @@ const FacturaPOSDetalle: React.FC = () => {
           </div>
         </div>
       )}
+
+      <Modal
+        title="Vista previa termica"
+        open={vistaPreviaUrl !== null}
+        onCancel={cerrarVistaPreviaTicket}
+        footer={<Button onClick={cerrarVistaPreviaTicket}>Cerrar</Button>}
+        width={680}
+      >
+        <Text type="secondary">
+          Se interpreta el mismo ticket enviado al agente local. La apariencia fisica puede variar segun el papel y la impresora.
+        </Text>
+        {vistaPreviaUrl && (
+          <div
+            style={{
+              maxHeight: '70vh',
+              overflow: 'auto',
+              marginTop: 16,
+              textAlign: 'center',
+              background: '#f5f5f5',
+              padding: 16,
+            }}
+          >
+            <img
+              src={vistaPreviaUrl}
+              alt="Vista previa del ticket termico"
+              style={{
+                display: 'block',
+                width: '100%',
+                maxWidth: 576,
+                height: 'auto',
+                margin: '0 auto',
+                background: '#fff',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.18)',
+              }}
+            />
+          </div>
+        )}
+      </Modal>
 
       {/* Modal de anulación de factura POS */}
       <Modal

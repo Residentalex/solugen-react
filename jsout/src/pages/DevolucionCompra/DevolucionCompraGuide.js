@@ -1,0 +1,80 @@
+import { jsx as _jsx } from "react/jsx-runtime";
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import GuidePopover from '../../components/GuidePopover/GuidePopover';
+export const DevolucionCompraGuide = ({ tipo, concepto, suplidor, almacen, entrada, detallesCount, tipoRef, conceptoRef, suplidorRef, almacenRef, agregarFilaRef, entradaRef, suplidoresDisponibles, }) => {
+    const [open, setOpen] = useState(false);
+    const dismissedStepRef = useRef(null);
+    const currentStepRef = useRef(null);
+    const getCurrentStep = useCallback(() => {
+        const steps = [
+            {
+                key: 'tipo',
+                title: 'Paso 1: Tipo de Documento',
+                description: 'Debe elegir un tipo de documento antes de seleccionar el concepto.',
+                target: () => tipoRef.current,
+            },
+            {
+                key: 'concepto',
+                title: 'Paso 2: Concepto',
+                description: 'Seleccione un concepto. Las opciones disponibles dependen del tipo seleccionado.',
+                target: () => conceptoRef.current,
+            },
+            {
+                key: 'suplidor',
+                title: 'Paso 3: Suplidor',
+                description: 'Seleccione el suplidor. Puede auto-asignarse al elegir una Entrada de Referencia.',
+                target: () => suplidorRef.current,
+            },
+            {
+                key: 'entrada',
+                title: 'Paso 4: Entrada de Referencia',
+                description: 'Seleccione una Entrada de Almacén de referencia para cargar sus productos.',
+                target: () => entradaRef.current,
+            },
+            {
+                key: 'almacen',
+                title: 'Paso 5: Almacén',
+                description: 'Seleccione el almacén donde se registrará la devolución.',
+                target: () => almacenRef.current,
+            },
+            {
+                key: 'productos',
+                title: 'Paso 6: Productos',
+                description: 'Agregue productos usando "Agregar fila", "Buscar Producto" o importando desde una Entrada de Almacén.',
+                target: () => agregarFilaRef.current,
+            },
+        ];
+        // Lógica de prioridad (mismo orden que MostrarGuia del desktop)
+        if (!tipo)
+            return steps[0];
+        if (!concepto)
+            return steps[1]; // concepto ahora paso 1 (índice 1)
+        if (suplidoresDisponibles && !suplidor)
+            return steps[2]; // suplidor ahora paso 2 (índice 2)
+        if (tipo?.requiereReferencia && !entrada)
+            return steps[3]; // entrada ahora paso 3 (índice 3)
+        if (!almacen)
+            return steps[4]; // almacen ahora paso 4 (índice 4)
+        if (detallesCount === 0)
+            return steps[5]; // productos ahora paso 5 (índice 5)
+        return null;
+    }, [tipo, concepto, almacen, suplidor, entrada, detallesCount, suplidoresDisponibles, tipoRef, conceptoRef, suplidorRef, almacenRef, agregarFilaRef, entradaRef]);
+    currentStepRef.current = getCurrentStep();
+    useEffect(() => {
+        const current = getCurrentStep();
+        if (current) {
+            if (dismissedStepRef.current !== current.key) {
+                setOpen(true);
+            }
+        }
+        else {
+            setOpen(false);
+            dismissedStepRef.current = null;
+        }
+    }, [getCurrentStep]);
+    const currentStep = getCurrentStep();
+    if (!currentStep)
+        return null;
+    return (_jsx(GuidePopover, { title: currentStep.title, description: currentStep.description, targetElement: currentStep.target(), open: open, onClose: () => { setOpen(false); dismissedStepRef.current = currentStepRef.current?.key || ''; } }));
+};
+export default DevolucionCompraGuide;
