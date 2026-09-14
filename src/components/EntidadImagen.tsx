@@ -70,12 +70,14 @@ const EntidadImagen: React.FC<Props> = ({ tipo, entidadID, codigo, fallback, siz
   if (error || !src) {
     return (
       <div
+        aria-label={`${tipo} ${fallback}`}
+        role="img"
         className={className}
         style={{
           width: size,
           height: size,
           borderRadius: '50%',
-          background: 'var(--paces-primary)',
+          background: '#556ee6',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -94,7 +96,9 @@ const EntidadImagen: React.FC<Props> = ({ tipo, entidadID, codigo, fallback, siz
   return (
     <img
       src={src}
-      alt=""
+      alt={`${tipo} ${fallback}`}
+      aria-label={`${tipo} ${fallback}`}
+      role="img"
       className={className}
       style={{
         width: size,
