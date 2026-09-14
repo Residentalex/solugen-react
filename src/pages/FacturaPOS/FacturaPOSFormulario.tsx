@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
+  Card, Table, Tabs, Tag, Spin, Skeleton, Button, Space, Row, Col, Divider, Grid,
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Empty,
 } from 'antd';
 import {
@@ -1374,7 +1374,7 @@ const FacturaPOSFormulario: React.FC = () => {
       >
         {visanetProcessing ? (
           <div style={{ textAlign: 'center', padding: '24px 0' }}>
-            <Spin size="large" />
+            <Skeleton active paragraph={{ rows: 2 }} />
             <p style={{ marginTop: 16, fontSize: 16 }}>
               Procesando pago en el terminal POS...
             </p>

@@ -7,7 +7,7 @@ interface LoadingSpinnerProps {
 
 const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ mensaje = 'Cargando...' }) => (
   <div style={{ textAlign: 'center', padding: 80 }}>
-    <Spin size="large" />
+    <Spin size="large" aria-label={mensaje || 'Cargando contenido'} />
     <div style={{ marginTop: 16 }} className="paces-text-secondary">{mensaje}</div>
   </div>
 );

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Button, Form, Input, InputNumber, Switch, Checkbox, Spin, message, Grid, Collapse, Alert, Modal, Tag } from 'antd';
+import { Card, Row, Col, Button, Form, Input, InputNumber, Switch,   Checkbox, Spin, Skeleton, message, Grid, Collapse, Alert, Modal, Tag } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -271,9 +271,8 @@ const RolFormulario: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando...</div>
+      <div style={{ padding: 24 }}>
+        <Skeleton active paragraph={{ rows: 6 }} />
       </div>
     );
   }

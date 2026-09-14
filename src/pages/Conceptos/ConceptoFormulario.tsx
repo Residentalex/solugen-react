@@ -2,7 +2,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Tabs, Tag, Button, Space, Row, Col, Grid,
-  message, Form, Input, Select, Switch, Typography, Modal, Alert, Spin,
+  message, Form, Input, Select, Switch, Typography, Modal, Alert, Spin, Skeleton,
   Table, Empty,
 } from 'antd';
 import {
@@ -556,9 +556,8 @@ const ConceptoFormulario: React.FC = () => {
   // ===== Loading state =====
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando concepto...</div>
+      <div style={{ padding: 24 }}>
+        <Skeleton active paragraph={{ rows: 6 }} />
       </div>
     );
   }

@@ -11,7 +11,7 @@ import {
   Select,
   Switch,
   Checkbox,
-  Spin,
+  Skeleton,
   message,
   Tag,
   Space,
@@ -31,6 +31,7 @@ import { pantallaApi } from '../../api/pantallaApi';
 import { permisoEspecialApi } from '../../api/permisoEspecialApi';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import type { PantallaDTO, PantallaEntidadDTO, ModuloDTO, EntidadDocumentoDTO, PermisoEspecialConAsignacionDTO } from '../../types/auth';
+import LoadingSpinner from '../../components/LoadingSpinner';
 import FormularioToolbar from '../../components/FormularioToolbar';
 import type { AccionDTO } from '../../types/administracion';
 
@@ -232,7 +233,11 @@ const PantallaFormulario: React.FC = () => {
   };
 
   if (esEditar && loading) {
-    return <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>;
+    return (
+      <div style={{ padding: 24 }}>
+        <Skeleton active paragraph={{ rows: 8 }} />
+      </div>
+    );
   }
   if (esEditar && loadingError) {
     return (

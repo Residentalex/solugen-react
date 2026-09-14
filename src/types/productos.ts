@@ -124,6 +124,7 @@ export interface ProductoDTO {
   diasVencimiento?: number;
   modificaPrecio?: boolean;
   modificaDescripcion?: boolean;
+  prodserv?: string;
 }
 
 export interface ResultadoImportacionDTO {

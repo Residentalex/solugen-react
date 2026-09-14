@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Button, Form, Input, InputNumber, Switch, Select, Spin, message, Tabs, Tag, Space, Typography, Alert, Table, Modal } from 'antd';
+import { Card, Row, Col, Button, Form, Input, InputNumber, Switch, Select, Skeleton, Spin, message, Tabs, Tag, Space, Typography, Alert, Table, Modal } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, SearchOutlined, CloseOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -18,13 +18,7 @@ import type { RolDTO, PantallaDTO, UsuarioSucursalRolDTO, AuthSucursalPermitidaD
 import BuscarEmpleadoModal from '../../components/BuscarEmpleadoModal/BuscarEmpleadoModal';
 import EntidadImagen from '../../components/EntidadImagen';
 
-function sanitizeHtml(text: string): string {
-  if (!text) return text;
-  const map: Record<string, string> = {
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;', '/': '&#x2F;',
-  };
-  return text.replace(/[&<>"'\/]/g, (m) => map[m]);
-}
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
 interface PantallaConRoles extends PantallaDTO {
   rolesAcceso: string[];
@@ -344,7 +338,7 @@ const UsuarioFormulario: React.FC = () => {
   };
 
   if (esEditar && loading) {
-    return <div style={{ textAlign: 'center', padding: 60 }}><Spin size="large" /></div>;
+    return <div style={{ padding: 24 }}><Skeleton active paragraph={{ rows: 8 }} /></div>;
   }
   if (esEditar && loadingError) {
     return (
@@ -508,7 +502,7 @@ const UsuarioFormulario: React.FC = () => {
                           Pantallas disponibles
                         </Typography.Text>
                         {cargandoPantallas ? (
-                          <Spin size="small" />
+                          <Skeleton active paragraph={{ rows: 1 }} />
                         ) : (pantallasPorSucursal[s] || []).length === 0 ? (
                           <Typography.Text type="secondary" style={{ fontStyle: 'italic' }}>
                             No hay pantallas disponibles en esta sucursal
@@ -533,6 +527,7 @@ const UsuarioFormulario: React.FC = () => {
           form.setFieldValue('nombre', emp.nombre);
         }}
       />
+    </div>
     </Spin>
   );
 };

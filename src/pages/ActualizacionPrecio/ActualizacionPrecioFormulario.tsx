@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Button, Space, Row, Col, Grid,
   Form, Input, InputNumber, Select, DatePicker, Typography,
-  Modal, message, Alert, Spin, Switch,
+  Modal, message, Alert, Spin, Skeleton, Switch,
 } from 'antd';
 import {
   PlusOutlined, SaveOutlined, CloseOutlined, SearchOutlined,
@@ -291,9 +291,8 @@ const ActualizacionPrecioFormulario: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando documento...</div>
+      <div style={{ padding: 24 }}>
+        <Skeleton active paragraph={{ rows: 6 }} />
       </div>
     );
   }

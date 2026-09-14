@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Row, Col, Button, Form, Input, InputNumber, Switch, Select, Tag, Table, Space,
-  message, Spin, Alert, Modal, Typography, Grid, Upload,
+  message, Spin, Skeleton, Alert, Modal, Typography, Grid, Upload,
 } from 'antd';
 import {
   SaveOutlined, CloseOutlined, ExclamationCircleOutlined, InboxOutlined, DeleteOutlined,
@@ -116,6 +116,7 @@ const ProductoFormulario: React.FC = () => {
           paraComprar: true,
           precio: 0,
           ultimoCosto: 0,
+          prodserv: 'P',
         });
         setLoading(false);
       }
@@ -164,6 +165,7 @@ const ProductoFormulario: React.FC = () => {
         productoTerminado: prod.datosExtra?.productoTerminado || false,
         esComodin: prod.datosExtra?.esComodin || false,
         productoControl: prod.productoControl?.codigo || undefined,
+        prodserv: prod.prodserv || 'P',
       });
       setRequiereFechaVenc(prod.requiereFechaVenc || false);
 
@@ -259,6 +261,7 @@ const ProductoFormulario: React.FC = () => {
         ultimoCosto: data?.ultimoCosto || 0,
         modificaPrecio: values.modificaPrecio || false,
         modificaDescripcion: values.modificaDescripcion || false,
+        prodserv: values.prodserv || 'P',
         requiereFechaVenc: values.requiereFechaVenc || false,
         diasVencimiento: values.requiereFechaVenc ? values.diasVencimiento : undefined,
         datosExtra,
@@ -330,11 +333,8 @@ const ProductoFormulario: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">
-          Cargando formulario...
-        </div>
+      <div style={{ padding: 24 }}>
+        <Skeleton active paragraph={{ rows: 6 }} />
       </div>
     );
   }
@@ -703,6 +703,14 @@ const ProductoFormulario: React.FC = () => {
                 <Col xs={24} sm={12}>
                   <Form.Item name="codigoSuplidor" label="Código Suplidor">
                     <Input placeholder="Código del suplidor" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item name="prodserv" label="Tipo Artículo" rules={[{ required: true, message: 'Seleccione tipo' }]}>
+                    <Select placeholder="Seleccionar tipo">
+                      <Select.Option value="P">Producto</Select.Option>
+                      <Select.Option value="S">Servicio</Select.Option>
+                    </Select>
                   </Form.Item>
                 </Col>
               </Row>

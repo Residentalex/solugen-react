@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Spin, Button, Space, Row, Col, Grid,
+  Card, Table, Spin, Skeleton, Button, Space, Row, Col, Grid,
   message, Form, Input, DatePicker, Typography, Modal, Alert, Select, Empty,
 } from 'antd';
 import {
@@ -277,9 +277,8 @@ const PlantillaSuplidorFormulario: React.FC = () => {
   // ===== Loading state =====
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando plantilla...</div>
+      <div style={{ padding: 24 }}>
+        <Skeleton active paragraph={{ rows: 6 }} />
       </div>
     );
   }

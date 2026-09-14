@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Button, Space, Row, Col, Grid, Form, Input, InputNumber, Select, DatePicker, Typography, message, Modal, Alert, Spin, Upload, Divider, Checkbox, Descriptions,
+  Card, Table, Tabs, Button, Space, Row, Col, Grid, Form, Input, InputNumber, Select, DatePicker, Typography, message, Modal, Alert, Spin, Skeleton, Upload, Divider, Checkbox, Descriptions,
 } from 'antd';
 import {
   SaveOutlined, CloseOutlined, UploadOutlined, PlusOutlined, DeleteOutlined, CheckCircleFilled, SearchOutlined, ArrowUpOutlined, ArrowDownOutlined, DownloadOutlined, FilterFilled, FilterOutlined, FileTextOutlined, ReloadOutlined, ExclamationCircleOutlined,
@@ -2123,9 +2123,8 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
   // ===== Loading =====
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando conciliación...</div>
+      <div style={{ padding: 24 }}>
+        <Skeleton active paragraph={{ rows: 8 }} />
       </div>
     );
   }

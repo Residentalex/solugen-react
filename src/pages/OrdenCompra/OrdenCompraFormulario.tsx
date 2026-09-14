@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Spin, Button, Space, Row, Col, Divider,
+  Card, Table, Tabs, Spin, Skeleton, Button, Space, Row, Col, Divider,
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Empty,
 } from 'antd';
 import {
@@ -427,9 +427,8 @@ const OrdenCompraFormulario: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando orden de compra...</div>
+      <div style={{ padding: 24 }}>
+        <Skeleton active paragraph={{ rows: 6 }} />
       </div>
     );
   }
