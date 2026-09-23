@@ -12,6 +12,7 @@ import { ErrorDetalle } from '../../components';
 import PermissionGate from '../../components/PermissionGate';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { toTitleCase } from '../../utils/formats';
 
 const { Text } = Typography;
 

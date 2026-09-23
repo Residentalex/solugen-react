@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { MovimientoDTO } from '../types/movimiento';
-import type { MovimientoArticuloDTO, MovimientoArticuloAgrupadoDTO } from '../types/movimientoPorPlantilla';
+import type { MovimientoArticuloDTO, MovimientoArticuloAgrupadoDTO, MovimientoPorFechaDTO } from '../types/movimientoPorPlantilla';
 import type { DetallePlantillaConteoFisicoDTO } from '../types/plantilla';
 import type { ApiResponse } from '../types/auth';
 
@@ -83,6 +83,24 @@ export const movimientoApi = {
   ): Promise<MovimientoArticuloDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<MovimientoArticuloDTO[]>>(
       `${BASE}/${sucursal}/movimientos-fecha`,
+      { params }
+    );
+    return data.data;
+  },
+
+  obtenerMovimientosPorFechaAgrupados: async (
+    sucursal: number,
+    params: {
+      desde: string;
+      hasta: string;
+      codigo?: string;
+      familia?: string;
+      suplidor?: string;
+      categoria?: string;
+    }
+  ): Promise<MovimientoPorFechaDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<MovimientoPorFechaDTO[]>>(
+      `${BASE}/${sucursal}/RMovimientosPorFecha`,
       { params }
     );
     return data.data;

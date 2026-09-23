@@ -23,6 +23,7 @@ import type {
   FirmaConfig,
   ZonaTicketConfig,
   LineaZonaConfig,
+  SeparadorZonaConfig,
   TamanoLetraTicket,
   TipoCalculoCampo,
   CalculoCampo,
@@ -134,7 +135,7 @@ function lineSep(char: string = '-', width: number = LINE_LENGTH, tamano?: Taman
 
 /** Geometría de fuente según tamaño ESC/POS (puntos por carácter y escala). */
 function geometriaFuente(tamano?: TamanoLetraTicket): { fuenteB: boolean; escala: number; paso: number } {
-  const fuenteB = tamano === 'condensada' || tamano === 'doble_b';
+  const fuenteB = tamano === 'condensada' || tamano === 'doble_b' || tamano === 'condensando_doble';
   const escala = tamano === 'triple' ? 3 : ['doble', 'doble_b', 'doble_ancho'].includes(tamano ?? '') ? 2 : 1;
   const paso = (fuenteB ? 9 : 12) * escala;
   return { fuenteB, escala, paso };
@@ -643,12 +644,17 @@ function comandosFormato(
   } else if (fmt.tamano === 'condensada') {
     antes.push(CMD_CONDENSED);
     despues.push(CMD_CONDENSED_OFF);
+  } else if (fmt.tamano === 'condensando_doble') {
+    antes.push(CMD_FONT_B + CMD_CONDENSED);
+    despues.push(CMD_CONDENSED_OFF + CMD_FONT_A);
   }
 
-  if (fmt.negrita === true) {
+  // Full bold para condensando_doble
+  const boldForce = fmt?.tamano === 'condensando_doble' ? true : fmt?.negrita;
+  if (boldForce === true) {
     antes.push(CMD_BOLD_ON);
     despues.push(CMD_BOLD_OFF);
-  } else if (fmt.negrita === false) {
+  } else if (boldForce === false) {
     antes.push(CMD_BOLD_OFF);
   }
 
@@ -776,9 +782,12 @@ function lineaTabular(ctx: Ctx, label: string, valor: string, ancho: number, fmt
  * Version sin Ctx para callers que no tienen contexto (ej. renderCampoFPV).
  * Solo formatea el texto sin comandos de formato embebidos.
  */
-function lineaTabularStr(label: string, valor: string, ancho: number): string {
-  const anchoEtiqueta = Math.max(ancho, label.length + 2); // incluye ':' y al menos un espacio antes del valor
-  return right(label + ':', anchoEtiqueta) + valor;
+function lineaTabularStr(label: string, valor: string, ancho: number, alineacionLabel?: AlineacionTicket): string {
+  const lbl = label + ': ';
+  const anchoEtiqueta = Math.max(ancho, lbl.length);
+  if (alineacionLabel === 'izquierda') return left(lbl, anchoEtiqueta) + valor;
+  if (alineacionLabel === 'centro') return center(lbl, anchoEtiqueta) + valor;
+  return right(lbl, anchoEtiqueta) + valor;
 }
 
 /**
@@ -790,7 +799,7 @@ function lineaTabularConFormato(
   fmtLabel?: FormatoItemTicket,
   fmtValor?: FormatoItemTicket
 ): string {
-  let lblPart = label + ':';
+  let lblPart = label + ': ';
   if (fmtLabel?.negrita === true) lblPart = CMD_BOLD_ON + lblPart + CMD_BOLD_OFF;
   else if (fmtLabel?.negrita === false) lblPart = CMD_BOLD_OFF + lblPart;
 
@@ -798,7 +807,10 @@ function lineaTabularConFormato(
   if (fmtValor?.negrita === true) valPart = CMD_BOLD_ON + valPart + CMD_BOLD_OFF;
   else if (fmtValor?.negrita === false) valPart = CMD_BOLD_OFF + valPart;
 
-  const anchoEtiqueta = Math.max(ancho, largoVisible(lblPart) + 1);
+  const anchoEtiqueta = Math.max(ancho, lblPart.length);
+  const alineacion = fmtLabel?.alineacion || fmtValor?.alineacion;
+  if (alineacion === 'izquierda') return leftVisible(lblPart, anchoEtiqueta) + valPart;
+  if (alineacion === 'centro') return centerVisible(lblPart, anchoEtiqueta) + valPart;
   return rightVisible(lblPart, anchoEtiqueta) + valPart;
 }
 
@@ -898,7 +910,7 @@ function emitirItemEspecial(
         // Texto crudo (sin padding ni wrap): el grupo lo rellena por columna.
         parts.push(def.negrita === true ? CMD_BOLD_ON + label + CMD_BOLD_OFF + ': ' + valor : label + ': ' + valor);
       } else if (tabular) {
-        parts.push(lineaTabularStr(label, valor, tabular.ancho ?? 12) + LF);
+        parts.push(lineaTabularStr(label, valor, tabular.ancho ?? 12, linea?.formato?.alineacion || linea?.formatoLabel?.alineacion || def.alineacion) + LF);
       } else {
         parts.push(lineaConFormato(def, label, valor, width));
       }
@@ -970,8 +982,12 @@ function _co(ctx: Ctx, c: boolean) { if (ctx.co !== c) { ctx.co = c; ctx.p.push(
 function _aplicarFmt(ctx: Ctx, fmt: FormatoItemTicket | undefined) {
   if (!fmt) return;
   if (fmt.alineacion) _al(ctx, fmt.alineacion);
-  if (fmt.negrita !== undefined) _bo(ctx, fmt.negrita);
+  const boldForce = fmt.tamano === 'condensando_doble' ? true : fmt.negrita;
+  if (boldForce !== undefined) _bo(ctx, boldForce);
   if (fmt.tamano === 'condensada') _co(ctx, true);
+  else if (fmt.tamano === 'condensando_doble') {
+    ctx.p.push(CMD_FONT_B + CMD_CONDENSED);
+  }
   else if (fmt.tamano === 'doble') { ctx.p.push(CMD_SIZE_DOUBLE); }
   else if (fmt.tamano === 'doble_b') { ctx.p.push(CMD_FONT_B + CMD_SIZE_DOUBLE); }
   else if (fmt.tamano === 'doble_altura') { ctx.p.push(CMD_SIZE_DOUBLE_ALTURA); }
@@ -981,8 +997,12 @@ function _aplicarFmt(ctx: Ctx, fmt: FormatoItemTicket | undefined) {
 
 function _restaurarFmt(ctx: Ctx, fmt: FormatoItemTicket | undefined) {
   if (!fmt) return;
-  if (fmt.negrita !== undefined) _bo(ctx, false);
+  const boldForce = fmt.tamano === 'condensando_doble' ? true : fmt.negrita;
+  if (boldForce !== undefined) _bo(ctx, false);
   if (fmt.tamano === 'condensada') _co(ctx, false);
+  else if (fmt.tamano === 'condensando_doble') {
+    ctx.p.push(CMD_CONDENSED_OFF + CMD_FONT_A);
+  }
   if (fmt.tamano === 'doble' || fmt.tamano === 'doble_altura' || fmt.tamano === 'doble_ancho' || fmt.tamano === 'triple') ctx.p.push(CMD_SIZE_NORMAL);
   else if (fmt.tamano === 'doble_b') ctx.p.push(CMD_SIZE_NORMAL + CMD_FONT_A);
 }
@@ -1049,6 +1069,38 @@ function _emitirSep(ctx: Ctx, linea: LineaZonaConfig) {
   if (linea.formato?.tamano === 'condensada') _co(ctx, false);
   // Margen inferior
   if (margen > 0) ctx.p.push(CMD_J + String.fromCharCode(margen));
+}
+
+/** Emite un separador de zona construyendo una línea SEPARADOR con la config de la zona. */
+function _emitirSepZona(ctx: Ctx, separador: SeparadorZonaConfig) {
+  const linea: LineaZonaConfig = {
+    ref: 'SEPARADOR',
+    caracter: separador.caracter || '-',
+    ancho: separador.ancho,
+    alineacionSep: separador.alineacionSep,
+    grosor: separador.grosor,
+    formato: separador.formato,
+  };
+  _emitirSep(ctx, linea);
+}
+
+/**
+ * Emite el separador de zona según la posición indicada.
+ * En zonas 'detalle', omite el separador cuando el array está vacío salvo que
+ * `imprimirSiVacio` sea true. Zonas contiguas: cada zona emite la suya (sin deduplicar).
+ */
+function _emitirSepZonaPos(ctx: Ctx, zona: ZonaTicketConfig, data: any, posicion: 'encima' | 'debajo') {
+  const sep = zona.separador;
+  if (!sep?.posicion) return;
+  const pos = sep.posicion;
+  if (pos !== posicion && pos !== 'ambos') return;
+  if (zona.tipo === 'detalle' && sep.imprimirSiVacio !== true) {
+    const detalles = zona.arrayOrigen
+      ? (resolverRuta(data, zona.arrayOrigen) as any[]) || []
+      : (data.detalles || []);
+    if (detalles.length === 0) return;
+  }
+  _emitirSepZona(ctx, sep);
 }
 
 function _emitirEspacio(ctx: Ctx) {
@@ -1389,6 +1441,7 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
   let zonaActualAlineacion: AlineacionTicket | undefined;
 
   for (const zona of zonas) {
+    _emitirSepZonaPos(ctx, zona, data, 'encima');
     switch (zona.tipo) {
       case 'encabezado_reporte':
       case 'pie_reporte':
@@ -1664,6 +1717,7 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
         break;
       }
     }
+    _emitirSepZonaPos(ctx, zona, data, 'debajo');
   }
 
   ctx.p.push(LF);
@@ -1850,7 +1904,7 @@ function renderCampoFPV(
         if (alineacion) fmtComb.alineacion = alineacion;
         return aplicarFormatoTexto(fmtComb, lineaTabularConFormato('RNC', clienteRnc, tabAn, fmtLabel || fmt, fmtValor), w);
       }
-      return aplicarFormatoTexto(fmt, lineaTabularStr('RNC', clienteRnc, tabAn) + LF, w);
+      return aplicarFormatoTexto(fmt, lineaTabularStr('RNC', clienteRnc, tabAn, fmt?.alineacion) + LF, w);
     }
     if (fmtLabel || fmtValor) {
       const alineacion = fmtLabel?.alineacion || fmtValor?.alineacion || fmt?.alineacion;
@@ -1858,7 +1912,7 @@ function renderCampoFPV(
       if (alineacion) fmtComb.alineacion = alineacion;
       return aplicarFormatoTexto(fmtComb, lineaTabularConFormato(lbl, v, tabAn, fmtLabel || fmt, fmtValor), w);
     }
-    return aplicarFormatoTexto(fmt, lineaTabularStr(lbl, v, tabAn), w);
+    return aplicarFormatoTexto(fmt, lineaTabularStr(lbl, v, tabAn, fmt?.alineacion), w);
   }
 
   // Modo no tabular: si hay formato dual (fmtLabel o fmtValor), intercalar comandos
@@ -2377,6 +2431,7 @@ export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, conf
   let zonaActualAlineacionFRI: AlineacionTicket | undefined;
 
   for (const zona of zonas) {
+    _emitirSepZonaPos(ctx, zona, data, 'encima');
     switch (zona.tipo) {
       case 'encabezado_reporte':
       case 'pie_reporte':
@@ -2598,6 +2653,7 @@ export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, conf
         break;
       }
     }
+    _emitirSepZonaPos(ctx, zona, data, 'debajo');
   }
 
   ctx.p.push(LF);
@@ -2850,6 +2906,7 @@ function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: P
   let zonaActualAlineacion: AlineacionTicket | undefined;
 
   for (const zona of zonas) {
+    _emitirSepZonaPos(ctx, zona, data, 'encima');
     zonaActualAlineacion = zona.alineacion;
     if (zona.alineacion) _al(ctx, zona.alineacion); else _al(ctx, 'izquierda');
     if (zona.tipo === 'detalle' && zona.arrayOrigen) {
@@ -2867,6 +2924,7 @@ function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: P
     _bo(ctx, false); _co(ctx, false);
     _al(ctx, 'izquierda');
     ctx.forceAl = true;
+    _emitirSepZonaPos(ctx, zona, data, 'debajo');
   }
 
   ctx.p.push(LF);

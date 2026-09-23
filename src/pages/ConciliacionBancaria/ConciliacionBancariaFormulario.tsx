@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Button, Space, Row, Col, Grid, Form, Input, InputNumber, Select, DatePicker, Typography, message, Modal, Alert, Spin, Skeleton, Upload, Divider, Checkbox, Descriptions,
+  Card, Table, Tabs, Button, Space, Row, Col, Grid, Form, Input, InputNumber, Select, DatePicker, Typography, message, Modal, Alert, Spin, Skeleton, Upload, Divider, Checkbox, Descriptions, Steps,
 } from 'antd';
 import {
   SaveOutlined, CloseOutlined, UploadOutlined, PlusOutlined, DeleteOutlined, CheckCircleFilled, SearchOutlined, ArrowUpOutlined, ArrowDownOutlined, DownloadOutlined, FilterFilled, FilterOutlined, FileTextOutlined, ReloadOutlined, ExclamationCircleOutlined,
@@ -15,7 +15,7 @@ import { transaccionBancariaApi } from '../../api/transaccionBancariaApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { entidadApi } from '../../api/entidadApi';
 import BuscarEntidadSelect from '../../components/BuscarEntidadSelect/BuscarEntidadSelect';
-import { extraerMensajeError, formatCurrency, formatNumber, formatDate } from '../../utils/formats';
+import { toTitleCase, extraerMensajeError, formatCurrency, formatNumber, formatDate } from '../../utils/formats';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import FiltroSeleccionDropdown from '../../components/FiltroSeleccionDropdown';
 import type {
@@ -453,6 +453,7 @@ const balLibrosInicialCargado = useRef(false);
         setTransaccionesCargadas(true);
       }
       if (!enTransitoCargado) {
+        const fechaStr = fechaConciliacion ? fechaConciliacion.format('YYYY-MM-DD') : '';
         transito = await conciliacionBancariaApi.obtenerTransaccionesSinConciliarSimple(sucursalActiva, cuentaTransito, fechaStr), conciliacionBancariaApi.obtenerEnTransito(sucursalActiva, parseInt(id));
         setEnTransito(transito);
         setEnTransitoCargado(true);
@@ -1134,15 +1135,32 @@ const balLibrosInicialCargado = useRef(false);
   // Auto-popular balLibros en modo crear: cuando se selecciona cuenta bancaria y fecha,
   // obtener el saldo según libros (DTRANS_CONT) hasta la fecha seleccionada.
   const [cargandoSaldoLibros, setCargandoSaldoLibros] = useState(false);
-// Auto-calcular fechaAnt al seleccionar cuenta bancaria en modo crear.
+  // Auto-calcular fechaAnt al seleccionar cuenta bancaria (crear o editar).
 const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
   useEffect(() => {
     if (mode !== 'crear') return;
     if (!numeroCtaForm || !fechaConciliacion) return;
 
-    // Auto-calcular fechaAnt: un mes antes de la fecha de conciliación.
-    const fechaAntCalculada = fechaConciliacion.add(-1, 'month');
-    form.setFieldsValue({ fechaAnt: fechaAntCalculada });
+    setCargandoFechaAnt(true);
+    conciliacionBancariaApi.obtenerUltimaConciliacionPorCuenta(sucursalActiva, numeroCtaForm)
+      .then((fechaStr) => {
+        if (fechaStr) {
+          const ultimaFecha = dayjs(fechaStr);
+          if (ultimaFecha.isValid()) {
+            const fechaAntCalculada = ultimaFecha.add(1, 'day');
+            form.setFieldsValue({ fechaAnt: fechaAntCalculada });
+          }
+        } else {
+          // Fallback: un mes antes si no hay conciliación previa
+          const fechaAntCalculada = fechaConciliacion.add(-1, 'month');
+          form.setFieldsValue({ fechaAnt: fechaAntCalculada });
+        }
+      })
+      .catch(() => {
+        const fechaAntCalculada = fechaConciliacion.add(-1, 'month');
+        form.setFieldsValue({ fechaAnt: fechaAntCalculada });
+      })
+      .finally(() => setCargandoFechaAnt(false));
 
     const fechaStr = fechaConciliacion.format('YYYY-MM-DD');
     setCargandoSaldoLibros(true);
@@ -2150,6 +2168,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
             icon={<ReloadOutlined />} 
             onClick={cargarTodo}
             loading={cargandoTransito}
+            disabled={saving || importando}
           >
             Actualizar
           </Button>
@@ -2160,28 +2179,52 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
               handleImportarArchivo(file);
               return false;
             }}
-            disabled={importando}
+            disabled={importando || saving}
           >
-            <Button icon={<UploadOutlined />} loading={importando}>
+            <Button icon={<UploadOutlined />} loading={importando} disabled={saving}>
               {archivoImportado ? 'Reemplazar archivo...' : 'Importar'}
             </Button>
           </Upload>
           {archivoImportado && (
             <Text className="paces-text-secondary">{archivoImportado.name}</Text>
           )}
-          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-            Guardar
+          <Button type="default" icon={<SaveOutlined />} loading={saving} disabled={saving || importando} onClick={handleGuardar}>
+            Guardar borrador
           </Button>
           {mode === 'crear' && (
-            <Button icon={<SaveOutlined />} loading={saving} onClick={handleGuardarYAplicar}>
-              Guardar y Aplicar
+            <Button type="primary" danger icon={<SaveOutlined />} loading={saving} disabled={saving || importando} onClick={() => {
+              setSaving(true);
+              Modal.confirm({
+                title: 'Aplicar conciliación',
+                icon: <ExclamationCircleOutlined style={{ color: '#faad14' }} />,
+                content: 'Esta acción aplicará la conciliación en libros. ¿Confirmas que deseas continuar?',
+                okText: 'Aplicar',
+                cancelText: 'Cancelar',
+                okButtonProps: { danger: true },
+                onOk: () => handleGuardarYAplicar(),
+                onCancel: () => setSaving(false),
+              });
+            }}>
+              Aplicar conciliación
             </Button>
           )}
-          <Button icon={<CloseOutlined />} onClick={handleCancelar}>
+          <Button icon={<CloseOutlined />} disabled={saving || importando} onClick={handleCancelar}>
             Cancelar
           </Button>
         </Space>
       </div>
+
+      {/* Progreso del proceso */}
+      <Steps
+        current={mode === 'editar' ? 2 : (movimientos.length > 0 ? 1 : 0)}
+        size="small"
+        style={{ marginBottom: 16 }}
+        items={[
+          { title: 'Datos', description: 'Cuenta y saldo' },
+          { title: 'Movimientos', description: 'Importar / revisar' },
+          { title: 'Conciliar', description: 'Diferencias y aplicación' },
+        ]}
+      />
 
       {/* Formulario */}
       {isLarge ? (
@@ -2589,7 +2632,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                       allowClear
                       onSearch={(v) => setSearchConcil(v)}
                       onChange={(e) => { if (!e.target.value) setSearchConcil(''); }}
-                      style={{ width: 300, marginBottom: 12 }}
+                      style={{ maxWidth: 400, width: '100%', marginBottom: 12 }}
                       prefix={<SearchOutlined className="paces-text-icon" />}
                     />
                     <Table
@@ -2616,7 +2659,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                         allowClear
                         onSearch={(v) => setSearchSinConcil(v)}
                         onChange={(e) => { if (!e.target.value) setSearchSinConcil(''); }}
-                        style={{ width: 300 }}
+                        style={{ maxWidth: 400, width: '100%' }}
                         prefix={<SearchOutlined className="paces-text-icon" />}
                       />
                       <div style={{ flex: 1 }} />
@@ -2659,7 +2702,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                       allowClear
                       onSearch={(v) => setSearchResumen(v)}
                       onChange={(e) => { if (!e.target.value) setSearchResumen(''); }}
-                      style={{ width: 300, marginBottom: 12 }}
+                      style={{ maxWidth: 400, width: '100%', marginBottom: 12 }}
                       prefix={<SearchOutlined className="paces-text-icon" />}
                     />
                     <Table
@@ -2685,7 +2728,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                     allowClear
                     onSearch={(v) => setSearchTransito(v)}
                     onChange={(e) => { if (!e.target.value) setSearchTransito(''); }}
-                    style={{ width: 300, marginBottom: 12 }}
+                    style={{ maxWidth: 400, width: '100%', marginBottom: 12 }}
                     prefix={<SearchOutlined className="paces-text-icon" />}
                   />
                   <Table
@@ -2712,7 +2755,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                     allowClear
                     onSearch={(v) => setSearchResumenTransito(v)}
                     onChange={(e) => { if (!e.target.value) setSearchResumenTransito(''); }}
-                    style={{ width: 300, marginBottom: 12 }}
+                    style={{ maxWidth: 400, width: '100%', marginBottom: 12 }}
                     prefix={<SearchOutlined className="paces-text-icon" />}
                   />
                   <Table

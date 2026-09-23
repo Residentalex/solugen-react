@@ -90,7 +90,7 @@ const Proveedores: React.FC = () => {
       width: 120,
       fixed: 'left',
       render: (val: string, record: SuplidorDTO) => (
-        <Link to={`/MProveedor/${record.codigo}`} className="paces-doc-link">
+        <Link to={`/MSUP/${record.codigo}`} className="paces-doc-link">
           <Text strong>{val}</Text>
         </Link>
       ),

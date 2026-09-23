@@ -8,7 +8,7 @@ import CambiarClave from './pages/CambiarClave/CambiarClave';
 import MainLayout from './layouts/MainLayout';
 import SaasMainLayout from './layouts/SaasMainLayout';
 import Dashboard from './pages/Dashboard/Dashboard';
-import DashboardConfig from './pages/Dashboard/DashboardConfig';
+import ConfiguracionDashboard from './pages/Dashboard/ConfiguracionDashboard';
 import EntradaAlmacen from './pages/EntradaAlmacen/EntradaAlmacen';
 import EntradaAlmacenDetalle from './pages/EntradaAlmacen/EntradaAlmacenDetalle';
 import EntradaAlmacenFormulario from './pages/EntradaAlmacen/EntradaAlmacenFormulario';
@@ -109,6 +109,7 @@ import TransaccionBancariaDetalle from './pages/TransaccionBancaria/TransaccionB
 import TransaccionBancariaFormulario from './pages/TransaccionBancaria/TransaccionBancariaFormulario';
 import UnidadesMedida from './pages/UnidadesMedida/UnidadesMedida';
 import CategoriasArticulo from './pages/CategoriasArticulo/CategoriasArticulo';
+import CategoriaArticuloDetalle from './pages/CategoriasArticulo/CategoriaArticuloDetalle';
 import FamiliasArticulo from './pages/FamiliasArticulo/FamiliasArticulo';
 import SolicitudPago from './pages/SolicitudPago/SolicitudPago';
 import SolicitudPagoDetalle from './pages/SolicitudPago/SolicitudPagoDetalle';
@@ -161,6 +162,7 @@ import PlantillaSuplidorFormulario from './pages/PlantillaSuplidor/PlantillaSupl
 import MovimientoPorPlantilla from './pages/MovimientoPorPlantilla/MovimientoPorPlantilla';
 import DocumentacionPage from './pages/Documentacion/DocumentacionPage';
 import RDocNoAutorizado from './pages/RDocNoAutorizado/RDocNoAutorizado';
+import ASPA from './pages/ASPA/ASPA';
 import Store from './pages/Ecommerce/Store';
 import StoreProductoDetalle from './pages/Ecommerce/StoreProductoDetalle';
 import HomePage from './pages/Ecommerce/HomePage';
@@ -258,7 +260,7 @@ const App: React.FC = () => {
         >
           <Route index element={<Dashboard />} />
           <Route path="dashboard" element={<Dashboard />} />
-          <Route path="dashboardconfig" element={<DashboardConfig />} />
+          <Route path="dashboardconfig" element={<ConfiguracionDashboard />} />
             <Route path="Reportes/:modulo" element={<ReportesModulo />} />
             <Route path="FENP" element={<EntradaAlmacen />} />
             <Route path="FENP/nuevo" element={<EntradaAlmacenFormulario />} />
@@ -292,7 +294,8 @@ const App: React.FC = () => {
             <Route path="RDocAplicado" element={<DocumentosAplicados />} />
             <Route path="RDocCxPAutorizado" element={<DocumentosCxPAutorizados />} />
             <Route path="RDocCxPAplicado" element={<DocumentosCxPAplicados />} />
-            <Route path="ASPA" element={<RDocNoAutorizado />} />
+            <Route path="ASPA" element={<ASPA />} />
+            <Route path="RDocNoAutorizado" element={<RDocNoAutorizado />} />
             <Route path="RSAPENP" element={<TransferenciaSucursales />} />
             <Route path="FCotizacion" element={<CotizacionVenta />} />
             <Route path="FCotizacion/nuevo" element={<CotizacionVentaFormulario />} />
@@ -400,6 +403,7 @@ const App: React.FC = () => {
             <Route path="FORC/:id/editar" element={<OrdenCompraFormulario />} />
             <Route path="FORC/:id" element={<OrdenCompraDetalle />} />
             <Route path="MSUP" element={<Proveedores />} />
+            <Route path="MSUP/nuevo" element={<ProveedorDetalle />} />
             <Route path="MSUP/:codigo" element={<ProveedorDetalle />} />
             <Route path="MBanco" element={<Bancos />} />
             <Route path="FOfertas" element={<Ofertas />} />
@@ -412,6 +416,7 @@ const App: React.FC = () => {
             <Route path="FTransBanco/:id" element={<TransaccionBancariaDetalle />} />
             <Route path="MUnidadMedida" element={<UnidadesMedida />} />
             <Route path="MCategoria" element={<CategoriasArticulo />} />
+            <Route path="MCategoria/:codigo" element={<CategoriaArticuloDetalle />} />
             <Route path="MFamilia" element={<FamiliasArticulo />} />
             <Route path="MMarca" element={<Proximamente modulo="Marcas" codigo="MMarca" />} />
             <Route path="MAtributo" element={<Proximamente modulo="Atributos" codigo="MAtributo" />} />
@@ -647,6 +652,7 @@ const App: React.FC = () => {
             <Route path="FORC/:id/editar" element={<OrdenCompraFormulario />} />
             <Route path="FORC/:id" element={<OrdenCompraDetalle />} />
             <Route path="MSUP" element={<Proveedores />} />
+            <Route path="MSUP/nuevo" element={<ProveedorDetalle />} />
             <Route path="MSUP/:codigo" element={<ProveedorDetalle />} />
             <Route path="MBanco" element={<Bancos />} />
             <Route path="FOfertas" element={<Ofertas />} />
@@ -659,6 +665,7 @@ const App: React.FC = () => {
             <Route path="FTransBanco/:id" element={<TransaccionBancariaDetalle />} />
             <Route path="MUnidadMedida" element={<UnidadesMedida />} />
             <Route path="MCategoria" element={<CategoriasArticulo />} />
+            <Route path="MCategoria/:codigo" element={<CategoriaArticuloDetalle />} />
             <Route path="MFamilia" element={<FamiliasArticulo />} />
             <Route path="MMarca" element={<Proximamente modulo="Marcas" codigo="MMarca" />} />
             <Route path="MAtributo" element={<Proximamente modulo="Atributos" codigo="MAtributo" />} />

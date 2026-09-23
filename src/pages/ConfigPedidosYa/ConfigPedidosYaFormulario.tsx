@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Input, InputNumber, message } from 'antd';
+import { Modal, Form, Input, InputNumber, message, Radio, Space, Divider, Typography, Button } from 'antd';
 import { configPedidosYaApi } from '../../api/configPedidosYaApi';
 import type { ConfigPedidosYaDTO } from '../../types/configPedidosYa';
 import { useAuthStore } from '../../stores/authStore';
+import { toTitleCase } from '../../utils/formats';
 
 interface ConfigPedidosYaFormularioProps {
   visible: boolean;
@@ -20,17 +21,48 @@ const ConfigPedidosYaFormulario: React.FC<ConfigPedidosYaFormularioProps> = ({
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
+  const [authMethod, setAuthMethod] = useState<'password' | 'private_key'>('password');
+  const [probando, setProbando] = useState(false);
+  const [resultadoPrueba, setResultadoPrueba] = useState<{ exito: boolean; mensaje: string; fechaPrueba?: string; detalle?: string } | null>(null);
 
   useEffect(() => {
     if (visible) {
       if (editItem) {
         form.setFieldsValue(editItem);
+        setAuthMethod(editItem.archivoClave ? 'private_key' : 'password');
+        setResultadoPrueba(null);
       } else {
         form.resetFields();
         form.setFieldsValue({ puerto: 22, margenBeneficio: 15 });
+        setAuthMethod('password');
+        setResultadoPrueba(null);
       }
     }
   }, [visible, editItem, form]);
+
+  const handleProbar = async () => {
+    try {
+      const values = await form.validateFields(['servidor', 'puerto', 'usuario']);
+      setProbando(true);
+      setResultadoPrueba(null);
+      const payload: Partial<ConfigPedidosYaDTO> = {
+        servidor: values.servidor,
+        puerto: values.puerto,
+        usuario: values.usuario,
+        contrasena: authMethod === 'password' ? values.contrasena || undefined : undefined,
+        archivoClave: authMethod === 'private_key' ? values.archivoClave || undefined : undefined,
+      };
+      const res = await configPedidosYaApi.probarConexion(sucursalActiva, payload);
+      setResultadoPrueba(res);
+      message[res.exito ? 'success' : 'error'](res.exito ? 'Conexión exitosa' : 'Fallo en la conexión');
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || err?.message || 'Error al probar conexión';
+      setResultadoPrueba({ exito: false, mensaje: 'Error al probar', fechaPrueba: new Date().toISOString(), detalle: msg });
+      message.error(msg);
+    } finally {
+      setProbando(false);
+    }
+  };
 
   const handleOk = async () => {
     try {
@@ -74,6 +106,12 @@ const ConfigPedidosYaFormulario: React.FC<ConfigPedidosYaFormularioProps> = ({
       destroyOnClose
     >
       <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        {/* Sección: Conexión SFTP */}
+        <Typography.Title level={5} style={{ marginBottom: 4, fontWeight: 600 }}>Conexión SFTP</Typography.Title>
+        <Typography.Text type="secondary" style={{ fontSize: 12, marginBottom: 12, display: 'block' }}>
+          Datos para conectarse al servidor de PedidosYa. Usa contraseña o llave privada, no ambas.
+        </Typography.Text>
+
         <Form.Item
           name="servidor"
           label="Servidor"
@@ -87,7 +125,7 @@ const ConfigPedidosYaFormulario: React.FC<ConfigPedidosYaFormularioProps> = ({
           label="Puerto"
           rules={[{ required: true, message: 'El puerto es obligatorio' }]}
         >
-          <InputNumber min={1} max={65535} style={{ width: '100%' }} placeholder="22" />
+          <InputNumber min={1} max={65535} style={{ width: '100%' }} placeholder="22 (puerto SFTP estándar)" />
         </Form.Item>
 
         <Form.Item
@@ -95,22 +133,63 @@ const ConfigPedidosYaFormulario: React.FC<ConfigPedidosYaFormularioProps> = ({
           label="Usuario"
           rules={[{ required: true, message: 'El usuario es obligatorio' }]}
         >
-          <Input placeholder="usuario SFTP" />
+          <Input placeholder="usuario SFTP (ej: mi_usuario)" />
         </Form.Item>
 
-        <Form.Item
-          name="contrasena"
-          label="Contraseña"
-        >
-          <Input.Password placeholder="Contraseña SFTP (opcional)" />
+        <Form.Item label="Método de autenticación">
+          <Radio.Group value={authMethod} onChange={(e) => setAuthMethod(e.target.value)}>
+            <Space direction="vertical">
+              <Radio value="password">Contraseña</Radio>
+              <Radio value="private_key">Llave privada (archivo)</Radio>
+            </Space>
+          </Radio.Group>
         </Form.Item>
 
-        <Form.Item
-          name="archivoClave"
-          label="Archivo Clave"
-        >
-          <Input placeholder="Ruta del archivo clave (opcional)" />
-        </Form.Item>
+        {authMethod === 'password' ? (
+          <Form.Item
+            name="contrasena"
+            label="Contraseña"
+            help="Contraseña del usuario SFTP (no se guarda en texto plano en el formulario)"
+          >
+            <Input.Password placeholder="Contraseña SFTP" />
+          </Form.Item>
+        ) : (
+          <Form.Item
+            name="archivoClave"
+            label="Archivo Clave"
+            help="Ruta al archivo de llave privada (ej: /home/user/.ssh/id_rsa)"
+          >
+            <Input placeholder="Ruta de archivo clave (ej: /etc/pedidosya/key)" />
+          </Form.Item>
+        )}
+
+        <Divider style={{ margin: '8px 0' }} />
+        <Space>
+          <Button type="default" loading={probando} onClick={handleProbar} disabled={saving || probando}>
+            Probar conexión
+          </Button>
+        </Space>
+
+        {resultadoPrueba && (
+          <div style={{ marginTop: 12, padding: 12, borderRadius: 6, background: resultadoPrueba.exito ? '#f6ffed' : '#fff2f0', border: `1px solid ${resultadoPrueba.exito ? '#b7eb8f' : '#ffccc7'}` }}>
+            <Typography.Text strong style={{ color: resultadoPrueba.exito ? '#52c41a' : '#ff4d4f' }}>
+              {resultadoPrueba.exito ? 'Conexión exitosa' : 'Conexión fallida'}
+            </Typography.Text>
+            <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>
+              {resultadoPrueba.fechaPrueba ? `Fecha: ${new Date(resultadoPrueba.fechaPrueba).toLocaleString()}` : ''}
+            </div>
+            <div style={{ fontSize: 12, color: '#595959', marginTop: 2 }}>
+              {resultadoPrueba.mensaje}
+            </div>
+            {resultadoPrueba.detalle && (
+              <div style={{ fontSize: 11, color: '#bfbfbf', marginTop: 4, whiteSpace: 'pre-wrap' }}>
+                {resultadoPrueba.detalle}
+              </div>
+            )}
+          </div>
+        )}
+
+        <Divider style={{ margin: '16px 0 8px' }} />
 
         <Form.Item
           name="margenBeneficio"
@@ -123,22 +202,25 @@ const ConfigPedidosYaFormulario: React.FC<ConfigPedidosYaFormularioProps> = ({
         <Form.Item
           name="rutaRemota"
           label="Ruta Remota"
+          help="Directorio remoto donde se encuentra el archivo (ej: Assortment/miChain_123.csv)"
         >
-          <Input placeholder="Assortment/miChain_123.csv (opcional)" />
+          <Input placeholder="Assortment/miChain_123.csv" />
         </Form.Item>
 
         <Form.Item
           name="prefijoArchivo"
           label="Prefijo Archivo"
+          help="Prefijo del archivo descargado (ej: miChain)"
         >
-          <Input placeholder="miChain (opcional)" />
+          <Input placeholder="miChain" />
         </Form.Item>
 
         <Form.Item
           name="vendorID"
           label="Vendor ID"
+          help="Identificador del vendedor en PedidosYa"
         >
-          <Input placeholder="ID del vendedor (opcional)" />
+          <Input placeholder="ID del vendedor" />
         </Form.Item>
       </Form>
     </Modal>

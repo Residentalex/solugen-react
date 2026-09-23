@@ -34,3 +34,14 @@ export interface MovimientoArticuloDTO {
   noCuenta: string;
   fecha: string;
 }
+
+export interface MovimientoPorFechaDTO {
+  sucursal: string;
+  sucursalNombre?: string;
+  codPro: string;
+  descripcion: string;
+  familiaNombre: string;
+  suplidorNombre: string;
+  grupoDescripcion: string;
+  fecha: string;
+}

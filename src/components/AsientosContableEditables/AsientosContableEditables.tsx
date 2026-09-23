@@ -43,7 +43,7 @@ const AsientosContableEditables: React.FC<AsientosContableEditablesProps> = ({
       (asientos || []).map((r: any, i: number) => {
         if (i !== index) return r;
         const montoRedondeado = Math.round(val * 100) / 100;
-        const upd: any = { ...r, monto: montoRedondeado };
+        const upd: any = { ...r, monto: montoRedondeado, generado: false };
         if (montoRedondeado > 0 && r.monto === 0) {
           upd.tipoAsiento = field === 'debito' ? 'D' : 'C';
         }

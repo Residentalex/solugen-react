@@ -88,12 +88,13 @@ const Conceptos: React.FC = () => {
       width: 120,
       fixed: 'left',
       render: (val: string, record: ConceptoDTO) => (
-        <Text
-          style={{ fontFamily: 'monospace', cursor: 'pointer', color: '#556ee6' }}
+        <a
+          className="paces-doc-link"
           onClick={() => navigate(`/MConcepto/${record.codigo}`)}
+          style={{ fontFamily: 'inherit', cursor: 'pointer', color: '#556ee6' }}
         >
           {val}
-        </Text>
+        </a>
       ),
     },
     {

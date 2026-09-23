@@ -16,4 +16,9 @@ export const configPedidosYaApi = {
   eliminar: async (sucursal: number): Promise<void> => {
     await apiClient.delete(`${BASE}/${sucursal}`);
   },
+
+  probarConexion: async (sucursal: number, config: Partial<ConfigPedidosYaDTO>): Promise<{ exito: boolean; mensaje: string; fechaPrueba?: string; detalle?: string }> => {
+    const { data } = await apiClient.post(`${BASE}/${sucursal}/probar`, config);
+    return data;
+  },
 };

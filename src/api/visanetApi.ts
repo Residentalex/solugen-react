@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
-import type { VisanetResponseDTO, VisanetVoucherDTO } from '../types/visanet';
+import type { VisanetCierreDTO, VisanetResponseDTO, VisanetVoucherDTO } from '../types/visanet';
 
 const BASE = '/visanet';
 
@@ -31,6 +31,12 @@ export const visanetApi = {
   obtenerVouchersDelDia: async (sucursal: number, fecha?: string): Promise<VisanetVoucherDTO[]> => {
     const params = fecha ? `?fecha=${fecha}` : '';
     const { data } = await apiClient.get<ApiResponse<VisanetVoucherDTO[]>>(`${BASE}/${sucursal}/vouchers-dia${params}`);
+    return data.data;
+  },
+
+  obtenerVouchersCierre: async (sucursal: number, desde?: string, hasta?: string): Promise<VisanetCierreDTO[]> => {
+    const query = [desde && `desde=${desde}`, hasta && `hasta=${hasta}`].filter(Boolean).join('&');
+    const { data } = await apiClient.get<ApiResponse<VisanetCierreDTO[]>>(`${BASE}/${sucursal}/vouchers-cierre${query ? `?${query}` : ''}`);
     return data.data;
   },
 };

@@ -28,6 +28,7 @@ import { useCarritoStore } from '../../stores/useCarritoStore';
 import { useFavoritosStore } from '../../stores/useFavoritosStore';
 import StoreHeader from './components/StoreHeader';
 import './Ecommerce.css';
+import { toTitleCase } from '../../utils/formats';
 
 const { Text, Title } = Typography;
 

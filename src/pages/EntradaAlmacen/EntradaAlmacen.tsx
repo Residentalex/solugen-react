@@ -166,19 +166,32 @@ const EntradaAlmacen: React.FC = () => {
         onRefresh: actions.handleRefresh,
       }}
       extraFooter={
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
           <Space size={4}>
             <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#E05252' }} />
             <Text type="secondary" style={{ fontSize: 12 }}>0-14 días</Text>
-          </Space>
-          <Space size={4}>
+            <span style={{ marginLeft: 8 }} />
             <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#4A8FD4' }} />
             <Text type="secondary" style={{ fontSize: 12 }}>15-29 días</Text>
-          </Space>
-          <Space size={4}>
+            <span style={{ marginLeft: 8 }} />
             <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#2BA88C' }} />
             <Text type="secondary" style={{ fontSize: 12 }}>30+ días</Text>
           </Space>
+          <Space size={8}>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              <strong>{state.total}</strong> registros
+            </Text>
+          </Space>
+        </div>
+      }
+
+      emptyText={
+        <div style={{ textAlign: 'center', padding: 32 }}>
+          <Typography.Title level={4} style={{ marginBottom: 8 }}>No hay entradas de almacén</Typography.Title>
+          <Typography.Text type="secondary">No se encontraron registros con los filtros actuales.</Typography.Text>
+          <div style={{ marginTop: 12 }}>
+            <Typography.Link onClick={() => actions.handleRefresh()}>Limpiar filtros y recargar</Typography.Link>
+          </div>
         </div>
       }
     />

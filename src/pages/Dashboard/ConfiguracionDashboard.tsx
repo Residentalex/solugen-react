@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
-  Card, Table, Checkbox, InputNumber, Button, Space, Select,
+  Card, Table, Checkbox, InputNumber, Button, Space, Select, Input,
   Typography, Row, Col, message, Spin, Alert, Divider
 } from 'antd';
 import {
@@ -13,13 +13,22 @@ import type { DashboardWidgetDto, DashboardWidgetConfigDto } from '../../types/d
 
 const { Text, Title } = Typography;
 
+const zonaWidget = (codigo: string): string => {
+  const mapa: Record<string, string> = {
+    izquierda: 'Izquierda', derecha: 'Derecha', centro: 'Centro',
+    arriba: 'Arriba', abajo: 'Abajo', principal: 'Principal',
+    sec: 'Secundaria', aux: 'Auxiliar',
+  };
+  return mapa[codigo?.toLowerCase()] || (codigo ? codigo.toUpperCase() : '-');
+};
+
 /**
  * Página de configuración de widgets del dashboard por rol
  *
  * Solo usuarios con el permiso ADMIN_DASHBOARD_CONFIG pueden acceder.
  * Permite ver y modificar qué widgets son visibles para cada rol.
  */
-const DashboardConfig: React.FC = () => {
+const ConfiguracionDashboard: React.FC = () => {
   const usuario = useAuthStore((s) => s.usuario);
   const { catalog, widgetsPorRol, loading, saving, fetchCatalog, fetchWidgetsPorRol, guardarConfiguracion } =
     useDashboardWidgetStore();
@@ -68,8 +77,12 @@ const DashboardConfig: React.FC = () => {
       });
       setConfigs(newConfigs);
       setDirty(false);
+    } else if (rolSeleccionado) {
+      // Si el rol seleccionado no tiene widgets, limpiar las configs
+      setConfigs(new Map<number, DashboardWidgetConfigDto>());
+      setDirty(false);
     }
-  }, [widgetsDelRol]);
+  }, [widgetsDelRol, rolSeleccionado]);
 
   // Agregar widget del catálogo que no esté en configs (visible = false por defecto)
   useEffect(() => {
@@ -88,10 +101,11 @@ const DashboardConfig: React.FC = () => {
       });
       if (changed) {
         setConfigs(newConfigs);
-        setDirty(true);
+        // No marcar como dirty automáticamente: los nuevos widgets del catálogo
+        // se cargan con visible=false; solo el usuario debe activar los cambios.
       }
     }
-  }, [catalog, rolSeleccionado]);
+  }, [catalog, rolSeleccionado, configs]);
 
   const handleToggleVisible = (widgetId: number, checked: boolean) => {
     const newConfigs = new Map(configs);
@@ -114,6 +128,19 @@ const DashboardConfig: React.FC = () => {
     setConfigs(newConfigs);
     setDirty(true);
   };
+
+  const [busquedaWidgets, setBusquedaWidgets] = useState('');
+
+  const catalogFiltrado = useMemo(() => {
+    if (!busquedaWidgets.trim()) return catalog;
+    const q = busquedaWidgets.toLowerCase();
+    return catalog.filter(
+      (w) =>
+        w.nombre.toLowerCase().includes(q) ||
+        (w.codigo && w.codigo.toLowerCase().includes(q)) ||
+        (w.descripcion && w.descripcion.toLowerCase().includes(q))
+    );
+  }, [catalog, busquedaWidgets]);
 
   const handleGuardar = async () => {
     if (!rolSeleccionado) {
@@ -154,6 +181,40 @@ const DashboardConfig: React.FC = () => {
       render: (codigo: string) => <Text code>{codigo}</Text>,
     },
     {
+      title: 'Zona',
+      dataIndex: 'codigo',
+      key: 'zona',
+      width: 100,
+      align: 'center' as const,
+      render: (codigo: string) => (
+        <Text style={{ fontSize: 11, color: '#556ee6', fontWeight: 500 }}>{zonaWidget(codigo)}</Text>
+      ),
+    },
+    {
+      title: 'Estado',
+      dataIndex: 'visible',
+      key: 'estado',
+      width: 130,
+      align: 'center' as const,
+      render: (_: any, record: DashboardWidgetDto) => {
+        const visible = configs.get(record.id)?.visible ?? false;
+        return (
+          <span style={{
+            display: 'inline-block',
+            padding: '2px 8px',
+            borderRadius: 12,
+            fontSize: 11,
+            fontWeight: 500,
+            background: visible ? '#e6f4ea' : '#f5f5f5',
+            color: visible ? '#10b981' : '#6b7280',
+            border: visible ? '1px solid #d1e6d8' : '1px solid #e2e5ec',
+          }}>
+            {visible ? 'Visible' : 'Oculto'}
+          </span>
+        );
+      },
+    },
+    {
       title: 'Visible',
       dataIndex: 'visible',
       key: 'visible',
@@ -186,11 +247,21 @@ const DashboardConfig: React.FC = () => {
 
   // Contenido para usuarios sin permiso
   const sinPermisoContent = (
-    <div style={{ padding: 48, textAlign: 'center' }}>
-      <Title level={4}>Acceso Denegado</Title>
-      <Text type="secondary">
-        No tienes el permiso <Text code>PE_DASHBOARD_CONFIG</Text> para acceder a esta página.
+    <div style={{ padding: 48, textAlign: 'center', maxWidth: 520, margin: '0 auto' }}>
+      <div style={{ fontSize: 48, color: '#d48806', marginBottom: 16 }}>
+        <SettingOutlined />
+      </div>
+      <Title level={4} style={{ marginBottom: 8 }}>Configuración no disponible</Title>
+      <Text type="secondary" style={{ fontSize: 14, display: 'block', marginBottom: 24 }}>
+        No tienes el permiso <Text code>PE_DASHBOARD_CONFIG</Text> para configurar los widgets del dashboard por rol.
       </Text>
+      <Alert
+        message="¿Qué puedes hacer?"
+        description="Contacta a un administrador con permisos especiales para que te asigne la configuración adecuada o solicite acceso en tu nombre."
+        type="warning"
+        showIcon
+        style={{ textAlign: 'left', borderRadius: 8 }}
+      />
     </div>
   );
 
@@ -201,24 +272,38 @@ const DashboardConfig: React.FC = () => {
           <Title level={4}>
             <SettingOutlined /> Configuración de Dashboard por Rol
           </Title>
-          <Text type="secondary">
-            Define qué widgets del dashboard puede ver cada rol de usuario.
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            Define qué widgets del dashboard puede ver cada <strong>rol de usuario</strong> (perfil de empresa). Los cambios se aplican inmediatamente después de guardar.
           </Text>
         </div>
 
-        <Row gutter={16} style={{ marginBottom: 24 }}>
-          <Col span={8}>
+        <Row gutter={16} style={{ marginBottom: 24, position: 'sticky', top: 0, zIndex: 2, background: '#fff', padding: '8px 0', borderBottom: '1px solid #e2e5ec' }}>
+          <Col xs={24} sm={8} lg={8}>
             <Text strong>Seleccionar Rol:</Text>
             <Select
               style={{ width: '100%', marginTop: 8 }}
               placeholder="Seleccione un rol"
               value={rolSeleccionado}
-              onChange={setRolSeleccionado}
+              onChange={(value: number | null) => {
+                if (dirty) {
+                  message.warning('Tiene cambios sin guardar. Guarde o descarte antes de cambiar de rol.');
+                  return;
+                }
+                setRolSeleccionado(value);
+              }}
               options={rolesDisponibles}
               loading={loading}
             />
           </Col>
-          <Col span={16} style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+          <Col xs={24} sm={16} lg={16} style={{ display: 'flex', alignItems: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+            <Input.Search
+              placeholder="Buscar widget..."
+              allowClear
+              value={busquedaWidgets}
+              onChange={(e) => setBusquedaWidgets(e.target.value)}
+              style={{ width: 240, maxWidth: '100%' }}
+              size="middle"
+            />
             <Button
               icon={<ReloadOutlined />}
               onClick={handleReset}
@@ -236,9 +321,15 @@ const DashboardConfig: React.FC = () => {
               Guardar Cambios
             </Button>
             {dirty && (
-              <Text type="warning" style={{ marginLeft: 8 }}>
-                Hay cambios sin guardar
-              </Text>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '4px 10px', borderRadius: 12, fontSize: 12,
+                background: '#fff8e6', color: '#d48806', border: '1px solid #ffe58f',
+                fontWeight: 500,
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#d48806' }} />
+                {Array.from(configs.values()).filter(c => c.visible !== (widgetsPorRol.get(rolSeleccionado ?? 0)?.find(w => w.id === c.widgetId)?.visible ?? false)).length} cambios
+              </span>
             )}
           </Col>
         </Row>
@@ -263,12 +354,34 @@ const DashboardConfig: React.FC = () => {
 
         {!loading && rolSeleccionado && (
           <>
-            <Divider orientation="left">
-              Widgets disponibles ({catalog.length})
-            </Divider>
+            {/* Vista previa del resultado */}
+            <div style={{ marginBottom: 16, padding: '12px 16px', background: '#f8f9fb', borderRadius: 8, border: '1px solid #e2e5ec' }}>
+              <Text strong style={{ fontSize: 13, color: '#374151', display: 'block', marginBottom: 8 }}>Vista previa por rol seleccionado</Text>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {Array.from(configs.values())
+                  .filter(c => c.visible)
+                  .sort((a, b) => (a.ordenPersonalizado ?? 99) - (b.ordenPersonalizado ?? 99))
+                  .map(c => {
+                    const w = catalog.find(w => w.id === c.widgetId);
+                    return (
+                      <span key={c.widgetId} style={{
+                        padding: '4px 10px', borderRadius: 12, fontSize: 11,
+                        background: '#e6f4ea', color: '#10b981', border: '1px solid #d1e6d8', fontWeight: 500,
+                      }}>
+                        {w?.nombre ?? `Widget ${c.widgetId}`}
+                      </span>
+                    );
+                  })}
+                {Array.from(configs.values()).filter(c => c.visible).length === 0 && (
+                  <Text className="paces-text-secondary" style={{ fontSize: 12 }}>Ningún widget visible para este rol. El dashboard aparecerá vacío.</Text>
+                )}
+              </div>
+            </div>
+
+            <Divider>Widgets disponibles ({catalogFiltrado.length})</Divider>
 
             <Table
-              dataSource={catalog}
+              dataSource={catalogFiltrado}
               columns={columns}
               rowKey="id"
               pagination={false}
@@ -296,4 +409,4 @@ const DashboardConfig: React.FC = () => {
   );
 };
 
-export default DashboardConfig;
+export default ConfiguracionDashboard;

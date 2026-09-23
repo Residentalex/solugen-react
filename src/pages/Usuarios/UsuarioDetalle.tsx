@@ -13,6 +13,7 @@ import type { UsuarioDTO } from '../../types/administracion';
 import type { RolDTO, PantallaDTO, AuthSucursalPermitidaDTO } from '../../types/auth';
 import { ErrorDetalle } from '../../components';
 import EntidadImagen from '../../components/EntidadImagen';
+import { toTitleCase } from '../../utils/formats';
 
 /* ───────── helpers ───────── */
 function formatFecha(iso?: string): string {

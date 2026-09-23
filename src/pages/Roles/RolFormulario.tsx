@@ -12,6 +12,7 @@ import { useMemo } from 'react';
 import { permisoEspecialApi } from '../../api/permisoEspecialApi';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import PermissionGate from '../../components/PermissionGate';
+import { toTitleCase } from '../../utils/formats';
 
 const RolFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();

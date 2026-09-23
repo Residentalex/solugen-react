@@ -8,7 +8,7 @@ interface BuscarConceptoModalProps {
   open: boolean;
   onClose: () => void;
   onSelect: (concepto: ConceptoDTO) => void;
-  fetchConceptos: () => Promise<ConceptoDTO[]>;
+  fetchConceptos?: () => Promise<ConceptoDTO[]>;
   title?: string;
   /** Si se proveen, se usa el endpoint con filtro por tipo en lugar de fetchConceptos */
   sucursal?: number;
@@ -62,11 +62,13 @@ const BuscarConceptoModal: React.FC<BuscarConceptoModalProps> = ({
         .then((res) => setConceptos(filterActivos(res)))
         .catch(() => message.error('Error al cargar conceptos'))
         .finally(handleFinally);
-    } else {
+    } else if (fetchConceptos) {
       fetchConceptos()
         .then((res) => setConceptos(filterActivos(res)))
         .catch(() => message.error('Error al cargar conceptos'))
         .finally(handleFinally);
+    } else {
+      handleFinally();
     }
   }, [open, fetchConceptos, sucursal, documento, tipo, tipoEntidad]);
 

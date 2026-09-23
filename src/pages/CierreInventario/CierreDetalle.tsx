@@ -10,7 +10,7 @@ import {
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { cierreInventarioApi } from '../../api/cierreInventarioApi';
-import { formatCurrency } from '../../utils/formats';
+import { toTitleCase, formatCurrency } from '../../utils/formats';
 import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 
 const { Text, Title } = Typography;
@@ -125,13 +125,13 @@ const CierreDetalle: React.FC = () => {
       dataIndex: 'codpro',
       key: 'codpro',
       width: 100,
-      render: (val: string) => <Text style={{ fontSize: 12 }}>{val || '—'}</Text>,
+      render: (val: string) => <Text style={{ fontSize: 14 }}>{val || '—'}</Text>,
     },
     {
       title: 'Descripción',
       dataIndex: 'descripcion',
       key: 'descripcion',
-      render: (val: string) => <Text style={{ fontSize: 12 }}>{val || '—'}</Text>,
+      render: (val: string) => <Text style={{ fontSize: 14 }}>{val || '—'}</Text>,
     },
     {
       title: 'Familia',
@@ -139,7 +139,7 @@ const CierreDetalle: React.FC = () => {
       key: 'familiaNombre',
       width: 120,
       render: (val: string | null | undefined) => (
-        <Text style={{ fontSize: 12 }}>{val || '—'}</Text>
+        <Text style={{ fontSize: 14 }}>{val || '—'}</Text>
       ),
     },
     {
@@ -149,7 +149,7 @@ const CierreDetalle: React.FC = () => {
       width: 120,
       align: 'right' as const,
       render: (val: number) => (
-        <Text style={{ fontSize: 12 }}>{formatNumber(val)}</Text>
+        <Text style={{ fontSize: 14 }}>{formatNumber(val)}</Text>
       ),
     },
     {
@@ -159,7 +159,7 @@ const CierreDetalle: React.FC = () => {
       width: 140,
       align: 'right' as const,
       render: (val: number) => (
-        <Text style={{ fontSize: 12 }}>{formatCurrency(val ?? 0)}</Text>
+        <Text style={{ fontSize: 14 }}>{formatCurrency(val ?? 0)}</Text>
       ),
     },
   ];
@@ -208,11 +208,11 @@ const CierreDetalle: React.FC = () => {
                 label={
                   <Space size={4}>
                     <CalendarOutlined style={{ color: '#556ee6', fontSize: 13 }} />
-                    <span style={{ fontSize: 12 }}>Cierre</span>
+                    <span style={{ fontSize: 14 }}>Cierre</span>
                   </Space>
                 }
               >
-                <Text strong style={{ fontSize: 13 }}>
+                <Text strong style={{ fontSize: 14 }}>
                   {formatDateDisplay(cierreInfo.fechaCierre)}
                 </Text>
               </Descriptions.Item>
@@ -220,11 +220,11 @@ const CierreDetalle: React.FC = () => {
                 label={
                   <Space size={4}>
                     <CalendarOutlined style={{ color: '#34c38f', fontSize: 13 }} />
-                    <span style={{ fontSize: 12 }}>Realizado</span>
+                    <span style={{ fontSize: 14 }}>Realizado</span>
                   </Space>
                 }
               >
-                <Text strong style={{ fontSize: 13 }}>
+                <Text strong style={{ fontSize: 14 }}>
                   {formatDateDisplay(cierreInfo.fechaRealizado)}
                 </Text>
               </Descriptions.Item>
@@ -232,11 +232,11 @@ const CierreDetalle: React.FC = () => {
                 label={
                   <Space size={4}>
                     <NumberOutlined style={{ color: '#f1b44c', fontSize: 13 }} />
-                    <span style={{ fontSize: 12 }}>Cantidad</span>
+                    <span style={{ fontSize: 14 }}>Cantidad</span>
                   </Space>
                 }
               >
-                <Text strong style={{ fontSize: 13 }}>
+                <Text strong style={{ fontSize: 14 }}>
                   {formatNumber(cierreInfo.cantidad)}
                 </Text>
               </Descriptions.Item>
@@ -244,15 +244,15 @@ const CierreDetalle: React.FC = () => {
                 label={
                   <Space size={4}>
                     <DollarOutlined style={{ color: '#34c38f', fontSize: 13 }} />
-                    <span style={{ fontSize: 12 }}>Total</span>
+                    <span style={{ fontSize: 14 }}>Total</span>
                   </Space>
                 }
               >
-                <Text strong style={{ fontSize: 13, color: '#34c38f' }}>
+                <Text strong style={{ fontSize: 14, color: '#34c38f' }}>
                   {formatCurrency(cierreInfo.total ?? 0)}
                 </Text>
               </Descriptions.Item>
-              <Descriptions.Item label={<span style={{ fontSize: 12 }}>Tipo</span>}>—</Descriptions.Item>
+              <Descriptions.Item label={<span style={{ fontSize: 14 }}>Tipo</span>}>—</Descriptions.Item>
             </Descriptions>
           </Card>
         )}
@@ -283,7 +283,7 @@ const CierreDetalle: React.FC = () => {
           </div>
           {error ? (
             <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <Text type="danger" style={{ fontSize: 13 }}>
+              <Text type="danger" style={{ fontSize: 14 }}>
                 {error}
               </Text>
             </div>

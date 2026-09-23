@@ -102,10 +102,30 @@ const ConfigPedidosYa: React.FC = () => {
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando configuración...</div>
-      </div>
+      <>
+        <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
+          <div style={{ padding: '16px 24px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
+              <div style={{ width: 160, height: 20, background: '#f0f0f0', borderRadius: 4 }} />
+              <div style={{ flex: 1 }} />
+              <div style={{ width: 100, height: 32, background: '#f0f0f0', borderRadius: 6 }} />
+            </div>
+          </div>
+          <div style={{ padding: '0 24px 24px' }}>
+            <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 2 }} style={{ background: '#fff' }}>
+              <Descriptions.Item label="Servidor"><div style={{ width: '100%', height: 14, background: '#f0f0f0', borderRadius: 4 }} /></Descriptions.Item>
+              <Descriptions.Item label="Puerto"><div style={{ width: 40, height: 14, background: '#f0f0f0', borderRadius: 4 }} /></Descriptions.Item>
+              <Descriptions.Item label="Usuario" span={2}><div style={{ width: '50%', height: 14, background: '#f0f0f0', borderRadius: 4 }} /></Descriptions.Item>
+              <Descriptions.Item label="Contraseña"><div style={{ width: 120, height: 14, background: '#f0f0f0', borderRadius: 4 }} /></Descriptions.Item>
+              <Descriptions.Item label="Archivo Clave"><div style={{ width: '50%', height: 14, background: '#f0f0f0', borderRadius: 4 }} /></Descriptions.Item>
+              <Descriptions.Item label="Margen Beneficio"><div style={{ width: 60, height: 14, background: '#f0f0f0', borderRadius: 4 }} /></Descriptions.Item>
+              <Descriptions.Item label="Ruta Remota"><div style={{ width: '50%', height: 14, background: '#f0f0f0', borderRadius: 4 }} /></Descriptions.Item>
+              <Descriptions.Item label="Prefijo Archivo"><div style={{ width: 100, height: 14, background: '#f0f0f0', borderRadius: 4 }} /></Descriptions.Item>
+              <Descriptions.Item label="Vendor ID"><div style={{ width: 80, height: 14, background: '#f0f0f0', borderRadius: 4 }} /></Descriptions.Item>
+            </Descriptions>
+          </div>
+        </Card>
+      </>
     );
   }
 

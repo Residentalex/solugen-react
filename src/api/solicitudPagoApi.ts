@@ -149,10 +149,10 @@ export const solicitudPagoApi = {
     return data;
   },
 
-  generarPago: async (sucursal: number, id: number, postear?: boolean): Promise<number> => {
+  generarPago: async (sucursal: number, id: number, postear?: boolean): Promise<{ id: number; documento: string }> => {
     const params: Record<string, boolean> = {};
     if (postear) params.postear = true;
-    const { data } = await apiClient.post<ApiResponse<number>>(`/SPA/${sucursal}/generar-pago/${id}`, null, { params });
+    const { data } = await apiClient.post<ApiResponse<{ id: number; documento: string }>>(`/SPA/${sucursal}/generar-pago/${id}`, null, { params });
     return data.data;
   },
 

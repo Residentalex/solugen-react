@@ -32,7 +32,7 @@ export type TipoCampoDTO = 'texto' | 'fecha' | 'hora' | 'dinero' | 'numero' | 'd
 
 export type AlineacionTicket = 'izquierda' | 'centro' | 'derecha';
 
-export type TamanoLetraTicket = 'normal' | 'doble' | 'doble_b' | 'doble_altura' | 'doble_ancho' | 'triple' | 'condensada';
+export type TamanoLetraTicket = 'normal' | 'doble' | 'doble_b' | 'doble_altura' | 'doble_ancho' | 'triple' | 'condensada' | 'condensando_doble';
 
 /** Formato de impresión opcional de un ítem del ticket. Todos opcionales = formato actual. */
 export interface FormatoItemTicket {
@@ -210,6 +210,27 @@ export type ClaveCobroTicket =
 /** Caracteres de línea disponibles para SEPARADOR. */
 export type CaracterSeparadorTicket = '-' | '=' | '─' | '_' | 'linea' | 'linea_gruesa';
 
+/** Posición del separador de zona respecto al contenido. */
+export type PosicionSeparadorZona = 'encima' | 'debajo' | 'ambos';
+
+/** Configuración del separador a nivel de zona. */
+export interface SeparadorZonaConfig {
+  /** Posición del separador. Ausente = sin separador. */
+  posicion?: PosicionSeparadorZona;
+  /** Carácter de la línea. Default '-'. */
+  caracter?: CaracterSeparadorTicket;
+  /** Ancho: número = caracteres exactos, string '50%' = porcentaje. Ausente = ancho completo. */
+  ancho?: number | string;
+  /** Alineación horizontal del separador parcial. Default 'centro'. */
+  alineacionSep?: AlineacionTicket;
+  /** Grosor (1-3) para 'linea' y 'linea_gruesa'. Default 1. */
+  grosor?: number;
+  /** Formato (negrita, tamaño, etc.). */
+  formato?: FormatoItemTicket;
+  /** Si true, imprime el separador aunque el array de detalle esté vacío. Default false. Solo aplica a zonas 'detalle'. */
+  imprimirSiVacio?: boolean;
+}
+
 /** Claves de campos de detalle: DETALLE:<clave>. */
 export type ClaveCampoDetalleTicket =
   | 'CODIGO' | 'ARTICULO' | 'CANTIDAD' | 'PRECIO' | 'ITBIS' | 'TOTAL'
@@ -304,6 +325,8 @@ export interface ZonaTicketConfig {
   alineacion?: AlineacionTicket;
   /** Dibuja un cuadro ┌─┐│└┘ alrededor de la zona, ajustado al contenido y centrado. */
   enmarcar?: boolean;
+  /** Separador de zona: posición, carácter, grosor e impresión condicional sobre array vacío. */
+  separador?: SeparadorZonaConfig;
   /** Ruta del array del esquema JSON que alimenta esta zona de detalle (ej: 'data.detalles'). */
   arrayOrigen?: string;
 }

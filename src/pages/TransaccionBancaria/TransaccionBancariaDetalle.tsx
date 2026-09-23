@@ -10,6 +10,7 @@ import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
+import { apiClient } from '../../api/client';
 import { transaccionBancariaApi } from '../../api/transaccionBancariaApi';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard/TransaccionesAsociadasCard';
 import SucursalField from '../../components/SucursalField';
@@ -317,7 +318,33 @@ const TransaccionBancariaDetalle: React.FC = () => {
         onAnular={handleAnular}
         onPostear={handlePostear}
         onDesaplicar={handleDesaplicar}
-        showImprimir={false}
+        showImprimir={true}
+        onImprimir={async () => {
+          const payload: any = {
+            id: parseInt(id || '0'),
+            fechaDocumento: rawData?.fechaDocumento || '',
+            tipoDocumento: rawData?.tipoDocumento || '',
+            noDocumento: rawData?.noDocumento || '',
+            codigoEntidad: rawData?.codigoEntidad || '',
+            nombreEntidad: rawData?.entidad?.nombre || rawData?.entidad || '',
+            ctaBancaria: rawData?.ctaBancaria || data?.cuentaBancaria || '',
+            concepto: rawData?.concepto?.nombre || rawData?.concepto || '',
+            referencia: rawData?.referencia || '',
+            total: rawData?.total || 0,
+            nombreBeneficiario: rawData?.nombreBeneficiario || '',
+            montoEnLetras: '',
+            estado: rawData?.estado || 0,
+            notas: rawData?.nota || '',
+            documentosAsociados: (data as any)?.transaccionesAsociadas || [],
+          };
+          try {
+            const { data: blobData } = await apiClient.post('/reportes/banco/cheque', payload, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([blobData], { type: 'application/pdf' }));
+            window.open(url, '_blank');
+          } catch (err: any) {
+            message.error(err?.response?.data?.errorMessage || 'Error al imprimir el reporte');
+          }
+        }}
         extraButtons={id ? (
           <>
             {toEstadoNum(data?.estado) === 3 && reversoData && (

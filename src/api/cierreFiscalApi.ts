@@ -11,6 +11,7 @@ export interface CierreFiscalItem {
   fecha: string;
   totalDebitos: number;
   totalCreditos: number;
+  tipo?: string;
 }
 
 export interface ResultadoCierre {

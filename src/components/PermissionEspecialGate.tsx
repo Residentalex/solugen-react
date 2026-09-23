@@ -4,9 +4,10 @@ import { useAuthStore } from '../stores/authStore';
 interface PermissionEspecialGateProps {
   permiso: string;          // Código del permiso (ej: "PUEDE_ANULAR", "VER_COSTOS")
   children: React.ReactNode;
+  fallback?: React.ReactNode;
 }
 
-const PermissionEspecialGate: React.FC<PermissionEspecialGateProps> = ({ permiso, children }) => {
+const PermissionEspecialGate: React.FC<PermissionEspecialGateProps> = ({ permiso, children, fallback }) => {
   const usuario = useAuthStore((s) => s.usuario);
 
   if (!usuario || !permiso) {
@@ -18,7 +19,7 @@ const PermissionEspecialGate: React.FC<PermissionEspecialGateProps> = ({ permiso
   );
 
   if (!tienePermiso) {
-    return null;
+    return fallback !== undefined ? <>{fallback}</> : null;
   }
 
   return <>{children}</>;

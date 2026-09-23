@@ -6,6 +6,7 @@ import { PlusOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/ic
 import { notificacionesApi } from '../../api/notificacionesApi';
 import { useCompanyStore } from '../../stores/companyStore';
 import type { NotificacionSQLConfig, NotificacionSQLRequest } from '../../types/notificaciones';
+import { toTitleCase } from '../../utils/formats';
 
 const TIPOS_OPCIONES = [
   { label: 'Alerta', value: 'Alerta' },

@@ -1,10 +1,12 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   Card, Table, Input, Button, DatePicker, Row, Col, Space,
-  message, Alert, Empty, Tag, Typography, Select, Modal, Drawer,
+  message, Alert, Empty, Tag, Typography, Select, Modal,
+  Drawer, Avatar, Skeleton, Divider, Descriptions, Tooltip, Spin,
 } from 'antd';
 import {
-  SearchOutlined, ReloadOutlined, ShopOutlined, CloseOutlined,
+  SearchOutlined, ReloadOutlined, CloseOutlined,
+  BarChartOutlined, ShopOutlined, ClockCircleOutlined, EyeOutlined, ArrowLeftOutlined, DownOutlined, FilePdfOutlined, CheckCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -13,9 +15,7 @@ import { movimientoApi } from '../../api/movimientoApi';
 import { familiaArticuloApi } from '../../api/familiaArticuloApi';
 import { proveedorApi } from '../../api/proveedorApi';
 import { categoriaArticuloApi } from '../../api/categoriaArticuloApi';
-import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
-import ModalMovimientosPosteriores from '../../components/ModalMovimientosPosteriores/ModalMovimientosPosteriores';
-import type { MovimientoArticuloDTO } from '../../types/movimientoPorPlantilla';
+import type { MovimientoPorFechaDTO } from '../../types/movimientoPorPlantilla';
 import type { FamiliaArticuloDTO } from '../../types/productos';
 import type { SuplidorDTO } from '../../types/entidad';
 import dayjs, { Dayjs } from 'dayjs';
@@ -101,44 +101,66 @@ const RMovimientosPorFecha: React.FC = () => {
   const [loadingCategoria, setLoadingCategoria] = useState(false);
   const categoriaSearchRef = useRef<any>(null);
 
-  // Datos
-  const [movimientos, setMovimientos] = useState<MovimientoArticuloDTO[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingError, setLoadingError] = useState(false);
-
-  // Búsqueda local
+  // Datos agrupados por sucursal (para acordeón)
+  const [movimientosAgrupados, setMovimientosAgrupados] = useState<MovimientoPorFechaDTO[]>([]);
+  const [loadingAgrupado, setLoadingAgrupado] = useState(false);
   const [searchText, setSearchText] = useState('');
 
-  // Producto seleccionado para drawer
-  type ProductoConMovimientos = {
-    codigo: string;
-    articulo: string;
-    familia: string;
-    categoria: string;
-    movimientos: MovimientoArticuloDTO[];
-  };
-  const [selectedItem, setSelectedItem] = useState<ProductoConMovimientos | null>(null);
+  // Drawer de análisis (igual a /FGORC)
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerData, setDrawerData] = useState<MovimientoPorFechaDTO | null>(null);
 
-  // Modal movimientos posteriores
-  const [movimientosModalOpen, setMovimientosModalOpen] = useState(false);
-  const [movimientosSucursal, setMovimientosSucursal] = useState('');
-  const [movimientosData, setMovimientosData] = useState<any[]>([]);
-  const [movimientosLoading, setMovimientosLoading] = useState(false);
+  // Pre-computar los paneles del acordeón para evitar problemas de JSX
+  const panelesAgrupados = useMemo(() => {
+    if (!movimientosAgrupados || movimientosAgrupados.length === 0) return [];
+    const unicos = new Map<string, MovimientoPorFechaDTO[]>();
+    for (const m of movimientosAgrupados) {
+      const key = m.sucursal || 'SIN_SUC';
+      if (!unicos.has(key)) unicos.set(key, []);
+      unicos.get(key)!.push(m);
+    }
+    const result: { sucursal: string; items: MovimientoPorFechaDTO[] }[] = [];
+    unicos.forEach((items, sucursal) => {
+      result.push({ sucursal, items });
+    });
+    return result.sort((a, b) => a.sucursal.localeCompare(b.sucursal));
+  }, [movimientosAgrupados]);
+
+  const panelesFiltrados = useMemo(() => {
+    if (!searchText.trim()) return panelesAgrupados;
+    const term = searchText.trim().toLowerCase();
+    return panelesAgrupados
+      .map((grupo) => ({
+        ...grupo,
+        items: grupo.items.filter(
+          (item: any) =>
+            (item.codPro || '').toLowerCase().includes(term) ||
+            (item.descripcion || '').toLowerCase().includes(term) ||
+            (item.familiaNombre || '').toLowerCase().includes(term) ||
+            (item.suplidorNombre || '').toLowerCase().includes(term) ||
+            (item.grupoDescripcion || '').toLowerCase().includes(term)
+        ),
+      }))
+      .filter((grupo) => grupo.items.length > 0);
+  }, [panelesAgrupados, searchText]);
+
+  // Datos agrupados por sucursal (para acordeón)
+  const [loadingError, setLoadingError] = useState(false);
 
   useEffect(() => {
     setActiveModule('RMOVFECHA');
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride]);
 
-  // Cargar movimientos
+  // Buscar movimientos agrupados por sucursal (para acordeón)
   const handleBuscar = useCallback(async () => {
+    if (!sucursalActiva) return;
+    setLoadingAgrupado(true);
+    setMovimientosAgrupados([]);
     setLoadingError(false);
-    setLoading(true);
-    setSelectedItem(null);
     try {
       const res = await Promise.race([
-        movimientoApi.obtenerMovimientosPorFecha(sucursalActiva, {
+        movimientoApi.obtenerMovimientosPorFechaAgrupados(sucursalActiva, {
           desde: fechaDesde.format('YYYYMMDD') + '000000',
           hasta: fechaHasta.format('YYYYMMDD') + '235959',
           codigo: codigo || undefined,
@@ -150,17 +172,17 @@ const RMovimientosPorFecha: React.FC = () => {
           setTimeout(() => reject(new Error('Timeout: el servidor no responde. Verifica que el backend esté corriendo.')), 15000)
         ),
       ]);
-      setMovimientos(res || []);
+      setMovimientosAgrupados(res || []);
       if (!res || res.length === 0) {
         message.info('No se encontraron movimientos para los filtros seleccionados');
       }
     } catch (err: any) {
       setLoadingError(true);
-      setMovimientos([]);
-      const msg = extraerMensajeError(err, 'Error al cargar los movimientos');
+      setMovimientosAgrupados([]);
+      const msg = extraerMensajeError(err, 'Error al cargar los movimientos agrupados');
       message.error(msg);
     } finally {
-      setLoading(false);
+      setLoadingAgrupado(false);
     }
   }, [sucursalActiva, fechaDesde, fechaHasta, codigo, familia, suplidor, categoria]);
 
@@ -175,10 +197,7 @@ const RMovimientosPorFecha: React.FC = () => {
     setNomSuplidor('');
     setCategoria('');
     setNomCategoria('');
-    setMovimientos([]);
-    setSelectedItem(null);
-    setDrawerOpen(false);
-    setSearchText('');
+    setMovimientosAgrupados([]);
   }, []);
 
   // ───── Handlers de búsqueda de familia ─────
@@ -286,108 +305,6 @@ const RMovimientosPorFecha: React.FC = () => {
     setCategoria('');
     setNomCategoria('');
   };
-
-  // Seleccionar producto y abrir drawer
-  const handleSeleccionarProducto = (producto: ProductoConMovimientos) => {
-    setSelectedItem(producto);
-    setDrawerOpen(true);
-  };
-
-  // Ver movimientos posteriores
-  const handleVerMovimientos = useCallback(async (item: any) => {
-    if (!selectedItem) return;
-    setMovimientosSucursal(item.sucursalNombre);
-    setMovimientosModalOpen(true);
-    setMovimientosLoading(true);
-    setMovimientosData([]);
-    try {
-      const data = await entradaAlmacenApi.obtenerDetalleMovimientosPosteriores(
-        item.sucursal,
-        selectedItem.codigo,
-        dayjs(item.fecha).format('YYYYMMDDHHmmss'),
-        item.sucursal
-      );
-      setMovimientosData(data ?? []);
-    } catch {
-      message.error('Error al cargar movimientos');
-      setMovimientosData([]);
-    } finally {
-      setMovimientosLoading(false);
-    }
-  }, [selectedItem]);
-
-  // Datos únicos por código (productos distintos)
-  const productosUnicos = useMemo(() => {
-    if (!movimientos.length) return [];
-    const agrupado: Record<string, {
-      codigo: string;
-      articulo: string;
-      familia: string;
-      categoria: string;
-      movimientos: typeof movimientos;
-    }> = {};
-
-    movimientos.forEach(item => {
-      const key = item.codigo;
-      if (!agrupado[key]) {
-        agrupado[key] = {
-          codigo: item.codigo,
-          articulo: item.articulo,
-          familia: item.familia,
-          categoria: item.categoria || '',
-          movimientos: [],
-        };
-      }
-      agrupado[key].movimientos.push(item);
-    });
-
-    return Object.values(agrupado);
-  }, [movimientos]);
-
-  // Datos filtrados por búsqueda local (sobre productos únicos)
-  const filteredData = useMemo(() => {
-    if (!productosUnicos.length) return [];
-    if (!searchText.trim()) return productosUnicos;
-    const term = searchText.trim().toLowerCase();
-    return productosUnicos.filter(
-      (item) =>
-        (item.codigo || '').toLowerCase().includes(term) ||
-        (item.articulo || '').toLowerCase().includes(term) ||
-        (item.familia || '').toLowerCase().includes(term) ||
-        (item.categoria || '').toLowerCase().includes(term)
-    );
-  }, [productosUnicos, searchText]);
-
-  // Columnas de la tabla
-  const columns = useMemo(() => [
-    {
-      title: 'Código',
-      dataIndex: 'codigo',
-      key: 'codigo',
-      width: 120,
-    },
-    {
-      title: 'Artículo',
-      dataIndex: 'articulo',
-      key: 'articulo',
-      ellipsis: true,
-      render: (v: string) => toTitleCase(v || ''),
-    },
-    {
-      title: 'Familia',
-      dataIndex: 'familia',
-      key: 'familia',
-      width: 120,
-      render: (v: string) => v || '-',
-    },
-    {
-      title: 'Categoría',
-      dataIndex: 'categoria',
-      key: 'categoria',
-      width: 140,
-      render: (v: string) => v || '-',
-    },
-  ], []);
 
   return (
     <div>
@@ -500,7 +417,7 @@ const RMovimientosPorFecha: React.FC = () => {
               <Button onClick={handleLimpiar}>
                 Limpiar
               </Button>
-              <Button type="primary" icon={<SearchOutlined />} onClick={handleBuscar} loading={loading}>
+              <Button type="primary" icon={<SearchOutlined />} onClick={handleBuscar} loading={loadingAgrupado}>
                 Buscar
               </Button>
             </Space>
@@ -523,191 +440,52 @@ const RMovimientosPorFecha: React.FC = () => {
         />
       )}
 
-      {/* Card 2 — Resultados con sidebar */}
-      <Row gutter={16}>
-        <Col xxl={18}>
-          <Card
-            className="paces-card"
-            style={{ borderRadius: 8 }}
-            title={
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 16, fontWeight: 600 }}>Movimientos ({filteredData.length})</span>
-                {filteredData.length > 0 && (
-                  <Tag color="blue">{filteredData.length} registros</Tag>
-                )}
-              </div>
-            }
-          >
-            <div style={{ padding: '0 0 16px' }}>
-              <Input.Search
-                placeholder="Buscar por código, artículo, tipo o documento..."
-                allowClear
-                onSearch={(value) => setSearchText(value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    (e.target as HTMLInputElement).blur();
-                    setSearchText('');
-                  }
-                }}
-                style={{ width: 400 }}
-                prefix={<SearchOutlined className="paces-text-icon" />}
-              />
-            </div>
-            {filteredData.length === 0 && !loading ? (
-              <div style={{ minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={
-                    <span>
-                      {!movimientos.length
-                        ? 'Ingrese los filtros y presione Buscar'
-                        : searchText.trim()
-                          ? 'No hay resultados que coincidan con la búsqueda'
-                          : 'No se encontraron movimientos para los filtros seleccionados'}
-                    </span>
-                  }
-                />
-              </div>
-            ) : (
-              <Table
-                dataSource={filteredData}
-                columns={columns}
-                rowKey={(record) => `${record.codigo}-${record.tipoDocumento}`}
-                loading={loading}
-                size="small"
-                scroll={{ x: 900 }}
-                style={{ minHeight: 420 }}
-                pagination={{
-                  pageSize: 20,
-                  showSizeChanger: false,
-                  showTotal: (total) => `${total} registros`,
-                }}
-                rowClassName={(record, index) =>
-                  selectedItem && selectedItem.codigo === record.codigo
-                    ? 'paces-row-selected'
-                    : ''
-                }
-                onRow={(record) => ({
-                  onClick: () => handleSeleccionarProducto(record),
-                  style: { cursor: 'pointer' },
-                })}
-              />
-            )}
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Drawer de movimientos del producto */}
-      <Drawer
-        title={
-          <Space>
-            <ShopOutlined />
-            <span>Movimientos de: {selectedItem?.articulo}</span>
-          </Space>
-        }
-        placement="right"
-        width={700}
-        open={drawerOpen}
-        onClose={() => {
-          setDrawerOpen(false);
-          setSelectedItem(null);
-        }}
-        destroyOnClose
-      >
-        {selectedItem && (
-          <div>
-            <Card className="paces-card" style={{ marginBottom: 16 }}>
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Typography.Text type="secondary">Código</Typography.Text>
-                  <Typography.Paragraph strong style={{ margin: 0 }}>{selectedItem.codigo}</Typography.Paragraph>
-                </Col>
-                <Col span={8}>
-                  <Typography.Text type="secondary">Artículo</Typography.Text>
-                  <Typography.Paragraph strong style={{ margin: 0 }}>{selectedItem.articulo}</Typography.Paragraph>
-                </Col>
-                <Col span={8}>
-                  <Typography.Text type="secondary">Familia</Typography.Text>
-                  <Typography.Paragraph strong style={{ margin: 0 }}>{selectedItem.familia || '-'}</Typography.Paragraph>
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: 16 }}>
-                <Col span={8}>
-                  <Typography.Text type="secondary">Categoría</Typography.Text>
-                  <Typography.Paragraph strong style={{ margin: 0 }}>{selectedItem.categoria || '-'}</Typography.Paragraph>
-                </Col>
-                <Col span={8}>
-                  <Typography.Text type="secondary">Total Movimientos</Typography.Text>
-                  <Typography.Paragraph strong style={{ margin: 0 }}>{selectedItem.movimientos.length}</Typography.Paragraph>
-                </Col>
-              </Row>
-            </Card>
-
-            <Typography.Title level={5}>Detalle de Movimientos</Typography.Title>
+      {/* Card único — Resultados agrupados por sucursal (sin acordeón) */}
+      <Card className="paces-card" style={{ borderRadius: 8, marginTop: 16, marginBottom: 16 }}
+        title={<span style={{ fontWeight: 600 }}>Movimientos por Sucursal</span>}>
+        <div style={{ padding: '0 0 16px' }}>
+          <Input.Search
+            placeholder="Buscar por código, descripción, familia, suplidor o grupo..."
+            allowClear
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            style={{ width: 500 }}
+            prefix={<SearchOutlined className="paces-text-icon" />}
+          />
+        </div>
+        {loadingAgrupado ? (<Typography.Text>Cargando...</Typography.Text>)
+          : panelesFiltrados.length === 0 ? (<Empty description="No se encontraron resultados..." />)
+          : (
             <Table
-              dataSource={selectedItem.movimientos}
-              rowKey={(r, i) => `${r.documento}-${r.tipoDocumento}-${i}`}
-              size="small"
-              pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (t) => `${t} movimientos` }}
+              dataSource={panelesFiltrados.flatMap((g) => g.items.map((item) => ({ ...item, sucursalKey: g.sucursal })))}
               columns={[
-                {
-                  title: 'Fecha',
-                  dataIndex: 'fecha',
-                  key: 'fecha',
-                  width: 100,
-                  render: (v: string) => formatDate(v),
-                },
-                {
-                  title: 'Tipo',
-                  dataIndex: 'tipoDocumento',
-                  key: 'tipoDocumento',
-                  width: 80,
-                  render: (v: string) => <Tag color={v === 'ENP' ? 'green' : v === 'SAP' ? 'blue' : v === 'PV' ? 'orange' : v === 'FAC' ? 'purple' : v === 'DVC' ? 'red' : v === 'DEV' ? 'magenta' : 'default'}>{v}</Tag>,
-                },
-                {
-                  title: 'Documento',
-                  dataIndex: 'documento',
-                  key: 'documento',
-                  width: 130,
-                },
-                {
-                  title: 'Cantidad',
-                  dataIndex: 'cantidad',
-                  key: 'cantidad',
-                  width: 100,
-                  align: 'right' as const,
-                  render: (v: number) => formatNumber(v || 0),
-                },
-                {
-                  title: 'Costo',
-                  dataIndex: 'costo',
-                  key: 'costo',
-                  width: 110,
-                  align: 'right' as const,
-                  render: (v: number) => formatNumber(v || 0),
-                },
-                {
-                  title: 'Sucursal',
-                  dataIndex: 'sucursal',
-                  key: 'sucursal',
-                  width: 100,
-                  render: (v: string) => v || '-',
-                },
+                { title: 'Sucursal', dataIndex: 'sucursalKey', key: 'sucursalKey', width: 160,
+                  render: (v: string, r: any) => toTitleCase(r.sucursal || '-') },
+                { title: 'Código', dataIndex: 'codPro', key: 'codPro', width: 120,
+                  render: (v: string) => <Tag color="geekblue">{toTitleCase(v || '-')}</Tag> },
+                { title: 'Descripción', dataIndex: 'descripcion', key: 'descripcion', ellipsis: true,
+                  render: (v: string) => toTitleCase(v || '-') },
+                { title: 'Familia', dataIndex: 'familiaNombre', key: 'familiaNombre', width: 140,
+                  render: (v: string) => toTitleCase(v || '-') },
+                { title: 'Suplidor', dataIndex: 'suplidorNombre', key: 'suplidorNombre', width: 220,
+                  render: (v: string) => toTitleCase(v || '-') },
               ]}
+              rowKey={(r: any, i: number) => `${r.sucursalKey}-${r.codPro}-${i}`}
+              size="small"
+              pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (t: number) => `${t} registros` }}
+              scroll={{ x: 1100 }}
+              style={{ minHeight: 200 }}
+              onRow={(record: any) => ({
+                onClick: () => {
+                  setDrawerData(record);
+                  setDrawerOpen(true);
+                },
+                style: { cursor: 'pointer' },
+              })}
             />
-          </div>
-        )}
-      </Drawer>
-
-      {/* Modal de movimientos posteriores */}
-      <ModalMovimientosPosteriores
-        open={movimientosModalOpen}
-        sucursal={movimientosSucursal}
-        codigo={selectedItem?.codigo || ''}
-        dataSource={movimientosData}
-        loading={movimientosLoading}
-        onClose={() => setMovimientosModalOpen(false)}
-      />
+          )
+        }
+      </Card>
 
       {/* Modal búsqueda suplidor */}
       <Modal
@@ -776,6 +554,103 @@ const RMovimientosPorFecha: React.FC = () => {
           locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
         />
       </Modal>
+
+      {/* ===== Drawer de Análisis (IGUAL a /FGORC) ===== */}
+      <Drawer
+        title={
+          <Space>
+            <BarChartOutlined style={{ color: 'var(--paces-primary)' }} />
+            <span style={{ fontWeight: 600 }}>Análisis de Movimiento</span>
+          </Space>
+        }
+        placement="right"
+        size={520}
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+      >
+        {drawerData && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {/* SECCIÓN A — Identidad del movimiento */}
+            <Space align="start" size={12} style={{ marginBottom: 16, width: '100%' }}>
+              <Avatar size={40} style={{ backgroundColor: 'rgba(85,110,230,0.12)', color: 'var(--paces-primary)', fontWeight: 600, flexShrink: 0 }}>
+                {(drawerData.descripcion || '?')[0].toUpperCase()}
+              </Avatar>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Typography.Title level={5} style={{ margin: 0 }}>{toTitleCase(drawerData.descripcion || '')}</Typography.Title>
+                <Typography.Text className="paces-text-secondary" style={{ fontSize: 12 }}>
+                  Código: {drawerData.codPro || '-'}
+                  {drawerData.sucursal ? <span> · Sucursal: {drawerData.sucursal}</span> : ''}
+                  {drawerData.familiaNombre ? <span> · Familia: {drawerData.familiaNombre}</span> : ''}
+                </Typography.Text>
+              </div>
+            </Space>
+            <Divider style={{ margin: '0 0 16px 0' }} />
+
+            {/* SECCIÓN B — Datos del documento */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <Card
+                className="paces-card"
+                size="small"
+                style={{ borderRadius: 6, border: '1px solid #d9d9d9', borderTop: '3px solid #556ee6', background: 'rgba(85,110,230,0.04)', marginBottom: 12 }}
+              >
+                <Typography.Text strong style={{ fontSize: 12, color: '#556ee6', display: 'block', marginBottom: 6 }}>
+                  📊 Datos del movimiento
+                </Typography.Text>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
+                  {[
+                    { label: 'Código', value: drawerData.codPro || '-' },
+                    { label: 'Descripción', value: drawerData.descripcion || '-' },
+                    { label: 'Familia', value: drawerData.familiaNombre || '-' },
+                    { label: 'Suplidor', value: drawerData.suplidorNombre || '-' },
+                    { label: 'Grupo', value: drawerData.grupoDescripcion || '-' },
+                    { label: 'Sucursal', value: drawerData.sucursal || '-' },
+                  ].map((kpi) => (
+                    <div key={kpi.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <Typography.Text style={{ fontSize: 12, color: '#8c8c8c' }}>{kpi.label}</Typography.Text>
+                      <Typography.Text strong style={{ fontSize: 13, color: '#262626' }}>
+                        {toTitleCase(String(kpi.value))}
+                      </Typography.Text>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+
+            {/* SECCIÓN C — Resumen */}
+            <Divider orientation="left" style={{ fontSize: 12, color: '#8c8c8c' }}>Resumen</Divider>
+            <div style={{ background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0', padding: '12px 0', marginBottom: 16 }}>
+              <Row gutter={0}>
+                <Col span={12} style={{ borderRight: '1px solid #f0f0f0', textAlign: 'center' }}>
+                  <Typography.Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block' }}>Código</Typography.Text>
+                  <Typography.Text strong style={{ fontSize: 14, color: 'var(--paces-primary)' }}>
+                    {drawerData.codPro || '-'}
+                  </Typography.Text>
+                </Col>
+                <Col span={12} style={{ textAlign: 'center' }}>
+                  <Typography.Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block' }}>Sucursal</Typography.Text>
+                  <Typography.Text strong style={{ fontSize: 14 }}>
+                    {drawerData.sucursal || '-'}
+                  </Typography.Text>
+                </Col>
+              </Row>
+              <Row gutter={0} style={{ marginTop: 8 }}>
+                <Col span={12} style={{ borderRight: '1px solid #f0f0f0', textAlign: 'center' }}>
+                  <Typography.Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block' }}>Familia</Typography.Text>
+                  <Typography.Text strong style={{ fontSize: 14 }}>
+                    {drawerData.familiaNombre || '-'}
+                  </Typography.Text>
+                </Col>
+                <Col span={12} style={{ textAlign: 'center' }}>
+                  <Typography.Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block' }}>Suplidor</Typography.Text>
+                  <Typography.Text strong style={{ fontSize: 14 }}>
+                    {drawerData.suplidorNombre || '-'}
+                  </Typography.Text>
+                </Col>
+              </Row>
+            </div>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 };

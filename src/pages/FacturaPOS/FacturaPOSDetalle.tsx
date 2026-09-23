@@ -580,7 +580,9 @@ const FacturaPOSDetalle: React.FC = () => {
     }
 
     // Los impuestos ya se cargan automaticamente junto al encabezado.
-    const dataPrint = data;
+    // Inyectar impuestosFactura en el payload para que el motor los resuelva.
+    const impuestosFactura = data?.impuestosFactura || (await facturaPOSApi.obtenerImpuestos(sucursalActiva, parseInt(id || '0')));
+    const dataPrint = { ...data, impuestosFactura: impuestosFactura || [] };
 
     // Obtener el payload serializado que el frontend enviara directamente
     // al servicio local de la maquina cliente.

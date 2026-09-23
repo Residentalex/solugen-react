@@ -10,6 +10,7 @@ import { monedaApi } from '../../api/monedaApi';
 import type { MonedaDTO } from '../../types/contabilidad';
 import type { CuentaBancariaDTO } from '../../api/cuentaBancariaApi';
 import PlantillaImportacion from '../../components/PlantillaImportacion';
+import { toTitleCase } from '../../utils/formats';
 
 const { TextArea } = Input;
 

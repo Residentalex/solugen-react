@@ -446,14 +446,19 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
   return (
     <div style={{ animation: 'fadeIn 0.3s ease' }}>
       {/* ========== HEADER ========== */}
-      <div className="dashboard-hero">
+      <div className="dashboard-hero" style={{ padding: '20px 0 16px' }}>
         <div className="dashboard-hero-copy">
-          <h1 className="dashboard-hero-title">Hola, {nombreCortoUsuario}</h1>
-          <div className="dashboard-hero-meta">
+          <h1 className="dashboard-hero-title" style={{ fontSize: 24, marginBottom: 2 }}>Hola, {nombreCortoUsuario}</h1>
+          <div className="dashboard-hero-meta" style={{ fontSize: 12, color: '#6b7280', gap: 12 }}>
             <span>{todayStr}</span>
-            <span>{companyData?.sucursales?.length ?? 0} sucursales visibles</span>
+            <span>·</span>
+            <span>{companyData?.sucursales?.length ?? 0} sucursales</span>
+            <span>·</span>
             <span>{totalPendientesOperativos} alertas operativas</span>
           </div>
+          <Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+            Datos mostrados para: <strong>{etiquetaPeriodo}</strong> ({periodo === 'dia' ? 'Hoy' : periodo === 'semana' ? 'Últimos 7 días' : periodo === 'ano' ? 'Últimos 12 meses' : 'Últimos 30 días'})
+          </Text>
         </div>
         <div className="dashboard-hero-actions">
           <div className="dashboard-hero-actions-top">
@@ -552,7 +557,10 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                   <div className="dashboard-kpi-value">
                     {formatKPIValue(kpi.valor, kpi.kind)}
                   </div>
-                  <p className="dashboard-kpi-label">{kpi.label}</p>
+                  <p className="dashboard-kpi-label" style={{ marginBottom: 0 }}>{kpi.label}</p>
+                  <Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>
+                    {kpi.kind === 'currency' ? 'Monto total del período' : 'Conteo acumulado'}
+                  </Text>
                   <div className="dashboard-kpi-footer">
                     <div
                       className="dashboard-kpi-change"
@@ -589,6 +597,9 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                   <h3 className="dashboard-section-title">
                     <BarChartOutlined /> Ventas vs Compras por Mes
                   </h3>
+                  <Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>
+                    Comparativo mensual del período seleccionado. El selector global afecta estos datos.
+                  </Text>
                 {ventasPorMes.length > 0 ? (
                   <ResponsiveContainer width="100%" height={280}>
                     <BarChart data={ventasPorMes} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
@@ -604,8 +615,11 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="dashboard-panel-empty">
-                    <Empty description="Sin datos de ventas" />
+                  <div className="dashboard-panel-empty" style={{ padding: 32, textAlign: 'center' }}>
+                    <Empty description={<span>No hay datos de ventas para <strong>{etiquetaPeriodo}</strong></span>} />
+                    <Text className="paces-text-secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+                      Intenta cambiar el período en el selector o verificar que haya documentos registrados.
+                    </Text>
                   </div>
                 )}
               </div>
@@ -651,8 +665,11 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     ]}
                   />
                 ) : (
-                  <div className="dashboard-panel-empty">
-                    <span className="paces-text-secondary">Sin datos del período</span>
+                  <div className="dashboard-panel-empty" style={{ padding: 24, textAlign: 'center' }}>
+                    <Empty description={<span>Sin datos comparativos para <strong>{etiquetaPeriodo}</strong></span>} />
+                    <Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block', marginTop: 6 }}>
+                      No hay ventas o compras registradas en el período seleccionado.
+                    </Text>
                   </div>
                 )}
               </div>
@@ -685,8 +702,11 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="dashboard-panel-empty">
-                    <span className="paces-text-secondary">Sin datos del período</span>
+                  <div className="dashboard-panel-empty" style={{ padding: 32, textAlign: 'center' }}>
+                    <Empty description={<span>Sin evolución diaria para <strong>{etiquetaPeriodo}</strong></span>} />
+                    <Text className="paces-text-secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+                      Intenta cambiar el período en el selector o verificar que haya documentos registrados.
+                    </Text>
                   </div>
                 )}
               </div>
@@ -724,8 +744,11 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     ]}
                   />
                 ) : (
-                  <div className="dashboard-empty-state">
+                  <div className="dashboard-empty-state" style={{ padding: 24, textAlign: 'center' }}>
                     <span className="paces-text-secondary"><CheckCircleOutlined /> No hay NCF pendientes por enviar en este período</span>
+                    <Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block', marginTop: 6 }}>
+                      Si hay transacciones recientes sin NCF, verifica el módulo de envío DGII.
+                    </Text>
                   </div>
                 )}
               </div>
@@ -766,8 +789,11 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     ]}
                   />
                 ) : (
-                  <div className="dashboard-empty-state">
+                  <div className="dashboard-empty-state" style={{ padding: 24, textAlign: 'center' }}>
                     <span className="paces-text-secondary"><CheckCircleOutlined /> No hay documentos no cuadrados en este período</span>
+                    <Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block', marginTop: 6 }}>
+                      Si detectas diferencias, revisa los asientos contables relacionados.
+                    </Text>
                   </div>
                 )}
               </div>
@@ -795,8 +821,11 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     className="paces-list-table paces-border-top"
                   />
                 ) : (
-                  <div className="dashboard-panel-empty">
-                    <Empty description="Sin documentos recientes" />
+                  <div className="dashboard-panel-empty" style={{ padding: 24, textAlign: 'center' }}>
+                    <Empty description={<span>Sin documentos recientes para <strong>{etiquetaPeriodo}</strong></span>} />
+                    <Text className="paces-text-secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+                      No hay transacciones registradas en el período seleccionado.
+                    </Text>
                   </div>
                 )}
               </div>
@@ -853,9 +882,12 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                       ]}
                     />
                   ) : (
-                    <div className="dashboard-panel-empty">
-                      <span className="paces-text-secondary"><CheckCircleOutlined /> No hay productos con stock negativo en esta sucursal</span>
-                    </div>
+                  <div className="dashboard-panel-empty" style={{ padding: 24, textAlign: 'center' }}>
+                    <span className="paces-text-secondary"><CheckCircleOutlined /> No hay productos con stock negativo en esta sucursal</span>
+                    <Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block', marginTop: 6 }}>
+                      El inventario de esta sucursal está equilibrado para el período seleccionado.
+                    </Text>
+                  </div>
                   )}
                 </div>
               </Col>

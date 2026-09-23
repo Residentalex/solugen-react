@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Button, Spin, Alert, Empty, Typography, Tag, Row, Col, Grid, message
+  Card, Table, Button, Spin, Alert, Empty, Typography, Tag, Row, Col, Grid, message, Select
 } from 'antd';
 import {
   BankOutlined, LeftOutlined, RightOutlined
@@ -121,103 +121,67 @@ const ActiveCard: React.FC<ActiveCardProps> = ({ cuenta }) => {
   );
 };
 
-/* ===== Summary Sidebar (desktop) ===== */
+/* ===== Account List (reemplaza summary / compact) ===== */
 
-interface SummarySidebarProps {
-  cuenta: CuentaBancariaDTO;
+interface AccountListProps {
+  cuentas: CuentaBancariaDTO[];
+  activeIndex: number;
+  onSelect: (index: number) => void;
 }
 
-const SummarySidebar: React.FC<SummarySidebarProps> = ({ cuenta }) => {
-  const esUSD = cuenta.moneda?.toUpperCase() === 'DOLAR' || cuenta.moneda?.toUpperCase() === 'USD';
-  const monedaInfo = getMonedaInfo(cuenta.moneda);
-  const balanceDisplay = formatCurrency(cuenta.balance, cuenta.moneda);
-  const hasBalance = cuenta.balance !== undefined && cuenta.balance !== null;
-
+const AccountList: React.FC<AccountListProps> = ({ cuentas, activeIndex, onSelect }) => {
+  const cuentasVisibles = cuentas.slice(0, 5);
   return (
-    <Card className="paces-card" styles={{ body: { padding: '20px 24px' }}}>
-      <div style={{ marginBottom: 24 }}>
-        <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 4 }}>
-          Balance actual
-        </Text>
-        <div
-          className={`summary-balance-hero${esUSD ? ' summary-balance-usd' : ''}`}
-        >
-          {hasBalance ? balanceDisplay : '—'}
-        </div>
+    <Card className="paces-card" size="small" styles={{ body: { padding: '12px 16px' } }}>
+      <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 8 }}>
+        Cuentas bancarias
+      </Text>
+      <div style={{ marginBottom: 8 }}>
+        <Select
+          size="middle"
+          style={{ width: '100%', borderRadius: 8, boxShadow: '0 2px 8px rgba(85,110,230,0.15)' }}
+          placeholder="Buscar cuenta bancaria..."
+          value={cuentas.find((c, idx) => idx === activeIndex)?.noCuenta || undefined}
+          onChange={(value: string) => {
+            const idx = cuentas.findIndex((c) => c.noCuenta === value);
+            if (idx >= 0) onSelect(idx);
+          }}
+          options={cuentas.map((c) => ({ value: c.noCuenta || '', label: c.noCuenta || '—' }))}
+          showSearch
+          optionFilterProp="label"
+          suffixIcon={<span style={{ color: '#8c8c8c' }}>🔍</span>}
+        />
       </div>
-
-      <div className="summary-details-list">
-        <div className="summary-detail-row">
-          <span className="summary-detail-label">Banco</span>
-          <span className="summary-detail-value">{toTitleCase(cuenta.banco || '')}</span>
-        </div>
-        <div className="summary-detail-row">
-          <span className="summary-detail-label">No. Cuenta</span>
-          <span className="summary-detail-value">{cuenta.noCuenta || '—'}</span>
-        </div>
-        <div className="summary-detail-row">
-          <span className="summary-detail-label">Cta. Contable</span>
-          <span className="summary-detail-value">{cuenta.cuentaContable || '—'}</span>
-        </div>
-        <div className="summary-detail-row">
-          <span className="summary-detail-label">Moneda</span>
-          <Tag color={esUSD ? 'green' : 'blue'} style={{ margin: 0 }}>{monedaInfo.label}</Tag>
-        </div>
-        <div className="summary-detail-row">
-          <span className="summary-detail-label">Tipo</span>
-          <span className="summary-detail-value">—</span>
-        </div>
-        <div className="summary-detail-row">
-          <span className="summary-detail-label">Estado</span>
-          <Tag color={cuenta.activo ? 'success' : 'error'} style={{ margin: 0 }}>
-            {cuenta.activo ? 'Activo' : 'Inactivo'}
-          </Tag>
-        </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {cuentasVisibles.map((c, idxLocal) => {
+          const i = cuentas.findIndex((cc) => cc.noCuenta === c.noCuenta);
+          const isActive = i === activeIndex;
+          return (
+            <button
+              key={c.noCuenta || idxLocal}
+              onClick={() => onSelect(i >= 0 ? i : idxLocal)}
+              style={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                padding: '8px 12px',
+                borderRadius: 6,
+                border: isActive ? '2px solid #556ee6' : '1px solid #d9d9d9',
+                background: isActive ? '#e8f0fe' : '#fff',
+                color: isActive ? '#1a1a1a' : '#595959',
+                fontWeight: isActive ? 700 : 400,
+                boxShadow: isActive ? '0 2px 8px rgba(85,110,230,0.15)' : 'none',
+                fontSize: 14,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {c.noCuenta || '—'}
+            </button>
+          );
+        })}
       </div>
     </Card>
-  );
-};
-
-/* ===== Compact Summary (< xxl) ===== */
-
-interface CompactSummaryProps {
-  cuenta: CuentaBancariaDTO;
-}
-
-const CompactSummary: React.FC<CompactSummaryProps> = ({ cuenta }) => {
-  const esUSD = cuenta.moneda?.toUpperCase() === 'DOLAR' || cuenta.moneda?.toUpperCase() === 'USD';
-  const monedaInfo = getMonedaInfo(cuenta.moneda);
-  const balanceDisplay = formatCurrency(cuenta.balance, cuenta.moneda);
-  const hasBalance = cuenta.balance !== undefined && cuenta.balance !== null;
-
-  return (
-    <div style={{ padding: '0 24px 12px' }}>
-      <Card className="paces-card" size="small" styles={{ body: { padding: '12px 16px' }}}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-          <div>
-            <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Balance actual</Text>
-            <Text strong style={{ fontSize: 20, color: esUSD ? '#10b981' : undefined }}>
-              {hasBalance ? balanceDisplay : '—'}
-            </Text>
-          </div>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span>
-              <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>No. Cuenta</Text>
-              <Text>{maskAccountNumber(cuenta.noCuenta || '')}</Text>
-            </span>
-            <span>
-              <Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Cta. Contable</Text>
-              <Text>{cuenta.cuentaContable || '—'}</Text>
-            </span>
-            <Tag color={monedaInfo.color}>{monedaInfo.label}</Tag>
-            <span><Text type="secondary" style={{ fontSize: 11, display: 'block' }}>Tipo</Text><Text>—</Text></span>
-            <Tag color={cuenta.activo ? 'success' : 'error'}>
-              {cuenta.activo ? 'Activo' : 'Inactivo'}
-            </Tag>
-          </div>
-        </div>
-      </Card>
-    </div>
   );
 };
 
@@ -239,7 +203,8 @@ const FTransBanco: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
-  const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({});
+  const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const [filtros, setFiltros] = useState<{ desde?: string; hasta?: string; estado?: number }>({ desde: '20200101', hasta: todayStr });
 
   const [movimientos, setMovimientos] = useState<TransaccionVistaDTO[]>([]);
   const [loadingMov, setLoadingMov] = useState(false);
@@ -292,6 +257,11 @@ const FTransBanco: React.FC = () => {
 
   /* ---- Navigation handlers ---- */
 
+  const handleSelectAccount = (index: number) => {
+    setActiveIndex(index);
+    setCurrentPage(1);
+  };
+
   const handlePrev = () => {
     setActiveIndex((prev) => Math.max(0, prev - 1));
     setCurrentPage(1); // Reset paginación al cambiar cuenta
@@ -341,6 +311,29 @@ const FTransBanco: React.FC = () => {
       setLoadingMov(false);
     }
   }, [sucursalActiva, cuentaActiva?.noCuenta, filtros, searchText]);
+
+  /* ---- Load movimientos on account change ---- */
+
+  useEffect(() => {
+    if (!cuentaActiva?.noCuenta) return;
+    const cargarDirecto = async () => {
+      setLoadingMov(true);
+      try {
+        const result = await cuentaBancariaApi.obtenerMovimientos(sucursalActiva, cuentaActiva.noCuenta, {
+          desde: filtros.desde, hasta: filtros.hasta, cantidad: pageSize, salto: (currentPage - 1) * pageSize,
+          busqueda: searchText || undefined,
+          estado: filtros.estado,
+        });
+        setMovimientos(result || []);
+        setTotalMov(result.length < pageSize ? (currentPage - 1) * pageSize + result.length : currentPage * pageSize + 1);
+      } catch (err: any) {
+        message.error(err?.response?.data?.errorMessage || 'Error al cargar movimientos');
+      } finally {
+        setLoadingMov(false);
+      }
+    };
+    cargarDirecto();
+  }, [cuentaActiva?.noCuenta]);
 
   /* ---- Load movimientos on dependency change ---- */
 
@@ -427,12 +420,11 @@ const FTransBanco: React.FC = () => {
       {/* Main content */}
       {hasContent && cuentaActiva && (
         <>
-          {/* Top row: two columns (slider | account info) */}
+          {/* Top row: slider + account info */}
           <div style={{ padding: '16px 24px 0' }}>
             {isLarge ? (
               <Row gutter={16} style={{ marginBottom: 16 }}>
                 <Col xxl={18}>
-                  {/* Card stack slider */}
                   <div className="cuenta-card-stack">
                     <Button
                       className="stack-arrow-btn"
@@ -462,7 +454,7 @@ const FTransBanco: React.FC = () => {
                 </Col>
                 <Col xxl={6}>
                   <div className="cuenta-summary-sidebar">
-                    <SummarySidebar cuenta={cuentaActiva} />
+                    <AccountList cuentas={cuentas} activeIndex={activeIndex} onSelect={handleSelectAccount} />
                   </div>
                 </Col>
               </Row>
@@ -494,7 +486,7 @@ const FTransBanco: React.FC = () => {
                     size="large"
                   />
                 </div>
-                <CompactSummary cuenta={cuentaActiva} />
+                <AccountList cuentas={cuentas} activeIndex={activeIndex} onSelect={handleSelectAccount} />
               </div>
             )}
           </div>

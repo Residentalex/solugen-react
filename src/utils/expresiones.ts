@@ -501,7 +501,7 @@ function datediff(faVal: any, fbVal: any, unidadRaw: any): number | null {
 /** Aridad minima por funcion (validada en parseo para mejores errores). */
 const ARIDAD_MINIMA: Record<string, number> = {
   SUM: 1, AVG: 1, COUNT: 1, MIN: 1, MAX: 1, SUMIF: 2, COUNTIF: 2,
-  IF: 3, AND: 1, OR: 1, NOT: 1,
+  IF: 3, IIF: 3, AND: 1, OR: 1, NOT: 1,
   ROUND: 1, ABS: 1,
   CONCAT: 1, LEFT: 2, RIGHT: 2, SUBSTRING: 2, UPPER: 1, LOWER: 1, TRIM: 1, LEN: 1, REPLACE: 3,
   TODAY: 0, NOW: 0, YEAR: 1, MONTH: 1, DAY: 1, DATEDIFF: 3,
@@ -595,6 +595,10 @@ const IMPL: Record<string, ImplFn> = {
   // ----- Logica -----
   IF: (a) => {
     reqArgs(a, 3, 'IF');
+    return truthy(a[0]) ? a[1] : a[2];
+  },
+  IIF: (a) => {
+    reqArgs(a, 3, 'IIF');
     return truthy(a[0]) ? a[1] : a[2];
   },
   AND: (a) => a.every(truthy),
@@ -700,6 +704,7 @@ export const FUNCIONES: FuncionDef[] = [
 
   // ----- Logica -----
   { nombre: 'IF', categoria: 'logica', params: 'condicion; siVerdadero; siFalso', descripcion: 'Devuelve un valor u otro segun la condicion.', ejemplo: '{IF(total > 10000, "GRANDE", "NORMAL")}' },
+  { nombre: 'IIF', categoria: 'logica', params: 'condicion; siVerdadero; siFalso', descripcion: 'Alias de IF; admite referencias entre llaves dentro de la condicion.', ejemplo: '{iif({total} > 0, "Aprobado", "Rechazado")}' },
   { nombre: 'AND', categoria: 'logica', params: 'cond1; cond2; ...', descripcion: 'Verdadero si todas las condiciones son verdaderas.', ejemplo: '{IF(AND(cerrado = 1, total > 0), "OK", "REVISAR")}' },
   { nombre: 'OR', categoria: 'logica', params: 'cond1; cond2; ...', descripcion: 'Verdadero si alguna condicion es verdadera.', ejemplo: '{IF(OR(tipo = "A", tipo = "B"), "VALIDO", "-")}' },
   { nombre: 'NOT', categoria: 'logica', params: 'condicion', descripcion: 'Niega una condicion.', ejemplo: '{IF(NOT(anulado), "ACTIVO", "ANULADO")}' },
@@ -810,6 +815,9 @@ function evaluarBin(n: Extract<Nodo, { k: 'bin' }>, ctx: ContextoDatos): any {
 
 const RE_EXPRESION = /\{([^{}]*)\}/g;
 
+/** Maximo de pasadas para resolver bloques anidados ({iif({campo} > 0, ...)}). */
+const MAX_PASADAS = 5;
+
 /** Valida la sintaxis de una expresion (sin evaluarla). */
 export function validarExpresion(expresion: string): { ok: boolean; error?: string } {
   try {
@@ -832,15 +840,22 @@ export function evaluarExpresion(expresion: string, ctx: ContextoDatos = {}): an
  */
 export function evaluarTexto(texto: string, ctx: ContextoDatos = {}): string {
   if (!texto || texto.indexOf('{') === -1) return texto;
-  return texto.replace(RE_EXPRESION, (completo: string, interior: string) => {
-    const expr = interior.trim();
-    if (!expr) return completo;
-    try {
-      return aString(evaluarExpresion(expr, ctx));
-    } catch {
-      return completo;
-    }
-  });
+  let resultado = texto;
+  for (let pasada = 0; pasada < MAX_PASADAS; pasada++) {
+    const siguiente = resultado.replace(RE_EXPRESION, (completo: string, interior: string) => {
+      const expr = interior.trim();
+      if (!expr) return completo;
+      try {
+        return aString(evaluarExpresion(expr, ctx));
+      } catch {
+        return completo;
+      }
+    });
+    if (siguiente === resultado) return resultado;
+    resultado = siguiente;
+    if (resultado.indexOf('{') === -1) return resultado;
+  }
+  return resultado;
 }
 
 /** Aplica evaluarTexto a todos los strings de un objeto/arreglo (recursivo). */
@@ -863,12 +878,22 @@ function recorrer(v: any, ctx: ContextoDatos): any {
   return v;
 }
 
-/** Extrae las expresiones {...} de un texto. */
+/** Extrae las expresiones {...} de un texto (multi-pasada para bloques anidados). */
 function extraerExpresiones(texto: string): string[] {
+  const vistos = new Set<string>();
   const out: string[] = [];
-  for (const m of texto.matchAll(RE_EXPRESION)) {
-    const expr = m[1].trim();
-    if (expr) out.push(expr);
+  let restante = texto;
+  for (let pasada = 0; pasada < MAX_PASADAS; pasada++) {
+    const anterior = restante;
+    restante = restante.replace(RE_EXPRESION, (completo: string, interior: string) => {
+      const expr = interior.trim();
+      if (expr && !vistos.has(expr)) {
+        vistos.add(expr);
+        out.push(expr);
+      }
+      return '0';
+    });
+    if (restante === anterior || restante.indexOf('{') === -1) break;
   }
   return out;
 }

@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Form, Input, InputNumber, Button, message, Typography } from 'antd';
+import { Card, Form, Input, InputNumber, Button, message, Typography, Switch } from 'antd';
 import { SaveOutlined, CloseOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { moduloApi } from '../../api/moduloApi';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { toTitleCase } from '../../utils/formats';
 
 const { Text } = Typography;
 
@@ -36,7 +37,7 @@ const ModuloFormulario: React.FC = () => {
       moduloApi.obtenerTodo(sucursalActiva).then((modulos) => {
         const modulo = modulos.find((m) => m.id === Number(id));
         if (modulo) {
-          form.setFieldsValue({ nombre: modulo.nombre, orden: modulo.orden });
+          form.setFieldsValue({ codigo: modulo.codigo || '', nombre: modulo.nombre, orden: modulo.orden, oculto: !!modulo.oculto });
         } else {
           message.error('Módulo no encontrado');
           navigate('/Mmodulo', { replace: true });
@@ -93,6 +94,11 @@ const ModuloFormulario: React.FC = () => {
       </div>
 
       <Form form={form} layout="vertical" size="small" style={{ maxWidth: 600 }}>
+        <Form.Item name="codigo" label="Código"
+          rules={[{ required: true, message: 'El código es obligatorio' }]}
+        >
+          <Input placeholder="Ej: CONTAB" />
+        </Form.Item>
         <Form.Item name="nombre" label="Nombre del Módulo"
           rules={[{ required: true, message: 'El nombre es requerido' }]}>
           <Input placeholder="Ej: Generador ORC" />
@@ -100,6 +106,9 @@ const ModuloFormulario: React.FC = () => {
         <Form.Item name="orden" label="Orden"
           rules={[{ required: true, message: 'El orden es requerido' }]}>
           <InputNumber min={0} max={999} style={{ width: '100%' }} />
+        </Form.Item>
+        <Form.Item name="oculto" label="Ocultar del sidebar" valuePropName="checked">
+          <Switch checkedChildren="Sí" unCheckedChildren="No" />
         </Form.Item>
       </Form>
     </Card>

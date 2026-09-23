@@ -247,9 +247,9 @@ const SolicitudPagoDetalle: React.FC = () => {
     if (!id) return;
     setSaving(true);
     try {
-      const idDocBancario = await solicitudPagoApi.generarPago(sucursalActiva, parseInt(id));
+      const resultado = await solicitudPagoApi.generarPago(sucursalActiva, parseInt(id));
       message.success('Pago generado exitosamente');
-      navigate(`/FTransBanco/${idDocBancario}`);
+      navigate(`/FTransBanco/${resultado.id}`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar pago');
       message.error(msg);

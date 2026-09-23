@@ -241,6 +241,15 @@ export const conciliacionBancariaApi = {
     return data.data ?? false;
   },
 
+  /** Obtener la última conciliación por cuenta bancaria (para calcular fechaAnt) */
+  obtenerUltimaConciliacionPorCuenta: async (sucursal: number, numeroCta: string): Promise<string | null> => {
+    const { data } = await apiClient.get<ApiResponse<string | null>>(
+      `${BASE}/${sucursal}/ultima-conciliacion`,
+      { params: { numeroCta } }
+    );
+    return data.data ?? null;
+  },
+
   /** Obtener cuentas bancarias disponibles (CTASBANC) */
   obtenerCuentasBancarias: async (sucursal: number): Promise<CuentaBancariaDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<CuentaBancariaDTO[]>>(

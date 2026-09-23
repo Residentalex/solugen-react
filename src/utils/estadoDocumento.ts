@@ -57,9 +57,40 @@ export function toPeriodoNum(periodo: string | number | null | undefined): numbe
   return PERIODO_NUM_MAP[periodo] ?? -1;
 }
 
-export function resolveEstado(estado: string | number): { label: string; color: string } {
+const ICON_MAP: Record<string, string> = {
+  Borrador: 'CloseOutlined',
+  Terminado: 'CheckCircleOutlined',
+  Autorizado: 'LockFilled',
+  Anulado: 'CloseCircleOutlined',
+  Pagado: 'CheckCircleOutlined',
+  Abierto: 'ReloadOutlined',
+  Cerrado: 'LockFilled',
+  Validado: 'CheckCircleOutlined',
+};
+
+const ESTADO_NUM_LABEL_MAP: Record<number, string> = {
+  0: 'Borrador',
+  1: 'Terminado',
+  2: 'Autorizado',
+  3: 'Anulado',
+  4: 'Pagado',
+  5: 'Abierto',
+  6: 'Cerrado',
+};
+
+export function resolveEstado(estado: string | number): { label: string; color: string; icon?: string } {
   if (typeof estado === 'string') {
-    return ESTADO_DOCUMENTO_LABEL_MAP[estado] || { label: estado, color: 'default' };
+    return {
+      label: ESTADO_DOCUMENTO_LABEL_MAP[estado]?.label || estado,
+      color: ESTADO_DOCUMENTO_LABEL_MAP[estado]?.color || 'default',
+      icon: ICON_MAP[estado],
+    };
   }
-  return ESTADO_DOCUMENTO_MAP[estado] || { label: 'Desconocido', color: 'default' };
+  const label = ESTADO_NUM_LABEL_MAP[estado] || 'Desconocido';
+  const info = ESTADO_DOCUMENTO_MAP[estado] || { label, color: 'default' };
+  return {
+    label: info.label,
+    color: info.color,
+    icon: ICON_MAP[label],
+  };
 }

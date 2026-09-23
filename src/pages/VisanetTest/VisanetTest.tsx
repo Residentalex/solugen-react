@@ -9,6 +9,7 @@ import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { useCompanyStore } from '../../stores/companyStore';
 import { visanetApi } from '../../api/visanetApi';
 import type {
+  VisanetCierreDTO,
   VisanetCierrePruebaRespuestaDTO,
   VisanetResponseDTO,
   VisanetVoucherDTO,
@@ -118,6 +119,11 @@ const conFechaTransaccion = (res: VisanetResponseDTO): VisanetResponseDTO => {
   };
 };
 
+/**
+ * Un voucher está anulado si ANULADO es 'T' (backend actual) o 'S' (legacy).
+ */
+const esAnulado = (valor?: string): boolean => valor === 'T' || valor === 'S';
+
 /** Tipo de operación que determina la plantilla y el label del voucher. */
 type TipoOpVoucher = 'venta' | 'subsidio' | 'anulacion' | 'cierre';
 
@@ -209,6 +215,12 @@ const VisanetTest: React.FC = () => {
   const [vouchersLoading, setVouchersLoading] = useState(false);
   const [generandoCierre, setGenerandoCierre] = useState(false);
   const [fechaFiltro, setFechaFiltro] = useState<dayjs.Dayjs | null>(dayjs());
+
+  // Cierre con rango (GET /visanet/{sucursal}/vouchers-cierre): JSON + impresión térmica
+  const [cierreVouchers, setCierreVouchers] = useState<VisanetCierreDTO[] | null>(null);
+  const [cierreDrawerOpen, setCierreDrawerOpen] = useState(false);
+  const [obteniendoCierre, setObteniendoCierre] = useState(false);
+  const [imprimiendoCierre, setImprimiendoCierre] = useState(false);
 
   // Estado del modal voucher
   const [voucherVisible, setVoucherVisible] = useState(false);
@@ -603,12 +615,23 @@ const VisanetTest: React.FC = () => {
     }
 
     // 3. Data del voucher para el template
+    //    La empresa se inyecta como `sucursal` porque el backend descarta el
+    //    objeto `company` del payload y el agente resuelve `sucursal.nombre`,
+    //    `sucursal.rnc`, etc. al imprimir (mismo contrato que FPV).
     const dataVoucher: VisanetVoucherInputDTO = {
       ...resultadoVenta,
       montoPesos: monto,
       simMoneda,
       sucursalName,
       subsidioLabel: labelOperacionVoucher(tipoOp, subsidyIdParam),
+      sucursal: {
+        nombre: companyInfo.nombre,
+        direccion: companyInfo.direccion,
+        telefono: companyInfo.telefono,
+        rnc: companyInfo.rnc,
+        fax: companyInfo.fax,
+        slogan: companyInfo.slogan,
+      },
     };
 
     return { plantilla, companyInfo, dataVoucher };
@@ -751,7 +774,10 @@ const VisanetTest: React.FC = () => {
       stan: String(record.noSec),
       rrn: record.rrn,
       batchNumber: record.noLote,
-      issuerName: record.tipoTC,
+      issuerName: record.nTipoTC || record.tipoTC,
+      merchantId: record.merchantId,
+      terminalId: record.terminalId,
+      entryMode: record.entryMode,
       cardHolderName: record.nombtar,
       transactionDate,
     };
@@ -761,7 +787,7 @@ const VisanetTest: React.FC = () => {
   // Tipo de operación para reimprimir/visualizar un registro del día:
   // un voucher anulado se reimprime como comprobante de ANULACIÓN (VSNT_ANULACION).
   const tipoOpDeRecord = (record: VisanetVoucherDTO): TipoOpVoucher =>
-    record.anulado === 'S' ? 'anulacion' : 'venta';
+    esAnulado(record.anulado) ? 'anulacion' : 'venta';
 
   // Reimprimir voucher desde la tabla de registros del día
   const handleReimprimir = async (record: VisanetVoucherDTO) => {
@@ -783,7 +809,7 @@ const VisanetTest: React.FC = () => {
       key: 'noSec',
       width: 80,
       render: (noSec: number, record: VisanetVoucherDTO) => (
-        <span style={record.anulado === 'S' ? { textDecoration: 'line-through' } : undefined}>{noSec}</span>
+        <span style={esAnulado(record.anulado) ? { textDecoration: 'line-through' } : undefined}>{noSec}</span>
       ),
     },
     { title: 'Token ID', dataIndex: 'tokenId', key: 'tokenId', width: 150 },
@@ -804,7 +830,7 @@ const VisanetTest: React.FC = () => {
       key: 'estado',
       width: 120,
       render: (_, record) => (
-        record.anulado === 'S' ? <Tag color="red">ANULADO</Tag> : <Tag color="green">APROBADO</Tag>
+        esAnulado(record.anulado) ? <Tag color="red">ANULADO</Tag> : <Tag color="green">APROBADO</Tag>
       ),
     },
     { title: 'Origen', dataIndex: 'origen', key: 'origen', width: 110 },
@@ -819,14 +845,14 @@ const VisanetTest: React.FC = () => {
             type="link"
             size="small"
             icon={<EyeOutlined />}
-            title={record.anulado === 'S' ? 'Visualizar anulación (ESC/POS)' : 'Visualizar ESC/POS'}
+            title={esAnulado(record.anulado) ? 'Visualizar anulación (ESC/POS)' : 'Visualizar ESC/POS'}
             onClick={() => handleVisualizarReimpresion(record)}
           />
           <Button
             type="link"
             size="small"
             icon={<PrinterOutlined />}
-            title={record.anulado === 'S' ? 'Reimprimir comprobante de anulación' : 'Reimprimir voucher'}
+            title={esAnulado(record.anulado) ? 'Reimprimir comprobante de anulación' : 'Reimprimir voucher'}
             onClick={() => handleReimprimir(record)}
           />
         </Space>
@@ -888,54 +914,58 @@ const VisanetTest: React.FC = () => {
         }
       });
 
-      const ventas = vouchers.filter((voucher) => voucher.anulado !== 'S');
-      const anulaciones = vouchers.filter((voucher) => voucher.anulado === 'S');
+      const ventas = vouchers.filter((voucher) => !esAnulado(voucher.anulado));
+      const anulaciones = vouchers.filter((voucher) => esAnulado(voucher.anulado));
       const montoVentas = ventas.reduce((total, voucher) => total + Number(voucher.monto || 0), 0);
       const montoAnulaciones = anulaciones.reduce((total, voucher) => total + Number(voucher.monto || 0), 0);
 
       const gruposHtml = Array.from(grupos.values()).map(({ host, lote, vouchers: vouchersGrupo }) => {
+        const hostMostrado = host.toUpperCase() === 'MCARD' ? 'MASTERCARD' : host;
         const movimientos = vouchersGrupo.map((voucher) => {
-          const esAnulacion = voucher.anulado === 'S';
+          const esAnulacion = esAnulado(voucher.anulado);
           const monto = Number(voucher.monto || 0);
           const tarjeta = voucher.notarjeta?.trim() || 'SIN TARJETA';
+          const marca = voucher.nombtar?.trim() || voucher.tipoTC?.trim() || '';
           const aprobacion = voucher.noAprob?.trim();
-          const rrn = voucher.rrn?.trim();
+          const fechaMovimiento = voucher.fecha && dayjs(voucher.fecha).isValid()
+            ? dayjs(voucher.fecha).format('DD/MM/YY')
+            : voucher.fecha?.trim();
+          const horaMovimiento = voucher.hora?.trim();
           const detalles = [
-            escaparHtml(tarjeta),
-            aprobacion ? `Aprob.: ${escaparHtml(aprobacion)}` : '',
-            rrn ? `RRN: ${escaparHtml(rrn)}` : '',
-          ].filter(Boolean).join(' | ');
+            aprobacion ? escaparHtml(aprobacion) : '',
+            fechaMovimiento ? `FECHA: ${escaparHtml(fechaMovimiento)}` : '',
+            horaMovimiento ? `HORA: ${escaparHtml(horaMovimiento)}` : '',
+          ].filter(Boolean).join('   ');
 
           return `<div class="movimiento ${esAnulacion ? 'anulacion' : ''}">
             <div class="movimiento-cabecera">
-              <strong>${escaparHtml(esAnulacion ? 'ANULACION' : 'VENTA')} ${escaparHtml(voucher.noSec || 'SIN REF.')}</strong>
+              <span>REF.: ${escaparHtml(voucher.rrn?.trim() || 'SIN REF.')}</span>
+              <span>${escaparHtml(tarjeta)}</span>
+              <span>${escaparHtml(marca)}</span>
+            </div>
+            ${detalles ? `<div class="movimiento-detalle">${detalles}</div>` : ''}
+            <div class="movimiento-estado">
+              <strong>${esAnulacion ? 'VENTA ANULADA' : 'VENTA NORMAL'}</strong>
               <strong>${escaparHtml(formatoMonto(esAnulacion ? -monto : monto))}</strong>
             </div>
-            <div class="movimiento-detalle">${detalles}</div>
           </div>`;
         }).join('');
 
-        const montoGrupo = vouchersGrupo.reduce(
-          (total, voucher) => total + (voucher.anulado === 'S' ? -Number(voucher.monto || 0) : Number(voucher.monto || 0)),
-          0,
-        );
-
         return `<section class="grupo">
-          <div class="fila-meta"><strong>HOST: ${escaparHtml(host)}</strong><strong>LOTE: ${escaparHtml(lote)}</strong></div>
+          <div class="fila-meta grupo-meta"><strong>HOST: ${escaparHtml(hostMostrado)}</strong><strong>LOTE: ${escaparHtml(lote)}</strong></div>
           <div class="separador"></div>
           ${movimientos}
           <div class="separador"></div>
-          <div class="movimiento-pie"><strong>NETO DEL LOTE</strong><strong>${escaparHtml(formatoMonto(montoGrupo))}</strong></div>
         </section>`;
       }).join('');
 
       const fecha = (fechaFiltro ?? dayjs()).format('DD/MM/YYYY');
       const encabezadoEmpresa = [
-        companiaInfo.nombre,
-        companiaInfo.direccion,
-        [companiaInfo.telefono && `Tel.: ${companiaInfo.telefono}`, companiaInfo.fax && `Fax: ${companiaInfo.fax}`].filter(Boolean).join('   '),
-        companiaInfo.rnc && `RNC: ${companiaInfo.rnc}`,
-      ].filter((linea): linea is string => Boolean(linea)).map((linea) => `<div>${escaparHtml(linea)}</div>`).join('');
+        '<div>000000093559001MC000001</div>',
+        companiaInfo.nombre && `<div class="nombre-comercio">${escaparHtml(companiaInfo.nombre)}</div>`,
+        companiaInfo.rnc && `<div>${escaparHtml(companiaInfo.rnc)}</div>`,
+        companiaInfo.direccion && `<div class="etiqueta">DIRECCION DEL COMERCIO</div><div>${escaparHtml(companiaInfo.direccion)}</div>`,
+      ].filter(Boolean).join('');
 
       ventana.document.write(`<!doctype html>
 <html lang="es">
@@ -943,41 +973,49 @@ const VisanetTest: React.FC = () => {
 <meta charset="utf-8" />
 <title>Cierre Visanet ${escaparHtml(fecha)}</title>
 <style>
-  @page { size: 80mm auto; margin: 5mm; }
+  @page { size: 80mm auto; margin: 3mm; }
   * { box-sizing: border-box; }
-  body { width: 70mm; margin: 0 auto; color: #1f1f1f; font-family: "Courier New", monospace; font-size: 11px; line-height: 1.4; }
-  .encabezado { text-align: center; margin-bottom: 12px; }
-  h1 { margin: 0 0 3px; font-size: 15px; }
-  .fecha { margin-top: 5px; font-weight: 700; }
-  .grupo { margin-top: 13px; break-inside: avoid; }
-  .fila-meta, .movimiento-cabecera, .movimiento-pie, .fila-total { display: flex; justify-content: space-between; gap: 8px; }
-  .separador { border-top: 1px dashed #444; margin: 7px 0; }
-  .movimiento { margin: 6px 0; }
-  .movimiento-detalle { color: #444; overflow-wrap: anywhere; }
+  body { width: 74mm; margin: 0 auto; padding: 2mm 0; color: #171717; font-family: Arial, sans-serif; font-size: 9px; line-height: 1.25; }
+  .recibo { min-height: 120mm; border: 1px solid #62738d; padding: 7mm 3.5mm 5mm; }
+  .encabezado { text-align: center; margin-bottom: 9px; text-transform: uppercase; }
+  .nombre-comercio { margin-bottom: 8px; font-size: 16px; font-weight: 700; }
+  .etiqueta { margin-top: 1px; }
+  h1 { margin: 2px 0 0; font-size: 10px; }
+  .fecha { font-weight: 700; }
+  .grupo { margin-top: 10px; break-inside: avoid; }
+            .fila-meta, .movimiento-pie { display: flex; justify-content: space-between; gap: 7px; }
+            .grupo-meta { justify-content: flex-start; gap: 14px; }
+  .movimiento-cabecera { display: grid; grid-template-columns: auto 1fr auto; gap: 5px; }
+  .movimiento-cabecera span:nth-child(2) { text-align: center; }
+  .movimiento-cabecera span:last-child { text-align: right; }
+  .separador { border-top: 1px solid #565656; margin: 4px 0; }
+  .movimiento { margin: 4px 0; }
+  .movimiento-detalle { color: #333; overflow-wrap: anywhere; }
   .anulacion { font-weight: 700; }
-  .resumen { margin-top: 16px; }
-  .fila-total { padding: 2px 0; }
-  .neto { font-size: 13px; font-weight: 700; border-top: 1px dashed #444; margin-top: 5px; padding-top: 5px; }
-  .pie { margin-top: 18px; text-align: center; font-weight: 700; }
-  .nota { margin-top: 18px; color: #555; font-family: Arial, sans-serif; font-size: 10px; font-weight: 400; }
-  @media print { body { width: auto; } .nota { display: none; } }
+  .resumen { margin-top: 13px; }
+  .fila-total { display: grid; grid-template-columns: 1fr 20px auto; gap: 5px; padding: 2px 0; }
+  .fila-total strong:last-child { text-align: right; }
+  .neto { font-weight: 700; }
+  .pie { margin-top: 17px; text-align: center; font-weight: 700; }
+  @media print { body { width: auto; padding: 0; } .recibo { min-height: 0; } }
 </style>
 </head>
 <body>
+<main class="recibo">
   <header class="encabezado">
     ${encabezadoEmpresa}
-    <h1>CIERRE PORTAL</h1>
+    <h1>DETALLES DEL CIERRE</h1>
     <div class="fecha">FECHA: ${escaparHtml(fecha)}</div>
   </header>
   ${gruposHtml}
   <section class="resumen">
     <div class="separador"></div>
-    <div class="fila-total"><span>Ventas (${ventas.length})</span><strong>${escaparHtml(formatoMonto(montoVentas))}</strong></div>
-    <div class="fila-total"><span>Anulaciones (${anulaciones.length})</span><strong>${escaparHtml(formatoMonto(-montoAnulaciones))}</strong></div>
-    <div class="fila-total neto"><span>TOTAL (${ventas.length - anulaciones.length})</span><strong>${escaparHtml(formatoMonto(montoVentas - montoAnulaciones))}</strong></div>
+    <div class="fila-total"><span>Ventas:</span><strong>${ventas.length}</strong><strong>${escaparHtml(formatoMonto(montoVentas))}</strong></div>
+    <div class="fila-total anulacion"><span>Anulaciones:</span><strong>${anulaciones.length}</strong><strong>${escaparHtml(formatoMonto(-montoAnulaciones))}</strong></div>
+    <div class="fila-total neto"><span>Total:</span><strong>${ventas.length - anulaciones.length}</strong><strong>${escaparHtml(formatoMonto(montoVentas - montoAnulaciones))}</strong></div>
   </section>
   <footer class="pie">** CIERRE COMPLETO **</footer>
-  <div class="nota">Vista de consulta. Use Imprimir o Guardar como PDF del navegador.</div>
+</main>
 </body>
 </html>`);
       ventana.document.close();
@@ -1001,7 +1039,7 @@ const VisanetTest: React.FC = () => {
       dataRows: vouchers.map((item: any) =>
         cols.map((col) => {
           if (col.key === 'estado') {
-            return item.anulado === 'S' ? 'ANULADO' : 'APROBADO';
+            return item.anulado === 'T' || item.anulado === 'S' ? 'ANULADO' : 'APROBADO';
           }
           if (col.key === 'monto') {
             return item.monto != null ? item.monto.toFixed(2) : '';
@@ -1011,6 +1049,83 @@ const VisanetTest: React.FC = () => {
         })
       ),
     });
+  };
+
+  // Obtiene el JSON del cierre para la fecha seleccionada (GET vouchers-cierre) y abre el Drawer.
+  const handleObtenerCierre = async () => {
+    setObteniendoCierre(true);
+    try {
+      const fecha = (fechaFiltro ?? dayjs()).format('YYYYMMDD');
+      const data = await visanetApi.obtenerVouchersCierre(sucursalActiva, fecha, fecha);
+      setCierreVouchers(data || []);
+      setCierreDrawerOpen(true);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al obtener el cierre');
+    } finally {
+      setObteniendoCierre(false);
+    }
+  };
+
+  // Convierte las filas planas de vouchers-cierre al shape acquirers[].data[] que
+  // entiende la plantilla VSNT_CIERRE (mismo contrato que la respuesta CLOSE).
+  const mapearCierreParaPlantilla = (rows: VisanetCierreDTO[]): VisanetResponseDTO => {
+    const grupos = new Map<string, { host: string; lote: string; rows: VisanetCierreDTO[] }>();
+    rows.forEach((row) => {
+      const host = row.host?.trim() || 'SIN HOST';
+      const lote = row.noLote?.trim() || 'SIN LOTE';
+      const clave = `${host}::${lote}`;
+      const grupo = grupos.get(clave);
+      if (grupo) {
+        grupo.rows.push(row);
+      } else {
+        grupos.set(clave, { host, lote, rows: [row] });
+      }
+    });
+
+    const acquirers = Array.from(grupos.values()).map(({ host, lote, rows: filas }) => ({
+      acquirerName: host,
+      batchNumber: lote,
+      data: filas.map((fila) => {
+        const monto = Number(fila.monto || 0);
+        const anulada = esAnulado(fila.anulado);
+        return {
+          transactionName: anulada ? 'VOID' : 'SALE',
+          totalAmount: anulada ? -monto : monto,
+          transactionDate: fila.fecha?.slice(0, 10),
+          transactionTime: fila.hora,
+          approval: fila.noAprob,
+          authorization: fila.noAprob,
+          rrn: fila.rrn,
+          pan: fila.notarjeta,
+          batchNumber: lote,
+        };
+      }),
+    }));
+
+    return { exitoso: true, acquirers } as VisanetResponseDTO;
+  };
+
+  // Envía el cierre consultado a la impresora térmica usando la plantilla VSNT_CIERRE.
+  const handleImprimirCierre = async () => {
+    if (!cierreVouchers?.length) {
+      message.warning('No hay vouchers para imprimir.');
+      return;
+    }
+    setImprimiendoCierre(true);
+    try {
+      await imprimirVoucherConDatos('cierre', mapearCierreParaPlantilla(cierreVouchers), 0, undefined);
+    } catch {
+      message.error('No fue posible imprimir el cierre.');
+    } finally {
+      setImprimiendoCierre(false);
+    }
+  };
+
+  const jsonCierreTexto = (): string => JSON.stringify(cierreVouchers, null, 2);
+
+  const handleCopiarJsonCierre = () => {
+    navigator.clipboard.writeText(jsonCierreTexto());
+    message.success('JSON del cierre copiado al portapapeles');
   };
 
   return (
@@ -1208,6 +1323,13 @@ const VisanetTest: React.FC = () => {
      >
        Ver cierre
      </Button>
+     <Button
+       icon={<PrinterOutlined />}
+       loading={obteniendoCierre}
+       onClick={handleObtenerCierre}
+     >
+       Cierre → JSON
+     </Button>
      <Button icon={<FileExcelOutlined />} onClick={handleExportarExcelVouchers} />
      <Button icon={<ReloadOutlined />} onClick={() => cargarVouchersDelDia(fechaFiltro ?? dayjs())} />
           </div>
@@ -1221,7 +1343,7 @@ const VisanetTest: React.FC = () => {
           loading={vouchersLoading}
           scroll={{ x: 1350 }}
           pagination={{ showTotal: (t) => `${t} registros` }}
-          rowClassName={(record) => (record.anulado === 'S' ? 'paces-text-secondary' : '')}
+          rowClassName={(record) => (esAnulado(record.anulado) ? 'paces-text-secondary' : '')}
         />
       </Card>
 
@@ -1497,6 +1619,48 @@ const VisanetTest: React.FC = () => {
           }}
         >
           {jsonSoporteTexto()}
+        </pre>
+      </Drawer>
+
+      {/* Drawer JSON del cierre consultado (vouchers-cierre) + impresión térmica */}
+      <Drawer
+        title={`Cierre del ${(fechaFiltro ?? dayjs()).format('DD/MM/YYYY')}`}
+        open={cierreDrawerOpen}
+        onClose={() => setCierreDrawerOpen(false)}
+        width={560}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+          <Button size="small" icon={<CopyOutlined />} onClick={handleCopiarJsonCierre}>
+            Copiar JSON
+          </Button>
+          <Button
+            size="small"
+            type="primary"
+            icon={<PrinterOutlined />}
+            loading={imprimiendoCierre}
+            disabled={!cierreVouchers?.length}
+            onClick={handleImprimirCierre}
+          >
+            Enviar a impresora térmica
+          </Button>
+        </div>
+        <p style={{ marginTop: 0, marginBottom: 8 }}>
+          {cierreVouchers && cierreVouchers.length > 0
+            ? `${cierreVouchers.length} vouchers del cierre. Revisa el JSON o envíalo a la impresora térmica con la plantilla VSNT_CIERRE.`
+            : 'No hay vouchers para la fecha seleccionada.'}
+        </p>
+        <pre
+          style={{
+            maxHeight: 'calc(100vh - 260px)',
+            overflow: 'auto',
+            background: '#f5f5f5',
+            padding: 12,
+            borderRadius: 4,
+            fontSize: 12,
+            margin: 0,
+          }}
+        >
+          {jsonCierreTexto()}
         </pre>
       </Drawer>
     </div>

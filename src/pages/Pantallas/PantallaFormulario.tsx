@@ -34,6 +34,7 @@ import type { PantallaDTO, PantallaEntidadDTO, ModuloDTO, EntidadDocumentoDTO, P
 import LoadingSpinner from '../../components/LoadingSpinner';
 import FormularioToolbar from '../../components/FormularioToolbar';
 import type { AccionDTO } from '../../types/administracion';
+import { toTitleCase } from '../../utils/formats';
 
 const { Text } = Typography;
 

@@ -1,9 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Card, Row, Col, Typography, Space, Spin, Empty } from 'antd';
-import {
-  FileTextOutlined,
-} from '@ant-design/icons';
+import { FileTextOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import type { PantallaDTO } from '../../types/auth';
@@ -18,11 +16,9 @@ const ReportesModulo: React.FC = () => {
 
   const moduloNombre = modulo || '';
 
-  // Detectar si estamos en ruta /saas
   const isSaas = location.pathname.startsWith('/saas');
   const prefix = isSaas ? '/saas/' : '/';
 
-  // Filtrar reportes del módulo
   const reportesFiltrados = useMemo<PantallaDTO[]>(() => {
     if (!usuario?.pantallas || !moduloNombre) return [];
     return usuario.pantallas.filter((p) => {
@@ -32,32 +28,26 @@ const ReportesModulo: React.FC = () => {
     });
   }, [usuario?.pantallas, moduloNombre]);
 
-  // Estados
   useEffect(() => {
     const codigoReportes = `Reportes_${moduloNombre}`;
     setActiveModule(codigoReportes);
     setPageTitleOverride(`${moduloNombre} - Reportes`);
   }, [moduloNombre, setActiveModule, setPageTitleOverride]);
 
-  // Limpiar pageTitleOverride al desmontar
   useEffect(() => {
     return () => {
       setPageTitleOverride('');
     };
   }, [setPageTitleOverride]);
 
-  const loading = false; // datos locales, sin llamada API
+  const loading = false;
 
   return (
     <div style={{ padding: 0 }}>
-      {/* Header section */}
       <div style={{ marginBottom: 32 }}>
-        {/* Título principal: "Reportes de {moduloNombre}" */}
         <Typography.Title level={3} style={{ margin: 0, fontWeight: 700 }}>
           Reportes de {moduloNombre}
         </Typography.Title>
-
-        {/* Subtítulo con conteo */}
         {!loading && (
           <Typography.Text type="secondary" style={{ fontSize: 14 }}>
             {reportesFiltrados.length} reporte{reportesFiltrados.length !== 1 ? 's' : ''} disponible{reportesFiltrados.length !== 1 ? 's' : ''}
@@ -65,7 +55,6 @@ const ReportesModulo: React.FC = () => {
         )}
       </div>
 
-      {/* Content */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '80px 0' }}>
           <Spin size="large" />
@@ -112,7 +101,6 @@ const ReportesModulo: React.FC = () => {
                 }}
               >
                 <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                  {/* Icono grande con fondo degradado */}
                   <div
                     style={{
                       width: 48,
@@ -127,17 +115,14 @@ const ReportesModulo: React.FC = () => {
                     <FileTextOutlined style={{ fontSize: 22, color: '#fff' }} />
                   </div>
 
-                  {/* Nombre del reporte */}
                   <Typography.Text strong style={{ fontSize: 14, color: '#1a1d21' }}>
                     {reporte.nombre}
                   </Typography.Text>
 
-                  {/* Código del reporte */}
                   <Typography.Text type="secondary" style={{ fontSize: 11, fontFamily: 'monospace' }}>
                     {reporte.codigo}
                   </Typography.Text>
 
-                  {/* Indicador de clic */}
                   <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
                     <Typography.Text style={{ color: '#556ee6', fontSize: 12, fontWeight: 500 }}>
                       Abrir reporte →

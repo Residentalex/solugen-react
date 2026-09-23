@@ -38,6 +38,8 @@ export interface ModuloDTO {
   nombre: string;
   codigo?: string;
   orden: number;
+  oculto?: boolean;
+  Oculto?: boolean;
 }
 
 export interface PantallaEntidadDTO {

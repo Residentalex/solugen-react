@@ -107,6 +107,13 @@ const LogTable: React.FC<LogTableProps> = ({ dataSource, loading, scroll }) => {
       ),
     },
     {
+      title: 'Cuenta Bancaria',
+      dataIndex: 'cuentaBancaria',
+      key: 'cuentaBancaria',
+      width: 140,
+      render: (v: string) => v ? <span style={{ fontSize: 12 }}>{v}</span> : <span className="paces-text-secondary" style={{ fontSize: 12 }}>-</span>,
+    },
+    {
       title: 'Origen',
       key: 'origen',
       render: (_: any, record: LogEntry) => {

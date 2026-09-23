@@ -68,6 +68,24 @@ export const cuentaContableApi = {
     await apiClient.delete(`${BASE}/${sucursal}/${noCuenta}`);
   },
 
+  obtenerHijos: async (sucursal: number, noCuentaPadre: string): Promise<CuentaContableDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<CuentaContableDTO[]>>(`${BASE}/${sucursal}/hijos/${noCuentaPadre}`);
+    return data.data;
+  },
+
+  obtenerPadresPaginado: async (
+    sucursal: number,
+    cantidad = 25,
+    salto = 0,
+    filtro = ''
+  ): Promise<{ data: CuentaContableResumenDTO[]; total: number }> => {
+    const params = new URLSearchParams({ take: String(cantidad), skip: String(salto), filtro });
+    const { data } = await apiClient.get<ApiResponse<CuentaContableResumenDTO[]> & { total: number }>(
+      `${BASE}/${sucursal}/padres?${params}`
+    );
+    return { data: data.data, total: data.total };
+  },
+
   // ===== Catálogos para formulario =====
 
   obtenerTipos: async (sucursal: number): Promise<TipoCuentaDTO[]> => {

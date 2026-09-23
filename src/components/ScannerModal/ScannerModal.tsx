@@ -55,6 +55,9 @@ const ScannerModal: React.FC<ScannerModalProps> = ({ open, onClose, onSelect }) 
     setLoading(true);
     try {
       const res = await productoApi.obtenerDetalle(sucursalActiva, codigo.trim());
+      if (!res || (!res.idExterno && !res.nombre)) {
+        throw new Error('Producto no encontrado');
+      }
       setProductoEncontrado({
         codigo: res.idExterno || codigo,
         articulo: res.nombre,
@@ -78,7 +81,10 @@ const ScannerModal: React.FC<ScannerModalProps> = ({ open, onClose, onSelect }) 
   };
 
   const handleAgregar = () => {
-    if (!productoEncontrado) return;
+    if (!productoEncontrado || !productoEncontrado.codigo || !productoEncontrado.articulo) {
+      message.error('Producto no encontrado');
+      return;
+    }
     onSelect({ ...productoEncontrado, cantidad: cantidad || 1 });
     onClose();
   };

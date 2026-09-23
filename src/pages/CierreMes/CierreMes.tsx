@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Table, DatePicker, message, Typography, Button, Alert } from 'antd';
-import { FileExcelOutlined } from '@ant-design/icons';
+import { Card, Table, DatePicker, message, Typography, Button, Alert, Space, Tag } from 'antd';
+import { FileExcelOutlined, ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { cierreMesApi } from '../../api/cierreMesApi';
 import type { CierreMesDTO } from '../../api/cierreMesApi';
@@ -9,7 +9,7 @@ import { useAuthStore } from '../../stores/authStore';
 import PermissionGate from '../../components/PermissionGate';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 const CierreMes: React.FC = () => {
   const [datos, setDatos] = useState<CierreMesDTO[]>([]);
@@ -17,6 +17,7 @@ const CierreMes: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [fechasEditadas, setFechasEditadas] = useState<Record<number, Dayjs>>({});
   const [guardando, setGuardando] = useState(false);
+  const [erroresIds, setErroresIds] = useState<number[]>([]);
 
   const cargar = async () => {
     setLoading(true);
@@ -66,28 +67,57 @@ const CierreMes: React.FC = () => {
     }
   };
 
+  const handleReintentar = async () => {
+    setGuardando(true);
+    let erroresIdsTemp: number[] = [];
+    const idsFallidas = erroresIds;
+
+    for (const sucursalId of idsFallidas) {
+      const date = fechasEditadas[sucursalId];
+      if (!date) continue;
+      try {
+        const fechaStr = date.format('YYYYMMDDHHmmss');
+        await cierreMesApi.actualizarFecha(sucursalId, fechaStr);
+      } catch {
+        erroresIdsTemp.push(sucursalId);
+      }
+    }
+
+    setErroresIds(erroresIdsTemp);
+    setGuardando(false);
+
+    if (erroresIdsTemp.length === 0) {
+      message.success(`${idsFallidas.length} fecha(s) reintentada(s) correctamente`);
+      setFechasEditadas({});
+      cargar();
+    } else {
+      message.error(`${erroresIdsTemp.length} de ${idsFallidas.length} reintentos fallaron`);
+    }
+  };
+
   const handleGuardar = async () => {
     setGuardando(true);
     const entries = Object.entries(fechasEditadas);
-    let errores = 0;
+    let erroresIdsTemp: number[] = [];
 
     for (const [sucursalId, date] of entries) {
       try {
         const fechaStr = date.format('YYYYMMDDHHmmss');
         await cierreMesApi.actualizarFecha(Number(sucursalId), fechaStr);
       } catch {
-        errores++;
+        erroresIdsTemp.push(Number(sucursalId));
       }
     }
 
+    setErroresIds(erroresIdsTemp);
     setGuardando(false);
 
-    if (errores === 0) {
+    if (erroresIdsTemp.length === 0) {
       message.success(`${entries.length} fecha(s) actualizada(s) correctamente`);
       setFechasEditadas({});
       cargar();
     } else {
-      message.error(`${errores} de ${entries.length} actualizaciones fallaron`);
+      message.error(`${erroresIdsTemp.length} de ${entries.length} actualizaciones fallaron — quedan destacadas para reintento`);
     }
   };
 
@@ -102,15 +132,23 @@ const CierreMes: React.FC = () => {
       dataIndex: 'fechaUltimoCierre',
       key: 'fechaUltimoCierre',
       render: (fecha: string | null, record: CierreMesDTO) => (
-        <DatePicker
-          value={fechasEditadas[record.sucursalId] || (fecha ? dayjs(fecha) : null)}
-          onChange={(date) => handleFechaChange(record.sucursalId, date)}
-          format="DD/MM/YYYY"
-          style={{
-            width: 160,
-            borderColor: fechasEditadas[record.sucursalId] ? '#556ee6' : undefined,
-          }}
-        />
+        <Space>
+          <DatePicker
+            value={fechasEditadas[record.sucursalId] || (fecha ? dayjs(fecha) : null)}
+            onChange={(date) => handleFechaChange(record.sucursalId, date)}
+            format="DD/MM/YYYY"
+            style={{
+              width: 160,
+              borderColor: fechasEditadas[record.sucursalId] ? '#556ee6' : erroresIds.includes(record.sucursalId) ? '#f46a6a' : undefined,
+            }}
+          />
+          {fechasEditadas[record.sucursalId] && (
+            <Tag color="processing" style={{ fontSize: 11, padding: '0 6px', borderRadius: 4 }}>Sin guardar</Tag>
+          )}
+          {erroresIds.includes(record.sucursalId) && (
+            <Tag color="error" style={{ fontSize: 11, padding: '0 6px', borderRadius: 4 }}>Falló</Tag>
+          )}
+        </Space>
       ),
     },
   ];
@@ -118,20 +156,48 @@ const CierreMes: React.FC = () => {
   const cantCambios = Object.keys(fechasEditadas).length;
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>Cierre de Mes</Title>
+    <>
+      {/* Encabezado normalizado */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 24,
+          flexWrap: 'wrap',
+          gap: 8,
+        }}
+      >
+        <div>
+          <Title level={4} style={{ margin: 0 }}>Cierre de Mes</Title>
+          <Text type="secondary" style={{ fontSize: 13 }}>
+            Gestión de fechas de cierre por sucursal
+          </Text>
+        </div>
         <div style={{ flex: 1 }} />
         <PermissionGate accion="EXPORTAR">
           <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
         </PermissionGate>
+        <Button icon={<ReloadOutlined />} onClick={cargar} loading={loading} />
+        {cantCambios > 0 && (
+          <Tag color="processing" style={{ fontSize: 13, padding: '4px 10px', borderRadius: 6 }}>
+            {cantCambios} cambio{cantCambios !== 1 ? 's' : ''} sin guardar
+          </Tag>
+        )}
         {cantCambios > 0 && (
           <Button type="primary" onClick={handleGuardar} loading={guardando}>
             Guardar cambios ({cantCambios})
           </Button>
         )}
+        {erroresIds.length > 0 && (
+          <Button danger onClick={handleReintentar} loading={guardando} style={{ marginLeft: 8 }}>
+            Reintentar fallidas ({erroresIds.length})
+          </Button>
+        )}
       </div>
-      {loadingError && (
+
+      <div style={{ padding: '0 24px 24px' }}>
+        {loadingError && (
         <Alert
           message="Error al cargar datos"
           type="error"
@@ -153,9 +219,19 @@ const CierreMes: React.FC = () => {
           pagination={false}
           className="paces-border-top paces-list-table"
           locale={{ emptyText: 'No hay sucursales activas' }}
+          rowClassName={(record: any) => {
+            if (fechasEditadas[record.sucursalId]) {
+              return 'paces-row-selected';
+            }
+            if (erroresIds.includes(record.sucursalId)) {
+              return 'paces-row-error';
+            }
+            return 'paces-row-hover';
+          }}
         />
       </Card>
     </div>
+    </>
   );
 };
 

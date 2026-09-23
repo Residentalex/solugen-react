@@ -22,12 +22,9 @@ import AsientosContableTable from '../../components/AsientosContableTable';
 import LogTable from '../../components/LogTable';
 import FiltroSeleccionDropdown from '../../components/FiltroSeleccionDropdown';
 import PermissionGate from '../../components/PermissionGate';
-import ModalSeleccionarImpresoraPOS from '../../components/ModalSeleccionarImpresoraPOS/ModalSeleccionarImpresoraPOS';
-import { useQZTray } from '../../hooks/useQZTray';
-import { formatTicket, feed, CMD_CUT } from '../../utils/escpos-formatter';
-import { obtenerConfigPlantilla, CODIGO_PLANTILLA_TURNO_CIERRE } from '../../utils/ticketPlantilla';
-import { obtenerLogoEscPosBase64 } from '../../utils/logoEscPos';
+import { CODIGO_PLANTILLA_TURNO_CIERRE } from '../../utils/ticketPlantilla';
 import { companiaApi } from '../../api/companiaApi';
+import { reportesConfigApi } from '../../api/reportesConfigApi';
 
 const { Text } = Typography;
 
@@ -107,6 +104,15 @@ const TurnoDetalle: React.FC = () => {
     }
   }, [data, setPageTitleOverride]);
 
+  const { data: desgloseData, isLoading: cargandoDesglose } = useQuery({
+    queryKey: ['turnoDesgloseMonedas', sucursalActiva, noTurno],
+    queryFn: async () => {
+      if (!noTurno || sucursalActiva === undefined) return [];
+      return turnoApi.obtenerDesgloseMonedas(sucursalActiva, noTurno);
+    },
+    enabled: !!noTurno && sucursalActiva !== undefined && !!data,
+  });
+
   const handleRefresh = useCallback(() => {
     refetch();
   }, [refetch]);
@@ -133,74 +139,138 @@ const TurnoDetalle: React.FC = () => {
     });
   };
 
+const [filtrosActivos, setFiltrosActivos] = useState<Record<string, any>>({});
+   const [costosFiltrosActivos, setCostosFiltrosActivos] = useState<Record<string, any>>({});
+   const [ingresosFiltrosActivos, setIngresosFiltrosActivos] = useState<Record<string, any>>({});
+   const [costosSearch, setCostosSearch] = useState('');
+   const [ingresosSearch, setIngresosSearch] = useState('');
+   const [posteando, setPosteando] = useState(false);
+   const [imprimiendo, setImprimiendo] = useState(false);
+   const asientos = data?.factura?.asientos || [];
+   const logs = data?.factura?.logs || [];
+   const detalles = data?.factura?.detalles || [];
+
+  // ─── Helpers de filtros ──────────────────────────────────────────────────────
+  const limpiarFiltro = React.useCallback((key: string) => {
+    setFiltrosActivos(prev => { const n = { ...prev }; delete n[key]; return n; });
+  }, []);
+
+  const limpiarTodosFiltros = React.useCallback(() => {
+    setFiltrosActivos({});
+  }, []);
+
+  const limpiarFiltroCostos = React.useCallback((key: string) => {
+    setCostosFiltrosActivos(prev => { const n = { ...prev }; delete n[key]; return n; });
+  }, []);
+
+  const limpiarTodosFiltrosCostos = React.useCallback(() => {
+    setCostosFiltrosActivos({});
+  }, []);
+
+  const limpiarFiltroIngresos = React.useCallback((key: string) => {
+    setIngresosFiltrosActivos(prev => { const n = { ...prev }; delete n[key]; return n; });
+  }, []);
+
+  const limpiarTodosFiltrosIngresos = React.useCallback(() => {
+    setIngresosFiltrosActivos({});
+  }, []);
+
+  // ─── Handler de impresión del ticket de cierre ─────────────────────────────────
   const handleImprimirTicket = async () => {
     if (!data) return;
     setImprimiendo(true);
     try {
       // Datos de la compañía desde la sucursal activa
       let companyInfo = { nombre: '', direccion: '', telefono: '', rnc: '', fax: '', slogan: '' };
-      try {
-        const lista = await companiaApi.obtenerTodas(sucursalActiva);
-        if (lista.length > 0) {
-          companyInfo = {
-            nombre: lista[0].nombre ?? '',
-            direccion: lista[0].direccion ?? '',
-            telefono: lista[0].telefono ?? '',
-            rnc: lista[0].rnc ?? '',
-            fax: lista[0].fax ?? '',
-            slogan: lista[0].slogan ?? '',
-          };
-        }
-      } catch {
-        const sucursales = useAuthStore.getState().sucursalesPermitidas;
-        companyInfo.nombre = sucursales.find((sp: any) => sp.sucursal === sucursalActiva)?.nombre || '';
+    try {
+      const lista = await companiaApi.obtenerTodas(sucursalActiva);
+      if (lista.length > 0) {
+        companyInfo = {
+          nombre: lista[0].nombre ?? '',
+          direccion: lista[0].direccion ?? '',
+          telefono: lista[0].telefono ?? '',
+          rnc: lista[0].rnc ?? '',
+          fax: lista[0].fax ?? '',
+          slogan: lista[0].slogan ?? '',
+        };
       }
-
-      // Config de plantilla de cierre de turno (por codigo fijo TURNO_CIERRE)
-      let config = null;
-      try {
-        config = await obtenerConfigPlantilla(CODIGO_PLANTILLA_TURNO_CIERRE);
-      } catch {
-        config = null;
-      }
-
-      // Generar ticket ESC/POS (texto con formato)
-      let ticketText = formatTicket(data, companyInfo, config || undefined, 'TICKET_TC');
-
-      // Avance y corte DESPUÉS del contenido
-      ticketText += feed(config?.opciones?.feedCorte ?? 4);
-      ticketText += CMD_CUT;
-
-      // Logo configurable: generar comando GS v 0 (base64) si la plantilla lo activa.
-      let logoBase64 = '';
-      if (config?.logo?.mostrar) {
-        logoBase64 = await obtenerLogoEscPosBase64(config.logo);
-      }
-
-      // Enviar a QZ Tray como texto raw ESC/POS
-      await qz.print(ticketText, logoBase64 || undefined);
-      message.success(`Imprimiendo en: ${qz.printerName || 'Impresora POS'}`);
-    } catch (err: any) {
-      if (err.code === 'NO_PRINTER_SELECTED') {
-        try {
-          const list = await qz.fetchPrinters();
-          if (list.length === 0) {
-            message.error('No hay impresoras POS disponibles.');
-          } else {
-            setPrinterList(list);
-            setSelectedPrinter(list[0] || '');
-            setPrinterModalOpen(true);
-          }
-        } catch {
-          message.error('QZ Tray: ' + (err.message || 'Error'));
-        }
-      } else {
-        message.error('QZ Tray: ' + (err.message || 'Error'));
-      }
-    } finally {
-      setImprimiendo(false);
+    } catch {
+      const sucursales = useAuthStore.getState().sucursalesPermitidas;
+      companyInfo.nombre = sucursales.find((sp: any) => sp.sucursal === sucursalActiva)?.nombre || '';
     }
-  };
+
+    // Plantilla ESC/POS de cierre de turno (por codigo fijo TURNO_CIERRE)
+    const plantilla = await reportesConfigApi.obtenerPorCodigo(CODIGO_PLANTILLA_TURNO_CIERRE);
+    if (!plantilla) {
+      message.error('No hay plantilla ESC/POS asignada para el cierre de turno.');
+      return;
+    }
+
+    // JSON de impresión resumido para el ticket de cierre (TURNO_CIERRE).
+    // La plantilla solo consume: encabezado + resumen por tipo de cobro
+    // (los marcadores COBRO: resuelven a cobros.0.<tipo>) + los totales
+    // top-level (total, cobrado, porCobrar, devuelta). No se envian facturas,
+    // detalles ni los cobros por documento — solo resúmenes de todo.
+    const dataPrint = {
+      id: data.id,
+      noTurno: data.noTurno,
+      fechaApertura: data.fechaApertura,
+      fechaCierre: data.fechaCierre,
+      fechaDocumento: data.fechaCierre || data.fechaApertura,
+      total: data.total ?? 0,
+      cobrado,
+      porCobrar,
+      devuelta: cobrosTotales.devuelta,
+      nombrePOS: data.nombrePOS,
+      usuario: { nombre: data?.usuario?.nombre ?? '' },
+      factur: { cajero: data?.usuario?.nombre ?? '' },
+      ...(data.estado !== undefined ? { estado: data.estado } : {}),
+      sucursal: {
+        nombre: companyInfo.nombre,
+        direccion: companyInfo.direccion,
+        telefono: companyInfo.telefono,
+        rnc: companyInfo.rnc,
+        fax: companyInfo.fax,
+        slogan: companyInfo.slogan,
+      },
+      cobros: [cobrosTotales],
+      impuestos: Object.entries(impuestosTotales).map(([tipo, monto]) => ({
+        tipo,
+        monto,
+      })),
+      desgloseMonedas: desgloseData || [],
+    };
+
+    // Obtener el payload serializado que el frontend enviara directamente
+    // al servicio local Solugen.Impresion.Service de la maquina cliente.
+    const payload = await reportesConfigApi.obtenerPayloadImpresion(plantilla.plantillaId, {
+      tipoDoc: 'TICKET_TC',
+      data: dataPrint,
+      company: companyInfo,
+      feedLines: 4,
+      cut: true,
+      copias: 1,
+    });
+
+    // URL del servicio local de impresion.
+    const servicioLocalUrl = import.meta.env.VITE_IMPRESSION_SERVICE_URL || 'http://localhost:5010/imprimir';
+    const resultado = await reportesConfigApi.imprimirLocal(payload, servicioLocalUrl);
+    if (resultado.ok) {
+      message.success('Ticket de cierre enviado a la impresora');
+    } else {
+      message.error(resultado.error ?? 'Error al imprimir: el servicio local no respondio');
+    }
+  } catch (err: any) {
+    const msg =
+      err?.response?.data?.errorMessage ||
+      err?.response?.data?.ErrorMessage ||
+      err?.message ||
+      'Error al imprimir el ticket';
+    message.error(msg);
+  } finally {
+    setImprimiendo(false);
+  }
+};
 
   // Calcular cobros totales
   const cobrosTotales: CobroDTO = React.useMemo(() => {
@@ -228,8 +298,23 @@ const TurnoDetalle: React.FC = () => {
     (c.efectivo || 0) + (c.cheque || 0) + (c.transferencia || 0) +
     (c.tarjetaCredito || 0) + (c.tarjetaDebito || 0) + (c.bono || 0) +
     (c.tarjetaRegalo || 0) + (c.notaCredito || 0), 0) ?? 0;
-  const total = data?.total ?? 0;
+const total = data?.total ?? 0;
   const porCobrar = total - cobrado;
+
+  // Resumen de impuestos por tipo (I=Impuesto, L=Liquidación, V=Informativo, R=Retención)
+  const impuestosTotales: Record<string, number> = React.useMemo(() => {
+    const acumulador: Record<string, number> = {};
+    if (!data?.facturas) return acumulador;
+    data.facturas.forEach((f: any) => {
+      if (f.impuestos && Array.isArray(f.impuestos)) {
+        f.impuestos.forEach((imp: any) => {
+          const tipo = imp.tipo || 'I';
+          acumulador[tipo] = (acumulador[tipo] || 0) + (imp.monto || 0);
+        });
+      }
+    });
+    return acumulador;
+  }, [data?.facturas]);
 
   // Mapa de pagos por factura
   const pagosPorFactura: Record<number, { metodos: Array<{ key: string; label: string; monto: number }>; totalPagado: number }> = React.useMemo(() => {
@@ -492,46 +577,6 @@ const TurnoDetalle: React.FC = () => {
 
   const loading = isLoading;
   const loadingError = isError;
-
-  const [filtrosActivos, setFiltrosActivos] = useState<Record<string, any>>({});
-  const [costosFiltrosActivos, setCostosFiltrosActivos] = useState<Record<string, any>>({});
-  const [ingresosFiltrosActivos, setIngresosFiltrosActivos] = useState<Record<string, any>>({});
-  const [costosSearch, setCostosSearch] = useState('');
-  const [ingresosSearch, setIngresosSearch] = useState('');
-  const [posteando, setPosteando] = useState(false);
-  const qz = useQZTray();
-  const [imprimiendo, setImprimiendo] = useState(false);
-  const [printerModalOpen, setPrinterModalOpen] = useState(false);
-  const [printerList, setPrinterList] = useState<string[]>([]);
-  const [selectedPrinter, setSelectedPrinter] = useState<string>('');
-  const asientos = data?.factura?.asientos || [];
-  const logs = data?.factura?.logs || [];
-  const detalles = data?.factura?.detalles || [];
-
-  // ─── Helpers de filtros ──────────────────────────────────────────────────────
-  const limpiarFiltro = React.useCallback((key: string) => {
-    setFiltrosActivos(prev => { const n = { ...prev }; delete n[key]; return n; });
-  }, []);
-
-  const limpiarTodosFiltros = React.useCallback(() => {
-    setFiltrosActivos({});
-  }, []);
-
-  const limpiarFiltroCostos = React.useCallback((key: string) => {
-    setCostosFiltrosActivos(prev => { const n = { ...prev }; delete n[key]; return n; });
-  }, []);
-
-  const limpiarTodosFiltrosCostos = React.useCallback(() => {
-    setCostosFiltrosActivos({});
-  }, []);
-
-  const limpiarFiltroIngresos = React.useCallback((key: string) => {
-    setIngresosFiltrosActivos(prev => { const n = { ...prev }; delete n[key]; return n; });
-  }, []);
-
-  const limpiarTodosFiltrosIngresos = React.useCallback(() => {
-    setIngresosFiltrosActivos({});
-  }, []);
 
   const documentosFiltrados = React.useMemo(() => {
     let result = data?.facturas || [];
@@ -1308,6 +1353,27 @@ const TurnoDetalle: React.FC = () => {
       label: `Historial (${logs.length})`,
       children: <LogTable dataSource={logs} scroll={{ x: 800 }} />,
     }] : []),
+    {
+      key: 'desglose',
+      label: 'Desglose Monedas',
+      children: (
+        <div>
+          <Table
+            dataSource={desgloseData || []}
+            columns={[
+              { title: 'Valor', dataIndex: 'valor', key: 'valor', width: 120, align: 'right', render: (v: number) => formatNumber(v) },
+              { title: 'Cantidad', dataIndex: 'cantidad', key: 'cantidad', width: 120, align: 'right', render: (v: number) => formatNumber(v) },
+              { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 160, align: 'right', render: (v: number) => formatCurrency(v) },
+            ]}
+            rowKey={(r: any) => `desglose-${r.valor}-${r.cantidad}`}
+            size="small"
+            pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (t) => `${t} registros` }}
+            loading={cargandoDesglose}
+            locale={{ emptyText: 'Sin desglose de monedas' }}
+          />
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -1348,11 +1414,6 @@ const TurnoDetalle: React.FC = () => {
               <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={handleImprimirTicket}>
                 Ticket Cierre
               </Button>
-              {qz.printerName && (
-                <Tag color="success" style={{ marginLeft: 2, fontSize: 11, lineHeight: '18px' }}>
-                  QZ: {qz.printerName}
-                </Tag>
-              )}
             </PermissionGate>
           </Space>
         }
@@ -1362,20 +1423,6 @@ const TurnoDetalle: React.FC = () => {
         {contentCard}
         <Tabs defaultActiveKey="documentos" type="card" items={tabsItems} />
       </div>
-
-      <ModalSeleccionarImpresoraPOS
-        open={printerModalOpen}
-        impresoras={printerList}
-        seleccionada={selectedPrinter}
-        onSelect={setSelectedPrinter}
-        onConfirm={async () => {
-          if (!selectedPrinter) return;
-          qz.selectPrinter(selectedPrinter);
-          setPrinterModalOpen(false);
-          handleImprimirTicket();
-        }}
-        onClose={() => { setPrinterModalOpen(false); }}
-      />
     </div>
   );
 };

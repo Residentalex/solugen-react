@@ -31,6 +31,11 @@ export const turnoApi = {
     return data.data;
   },
 
+  obtenerDesgloseMonedas: async (sucursal: number, noTurno: string): Promise<any[]> => {
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/doc/${noTurno}/desglose`);
+    return data.data || [];
+  },
+
   obtenerPorNoTurno: async (sucursal: number, noDoc: string): Promise<TurnoDTO> => {
     const { data } = await apiClient.get<ApiResponse<TurnoDTO>>(`${BASE}/${sucursal}/doc/${noDoc}`);
     return data.data;

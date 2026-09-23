@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Table, Button, Alert, Modal, Form, Input, InputNumber, message } from 'antd';
+import { Card, Table, Button, Alert, Modal, Form, Input, InputNumber, message, Switch } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -56,6 +56,7 @@ const Modulos: React.FC = () => {
           codigo: editingModulo.codigo,
           nombre: editingModulo.nombre,
           orden: editingModulo.orden,
+          oculto: !!editingModulo.oculto,
         });
       } else {
         form.resetFields();
@@ -244,6 +245,9 @@ const Modulos: React.FC = () => {
             rules={[{ required: true, message: 'El orden es obligatorio' }]}
           >
             <InputNumber min={0} placeholder="Orden de aparición" />
+          </Form.Item>
+          <Form.Item name="oculto" label="Ocultar del sidebar" valuePropName="checked">
+            <Switch checkedChildren="Sí" unCheckedChildren="No" />
           </Form.Item>
         </Form>
       </Modal>

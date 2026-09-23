@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Card, Row, Col, Typography, Switch, Button, Tag, message,
-  Spin, Alert, Table,
+  Spin, Alert, Table, Modal, Divider,
 } from 'antd';
 import {
   ReloadOutlined, LockOutlined, CheckCircleOutlined,
@@ -101,6 +101,9 @@ const CierreInventario: React.FC = () => {
   const [cierreCompletado, setCierreCompletado] = useState(false);
   const [existenciasModalOpen, setExistenciasModalOpen] = useState(false);
   const [existenciasNegativasData, setExistenciasNegativasData] = useState<any[]>([]);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [etapaActual, setEtapaActual] = useState<'validacion' | 'incidencias' | 'confirmacion' | 'resultado'>('validacion');
+  const [negativasDetectadas, setNegativasDetectadas] = useState(0);
 
   // ===== Valores derivados =====
   const cierresRestantes = calcularCierresRestantes(fechaCierre);
@@ -144,10 +147,27 @@ const CierreInventario: React.FC = () => {
       return;
     }
 
+    if (negativasDetectadas > 0) {
+      message.error('Existen existencias negativas. Corrija antes de continuar.');
+      return;
+    }
+
+    setConfirmModalOpen(true);
+    setEtapaActual('confirmacion');
+  };
+
+  const confirmarCierre = async () => {
+    if (!proximoCierre) {
+      message.warning('No hay fecha de cierre disponible');
+      setConfirmModalOpen(false);
+      return;
+    }
+
+    setConfirmModalOpen(false);
     setGenerando(true);
     setCierreCompletado(false);
+    setEtapaActual('validacion');
 
-    // Inicializar validaciones
     const vitems: ValidacionItem[] = [
       { key: 'sinSolucion', label: 'Productos sin solución', estado: 'pending' },
       { key: 'sinFamilia', label: 'Productos sin familia', estado: 'pending' },
@@ -164,41 +184,41 @@ const CierreInventario: React.FC = () => {
     setCierreCompletado(false);
 
     try {
-      // Si validar está activo, ejecutar verificaciones
       if (validar) {
-        // Validar existencias negativas via API
         let validationFailed = false;
         try {
           const negativas = await cierreInventarioApi.obtenerExistenciasNegativas(sucursal);
           if (negativas.length > 0) {
             setExistenciasNegativasData(negativas);
+            setNegativasDetectadas(negativas.length);
             setValidaciones((prev) =>
               prev.map((v) =>
                 v.key === 'existenciasNegativas'
-                    ? {
-                        ...v,
-                        estado: 'error' as const,
-                        mensaje: `${negativas.length} producto(s)`,
-                        count: negativas.length,
-                        datosDetalle: negativas,
-                      }
-                    : { ...v, estado: 'success' as const, mensaje: 'OK' }
+                  ? {
+                      ...v,
+                      estado: 'error' as const,
+                      mensaje: `${negativas.length} producto(s)`,
+                      count: negativas.length,
+                      datosDetalle: negativas,
+                    }
+                  : { ...v, estado: 'success' as const, mensaje: 'OK' }
               )
             );
             validationFailed = true;
+            setEtapaActual('incidencias');
           } else {
+            setNegativasDetectadas(0);
             setValidaciones((prev) =>
               prev.map((v) => ({ ...v, estado: 'success' as const, mensaje: 'OK' }))
             );
           }
         } catch (err: any) {
-          // Error de conexión o del endpoint
           const errorMsg = err?.message || 'Error al validar';
           setValidaciones((prev) =>
             prev.map((v) =>
               v.key === 'existenciasNegativas'
-                  ? { ...v, estado: 'error' as const, mensaje: errorMsg }
-                  : { ...v, estado: 'success' as const, mensaje: 'OK' }
+                ? { ...v, estado: 'error' as const, mensaje: errorMsg }
+                : { ...v, estado: 'success' as const, mensaje: 'OK' }
             )
           );
           validationFailed = true;
@@ -207,24 +227,22 @@ const CierreInventario: React.FC = () => {
         if (validationFailed) {
           message.error('Corrija los errores de validación antes de generar el cierre.');
           setGenerando(false);
+          setEtapaActual('incidencias');
           return;
         }
       }
 
-      // Llamar a generar cierre (backend hace todo internamente)
+      setEtapaActual('confirmacion');
       const fechaFormatted = formatDateISO(proximoCierre);
       const resultado = await cierreInventarioApi.generarCierre(sucursal, fechaFormatted);
 
       message.success(`Cierre generado exitosamente al ${formatDateDisplay(proximoCierre.toISOString())}`);
-
-      // Recargar fecha de cierre
       await cargarDatos();
       setCierreCompletado(true);
+      setEtapaActual('resultado');
     } catch (err: any) {
       const errorMsg = err?.response?.data?.errorMessage || 'Error al generar cierre';
       message.error(errorMsg);
-
-      // Marcar validaciones como error si falló
       if (validar) {
         setValidaciones((prev) =>
           prev.map((v) => ({
@@ -234,6 +252,7 @@ const CierreInventario: React.FC = () => {
           }))
         );
       }
+      setEtapaActual('resultado');
     } finally {
       setGenerando(false);
     }
@@ -289,20 +308,46 @@ const CierreInventario: React.FC = () => {
     }
   };
 
+  const etapas = [
+    { key: 'validacion', label: 'Validación' },
+    { key: 'incidencias', label: 'Incidencias' },
+    { key: 'confirmacion', label: 'Confirmación' },
+    { key: 'resultado', label: 'Resultado' },
+  ];
+
   const renderValidationPanel = () => {
-    if (validaciones.length === 0) return null;
+    if (validaciones.length === 0 && etapaActual === 'resultado' && !cierreCompletado) return null;
 
     const hasVisible = validaciones.some((v) => v.estado !== 'skipped');
-    if (!hasVisible && !generando) return null;
+    if (!hasVisible && !generando && etapaActual === 'validacion') return null;
 
     return (
       <Card
         className="paces-card"
         size="small"
         title={
-          <span style={{ fontSize: 13, fontWeight: 600 }}>
-            {generando ? 'Verificando integridad...' : 'Resultado de validaciones'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>
+              {generando ? 'Verificando integridad...' : `Etapa: ${etapas.find((e) => e.key === etapaActual)?.label}`}
+            </span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {etapas.map((e) => (
+                <Tag
+                  key={e.key}
+                  color={
+                    etapaActual === e.key
+                      ? 'blue'
+                      : etapas.indexOf(e) < etapas.indexOf(etapas.find((et) => et.key === etapaActual) || etapas[0])
+                      ? 'success'
+                      : 'default'
+                  }
+                  style={{ borderRadius: 4, fontSize: 11, padding: '2px 6px', margin: 0 }}
+                >
+                  {e.label}
+                </Tag>
+              ))}
+            </div>
+          </div>
         }
         style={{ marginTop: 16, borderRadius: 8 }}
       >
@@ -383,12 +428,12 @@ const CierreInventario: React.FC = () => {
 
       <Spin spinning={loading && !generando}>
         <Row gutter={[16, 16]}>
-          {/* Columna principal */}
-          <Col xs={24} lg={16}>
+          {/* Columna izquierda */}
+          <Col xs={24} lg={18}>
             {/* Info cards */}
             {/* KPIs en una sola fila */}
             <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-              <Col xs={8}>
+              <Col xs={6}>
                 <div
                   style={{
                     background: 'linear-gradient(135deg, #eef1ff 0%, #f8f9ff 100%)',
@@ -422,7 +467,7 @@ const CierreInventario: React.FC = () => {
                   </Text>
                 </div>
               </Col>
-              <Col xs={8}>
+              <Col xs={6}>
                 <div
                   style={{
                     background: cierresRestantes > 0
@@ -468,7 +513,7 @@ const CierreInventario: React.FC = () => {
                   </Text>
                 </div>
               </Col>
-              <Col xs={8}>
+              <Col xs={6}>
                 <div
                   style={{
                     background: 'linear-gradient(135deg, #e8faf0 0%, #f5fffa 100%)',
@@ -550,66 +595,7 @@ const CierreInventario: React.FC = () => {
               </Col>
             </Row>
 
-            {/* Toggle validar */}
-            <Card
-              className="paces-card"
-              size="small"
-              style={{
-                marginBottom: 16,
-                borderRadius: 8,
-                borderLeft: `3px solid ${validar ? '#556ee6' : '#d9d9d9'}`,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 8,
-                    background: validar ? '#eef1ff' : '#f5f5f5',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 16,
-                    color: validar ? '#556ee6' : '#bfbfbf',
-                  }}
-                >
-                  <SafetyOutlined />
-                </div>
-                <Switch
-                  checked={validar}
-                  onChange={setValidar}
-                  disabled={generando}
-                />
-                <Text style={{ fontSize: 13, flex: 1 }}>Validar documentos antes del cierre</Text>
-              </div>
-            </Card>
-
-            {/* Botón Generar Cierre */}
-            <PermissionGate accion="PROCESAR">
-              <Button
-                type="primary"
-                size="large"
-                block
-                icon={!generando ? <LockOutlined /> : undefined}
-                loading={generando}
-                disabled={!hayCierresPendientes || generando}
-                onClick={handleGenerarCierre}
-                style={{
-                  height: 48,
-                  fontSize: 16,
-                  fontWeight: 600,
-                  backgroundColor: '#556ee6',
-                  borderColor: '#556ee6',
-                  opacity: !hayCierresPendientes ? 0.65 : 1,
-                }}
-              >
-                {generando
-                  ? 'Generando Cierre...'
-                  : `Generar Cierre al ${proximoCierreStr}`}
-              </Button>
-            </PermissionGate>
-
+            {/* Alertas posteriores al cierre */}
             {!hayCierresPendientes && fechaCierre && (
               <Alert
                 message="No hay cierres pendientes. Todos los períodos están cerrados."
@@ -632,77 +618,172 @@ const CierreInventario: React.FC = () => {
             )}
           </Col>
 
-          {/* Columna lateral */}
-          <Col xs={24} lg={8}>
-            {/* Resumen */}
+          {/* Columna derecha — Zona de riesgo */}
+          <Col xs={24} lg={6}>
+            {/* Toggle validar dentro de la zona de riesgo */}
             <Card
               className="paces-card"
               size="small"
-              title={<span style={{ fontSize: 13, fontWeight: 600 }}>Resumen</span>}
-              style={{ marginBottom: 16, borderRadius: 8 }}
+              style={{
+                marginBottom: 16,
+                borderRadius: 8,
+                borderLeft: `3px solid ${validar ? '#556ee6' : '#d9d9d9'}`,
+                background: 'linear-gradient(135deg, #fff8f0 0%, #fff5f0 100%)',
+                border: '2px solid #f1b44c',
+                boxShadow: '0 2px 8px rgba(241, 180, 76, 0.15)',
+              }}
             >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Sucursal</Text>
-                  <Text strong style={{ fontSize: 13 }}>
-                    {SUCURSAL_VALUE_MAP[sucursal] || '—'}
-                  </Text>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: validar ? '#eef1ff' : '#f5f5f5',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 16,
+                    color: validar ? '#556ee6' : '#bfbfbf',
+                  }}
+                >
+                  <SafetyOutlined />
                 </div>
-                <div style={{ height: 1, background: '#f0f0f0' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Último cierre</Text>
-                  <Text strong style={{ fontSize: 13 }}>
-                    {fechaCierre ? formatDateDisplay(fechaCierre) : '—'}
-                  </Text>
-                </div>
-                <div style={{ height: 1, background: '#f0f0f0' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Próximo cierre</Text>
-                  <Text strong style={{ fontSize: 13, color: '#556ee6' }}>
-                    {proximoCierreStr}
-                  </Text>
-                </div>
-                <div style={{ height: 1, background: '#f0f0f0' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Cierres pendientes</Text>
-                  <Tag color={cierresRestantes > 0 ? 'warning' : 'success'} style={{ borderRadius: 4 }}>
-                    {cierresRestantes}
-                  </Tag>
-                </div>
-                <div style={{ height: 1, background: '#f0f0f0' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Validar</Text>
-                  <Tag color={validar ? 'blue' : 'default'} style={{ borderRadius: 4 }}>
-                    {validar ? 'Activado' : 'Desactivado'}
-                  </Tag>
-                </div>
+                <Text strong style={{ fontSize: 14, color: '#cf3b3b' }}>Validar documentos antes del cierre</Text>
+                <Switch
+                  checked={validar}
+                  onChange={setValidar}
+                  disabled={generando}
+                  size="small"
+                />
               </div>
             </Card>
 
-            {/* Botón Reaperturar */}
-            <PermissionGate accion="PROCESAR">
-              <Button
-                block
-                style={{
-                  borderColor: '#4a7db5',
-                  color: '#4a7db5',
-                  height: 40,
-                  fontSize: 14,
-                  fontWeight: 500,
-                }}
-                onClick={() => setReaperturaModalOpen(true)}
-                disabled={generando}
-              >
-                <LockOutlined /> Reaperturar
-              </Button>
-            </PermissionGate>
-
-            <Text
-              type="secondary"
-              style={{ display: 'block', textAlign: 'center', fontSize: 11, marginTop: 8 }}
+            {/* Indicador bloqueante */}
+            <div
+              style={{
+                marginBottom: 16,
+                padding: '12px 16px',
+                borderRadius: 8,
+                border: `2px solid ${negativasDetectadas > 0 ? '#f46a6a' : '#34c38f'}`,
+                background: negativasDetectadas > 0 ? '#fff5f5' : '#f0fff4',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
             >
-              Reabrir un período de cierre anterior
-            </Text>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 8,
+                    background: negativasDetectadas > 0 ? 'linear-gradient(135deg, #f46a6a, #cf3b3b)' : 'linear-gradient(135deg, #34c38f, #219a6e)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    fontSize: 18,
+                    flexShrink: 0,
+                  }}
+                >
+                  {negativasDetectadas > 0 ? <CloseCircleOutlined /> : <CheckCircleOutlined />}
+                </div>
+                <div>
+                  <Text strong style={{ fontSize: 14, display: 'block', color: negativasDetectadas > 0 ? '#cf3b3b' : '#219a6e' }}>
+                    Existencias negativas
+                  </Text>
+                  <Text type="secondary" style={{ fontSize: 13, display: 'block' }}>
+                    {negativasDetectadas > 0
+                      ? `${negativasDetectadas} producto${negativasDetectadas !== 1 ? 's' : ''} con existencia negativa.`
+                      : 'Sin incidencias.'}
+                  </Text>
+                </div>
+              </div>
+              {negativasDetectadas > 0 && (
+                <Button
+                  type="primary"
+                  danger
+                  size="small"
+                  icon={<EyeOutlined />}
+                  onClick={() => {
+                    setExistenciasModalOpen(true);
+                    if (existenciasNegativasData.length === 0) {
+                      setEtapaActual('validacion');
+                    }
+                  }}
+                >
+                  Ver
+                </Button>
+              )}
+            </div>
+
+            {/* Zona de riesgo separada */}
+            <div
+              style={{
+                padding: '16px 16px',
+                borderRadius: 8,
+                background: 'linear-gradient(135deg, #fff8f0 0%, #fff5f0 100%)',
+                border: '2px solid #f1b44c',
+                boxShadow: '0 2px 8px rgba(241, 180, 76, 0.15)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <ExclamationCircleOutlined style={{ color: '#f46a6a', fontSize: 22 }} />
+                <Text strong style={{ fontSize: 15, color: '#cf3b3b' }}>Zona de riesgo</Text>
+              </div>
+              <Text type="secondary" style={{ fontSize: 13, display: 'block', marginBottom: 12 }}>
+                Cerrar o reabrir inventario afecta los registros contables del período.
+              </Text>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <PermissionGate accion="PROCESAR">
+                  <Button
+                    type="primary"
+                    danger
+                    block
+                    icon={<LockOutlined />}
+                    disabled={!hayCierresPendientes || generando || negativasDetectadas > 0}
+                    onClick={() => setConfirmModalOpen(true)}
+                    style={{
+                      height: 44,
+                      fontWeight: 600,
+                      backgroundColor: negativasDetectadas > 0 ? '#ccc' : '#cf3b3b',
+                      borderColor: negativasDetectadas > 0 ? '#ccc' : '#cf3b3b',
+                      opacity: negativasDetectadas > 0 ? 0.5 : 1,
+                      fontSize: 14,
+                    }}
+                  >
+                    {negativasDetectadas > 0 ? 'Corregir negativas' : `Generar Cierre al ${proximoCierreStr}`}
+                  </Button>
+                </PermissionGate>
+                <PermissionGate accion="PROCESAR">
+                  <Button
+                    block
+                    style={{
+                      borderColor: '#4a7db5',
+                      color: '#4a7db5',
+                      height: 40,
+                      fontSize: 14,
+                      fontWeight: 500,
+                    }}
+                    onClick={() => setReaperturaModalOpen(true)}
+                    disabled={generando}
+                  >
+                    <LockOutlined /> Reaperturar
+                  </Button>
+                </PermissionGate>
+              </div>
+            </div>
+
+            {!hayCierresPendientes && fechaCierre && (
+              <Alert
+                message="No hay cierres pendientes. Todos los períodos están cerrados."
+                type="info"
+                showIcon
+                style={{ marginTop: 12, borderRadius: 6 }}
+              />
+            )}
           </Col>
         </Row>
 
@@ -807,6 +888,60 @@ const CierreInventario: React.FC = () => {
         onClose={() => setReaperturaModalOpen(false)}
         onSuccess={handleReaperturaSuccess}
       />
+
+      {/* Modal de confirmación de cierre */}
+      <Modal
+        open={confirmModalOpen}
+        onCancel={() => setConfirmModalOpen(false)}
+        footer={null}
+        width={520}
+        centered
+        destroyOnHidden
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: '#cf3b3b', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 16 }}>
+              <LockOutlined />
+            </div>
+            <span style={{ fontWeight: 700, fontSize: 16, color: '#1a1a1a' }}>Confirmar Cierre de Inventario</span>
+          </div>
+        }
+      >
+        <div style={{ padding: '8px 0' }}>
+          <Alert
+            type="warning"
+            showIcon
+            message="Operación de alto impacto"
+            description="Esta acción generará el cierre del período y afectará los registros contables. Verifique que las validaciones sean correctas."
+            style={{ marginBottom: 16, borderRadius: 6 }}
+          />
+          <div style={{ background: '#f8f9fa', padding: '12px 16px', borderRadius: 6, marginBottom: 16 }}>
+            <Text strong style={{ fontSize: 14, display: 'block', marginBottom: 6 }}>Resumen del período</Text>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
+              <Text style={{ fontSize: 14 }} type="secondary">Fecha de cierre:</Text>
+              <Text strong style={{ fontSize: 14 }}>{proximoCierreStr}</Text>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
+              <Text style={{ fontSize: 14 }} type="secondary">Sucursal activa:</Text>
+              <Text strong style={{ fontSize: 14 }}>{SUCURSAL_VALUE_MAP[sucursal] || '—'}</Text>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+              <Text style={{ fontSize: 14 }} type="secondary">Estado validación:</Text>
+              <Tag color={negativasDetectadas === 0 ? 'success' : 'error'} style={{ borderRadius: 4 }}>
+                {negativasDetectadas === 0 ? 'Sin incidencias' : `${negativasDetectadas} negativa(s)`}
+              </Tag>
+            </div>
+          </div>
+          <Text style={{ fontSize: 13, display: 'block', marginBottom: 12, color: '#666' }}>
+            Una vez generado, el período quedará cerrado y solo podrá reabrirse mediante reapertura manual.
+          </Text>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Button onClick={() => setConfirmModalOpen(false)}>Cancelar</Button>
+            <Button type="primary" danger onClick={confirmarCierre} loading={generando}>
+              Confirmar y ejecutar cierre
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Modal de existencias negativas */}
       <ExistenciasNegativasModal

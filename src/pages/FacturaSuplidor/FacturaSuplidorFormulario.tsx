@@ -624,7 +624,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
                       : [],
                 }));
                 setDetalles(detallesNormalizados);
-                setAsientosLocales(res.asientos || []);
+        setAsientosLocales(res.asientos || []);
                 setImpuestosFactura(normalizarImpuestos(res.impuestosFactura));
                 setSelectedConcepto(res.concepto || null);
                 setSelectedEntidad(res.suplidor || res.entidad || null);

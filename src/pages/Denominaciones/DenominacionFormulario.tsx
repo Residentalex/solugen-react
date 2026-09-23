@@ -3,6 +3,7 @@ import { Modal, Form, Input, InputNumber, Select, Switch, message } from 'antd';
 import { denominacionApi } from '../../api/denominacionApi';
 import type { DenominacionDTO } from '../../types/denominacion';
 import { useAuthStore } from '../../stores/authStore';
+import { toTitleCase } from '../../utils/formats';
 
 interface DenominacionFormularioProps {
   visible: boolean;

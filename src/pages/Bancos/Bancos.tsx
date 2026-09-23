@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Table, Card, Button, Modal, Descriptions, Typography, Empty } from 'antd';
+import { Alert, Table, Card, Button, Drawer, Descriptions, Typography, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../../stores/authStore';
@@ -88,18 +88,18 @@ const Bancos: React.FC = () => {
       key: 'codigo',
       width: 120,
       fixed: 'left',
-      render: (val: string, record: BancoDTO) => (
-        <Text strong className="paces-doc-link" style={{ cursor: 'pointer' }} onClick={() => abrirDetalle(record)}>
-          {val}
-        </Text>
-      ),
+      render: (val: string) => <Text strong>{val}</Text>,
     },
     {
       title: 'Nombre',
       dataIndex: 'nombre',
       key: 'nombre',
-      width: 280,
-      render: (val: string) => <Text>{toTitleCase(val ?? '')}</Text>,
+      width: 220,
+      render: (val: string, record: BancoDTO) => (
+        <Text strong className="paces-doc-link" style={{ cursor: 'pointer' }} onClick={() => abrirDetalle(record)}>
+          {toTitleCase(val ?? '')}
+        </Text>
+      ),
     },
     {
       title: 'Tipo Entidad',
@@ -112,7 +112,7 @@ const Bancos: React.FC = () => {
       title: 'Correo Electrónico',
       dataIndex: 'correoElectronico',
       key: 'correoElectronico',
-      width: 250,
+      width: 200,
       ellipsis: true,
       render: (val: string) => <Text>{val || '-'}</Text>,
     },
@@ -158,7 +158,7 @@ const Bancos: React.FC = () => {
           dataSource={data?.datos || []}
           rowKey="codigo"
           loading={isLoading}
-          scroll={{ x: 900 }}
+          scroll={{ x: 750 }}
           size="middle"
           rowClassName="paces-row-hover"
           className="paces-border-top paces-list-table"
@@ -178,12 +178,13 @@ const Bancos: React.FC = () => {
         />
       </Card>
 
-      <Modal
+      <Drawer
         title={`Detalle: ${detalleItem?.codigo || ''}`}
         open={detalleVisible}
-        onCancel={() => setDetalleVisible(false)}
-        footer={null}
+        onClose={() => setDetalleVisible(false)}
         width={520}
+        placement="right"
+        destroyOnHidden
       >
         {detalleItem && (
           <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
@@ -194,7 +195,7 @@ const Bancos: React.FC = () => {
             <Descriptions.Item label="ID Externo">{detalleItem.idExterno || '-'}</Descriptions.Item>
           </Descriptions>
         )}
-      </Modal>
+      </Drawer>
     </>
   );
 };

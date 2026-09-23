@@ -12,6 +12,7 @@ const Login: React.FC = () => {
   const [contrasena, setContrasena] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
 
   const login = useAuthStore((s) => s.login);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -38,6 +39,10 @@ const Login: React.FC = () => {
     return '127.0.0.1';
   };
 
+  const handleKeyUp = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    setCapsLock(e.getModifierState && e.getModifierState('CapsLock'));
+  };
+
   const handleSubmit = async () => {
     setError('');
 
@@ -57,7 +62,7 @@ const Login: React.FC = () => {
         contrasena,
         equipo,
         ip,
-        sucursal: securitySucursal,
+        sucursal: securitySucursal as unknown as import('../../types/auth').Sucursal,
       });
 
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4003/api';
@@ -81,7 +86,15 @@ const Login: React.FC = () => {
       }
     } catch (err: any) {
       const apiMsg = err.response?.data?.errorMessage || err.response?.data?.ErrorMessage;
-      setError(apiMsg || err.message || 'Usuario o contraseña inválida.');
+      let mensaje = apiMsg || err.message || 'Usuario o contraseña inválida.';
+      if (mensaje.toLowerCase().includes('bloqueado') || mensaje.toLowerCase().includes('locked')) {
+        mensaje = 'Cuenta bloqueada. Contacte al administrador.';
+      } else if (!err.response && err.message) {
+        mensaje = 'No se pudo conectar al servidor. Verifique su conexión.';
+      } else if (mensaje === 'Usuario o contraseña inválida.' || mensaje.toLowerCase().includes('invalid') || mensaje.toLowerCase().includes('incorrect')) {
+        mensaje = 'Credenciales incorrectas. Verifique su usuario y contraseña.';
+      }
+      setError(mensaje);
     } finally {
       loginInProgress.current = false;
       setLoading(false);
@@ -99,7 +112,7 @@ const Login: React.FC = () => {
       </div>
 
       <div className="paces-login-form">
-        <div className="paces-login-card">
+        <div className="paces-login-card paces-card-erp">
           <div className="login-header">
             <div className="genesis-logo-wrapper">
               <GenesisLogo size={40} showText />
@@ -118,6 +131,7 @@ const Login: React.FC = () => {
                 prefix={<UserOutlined />}
                 value={nombreUsuario}
                 onChange={(e) => setNombreUsuario(e.target.value)}
+                onKeyUp={handleKeyUp}
                 placeholder="Ej: JUAN.PEREZ"
                 autoFocus
                 size="large"
@@ -129,6 +143,7 @@ const Login: React.FC = () => {
                 prefix={<LockOutlined />}
                 value={contrasena}
                 onChange={(e) => setContrasena(e.target.value)}
+                onKeyUp={handleKeyUp}
                 placeholder="Su contraseña"
                 size="large"
               />
@@ -155,9 +170,11 @@ const Login: React.FC = () => {
               </Button>
             </Form.Item>
 
-            <a className="login-recovery">¿Olvidó su contraseña?</a>
+            {capsLock && (
+              <Alert message="Bloqueo de mayúsculas activado (Caps Lock)" type="warning" showIcon style={{ marginBottom: 12 }} />
+            )}
 
-            <div className="login-footer">Genesis ERP · © 2026 Solugen</div>
+            <div className="login-footer">Genesis ERP · © {new Date().getFullYear()} Solugen</div>
           </Form>
         </div>
       </div>

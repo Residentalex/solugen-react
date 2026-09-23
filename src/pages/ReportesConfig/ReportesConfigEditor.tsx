@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Card, Spin, Alert, Button, Switch, Select, Input, InputNumber, Tag, Row, Col, Grid, message, Modal, Tooltip, Typography, Divider, Space, Popover, Dropdown, Segmented, Radio, Upload,
+  Card, Spin, Alert, Button, Switch, Select, Input, InputNumber, Tag, Row, Col, Grid, message, Modal, Tooltip, Typography, Divider, Space, Popover, Dropdown, Segmented, Radio, Upload, Checkbox,
 } from 'antd';
 import {
   ArrowUpOutlined, ArrowDownOutlined, SaveOutlined, UndoOutlined, RollbackOutlined, EyeOutlined, EyeInvisibleOutlined,
@@ -30,6 +30,8 @@ import type {
   TipoZonaTicket,
   ClaveCampoTicket,
   CaracterSeparadorTicket,
+  SeparadorZonaConfig,
+  PosicionSeparadorZona,
   TipoAnchoCampo,
   TipoCalculoCampo,
   CalculoCampo,
@@ -58,6 +60,7 @@ import {
 } from '../../utils/ticketPlantilla';
 import { escposToHtml } from '../../utils/escposToHtml';
 import { formatTicketPOS, formatTicketReciboIngreso, formatTicketVoucherVisanet, resolverRuta } from '../../utils/escpos-formatter';
+import TextAreaAutocompletar from '../../components/TextAreaAutocompletar';
 
 const { Text } = Typography;
 
@@ -342,6 +345,7 @@ function tagsFormato(fmt: FormatoItemTicket | undefined): React.ReactNode {
   else if (fmt.tamano === 'doble_ancho') partes.push('2x→');
   else if (fmt.tamano === 'triple') partes.push('3x');
   else if (fmt.tamano === 'condensada') partes.push('cond');
+  else if (fmt.tamano === 'condensando_doble') partes.push('cond·doble');
   if (partes.length === 0) return null;
   return <Tag className="rc-campo-formato-tag">{partes.join(' · ')}</Tag>;
 }
@@ -397,6 +401,7 @@ function FormatoToolbar({ formato, onChange, deshabilitarAlineacion }: {
           { label: 'Doble ancho', value: 'doble_ancho' as const },
           { label: 'Triple (3×3)', value: 'triple' as const },
           { label: 'Condensada', value: 'condensada' as const },
+          { label: 'Condensando Doble', value: 'condensando_doble' as const },
         ]} />
       <Tooltip title="Quitar formato">
         <Button size="small" danger type="text" icon={<DeleteOutlined />}
@@ -621,6 +626,7 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({
   const [saving, setSaving] = useState(false);
   const [restableciendo, setRestableciendo] = useState(false);
   const [zonasColapsadas, setZonasColapsadas] = useState<Record<string, boolean>>({});
+  const [zonaActivaId, setZonaActivaId] = useState<string | null>(null);
   const [lineaActiva, setLineaActiva] = useState<{ zonaIdx: number; lineaIdx: number } | null>(null);
 
   // Modales
@@ -717,13 +723,7 @@ const anchoPapelPreview = Math.ceil(
 ) + PADDING_HORIZONTAL_PREVIEW;
 
   const [previewConfig, setPreviewConfig] = useState(config);
-  const [previewAgenteUrl, setPreviewAgenteUrl] = useState<string | null>(null);
-  const [previewAgenteCargando, setPreviewAgenteCargando] = useState(false);
-  const [previewAgenteError, setPreviewAgenteError] = useState<string | null>(null);
   const prevPreviewRef = useRef('');
-  const previewAgenteUrlRef = useRef<string | null>(null);
-  const previewSolicitudRef = useRef(0);
-  const previewErrorNotificadoRef = useRef<string | null>(null);
   const configRef = useRef(config);
   configRef.current = config;
 
@@ -840,6 +840,24 @@ const anchoPapelPreview = Math.ceil(
     });
   }, [updZonas]);
 
+  const setZonaSeparador = useCallback((zIdx: number, separador?: SeparadorZonaConfig) => {
+    updZonas((zs) => {
+      const copia = [...zs];
+      copia[zIdx] = { ...copia[zIdx], separador };
+      return copia;
+    });
+  }, [updZonas]);
+
+  const seleccionarZona = (zonaId: string) => {
+    setZonaActivaId(zonaId);
+    setLineaActiva(null);
+  };
+
+  const seleccionarLinea = (zonaIdx: number, lineaIdx: number) => {
+    setZonaActivaId(null);
+    setLineaActiva({ zonaIdx, lineaIdx });
+  };
+
   const toggleZona = (id: string) => {
     setZonasColapsadas((prev) => {
       const expandida = !prev[id]; // va a expandirse
@@ -868,12 +886,18 @@ const anchoPapelPreview = Math.ceil(
   };
 
   const moverLinea = (zIdx: number, lIdx: number, delta: number) => {
+    const zona = config.zonas?.[zIdx];
+    const dest = lIdx + delta;
+    if (!zona || dest < 0 || dest >= (zona.lineas?.length ?? 0)) return;
     updZonaLineas(zIdx, (l) => {
-      const dest = lIdx + delta;
       if (dest < 0 || dest >= l.length) return l;
       const [item] = l.splice(lIdx, 1);
       l.splice(dest, 0, item);
       return l;
+    });
+    setLineaActiva((prev) => {
+      if (!prev || prev.zonaIdx !== zIdx || prev.lineaIdx !== lIdx) return prev;
+      return { ...prev, lineaIdx: dest };
     });
   };
 
@@ -959,8 +983,10 @@ const anchoPapelPreview = Math.ceil(
 
   const agregarLinea = useCallback((zIdx: number, ref: string) => {
     const sigNum = getSiguienteLineaNum(zIdx);
-    updZonaLineas(zIdx, (l) => [...l, { ref: ref as LineaZonaConfig['ref'], lineaNum: sigNum }]);
-  }, [getSiguienteLineaNum, updZonaLineas]);
+    const zona = zonas[zIdx];
+    const alineacionZona = zona?.alineacion || 'izquierda';
+    updZonaLineas(zIdx, (l) => [...l, { ref: ref as LineaZonaConfig['ref'], lineaNum: sigNum, formatoLabel: { alineacion: alineacionZona } }]);
+  }, [getSiguienteLineaNum, updZonaLineas, zonas]);
 
   const setLineaNum = useCallback((zIdx: number, lIdx: number, nuevoNum: number): Promise<'empujar' | 'compartir' | 'cancel'> => {
     return new Promise((resolve) => {
@@ -968,7 +994,22 @@ const anchoPapelPreview = Math.ceil(
       if (!zona) { resolve('cancel'); return; }
       const lineasEnNuevoNum = zona.lineas.filter((l, i) => i !== lIdx && l.lineaNum === nuevoNum);
       if (lineasEnNuevoNum.length === 0) {
-        updZonaLineas(zIdx, (l) => { l[lIdx] = { ...l[lIdx], lineaNum: nuevoNum }; return l; });
+        setConfig((prev) => {
+          const zonas = [...(prev.zonas || [])];
+          const zonaActual = zonas[zIdx];
+          if (!zonaActual) return prev;
+          const refActiva = zonaActual.lineas[lIdx]?.ref;
+          const lineas = [...zonaActual.lineas];
+          lineas[lIdx] = { ...lineas[lIdx], lineaNum: nuevoNum };
+          lineas.sort((a, b) => (a.lineaNum ?? Infinity) - (b.lineaNum ?? Infinity));
+          zonas[zIdx] = { ...zonaActual, lineas };
+          setLineaActiva((prevActiva) => {
+            if (!prevActiva || prevActiva.zonaIdx !== zIdx) return prevActiva;
+            const nuevoIdx = lineas.findIndex((l) => l.ref === refActiva && l.lineaNum === nuevoNum);
+            return nuevoIdx >= 0 ? { ...prevActiva, lineaIdx: nuevoIdx } : prevActiva;
+          });
+          return actualizarOpcion(prev, { zonas });
+        });
         resolve('compartir');
         return;
       }
@@ -977,24 +1018,51 @@ const anchoPapelPreview = Math.ceil(
         content: `¿Qué desea hacer con los campos en la línea ${nuevoNum}?`,
         okText: 'Empujar', cancelText: 'Compartir', okButtonProps: { danger: false },
         onOk: () => {
-          updZonaLineas(zIdx, (l) => {
-            l.forEach((linea, idx) => {
+          setConfig((prev) => {
+            const zonas = [...(prev.zonas || [])];
+            const zonaActual = zonas[zIdx];
+            if (!zonaActual) return prev;
+            const refActiva = zonaActual.lineas[lIdx]?.ref;
+            const lineas = [...zonaActual.lineas];
+            lineas.forEach((linea, idx) => {
               if (idx !== lIdx && linea.lineaNum !== undefined && linea.lineaNum >= nuevoNum) {
-                l[idx] = { ...l[idx], lineaNum: linea.lineaNum + 1 };
+                lineas[idx] = { ...linea, lineaNum: linea.lineaNum + 1 };
               }
             });
-            l[lIdx] = { ...l[lIdx], lineaNum: nuevoNum };
-            return [...l];
+            lineas[lIdx] = { ...lineas[lIdx], lineaNum: nuevoNum };
+            lineas.sort((a, b) => (a.lineaNum ?? Infinity) - (b.lineaNum ?? Infinity));
+            zonas[zIdx] = { ...zonaActual, lineas };
+            setLineaActiva((prevActiva) => {
+              if (!prevActiva || prevActiva.zonaIdx !== zIdx) return prevActiva;
+              const nuevoIdx = lineas.findIndex((l) => l.ref === refActiva && l.lineaNum === nuevoNum);
+              return nuevoIdx >= 0 ? { ...prevActiva, lineaIdx: nuevoIdx } : prevActiva;
+            });
+            return actualizarOpcion(prev, { zonas });
           });
           resolve('empujar');
         },
         onCancel: () => {
-          updZonaLineas(zIdx, (l) => { l[lIdx] = { ...l[lIdx], lineaNum: nuevoNum }; return l; });
+          setConfig((prev) => {
+            const zonas = [...(prev.zonas || [])];
+            const zonaActual = zonas[zIdx];
+            if (!zonaActual) return prev;
+            const refActiva = zonaActual.lineas[lIdx]?.ref;
+            const lineas = [...zonaActual.lineas];
+            lineas[lIdx] = { ...lineas[lIdx], lineaNum: nuevoNum };
+            lineas.sort((a, b) => (a.lineaNum ?? Infinity) - (b.lineaNum ?? Infinity));
+            zonas[zIdx] = { ...zonaActual, lineas };
+            setLineaActiva((prevActiva) => {
+              if (!prevActiva || prevActiva.zonaIdx !== zIdx) return prevActiva;
+              const nuevoIdx = lineas.findIndex((l) => l.ref === refActiva && l.lineaNum === nuevoNum);
+              return nuevoIdx >= 0 ? { ...prevActiva, lineaIdx: nuevoIdx } : prevActiva;
+            });
+            return actualizarOpcion(prev, { zonas });
+          });
           resolve('compartir');
         },
       });
     });
-  }, [zonas, updZonaLineas]);
+  }, [zonas, setLineaActiva]);
 
   const calcularAnchosLinea = useCallback((zIdx: number, lineaNum: number): Map<number, number> => {
     const zona = zonas[zIdx];
@@ -1477,10 +1545,10 @@ const anchoPapelPreview = Math.ceil(
             const colapsada = zonasColapsadas[zona.id] === true;
 
             return (
-              <Card key={zona.id} className={`paces-card-erp rc-zona ${!colapsada ? 'is-activa' : ''}`}
+            <Card key={zona.id} className={`paces-card-erp rc-zona ${zonaActivaId === zona.id || lineaActiva?.zonaIdx === zIdx ? 'is-activa' : ''}`}
                 style={{ borderRadius: 8, marginBottom: 16 }}
                 title={
-                  <div className="rc-zona-header" onClick={() => toggleZona(zona.id)}>
+                <div className="rc-zona-header" onClick={() => seleccionarZona(zona.id)}>
                     <span style={{ color: '#556ee6', marginRight: 4 }}>{ICONO_ZONA[zona.tipo] || <SettingOutlined />}</span>
                     <Input size="small" style={{ width: 140, fontWeight: 600 }} bordered={false}
                       value={zona.nombre || ''}
@@ -1539,7 +1607,7 @@ const anchoPapelPreview = Math.ceil(
                         Zona vacía — agregue líneas con el botón de abajo
                       </div>
                     )}
-                    {zona.lineas.map((linea, lIdx) => <FilaLinea key={`${zIdx}-${lIdx}`} zonaIdx={zIdx} lineaIdx={lIdx} linea={linea} zonaLineas={zona.lineas} tipo={zona.tipo} esActiva={lineaActiva?.zonaIdx === zIdx && lineaActiva?.lineaIdx === lIdx} onSeleccionarLinea={() => setLineaActiva({ zonaIdx: zIdx, lineaIdx: lIdx })} />)}
+                        {zona.lineas.map((linea, lIdx) => <FilaLinea key={`${zIdx}-${lIdx}`} zonaIdx={zIdx} lineaIdx={lIdx} linea={linea} zonaLineas={zona.lineas} tipo={zona.tipo} esActiva={lineaActiva?.zonaIdx === zIdx && lineaActiva?.lineaIdx === lIdx} onSeleccionarLinea={() => seleccionarLinea(zIdx, lIdx)} />)}
 
                     {/* Boton agregar linea */}
                     <div className="rc-zona-agregar-linea">
@@ -1750,9 +1818,165 @@ const anchoPapelPreview = Math.ceil(
           <Card className="paces-card-erp paces-card-erp-padded" style={{ borderRadius: 8, position: isLarge ? 'sticky' : undefined, top: 16 }}>
             <div style={{ fontWeight: 600, marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Propiedades</span>
-              {lineaActiva && <Button size="small" type="text" onClick={() => setLineaActiva(null)}>×</Button>}
-            </div>
-            {lineaActiva ? (() => {
+                    {(zonaActivaId || lineaActiva) && (
+                      <Button size="small" type="text" onClick={() => { setZonaActivaId(null); setLineaActiva(null); }}>×</Button>
+                    )}
+                  </div>
+                  {zonaActivaId ? (() => {
+                    const zonaIdx = (config.zonas || []).findIndex((item) => item.id === zonaActivaId);
+                    const zona = config.zonas?.[zonaIdx];
+                    if (!zona || zonaIdx < 0) return <Text type="secondary">Zona no encontrada</Text>;
+
+                    return (
+                      <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                        <div>
+                          <Text strong style={{ fontSize: 12 }}>Zona</Text>
+                          <Input
+                            size="small"
+                            style={{ width: '100%', marginTop: 6 }}
+                            value={zona.nombre || ''}
+                            placeholder={LABEL_ZONA[zona.tipo]}
+                            onChange={(e) => setZonaNombre(zonaIdx, e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 11 }}>Tipo de zona</Text>
+                          <Input
+                            size="small"
+                            style={{ width: '100%', marginTop: 2 }}
+                            value={LABEL_ZONA[zona.tipo] || zona.tipo}
+                            disabled
+                          />
+                        </div>
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 11 }}>Alineación</Text>
+                          <Segmented
+                            size="small"
+                            style={{ width: '100%', marginTop: 2 }}
+                            value={zona.alineacion || 'izquierda'}
+                            onChange={(value) => setZonaAlineacion(zonaIdx, value as AlineacionTicket)}
+                            options={[
+                              { value: 'izquierda', icon: <AlignLeftOutlined />, title: 'Izquierda' },
+                              { value: 'centro', icon: <AlignCenterOutlined />, title: 'Centro' },
+                              { value: 'derecha', icon: <AlignRightOutlined />, title: 'Derecha' },
+                            ]}
+                          />
+                        </div>
+                        {zona.tipo === 'detalle' && (
+                          <div>
+                            <Text type="secondary" style={{ fontSize: 11 }}>Origen array</Text>
+                            <Select
+                              size="small"
+                              style={{ width: '100%', marginTop: 2 }}
+                              value={zona.arrayOrigen || undefined}
+                              placeholder={rutasArrayEsquema.length > 0 ? 'Seleccione un array…' : 'No hay arrays en el esquema'}
+                              options={rutasArrayEsquema.map((ruta) => ({ label: ruta, value: ruta }))}
+                              allowClear
+                              onChange={(value) => setZonaArrayOrigen(zonaIdx, value || '')}
+                            />
+                          </div>
+                        )}
+                        <div>
+                          <Text type="secondary" style={{ fontSize: 11 }}>Separador de zona</Text>
+                          <Select
+                            size="small"
+                            style={{ width: '100%', marginTop: 2 }}
+                            value={zona.separador?.posicion}
+                            placeholder="Sin separador"
+                            options={[
+                              { value: 'encima', label: 'Encima' },
+                              { value: 'debajo', label: 'Debajo' },
+                              { value: 'ambos', label: 'Encima y debajo' },
+                            ]}
+                            allowClear
+                            onChange={(value) => {
+                              if (!value) {
+                                setZonaSeparador(zonaIdx, undefined);
+                                return;
+                              }
+                              const actual = zona.separador || {};
+                              setZonaSeparador(zonaIdx, { ...actual, posicion: value as PosicionSeparadorZona });
+                            }}
+                          />
+                          {zona.separador?.posicion && (
+                            <>
+                              <div style={{ marginTop: 8 }}>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Tipo de separador</Text>
+                                <Select
+                                  size="small"
+                                  style={{ width: '100%', marginTop: 2 }}
+                                  value={zona.separador?.caracter || '-'}
+                                  onChange={(value) => setZonaSeparador(zonaIdx, { ...zona.separador, caracter: value as CaracterSeparadorTicket })}
+                                  options={[
+                                    { value: '-', label: 'Guion (-)' },
+                                    { value: '=', label: 'Igual (=)' },
+                                    { value: '─', label: 'Línea media (─)' },
+                                    { value: '_', label: 'Subrayado (_)' },
+                                    { value: 'linea', label: 'Línea sólida' },
+                                    { value: 'linea_gruesa', label: 'Línea sólida gruesa' },
+                                  ]}
+                                />
+                              </div>
+                              <div style={{ marginTop: 8 }}>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Alineación del separador</Text>
+                                <Segmented
+                                  size="small"
+                                  style={{ width: '100%', marginTop: 2 }}
+                                  value={zona.separador?.alineacionSep || 'centro'}
+                                  onChange={(value) => setZonaSeparador(zonaIdx, { ...zona.separador, alineacionSep: value as AlineacionTicket })}
+                                  options={[
+                                    { value: 'izquierda', icon: <AlignLeftOutlined />, title: 'Izquierda' },
+                                    { value: 'centro', icon: <AlignCenterOutlined />, title: 'Centro' },
+                                    { value: 'derecha', icon: <AlignRightOutlined />, title: 'Derecha' },
+                                  ]}
+                                />
+                              </div>
+                              <div style={{ marginTop: 8 }}>
+                                <Text type="secondary" style={{ fontSize: 11 }}>Ancho</Text>
+                                <Input
+                                  size="small"
+                                  style={{ width: '100%', marginTop: 2 }}
+                                  value={zona.separador?.ancho != null ? String(zona.separador?.ancho) : ''}
+                                  placeholder="Ancho completo"
+                                  onChange={(e) => {
+                                    const raw = e.target.value.trim();
+                                    const ancho: number | string | undefined = raw === '' ? undefined : raw !== '' && /^\d+$/.test(raw) ? Number(raw) : raw;
+                                    setZonaSeparador(zonaIdx, { ...zona.separador, ancho });
+                                  }}
+                                />
+                              </div>
+                              {(zona.separador?.caracter === 'linea' || zona.separador?.caracter === 'linea_gruesa') && (
+                                <div style={{ marginTop: 8 }}>
+                                  <Text type="secondary" style={{ fontSize: 11 }}>Grosor</Text>
+                                  <Segmented
+                                    size="small"
+                                    style={{ width: '100%', marginTop: 2 }}
+                                    value={zona.separador?.grosor || 1}
+                                    onChange={(value) => setZonaSeparador(zonaIdx, { ...zona.separador, grosor: value as number })}
+                                    options={[
+                                      { value: 1, label: '1' },
+                                      { value: 2, label: '2' },
+                                      { value: 3, label: '3' },
+                                    ]}
+                                  />
+                                </div>
+                              )}
+                              {zona.tipo === 'detalle' && (
+                                <div style={{ marginTop: 8 }}>
+                                  <Checkbox
+                                    checked={zona.separador?.imprimirSiVacio === true}
+                                    onChange={(e) => setZonaSeparador(zonaIdx, { ...zona.separador, imprimirSiVacio: e.target.checked })}
+                                  >
+                                    Imprimir aunque el detalle esté vacío
+                                  </Checkbox>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </Space>
+                    );
+                  })() : lineaActiva ? (() => {
               const zona = config.zonas?.[lineaActiva.zonaIdx];
               const linea = zona?.lineas[lineaActiva.lineaIdx];
               if (!linea) return <Text type="secondary">Línea no encontrada</Text>;
@@ -1785,7 +2009,14 @@ const anchoPapelPreview = Math.ceil(
                     {ref.startsWith('LIBRE:') ? (
                       <div style={{ marginTop: 6 }}>
                         <Text type="secondary" style={{ fontSize: 11 }}>Contenido libre</Text>
-                        <Input.TextArea rows={3} style={{ width: '100%', marginTop: 2 }} value={(textoLibrePorId(ref.slice('LIBRE:'.length))?.texto || '')} onChange={(e) => setContenidoLibre(lineaActiva.zonaIdx, lineaActiva.lineaIdx, e.target.value)} placeholder="Escribe el texto libre (Enter para varias líneas)..." />
+                        <TextAreaAutocompletar
+                          opciones={rutasEsquema}
+                          rows={3}
+                          style={{ width: '100%', marginTop: 2 }}
+                          value={(textoLibrePorId(ref.slice('LIBRE:'.length))?.texto || '')}
+                          onChange={(e) => setContenidoLibre(lineaActiva.zonaIdx, lineaActiva.lineaIdx, e.target.value)}
+                          placeholder="Escribe el texto libre (Enter para varias líneas). Escribe {, {{ o dentro de CONCAT(...) para ver sugerencias..."
+                        />
                       </div>
                     ) : (
                       <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#556ee6', marginTop: 2 }}>{ref}</div>
@@ -2048,8 +2279,8 @@ const anchoPapelPreview = Math.ceil(
                 </Space>
               );
 })() : (
-              <Text type="secondary">Selecciona una línea para editar sus propiedades</Text>
-            )}
+                    <Text type="secondary">Selecciona una zona o una línea para editar sus propiedades</Text>
+                  )}
           </Card>
         </div>
 
@@ -2074,13 +2305,13 @@ const anchoPapelPreview = Math.ceil(
                 description="Hay líneas ESQUEMA (incluidos campos calculados) pero aún no se ha cargado el JSON de ejemplo. Use 'Cargar esquema' para ver su contenido en la vista previa."
               />
             )}
-                  <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
-                    <div style={{
-                      background: '#fff', width: `${anchoPapelPreview}px`, minWidth: `${anchoPapelPreview}px`, boxSizing: 'border-box', margin: '0 auto',
-                      padding: '16px 20px', fontFamily: config.opciones?.fontFamily ? `'${config.opciones.fontFamily}', monospace` : "'Courier New', Courier, monospace", fontSize: TAMANO_FUENTE_PREVIEW, lineHeight: 1.2,
-                      border: '1px solid #d9d9d9', borderRadius: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                    }} dangerouslySetInnerHTML={{ __html: frozenPreview }} />
-                  </div>
+            <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+              <div style={{
+                background: '#fff', width: `${anchoPapelPreview}px`, minWidth: `${anchoPapelPreview}px`, boxSizing: 'border-box', margin: '0 auto',
+                padding: '16px 20px', fontFamily: config.opciones?.fontFamily ? `'${config.opciones.fontFamily}', monospace` : "'Courier New', Courier, monospace", fontSize: TAMANO_FUENTE_PREVIEW, lineHeight: 1.2,
+                border: '1px solid #d9d9d9', borderRadius: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              }} dangerouslySetInnerHTML={{ __html: frozenPreview }} />
+            </div>
             <Divider style={{ margin: '12px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
               <Tag color={esVSNT_CIERRE ? 'red' : esVSNT_ANULACION ? 'volcano' : esVSNT ? 'orange' : esFPV ? 'blue' : 'purple'}>{esVSNT_ANULACION ? 'VSNT_ANULACION' : esVSNT_CIERRE ? 'VSNT_CIERRE' : esVSNT ? 'VSNT_VOUCHER' : esFPV ? 'FPV_TICKET' : 'FRI_TICKET'}</Tag>

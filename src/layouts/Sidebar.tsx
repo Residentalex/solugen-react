@@ -2,6 +2,7 @@ import React from 'react';
 import { Menu } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import { moduloApi } from '../api/moduloApi';
 import { useUIStore } from '../stores/uiStore';
 import type { MenuProps } from 'antd';
 import type { PantallaDTO, ModuloDTO } from '../types/auth';
@@ -48,6 +49,23 @@ const Sidebar: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const sidebarCollapsed = useUIStore((s: any) => s.sidebarCollapsed);
   const [openKeys, setOpenKeys] = React.useState<string[]>([]);
+  const [modulosOcultosIds, setModulosOcultosIds] = React.useState<Set<number>>(new Set());
+
+  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
+
+  React.useEffect(() => {
+    if (sucursalActiva == null) return;
+    let ignored = false;
+    moduloApi.obtenerTodo(Number(sucursalActiva)).then((mods) => {
+      if (ignored) return;
+      const ocultos = new Set(mods.filter((m: any) => !!m.oculto || !!(m as any).Oculto).map((m: any) => m.id));
+      setModulosOcultosIds(ocultos);
+    }).catch(() => {
+      if (!ignored) setModulosOcultosIds(new Set());
+    });
+    return () => { ignored = true; };
+  }, [sucursalActiva]);
+
   const navigate = useNavigate();
 
   const menuItems: MenuProps['items'] = React.useMemo(() => {
@@ -69,6 +87,8 @@ const Sidebar: React.FC = () => {
       const modulos = p.modulos || [];
       if (modulos.length > 0) {
         for (const m of modulos) {
+          const oculto = !!m.oculto || !!(m as any).Oculto || modulosOcultosIds.has(m.id);
+          if (oculto) continue;
           if (!modulosMap.has(m.id)) {
             modulosMap.set(m.id, { modulo: m, pantallas: [] });
           }
@@ -200,7 +220,7 @@ const makeKey = (codigo: string) => `${moduloNombre}__${codigo}`;
 
     items.push(...(modulosItems || []));
     return items;
-  }, [usuario?.pantallas]);
+  }, [usuario?.pantallas, modulosOcultosIds]);
 
   const handleMenuClick = ({ key }: { key: string }) => {
     if (key.startsWith('_grupo_') || key.startsWith('submenu_')) return;

@@ -47,6 +47,7 @@ export interface EntidadDTO {
   diasCredito?: number;
   tipoEntidad?: TipoEntidadDTO;
   idExterno?: string;
+  beneficiario?: string;
 }
 
 export interface TipoEntidadDTO {
@@ -152,6 +153,7 @@ export interface DetalleEntradaAlmacenDTO {
   costoActual: number;
   ajustado: boolean;
   cantidadBonificable: number;
+  cantidadBase?: number;
   idExterno?: number;
   idTransaccionExterna?: number;
   tieneVencimiento?: boolean;
@@ -184,6 +186,7 @@ export interface LogDTO {
   accion: number;
   descripcion: string;
   estacion: string;
+  cuentaBancaria?: string;
 }
 
 import type { CuentaContableDTO } from './contabilidad';

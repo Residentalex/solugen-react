@@ -14,6 +14,7 @@ const PAGE_SIZE = 50;
 
 const CierreFiscal: React.FC = () => {
   const navigate = useNavigate();
+  const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
 
@@ -122,6 +123,20 @@ const CierreFiscal: React.FC = () => {
       key: 'numeroDocumento',
       width: 200,
       render: (val: string) => <Text>{val || ''}</Text>,
+    },
+    {
+      title: 'Tipo',
+      dataIndex: 'tipo',
+      key: 'tipo',
+      width: 130,
+      render: (val: string) => (
+        <span style={{
+          padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600,
+          background: val === 'CIE' || val === 'T' ? '#556ee6' : '#10b981', color: '#fff',
+        }}>
+          {val === 'CIE' || val === 'T' ? 'Cierre Fiscal' : val || '---'}
+        </span>
+      ),
     },
     {
       title: 'Débitos',

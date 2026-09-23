@@ -9,6 +9,7 @@ import { cuentaContableApi } from '../../api/cuentaContableApi';
 import type { CuentaContableDTO, MovimientoCuentaDTO, BalanceCuentaDTO } from '../../types/contabilidad';
 import { OrigenCuenta } from '../../types/contabilidad';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
+import { toTitleCase } from '../../utils/formats';
 
 const { Text } = Typography;
 

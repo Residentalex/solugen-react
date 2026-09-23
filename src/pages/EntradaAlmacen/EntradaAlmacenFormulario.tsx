@@ -75,7 +75,6 @@ const { TextArea } = Input;
 
 // ===== Cálculo de fila =====
 
-// ===== Cálculo de fila =====
 function calcularFila(fila: DetalleEntradaAlmacenDTO): DetalleEntradaAlmacenDTO {
   const cantidad = fila.cantidad || 0;
   const costo = fila.costo || 0;
@@ -84,19 +83,28 @@ function calcularFila(fila: DetalleEntradaAlmacenDTO): DetalleEntradaAlmacenDTO 
   const cantBonif = fila.cantidadBonificable || 0;
   const ajustado = fila.ajustado || false;
 
-  // Si hay bonificable y no se ha ajustado, recalcular costo efectivo
-  let costoEfectivo = costo;
-  let cantidadEfectiva = cantidad;
-  let nuevoAjustado = ajustado;
-
-  if (cantBonif > 0 && !ajustado) {
-    const subTotalOriginal = Math.round(cantidad * costo * 100) / 100;
-    cantidadEfectiva = cantidad + cantBonif;
-    costoEfectivo = subTotalOriginal / cantidadEfectiva;
-    nuevoAjustado = true;
+  // Derivar la cantidad base (sin bonificación) para evitar acumulación
+  let base: number;
+  if (fila.cantidadBase !== undefined && fila.cantidadBase !== null) {
+    base = fila.cantidadBase;
+  } else if (ajustado && cantBonif > 0) {
+    base = cantidad - cantBonif;
+  } else {
+    base = cantidad;
   }
 
-  const subTotal = Math.round(cantidadEfectiva * costoEfectivo * 100) / 100;
+  let cantidadCalculo = base + (cantBonif > 0 ? cantBonif : 0);
+  let costoCalculo = costo;
+  let subTotal = fila.subTotal || 0;
+
+  if (!ajustado && cantBonif > 0) {
+    // Primera aplicación de bonificación: recalcular costo efectivo sobre cantidad total
+    costoCalculo = cantidadCalculo > 0 ? Math.round((subTotal / cantidadCalculo) * 100) / 100 : 0;
+    subTotal = Math.round(cantidadCalculo * costoCalculo * 100) / 100;
+  } else {
+    subTotal = Math.round(cantidadCalculo * costoCalculo * 100) / 100;
+  }
+
   const descuento = Math.round(subTotal * (pctDesc / 100) * 100) / 100;
   const baseImponible = subTotal - descuento;
   const impuestos = Math.round(baseImponible * (pctImp / 100) * 100) / 100;
@@ -104,13 +112,14 @@ function calcularFila(fila: DetalleEntradaAlmacenDTO): DetalleEntradaAlmacenDTO 
 
   return {
     ...fila,
-    cantidad: cantidadEfectiva,
-    costo: costoEfectivo,
+    cantidad: cantidadCalculo,
+    cantidadBase: base,
+    costo: costoCalculo,
     subTotal,
     descuento,
     impuestos,
     total,
-    ajustado: nuevoAjustado,
+    ajustado: ajustado || cantBonif > 0,
   };
 }
 
@@ -855,8 +864,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
       try {
         const nuevosDetalles: DetalleEntradaAlmacenDTO[] = ocDetalles
           .filter((d: any) => {
-            const cantidad = (d.cantidad + (d.cantidadBonificable || 0)) - (d.cantidadRecibida || 0);
-            return cantidad > 0;
+            const baseCant = (d.cantidad || 0) - (d.cantidadRecibida || 0);
+            return baseCant > 0;
           })
           .map((d: any, idx: number) => ({
             id: -(idx + 1),
@@ -865,7 +874,8 @@ const EntradaAlmacenFormulario: React.FC = () => {
             codigo: d.codigo,
             articulo: d.articulo,
             referencia: d.referencia || '',
-            cantidad: (d.cantidad + (d.cantidadBonificable || 0)) - (d.cantidadRecibida || 0),
+            cantidad: (d.cantidad || 0) - (d.cantidadRecibida || 0),
+            cantidadBase: (d.cantidad || 0) - (d.cantidadRecibida || 0),
             costo: d.costo || 0,
             precio: d.precio || d.costo || 0,
             subTotal: 0,
@@ -1096,6 +1106,11 @@ const EntradaAlmacenFormulario: React.FC = () => {
           return calcularFila(updated);
         }
         const updated = { ...d, [field]: value };
+        // Al editar cantidad directamente, actualizar la base para evitar acumulación
+        if (field === 'cantidad') {
+          const newBase = (d.cantidadBonificable || 0) > 0 ? Number(value) - (d.cantidadBonificable || 0) : Number(value);
+          updated.cantidadBase = newBase;
+        }
         return calcularFila(updated);
       })
     );
@@ -1118,7 +1133,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       setDetalles((prev) =>
         prev.map((d) => {
           if (d.id !== bonificacionModal.detalleId) return d;
-          const updated = { ...d, cantidadBonificable: valor };
+          const updated = { ...d, cantidadBonificable: valor, ajustado: false };
           return calcularFila(updated);
         })
       );
@@ -2148,6 +2163,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
         onSelect={handleConceptoSelect}
+        fetchConceptos={() => conceptosApi.obtenerConceptos(sucursalActiva)}
         sucursal={data?.concepto?.sucursalDestino?.id ?? data?.sucursal?.id ?? sucursalActiva}
         documento="ENP"
       />

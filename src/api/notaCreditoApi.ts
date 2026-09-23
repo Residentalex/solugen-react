@@ -79,7 +79,7 @@ export const notaCreditoApi = {
   },
 
   obtenerRelacionados: async (sucursal: number, id: number): Promise<any[]> => {
-    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/${id}/relacionados`);
+    const { data } = await apiClient.get<ApiResponse<any[]>>(`${BASE}/${sucursal}/${id}/relacionados-notacredito`);
     return data.data;
   },
 

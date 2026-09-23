@@ -1,3 +1,5 @@
+import type { CompanyInfo } from '../utils/escpos-formatter';
+
 export interface VisanetVoucherDTO {
   noSec: string;
   tipoTC?: string;
@@ -11,12 +13,24 @@ export interface VisanetVoucherDTO {
   noLote?: string;
   tokenId?: string;
   rrn?: string;
+  merchantId?: string;
+  terminalId?: string;
+  entryMode?: string;
   respuestaCod?: string;
   respuestaMsg?: string;
   codMon?: string;
   transfer?: string;
   anulado?: string;
   origen?: string;
+  tokenECR?: string;
+  stan?: string;
+  transactionDate?: string;
+  isoNumCode?: string;
+  isDcc?: boolean;
+  exchangeRate?: string;
+  transCurrency?: string;
+  totalAmount?: string;
+  totalTransAmount?: string;
 }
 
 /** DTO de entrada para el formatter del voucher Visanet: respuesta de venta + datos de impresion */
@@ -25,6 +39,8 @@ export interface VisanetVoucherInputDTO extends VisanetResponseDTO {
   simMoneda: string;
   sucursalName: string;
   subsidioLabel: string;
+  /** Datos de la empresa inyectados en el JSON de impresion (el backend descarta el objeto `company` del payload). */
+  sucursal?: CompanyInfo;
 }
 
 export interface VisanetResponseDTO {
@@ -51,6 +67,23 @@ export interface VisanetResponseDTO {
   exchangeRate?: string;
   transactionCurrency?: string;
   totalTransactionAmount?: string;
+}
+
+/** Fila del cierre Visanet obtenida de VOUCHERS JOIN CTRANSAC (endpoint vouchers-cierre). */
+export interface VisanetCierreDTO {
+  noSec: string;
+  tokenId: string;
+  fecha?: string | null;
+  hora?: string;
+  monto?: number;
+  anulado?: string;
+  fanulacion?: string | null;
+  hanulacion?: string;
+  noLote?: string;
+  host?: string;
+  notarjeta?: string;
+  noAprob?: string;
+  rrn?: string;
 }
 
 /** Respuesta de CLOSE usada exclusivamente para la vista de prueba del cierre. */

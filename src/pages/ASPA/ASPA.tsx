@@ -87,7 +87,7 @@ const columnas: ColumnsType<TransaccionBancariaVistaDTO> = [
   },
 ];
 
-const RDocNoAutorizado: React.FC = () => {
+const ASPA: React.FC = () => {
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const resetToolbar = useUIStore((s) => s.resetToolbar);
 
@@ -99,7 +99,9 @@ const RDocNoAutorizado: React.FC = () => {
       console.log('Consultando documentos no autorizados:', { sucursal, desde, hasta });
       const data = await solicitudPagoApi.obtenerNoAutorizados(sucursal, desde, hasta);
       console.log('Resultado:', data);
-      return data as any;
+      // Excluir documentos en borrador (estado 0)
+      const dataFiltrada = (data || []).filter((d: any) => d.estado !== 0);
+      return dataFiltrada as any;
     },
     reporteBlob: (sucursal: number, desde: string, hasta: string) =>
       documentosReporteApi.imprimirReporte(sucursal, 'autorizados', desde, hasta),
@@ -376,4 +378,4 @@ const RDocNoAutorizado: React.FC = () => {
   );
 };
 
-export default RDocNoAutorizado;
+export default ASPA;

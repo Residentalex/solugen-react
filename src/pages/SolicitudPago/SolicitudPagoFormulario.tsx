@@ -101,23 +101,39 @@ const SolicitudPagoFormulario: React.FC = () => {
   // Cuenta contable para asientos manuales
   const [cuentaModalAsientoOpen, setCuentaModalAsientoOpen] = useState(false);
 
+  // Modal para avance de efectivo (sin documentos relacionados)
+  const [modalMontoSinDocsOpen, setModalMontoSinDocsOpen] = useState(false);
+  const [modalMontoSinDocsValue, setModalMontoSinDocsValue] = useState<number | null>(null);
+
   // Asientos e historial
   const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
   const [logs, setLogs] = useState<LogDTO[]>([]);
 
   // ===== Totales calculados desde documentos seleccionados =====
-  const totalesDocs = React.useMemo(() => ({
-    subTotal: transaccionesAsociadas.reduce((s, t) => s + (t.monto || 0) + (t.descuento || 0), 0),
-    descuento: transaccionesAsociadas.reduce((s, t) => s + (t.descuento || 0), 0),
-    impuestos: transaccionesAsociadas.reduce((s, t) => s + (t.impuesto || 0), 0),
-    // Las retenciones ya vienen descontadas en el monto de cada documento relacionado: no sumar ni restar.
-    retenciones: 0,
-  }), [transaccionesAsociadas]);
+  const totalesDocs = React.useMemo(() => {
+    const baseSubTotal = transaccionesAsociadas.reduce((s, t) => s + (t.monto || 0) + (t.descuento || 0), 0);
+    const baseDescuento = transaccionesAsociadas.reduce((s, t) => s + (t.descuento || 0), 0);
+    const baseImpuestos = transaccionesAsociadas.reduce((s, t) => s + (t.impuesto || 0), 0);
+    // Si no hay documentos relacionados (avance efectivo), subtotal = total del documento
+    const tieneDocs = transaccionesAsociadas && transaccionesAsociadas.length > 0;
+    return {
+      subTotal: tieneDocs ? baseSubTotal : (data?.subTotal || data?.total || form.getFieldValue('subTotal') || 0),
+      descuento: tieneDocs ? baseDescuento : (data?.descuento || form.getFieldValue('descuento') || 0),
+      impuestos: tieneDocs ? baseImpuestos : (data?.impuestos || form.getFieldValue('impuestos') || 0),
+      retenciones: 0,
+    };
+  }, [transaccionesAsociadas, data, form]);
 
   const totalCalculado = Math.round(
-    (totalesDocs.subTotal - totalesDocs.descuento + totalesDocs.impuestos - totalesDocs.retenciones) * 100
+    (totalesDocs.subTotal - totalesDocs.descuento + totalesDocs.impuestos) * 100
   ) / 100;
 
+  // Si no hay documentos relacionados, usar el total del backend (edicion) o el calculado
+  const totalDisplay = totalCalculado;
+  const totalDistribuido = totalesDocs.subTotal - totalesDocs.descuento;
+  const totalRetencionesDocs = transaccionesAsociadas.reduce((s, t) => s + (t.retencion || 0), 0);
+
+  const porDistribuir = totalCalculado - totalDistribuido;
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
   // Sincronizar form fields para submission del DTO
@@ -127,15 +143,26 @@ const SolicitudPagoFormulario: React.FC = () => {
       descuento: totalesDocs.descuento,
       impuestos: totalesDocs.impuestos,
       retenciones: totalesDocs.retenciones,
+      total: totalCalculado,
     });
   }, [totalesDocs, form]);
 
   // ===== Constantes =====
-  const isLarge = screens.xxl === true;
+const isLarge = screens.xxl === true;
 
   // Moneda dinámica (siempre desde concepto)
   const monedaSimbolo = selectedConcepto?.moneda?.simbolo || getMonedaSucursalActiva().simbolo;
   const monedaNombre = selectedConcepto?.moneda?.nombre || getMonedaSucursalActiva().nombre;
+
+  // ===== Cargar entidades según concepto =====
+  const cargarEntidades = useCallback(async (conceptoCodigo?: string) => {
+    try {
+      const res = await conceptosApi.obtenerEntidadesActivas(sucursalActiva, conceptoCodigo);
+      setEntidadesCache(res || []);
+    } catch {
+      message.error('Error al cargar entidades');
+    }
+  }, [sucursalActiva, message]);
 
   // ===== Carga inicial =====
   useEffect(() => {
@@ -162,15 +189,13 @@ const SolicitudPagoFormulario: React.FC = () => {
     };
   }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, form]);
 
-  // ===== Cargar entidades según concepto =====
-  const cargarEntidades = useCallback(async (conceptoCodigo?: string) => {
-    try {
-      const res = await conceptosApi.obtenerEntidadesActivas(sucursalActiva, conceptoCodigo);
-      setEntidadesCache(res || []);
-    } catch {
-      message.error('Error al cargar entidades');
-    }
-  }, [sucursalActiva, message]);
+   // ===== Inicialmente no hay documentos relacionados (caso típico para SPAs) =====
+   // Se normaliza las transaccionesAsociadas a [] en lugar de null/undefined
+   useEffect(() => {
+     if (!transaccionesAsociadas) {
+       setTransaccionesAsociadas([]);
+     }
+   }, []);
 
   // ===== Cargar datos en modo editar =====
   useEffect(() => {
@@ -248,14 +273,15 @@ const SolicitudPagoFormulario: React.FC = () => {
           referencia: res.referencia || '',
           ncf: res.ncf || '',
           tipoPago: (res as any).tipoPagoCodigo || '',
-          nota: res.nota || '',
-          subTotal: res.subTotal ?? 0,
-          descuento: res.descuento ?? 0,
-          impuestos: res.impuestos ?? 0,
-          retenciones: res.retenciones ?? 0,
-          tasa: res.tasa ?? 1,
-          nombreBeneficiario: res.nombreBeneficiario || '',
-        });
+nota: res.nota || '',
+        subTotal: res.subTotal ?? 0,
+        descuento: res.descuento ?? 0,
+        impuestos: res.impuestos ?? 0,
+        retenciones: res.retenciones ?? 0,
+        total: res.total ?? totalCalculado,
+        tasa: res.tasa ?? 1,
+        nombreBeneficiario: res.nombreBeneficiario || entidad?.beneficiario?.trim() || entidad?.nombre || '',
+      });
       })
       .catch((err: any) => {
         const msg = extraerMensajeError(err, 'Error al cargar la solicitud de pago');
@@ -322,6 +348,7 @@ const SolicitudPagoFormulario: React.FC = () => {
       entidad: undefined,
       moneda: monedaObj.nombre,
       tasa: monedaObj.tasa ?? 1,
+      nombreBeneficiario: '',
     });
 
     // === NoImpuesto: si el concepto no acepta impuestos, limpiarlos ===
@@ -347,7 +374,7 @@ const SolicitudPagoFormulario: React.FC = () => {
     setConceptoSearchText('');
     setEntidadesCache([]);
     setSelectedEntidad(null);
-    form.setFieldsValue({ concepto: '', entidad: undefined });
+    form.setFieldsValue({ concepto: '', entidad: undefined, nombreBeneficiario: '' });
   };
 
   // ===== Handlers de Cuenta Bancaria =====
@@ -404,6 +431,53 @@ const SolicitudPagoFormulario: React.FC = () => {
 
 
 
+  const construirDTO = (): SolicitudPagoCrearDTO | SolicitudPagoActualizarDTO => {
+    const values = form.getFieldsValue();
+    const fechaDoc = values.fechaDocumento
+      ? dayjs(values.fechaDocumento).format('YYYYMMDDHHmmss')
+      : dayjs().format('YYYYMMDDHHmmss');
+    const dto: SolicitudPagoCrearDTO & { codigoTipo?: string; tipoPagoCodigo?: string } = {
+      fechaDocumento: fechaDoc,
+      codigoTipo: tipoValue || '',
+      conceptoCodigo: selectedConcepto?.codigo || '',
+      entidadId: selectedEntidad?.codigo || '',
+      cuentaBancaria: values.cuentaBancaria || '',
+      referencia: values.referencia || '',
+      ncf: values.ncf || '',
+      tipoPagoCodigo: tipoPago || '',
+      nota: values.nota || '',
+      subTotal: totalesDocs.subTotal,
+      descuento: totalesDocs.descuento,
+      impuestos: totalesDocs.impuestos,
+      retenciones: totalesDocs.retenciones,
+      total: totalCalculado,
+      tasa: tasaValue,
+      simboloMoneda: monedaSimbolo,
+      nombreMoneda: monedaNombre,
+      nombreBeneficiario: values.nombreBeneficiario || '',
+    };
+
+    const dtoConAsociadas = {
+      ...dto,
+      transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
+        ...t,
+        transaccionAsociadaID: t.transaccionAsociadaID || t.id,
+        saldoPendiente: pendienteEfectivo(t),
+      })),
+    };
+
+    if (mode === 'editar' && id && data) {
+      return {
+        ...dtoConAsociadas,
+        id: data.id || parseInt(id),
+        asientos: asientos || [],
+        logs: logs || [],
+      } as SolicitudPagoActualizarDTO;
+    }
+
+    return dtoConAsociadas as SolicitudPagoCrearDTO | SolicitudPagoActualizarDTO;
+  };
+
   // ===== Generar asientos =====
   /** Construye un objeto tipo TransaccionDTO (con objetos anidados) para el endpoint generarAsiento */
   const construirDTOGenerarAsientos = useCallback(() => {
@@ -437,7 +511,7 @@ const SolicitudPagoFormulario: React.FC = () => {
       referencia: values.referencia || '',
       nota: values.nota || '',
       tasa: tasaValue,
-      total: totalCalculado,
+      total: totalDisplay,
       subTotal: totalesDocs.subTotal,
       descuento: totalesDocs.descuento,
       impuestos: totalesDocs.impuestos,
@@ -464,7 +538,7 @@ const SolicitudPagoFormulario: React.FC = () => {
       logs: logs || [],
     };
   }, [data, form, documentCode, selectedConcepto, selectedEntidad,
-      tasaValue, totalCalculado, totalesDocs, tipoValue, transaccionesAsociadas, asientos, logs]);
+      tasaValue, totalCalculado, totalDisplay, totalesDocs, tipoValue, transaccionesAsociadas, asientos, logs]);
 
   const handleGenerarAsientos = async () => {
     if (sucursalActiva === undefined) return;
@@ -490,25 +564,44 @@ const SolicitudPagoFormulario: React.FC = () => {
     }
   };
 
-  // ===== Handler para agregar asiento manual =====
-  const handleAgregarAsientoManual = (cuenta: any) => {
-    const nuevoAsiento = {
-      id: Date.now(),
-      cuentaContable: { noCuenta: cuenta.noCuenta, nombre: cuenta.nombre },
-      monto: 0,
-      tipoAsiento: 'D',
-      generado: false,
-      descripcion: '',
-    };
-    setAsientos((prev: any[]) => [...prev, nuevoAsiento]);
+  const handleGuardarConMonto = async (monto: number) => {
+    setSaving(true);
+    try {
+      const dto = construirDTO();
+      // Si hay documentos relacionados, no usar subTotal como monto; usar monto del modal
+      const tieneDocs = transaccionesAsociadas && transaccionesAsociadas.length > 0;
+      const dtoConMonto = {
+        ...dto,
+        subTotal: monto,
+        transaccionesAsociadas: tieneDocs ? transaccionesAsociadas.map((t) => ({
+          ...t,
+          transaccionAsociadaID: t.transaccionAsociadaID || t.id,
+          saldoPendiente: pendienteEfectivo(t),
+        })) : [],
+      } as SolicitudPagoCrearDTO | SolicitudPagoActualizarDTO;
+      if (mode === 'crear') {
+        const result = await solicitudPagoApi.crear(sucursalActiva, dtoConMonto as SolicitudPagoCrearDTO);
+        navigationConfirmedRef.current = true;
+        message.success('Solicitud de pago creada exitosamente');
+        navigate(`/FSPA/${result.id}`, { replace: true });
+      } else {
+        await solicitudPagoApi.actualizar(sucursalActiva, dtoConMonto as SolicitudPagoActualizarDTO);
+        navigationConfirmedRef.current = true;
+        message.success('Solicitud de pago actualizada exitosamente');
+        navigate(`/FSPA/${id}`, { replace: true });
+      }
+    } catch (err: any) {
+      console.log('Error al guardar con monto:', err);
+      const msg = extraerMensajeError(err, 'Error al guardar con monto');
+      message.error(msg);
+    } finally {
+      setSaving(false);
+      setModalMontoSinDocsOpen(false);
+      setModalMontoSinDocsValue(0);
+    }
   };
 
-  // ===== Totales calculados para documentos relacionados =====
-  const totalDistribuido = totalesDocs.subTotal - totalesDocs.descuento;
-  const totalRetencionesDocs = transaccionesAsociadas.reduce((s, t) => s + (t.retencion || 0), 0);
-  const porDistribuir = totalCalculado - totalDistribuido;
-
-  // ===== Handlers de navegación =====
+  // ===== Cancelar =====
   const handleCancelar = () => {
     Modal.confirm({
       title: 'Cancelar',
@@ -529,61 +622,19 @@ const SolicitudPagoFormulario: React.FC = () => {
   };
 
   // ===== Validación =====
-  const validarFormulario = (): string | null => {
-    if (!selectedConcepto) return 'Debe seleccionar un Concepto';
-    if (!selectedEntidad) return 'Debe seleccionar una Entidad';
-    if (!selectedEntidad?.codigo) return 'La entidad seleccionada no tiene un código válido';
-
+  const validarFormulario = () => {
+    if (!selectedConcepto)
+      return 'Debe seleccionar un Concepto';
+    if (!selectedEntidad)
+      return 'Debe seleccionar una Entidad';
+    if (!selectedEntidad?.codigo)
+      return 'La entidad seleccionada no tiene un código válido';
     const values = form.getFieldsValue();
-    if (!values.cuentaBancaria) return 'Debe ingresar una Cuenta Bancaria';
-    if (totalesDocs.subTotal < 0) return 'SubTotal no puede ser negativo';
-
+    if (!values.cuentaBancaria)
+      return 'Debe ingresar una Cuenta Bancaria';
+    if (totalesDocs.subTotal < 0)
+      return 'SubTotal no puede ser negativo';
     return null;
-  };
-
-  // ===== Construir DTO =====
-  const construirDTO = (): SolicitudPagoCrearDTO | SolicitudPagoActualizarDTO => {
-    const values = form.getFieldsValue();
-
-    const fechaDoc = values.fechaDocumento
-      ? dayjs(values.fechaDocumento).format('YYYYMMDDHHmmss')
-      : dayjs().format('YYYYMMDDHHmmss');
-
-    const dto: SolicitudPagoCrearDTO & { codigoTipo?: string; tipoPagoCodigo?: string } = {
-      fechaDocumento: fechaDoc,
-      codigoTipo: tipoValue || '',
-      conceptoCodigo: selectedConcepto?.codigo || '',
-      entidadId: selectedEntidad?.codigo || '',
-      cuentaBancaria: values.cuentaBancaria || '',
-      referencia: values.referencia || '',
-      ncf: values.ncf || '',
-      tipoPagoCodigo: tipoPago || '',
-      nota: values.nota || '',
-      subTotal: totalesDocs.subTotal,
-      descuento: totalesDocs.descuento,
-      impuestos: totalesDocs.impuestos,
-      retenciones: totalesDocs.retenciones,
-      total: totalCalculado,
-      tasa: tasaValue,
-      simboloMoneda: monedaSimbolo,
-      nombreMoneda: monedaNombre,
-        nombreBeneficiario: values.nombreBeneficiario || '',
-    };
-
-    const dtoConAsociadas = {
-      ...dto,
-      transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
-        ...t,
-        transaccionAsociadaID: t.transaccionAsociadaID || t.id,
-        saldoPendiente: pendienteEfectivo(t),
-      })),
-    };
-
-    if (mode === 'editar' && id && data) {
-      return { ...dtoConAsociadas, id: data.id || parseInt(id), asientos: asientos || [] };
-    }
-
-    return { ...dtoConAsociadas, asientos: asientos || [] };
   };
 
   // ===== Guardar =====
@@ -594,16 +645,47 @@ const SolicitudPagoFormulario: React.FC = () => {
       return;
     }
 
+    // Validación para avance de efectivo (sin documentos relacionados)
+    const noHayDocsRelacionados = !transaccionesAsociadas || transaccionesAsociadas.length === 0;
+
+    if (noHayDocsRelacionados) {
+      const savedTotal = mode === 'editar'
+        ? (data?.subTotal ?? data?.total ?? totalCalculado)
+        : totalCalculado;
+      setModalMontoSinDocsValue(savedTotal);
+      setModalMontoSinDocsOpen(true);
+      return;
+    }
+
     setSaving(true);
     try {
+      // Generar asientos si no existen
+      let asientosActualizados = asientos || [];
+      if (!asientos || asientos.length === 0) {
+        try {
+          const tempDTO = construirDTOGenerarAsientos();
+          const generados = await solicitudPagoApi.generarAsientos(sucursalActiva, tempDTO);
+          setAsientos((prev) => {
+            const manuales = prev.filter((a) => a.generado === false);
+            return [...manuales, ...generados];
+          });
+          asientosActualizados = generados;
+        } catch (errAsientos) {
+          message.warning('No se pudo generar asientos automáticamente');
+        }
+      }
       const dto = construirDTO();
+      const dtoConAsientos = {
+        ...dto,
+        asientos: asientosActualizados,
+      };
       if (mode === 'crear') {
-        const result = await solicitudPagoApi.crear(sucursalActiva, dto as SolicitudPagoCrearDTO);
+        const result = await solicitudPagoApi.crear(sucursalActiva, dtoConAsientos as SolicitudPagoCrearDTO);
         navigationConfirmedRef.current = true;
         message.success('Solicitud de pago creada exitosamente');
         navigate(`/FSPA/${result.id}`, { replace: true });
       } else {
-        await solicitudPagoApi.actualizar(sucursalActiva, dto as SolicitudPagoActualizarDTO);
+        await solicitudPagoApi.actualizar(sucursalActiva, dtoConAsientos as SolicitudPagoActualizarDTO);
         navigationConfirmedRef.current = true;
         message.success('Solicitud de pago actualizada exitosamente');
         navigate(`/FSPA/${id}`, { replace: true });
@@ -665,13 +747,13 @@ const SolicitudPagoFormulario: React.FC = () => {
           ncf: res.ncf || '',
           tipoPago: (res as any).tipoPagoCodigo || '',
           nota: res.nota || '',
-          subTotal: res.subTotal ?? 0,
-          descuento: res.descuento ?? 0,
-          impuestos: res.impuestos ?? 0,
-          retenciones: res.retenciones ?? 0,
-          tasa: res.tasa ?? 1,
-          nombreBeneficiario: res.nombreBeneficiario || '',
-        });
+subTotal: res.subTotal ?? 0,
+        descuento: res.descuento ?? 0,
+        impuestos: res.impuestos ?? 0,
+        retenciones: res.retenciones ?? 0,
+        tasa: res.tasa ?? 1,
+        nombreBeneficiario: res.nombreBeneficiario || entidadH?.beneficiario?.trim() || entidadH?.nombre || '',
+      });
       })
       .catch((err: any) => {
         const msg = extraerMensajeError(err, 'Error al recargar');
@@ -799,6 +881,9 @@ const SolicitudPagoFormulario: React.FC = () => {
                       onChange={(val) => {
                         const ent = entidadesCache.find((e: any) => e.codigo === val);
                         setSelectedEntidad(ent || null);
+                        form.setFieldsValue({
+                          nombreBeneficiario: ent?.beneficiario?.trim() || ent?.nombre || '',
+                        });
                       }}
                       onDropdownVisibleChange={(open) => {
                         if (open && !selectedConcepto) {
@@ -864,7 +949,7 @@ const SolicitudPagoFormulario: React.FC = () => {
               descuento={totalesDocs.descuento}
               impuestos={totalesDocs.impuestos}
               retenciones={totalesDocs.retenciones}
-              total={totalCalculado}
+              total={totalDisplay}
               hideTitle
               monedaSimbolo={monedaSimbolo}
               monedaNombre={monedaNombre}
@@ -1079,15 +1164,63 @@ const SolicitudPagoFormulario: React.FC = () => {
       />
 
       {/* Modal de búsqueda de cuenta contable para asientos manuales */}
-      <BuscarCuentaContableModal
-        open={cuentaModalAsientoOpen}
-        onClose={() => setCuentaModalAsientoOpen(false)}
-        onSelect={(cuenta) => {
-          handleAgregarAsientoManual(cuenta);
-          setCuentaModalAsientoOpen(false);
-        }}
-        sucursal={sucursalActiva}
-      />
+<BuscarCuentaContableModal
+         open={cuentaModalAsientoOpen}
+         onClose={() => setCuentaModalAsientoOpen(false)}
+         onSelect={(cuenta) => {
+           handleAgregarAsientoManual(cuenta);
+           setCuentaModalAsientoOpen(false);
+         }}
+         sucursal={sucursalActiva}
+       />
+
+       {/* Modal para especificar monto cuando no hay documentos relacionados (avance de efectivo) */}
+       <Modal
+         title="Especificar Monto de Avance de Efectivo"
+         open={modalMontoSinDocsOpen}
+         onOk={() => {
+           if (modalMontoSinDocsValue !== null) {
+             handleGuardarConMonto(modalMontoSinDocsValue);
+           }
+         }}
+         onCancel={() => setModalMontoSinDocsOpen(false)}
+         okText="Confirmar Monto"
+         cancelText="Cancelar"
+         width={500}
+       >
+         <div style={{ padding: 24 }}>
+           <p style={{ marginBottom: 16, fontSize: 16 }}>
+             No se han especificado documentos relacionados para esta solicitud de pago.
+           </p>
+           <p style={{ marginBottom: 24, fontSize: 14, color: '#262626' }}>
+             Para registrar un <strong>avance de efectivo</strong>, es necesario especificar el monto exacto que se desea desembolsar o adelantar. Este monto será el <strong>total</strong> de la solicitud de pago y se registrará como un avance de efectivo sin documentos relacionados.
+           </p>
+           <div style={{ marginBottom: 24 }}>
+             <label style={{ display: 'block', marginBottom: 8, fontWeight: 500, fontSize: 14 }}>
+               Monto del Avance de Efectivo (RD$):
+             </label>
+             <InputNumber
+               style={{ width: '100%' }}
+               min={0}
+               step={0.01}
+               precision={2}
+               placeholder="Ingrese el monto..."
+               value={modalMontoSinDocsValue ?? 0}
+               onChange={(value) => setModalMontoSinDocsValue(value)}
+               onPressEnter={() => {
+                 if (value !== null) {
+                   handleGuardarConMonto(value);
+                 }
+               }}
+             />
+           </div>
+           <div style={{ background: '#fff7e6', borderRadius: 4, padding: 16, border: '1px solid #ffd591' }}>
+             <p style={{ margin: 0, fontSize: 13, color: '#d96400' }}>
+               <strong>Nota importante:</strong> El monto ingresado será el total de la solicitud de pago. No se generará ningún documento relacionado; el sistema registrará este valor como un avance de efectivo.
+             </p>
+           </div>
+         </div>
+       </Modal>
 
       {isLarge ? (
         /* === DESKTOP === */

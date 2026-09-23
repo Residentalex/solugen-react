@@ -9,6 +9,8 @@ import { transaccionApi } from '../../api/transaccionApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { formatCurrency, formatDateRaw, formatDateParam, toTitleCase } from '../../utils/formats';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
+import FiltroSeleccionDropdown from '../../components/FiltroSeleccionDropdown';
+import { FilterFilled, FilterOutlined } from '@ant-design/icons';
 import { documentosReporteApi } from '../../api/documentosReporteApi';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import type { ApiResponse } from '../../types/auth';
@@ -66,6 +68,7 @@ const DocumentosAplicados: React.FC = () => {
   const [documentosError, setDocumentosError] = useState(false);
   const [tipoDoc, setTipoDoc] = useState<string | undefined>(undefined);
   const [aplicado, setAplicado] = useState<boolean>(true);
+  const [filtrosEstado, setFiltrosEstado] = useState<Record<string, any>>({});
 
   const moduloID = useMemo(() => {
     const qs = searchParams.get('modulo');
@@ -156,14 +159,25 @@ const DocumentosAplicados: React.FC = () => {
   };
 
   const filteredData = useMemo(() => {
-    if (!searchText) return data;
-    const t = searchText.toLowerCase();
-    return data.filter((r) =>
-      (r.documento || '').toLowerCase().includes(t) ||
-      (r.entidad || '').toLowerCase().includes(t) ||
-      (r.concepto || '').toLowerCase().includes(t)
-    );
-  }, [data, searchText]);
+    let result = data;
+    if (searchText) {
+      const t = searchText.toLowerCase();
+      result = result.filter((r) =>
+        (r.documento || '').toLowerCase().includes(t) ||
+        (r.entidad || '').toLowerCase().includes(t) ||
+        (r.concepto || '').toLowerCase().includes(t)
+      );
+    }
+    Object.entries(filtrosEstado).forEach(([key, filtro]) => {
+      if (filtro?.valor?.length > 0) {
+        result = result.filter((item: any) => {
+          const val = item[key] !== undefined && item[key] !== null ? String(item[key]) : '';
+          return filtro.valor.includes(val);
+        });
+      }
+    });
+    return result;
+  }, [data, searchText, filtrosEstado]);
 
   const handleImprimir = async () => {
     if (filteredData.length === 0) return;
@@ -202,13 +216,33 @@ const DocumentosAplicados: React.FC = () => {
   };
 
   const handleExportarExcel = async () => {
-    if (filteredData.length === 0) return;
+    let datosAExportar: TransaccionVistaDTO[] = filteredData;
 
     try {
+      if (!searchText) {
+        const desde = filtros.desde ?? rangoDefault.desde;
+        const hasta = filtros.hasta ?? rangoDefault.hasta;
+        const docsStr = documentos.length > 0 ? documentos.map((d) => d.codigo).join(',') : '';
+        const result = await transaccionApi.obtenerAplicados(
+          sucursalActiva,
+          desde,
+          hasta,
+          aplicado,
+          tipoDoc || undefined,
+          docsStr,
+          1,
+          10000,
+          tipoEntidad
+        );
+        datosAExportar = result.data || [];
+      }
+
+      if (datosAExportar.length === 0) return;
+
       const companyName = await getCompanyName(sucursalActiva);
       const aplicadoFecha = aplicado ? 'Fecha Aplicado' : 'Fecha Autorizado';
       const aplicadoPor = aplicado ? 'Aplicado por' : 'Autorizado por';
-      const dataRows = filteredData.map((item) => [
+      const dataRows = datosAExportar.map((item) => [
         item.documento ?? '',
         formatDateRaw(item.fecha),
         toTitleCase(item.entidad ?? ''),
@@ -299,6 +333,23 @@ const DocumentosAplicados: React.FC = () => {
       key: 'estado',
       width: 110,
       render: (est: number) => <EstadoColumnCell estado={est} />,
+      filterDropdown: ({ confirm, clearFilters }: any) => (
+        <FiltroSeleccionDropdown
+          dataSource={data}
+          dataIndex="estado"
+          render={(r: any) => String(r?.estado ?? '')}
+          placeholder="Buscar estado..."
+          filtroKey="estado"
+          filtrosActivos={filtrosEstado}
+          setFiltrosActivos={setFiltrosEstado}
+          confirm={confirm}
+          clearFilters={clearFilters}
+        />
+      ),
+      filterIcon: () => (filtrosEstado?.estado?.valor?.length > 0
+        ? <FilterFilled style={{ color: '#556ee6', fontSize: 12 }} />
+        : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />),
+      onFilter: () => {},
     },
   ];
 

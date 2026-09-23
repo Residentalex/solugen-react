@@ -5,7 +5,7 @@ import {
   Tabs, Descriptions, InputNumber, Tag, Grid, Divider, DatePicker,
   Button, Modal, Table,
 } from 'antd';
-import { CopyOutlined } from '@ant-design/icons';
+import { CopyOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -17,7 +17,7 @@ import type { ClienteDTO, CategoriaEntidadDTO, TipoComprobanteNCFDTO } from '../
 import type { CuentaContableDTO, CuentaContableResumenDTO, MonedaDTO } from '../../types/contabilidad';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
-import { formatCurrency, toISOFormat } from '../../utils/formats';
+import { toTitleCase, formatCurrency, toISOFormat } from '../../utils/formats';
 import PersonasAutorizadasTab from './components/PersonasAutorizadasTab';
 import GruposProductosTab from './components/GruposProductosTab';
 import CuentasBancariasTab from './components/CuentasBancariasTab';
@@ -61,6 +61,7 @@ const ClienteDetalle: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [editando, setEditando] = useState(false);
+  const [formTouched, setFormTouched] = useState(false);
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isLarge = screens.xxl === true;
@@ -177,7 +178,7 @@ const ClienteDetalle: React.FC = () => {
   // Bloqueo de navegación con cambios sin guardar
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (editando && form.isFieldsTouched()) {
+      if (editando && formTouched) {
         e.preventDefault();
         e.returnValue = '';
       }
@@ -188,7 +189,7 @@ const ClienteDetalle: React.FC = () => {
 
   useEffect(() => {
     const handlePopState = () => {
-      if (editando && form.isFieldsTouched()) {
+      if (editando && formTouched) {
         const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
         if (!leave) {
           window.history.pushState(null, '', window.location.pathname);
@@ -200,7 +201,7 @@ const ClienteDetalle: React.FC = () => {
   }, [editando, form]);
 
   const handleVolver = useCallback(() => {
-    if (editando && form.isFieldsTouched()) {
+    if (editando && formTouched) {
       Modal.confirm({
         title: '¿Salir sin guardar?',
         content: 'Los cambios no guardados se perderán.',
@@ -304,6 +305,7 @@ const ClienteDetalle: React.FC = () => {
       if (!esNuevo && data) {
         await clienteApi.actualizar(sucursalActiva, { ...data, ...payload });
         message.success('Cliente actualizado correctamente');
+        setFormTouched(false);
         navigate('/MCliente');
       } else {
         const creado = await clienteApi.crear(sucursalActiva, payload);
@@ -744,7 +746,7 @@ const ClienteDetalle: React.FC = () => {
             <Text>{data?.vendedorNombre || '-'}</Text>
           ) : (
             <Form.Item name="vendedorNombre" noStyle>
-              <Select style={{ width: '100%' }} allowClear showSearch placeholder="Busque vendedor"
+                <Select style={{ width: '100%' }} allowClear showSearch disabled placeholder="No disponible — próximamente"
                 optionFilterProp="children" options={[]} />
             </Form.Item>
           )
@@ -754,7 +756,7 @@ const ClienteDetalle: React.FC = () => {
             <Text>{data?.listaPrecioNombre || '-'}</Text>
           ) : (
             <Form.Item name="listaPrecioNombre" noStyle>
-              <Select style={{ width: '100%' }} allowClear placeholder="Seleccione lista" options={[]} />
+              <Select style={{ width: '100%' }} allowClear disabled placeholder="No disponible — próximamente" options={[]} />
             </Form.Item>
           )
         )}
@@ -763,7 +765,7 @@ const ClienteDetalle: React.FC = () => {
             <Text>{data?.perfil || '-'}</Text>
           ) : (
             <Form.Item name="perfil" noStyle>
-              <Select style={{ width: '100%' }} allowClear placeholder="Seleccione perfil" options={[]} />
+              <Select style={{ width: '100%' }} allowClear disabled placeholder="No disponible — próximamente" options={[]} />
             </Form.Item>
           )
         )}
@@ -874,7 +876,47 @@ const ClienteDetalle: React.FC = () => {
 
   // ===== Render Principal =====
   const renderFormulario = () => (
-    <Form form={form} layout="vertical" size="small">
+    <>
+      {/* Encabezado fijo con aviso global */}
+      <div
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          background: editando && formTouched ? '#fffbe6' : '#fff',
+          borderBottom: '1px solid #f0f0f0',
+          padding: '12px 16px',
+          borderRadius: 6,
+          marginBottom: 16,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 8,
+          boxShadow: editando && formTouched ? '0 2px 6px rgba(241, 180, 76, 0.3)' : 'none',
+        }}
+      >
+        <div>
+          <Text strong style={{ fontSize: 15, color: '#1a1a1a' }}>
+            {data?.nombre || data?.codigo || 'Nuevo Cliente'}
+          </Text>
+          <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+            {esNuevo ? 'Creando cliente' : `Código: ${data?.codigo}`}
+          </Text>
+        </div>
+        {editando && formTouched && (
+          <Tag color="warning" icon={<ClockCircleOutlined />} style={{ fontSize: 13, padding: '4px 10px', borderRadius: 6 }}>
+            Cambios sin guardar — revise antes de salir
+          </Tag>
+        )}
+        {!editando && !esNuevo && (
+          <Tag color="success" style={{ fontSize: 13, padding: '4px 10px', borderRadius: 6 }}>
+            Solo lectura
+          </Tag>
+        )}
+      </div>
+
+      <Form form={form} layout="vertical" size="small" onValuesChange={() => setFormTouched(true)}>
       {isLarge ? (
         <Row gutter={16}>
           <Col xxl={18}>
@@ -898,6 +940,7 @@ const ClienteDetalle: React.FC = () => {
         </div>
       )}
     </Form>
+    </>
   );
 
   return (

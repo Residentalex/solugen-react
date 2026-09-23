@@ -16,7 +16,7 @@ import type { ReportePlantillaListaDTO } from '../../types/reportesConfig';
 import FormularioToolbar from '../../components/FormularioToolbar';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { extraerMensajeError } from '../../utils/formats';
+import { toTitleCase, extraerMensajeError } from '../../utils/formats';
 
 const { Content, Sider } = Layout;
 const { Text, Title } = Typography;

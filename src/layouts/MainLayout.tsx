@@ -41,6 +41,7 @@ const { useBreakpoint } = Grid;
 
 const pageTitles: Record<string, string> = {
   Dashboard: 'Dashboard',
+  dashboardconfig: 'Configuración de Dashboard',
   MUsuario: 'Usuarios',
   MEMP: 'Empleados',
   MROL: 'Roles',
@@ -267,14 +268,11 @@ const MainLayout: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  if (!isAuthenticated) return null;
-
   const pantallaActual: PantallaDTO | undefined = usuario?.pantallas?.find(
     (p: PantallaDTO) => p.codigo?.toUpperCase() === activeModule?.toUpperCase()
   );
   const pageTitle = pantallaActual?.nombre || pageTitles[activeModule] || activeModule || 'Dashboard';
 
-  // Filtrar sucursales: si la pantalla tiene sucursalesAutorizadas, usarlas; si no, mostrar todas
   const sucursalesFiltradas = pantallaActual?.sucursalesAutorizadas?.length
     ? sucursalesPermitidas.filter((s: AuthSucursalPermitidaDTO) =>
         pantallaActual!.sucursalesAutorizadas!.some((sa: AuthSucursalPermitidaDTO) => sa.sucursal === s.sucursal)
@@ -288,6 +286,8 @@ const MainLayout: React.FC = () => {
       setSucursalActiva(sucursalesFiltradas[0].sucursal);
     }
   }, [activeModule, sucursalesFiltradas, sucursalActiva, setSucursalActiva]);
+
+  if (!isAuthenticated) return null;
 
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
     if (key === 'profile') navigate('/MPerfil');
