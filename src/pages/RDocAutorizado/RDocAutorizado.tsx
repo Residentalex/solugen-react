@@ -8,6 +8,7 @@ import { useDocumentoListado } from '../../../hooks/useDocumentoListado';
 import { useAuthStore } from '../../../stores/authStore';
 import EntidadColumnCell from '../../../components/EntidadColumnCell';
 import EstadoColumnCell from '../../../components/EstadoColumnCell';
+import FechaColumnCell from '../../../components/FechaColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../../utils/estadoDocumento';
 import type { TransaccionBancariaVistaDTO } from '../../../types/transaccion';
@@ -170,7 +171,7 @@ const RDocAutorizado: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (f: string) => <Text>{formatDateRaw(f)}</Text>,
+      render: (f: string) => <FechaColumnCell fecha={f} />,
     },
     {
       title: 'Entidad',

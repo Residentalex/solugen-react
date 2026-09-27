@@ -10,6 +10,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: var(--paces-bg-layout);
   color: var(--paces-text);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 #root {
@@ -476,6 +477,68 @@ body.theme-light-spa .paces-login-bg {
 }
 body.theme-light-spa .paces-login-brand {
   background: linear-gradient(135deg, #3D2B1F 0%, #5C3D2E 50%, #3D2B1F 100%);
+}
+
+/* ============================================================
+   TEMA: light-flow
+   ============================================================ */
+body.theme-light-flow {
+  --paces-bg-layout: #f8fafc;
+  --paces-bg-container: #ffffff;
+  --paces-bg-elevated: #ffffff;
+  --paces-text: #334155;
+  --paces-text-secondary: #64748b;
+  --paces-text-heading: #0f172a;
+  --paces-border: #e2e8f0;
+  --paces-border-secondary: #f1f5f9;
+  --paces-primary: #0284c7;
+  --paces-primary-hover: #0ea5e9;
+  --paces-primary-active: #0369a1;
+  --paces-primary-shadow: 0 1px 2px rgba(2,132,199,0.18);
+  --paces-sidebar-bg: #ffffff;
+  --paces-sidebar-border: #e2e8f0;
+  --paces-topbar-bg: #ffffff;
+  --paces-topbar-border: #e2e8f0;
+  --paces-topbar-search-bg: #f1f5f9;
+  --paces-hover-bg: rgba(2,132,199,0.06);
+  --paces-selected-bg: rgba(2,132,199,0.10);
+  --paces-scrollbar-thumb: #c8ced6;
+  --paces-scrollbar-thumb-hover: #a8b0b9;
+  --paces-menu-item-hover-color: #0284c7;
+  --paces-menu-item-selected-color: #0284c7;
+  --paces-logo-border: #e2e8f0;
+  --paces-shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --paces-card-border: #f1f5f9;
+  --paces-login-card-bg: #ffffff;
+  --paces-login-card-border: rgba(30,30,45,0.04);
+  --paces-table-header-font-size: 12px;
+  --paces-table-cell-font-size: 11px;
+}
+
+/* Topbar con blur */
+body.theme-light-flow .paces-topbar {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+}
+
+/* Avatar */
+body.theme-light-flow .paces-avatar-initials {
+  background: #0284c7;
+  color: #FFFFFF;
+}
+
+/* Logo */
+body.theme-light-flow .genesis-logo-box {
+  background: linear-gradient(135deg, #0284c7, #0ea5e9);
+  box-shadow: 0 3px 8px rgba(2,132,199,0.28);
+}
+
+/* Login */
+body.theme-light-flow .paces-login-bg {
+  background:
+    radial-gradient(600px 600px at 10% 20%, rgba(2,132,199,0.06) 0%, transparent 100%),
+    radial-gradient(800px 800px at 90% 80%, rgba(2,132,199,0.04) 0%, transparent 100%),
+    var(--paces-bg-layout);
 }
 
 /* liga - hibrido neutral entre dark y light */
@@ -1392,9 +1455,19 @@ a:hover {
 }
 
 /* ===== Utilidades para vistas ERP ===== */
-.paces-row-selected { background: var(--paces-selected-bg) !important; transition: background 0.15s; }
-.paces-row-hover:hover { background: var(--paces-hover-bg) !important; }
+.paces-row-selected {
+  background: var(--paces-selected-bg) !important;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.paces-row-hover {
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.paces-row-hover:hover {
+  background: var(--paces-hover-bg) !important;
+  box-shadow: inset 4px 0 0 0 var(--paces-primary);
+}
 .paces-row-inventario { box-shadow: inset 3px 0 0 0 var(--paces-primary); }
+.paces-row-unread { background: rgba(85, 110, 230, 0.04); border-left: 3px solid var(--paces-primary); }
 .paces-text-total { color: var(--paces-text-heading) !important; }
 .paces-text-primary { color: var(--paces-primary) !important; }
 .paces-text-muted { color: var(--paces-text-secondary) !important; }

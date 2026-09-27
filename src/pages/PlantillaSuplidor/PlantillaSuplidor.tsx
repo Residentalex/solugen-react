@@ -6,6 +6,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { plantillaSuplidorApi } from '../../api/plantillaSuplidorApi';
 import PermissionGate from '../../components/PermissionGate';
 import type { PlantillaSuplidorDTO } from '../../types/plantillaSuplidor';
@@ -114,7 +115,7 @@ const PlantillaSuplidor: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 120,
-      render: (f: string) => <Text>{formatDate(f)}</Text>,
+      render: (f: string) => <FechaColumnCell fecha={f} />,
     },
     {
       title: 'Número',

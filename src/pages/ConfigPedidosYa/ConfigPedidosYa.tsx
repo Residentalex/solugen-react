@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Card, Button, Descriptions, Tag, Typography, Alert, Spin, Space, Popconfirm, message,
 } from 'antd';
@@ -27,8 +27,13 @@ const ConfigPedidosYa: React.FC = () => {
   const [formularioVisible, setFormularioVisible] = useState(false);
   const [eliminando, setEliminando] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
+  const [formularioOcupado, setFormularioOcupado] = useState(false);
+  const operacionEnCursoRef = useRef(false);
+  const bloqueado = loading || eliminando || subiendo || formularioOcupado;
 
   const cargarConfig = useCallback(async () => {
+    if (operacionEnCursoRef.current) return;
+    operacionEnCursoRef.current = true;
     setLoading(true);
     setLoadingError(false);
     setNoExiste(false);
@@ -45,6 +50,7 @@ const ConfigPedidosYa: React.FC = () => {
       }
     } finally {
       setLoading(false);
+      operacionEnCursoRef.current = false;
     }
   }, [sucursalActiva]);
 
@@ -59,14 +65,18 @@ const ConfigPedidosYa: React.FC = () => {
   }, [cargarConfig]);
 
   const abrirNuevo = () => {
+    if (bloqueado || operacionEnCursoRef.current) return;
     setFormularioVisible(true);
   };
 
   const abrirEditar = () => {
+    if (bloqueado || operacionEnCursoRef.current) return;
     setFormularioVisible(true);
   };
 
   const handleEliminar = async () => {
+    if (operacionEnCursoRef.current || bloqueado) return;
+    operacionEnCursoRef.current = true;
     setEliminando(true);
     try {
       await configPedidosYaApi.eliminar(sucursalActiva);
@@ -77,8 +87,13 @@ const ConfigPedidosYa: React.FC = () => {
       message.error(err?.response?.data?.errorMessage || 'Error al eliminar configuración de PedidosYa');
     } finally {
       setEliminando(false);
+      operacionEnCursoRef.current = false;
     }
   };
+
+  const handleOcupadoChange = useCallback((v: boolean) => {
+    setFormularioOcupado(v);
+  }, []);
 
   const handleGuardar = () => {
     cargarConfig();
@@ -86,6 +101,8 @@ const ConfigPedidosYa: React.FC = () => {
 
   const handleSubir = async () => {
     if (!config) return;
+    if (operacionEnCursoRef.current || bloqueado) return;
+    operacionEnCursoRef.current = true;
     setSubiendo(true);
     try {
       const rutaTemp = `C:\\temp\\pedidosya_${sucursalActiva}_${Date.now()}.csv`;
@@ -95,6 +112,7 @@ const ConfigPedidosYa: React.FC = () => {
       message.error(err?.response?.data?.errorMessage || 'Error al subir archivo a PedidosYa');
     } finally {
       setSubiendo(false);
+      operacionEnCursoRef.current = false;
     }
   };
 
@@ -138,7 +156,7 @@ const ConfigPedidosYa: React.FC = () => {
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={cargarConfig}>
+            <Button size="small" onClick={cargarConfig} disabled={bloqueado}>
               Reintentar
             </Button>
           }
@@ -155,17 +173,17 @@ const ConfigPedidosYa: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
             <Text strong style={{ fontSize: 16 }}>Configuración PedidosYa</Text>
             <div style={{ flex: 1 }} />
-            <Button icon={<ReloadOutlined />} onClick={cargarConfig} />
+            <Button icon={<ReloadOutlined />} onClick={cargarConfig} disabled={bloqueado} />
             {noExiste ? (
-              <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
+              <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo} disabled={bloqueado}>
                 Crear configuración
               </Button>
             ) : (
               <Space>
-                <Button type="primary" icon={<UploadOutlined />} loading={subiendo} onClick={handleSubir}>
+                <Button type="primary" icon={<UploadOutlined />} loading={subiendo} onClick={handleSubir} disabled={bloqueado}>
                   Subir ahora
                 </Button>
-                <Button icon={<EditOutlined />} onClick={abrirEditar}>
+                <Button icon={<EditOutlined />} onClick={abrirEditar} disabled={bloqueado}>
                   Editar
                 </Button>
                 <Popconfirm
@@ -175,8 +193,9 @@ const ConfigPedidosYa: React.FC = () => {
                   okText="Eliminar"
                   cancelText="Cancelar"
                   okButtonProps={{ danger: true }}
+                  disabled={bloqueado}
                 >
-                  <Button danger icon={<DeleteOutlined />} loading={eliminando}>
+                  <Button danger icon={<DeleteOutlined />} loading={eliminando} disabled={bloqueado}>
                     Eliminar
                   </Button>
                 </Popconfirm>
@@ -193,7 +212,7 @@ const ConfigPedidosYa: React.FC = () => {
                 No hay configuración de PedidosYa para esta sucursal.
               </Text>
               <div style={{ marginTop: 16 }}>
-                <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
+                <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo} disabled={bloqueado}>
                   Crear configuración
                 </Button>
               </div>
@@ -246,6 +265,7 @@ const ConfigPedidosYa: React.FC = () => {
         editItem={config}
         onClose={() => setFormularioVisible(false)}
         onSaved={handleGuardar}
+        onOcupadoChange={handleOcupadoChange}
       />
     </>
   );

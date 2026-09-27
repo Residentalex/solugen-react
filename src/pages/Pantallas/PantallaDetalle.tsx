@@ -28,6 +28,8 @@ const PantallaDetalle: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [data, setData] = useState<PantallaDTO | null>(null);
   const [permisosEspeciales, setPermisosEspeciales] = useState<PermisoEspecialConAsignacionDTO[]>([]);
+  const [permisosLoading, setPermisosLoading] = useState(false);
+  const [permisosError, setPermisosError] = useState(false);
 
   useEffect(() => {
     setActiveModule('MPantalla');
@@ -57,11 +59,16 @@ const PantallaDetalle: React.FC = () => {
 
   const cargarPermisos = useCallback(async () => {
     if (!id) return;
+    setPermisosLoading(true);
+    setPermisosError(false);
     try {
       const result = await permisoEspecialApi.obtenerPorPantalla(securitySucursal, parseInt(id));
       setPermisosEspeciales(result || []);
     } catch {
-      // no crítico
+      setPermisosError(true);
+      message.error('No fue posible cargar los permisos especiales');
+    } finally {
+      setPermisosLoading(false);
     }
   }, [id]);
 
@@ -195,20 +202,36 @@ const PantallaDetalle: React.FC = () => {
                 label: 'Permisos Especiales',
                 children: (
                   <div style={{ padding: '16px 0' }}>
-                    {(() => {
-                      const asignados = permisosEspeciales.filter((p) => p.asignado);
-                      return asignados.length > 0 ? (
-                        <Space wrap size={4}>
-                          {asignados.map((p) => (
-                            <Tag key={p.id} color="green">
-                              {p.nombre || p.codigo}
-                            </Tag>
-                          ))}
-                        </Space>
-                      ) : (
-                        <Text type="secondary">No hay permisos especiales asignados</Text>
-                      );
-                    })()}
+                    {permisosLoading ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Text type="secondary">Cargando permisos...</Text>
+                        <LoadingSpinner mensaje="" />
+                      </div>
+                    ) : permisosError ? (
+                      <>
+                        <Text type="secondary">No fue posible cargar los permisos</Text>
+                        <Button size="small" type="link" onClick={cargarPermisos}>
+                          Reintentar
+                        </Button>
+                      </>
+                    ) : (
+                      <div>
+                        {(() => {
+                          const asignados = permisosEspeciales.filter((p) => p.asignado);
+                          return asignados.length > 0 ? (
+                            <Space wrap size={4}>
+                              {asignados.map((p) => (
+                                <Tag key={p.id} color="green">
+                                  {p.nombre || p.codigo}
+                                </Tag>
+                              ))}
+                            </Space>
+                          ) : (
+                            <Text type="secondary">No hay permisos especiales asignados</Text>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
                 ),
               },

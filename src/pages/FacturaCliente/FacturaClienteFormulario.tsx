@@ -17,6 +17,7 @@ import {
   MoreOutlined,
   CalendarOutlined,
   HolderOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -206,6 +207,7 @@ const FacturaClienteFormulario: React.FC = () => {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
   const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
+  const [asientosModificados, setAsientosModificados] = useState(false);
   const [impuestosFactura, setImpuestosFactura] = useState<any[]>([]);
   const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
 
@@ -1641,14 +1643,17 @@ const FacturaClienteFormulario: React.FC = () => {
                   key: 'asientos',
                   label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
                   children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
-                    <AsientosContableEditables
-                      asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
-                      onChange={setAsientosLocales}
-                      editable={true}
-                      scroll={{ x: 900 }}
-                      onGenerar={handleGenerarAsientos}
-                      generando={generandoAsientos}
-                    />
+<AsientosContableEditables
+  asientos={asientosModificados ? asientosLocales : (asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []))}
+  onChange={(nuevosAsientos) => {
+    setAsientosLocales(nuevosAsientos);
+    setAsientosModificados(true);
+  }}
+  editable={true}
+  scroll={{ x: 900 }}
+  onGenerar={handleGenerarAsientos}
+  generando={generandoAsientos}
+/>
                   ) : (
                     <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
                   ),
@@ -1656,7 +1661,7 @@ const FacturaClienteFormulario: React.FC = () => {
                 ...(data?.logs && data.logs.length > 0
                   ? [{
                       key: 'historial',
-                      label: `Historial (${data?.logs?.length || 0})`,
+                      icon: <HistoryOutlined />, label: `Historial (${data?.logs?.length || 0})`,
                       children: (
                         <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
                       ),
@@ -1775,14 +1780,17 @@ const FacturaClienteFormulario: React.FC = () => {
                 key: 'asientos',
                 label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
                 children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
-                  <AsientosContableEditables
-                    asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
-                    onChange={setAsientosLocales}
-                    editable={true}
-                    scroll={{ x: 900 }}
-                    onGenerar={handleGenerarAsientos}
-                    generando={generandoAsientos}
-                  />
+<AsientosContableEditables
+  asientos={asientosModificados ? asientosLocales : (asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []))}
+  onChange={(nuevosAsientos) => {
+    setAsientosLocales(nuevosAsientos);
+    setAsientosModificados(true);
+  }}
+  editable={true}
+  scroll={{ x: 900 }}
+  onGenerar={handleGenerarAsientos}
+  generando={generandoAsientos}
+/>
                 ) : (
                   <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
                 ),
@@ -1790,7 +1798,7 @@ const FacturaClienteFormulario: React.FC = () => {
               ...(data?.logs && data.logs.length > 0
                 ? [{
                     key: 'historial',
-                    label: `Historial (${data?.logs?.length || 0})`,
+                    icon: <HistoryOutlined />, label: `Historial (${data?.logs?.length || 0})`,
                     children: (
                       <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
                     ),

@@ -18,6 +18,7 @@ import {
   HolderOutlined,
   BarcodeOutlined,
   PercentageOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -226,6 +227,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const [tiposCache, setTiposCache] = useState<TipoDTO[]>([]);
   const [selectedTipo, setSelectedTipo] = useState<TipoDTO | null>(null);
   const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
+  const [asientosModificados, setAsientosModificados] = useState(false);
   const [impuestosFactura, setImpuestosFactura] = useState<any[]>([]);
   const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
@@ -2298,14 +2300,17 @@ const FacturaSuplidorFormulario: React.FC = () => {
                           Agregar asiento manual
                         </Button>
                       </div>
-                      <AsientosContableEditables
-                        asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
-                        onChange={setAsientosLocales}
-                        editable={true}
-                        scroll={{ x: 600 }}
-                        onGenerar={handleGenerarAsientos}
-                        generando={generandoAsientos}
-                      />
+<AsientosContableEditables
+  asientos={asientosModificados ? asientosLocales : (asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []))}
+  onChange={(nuevosAsientos) => {
+    setAsientosLocales(nuevosAsientos);
+    setAsientosModificados(true);
+  }}
+  editable={true}
+  scroll={{ x: 900 }}
+  onGenerar={handleGenerarAsientos}
+  generando={generandoAsientos}
+/>
                     </>
                   ) : (
                     <AsientosContableTable
@@ -2314,13 +2319,13 @@ const FacturaSuplidorFormulario: React.FC = () => {
                     />
                   ),
                 },
-                {
-                  key: 'historial',
-                  label: `Historial (${data?.logs?.length || 0})`,
-                  children: (
-                    <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
-                  ),
-                },
+{
+                   key: 'historial',
+                   icon: <HistoryOutlined />, label: `Historial (${data?.logs?.length || 0})`,
+                   children: (
+                     <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
+                   ),
+                 },
               ]}
             />
           </Col>
@@ -2434,14 +2439,17 @@ const FacturaSuplidorFormulario: React.FC = () => {
                         Agregar asiento manual
                       </Button>
                     </div>
-                    <AsientosContableEditables
-                      asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
-                      onChange={setAsientosLocales}
-                      editable={true}
-                      scroll={{ x: 600 }}
-                      onGenerar={handleGenerarAsientos}
-                      generando={generandoAsientos}
-                    />
+<AsientosContableEditables
+  asientos={asientosModificados ? asientosLocales : (asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []))}
+  onChange={(nuevosAsientos) => {
+    setAsientosLocales(nuevosAsientos);
+    setAsientosModificados(true);
+  }}
+  editable={true}
+  scroll={{ x: 600 }}
+  onGenerar={handleGenerarAsientos}
+  generando={generandoAsientos}
+/>
                   </>
                 ) : (
                   <AsientosContableTable
@@ -2450,13 +2458,13 @@ const FacturaSuplidorFormulario: React.FC = () => {
                   />
                 ),
               },
-              {
-                key: 'historial',
-                label: `Historial (${data?.logs?.length || 0})`,
-                children: (
-                  <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
-                ),
-              },
+{
+                   key: 'historial',
+                   icon: <HistoryOutlined />, label: `Historial (${data?.logs?.length || 0})`,
+                   children: (
+                     <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
+                   ),
+                 },
             ]}
           />
         </div>

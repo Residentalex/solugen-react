@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, message, Row, Col, Table, Statistic, Typography, Empty, Spin, Skeleton } from 'antd';
+import { Card, Descriptions, Tag, message, Row, Col, Table, Statistic, Typography, Empty, Spin, Skeleton, theme } from 'antd';
 import { ArrowUpOutlined, ArrowDownOutlined, SwapOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -22,6 +22,7 @@ const ORIGEN_LABEL: Record<number, string> = {
 const CuentaContableDetalle: React.FC = () => {
   const { noCuenta } = useParams<{ noCuenta: string }>();
   const navigate = useNavigate();
+  const { token } = theme.useToken();
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
@@ -158,7 +159,6 @@ const CuentaContableDetalle: React.FC = () => {
           >
             <Descriptions column={1} bordered size="small">
               <Descriptions.Item label="Nombre">{item?.nombre}</Descriptions.Item>
-              <Descriptions.Item label="Tipo">—</Descriptions.Item>
               <Descriptions.Item label="Tipo Cuenta">{item?.tipoCuenta?.nombre || '-'}</Descriptions.Item>
               <Descriptions.Item label="Grupo">{item?.grupo?.nombre || '-'}</Descriptions.Item>
               <Descriptions.Item label="Moneda">{item?.moneda?.codigo || '-'}</Descriptions.Item>
@@ -201,8 +201,8 @@ const CuentaContableDetalle: React.FC = () => {
                       title="Total Débitos"
                       value={balance?.totalDebe ?? 0}
                       precision={2}
-                      prefix={<ArrowDownOutlined style={{ color: '#f5222d' }} />}
-                      valueStyle={{ color: '#f5222d', fontSize: 18 }}
+                      prefix={<ArrowDownOutlined style={{ color: token.colorError }} />}
+                      valueStyle={{ color: token.colorError, fontSize: 18 }}
                     />
                   </Col>
                   <Col xs={12} sm={8}>
@@ -210,8 +210,8 @@ const CuentaContableDetalle: React.FC = () => {
                       title="Total Créditos"
                       value={balance?.totalHaber ?? 0}
                       precision={2}
-                      prefix={<ArrowUpOutlined style={{ color: '#52c41a' }} />}
-                      valueStyle={{ color: '#52c41a', fontSize: 18 }}
+                      prefix={<ArrowUpOutlined style={{ color: token.colorSuccess }} />}
+                      valueStyle={{ color: token.colorSuccess, fontSize: 18 }}
                     />
                   </Col>
                   <Col xs={12} sm={8}>
@@ -219,15 +219,15 @@ const CuentaContableDetalle: React.FC = () => {
                       title="Saldo Actual"
                       value={balance?.saldo ?? 0}
                       precision={2}
-                      prefix={<SwapOutlined style={{ color: '#556ee6' }} />}
-                      valueStyle={{ color: '#556ee6', fontSize: 18, fontWeight: 600 }}
+                      prefix={<SwapOutlined style={{ color: token.colorPrimary }} />}
+                      valueStyle={{ color: token.colorPrimary, fontSize: 18, fontWeight: 600 }}
                     />
                   </Col>
                 </Row>
                 {balance?.fechaUltimoCierre && (
                   <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
                     <Col span={24}>
-                      <Card size="small" className="paces-card" style={{ background: '#fafafa' }}>
+                      <Card size="small" className="paces-card" style={{ background: token.colorFillTertiary }}>
                         <Text type="secondary">
                           Último cierre: <Text strong>{balance.fechaUltimoCierre?.split('-').reverse().join('/')}</Text>
                           {balance.balanceBase != null && (

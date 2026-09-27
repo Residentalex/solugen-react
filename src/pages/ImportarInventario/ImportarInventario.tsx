@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Button, Space, Row, Col, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal,
+  Card, Table, Button, Space, Row, Col, Grid, Steps,
+  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Descriptions, Alert,
 } from 'antd';
 import {
   SaveOutlined,
@@ -143,6 +143,30 @@ function filaVacia(): DetalleImportarDTO {
   };
 }
 
+// ===== Validación =====
+function validarFila(fila: DetalleImportarDTO): string[] {
+  const errores: string[] = [];
+
+  if (!fila.codigo?.trim()) errores.push('El campo Código es requerido');
+  if (!fila.articulo?.trim()) errores.push('El campo Artículo es requerido');
+  if (fila.cantidad === undefined || fila.cantidad <= 0)
+    errores.push('La Cantidad debe ser un número mayor que 0');
+  if (fila.costo === undefined || fila.costo < 0)
+    errores.push('El Costo no puede ser negativo');
+  if (
+    fila.porcentajeDescuento !== undefined &&
+    (isNaN(fila.porcentajeDescuento) || fila.porcentajeDescuento < 0 || fila.porcentajeDescuento > 100)
+  )
+    errores.push('El Porcentaje Descuento debe estar entre 0 y 100');
+  if (
+    fila.porcentajeImpuesto !== undefined &&
+    (isNaN(fila.porcentajeImpuesto) || fila.porcentajeImpuesto < 0 || fila.porcentajeImpuesto > 100)
+  )
+    errores.push('El Porcentaje Impuesto debe estar entre 0 y 100');
+
+  return errores;
+}
+
 // ===== Parser CSV básico =====
 function parseCSV(text: string): DetalleImportarDTO[] {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
@@ -179,24 +203,18 @@ function parseCSV(text: string): DetalleImportarDTO[] {
   return resultados;
 }
 
-// ===== Componente principal =====
+const PASOS = ['Cargar', 'Validar', 'Completar documento', 'Confirmar'];
+
 const ImportarInventario: React.FC = () => {
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
-  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
-  const resetToolbar = useUIStore((s) => s.resetToolbar);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setPageTitleOverride = useUIStore((s) => s.setPageTitleOverride);
-  const screens = Grid.useBreakpoint();
-  const isLarge = screens.lg ?? true;
+  const resetToolbar = useUIStore((s) => s.resetToolbar);
+  const { data: { fechasCierre, fechasCierreInv } } = useCompanyStore();
   const monedaDefault = getMonedaSucursalActiva();
-
-  // ===== States =====
-  const [saving, setSaving] = useState(false);
-  const [detalles, setDetalles] = useState<DetalleImportarDTO[]>([]);
-
-  // Tipo documento
-  const [tipoDocumento, setTipoDocumento] = useState<TipoDocInventario>('ENP');
+  const screens = Grid.useBreakpoint();
+  const isLarge = screens.xxl === true;
 
   // Concepto
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
@@ -211,12 +229,21 @@ const ImportarInventario: React.FC = () => {
   const [entidadDesdeVal, setEntidadDesdeVal] = useState<string>('');
   const [entidadHastaVal, setEntidadHastaVal] = useState<string>('');
 
-  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
+  const impuestosBackupRef = useRef<Map<number, { impuestos: number; porcentajeImpuesto: number }>>(new Map());
 
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form] = Form.useForm();
+
+  // ===== Wizard state =====
+
+  const [currentStep, setCurrentStep] = useState(0);
+  const [file, setFile] = useState<File | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Map<number, string[]>>(new Map());
+  const [detalles, setDetalles] = useState<DetalleImportarDTO[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [tipoDocumento, setTipoDocumento] = useState<TipoDocInventario>('ENP');
 
   // ===== Determinar labels de entidad según tipo de documento =====
   const entidadLabels = useMemo(() => {
@@ -238,6 +265,9 @@ const ImportarInventario: React.FC = () => {
     setEntidadDesdeVal('');
     setEntidadHastaVal('');
     setDetalles([]);
+    setFile(null);
+    setValidationErrors(new Map());
+    setCurrentStep(0);
     form.setFieldsValue({
       conceptoNombre: '',
       entidadDesde: undefined,
@@ -267,6 +297,7 @@ const ImportarInventario: React.FC = () => {
 
   // ===== Handlers =====
   const handleCancelar = () => {
+    if (saving) return;
     Modal.confirm({
       title: 'Cancelar',
       icon: <ExclamationCircleOutlined />,
@@ -288,7 +319,7 @@ const ImportarInventario: React.FC = () => {
     form.setFieldsValue({
       conceptoNombre: concepto.nombre,
       moneda: monedaObj.nombre,
-      tasa: monedaObj.tasa ?? 1,
+      tasa: (monedaObj as { tasa?: number }).tasa ?? 1,
     });
 
     // === NoImpuesto: si el concepto no acepta impuestos, limpiarlos ===
@@ -296,16 +327,16 @@ const ImportarInventario: React.FC = () => {
     if (concepto.noImpuesto) {
       const hayImpuestos = detalles.some((d) => (d.porcentajeImpuesto || 0) > 0);
       if (hayImpuestos) {
-        const backup = new Map<number, { impuesto?: any; porcentajeImpuesto: number }>();
+        const backup = new Map<number, { impuestos: number; porcentajeImpuesto: number }>();
         detalles.forEach((d) => {
           if ((d.porcentajeImpuesto || 0) > 0) {
-            backup.set(d.id, { impuesto: d.impuesto, porcentajeImpuesto: d.porcentajeImpuesto || 0 });
+            backup.set(d.id, { impuestos: d.impuestos || 0, porcentajeImpuesto: d.porcentajeImpuesto || 0 });
           }
         });
         impuestosBackupRef.current = backup;
         message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
         setDetalles((prev) =>
-          prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
+          prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuestos: 0 }))
         );
       }
     } else if (prevNoImpuesto && !concepto.noImpuesto) {
@@ -315,7 +346,7 @@ const ImportarInventario: React.FC = () => {
           prev.map((d) => {
             const saved = backup.get(d.id);
             if (saved) {
-              return calcularFila({ ...d, impuesto: saved.impuesto, porcentajeImpuesto: saved.porcentajeImpuesto });
+              return calcularFila({ ...d, impuestos: saved.impuestos, porcentajeImpuesto: saved.porcentajeImpuesto });
             }
             return d;
           })
@@ -423,6 +454,7 @@ const ImportarInventario: React.FC = () => {
           const nuevos = parsed.map((d, idx) => ({ ...d, id: maxId - 1 - idx }));
           return [...prev, ...nuevos];
         });
+        setFile(file);
         message.success(`${parsed.length} filas cargadas desde ${isExcel ? 'Excel' : 'CSV'}`);
       } catch (err) {
         message.error('Error al leer el archivo. Verifique el formato.');
@@ -462,6 +494,16 @@ const ImportarInventario: React.FC = () => {
     if (!detalles.some((d) => (d.cantidad || 0) > 0)) return 'Debe tener al menos un detalle con cantidad > 0';
     return null;
   };
+
+  // ===== Validación por fila =====
+  const validationErrorsComputed = useMemo(() => {
+    const errors = new Map<number, string[]>();
+    detalles.forEach((d) => {
+      const errs = validarFila(d);
+      if (errs.length > 0) errors.set(d.id, errs);
+    });
+    return errors;
+  }, [detalles]);
 
   // ===== Construir DTO según tipo =====
   const construirDTO = (): any => {
@@ -537,7 +579,7 @@ const ImportarInventario: React.FC = () => {
           } as DetalleEntradaAlmacenDTO)),
           asientos: [],
           logs: [],
-        } as EntradaAlmacenDTO;
+        } as unknown as EntradaAlmacenDTO;
       }
 
       case 'SAP': {
@@ -574,7 +616,7 @@ const ImportarInventario: React.FC = () => {
           } as DetalleSalidaAlmacenDTO)),
           asientos: [],
           logs: [],
-        } as SalidaAlmacenFullDTO;
+        } as unknown as SalidaAlmacenFullDTO;
       }
 
       case 'TRP': {
@@ -600,7 +642,7 @@ const ImportarInventario: React.FC = () => {
           } as DetalleTransferenciaAlmacenDTO)),
           asientos: [],
           logs: [],
-        } as TransferenciaAlmacenFullDTO;
+        } as unknown as TransferenciaAlmacenFullDTO;
       }
 
       case 'DVC': {
@@ -639,7 +681,7 @@ const ImportarInventario: React.FC = () => {
           } as DetalleDevolucionCompraDTO)),
           asientos: [],
           logs: [],
-        } as DevolucionCompraFullDTO;
+        } as unknown as DevolucionCompraFullDTO;
       }
 
       default:
@@ -647,14 +689,21 @@ const ImportarInventario: React.FC = () => {
     }
   };
 
-  // ===== Guardar =====
+// ===== Guardar =====
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+
   const handleGuardar = async () => {
     const error = validarFormulario();
     if (error) {
       message.error(error);
       return;
     }
+    setConfirmModalOpen(true);
+  };
 
+  const handleConfirmarGuardar = async () => {
+    if (saving) return;
+    setConfirmModalOpen(false);
     setSaving(true);
     try {
       const dto = construirDTO();
@@ -688,18 +737,28 @@ const ImportarInventario: React.FC = () => {
     }
   };
 
-  // ===== Toolbar inline =====
-  const renderToolbar = () => (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-      <div style={{ flex: 1 }} />
-      <Space wrap>
-        <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
-          Guardar
-        </Button>
-        <Button icon={<CloseOutlined />} onClick={handleCancelar}>
-          Cancelar
-        </Button>
-      </Space>
+  // ===== Toolbar con Steps =====
+  const pasosValidos = [
+    true, // Cargar
+    !!file, // Validar
+    !!file && validationErrorsComputed.size === 0, // Completar documento
+    !!file && validationErrorsComputed.size === 0 && detalles.length > 0, // Confirmar
+  ];
+
+  const renderStepsToolbar = () => (
+    <div style={{ marginBottom: 16 }}>
+      <Steps
+        current={currentStep}
+        onChange={(s) => {
+          if (saving) return;
+          if (s < currentStep || pasosValidos[s]) setCurrentStep(s);
+        }}
+        size="small"
+        items={PASOS.map((label, i) => ({
+          title: label,
+          status: i < currentStep ? 'finish' : i === currentStep ? 'process' : 'wait',
+        }))}
+      />
     </div>
   );
 
@@ -992,66 +1051,138 @@ const ImportarInventario: React.FC = () => {
     </Card>
   );
 
-  return (
+  // ===== Render por paso =====
+  const renderStepCargar = () => (
     <div>
-      {renderToolbar()}
+      <Card className="paces-card" size="small" title="Cargar Archivo" style={{ marginBottom: 16 }}>
+        <div style={{ padding: 16 }}>
+          <div style={{ marginBottom: 16 }}>
+            <Form form={form} layout="vertical" size="small">
+              <Row gutter={[16, 24]}>
+                <Col xs={24} sm={12} lg={8}>
+                  <Form.Item label="Tipo Documento" required style={{ marginBottom: 0 }}>
+                    <Select
+                      value={tipoDocumento}
+                      onChange={handleTipoDocumentoChange}
+                      options={[
+                        { value: 'ENP', label: 'Entrada de Almacén (ENP)' },
+                        { value: 'SAP', label: 'Salida de Almacén (SAP)' },
+                        { value: 'TRP', label: 'Transferencia (TRP)' },
+                        { value: 'DVC', label: 'Devolución Compra (DVC)' },
+                      ]}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Form>
+          </div>
 
-      <BuscarConceptoModal
-        open={conceptoModalOpen}
-        onClose={() => setConceptoModalOpen(false)}
-        onSelect={handleConceptoSelect}
-        sucursal={sucursalActiva}
-        documento={tipoDocumento}
-      />
+          <div style={{ border: '2px dashed #d9d9d9', borderRadius: 8, padding: 24, textAlign: 'center', cursor: 'pointer', transition: 'all 0.3s', background: '#fafafa' }} onClick={() => fileInputRef.current?.click()}>
+            <UploadOutlined style={{ fontSize: 32, color: '#556ee6', marginBottom: 8 }} />
+            <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>Arrastrar y soltar archivo CSV/Excel</div>
+            <div style={{ fontSize: 12, color: '#999' }}>o haga clic para seleccionar</div>
+            <input
+              type="file"
+              accept=".csv,.txt,.xlsx"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              style={{ display: 'none' }}
+            />
+          </div>
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+            Formato CSV: codigo,articulo,referencia,cantidad,costo,porcentajedescuento,porcentajeimpuesto
+          </Text>
+        </div>
+      </Card>
+
+      {detalles.length > 0 && (
+        <Card className="paces-card" size="small" title={`Detalles Cargados (${detalles.length})`} style={{ marginBottom: 16 }}>
+          <Table
+            dataSource={detalles}
+            columns={detalleColumns}
+            rowKey="id"
+            size="small"
+            pagination={false}
+            scroll={{ x: 1000 }}
+          />
+        </Card>
+      )}
+
+      <Space>
+        <Button icon={<DownloadOutlined />} onClick={() => handleDescargarPlantilla(tipoDocumento)}>
+          Descargar plantilla
+        </Button>
+      </Space>
+    </div>
+  );
+
+  const renderStepValidar = () => (
+    <div>
+      {validationErrorsComputed.size > 0 && (
+        <Card className="paces-card" size="small" title={`Errores de Validación (${validationErrorsComputed.size} filas)`} style={{ marginBottom: 16, borderColor: '#ff4d4f' }}>
+          <div style={{ padding: 16 }}>
+            {Array.from(validationErrorsComputed.entries()).map(([rowId, errors]) => (
+              <Alert
+                key={rowId}
+                type="error"
+                message={`Fila ${detalles.findIndex((d) => d.id === rowId) + 1}`}
+                description={errors.join('; ')}
+                style={{ marginBottom: 8 }}
+                closable={false}
+              />
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <Card className="paces-card" size="small" title={`Detalles (${detalles.length})`} style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <Space>
+            <Button type="dashed" icon={<PlusOutlined />} onClick={handleAgregarFila}>
+              Agregar fila
+            </Button>
+            <Button icon={<DownloadOutlined />} onClick={() => handleDescargarPlantilla(tipoDocumento)}>
+              Descargar plantilla
+            </Button>
+            <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
+              Cargar archivo
+            </Button>
+          </Space>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            Formato CSV: codigo,articulo,referencia,cantidad,costo,porcentajedescuento,porcentajeimpuesto
+          </Text>
+        </div>
+
+        <Table
+          dataSource={detalles}
+          columns={detalleColumns}
+          rowKey="id"
+          size="small"
+          pagination={false}
+          scroll={{ x: 1000 }}
+        />
+      </Card>
+    </div>
+  );
+
+  const renderStepCompletar = () => (
+    <div>
+      {renderEncabezado()}
+
+      <Card className="paces-card" size="small" title={`Detalles (${detalles.length})`} style={{ marginBottom: 16 }}>
+        <Table
+          dataSource={detalles}
+          columns={detalleColumns}
+          rowKey="id"
+          size="small"
+          pagination={false}
+          scroll={{ x: 1000 }}
+        />
+      </Card>
 
       {isLarge ? (
-        /* === DESKTOP LAYOUT === */
         <Row gutter={16}>
-          <Col lg={18}>
-            {renderEncabezado()}
-
-            {/* Sección de detalles */}
-            <Card
-              className="paces-card"
-              size="small"
-              title={`Detalles (${detalles.length})`}
-              style={{ marginBottom: 16 }}
-            >
-              <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <Space>
-                  <Button type="dashed" icon={<PlusOutlined />} onClick={handleAgregarFila}>
-                    Agregar fila
-                  </Button>
-                  <input
-                    type="file"
-                    accept=".csv,.txt,.xlsx"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    style={{ display: 'none' }}
-                  />
-                  <Button icon={<DownloadOutlined />} onClick={() => handleDescargarPlantilla(tipoDocumento)}>
-                    Descargar plantilla
-                  </Button>
-                  <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
-                    Cargar archivo
-                  </Button>
-                </Space>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Formato CSV: codigo,articulo,referencia,cantidad,costo,porcentajedescuento,porcentajeimpuesto
-                </Text>
-              </div>
-
-              <Table
-                dataSource={detalles}
-                columns={detalleColumns}
-                rowKey="id"
-                size="small"
-                pagination={false}
-                scroll={{ x: 1000 }}
-              />
-            </Card>
-          </Col>
-
+          <Col lg={18} />
           <Col lg={6}>
             <TotalesCard
               subTotal={totales.subTotal}
@@ -1065,59 +1196,146 @@ const ImportarInventario: React.FC = () => {
           </Col>
         </Row>
       ) : (
-        /* === MOBILE LAYOUT === */
-        <div>
-          {renderEncabezado()}
-
-          <Card
-            className="paces-card"
-            size="small"
-            title={`Detalles (${detalles.length})`}
-            style={{ marginBottom: 16 }}
-          >
-            <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <Space>
-                <Button type="dashed" icon={<PlusOutlined />} onClick={handleAgregarFila}>
-                  Agregar fila
-                </Button>
-                <input
-                  type="file"
-                  accept=".csv,.txt,.xlsx"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  style={{ display: 'none' }}
-                />
-                <Button icon={<DownloadOutlined />} onClick={() => handleDescargarPlantilla(tipoDocumento)}>
-                  Descargar plantilla
-                </Button>
-                <Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
-                  Cargar archivo
-                </Button>
-              </Space>
-            </div>
-
-            <Table
-              dataSource={detalles}
-              columns={detalleColumns}
-              rowKey="id"
-              size="small"
-              pagination={false}
-              scroll={{ x: 1000 }}
-            />
-          </Card>
-
-          <TotalesCard
-            subTotal={totales.subTotal}
-            descuento={totales.descuento}
-            impuestos={totales.impuestos}
-            total={totales.total}
-            monedaSimbolo={selectedConcepto?.moneda?.simbolo || monedaDefault.simbolo}
-            monedaNombre={selectedConcepto?.moneda?.nombre || monedaDefault.nombre}
-            tasa={1}
-            alignRight
-          />
-        </div>
+        <TotalesCard
+          subTotal={totales.subTotal}
+          descuento={totales.descuento}
+          impuestos={totales.impuestos}
+          total={totales.total}
+          monedaSimbolo={selectedConcepto?.moneda?.simbolo || monedaDefault.simbolo}
+          monedaNombre={selectedConcepto?.moneda?.nombre || monedaDefault.nombre}
+          tasa={1}
+          alignRight
+        />
       )}
+    </div>
+  );
+
+  const renderStepConfirmar = () => (
+    <div>
+      <Card className="paces-card" size="small" title="Resumen del Documento" style={{ marginBottom: 16 }}>
+        <Descriptions size="small" column={2} layout="horizontal">
+          <Descriptions.Item label="Tipo Documento">{TIPO_DOC_LABELS[tipoDocumento]}</Descriptions.Item>
+          <Descriptions.Item label="Concepto">{selectedConcepto?.nombre || '-'}</Descriptions.Item>
+          <Descriptions.Item label={entidadLabels.desde}>{entidadDesdeVal || '-'}</Descriptions.Item>
+          <Descriptions.Item label={entidadLabels.hasta}>{entidadHastaVal || '-'}</Descriptions.Item>
+          <Descriptions.Item label="Fecha">{form.getFieldValue('fechaDocumento')?.format('YYYY-MM-DD') || '-'}</Descriptions.Item>
+          <Descriptions.Item label="Filas">{detalles.length}</Descriptions.Item>
+        </Descriptions>
+      </Card>
+
+      <Card className="paces-card" size="small" title={`Detalles (${detalles.length})`} style={{ marginBottom: 16 }}>
+        <Table
+          dataSource={detalles}
+          columns={detalleColumns}
+          rowKey="id"
+          size="small"
+          pagination={false}
+          scroll={{ x: 1000 }}
+        />
+      </Card>
+
+      {isLarge ? (
+        <Row gutter={16}>
+          <Col lg={18} />
+          <Col lg={6}>
+            <TotalesCard
+              subTotal={totales.subTotal}
+              descuento={totales.descuento}
+              impuestos={totales.impuestos}
+              total={totales.total}
+              monedaSimbolo={selectedConcepto?.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={selectedConcepto?.moneda?.nombre || monedaDefault.nombre}
+              tasa={1}
+            />
+          </Col>
+        </Row>
+      ) : (
+        <TotalesCard
+          subTotal={totales.subTotal}
+          descuento={totales.descuento}
+          impuestos={totales.impuestos}
+          total={totales.total}
+          monedaSimbolo={selectedConcepto?.moneda?.simbolo || monedaDefault.simbolo}
+          monedaNombre={selectedConcepto?.moneda?.nombre || monedaDefault.nombre}
+          tasa={1}
+          alignRight
+        />
+      )}
+
+      <Space style={{ marginTop: 16 }}>
+        <Button type="primary" icon={<SaveOutlined />} size="large" onClick={handleGuardar} loading={saving} disabled={saving}>
+          Confirmar y Guardar
+        </Button>
+        <Button icon={<CloseOutlined />} size="large" onClick={handleCancelar} disabled={saving}>
+          Cancelar
+        </Button>
+      </Space>
+    </div>
+  );
+
+  return (
+    <div>
+      {renderStepsToolbar()}
+
+      <BuscarConceptoModal
+        open={conceptoModalOpen}
+        onClose={() => setConceptoModalOpen(false)}
+        onSelect={handleConceptoSelect}
+        sucursal={sucursalActiva}
+        documento={tipoDocumento}
+      />
+
+      <Modal
+        open={confirmModalOpen}
+        onOk={handleConfirmarGuardar}
+        onCancel={() => { if (!saving) setConfirmModalOpen(false); }}
+        title="Confirmar Guardado"
+        okText="Sí, guardar"
+        cancelText="Cancelar"
+        okButtonProps={{ danger: false, loading: saving, disabled: saving }}
+        cancelButtonProps={{ disabled: saving }}
+        width={500}
+      >
+        <p>¿Confirma la creación del documento <strong>{TIPO_DOC_LABELS[tipoDocumento]}</strong>?</p>
+        <p style={{ color: '#999', marginTop: 8 }}>
+          Se crearán {detalles.length} líneas de detalle.
+        </p>
+      </Modal>
+
+      {currentStep === 0 && renderStepCargar()}
+      {currentStep === 1 && renderStepValidar()}
+      {currentStep === 2 && renderStepCompletar()}
+      {currentStep === 3 && renderStepConfirmar()}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16, gap: 8, flexWrap: 'wrap' }}>
+        <Button
+          disabled={currentStep === 0 || saving}
+          onClick={() => setCurrentStep((s) => Math.max(0, s - 1))}
+        >
+          Atrás
+        </Button>
+        <Space>
+          {currentStep < 3 && (
+            <Button
+              type="primary"
+              disabled={(currentStep === 0 && !file) || saving}
+              onClick={() => {
+                if (saving) return;
+                if (currentStep === 0 && file) setCurrentStep(1);
+                if (currentStep === 1 && validationErrorsComputed.size === 0) setCurrentStep(2);
+                if (currentStep === 2) setCurrentStep(3);
+              }}
+            >
+              Siguiente
+            </Button>
+          )}
+          {currentStep === 3 && (
+            <Button type="primary" icon={<SaveOutlined />} onClick={handleGuardar} loading={saving} disabled={saving}>
+              Guardar
+            </Button>
+          )}
+        </Space>
+      </div>
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Modal, Table, Checkbox, Button, Spin, Empty, Tag } from 'antd';
 import { impuestoApi } from '../../api/impuestoApi';
-import type { ImpuestoDTO } from '../../types/contabilidad';
+import type { ImpuestoDTO, TipoImpuesto, AmbitoImpuesto } from '../../types/contabilidad';
 import { toTitleCase } from '../../utils/formats';
 
 export interface ImpuestoSeleccionado {
@@ -12,6 +12,10 @@ export interface ImpuestoSeleccionado {
   tipo: string; // 'Impuesto' | 'Retencion' | 'Informativo' | 'Otro'
   monto: number;
   noCuenta?: string;
+  /** Codigo de enum real del backend (I/L/V/R), no la etiqueta de display. */
+  tipoCodigo?: TipoImpuesto;
+  /** Ambito real del backend (Venta/Compra/Ninguno). */
+  ambito?: AmbitoImpuesto;
 }
 
 interface Props {
@@ -93,6 +97,8 @@ const SeleccionarImpuestosModal: React.FC<Props> = ({
         tipo: mapTipoImpuesto(imp.tipo),
         monto: 0,
         noCuenta: imp.noCuenta || '',
+        tipoCodigo: imp.tipo,
+        ambito: imp.ambito,
       }));
 
     // Mezclar con existentes: conservar montos previos

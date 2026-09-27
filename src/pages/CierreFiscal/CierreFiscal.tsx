@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography, message } from 'antd';
+import { Typography, Tag, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { cierreFiscalApi, type CierreFiscalItem } from '../../api/cierreFiscalApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { formatCurrency, formatDateRaw } from '../../utils/formats';
+import FechaColumnCell from '../../components/FechaColumnCell';
 
 const { Text } = Typography;
 
@@ -129,14 +130,14 @@ const CierreFiscal: React.FC = () => {
       dataIndex: 'tipo',
       key: 'tipo',
       width: 130,
-      render: (val: string) => (
-        <span style={{
-          padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 600,
-          background: val === 'CIE' || val === 'T' ? '#556ee6' : '#10b981', color: '#fff',
-        }}>
-          {val === 'CIE' || val === 'T' ? 'Cierre Fiscal' : val || '---'}
-        </span>
-      ),
+      render: (val: string) => {
+        const esCierre = val === 'CIE' || val === 'T';
+        return (
+          <Tag color={esCierre ? 'processing' : 'success'} style={{ margin: 0, borderRadius: 4 }}>
+            {esCierre ? 'Cierre Fiscal' : val || '---'}
+          </Tag>
+        );
+      },
     },
     {
       title: 'Débitos',

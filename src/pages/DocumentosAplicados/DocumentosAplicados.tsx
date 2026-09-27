@@ -9,6 +9,7 @@ import { transaccionApi } from '../../api/transaccionApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { formatCurrency, formatDateRaw, formatDateParam, toTitleCase } from '../../utils/formats';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import FiltroSeleccionDropdown from '../../components/FiltroSeleccionDropdown';
 import { FilterFilled, FilterOutlined } from '@ant-design/icons';
 import { documentosReporteApi } from '../../api/documentosReporteApi';
@@ -288,7 +289,7 @@ const DocumentosAplicados: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (v: string) => <Text>{formatDateRaw(v)}</Text>,
+      render: (v: string) => <FechaColumnCell fecha={v} />,
     },
     {
       title: 'Entidad',
@@ -318,7 +319,7 @@ const DocumentosAplicados: React.FC = () => {
       dataIndex: 'fechaAccion',
       key: 'fechaAccion',
       width: 130,
-      render: (v: string) => (v ? <Text>{formatDateRaw(v)}</Text> : <Text>-</Text>),
+      render: (v: string) => v ? <FechaColumnCell fecha={v} /> : '-',
     },
     {
       title: aplicado ? 'Aplicado por' : 'Autorizado por',

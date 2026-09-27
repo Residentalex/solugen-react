@@ -24,9 +24,12 @@ const METODO_APLICAR_LABEL: Record<number, string> = {
 };
 
 const FECHA_PERMITIDA_LABEL: Record<number, string> = {
-  0: 'Fecha Actual',
-  1: 'Cualquier Fecha',
-  2: 'Período Abierto',
+   0: 'No definida',
+   1: 'Todas las fechas',
+   2: 'Posterior al cierre',
+   3: 'Posterior al documento aplicado',
+   4: 'Fecha del día',
+   5: 'Hasta la fecha del día',
 };
 
 const TIPO_NUMERACION_LABEL: Record<number, string> = {
@@ -35,9 +38,9 @@ const TIPO_NUMERACION_LABEL: Record<number, string> = {
 };
 
 const TIPO_IMPUESTO_LABEL: Record<number, string> = {
-  0: 'Ninguno',
-  1: 'ITBIS',
-  2: 'ISC',
+   0: 'Venta',
+   1: 'Compra',
+   2: 'Ninguno',
 };
 
 const DocumentosDetalle: React.FC = () => {
@@ -102,11 +105,6 @@ const DocumentosDetalle: React.FC = () => {
           <Text type="secondary" style={{ fontSize: 12 }}>Puede Reimprimir</Text>
           <br />
           <Tag color={data.puedeReimprimir ? 'blue' : 'default'}>{data.puedeReimprimir ? 'Sí' : 'No'}</Tag>
-        </div>
-        <div>
-          <Text type="secondary" style={{ fontSize: 12 }}>Documento Contable</Text>
-          <br />
-          <Tag color={data.documentoContable ? 'geekblue' : 'default'}>{data.documentoContable ? 'Sí' : 'No'}</Tag>
         </div>
         <div>
           <Text type="secondary" style={{ fontSize: 12 }}>Incluir Estados Cuenta</Text>

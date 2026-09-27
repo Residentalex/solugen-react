@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -36,6 +36,9 @@ const Documentos: React.FC = () => {
   const [page, setPage] = useState(1);
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(25);
+  const [eliminandoId, setEliminandoId] = useState<number | null>(null);
+  const operacionRef = useRef(false);
+  const ocupado = eliminandoId !== null;
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['documentos', sucursalActiva, page, pageSize, searchText],
@@ -84,13 +87,19 @@ const Documentos: React.FC = () => {
   };
 
   const handleEliminar = async (doc: DocumentoDTO) => {
+    if (sucursalActiva === undefined) return;
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setEliminandoId(doc.id);
     try {
-      if (sucursalActiva === undefined) return;
       await documentosApi.eliminar(sucursalActiva, doc.id);
       message.success('Documento eliminado correctamente');
       refetch();
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al eliminar documento');
+    } finally {
+      setEliminandoId(null);
+      operacionRef.current = false;
     }
   };
 
@@ -103,8 +112,8 @@ const Documentos: React.FC = () => {
       width: 120,
       render: (val: string, record: DocumentoDTO) => (
         <Text
-          style={{ fontFamily: 'monospace', cursor: 'pointer', color: '#556ee6' }}
-          onClick={() => navigate(`/MDocumento/${record.id}`)}
+          style={{ fontFamily: 'monospace', cursor: ocupado ? 'default' : 'pointer', color: ocupado ? '#8c8c8c' : '#556ee6' }}
+          onClick={() => { if (!ocupado) navigate(`/MDocumento/${record.id}`); }}
         >
           {val}
         </Text>
@@ -145,6 +154,7 @@ const Documentos: React.FC = () => {
                     type="link"
                     size="small"
                     style={{ marginRight: 8 }}
+                    disabled={ocupado}
                     onClick={() => navigate(`/MDocumento/${record.id}/editar`)}
                   >
                     Editar
@@ -156,8 +166,16 @@ const Documentos: React.FC = () => {
                     onConfirm={() => handleEliminar(record)}
                     okText="Sí"
                     cancelText="No"
+                    okButtonProps={{ danger: true, disabled: ocupado, loading: eliminandoId === record.id }}
+                    cancelButtonProps={{ disabled: ocupado }}
                   >
-                    <Button type="link" danger size="small">
+                    <Button
+                      type="link"
+                      danger
+                      size="small"
+                      loading={eliminandoId === record.id}
+                      disabled={ocupado}
+                    >
                       Eliminar
                     </Button>
                   </Popconfirm>
@@ -188,10 +206,11 @@ const Documentos: React.FC = () => {
         <CatalogoListadoToolbar
           onSearch={handleSearch}
           pageSize={pageSize}
-          onPageSizeChange={(v) => { setPageSize(v); }}
+          onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onNuevo={() => navigate('/MDocumento/nuevo')}
           onReload={() => refetch()}
           onExportarExcel={handleExportarExcel}
+          deshabilitado={ocupado}
         />
         <Table<DocumentoDTO>
           columns={columns}

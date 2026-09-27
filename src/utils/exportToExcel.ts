@@ -185,7 +185,7 @@ export function exportToExcelMultiSheet(options: ExportToExcelMultiSheetOptions)
 
     // ── Anchos de columna ──
     if (columnWidths) {
-      ws['!cols'] = columnWidths;
+    ws['!cols'] = columnWidths.filter((c): c is { wch: number } => c !== undefined);
     } else {
       ws['!cols'] = Array.from({ length: ncols }, () => ({ wch: 18 }));
     }

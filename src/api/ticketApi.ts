@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { ApiResponse } from '../types/auth';
-import type { TicketDTO, TicketRespuestaDTO, CrearTicketRequest, ResponderTicketRequest, CambiarEstadoTicketRequest } from '../types/ticket';
+import type { TicketDTO, TicketRespuestaDTO, TicketAdjuntoDTO, CrearTicketRequest, ResponderTicketRequest, CambiarEstadoTicketRequest } from '../types/ticket';
 
 const BASE = '/ticket';
 
@@ -30,5 +30,24 @@ export const ticketApi = {
     if (salto !== undefined) params.salto = salto;
     const { data } = await apiClient.get<ApiResponse<TicketDTO[]>>(`${BASE}/${sucursal}/pendientes/${usuarioID}`, { params });
     return data.data;
+  },
+
+  subirAdjunto: async (sucursal: number, ticketID: number, file: File): Promise<TicketAdjuntoDTO> => {
+    const formData = new FormData();
+    formData.append('archivo', file);
+    const { data } = await apiClient.post<ApiResponse<TicketAdjuntoDTO>>(
+      `${BASE}/${sucursal}/${ticketID}/adjuntos`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return data.data;
+  },
+
+  descargarAdjunto: async (adjuntoId: number): Promise<Blob> => {
+    const { data } = await apiClient.get<Blob>(
+      `${BASE}/adjuntos/${adjuntoId}/descargar`,
+      { responseType: 'blob' },
+    );
+    return data;
   },
 };

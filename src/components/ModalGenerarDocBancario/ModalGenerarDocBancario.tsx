@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import type { ColumnsType } from 'antd/es/table';
 import { Modal, Table, Progress, Button, Tag, Space, Typography, Checkbox } from 'antd';
 import { FileAddOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
@@ -101,37 +102,37 @@ export const ModalGenerarDocBancario: React.FC<Props> = ({ visible, onCancel, it
 
   const seleccionados = progresos.filter((p) => p.seleccionado && p.status === 'done');
 
-  const columns = [
-    { title: 'Doc. Original', dataIndex: 'documentoOriginal', width: 140, render: (t: string) => <Text strong ellipsis={{ tooltip: t }}>{t}</Text> },
-    { title: 'Entidad', dataIndex: 'entidad', width: 200, render: (t: string) => t || '-' },
-    { title: 'Total', dataIndex: 'total', width: 100, align: 'right', render: (t: number) => <Text strong>{t ? t.toFixed(2) : '-'}</Text> },
-    {
-      title: 'Estado',
-      width: 220,
-      render: (_: any, record: ProgresoItem) => {
-        if (record.status === 'pending') return <Tag>Pendiente</Tag>;
-        if (record.status === 'creating') return <Progress percent={50} size="small" status="active" format={() => 'Creando...'} />;
-        if (record.status === 'done') return <Tag color="green">Generado: {record.documentoGenerado}</Tag>;
-        return <Tag color="red">Error</Tag>;
-      },
-    },
-    {
-      title: 'Acción',
-      width: 200,
-      render: (_: any, record: ProgresoItem) => (
-        <Space>
-          {record.status === 'done' && (
-            <Button icon={<EyeOutlined />} size="small" onClick={() => window.open(`/FTransBanco/${record.idDocumentoGenerado ?? record.id}`, '_blank')}>
-              Ver
-            </Button>
-          )}
-          <Checkbox checked={record.seleccionado} onChange={() => handleToggleSeleccionado(record.id)} disabled={record.status !== 'done'}>
-            Imprimir
-          </Checkbox>
-        </Space>
-      ),
-    },
-  ];
+const columns: ColumnsType<ProgresoItem> = [
+     { title: 'Doc. Original', dataIndex: 'documentoOriginal', width: 140, render: (t: string) => <Text strong ellipsis={{ tooltip: t }}>{t}</Text> },
+     { title: 'Entidad', dataIndex: 'entidad', width: 200, render: (t: string) => t || '-' },
+     { title: 'Total', dataIndex: 'total', width: 100, align: 'right', render: (t: number) => <Text strong>{t ? t.toFixed(2) : '-'}</Text> },
+     {
+       title: 'Estado',
+       width: 220,
+       render: (_: any, record: ProgresoItem) => {
+         if (record.status === 'pending') return <Tag>Pendiente</Tag>;
+         if (record.status === 'creating') return <Progress percent={50} size="small" status="active" format={() => 'Creando...'} />;
+         if (record.status === 'done') return <Tag color="green">Generado: {record.documentoGenerado}</Tag>;
+         return <Tag color="red">Error</Tag>;
+       },
+     },
+     {
+       title: 'Acción',
+       width: 200,
+       render: (_: any, record: ProgresoItem) => (
+         <Space>
+           {record.status === 'done' && (
+             <Button icon={<EyeOutlined />} size="small" onClick={() => window.open(`/FTransBanco/${record.idDocumentoGenerado ?? record.id}`, '_blank')}>
+               Ver
+             </Button>
+           )}
+           <Checkbox checked={record.seleccionado} onChange={() => handleToggleSeleccionado(record.id)} disabled={record.status !== 'done'}>
+             Imprimir
+           </Checkbox>
+         </Space>
+       ),
+     },
+   ];
 
   return (
     <Modal

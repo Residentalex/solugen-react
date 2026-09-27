@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Row, Col, Button, Form, Input, InputNumber, Switch,   Checkbox, Spin, Skeleton, message, Grid, Collapse, Alert, Modal, Tag } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
@@ -23,7 +23,11 @@ const RolFormulario: React.FC = () => {
   const screens = Grid.useBreakpoint();
   const securitySucursal = useAuthStore((s) => s.securitySucursal);
 
-  const navigationConfirmedRef = useFormularioNavigation();
+  // Candado inmediato para impedir dobles guardados por clics rapidos
+  const guardandoRef = useRef(false);
+  // Id del rol ya persistido en esta sesion: evita volver a crear en el reintento
+  const rolGuardadoRef = useRef<number>(0);
+  const navigationConfirmedRef = useFormularioNavigation(guardandoRef);
 
   const [dashboardPermisoChecked, setDashboardPermisoChecked] = useState(false);
 
@@ -208,6 +212,8 @@ const RolFormulario: React.FC = () => {
   };
 
   const guardar = async () => {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
     try {
       const values = await form.validateFields();
       setGuardando(true);
@@ -218,21 +224,22 @@ const RolFormulario: React.FC = () => {
           id: parseInt(pantallaId),
           acciones: accs,
         }));
+      // Si el rol ya se creo en un intento anterior de esta sesion se conserva su id para no duplicarlo
+      const idExistente = rolData?.id || rolGuardadoRef.current;
       const payload = {
-        id: rolData?.id || 0,
+        id: idExistente,
         nombre: values.nombre,
         descripcion: values.descripcion || '',
         activo: values.activo ?? true,
         pantallas: pantallasPayload,
       };
-      let rolId = rolData?.id || 0;
-      if (id) {
+      let rolId = idExistente;
+      if (idExistente > 0) {
         await rolApi.actualizar(securitySucursal, payload as any);
-        message.success('Rol actualizado correctamente');
       } else {
         const creado = await rolApi.crear(securitySucursal, payload as any);
         rolId = creado.id;
-        message.success('Rol creado correctamente');
+        rolGuardadoRef.current = creado.id;
       }
 
       try {
@@ -256,16 +263,26 @@ const RolFormulario: React.FC = () => {
             await permisoEspecialApi.asignarARol(securitySucursal, rolId, parseInt(pantallaId), payloadPermisos);
           }
         }
-      } catch {
-        // no crítico, el rol ya se guardó
+      } catch (errPermisos) {
+        // El rol ya quedó guardado: se informa el fallo parcial y se permanece en la pantalla para reintentar
+        const motivo = (errPermisos as { response?: { data?: { errorMessage?: string } } })?.response?.data?.errorMessage;
+        message.warning(
+          motivo
+            ? `Rol guardado, pero no se pudieron guardar los permisos especiales: ${motivo}`
+            : 'Rol guardado, pero no se pudieron guardar los permisos especiales. Presione Guardar para reintentar.'
+        );
+        return;
       }
 
+      // Si el rol se creo en esta sesion se mantiene el mensaje de alta aunque el reintento use actualizar
+      message.success(rolGuardadoRef.current > 0 ? 'Rol creado correctamente' : 'Rol actualizado correctamente');
       navigationConfirmedRef.current = true;
       navigate('/MROL', { replace: true });
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar rol');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   };
@@ -281,315 +298,318 @@ const RolFormulario: React.FC = () => {
   const isSmall = !screens.md;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 140px)' }}>
-      {loadingError && (
-        <Alert
-          message="Error al cargar formulario de rol"
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          action={
-            <Button size="small" onClick={handleRefresh}>
-              Reintentar
+    <Spin spinning={guardando} tip="Guardando rol..." size="large">
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 140px)' }}>
+        {loadingError && (
+          <Alert
+            message="Error al cargar formulario de rol"
+            type="error"
+            showIcon
+            style={{ marginBottom: 16 }}
+            action={
+              <Button size="small" onClick={handleRefresh}>
+                Reintentar
+              </Button>
+            }
+          />
+        )}
+        {/* Toolbar */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 24,
+            flexWrap: 'wrap',
+            gap: 8,
+          }}
+        >
+          <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
+            {id ? 'Editar Rol' : 'Nuevo Rol'}
+          </h4>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button icon={<ArrowLeftOutlined />} disabled={guardando} onClick={() => {
+              if (guardandoRef.current || guardando) return;
+              Modal.confirm({
+                title: 'Cancelar',
+                icon: <ExclamationCircleOutlined />,
+                content: '¿Está seguro que desea cancelar los cambios realizados?',
+                okText: 'Si, cancelar',
+                cancelText: 'No, continuar editando',
+                okButtonProps: { danger: true },
+                onOk: () => {
+                  navigationConfirmedRef.current = true;
+                  navigate('/MROL', { replace: true });
+                },
+              });
+            }}>
+              Volver
             </Button>
-          }
-        />
-      )}
-      {/* Toolbar */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 24,
-          flexWrap: 'wrap',
-          gap: 8,
-        }}
-      >
-        <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-          {id ? 'Editar Rol' : 'Nuevo Rol'}
-        </h4>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => {
-            Modal.confirm({
-              title: 'Cancelar',
-              icon: <ExclamationCircleOutlined />,
-              content: '¿Está seguro que desea cancelar los cambios realizados?',
-              okText: 'Si, cancelar',
-              cancelText: 'No, continuar editando',
-              okButtonProps: { danger: true },
-              onOk: () => {
-                navigationConfirmedRef.current = true;
-                navigate('/MROL', { replace: true });
-              },
-            });
-          }}>
-            Volver
-          </Button>
-          <PermissionGate accion={id ? 'EDITAR' : 'CREAR'}>
-            <Button type="primary" icon={<SaveOutlined />} loading={guardando} onClick={guardar}>
-              Guardar
-            </Button>
-          </PermissionGate>
+            <PermissionGate accion={id ? 'EDITAR' : 'CREAR'}>
+              <Button type="primary" icon={<SaveOutlined />} loading={guardando} disabled={guardando} onClick={guardar}>
+                Guardar
+              </Button>
+            </PermissionGate>
+          </div>
         </div>
-      </div>
 
-      <Row gutter={[16, 16]} style={{ flex: 1 }}>
-        <Col xs={24} md={8}>
-          {/* Formulario */}
-          <Card className="paces-card" style={{ height: '100%' }}>
-            <Form form={form} layout="vertical" size={isSmall ? 'middle' : undefined}>
-              <Form.Item
-                name="nombre"
-                label="Nombre"
-                rules={[{ required: true, message: 'El nombre es obligatorio' }]}
-              >
-                <Input placeholder="Nombre del rol" />
-              </Form.Item>
-              <Form.Item name="descripcion" label="Descripción">
-                <Input.TextArea rows={3} placeholder="Descripción del rol" />
-              </Form.Item>
-              <Form.Item name="activo" label="Estado" valuePropName="checked" initialValue={true}>
-                <Switch checkedChildren="Activo" unCheckedChildren="Inactivo" />
-              </Form.Item>
-            </Form>
-            {id && (
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--paces-border)' }}>
-                <div className="paces-text-muted" style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-                  Usuarios Asignados ({rolData?.nombresUsuarios?.length || 0})
-                </div>
-                {(rolData?.nombresUsuarios || []).length === 0 ? (
-                  <span className="paces-text-muted" style={{ fontSize: 13 }}>Sin usuarios</span>
-                ) : (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {(rolData?.nombresUsuarios || []).map((nombre, i) => (
-                      <Tag key={i} color="geekblue">{nombre}</Tag>
-                    ))}
+        <Row gutter={[16, 16]} style={{ flex: 1 }}>
+          <Col xs={24} md={8}>
+            {/* Formulario */}
+            <Card className="paces-card" style={{ height: '100%' }}>
+              <Form form={form} layout="vertical" size={isSmall ? 'middle' : undefined} disabled={guardando}>
+                <Form.Item
+                  name="nombre"
+                  label="Nombre"
+                  rules={[{ required: true, message: 'El nombre es obligatorio' }]}
+                >
+                  <Input placeholder="Nombre del rol" />
+                </Form.Item>
+                <Form.Item name="descripcion" label="Descripción">
+                  <Input.TextArea rows={3} placeholder="Descripción del rol" />
+                </Form.Item>
+                <Form.Item name="activo" label="Estado" valuePropName="checked" initialValue={true}>
+                  <Switch checkedChildren="Activo" unCheckedChildren="Inactivo" />
+                </Form.Item>
+              </Form>
+              {id && (
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--paces-border)' }}>
+                  <div className="paces-text-muted" style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                    Usuarios Asignados ({rolData?.nombresUsuarios?.length || 0})
                   </div>
-                )}
-              </div>
-            )}
-          </Card>
-        </Col>
-        <Col xs={24} md={16} style={{ height: '100%' }}>
-          {/* Dashboard global permission */}
-          {(() => {
-            const dashboardPermisoCatalogo = catalogoPermisosEspeciales.find(p => p.codigo === 'PE_DASHBOARD_CONFIG');
-            if (!dashboardPermisoCatalogo) return null;
-            return (
-              <Card
-                className="paces-card"
-                title={
-                  <span style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 18 }}>◈</span>
-                    Dashboard
-                  </span>
-                }
-                style={{ marginBottom: 16 }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Checkbox
-                    checked={dashboardPermisoChecked}
-                    onChange={(e) => handleToggleDashboardPermiso(e.target.checked)}
-                  >
-                    <span style={{ fontSize: 13 }}>{dashboardPermisoCatalogo.nombre || 'PE_DASHBOARD_CONFIG'}</span>
-                  </Checkbox>
-                  <Tag color="purple" style={{ fontSize: 11 }}>Global</Tag>
+                  {(rolData?.nombresUsuarios || []).length === 0 ? (
+                    <span className="paces-text-muted" style={{ fontSize: 13 }}>Sin usuarios</span>
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {(rolData?.nombresUsuarios || []).map((nombre, i) => (
+                        <Tag key={i} color="geekblue">{nombre}</Tag>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div style={{ marginTop: 8, fontSize: 12, color: 'var(--paces-text-muted)' }}>
-                  Permite configurar qué widgets del dashboard son visibles por rol.
-                </div>
-              </Card>
-            );
-          })()}
-          {/* Permisos por Pantalla */}
-          <Card className="paces-card" title="Permisos por Pantalla" style={{ height: '100%', display: 'flex', flexDirection: 'column' }} styles={{ body: { flex: 1, overflow: 'auto', padding: 16 } }}>
-        {pantallasUnicas.length === 0 ? (
-          <Spin size="small" />
-        ) : (
-          <div style={{ padding: 4 }}>
-            <Collapse
-              ghost
-              defaultActiveKey={[]}
-              items={Array.from(gruposPorModulo.entries()).map(([key, modulo]) => ({
-                key,
-                label: (
-                  <span
-                    style={{
-                      fontSize: 15,
-                      fontWeight: 700,
-                      color: '#556ee6',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}
-                  >
-                    <span style={{ fontSize: 18 }}>◈</span>
-                    {modulo.nombre}
-                  </span>
-                ),
-                children: (
-                  <div style={{ paddingTop: 8 }}>
-                    {Array.from(modulo.tipos.entries()).map(([tipo, pantallas]) => (
-                      <div key={tipo} style={{ marginBottom: 16 }}>
-                        {tipo !== 'General' && (
-                          <div
-                            style={{
-                              fontSize: 12,
-                              fontWeight: 600,
-                              textTransform: 'uppercase',
-                              letterSpacing: 0.5,
-                              color: '#8c8c8c',
-                              marginBottom: 8,
-                              paddingLeft: 4,
-                            }}
-                          >
-                            {tipo}
-                          </div>
-                        )}
-                        {pantallas.map((pp) => {
-                          const pantallaId = pp.id;
-                          const selected = selectedPantallas[pantallaId] || [];
-                          const todas = pp.acciones;
-                          const todasSeleccionadas =
-                            todas.length > 0 && todas.every((a) => selected.includes(a));
-                          const algunaSeleccionada = selected.length > 0;
-                          return (
-                            <div
-                              key={`p-${pantallaId}`}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                padding: '6px 8px',
-                                borderRadius: 6,
-                                marginBottom: 4,
-                                background: algunaSeleccionada ? 'var(--paces-selected-bg)' : 'var(--paces-topbar-search-bg)',
-                                border: algunaSeleccionada
-                                  ? '1px solid var(--paces-primary)'
-                                  : '1px solid transparent',
-                                flexWrap: 'wrap',
-                                gap: 4,
-                              }}
-                            >
-                              <Checkbox
-                                checked={todasSeleccionadas}
-                                indeterminate={algunaSeleccionada && !todasSeleccionadas}
-                                onChange={(e) =>
-                                  handleTogglePantalla(pantallaId, e.target.checked, todas)
-                                }
-                                style={{
-                                  minWidth: 150,
-                                  fontWeight: 500,
-                                  fontSize: 13,
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {pp.nombre}
-                              </Checkbox>
+              )}
+            </Card>
+          </Col>
+          <Col xs={24} md={16} style={{ height: '100%' }}>
+            {/* Dashboard global permission */}
+            {(() => {
+              const dashboardPermisoCatalogo = catalogoPermisosEspeciales.find(p => p.codigo === 'PE_DASHBOARD_CONFIG');
+              if (!dashboardPermisoCatalogo) return null;
+              return (
+                <Card
+                  className="paces-card"
+                  title={
+                    <span style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 18 }}>◈</span>
+                      Dashboard
+                    </span>
+                  }
+                  style={{ marginBottom: 16 }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Checkbox
+                      checked={dashboardPermisoChecked}
+                      onChange={(e) => handleToggleDashboardPermiso(e.target.checked)}
+                    >
+                      <span style={{ fontSize: 13 }}>{dashboardPermisoCatalogo.nombre || 'PE_DASHBOARD_CONFIG'}</span>
+                    </Checkbox>
+                    <Tag color="purple" style={{ fontSize: 11 }}>Global</Tag>
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 12, color: 'var(--paces-text-muted)' }}>
+                    Permite configurar qué widgets del dashboard son visibles por rol.
+                  </div>
+                </Card>
+              );
+            })()}
+            {/* Permisos por Pantalla */}
+            <Card className="paces-card" title="Permisos por Pantalla" style={{ height: '100%', display: 'flex', flexDirection: 'column' }} styles={{ body: { flex: 1, overflow: 'auto', padding: 16 } }}>
+            {pantallasUnicas.length === 0 ? (
+              <Spin size="small" />
+            ) : (
+              <div style={{ padding: 4 }}>
+                <Collapse
+                  ghost
+                  defaultActiveKey={[]}
+                  items={Array.from(gruposPorModulo.entries()).map(([key, modulo]) => ({
+                    key,
+                    label: (
+                      <span
+                        style={{
+                          fontSize: 15,
+                          fontWeight: 700,
+                          color: '#556ee6',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
+                      >
+                        <span style={{ fontSize: 18 }}>◈</span>
+                        {modulo.nombre}
+                      </span>
+                    ),
+                    children: (
+                      <div style={{ paddingTop: 8 }}>
+                        {Array.from(modulo.tipos.entries()).map(([tipo, pantallas]) => (
+                          <div key={tipo} style={{ marginBottom: 16 }}>
+                            {tipo !== 'General' && (
                               <div
                                 style={{
-                                  display: 'flex',
-                                  flexWrap: 'wrap',
-                                  gap: 3,
-                                  alignItems: 'center',
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: 0.5,
+                                  color: '#8c8c8c',
+                                  marginBottom: 8,
+                                  paddingLeft: 4,
                                 }}
                               >
-                                {pp.acciones.map((acc) => (
-                                  <div
-                                    key={`${pantallaId}-${acc}`}
+                                {tipo}
+                              </div>
+                            )}
+                            {pantallas.map((pp) => {
+                              const pantallaId = pp.id;
+                              const selected = selectedPantallas[pantallaId] || [];
+                              const todas = pp.acciones;
+                              const todasSeleccionadas =
+                                todas.length > 0 && todas.every((a) => selected.includes(a));
+                              const algunaSeleccionada = selected.length > 0;
+                              return (
+                                <div
+                                  key={`p-${pantallaId}`}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'flex-start',
+                                    padding: '6px 8px',
+                                    borderRadius: 6,
+                                    marginBottom: 4,
+                                    background: algunaSeleccionada ? 'var(--paces-selected-bg)' : 'var(--paces-topbar-search-bg)',
+                                    border: algunaSeleccionada
+                                      ? '1px solid var(--paces-primary)'
+                                      : '1px solid transparent',
+                                    flexWrap: 'wrap',
+                                    gap: 4,
+                                  }}
+                                >
+                                  <Checkbox
+                                    checked={todasSeleccionadas}
+                                    indeterminate={algunaSeleccionada && !todasSeleccionadas}
+                                    onChange={(e) =>
+                                      handleTogglePantalla(pantallaId, e.target.checked, todas)
+                                    }
                                     style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      padding: '1px 2px',
-                                      borderRadius: 4,
-                                      background: selected.includes(acc)
-                                        ? 'var(--paces-hover-bg)'
-                                        : 'transparent',
-                                      border: selected.includes(acc)
-                                        ? '1px solid var(--paces-primary)'
-                                        : '1px solid var(--paces-border)',
+                                      minWidth: 150,
+                                      fontWeight: 500,
+                                      fontSize: 13,
+                                      flexShrink: 0,
                                     }}
                                   >
-                                    <Checkbox
-                                      checked={selected.includes(acc)}
-                                      onChange={(e) =>
-                                        handleToggleAccion(pantallaId, acc, e.target.checked)
-                                      }
-                                      style={{ fontSize: 12, marginRight: 0 }}
-                                    >
-                                      <span style={{ fontSize: 12 }}>{acc}</span>
-                                    </Checkbox>
-                                  </div>
-                                 ))}
-                              </div>
-                              {/* Permisos especiales de la pantalla */}
-                              {pp.permisosEspeciales && pp.permisosEspeciales.length > 0 && (
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4, marginLeft: 24, width: '100%' }}>
-                                  {pp.permisosEspeciales.map((peCodigo) => {
-                                    const permisoCatalogo = catalogoPermisosEspeciales.find(p => p.codigo === peCodigo);
-                                    if (!permisoCatalogo) return null;
-                                    const key = `${pantallaId}-${permisoCatalogo.id}`;
-                                    // Buscar valor especifico de esta pantalla, o global (pantallaId=0) como fallback
-                                    const valorActual = permisosPorPantalla[key] ?? permisosPorPantalla[`0-${permisoCatalogo.id}`] ?? { valor: false };
-                                    const esNumerico = permisoCatalogo.tipoValor === 'NUMERICO';
-                                    const checked = valorActual.valor;
-                                    return (
-                                      <div key={peCodigo}
+                                    {pp.nombre}
+                                  </Checkbox>
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      flexWrap: 'wrap',
+                                      gap: 3,
+                                      alignItems: 'center',
+                                    }}
+                                  >
+                                    {pp.acciones.map((acc) => (
+                                      <div
+                                        key={`${pantallaId}-${acc}`}
                                         style={{
-                                          display: 'inline-flex', alignItems: 'center', padding: '1px 2px',
-                                          borderRadius: 4, fontSize: 11,
-                                          background: checked ? 'var(--paces-selected-bg)' : 'transparent',
-                                          border: checked ? '1px solid var(--paces-primary)' : '1px solid var(--paces-border)',
-                                          gap: 4,
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          padding: '1px 2px',
+                                          borderRadius: 4,
+                                          background: selected.includes(acc)
+                                            ? 'var(--paces-hover-bg)'
+                                            : 'transparent',
+                                          border: selected.includes(acc)
+                                            ? '1px solid var(--paces-primary)'
+                                            : '1px solid var(--paces-border)',
                                         }}
                                       >
-                                        {esNumerico ? (
-                                          <>
-                                            <span style={{ fontSize: 11, marginRight: 2 }}>{permisoCatalogo.nombre || peCodigo}:</span>
-                                            <InputNumber
-                                              min={0}
-                                              step={0.01}
-                                              size="small"
-                                              style={{ width: 90 }}
-                                              value={valorActual.valorNumerico}
-                                              onChange={(val) => {
-                                                handleTogglePermisoEspecial(pantallaId, permisoCatalogo.id, true, val ?? 0);
-                                              }}
-                                              placeholder="Tope"
-                                            />
-                                          </>
-                                        ) : (
-                                          <Checkbox
-                                            checked={checked}
-                                            onChange={(e) => {
-                                              handleTogglePermisoEspecial(pantallaId, permisoCatalogo.id, e.target.checked);
-                                            }}
-                                            style={{ fontSize: 11, marginRight: 0 }}
-                                          >
-                                            <span style={{ fontSize: 11 }}>{permisoCatalogo.nombre || peCodigo}</span>
-                                          </Checkbox>
-                                        )}
+                                        <Checkbox
+                                          checked={selected.includes(acc)}
+                                          onChange={(e) =>
+                                            handleToggleAccion(pantallaId, acc, e.target.checked)
+                                          }
+                                          style={{ fontSize: 12, marginRight: 0 }}
+                                        >
+                                          <span style={{ fontSize: 12 }}>{acc}</span>
+                                        </Checkbox>
                                       </div>
-                                    );
-                                  })}
+                                     ))}
+                                  </div>
+                                  {/* Permisos especiales de la pantalla */}
+                                  {pp.permisosEspeciales && pp.permisosEspeciales.length > 0 && (
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4, marginLeft: 24, width: '100%' }}>
+                                      {pp.permisosEspeciales.map((peCodigo) => {
+                                        const permisoCatalogo = catalogoPermisosEspeciales.find(p => p.codigo === peCodigo);
+                                        if (!permisoCatalogo) return null;
+                                        const key = `${pantallaId}-${permisoCatalogo.id}`;
+                                        // Buscar valor especifico de esta pantalla, o global (pantallaId=0) como fallback
+                                        const valorActual = permisosPorPantalla[key] ?? permisosPorPantalla[`0-${permisoCatalogo.id}`] ?? { valor: false };
+                                        const esNumerico = permisoCatalogo.tipoValor === 'NUMERICO';
+                                        const checked = valorActual.valor;
+                                        return (
+                                          <div key={peCodigo}
+                                            style={{
+                                              display: 'inline-flex', alignItems: 'center', padding: '1px 2px',
+                                              borderRadius: 4, fontSize: 11,
+                                              background: checked ? 'var(--paces-selected-bg)' : 'transparent',
+                                              border: checked ? '1px solid var(--paces-primary)' : '1px solid var(--paces-border)',
+                                              gap: 4,
+                                            }}
+                                          >
+                                            {esNumerico ? (
+                                              <>
+                                                <span style={{ fontSize: 11, marginRight: 2 }}>{permisoCatalogo.nombre || peCodigo}:</span>
+                                                <InputNumber
+                                                  min={0}
+                                                  step={0.01}
+                                                  size="small"
+                                                  style={{ width: 90 }}
+                                                  value={valorActual.valorNumerico}
+                                                  onChange={(val) => {
+                                                    handleTogglePermisoEspecial(pantallaId, permisoCatalogo.id, true, val ?? 0);
+                                                  }}
+                                                  placeholder="Tope"
+                                                />
+                                              </>
+                                            ) : (
+                                              <Checkbox
+                                                checked={checked}
+                                                onChange={(e) => {
+                                                  handleTogglePermisoEspecial(pantallaId, permisoCatalogo.id, e.target.checked);
+                                                }}
+                                                style={{ fontSize: 11, marginRight: 0 }}
+                                              >
+                                                <span style={{ fontSize: 11 }}>{permisoCatalogo.nombre || peCodigo}</span>
+                                              </Checkbox>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                              );
+                            })}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                ),
-              }))}
-            />
-          </div>
-        )}
-        {/* Permisos especiales ahora se muestran dentro de cada pantalla */}
-      </Card>
-          </Col>
-        </Row>
-    </div>
+                    ),
+                  }))}
+                />
+              </div>
+            )}
+            {/* Permisos especiales ahora se muestran dentro de cada pantalla */}
+          </Card>
+        </Col>
+      </Row>
+      </div>
+    </Spin>
   );
 };
 

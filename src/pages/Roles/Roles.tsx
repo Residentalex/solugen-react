@@ -29,6 +29,7 @@ const Roles: React.FC = () => {
 
   const cargarRoles = useCallback(async () => {
     setLoading(true);
+    setLoadingError(false);
     try {
       const data = await rolApi.obtenerListado(securitySucursal);
       setRoles(data || []);
@@ -61,7 +62,6 @@ const Roles: React.FC = () => {
   };
 
   const handleRefresh = useCallback(() => {
-    setLoadingError(false);
     cargarRoles();
   }, [cargarRoles]);
 
@@ -93,9 +93,9 @@ const Roles: React.FC = () => {
           }
         />
       )}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Administrar Roles</h4>
-        <Space>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, rowGap: 12, marginBottom: 24 }}>
+        <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600, minWidth: 0 }}>Administrar Roles</h4>
+        <Space wrap>
           <PermissionGate accion="CREAR">
             <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MROL/nuevo')}>
               Nuevo Rol
@@ -109,7 +109,7 @@ const Roles: React.FC = () => {
         <Input.Search
           placeholder="Buscar roles..."
           allowClear
-          style={{ width: 400 }}
+          style={{ width: '100%', maxWidth: 400 }}
           prefix={<SearchOutlined className="paces-text-icon" />}
           onSearch={(value) => setSearchText(value)}
           onKeyDown={(e) => {
@@ -192,11 +192,13 @@ const Roles: React.FC = () => {
                         Ver detalle
                       </Button>
                     </Tooltip>
-                    <Tooltip title="Editar rol">
+                    <PermissionGate accion="EDITAR">
+                      <Tooltip title="Editar rol">
                         <Button type="link" size="small" icon={<EditOutlined />} onClick={() => navigate(`/MROL/${rol.id}/editar`)}>
                           Editar
                         </Button>
-                    </Tooltip>
+                      </Tooltip>
+                    </PermissionGate>
                   </div>
                 </Card>
               </Col>

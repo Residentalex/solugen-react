@@ -15,6 +15,7 @@ import Sidebar from './Sidebar';
 import SidebarDocBtn from '../components/SidebarDocBtn';
 import Toolbar from './Toolbar';
 import ThemeSwitcher from '../components/ThemeSwitcher';
+import IncidenciaButton from '../components/IncidenciaButton';
 import NotificacionDropdown from '../components/NotificacionDropdown';
 import BuscadorGlobalModal from '../components/BuscadorGlobal/BuscadorGlobalModal';
 import { Outlet } from 'react-router-dom';
@@ -364,6 +365,7 @@ const MainLayout: React.FC = () => {
 
           <div className="paces-topbar-right">
             <ThemeSwitcher />
+            <IncidenciaButton moduloActual={pageTitle} />
             <NotificacionDropdown />
             {sucursalesFiltradas.length > 1 && activeModule !== 'dashboard' && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && activeModule !== 'MTicket' && activeModule !== 'notificaciones' && activeModule !== 'MProducto' && (
               <Select

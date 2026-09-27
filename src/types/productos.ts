@@ -1,3 +1,5 @@
+import type { TipoImpuesto, AmbitoImpuesto } from './contabilidad';
+
 export interface ProductoVistaDTO {
   codigo: string;
   nombre: string;
@@ -77,8 +79,8 @@ export interface ImpuestoProductoDTO {
   impuesto: {
     nombre?: string;
     porcentaje?: number;
-    tipo?: number;
-    ambito?: number | string;
+    tipo?: TipoImpuesto;
+    ambito?: AmbitoImpuesto;
     codigo?: string;
     noCuenta?: string;
     idExterno?: string;

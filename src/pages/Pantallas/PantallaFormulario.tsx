@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card,
@@ -68,7 +68,10 @@ const PantallaFormulario: React.FC = () => {
   const [accionesCatalogo, setAccionesCatalogo] = useState<AccionDTO[]>([]);
   const [entidadesCatalogo, setEntidadesCatalogo] = useState<EntidadDocumentoDTO[]>([]);
   const [catalogosLoading, setCatalogosLoading] = useState(false);
+  const [permisosCatalogoLoading, setPermisosCatalogoLoading] = useState(false);
+  const [permisosCatalogoError, setPermisosCatalogoError] = useState(false);
   const navigationConfirmedRef = useFormularioNavigation();
+  const guardandoRef = useRef(false);
 
   // Acciones seleccionadas
   const [selectedAcciones, setSelectedAcciones] = useState<string[]>([]);
@@ -107,6 +110,8 @@ const PantallaFormulario: React.FC = () => {
   }, [sucursalActiva]);
 
   const cargarPermisosPorPantalla = async (pantallaId: number) => {
+    setPermisosCatalogoLoading(true);
+    setPermisosCatalogoError(false);
     try {
       const result = await permisoEspecialApi.obtenerPorPantalla(securitySucursal, pantallaId);
       setPermisosEspecialesCatalogo(result || []);
@@ -114,7 +119,10 @@ const PantallaFormulario: React.FC = () => {
         (result || []).filter(p => p.asignado).map(p => p.id)
       );
     } catch {
-      // no crítico
+      setPermisosCatalogoError(true);
+      message.error('No se pudieron cargar los permisos especiales');
+    } finally {
+      setPermisosCatalogoLoading(false);
     }
   };
 
@@ -167,6 +175,12 @@ const PantallaFormulario: React.FC = () => {
   };
 
   const guardar = async () => {
+    if (guardandoRef.current) return;
+    if (permisosCatalogoError) {
+      message.warning('No se pudieron cargar los permisos. Resuelva el error antes de guardar.');
+      return;
+    }
+    guardandoRef.current = true;
     try {
       const values = await form.validateFields();
       if (sucursalActiva === undefined) return;
@@ -213,6 +227,7 @@ const PantallaFormulario: React.FC = () => {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar pantalla');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   };
@@ -262,6 +277,20 @@ const PantallaFormulario: React.FC = () => {
         />
       )}
 
+      {permisosCatalogoError && (
+        <Alert
+          message="No se pudieron cargar los permisos especiales"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" onClick={() => id && cargarPermisosPorPantalla(parseInt(id))}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
       <FormularioToolbar
         saving={guardando}
         mode={esEditar ? 'editar' : 'crear'}
@@ -270,7 +299,7 @@ const PantallaFormulario: React.FC = () => {
       />
 
       {/* Datos Generales */}
-      <Form form={form} layout="vertical" size="small" style={{ marginBottom: 16 }}>
+      <Form form={form} layout="vertical" size="small" style={{ marginBottom: 16 }} disabled={guardando}>
       <Card title="Datos Generales" className="paces-card" style={{ marginBottom: 16 }}>
           <Row gutter={16}>
             <Col xs={24} sm={12} lg={8}>

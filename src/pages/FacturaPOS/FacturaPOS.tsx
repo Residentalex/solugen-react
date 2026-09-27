@@ -11,6 +11,7 @@ import type { FacturaPOSResumenDTO } from '../../types/facturaPOS';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import EntidadColumnCell from '../../components/EntidadColumnCell';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
+import FechaColumnCell from '../../components/FechaColumnCell';
 
 const { Text } = Typography;
 
@@ -71,7 +72,7 @@ const FacturaPOS: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (f: string) => <Text>{formatDateRaw(f)}</Text>,
+      render: (f: string) => <FechaColumnCell fecha={f} />,
     },
     {
       title: 'Cliente',

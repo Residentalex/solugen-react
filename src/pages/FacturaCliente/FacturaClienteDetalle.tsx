@@ -19,6 +19,7 @@ import {
   PrinterOutlined,
   RedoOutlined,
   SendOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
 
@@ -923,7 +924,7 @@ const FacturaClienteDetalle: React.FC = () => {
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${documentoActivo.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
@@ -1053,7 +1054,7 @@ const FacturaClienteDetalle: React.FC = () => {
               },
               {
                 key: 'historial',
-                label: `Historial (${documentoActivo.logs?.length || 0})`,
+                icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                 children: (
                   <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                 ),

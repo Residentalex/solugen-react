@@ -3,7 +3,7 @@ import { Modal, Checkbox, Button, Space, message } from 'antd';
 import { SyncOutlined } from '@ant-design/icons';
 import { monitoreoApi } from '../../api/monitoreoApi';
 import { TIPOS_SINCRONIZACION } from '../../types/monitoreo';
-import type { CheckboxValueType } from 'antd/es/checkbox/Group';
+import type { CheckboxValueType } from 'antd/es/checkbox';
 
 interface SyncModalProps {
   ip?: string;

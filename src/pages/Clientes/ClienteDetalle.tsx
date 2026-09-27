@@ -14,10 +14,10 @@ import { clienteApi } from '../../api/clienteApi';
 import { proveedorApi } from '../../api/proveedorApi';
 import { empleadoApi } from '../../api/empleadoApi';
 import type { ClienteDTO, CategoriaEntidadDTO, TipoComprobanteNCFDTO } from '../../types/facturacion';
-import type { CuentaContableDTO, CuentaContableResumenDTO, MonedaDTO } from '../../types/contabilidad';
+import type { CuentaContableResumenDTO, MonedaDTO } from '../../types/contabilidad';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
-import { toTitleCase, formatCurrency, toISOFormat } from '../../utils/formats';
+import { formatCurrency, toISOFormat } from '../../utils/formats';
 import PersonasAutorizadasTab from './components/PersonasAutorizadasTab';
 import GruposProductosTab from './components/GruposProductosTab';
 import CuentasBancariasTab from './components/CuentasBancariasTab';
@@ -185,7 +185,7 @@ const ClienteDetalle: React.FC = () => {
     };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
-  }, [editando, form]);
+  }, [editando, formTouched]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -198,7 +198,7 @@ const ClienteDetalle: React.FC = () => {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [editando, form]);
+  }, [editando, formTouched]);
 
   const handleVolver = useCallback(() => {
     if (editando && formTouched) {
@@ -212,7 +212,7 @@ const ClienteDetalle: React.FC = () => {
     } else {
       navigate('/MCliente');
     }
-  }, [editando, form, navigate]);
+  }, [editando, formTouched, navigate]);
 
   // Permisos
   const usuario = useAuthStore((s: any) => s.usuario);
@@ -254,6 +254,7 @@ const ClienteDetalle: React.FC = () => {
   };
 
   const handleGuardar = async () => {
+    if (guardando) return;
     try {
       const values = await form.validateFields();
       setGuardando(true);
@@ -590,7 +591,11 @@ const ClienteDetalle: React.FC = () => {
         )}
         {renderCampo('Tipo Identificación',
           esSoloLectura ? (
-            <Text>{TIPO_IDENTIFICACION_LABEL[data?.tipoIdentificacion ?? -1] || data?.tipoIdentificacion || '-'}</Text>
+            <Text>{(() => {
+              const tipoIdNum = Number(data?.tipoIdentificacion);
+              const etiqueta = TIPO_IDENTIFICACION_LABEL[Number.isNaN(tipoIdNum) ? -1 : tipoIdNum];
+              return etiqueta || data?.tipoIdentificacion || '-';
+            })()}</Text>
           ) : (
             <Form.Item name="tipoIdentificacion" noStyle initialValue={0}>
               <Select style={{ width: '100%' }}
@@ -916,7 +921,7 @@ const ClienteDetalle: React.FC = () => {
         )}
       </div>
 
-      <Form form={form} layout="vertical" size="small" onValuesChange={() => setFormTouched(true)}>
+      <Form form={form} layout="vertical" size="small" onValuesChange={() => setFormTouched(true)} disabled={guardando}>
       {isLarge ? (
         <Row gutter={16}>
           <Col xxl={18}>
@@ -959,7 +964,7 @@ const ClienteDetalle: React.FC = () => {
         onGuardar={(esNuevo || editando) ? handleGuardar : undefined}
         guardando={guardando}
         extraActions={esNuevo ? (
-          <Button icon={<CopyOutlined />} onClick={abrirModalClonar}>
+          <Button icon={<CopyOutlined />} onClick={abrirModalClonar} disabled={guardando}>
             Clonar desde otra entidad
           </Button>
         ) : undefined}
@@ -970,12 +975,12 @@ const ClienteDetalle: React.FC = () => {
       <Modal
         title="Clonar desde otra entidad"
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => { if (!clonando) setModalVisible(false); }}
         width={800}
         footer={[
-          <Button key="cancel" onClick={() => setModalVisible(false)}>Cancelar</Button>,
+          <Button key="cancel" onClick={() => setModalVisible(false)} disabled={clonando}>Cancelar</Button>,
           <Button key="clone" type="primary" icon={<CopyOutlined />}
-            disabled={!selectedEntity}
+            disabled={!selectedEntity || clonando}
             loading={clonando}
             onClick={handleClonar}>Clonar</Button>,
         ]}
@@ -985,14 +990,14 @@ const ClienteDetalle: React.FC = () => {
             <Typography.Text strong>Tipo de Entidad</Typography.Text>
             <Table
               dataSource={tiposEntidad}
-              columns={[{ title: 'Código', dataIndex: 'codigo', width: 80 }, { title: 'Descripción', dataIndex: 'descripcion' }]}
+              columns={[{ title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 80 }, { title: 'Descripción', dataIndex: 'descripcion', key: 'descripcion' }]}
               rowKey="codigo"
               size="small"
               pagination={false}
               scroll={{ y: 400 }}
               onRow={(record) => ({
                 onClick: () => setTipoSeleccionado(record.codigo),
-                style: { cursor: 'pointer', background: tipoSeleccionado === record.codigo ? '#e6f7ff' : undefined }
+                style: { cursor: clonando ? 'default' : 'pointer', background: tipoSeleccionado === record.codigo ? '#e6f7ff' : undefined }
               })}
             />
           </Col>
@@ -1004,22 +1009,23 @@ const ClienteDetalle: React.FC = () => {
               onSearch={(value) => setSearchTexto(value)}
               onClear={() => setSearchTexto('')}
               style={{ marginBottom: 8 }}
+              disabled={clonando}
             />
             <Table
               dataSource={entidades}
               loading={cargandoEntidades}
               columns={[
-                { title: 'Código', dataIndex: 'codigo', width: 80 },
-                { title: 'Nombre', dataIndex: 'nombre' },
-                { title: 'Identificación', dataIndex: 'identificacion', width: 130 },
+                { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 80 },
+                { title: 'Nombre', dataIndex: 'nombre', key: 'nombre' },
+                { title: 'Identificación', dataIndex: 'identificacion', key: 'identificacion', width: 130 },
               ]}
               rowKey="codigo"
               size="small"
               pagination={false}
               scroll={{ y: 400 }}
               onRow={(record) => ({
-                onClick: () => setSelectedEntity(record),
-                style: { cursor: 'pointer', background: selectedEntity?.codigo === record.codigo ? '#e6f7ff' : undefined }
+                onClick: () => { if (!clonando) setSelectedEntity(record); },
+                style: { cursor: clonando ? 'default' : 'pointer', background: selectedEntity?.codigo === record.codigo ? '#e6f7ff' : undefined }
               })}
             />
           </Col>

@@ -11,6 +11,7 @@ export type ThemeName =
   | 'dark-amber'
   | 'light-genesis'
   | 'light-spa'
+  | 'light-flow'
   | 'basic-devexpress';
 
 export interface ThemeConfig {
@@ -326,6 +327,30 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     selectedBg:     'rgba(188,109,77,0.12)',
     tableHeaderFontSize: 12,
     tableCellFontSize:   11,
+  },
+  'light-flow': {
+    isDark: false,
+    primaryColor: '#0284c7',
+    primaryHover: '#0ea5e9',
+    primaryActive: '#0369a1',
+    primaryShadow: '0 1px 2px rgba(2,132,199,0.18)',
+    bgLayout: '#f8fafc',
+    bgContainer: '#ffffff',
+    bgElevated: '#ffffff',
+    text: '#334155',
+    textSecondary: '#64748b',
+    textHeading: '#0f172a',
+    border: '#e2e8f0',
+    borderSecondary: '#f1f5f9',
+    sidebarBg: '#ffffff',
+    sidebarBorder: '#e2e8f0',
+    topbarBg: '#ffffff',
+    topbarBorder: '#e2e8f0',
+    topbarSearchBg: '#f1f5f9',
+    hoverBg: 'rgba(2,132,199,0.06)',
+    selectedBg: 'rgba(2,132,199,0.10)',
+    tableHeaderFontSize: 12,
+    tableCellFontSize: 11,
   },
   'basic-devexpress': {
     isDark: false,

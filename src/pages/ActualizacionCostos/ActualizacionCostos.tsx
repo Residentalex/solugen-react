@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { Table, Select, Button, message, Card, Typography, DatePicker, InputNumber, Empty, Input } from 'antd';
+import { Table, Select, Button, message, Card, Typography, DatePicker, InputNumber, Empty, Input, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SaveOutlined, SearchOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import PermissionGate from '../../components/PermissionGate';
@@ -78,11 +79,17 @@ const ActualizacionCostos: React.FC = () => {
   const [fechaCierre, setFechaCierre] = useState<dayjs.Dayjs | null>(null);
   const [pageSize, setPageSize] = useState(50);
   const [searchText, setSearchText] = useState('');
+  const [hasChanges, setHasChanges] = useState(false);
+  const [changedCount, setChangedCount] = useState(0);
+
+  // Bloqueo uniforme de acciones durante generar/actualizar
+  const bloqueado = loading || saving;
 
   const dateParamsRef = useRef({
     desde: formatDateParam(new Date(Date.now() - DIAS_POR_DEFECTO * 86400000)),
     hasta: formatDateParam(new Date()),
   });
+  const originalCostoNuevoRef = useRef<Map<number, number>>(new Map());
 
   // ===== Lifecycle =====
   useEffect(() => {
@@ -132,6 +139,7 @@ const ActualizacionCostos: React.FC = () => {
   const handleSearch = (value: string) => setSearchText(value);
 
   const handleGenerar = useCallback(async () => {
+    if (loading || saving) return;
     if (tiposDocumento.length === 0) {
       message.warning('Selecciona al menos un tipo de documento');
       return;
@@ -149,7 +157,11 @@ const ActualizacionCostos: React.FC = () => {
         hasta,
         docs
       );
-      setData([...resultados].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '')));
+      const resultadosSorted = [...resultados].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+      setData(resultadosSorted);
+      originalCostoNuevoRef.current = new Map(resultados.map(r => [r.id, r.costoNuevo ?? r.costoAntiguo ?? 0]));
+      setHasChanges(false);
+      setChangedCount(0);
       if (resultados.length === 0) {
         message.info('Todos los costos están actualizados');
       }
@@ -162,6 +174,7 @@ const ActualizacionCostos: React.FC = () => {
   }, [sucursalActiva, tiposDocumento]);
 
   const handleActualizar = async () => {
+    if (loading || saving) return;
     if (data.length === 0) {
       message.warning('No hay datos para actualizar');
       return;
@@ -181,6 +194,7 @@ const ActualizacionCostos: React.FC = () => {
       });
       message.success('Actualización de costos aplicada exitosamente');
       setData([]);
+      originalCostoNuevoRef.current.clear();
       setHasGenerated(false);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al aplicar actualización de costos');
@@ -189,12 +203,32 @@ const ActualizacionCostos: React.FC = () => {
     }
   };
 
-  const handleCostoNuevoChange = (id: number, value: number | null) => {
+  const handleDescartarCambios = () => {
     setData((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, costoNuevo: value ?? 0 } : item
-      )
+      prev.map((item) => {
+        const original = originalCostoNuevoRef.current.get(item.id);
+        return { ...item, costoNuevo: original ?? item.costoAntiguo ?? 0 };
+      })
     );
+    setHasChanges(false);
+    setChangedCount(0);
+  };
+
+  const handleCostoNuevoChange = (id: number, value: number | null) => {
+    setData((prev) => {
+      const next = prev.map((item) =>
+        item.id === id ? { ...item, costoNuevo: value ?? 0 } : item
+      );
+      const original = originalCostoNuevoRef.current.get(id);
+      const isChanged = original !== undefined && (value ?? 0) !== original;
+      const changed = next.filter((item) => {
+        const orig = originalCostoNuevoRef.current.get(item.id);
+        return orig !== undefined && item.costoNuevo !== orig;
+      }).length;
+      setChangedCount(changed);
+      setHasChanges(changed > 0);
+      return next;
+    });
   };
 
   const exportarExcel = useCallback(async () => {
@@ -237,7 +271,7 @@ const ActualizacionCostos: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 85,
-      render: (val: string) => <Text>{formatDate(val)}</Text>,
+      render: (val: string) => <FechaColumnCell fecha={val} />,
     },
     {
       title: 'Documento',
@@ -274,19 +308,6 @@ const ActualizacionCostos: React.FC = () => {
       ),
     },
     {
-      title: '% Dif.',
-      key: 'diferencia',
-      width: 80,
-      align: 'right',
-      render: (_: any, record: DetalleActualizacionCostoDTO) => {
-        const pct = record.costoAntiguo
-          ? ((record.costoNuevo - record.costoAntiguo) / record.costoAntiguo) * 100
-          : 0;
-        const color = pct > 0 ? '#34c38f' : pct < 0 ? '#f46a6a' : undefined;
-        return <Text style={{ color, fontFamily: 'monospace' }}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</Text>;
-      },
-    },
-    {
       title: 'Costo Nuevo',
       dataIndex: 'costoNuevo',
       key: 'costoNuevo',
@@ -302,9 +323,37 @@ const ActualizacionCostos: React.FC = () => {
           defaultValue={record.costoNuevo}
           onBlur={(e) => handleCostoNuevoChange(record.id, parseFloat(e.target.value) || 0)}
           onPressEnter={(e: any) => handleCostoNuevoChange(record.id, parseFloat(e.target.value) || 0)}
-          disabled={saving}
+          disabled={bloqueado}
         />
       ),
+    },
+    {
+      title: 'Diferencia',
+      key: 'diferencia',
+      width: 120,
+      align: 'right',
+      render: (_: any, record: DetalleActualizacionCostoDTO) => {
+        const diferencia = record.costoNuevo - record.costoAntiguo;
+        const color = diferencia > 0 ? '#34c38f' : diferencia < 0 ? '#f46a6a' : undefined;
+        return (
+          <Text style={{ color, fontFamily: 'monospace' }}>
+            {diferencia >= 0 ? '+' : '-'}{formatCurrency(Math.abs(diferencia))}
+          </Text>
+        );
+      },
+    },
+    {
+      title: '% Dif.',
+      key: 'diferenciaPorcentaje',
+      width: 80,
+      align: 'right',
+      render: (_: any, record: DetalleActualizacionCostoDTO) => {
+        const pct = record.costoAntiguo
+          ? ((record.costoNuevo - record.costoAntiguo) / record.costoAntiguo) * 100
+          : 0;
+        const color = pct > 0 ? '#34c38f' : pct < 0 ? '#f46a6a' : undefined;
+        return <Text style={{ color, fontFamily: 'monospace' }}>{pct >= 0 ? '+' : ''}{pct.toFixed(2)}%</Text>;
+      },
     },
     {
       title: 'Doc. Origen',
@@ -338,40 +387,30 @@ const ActualizacionCostos: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <Select
             mode="multiple"
-            style={{ minWidth: 260 }}
+            style={{ minWidth: 180 }}
             placeholder="Tipos de documento"
             value={tiposDocumento}
             onChange={setTiposDocumento}
             options={OPCIONES_DOCUMENTO}
             allowClear
+            disabled={bloqueado}
           />
           <RangePicker
-            style={{ width: 240 }}
+            style={{ width: 200 }}
             format="YYYY-MM-DD"
             onChange={handleDateChange}
             placeholder={['Desde', 'Hasta']}
             disabledDate={(current) => !!fechaCierre && current <= fechaCierre.endOf('day')}
+            disabled={bloqueado}
           />
           <PermissionGate accion="PROCESAR">
-            <Button type="primary" onClick={handleGenerar}>
+            <Button type="primary" onClick={handleGenerar} loading={loading} disabled={bloqueado}>
               Generar
             </Button>
           </PermissionGate>
           {data.length > 0 && (
-            <PermissionGate accion="PROCESAR">
-              <Button
-                type="primary"
-                icon={<SaveOutlined />}
-                loading={saving}
-                onClick={handleActualizar}
-              >
-                Actualizar
-              </Button>
-            </PermissionGate>
-          )}
-          {data.length > 0 && (
             <PermissionGate accion="EXPORTAR">
-              <Button icon={<DownloadOutlined />} onClick={exportarExcel} />
+              <Button icon={<DownloadOutlined />} onClick={exportarExcel} disabled={bloqueado} />
             </PermissionGate>
           )}
           <div style={{ flex: 1 }} />
@@ -384,9 +423,22 @@ const ActualizacionCostos: React.FC = () => {
               { value: 50, label: '50' },
               { value: 100, label: '100' },
             ]}
+            disabled={bloqueado}
           />
         </div>
       </Card>
+
+      {hasChanges && (
+        <Alert
+          type="warning"
+          showIcon
+          message={`${changedCount} registro(s) con cambios pendientes de guardar`}
+          style={{ marginBottom: 12 }}
+          action={
+            <Button size="small" onClick={handleDescartarCambios} disabled={bloqueado}>Descartar</Button>
+          }
+        />
+      )}
 
       {/* Barra de búsqueda */}
       {hasGenerated && (
@@ -395,6 +447,7 @@ const ActualizacionCostos: React.FC = () => {
             placeholder="Buscar por doc. origen, código, documento o producto..."
             allowClear
             onSearch={handleSearch}
+            disabled={bloqueado}
             onChange={(e) => { if (!e.target.value) setSearchText(''); }}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
@@ -402,7 +455,7 @@ const ActualizacionCostos: React.FC = () => {
                 handleSearch('');
               }
             }}
-            style={{ width: 450 }}
+            style={{ width: 400 }}
             prefix={<SearchOutlined className="paces-text-icon" />}
           />
         </div>
@@ -424,9 +477,29 @@ const ActualizacionCostos: React.FC = () => {
             pageSize,
             showSizeChanger: false,
             showTotal: (t) => `${t} registros`,
+            disabled: bloqueado,
           }}
         />
       </Card>
+
+      {hasGenerated && (
+        <div style={{ position: 'sticky', bottom: 0, zIndex: 1000, background: '#fff', borderTop: '1px solid #e8e8e8', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text type={hasChanges ? 'warning' : 'secondary'}>
+            {hasChanges ? `${changedCount} registro(s) con cambios pendientes` : 'Sin cambios pendientes'}
+          </Text>
+          <PermissionGate accion="PROCESAR">
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              loading={saving}
+              disabled={!hasChanges || bloqueado}
+              onClick={handleActualizar}
+            >
+              Actualizar
+            </Button>
+          </PermissionGate>
+        </div>
+      )}
     </div>
   );
 };

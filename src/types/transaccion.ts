@@ -44,6 +44,7 @@ export interface FiltroTransaccion {
 /** Modelo completo de transacción para postear */
 export interface TransaccionDTO {
   id: number;
+  reversoID?: number;
   fechaDocumento: string;
   fechaVencimiento?: string;
   noDocumento: string;

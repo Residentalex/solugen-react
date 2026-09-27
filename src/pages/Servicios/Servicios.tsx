@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Table, Select, Tag, Button, message, Card, Typography, Modal, Descriptions, Alert, Empty, Space } from 'antd';
+import { Table, Select, Tag, Button, message, Card, Typography, Drawer, Descriptions, Alert, Empty, Space } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
@@ -8,6 +8,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { servicioApi } from '../../api/servicioApi';
 import type { ServicioDTO, ServicioVistaDTO } from '../../types/servicio';
 import { formatCurrency, toTitleCase } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
@@ -119,16 +120,24 @@ const Servicios: React.FC = () => {
         </Space>
       ),
     },
-    {
-      title: 'Precio',
-      dataIndex: 'precio',
-      key: 'precio',
-      width: 130,
-      align: 'right',
-      render: (val: number) => (
-        <Text style={{ fontFamily: 'monospace' }}>{formatCurrency(val)}</Text>
-      ),
-    },
+{
+  title: 'Precio',
+  dataIndex: 'precio',
+  key: 'precio',
+  width: 130,
+  align: 'right',
+  render: (val: number) => (
+    <div style={{
+      background: 'rgba(85, 110, 230, 0.05)',
+      padding: '4px 8px',
+      borderRadius: 4,
+      fontFamily: 'monospace',
+      fontWeight: 500
+    }}>
+      {formatCurrency(val)}
+    </div>
+  ),
+},
     {
       title: 'Referencia',
       dataIndex: 'referenciaInterna',
@@ -143,13 +152,15 @@ const Servicios: React.FC = () => {
       width: 150,
       render: (val: string) => val ? <Tag style={{ fontSize: 11 }}>{val}</Tag> : <Text>{'-'}</Text>,
     },
-    {
-      title: 'Categoría',
-      dataIndex: 'categoriaNombre',
-      key: 'categoriaNombre',
-      width: 150,
-      render: (val: string) => val ? <Tag style={{ fontSize: 11 }}>{toTitleCase(val)}</Tag> : <Text>{'-'}</Text>,
-    },
+{
+  title: 'Categoría',
+  dataIndex: 'categoriaNombre',
+  key: 'categoriaNombre',
+  width: 150,
+  render: (val: string) => val ? (
+    <Tag style={{ fontSize: 11, fontWeight: 500, borderRadius: 4 }}>{toTitleCase(val)}</Tag>
+  ) : <Text type="secondary">{'-'}</Text>,
+},
     {
       title: 'Unidad Medida',
       dataIndex: 'unidadMedidaNombre',
@@ -191,21 +202,19 @@ const Servicios: React.FC = () => {
           onNuevo={() => navigate('/MServicio/nuevo')}
           onReload={() => refetch()}
           onExportarExcel={handleExportarExcel}
-          filtros={
-            <Select
-              value={filtroActivo}
-              onChange={handleFiltroActivoChange}
-              style={{ width: 130 }}
-              size="middle"
-              options={
-                [
-                  { value: "todos", label: "Todos" },
-                  { value: "activos", label: "Solo activos" },
-                  { value: "inactivos", label: "Solo inactivos" },
-                ]
-              }
-            />
-          }
+        filtros={
+          <Select
+            value={filtroActivo}
+            onChange={handleFiltroActivoChange}
+            style={{ width: '100%', maxWidth: 130, flex: '1 1 auto', minWidth: 80 }}
+            size="middle"
+            options={[
+              { value: "todos", label: "Todos" },
+              { value: "activos", label: "Solo activos" },
+              { value: "inactivos", label: "Solo inactivos" },
+            ]}
+          />
+        }
         />
         <Table<ServicioVistaDTO>
           columns={columns}
@@ -214,7 +223,10 @@ const Servicios: React.FC = () => {
           loading={isLoading}
           scroll={{ x: 1200 }}
           size="middle"
-          rowClassName="paces-row-hover"
+          rowClassName={(record) => {
+    if (!record.activo) return 'paces-row-selected paces-row-unread';
+    return 'paces-row-selected';
+  }}
           className="paces-border-top paces-list-table"
           locale={{
             emptyText: isLoading ? ' ' : <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No se encontraron servicios" /></div>,
@@ -230,43 +242,42 @@ const Servicios: React.FC = () => {
         />
       </Card>
 
-      <Modal
-        title={`Servicio: ${detalleItem?.codigo || ''}`}
-        open={detalleOpen}
-        onCancel={() => setDetalleOpen(false)}
-        footer={null}
-        width={600}
-      >
-        {detalleItem && (
-          <Descriptions column={1} bordered size="small">
-            <Descriptions.Item label="Código">{detalleItem.codigo}</Descriptions.Item>
-            <Descriptions.Item label="Nombre">{toTitleCase(detalleItem.nombre)}</Descriptions.Item>
-            <Descriptions.Item label="Precio">{formatCurrency(detalleItem.precio)}</Descriptions.Item>
-            <Descriptions.Item label="Moneda">{detalleItem.moneda || getMonedaSucursalActiva().codigo}</Descriptions.Item>
-            <Descriptions.Item label="Referencia Interna">
-              {detalleItem.referenciaInterna || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Familia">
-              {detalleItem.familia?.nombre || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Categoría">
-              {detalleItem.categoria?.nombre || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Unidad Medida">
-              {detalleItem.unidadMedida?.nombre || '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Para Vender">
-              {detalleItem.paraVender ? 'Sí' : 'No'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Nota">{detalleItem.nota || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Activo">
-              <Tag color={detalleItem.activo ? 'green' : 'red'}>
-                {detalleItem.activo ? 'Activo' : 'Inactivo'}
-              </Tag>
-            </Descriptions.Item>
-          </Descriptions>
-        )}
-      </Modal>
+<Drawer
+         title={`Servicio: ${detalleItem?.codigo || ''}`}
+         open={detalleOpen}
+         onClose={() => setDetalleOpen(false)}
+         width={420}
+         extra={
+           <Tag color={detalleItem?.activo ? 'green' : 'red'}>
+             {detalleItem?.activo ? 'Activo' : 'Inactivo'}
+           </Tag>
+         }
+       >
+         {detalleItem && (
+           <Descriptions column={1} bordered size="small">
+             <Descriptions.Item label="Código">{detalleItem.codigo}</Descriptions.Item>
+             <Descriptions.Item label="Nombre">{toTitleCase(detalleItem.nombre)}</Descriptions.Item>
+             <Descriptions.Item label="Precio">{formatCurrency(detalleItem.precio)}</Descriptions.Item>
+             <Descriptions.Item label="Moneda">{detalleItem.moneda || getMonedaSucursalActiva().codigo}</Descriptions.Item>
+             <Descriptions.Item label="Referencia Interna">
+               {detalleItem.referenciaInterna || '-'}
+             </Descriptions.Item>
+             <Descriptions.Item label="Familia">
+               {detalleItem.familia?.nombre || '-'}
+             </Descriptions.Item>
+             <Descriptions.Item label="Categoría">
+               {detalleItem.categoria?.nombre || '-'}
+             </Descriptions.Item>
+             <Descriptions.Item label="Unidad Medida">
+               {detalleItem.unidadMedida?.nombre || '-'}
+             </Descriptions.Item>
+             <Descriptions.Item label="Para Vender">
+               {detalleItem.paraVender ? 'Sí' : 'No'}
+             </Descriptions.Item>
+             <Descriptions.Item label="Nota">{detalleItem.nota || '-'}</Descriptions.Item>
+           </Descriptions>
+         )}
+       </Drawer>
     </>
   );
 };

@@ -9,6 +9,7 @@ import {
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
   FileTextOutlined, FileSearchOutlined, WarningFilled,
   PrinterOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import PermissionGate from '../../components/PermissionGate';
@@ -636,7 +637,7 @@ const ReciboIngresoDetalle: React.FC = () => {
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${data.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${data.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                   ),
@@ -748,7 +749,7 @@ const ReciboIngresoDetalle: React.FC = () => {
               },
               {
                 key: 'historial',
-                label: `Historial (${data.logs?.length || 0})`,
+                icon: <HistoryOutlined />, label: `Historial (${data.logs?.length || 0})`,
                 children: (
                   <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                 ),

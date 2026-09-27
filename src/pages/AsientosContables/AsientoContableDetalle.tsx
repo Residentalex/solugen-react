@@ -5,6 +5,7 @@ import {
 } from 'antd';
 import {
   LockFilled,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -61,7 +62,8 @@ const AsientoContableDetalle: React.FC = () => {
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
   const [mostrandoReverso, setMostrandoReverso] = useState(false);
-  const [reversoData, setReversoData] = useState<any>(null);
+  const [reversoData, setReversoData] = useState<TransaccionDTO | null>(null);
+  const actionLockRef = React.useRef(false);
 
   useEffect(() => {
     setActiveModule(screenCode);
@@ -86,8 +88,8 @@ const AsientoContableDetalle: React.FC = () => {
         }
         setData(res);
         setPageTitleOverride(`${res.documento?.codigo || ''}-${res.noDocumento || `Transacción #${res.id}`}`);
-        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-          transaccionApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+        if (toEstadoNum(res.estado) === 3 && res.reversoID) {
+          transaccionApi.obtenerPorId(sucursalActiva, res.reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
         } else {
@@ -118,8 +120,8 @@ const AsientoContableDetalle: React.FC = () => {
     (documentoActivo?.asientos || []).map(a => ({
       ...a,
       cuentaContable: {
-        noCuenta: (a as any).cuentaContable?.noCuenta || a.noCuenta || '',
-        nombre: (a as any).cuentaContable?.nombre || '',
+        noCuenta: a.cuentaContable?.noCuenta || a.noCuenta || '',
+        nombre: a.cuentaContable?.nombre || '',
       },
     })), [documentoActivo?.asientos]);
 
@@ -143,8 +145,8 @@ const AsientoContableDetalle: React.FC = () => {
         }
         setData(res);
         setPageTitleOverride(`${res.documento?.codigo || ''}-${res.noDocumento || `Transacción #${res.id}`}`);
-        if (toEstadoNum(res.estado) === 3 && (res as any).reversoID) {
-          transaccionApi.obtenerPorId(sucursalActiva, (res as any).reversoID)
+        if (toEstadoNum(res.estado) === 3 && res.reversoID) {
+          transaccionApi.obtenerPorId(sucursalActiva, res.reversoID)
             .then((revRes) => setReversoData(revRes))
             .catch(() => setReversoData(null));
         } else {
@@ -197,7 +199,8 @@ const AsientoContableDetalle: React.FC = () => {
   const esReverso = data.reversoID != null && data.reversoID > 0;
 
   const handlePostear = async () => {
-    if (!data) return;
+    if (!data || actionLockRef.current) return;
+    actionLockRef.current = true;
     setSaving(true);
     try {
       await transaccionApi.postear(sucursalActiva, data);
@@ -208,11 +211,13 @@ const AsientoContableDetalle: React.FC = () => {
       message.error(msg);
     } finally {
       setSaving(false);
+      actionLockRef.current = false;
     }
   };
 
   const handleAplicar = async () => {
-    if (!data) return;
+    if (!data || actionLockRef.current) return;
+    actionLockRef.current = true;
     setSaving(true);
     try {
       await transaccionApi.aplicar(sucursalActiva, data.id);
@@ -223,11 +228,13 @@ const AsientoContableDetalle: React.FC = () => {
       message.error(msg);
     } finally {
       setSaving(false);
+      actionLockRef.current = false;
     }
   };
 
   const handleDesaplicarConfirm = async (motivo: string) => {
-    if (!data) return;
+    if (!data || actionLockRef.current) return;
+    actionLockRef.current = true;
     setSaving(true);
     const documento = `${data.documento?.codigo || ''}-${data.noDocumento || ''}`;
     try {
@@ -240,11 +247,13 @@ const AsientoContableDetalle: React.FC = () => {
       message.error(msg);
     } finally {
       setSaving(false);
+      actionLockRef.current = false;
     }
   };
 
   const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
-    if (!data) return;
+    if (!data || actionLockRef.current) return;
+    actionLockRef.current = true;
     setSaving(true);
     try {
       const dto = {
@@ -261,15 +270,17 @@ const AsientoContableDetalle: React.FC = () => {
       message.error(msg);
     } finally {
       setSaving(false);
+      actionLockRef.current = false;
     }
   };
 
   const handleEliminar = async () => {
-    if (!data) return;
+    if (!data || actionLockRef.current) return;
     if (!permisoModificarAdmin) {
       message.error('No tiene permiso para eliminar documentos (pe_modificar_admin).');
       return;
     }
+    actionLockRef.current = true;
     setSaving(true);
     try {
       await transaccionApi.eliminar(sucursalActiva, data.id);
@@ -280,6 +291,7 @@ const AsientoContableDetalle: React.FC = () => {
       message.error(msg);
     } finally {
       setSaving(false);
+      actionLockRef.current = false;
     }
   };
 
@@ -305,17 +317,8 @@ const AsientoContableDetalle: React.FC = () => {
         periodo={data.periodo}
         saving={saving}
         imprimiendo={imprimiendo}
+        showImprimir={false}
         onVolver={() => navigate(-1)}
-        onImprimir={async () => {
-          setImprimiendo(true);
-          try {
-            message.info('Funcionalidad de impresión en desarrollo');
-          } catch {
-            message.error('Error al generar el PDF');
-          } finally {
-            setImprimiendo(false);
-          }
-        }}
         onEditar={() => navigate(`/FAsientoContable/${data.id}/editar`)}
         edicionSinRestricciones={permisoModificarAdmin}
         onAplicar={handleAplicar}
@@ -405,13 +408,13 @@ const AsientoContableDetalle: React.FC = () => {
                     <TransaccionesAsociadasCard documentos={documentoActivo.transaccionesAsociadas || []} readOnly />
                   ),
                 },
-                {
-                  key: 'historial',
-                  label: `Historial (${documentoActivo.logs?.length || 0})`,
-                  children: (
-                    <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 800 }} />
-                  ),
-                },
+{
+                   key: 'historial',
+                   icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
+                   children: (
+                     <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 800 }} />
+                   ),
+                 },
                 {
                   key: 'cobros',
                   label: `Cobros (${documentoActivo.cobros?.length || 0})`,
@@ -503,13 +506,13 @@ const AsientoContableDetalle: React.FC = () => {
                   <TransaccionesAsociadasCard documentos={documentoActivo.transaccionesAsociadas || []} readOnly />
                 ),
               },
-              {
-                key: 'historial',
-                label: `Historial (${documentoActivo.logs?.length || 0})`,
-                children: (
-                  <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 800 }} />
-                ),
-              },
+{
+                 key: 'historial',
+                 icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
+                 children: (
+                   <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 800 }} />
+                 ),
+               },
               {
                 key: 'cobros',
                 label: `Cobros (${documentoActivo.cobros?.length || 0})`,

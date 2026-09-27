@@ -12,6 +12,7 @@ import {
   EnvironmentOutlined,
   FileTextOutlined,
   FileSearchOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
@@ -792,7 +793,7 @@ const DevolucionCompraDetalle: React.FC = () => {
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${documentoActivo.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
@@ -912,7 +913,7 @@ const DevolucionCompraDetalle: React.FC = () => {
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${documentoActivo.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),

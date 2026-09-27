@@ -617,7 +617,7 @@ const RMovimientosPorFecha: React.FC = () => {
             </div>
 
             {/* SECCIÓN C — Resumen */}
-            <Divider orientation="left" style={{ fontSize: 12, color: '#8c8c8c' }}>Resumen</Divider>
+            <Divider orientation={"left" as any} style={{ fontSize: 12, color: '#8c8c8c' }}>Resumen</Divider>
             <div style={{ background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0', padding: '12px 0', marginBottom: 16 }}>
               <Row gutter={0}>
                 <Col span={12} style={{ borderRight: '1px solid #f0f0f0', textAlign: 'center' }}>

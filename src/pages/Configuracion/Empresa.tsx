@@ -1,7 +1,7 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Card, Form, Input, DatePicker, Select, Switch, Button, message, Spin, Space,
-  Row, Col, Grid, Descriptions,
+  Row, Col, Grid, Descriptions, Alert,
 } from 'antd';
 import {
   ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined,
@@ -25,6 +25,8 @@ const Empresa: React.FC = () => {
   const [data, setData] = useState<ConfiguracionEmpresa | null>(null);
   const [pedidosYaConfig, setPedidosYaConfig] = useState<ConfigPedidosYaDTO | null>(null);
   const [loadingPedidosYa, setLoadingPedidosYa] = useState(false);
+  const [errorPedidosYa, setErrorPedidosYa] = useState<string | null>(null);
+  const savingRef = useRef(false);
   const screens = Grid.useBreakpoint();
   const isLarge = screens.xxl === true;
 
@@ -42,7 +44,7 @@ const Empresa: React.FC = () => {
         });
       }
     } catch (err: any) {
-      message.error(extraerMensajeError(err, 'Error al cargar configuracion'));
+      message.error(extraerMensajeError(err, 'Error al cargar configuración'));
     } finally {
       setLoading(false);
     }
@@ -50,11 +52,18 @@ const Empresa: React.FC = () => {
 
   const cargarPedidosYa = useCallback(async () => {
     setLoadingPedidosYa(true);
+    setErrorPedidosYa(null);
     try {
       const config = await configPedidosYaApi.obtener(sucursalActiva);
       setPedidosYaConfig(config);
-    } catch {
-      setPedidosYaConfig(null);
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        setPedidosYaConfig(null);
+        setErrorPedidosYa(null);
+      } else {
+        setPedidosYaConfig(null);
+        setErrorPedidosYa(extraerMensajeError(err, 'No se pudo consultar la configuración de PedidosYa'));
+      }
     } finally {
       setLoadingPedidosYa(false);
     }
@@ -63,9 +72,11 @@ const Empresa: React.FC = () => {
   useEffect(() => { cargar(); cargarPedidosYa(); }, [cargar, cargarPedidosYa]);
 
   const handleGuardar = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     try {
       const values = await form.validateFields();
-      setSaving(true);
       const config: ConfiguracionEmpresa = {
         ...values,
         fechaCierre: values.fechaCierre ? dayjs(values.fechaCierre).format('YYYYMMDDHHmmss') : null,
@@ -73,18 +84,20 @@ const Empresa: React.FC = () => {
         fechaCierreFiscal: values.fechaCierreFiscal ? dayjs(values.fechaCierreFiscal).format('YYYYMMDDHHmmss') : null,
       };
       await configuracionApi.guardar(sucursalActiva, config);
-      message.success('Configuracion guardada correctamente');
+      message.success('Configuración guardada correctamente');
       setData(config);
       setModoEdicion(false);
     } catch (err: any) {
       if (err.errorFields) return;
-      message.error(extraerMensajeError(err, 'Error al guardar configuracion'));
+      message.error(extraerMensajeError(err, 'Error al guardar configuración'));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
 
   const handleCancelarEdicion = () => {
+    if (saving || savingRef.current) return;
     if (data) {
       form.setFieldsValue({
         ...data,
@@ -97,6 +110,7 @@ const Empresa: React.FC = () => {
   };
 
   const handleVolver = () => {
+    if (saving || savingRef.current) return;
     navigate('/dashboard');
   };
 
@@ -110,7 +124,7 @@ const Empresa: React.FC = () => {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
         <Spin size="large" />
-        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando configuracion...</div>
+        <div style={{ marginTop: 16 }} className="paces-text-secondary">Cargando configuración...</div>
       </div>
     );
   }
@@ -118,37 +132,38 @@ const Empresa: React.FC = () => {
   return (
     <>
       {/* Toolbar inline dinamico */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8, position: 'sticky', top: 0, zIndex: 10, background: 'var(--paces-layout-bg, #f0f2f5)', padding: '8px 0' }}>
         {modoEdicion ? (
           <>
             <div style={{ flex: 1 }} />
             <Space wrap>
-              <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
+              <Button type="primary" icon={<SaveOutlined />} loading={saving} disabled={saving} onClick={handleGuardar}>
                 Guardar
               </Button>
-              <Button icon={<CloseOutlined />} onClick={handleCancelarEdicion}>
+              <Button icon={<CloseOutlined />} disabled={saving} onClick={handleCancelarEdicion}>
                 Cancelar
               </Button>
             </Space>
           </>
         ) : (
           <>
-            <Button icon={<ArrowLeftOutlined />} onClick={handleVolver}>
+            <Button icon={<ArrowLeftOutlined />} disabled={saving} onClick={handleVolver}>
               Volver
             </Button>
             <div style={{ flex: 1 }} />
-            <Button type="primary" icon={<EditOutlined />} onClick={() => setModoEdicion(true)}>
+            <Button type="primary" icon={<EditOutlined />} disabled={saving} onClick={() => setModoEdicion(true)}>
               Editar
             </Button>
           </>
         )}
       </div>
 
+      <Spin spinning={saving} tip="Guardando configuración…">
       <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
         <Row gutter={16}>
           <Col xs={24} xxl={18}>
             {modoEdicion ? (
-              <Form form={form} layout="vertical" size="small" style={{ padding: 24 }}>
+              <Form form={form} layout="vertical" size="small" style={{ padding: 24 }} disabled={saving}>
                 {/* Seccion 1: Datos Generales */}
                 <Card className="paces-card" size="small" title={
                   <Space>
@@ -172,7 +187,7 @@ const Empresa: React.FC = () => {
                       </Form.Item>
                     </Col>
                     <Col xs={24} sm={12} lg={12}>
-                      <Form.Item name="telefono" label="Telefono">
+                      <Form.Item name="telefono" label="Teléfono">
                         <Input />
                       </Form.Item>
                     </Col>
@@ -182,7 +197,7 @@ const Empresa: React.FC = () => {
                       </Form.Item>
                     </Col>
                     <Col xs={24}>
-                      <Form.Item name="direccion" label="Direccion">
+                      <Form.Item name="direccion" label="Dirección">
                         <Input.TextArea rows={2} />
                       </Form.Item>
                     </Col>
@@ -198,7 +213,7 @@ const Empresa: React.FC = () => {
                 <Card className="paces-card" size="small" title={
                   <Space>
                     <CalendarOutlined className="paces-text-icon" />
-                    <span style={{ fontWeight: 600 }}>Parametros Contables</span>
+                    <span style={{ fontWeight: 600 }}>Parámetros Contables</span>
                   </Space>
                 } style={{ marginBottom: 16 }}>
                   <Row gutter={[16, 0]}>
@@ -224,12 +239,12 @@ const Empresa: React.FC = () => {
                 <Card className="paces-card" size="small" title={
                   <Space>
                     <SettingOutlined className="paces-text-icon" />
-                    <span style={{ fontWeight: 600 }}>Configuracion</span>
+                    <span style={{ fontWeight: 600 }}>Configuración</span>
                   </Space>
                 } style={{ marginBottom: 16 }}>
                   <Row gutter={[16, 0]}>
                     <Col xs={24} sm={12} lg={12}>
-                      <Form.Item name="metodoFacturacionDGII" label="Metodo de facturacion DGII">
+                      <Form.Item name="metodoFacturacionDGII" label="Método de facturación DGII">
                         <Select
                           allowClear
                           showSearch
@@ -271,9 +286,9 @@ const Empresa: React.FC = () => {
                   >
                     <Descriptions.Item label="Nombre">{data?.nombre || '-'}</Descriptions.Item>
                     <Descriptions.Item label="RNC">{data?.rnc || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="Telefono">{data?.telefono || '-'}</Descriptions.Item>
+                    <Descriptions.Item label="Teléfono">{data?.telefono || '-'}</Descriptions.Item>
                     <Descriptions.Item label="Fax">{data?.fax || '-'}</Descriptions.Item>
-                    <Descriptions.Item label="Direccion" span={isLarge ? 3 : 1}>
+                    <Descriptions.Item label="Dirección" span={isLarge ? 3 : 1}>
                       <span style={{ whiteSpace: 'pre-wrap' }}>{data?.direccion || '-'}</span>
                     </Descriptions.Item>
                     <Descriptions.Item label="Slogan" span={isLarge ? 3 : 1}>
@@ -286,7 +301,7 @@ const Empresa: React.FC = () => {
                 <Card className="paces-card" size="small" title={
                   <Space>
                     <CalendarOutlined className="paces-text-icon" />
-                    <span style={{ fontWeight: 600 }}>Parametros Contables</span>
+                    <span style={{ fontWeight: 600 }}>Parámetros Contables</span>
                   </Space>
                 } style={{ marginBottom: 16 }}>
                   <Descriptions
@@ -311,7 +326,7 @@ const Empresa: React.FC = () => {
                 <Card className="paces-card" size="small" title={
                   <Space>
                     <SettingOutlined className="paces-text-icon" />
-                    <span style={{ fontWeight: 600 }}>Configuracion</span>
+                    <span style={{ fontWeight: 600 }}>Configuración</span>
                   </Space>
                 } style={{ marginBottom: 16 }}>
                   <Descriptions
@@ -320,11 +335,11 @@ const Empresa: React.FC = () => {
                     column={isLarge ? 3 : 1}
                     styles={{ content: { background: 'transparent' } }}
                   >
-                    <Descriptions.Item label="Metodo de facturacion DGII">
+                    <Descriptions.Item label="Método de facturación DGII">
                       {data?.metodoFacturacionDGII || '-'}
                     </Descriptions.Item>
                     <Descriptions.Item label="ORC en unidades">
-                      {data?.orcEnUnidades ? 'Si' : 'No'}
+                      {data?.orcEnUnidades ? 'Sí' : 'No'}
                     </Descriptions.Item>
                   </Descriptions>
                 </Card>
@@ -345,6 +360,18 @@ const Empresa: React.FC = () => {
                   style={{ marginBottom: 16 }}>
                   {loadingPedidosYa ? (
                     <Spin />
+                  ) : errorPedidosYa ? (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message="No se pudo consultar la configuración de PedidosYa"
+                      description={errorPedidosYa}
+                      action={
+                        <Button size="small" onClick={cargarPedidosYa}>
+                          Reintentar
+                        </Button>
+                      }
+                    />
                   ) : pedidosYaConfig ? (
                     <Descriptions
                       bordered
@@ -362,7 +389,7 @@ const Empresa: React.FC = () => {
                     </Descriptions>
                   ) : (
                     <div className="paces-text-secondary" style={{ padding: '8px 0' }}>
-                      No hay configuracion de PedidosYa para esta sucursal.
+                      No hay configuración de PedidosYa para esta sucursal.
                     </div>
                   )}
                 </Card>
@@ -373,9 +400,9 @@ const Empresa: React.FC = () => {
           {/* Sidebar: solo visible en desktop (>= xxl) */}
           {isLarge && (
             <Col xs={24} xxl={6} style={{ padding: 24 }}>
-              <Card className="paces-card" size="small" title={<span style={{ fontWeight: 600 }}>Informacion</span>}>
+              <Card className="paces-card" size="small" title={<span style={{ fontWeight: 600 }}>Información</span>}>
                 <div className="paces-text-secondary" style={{ fontSize: 13, lineHeight: 1.6 }}>
-                  <p>Configure los parametros generales de la empresa.</p>
+                  <p>Configure los parámetros generales de la empresa.</p>
                   <p>Los cambios en fechas de cierre afectan el procesamiento contable e inventario.</p>
                 </div>
               </Card>
@@ -383,6 +410,7 @@ const Empresa: React.FC = () => {
           )}
         </Row>
       </Card>
+      </Spin>
     </>
   );
 };

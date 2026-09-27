@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   Card, Table, Input, Button, DatePicker, Row, Col, Modal, Space,
-  message, Alert, Empty, Tag, Avatar, Divider, Skeleton, Typography,
+  message, Alert, Empty, Tag, Avatar, Divider, Skeleton, Typography, Grid,
 } from 'antd';
 import {
   ThunderboltOutlined, SearchOutlined, ReloadOutlined,
-  EyeOutlined, ShopOutlined,
+  EyeOutlined, ShopOutlined, BarChartOutlined, ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -68,12 +68,20 @@ function extraerMensajeError(err: any, fallback: string): string {
 // ---------------------------------------------------------------------------
 interface BuscarPlantillaModalProps {
   open: boolean;
+  bloqueado?: boolean;
+  ocupadoRef: React.MutableRefObject<boolean>;
+  intentarOcupar: () => boolean;
+  liberarOcupacion: () => void;
   onClose: () => void;
   onSelect: (plantilla: PlantillaConteoFisicoDTO) => void;
 }
 
 const BuscarPlantillaModal: React.FC<BuscarPlantillaModalProps> = ({
   open,
+  bloqueado = false,
+  ocupadoRef,
+  intentarOcupar,
+  liberarOcupacion,
   onClose,
   onSelect,
 }) => {
@@ -83,6 +91,8 @@ const BuscarPlantillaModal: React.FC<BuscarPlantillaModalProps> = ({
   const [searchText, setSearchText] = useState('');
 
   const buscar = useCallback(async () => {
+    // Candado compartido: si otra operación está en vuelo, no iniciar la búsqueda
+    if (!intentarOcupar()) return;
     setLoading(true);
     try {
       const res = await conteoApi.obtenerPlantillas(sucursalActiva);
@@ -93,15 +103,18 @@ const BuscarPlantillaModal: React.FC<BuscarPlantillaModalProps> = ({
       setResultados([]);
     } finally {
       setLoading(false);
+      liberarOcupacion();
     }
-  }, [sucursalActiva]);
+  }, [sucursalActiva, intentarOcupar, liberarOcupacion]);
 
+  // Efecto de apertura: no dispara búsqueda si el candado está tomado (chequeo por ref, sin esperar render)
   useEffect(() => {
     if (open) {
+      if (ocupadoRef.current) return;
       setSearchText('');
       buscar();
     }
-  }, [open, buscar]);
+  }, [open, buscar, ocupadoRef]);
 
   const filtered = useMemo(() => {
     if (!searchText.trim()) return resultados;
@@ -127,9 +140,15 @@ const BuscarPlantillaModal: React.FC<BuscarPlantillaModalProps> = ({
 
   return (
     <Modal
-      title="Buscar Plantilla"
+      title="Buscar plantilla"
       open={open}
-      onCancel={onClose}
+      onCancel={() => {
+        // El cierre consulta la referencia sincrónica, no solo el estado renderizado
+        if (ocupadoRef.current || bloqueado || loading) return;
+        onClose();
+      }}
+      maskClosable={!bloqueado && !loading}
+      keyboard={!bloqueado && !loading}
       footer={null}
       width={700}
       destroyOnHidden
@@ -137,6 +156,7 @@ const BuscarPlantillaModal: React.FC<BuscarPlantillaModalProps> = ({
       <Input.Search
         placeholder="Buscar por código..."
         allowClear
+        disabled={bloqueado || loading}
         value={searchText}
         onChange={(e) => setSearchText(e.target.value)}
         onSearch={(value) => setSearchText(value)}
@@ -157,10 +177,13 @@ const BuscarPlantillaModal: React.FC<BuscarPlantillaModalProps> = ({
         scroll={{ y: 400 }}
         onRow={(record) => ({
           onClick: () => {
+            // Chequeo sincrónico por referencia: bloquea clics consecutivos antes del siguiente render.
+            // El cierre lo hace el manejador principal tras adquirir el candado (no usar onClose aquí,
+            // pues sería rechazado una vez tomado el candado).
+            if (ocupadoRef.current || bloqueado || loading) return;
             onSelect(record);
-            onClose();
           },
-          style: { cursor: 'pointer' },
+          style: { cursor: (bloqueado || loading) ? 'default' : 'pointer' },
         })}
       />
     </Modal>
@@ -172,6 +195,7 @@ const BuscarPlantillaModal: React.FC<BuscarPlantillaModalProps> = ({
 // Columnas para la tabla de productos
 // ---------------------------------------------------------------------------
 interface ColumnasProducto {
+  title: React.ReactNode;
   dataIndex: string;
   key: string;
   width?: number;
@@ -229,6 +253,22 @@ const MovimientoPorPlantilla: React.FC = () => {
   const [productos, setProductos] = useState<DetallePlantillaConteoFisicoDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
+  // Candado único compartido por toda la pantalla (lógica por ref = inmediata,
+  // visual por estado = en el siguiente render). Solo una acción en vuelo.
+  const ocupadoRef = useRef(false);
+  const [operacionEnCurso, setOperacionEnCurso] = useState(false);
+  // Secuencia anti-stale del análisis (descarta respuestas de selecciones anteriores)
+  const analisisSeqRef = useRef(0);
+  const intentarOcupar = useCallback(() => {
+    if (ocupadoRef.current) return false;
+    ocupadoRef.current = true;
+    setOperacionEnCurso(true);
+    return true;
+  }, []);
+  const liberarOcupacion = useCallback(() => {
+    ocupadoRef.current = false;
+    setOperacionEnCurso(false);
+  }, []);
 
   // Fecha seleccionada
   const [fechaSeleccionada, setFechaSeleccionada] = useState<Dayjs>(dayjs());
@@ -249,6 +289,13 @@ const MovimientoPorPlantilla: React.FC = () => {
   const [movimientosData, setMovimientosData] = useState<any[]>([]);
   const [movimientosLoading, setMovimientosLoading] = useState(false);
 
+  // Bloqueo visual agregado: candado compartido + spinners en curso
+  const bloqueado = operacionEnCurso || loading || movimientosLoading;
+
+  // Layout adaptable (patrón pantallas canónicas): dos columnas solo en ≥xxl
+  const screens = Grid.useBreakpoint();
+  const isLarge = screens.xxl === true;
+
   useEffect(() => {
     setActiveModule('RMOVPLAN');
     return () => setPageTitleOverride('');
@@ -262,9 +309,14 @@ const MovimientoPorPlantilla: React.FC = () => {
     }
   }, [plantillaCodigo, setPageTitleOverride]);
 
-  // Cargar productos de la plantilla
+  // Cargar productos de la plantilla — usa el candado único compartido
   const handleGenerar = useCallback(async () => {
+    // Chequeo sincrónico por referencia: frena el doble clic antes del siguiente render
+    if (!intentarOcupar()) {
+      return;
+    }
     if (!plantillaCodigo) {
+      liberarOcupacion();
       message.warning('Debe seleccionar una plantilla primero');
       return;
     }
@@ -285,12 +337,17 @@ const MovimientoPorPlantilla: React.FC = () => {
       message.error(msg);
     } finally {
       setLoading(false);
+      liberarOcupacion();
     }
-  }, [plantillaCodigo, sucursalActiva]);
+  }, [plantillaCodigo, sucursalActiva, intentarOcupar, liberarOcupacion]);
 
-  // Seleccionar plantilla desde el modal
+  // Seleccionar plantilla desde el modal — comparte el candado único
   const handleSeleccionarPlantilla = useCallback(
     async (plantilla: PlantillaConteoFisicoDTO) => {
+      if (!intentarOcupar()) return;
+      // Cierre directo (sin pasar por el onClose protegido, que rechazaría
+      // el cierre con el candado ya tomado)
+      setModalVisible(false);
       setPlantillaCodigo(plantilla.codigo);
       try {
         const detalle = await conteoApi.obtenerPlantilla(sucursalActiva, plantilla.id);
@@ -303,59 +360,68 @@ const MovimientoPorPlantilla: React.FC = () => {
         if (plantilla.suplidor) {
           setSuplidorNombre(plantilla.suplidor);
         }
+      } finally {
+        liberarOcupacion();
       }
     },
-    [sucursalActiva]
+    [sucursalActiva, intentarOcupar, liberarOcupacion]
   );
 
-  // Cargar análisis de producto cuando se selecciona
+  // Cargar análisis de producto cuando se selecciona — usa el candado único compartido
   useEffect(() => {
     if (!selectedItem) return;
+    // Si otra operación está en vuelo, no iniciar un análisis que nacería stale
+    if (!intentarOcupar()) return;
+    const seq = ++analisisSeqRef.current;
     const codigo = selectedItem.codigo;
-
-    setAnalisisData([]);
-    setAnalisisLoading(true);
-    setAnalisisError(false);
+    let cancelado = false;
 
     const SUCURSALES_ANALISIS = [
       { id: 0, nombre: 'OP' },
       { id: 1, nombre: 'HR' },
       { id: 2, nombre: 'VH' },
     ];
+    const vacio = (s: { id: number; nombre: string }) => ({
+      sucursal: s.id, sucursalNombre: s.nombre, codigo, nombre: '', fecha: null as any, documento: '', cantidad: 0,
+    });
 
-    Promise.allSettled(
-      SUCURSALES_ANALISIS.map((s) =>
-        entradaAlmacenApi.obtenerUltimasEntradasPorSucursal(s.id, codigo)
-          .then((data) => {
-            if (data && data.length > 0) {
-              const item = data[0];
-              return { ...item, sucursal: s.id, sucursalNombre: s.nombre };
-            }
-            return { sucursal: s.id, sucursalNombre: s.nombre, codigo, nombre: '', fecha: null as any, documento: '', cantidad: 0 };
-          })
-          .catch(() => ({
-            sucursal: s.id, sucursalNombre: s.nombre, codigo, nombre: '', fecha: null as any, documento: '', cantidad: 0,
-          }))
-      )
-    ).then((results) => {
-      const datos = results
-        .map((r) => (r.status === 'fulfilled' ? r.value : null))
-        .filter((d): d is NonNullable<typeof d> => d !== null);
-      setAnalisisData(datos);
-      setAnalisisLoading(false);
-
-      const conDatos = datos.filter((d) => d?.fecha);
-      if (conDatos.length > 0) {
-        setAnalisisResumenLoading(true);
-        Promise.allSettled(
-          conDatos.map((item) =>
-            entradaAlmacenApi.obtenerResumenMovimientosPosteriores(
-              item.sucursal, codigo, dayjs(item.fecha).format('YYYYMMDDHHmmss'), item.sucursal
-            )
-              .then((resumen) => ({ sucursal: item.sucursal, resumen }))
-              .catch(() => ({ sucursal: item.sucursal, resumen: null }))
+    (async () => {
+      setAnalisisData([]);
+      setAnalisisLoading(true);
+      setAnalisisError(false);
+      try {
+        const results = await Promise.allSettled(
+          SUCURSALES_ANALISIS.map((s) =>
+            entradaAlmacenApi.obtenerUltimasEntradasPorSucursal(s.id, codigo)
+              .then((data) => {
+                if (data && data.length > 0) {
+                  const item = data[0];
+                  return { ...item, sucursal: s.id, sucursalNombre: s.nombre };
+                }
+                return vacio(s);
+              })
+              .catch(() => vacio(s))
           )
-        ).then((res) => {
+        );
+        if (cancelado || analisisSeqRef.current !== seq) return;
+        const datos = results
+          .map((r) => (r.status === 'fulfilled' ? r.value : null))
+          .filter((d): d is NonNullable<typeof d> => d !== null);
+        setAnalisisData(datos);
+
+        const conDatos = datos.filter((d) => d?.fecha);
+        if (conDatos.length > 0) {
+          setAnalisisResumenLoading(true);
+          const res = await Promise.allSettled(
+            conDatos.map((item) =>
+              entradaAlmacenApi.obtenerResumenMovimientosPosteriores(
+                item.sucursal, codigo, dayjs(item.fecha).format('YYYYMMDDHHmmss'), item.sucursal
+              )
+                .then((resumen) => ({ sucursal: item.sucursal, resumen }))
+                .catch(() => ({ sucursal: item.sucursal, resumen: null }))
+            )
+          );
+          if (cancelado || analisisSeqRef.current !== seq) return;
           setAnalisisData((prev) =>
             prev.map((item) => {
               const found = res.find((r) => r.status === 'fulfilled' && r.value?.sucursal === item?.sucursal);
@@ -364,18 +430,32 @@ const MovimientoPorPlantilla: React.FC = () => {
                 : item;
             })
           );
+        }
+      } catch {
+        if (!cancelado && analisisSeqRef.current === seq) {
+          setAnalisisError(true);
+        }
+      } finally {
+        if (!cancelado && analisisSeqRef.current === seq) {
+          setAnalisisLoading(false);
           setAnalisisResumenLoading(false);
-        });
+        }
+        liberarOcupacion();
       }
-    }).catch(() => {
-      setAnalisisError(true);
-      setAnalisisLoading(false);
-    });
-  }, [selectedItem]);
+    })();
 
-  // Ver movimientos posteriores
+    return () => {
+      cancelado = true;
+    };
+  }, [selectedItem, intentarOcupar, liberarOcupacion]);
+
+  // Ver movimientos posteriores — usa el candado único compartido
   const handleVerMovimientos = useCallback(async (item: any) => {
-    if (!selectedItem) return;
+    if (!intentarOcupar()) return;
+    if (!selectedItem) {
+      liberarOcupacion();
+      return;
+    }
     setMovimientosSucursal(item.sucursalNombre);
     setMovimientosModalOpen(true);
     setMovimientosLoading(true);
@@ -393,8 +473,9 @@ const MovimientoPorPlantilla: React.FC = () => {
       setMovimientosData([]);
     } finally {
       setMovimientosLoading(false);
+      liberarOcupacion();
     }
-  }, [selectedItem]);
+  }, [selectedItem, intentarOcupar, liberarOcupacion]);
 
   // Datos filtrados por búsqueda local
   const filteredData = useMemo(() => {
@@ -409,9 +490,9 @@ const MovimientoPorPlantilla: React.FC = () => {
     );
   }, [productos, searchText]);
 
-  // Card de análisis de producto (sidebar derecho)
+  // Card de análisis de producto (sidebar derecho) — área Resultado
   const analisisCard = (
-    <Card className="paces-card" size="small" title="Análisis de Producto">
+    <Card className="paces-card" size="small" title="Análisis del producto">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
         {/* Identidad del producto */}
         {selectedItem ? (
@@ -449,26 +530,19 @@ const MovimientoPorPlantilla: React.FC = () => {
           <Alert type="info" message="Seleccione un producto para ver su análisis de movimientos." style={{ marginBottom: 16 }} />
         ) : analisisError ? (
           <Alert type="error" message="Error al cargar datos" style={{ marginBottom: 16 }}
-            action={<Button size="small" onClick={() => setSelectedItem({ ...selectedItem })}><ReloadOutlined />Reintentar</Button>} />
+            action={<Button size="small" disabled={bloqueado || analisisLoading} onClick={() => { if (!ocupadoRef.current && !bloqueado && selectedItem) setSelectedItem({ ...selectedItem }); }}><ReloadOutlined />Reintentar</Button>} />
         ) : analisisLoading ? (
           <Skeleton active paragraph={{ rows: 3 }} style={{ marginBottom: 16 }} />
         ) : analisisData.length > 0 ? (
           <>
             {analisisData.some((d) => d.resumen) && (
-              <Card
-                className="paces-card"
-                size="small"
-                style={{
-                  borderRadius: 6,
-                  border: '1px solid #d9d9d9',
-                  borderTop: '3px solid #556ee6',
-                  background: 'rgba(85,110,230,0.04)',
-                  marginBottom: 12,
-                }}
-              >
-                <Typography.Text strong style={{ fontSize: 12, color: '#556ee6', display: 'block', marginBottom: 6 }}>
-                  📊 Resumen total
-                </Typography.Text>
+              <div style={{ marginBottom: 12 }}>
+                <Space size={6} style={{ marginBottom: 6 }}>
+                  <BarChartOutlined style={{ color: 'var(--paces-primary)' }} />
+                  <Typography.Text strong style={{ fontSize: 12 }}>
+                    Resumen total
+                  </Typography.Text>
+                </Space>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px' }}>
                   {(() => {
                     const totales = analisisData.reduce(
@@ -494,24 +568,25 @@ const MovimientoPorPlantilla: React.FC = () => {
                     ].map((kpi) => (
                       <div key={kpi.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                         <Typography.Text style={{ fontSize: 12, color: '#8c8c8c' }}>{kpi.label}</Typography.Text>
-                        <Typography.Text strong style={{ fontSize: 14, color: '#556ee6' }}>
+                        <Typography.Text strong style={{ fontSize: 14 }}>
                           {formatNumber(kpi.value)}
                         </Typography.Text>
                       </div>
                     ));
                   })()}
                 </div>
-              </Card>
+                <Divider style={{ margin: '12px 0 0 0' }} />
+              </div>
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {analisisData.map((item: any) => {
-                const SUCURSAL_COLORS: Record<number, { color: string; bg: string }> = {
-                  0: { color: '#1677ff', bg: 'rgba(22,119,255,0.06)' },
-                  1: { color: '#52c41a', bg: 'rgba(82,196,26,0.06)' },
-                  2: { color: '#fa8c16', bg: 'rgba(250,140,22,0.06)' },
+                const SUCURSAL_COLORS: Record<number, { color: string }> = {
+                  0: { color: '#1677ff' },
+                  1: { color: '#52c41a' },
+                  2: { color: '#fa8c16' },
                 };
-                const style = SUCURSAL_COLORS[item.sucursal] || { color: '#556ee6', bg: 'rgba(85,110,230,0.06)' };
+                const style = SUCURSAL_COLORS[item.sucursal] || { color: '#556ee6' };
                 const sinRegistro = !item.fecha;
 
                 return (
@@ -523,7 +598,6 @@ const MovimientoPorPlantilla: React.FC = () => {
                       borderRadius: 6,
                       border: '1px solid #f0f0f0',
                       borderTop: `3px solid ${style.color}`,
-                      background: style.bg,
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -537,10 +611,11 @@ const MovimientoPorPlantilla: React.FC = () => {
                           type="link"
                           size="small"
                           icon={<EyeOutlined />}
+                          disabled={bloqueado || movimientosLoading}
                           onClick={() => handleVerMovimientos(item)}
                           style={{ fontSize: 12 }}
                         >
-                          Ver movimientos →
+                          Ver movimientos
                         </Button>
                       )}
                     </div>
@@ -548,8 +623,8 @@ const MovimientoPorPlantilla: React.FC = () => {
                     {!sinRegistro ? (
                       <>
                         <div style={{ marginBottom: 10 }}>
-                          <Typography.Text strong style={{ fontSize: 12, color: '#262626', display: 'block', marginBottom: 6 }}>
-                            📦 Última compra  <Typography.Text strong style={{ fontSize: 13, color: '#556ee6' }}>{item.fecha ? formatDate(item.fecha) : '-'}</Typography.Text>
+                          <Typography.Text strong style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
+                            Última compra <Typography.Text strong style={{ fontSize: 13 }}>{item.fecha ? formatDate(item.fecha) : '-'}</Typography.Text>
                           </Typography.Text>
                           <div style={{ marginTop: 8 }}>
                             <Typography.Text style={{ fontSize: 12, color: '#8c8c8c', marginRight: 8 }}>
@@ -562,8 +637,8 @@ const MovimientoPorPlantilla: React.FC = () => {
                         <div style={{ borderTop: '1px dashed #e8e8e8', marginBottom: 10 }} />
 
                         <div style={{ marginBottom: 10 }}>
-                          <Typography.Text strong style={{ fontSize: 12, color: '#262626', display: 'block', marginBottom: 6 }}>
-                            📊 Movimientos posteriores
+                          <Typography.Text strong style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
+                            Movimientos posteriores
                           </Typography.Text>
 
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', marginBottom: 6 }}>
@@ -590,11 +665,12 @@ const MovimientoPorPlantilla: React.FC = () => {
                           </div>
 
                           {item.resumen?.ultimaVentaFecha && (
-                            <div style={{ background: 'rgba(85,110,230,0.04)', borderRadius: 4, padding: '6px 8px', marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Space size={6} style={{ marginTop: 8 }}>
+                              <ClockCircleOutlined style={{ color: '#8c8c8c', fontSize: 11 }} />
                               <Typography.Text style={{ fontSize: 11, color: '#595959' }}>
-                                🕐 Última venta: {formatDate(item.resumen.ultimaVentaFecha)}
+                                Última venta: {formatDate(item.resumen.ultimaVentaFecha)}
                               </Typography.Text>
-                            </div>
+                            </Space>
                           )}
                         </div>
                       </>
@@ -615,17 +691,86 @@ const MovimientoPorPlantilla: React.FC = () => {
     </Card>
   );
 
+  // Card de productos (área Resultado) — se reutiliza en layout amplio y compacto
+  const productosCard = (
+    <Card
+      className="paces-card"
+      style={{ borderRadius: 8 }}
+      title={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 16, fontWeight: 600 }}>Resultado — Productos</span>
+          <Tag color="blue">{filteredData.length} registros</Tag>
+        </div>
+      }
+    >
+      <div style={{ padding: '0 0 16px' }}>
+        <Input.Search
+          placeholder="Buscar por código, artículo o familia..."
+          allowClear
+          onSearch={(value) => setSearchText(value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              (e.target as HTMLInputElement).blur();
+              setSearchText('');
+            }
+          }}
+          style={{ width: '100%', maxWidth: 400 }}
+          prefix={<SearchOutlined className="paces-text-icon" />}
+        />
+      </div>
+      {filteredData.length === 0 && !loading ? (
+        <div style={{ minHeight: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <span>
+                {!plantillaCodigo
+                  ? 'Seleccione una plantilla usando el botón buscar y presione Generar'
+                  : searchText.trim()
+                    ? 'No hay resultados que coincidan con la búsqueda'
+                    : 'No se encontraron productos para esta plantilla'}
+              </span>
+            }
+          />
+        </div>
+      ) : (
+        <Table
+          dataSource={filteredData}
+          columns={columnasProducto as any}
+          rowKey={(record, index) => `${record.codigo}-${index}`}
+          loading={loading}
+          size="small"
+          scroll={{ x: 600 }}
+          pagination={{
+            pageSize: 20,
+            showSizeChanger: false,
+            showTotal: (total) => `${total} registros`,
+          }}
+          rowClassName={(record, index) =>
+            selectedItem && selectedItem.codigo === record.codigo
+              ? 'paces-row-selected'
+              : ''
+          }
+          onRow={(record, index) => ({
+            onClick: () => { if (!ocupadoRef.current && !bloqueado) setSelectedItem(record); },
+            style: { cursor: bloqueado ? 'default' : 'pointer' },
+          })}
+        />
+      )}
+    </Card>
+  );
+
   return (
     <div>
-      {/* Card 1 — Filtros de consulta */}
+      {/* Card 1 — Parámetros del movimiento */}
       <Card
         className="paces-card"
         style={{ borderRadius: 8, marginBottom: 16 }}
-        title={<span style={{ fontSize: 16, fontWeight: 600 }}>Filtros de consulta</span>}
+        title={<span style={{ fontSize: 16, fontWeight: 600 }}>Parámetros del movimiento</span>}
       >
-        <Row gutter={[16, 0]} align="middle">
+        <Row gutter={[16, 16]} align="middle">
           {/* Plantilla */}
-          <Col span={7}>
+          <Col xs={24} md={12} xl={7}>
             <div style={{ fontSize: 14, marginBottom: 6 }}>Plantilla</div>
             <Space.Compact style={{ width: '100%' }}>
               <Input
@@ -635,14 +780,15 @@ const MovimientoPorPlantilla: React.FC = () => {
               />
               <Button
                 icon={<SearchOutlined />}
-                onClick={() => setModalVisible(true)}
+                disabled={bloqueado}
+                onClick={() => { if (!ocupadoRef.current && !bloqueado) setModalVisible(true); }}
                 title="Buscar plantilla"
               />
             </Space.Compact>
           </Col>
 
           {/* Suplidor */}
-          <Col span={7}>
+          <Col xs={24} md={12} xl={7}>
             <div style={{ fontSize: 14, marginBottom: 6 }}>Suplidor</div>
             <Input
               disabled
@@ -652,13 +798,14 @@ const MovimientoPorPlantilla: React.FC = () => {
           </Col>
 
           {/* Fecha */}
-          <Col span={5}>
+          <Col xs={24} md={12} xl={5}>
             <div style={{ fontSize: 14, marginBottom: 6 }}>Fecha</div>
             <DatePicker
               format="DD/MM/YYYY"
               style={{ width: '100%' }}
               value={fechaSeleccionada}
-              onChange={(date) => setFechaSeleccionada(date || dayjs())}
+              disabled={bloqueado}
+              onChange={(date) => { if (!ocupadoRef.current && !bloqueado) setFechaSeleccionada(date || dayjs()); }}
               disabledDate={(current) => {
                 if (!current) return false;
                 const cierre = fechasCierre?.[sucursalActiva];
@@ -671,18 +818,14 @@ const MovimientoPorPlantilla: React.FC = () => {
           </Col>
 
           {/* Generar */}
-          <Col span={5} style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Col xs={24} md={12} xl={5} style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button
               type="primary"
               icon={<ThunderboltOutlined />}
               loading={loading}
-              disabled={!plantillaCodigo}
+              disabled={!plantillaCodigo || bloqueado}
               onClick={handleGenerar}
-              style={{
-                background: '#389e0d',
-                borderColor: '#389e0d',
-                minWidth: 140,
-              }}
+              style={{ minWidth: 140 }}
             >
               Generar
             </Button>
@@ -698,94 +841,40 @@ const MovimientoPorPlantilla: React.FC = () => {
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={handleGenerar}>
+            <Button size="small" disabled={bloqueado} onClick={handleGenerar}>
               Reintentar
             </Button>
           }
         />
       )}
 
-      {/* Card 2 — Resultados con sidebar */}
-      <Row gutter={16}>
-        <Col xxl={18}>
-          <Card
-            className="paces-card"
-            style={{ borderRadius: 8 }}
-            title={
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 16, fontWeight: 600 }}>Productos ({filteredData.length})</span>
-                {filteredData.length > 0 && (
-                  <Tag color="blue">{filteredData.length} registros</Tag>
-                )}
-              </div>
-            }
-          >
-            <div style={{ padding: '0 0 16px' }}>
-              <Input.Search
-                placeholder="Buscar por código, artículo o familia..."
-                allowClear
-                onSearch={(value) => setSearchText(value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    (e.target as HTMLInputElement).blur();
-                    setSearchText('');
-                  }
-                }}
-                style={{ width: 400 }}
-                prefix={<SearchOutlined className="paces-text-icon" />}
-              />
-            </div>
-            {filteredData.length === 0 && !loading ? (
-              <div style={{ minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={
-                    <span>
-                      {!plantillaCodigo
-                        ? 'Seleccione una plantilla usando el botón buscar y presione Generar'
-                        : searchText.trim()
-                          ? 'No hay resultados que coincidan con la búsqueda'
-                          : 'No se encontraron productos para esta plantilla'}
-                    </span>
-                  }
-                />
-              </div>
-            ) : (
-              <Table
-                dataSource={filteredData}
-                columns={columnasProducto as any}
-                rowKey={(record, index) => `${record.codigo}-${index}`}
-                loading={loading}
-                size="small"
-                scroll={{ x: 600 }}
-                style={{ minHeight: 420 }}
-                pagination={{
-                  pageSize: 20,
-                  showSizeChanger: false,
-                  showTotal: (total) => `${total} registros`,
-                }}
-                rowClassName={(record, index) =>
-                  selectedItem && selectedItem.codigo === record.codigo
-                    ? 'paces-row-selected'
-                    : ''
-                }
-                onRow={(record, index) => ({
-                  onClick: () => setSelectedItem(record),
-                  style: { cursor: 'pointer' },
-                })}
-              />
-            )}
-          </Card>
-        </Col>
-        <Col xxl={6}>
-          {analisisCard}
-        </Col>
-      </Row>
+      {/* Card 2 — Resultado con sidebar (dos columnas solo en ≥xxl) */}
+      {isLarge ? (
+        <Row gutter={16}>
+          <Col xxl={18}>
+            {productosCard}
+          </Col>
+          <Col xxl={6}>
+            {analisisCard}
+          </Col>
+        </Row>
+      ) : (
+        <>
+          {productosCard}
+          <div style={{ marginTop: 24 }}>
+            {analisisCard}
+          </div>
+        </>
+      )}
 
       {/* Modal de búsqueda de plantillas */}
       <BuscarPlantillaModal
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        bloqueado={bloqueado}
+        ocupadoRef={ocupadoRef}
+        intentarOcupar={intentarOcupar}
+        liberarOcupacion={liberarOcupacion}
+        onClose={() => { if (!ocupadoRef.current && !bloqueado) setModalVisible(false); }}
         onSelect={handleSeleccionarPlantilla}
       />
 
@@ -796,7 +885,7 @@ const MovimientoPorPlantilla: React.FC = () => {
         codigo={selectedItem?.codigo || ''}
         dataSource={movimientosData}
         loading={movimientosLoading}
-        onClose={() => setMovimientosModalOpen(false)}
+        onClose={() => { if (!ocupadoRef.current && !movimientosLoading && !bloqueado) setMovimientosModalOpen(false); }}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Card,
@@ -41,6 +41,7 @@ const Monedas: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<MonedaDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const guardandoRef = useRef(false);
   const [form] = Form.useForm();
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -94,6 +95,7 @@ const Monedas: React.FC = () => {
 
   const abrirNuevo = () => {
     if (!puedeCrear) return;
+    if (guardandoRef.current || guardando) return;
     setEditando(null);
     form.resetFields();
     setModalVisible(true);
@@ -101,6 +103,7 @@ const Monedas: React.FC = () => {
 
   const abrirEditar = (moneda: MonedaDTO) => {
     if (!puedeEditar) return;
+    if (guardandoRef.current || guardando) return;
     setEditando(moneda);
     form.setFieldsValue({
       nombre: moneda.nombre,
@@ -111,11 +114,18 @@ const Monedas: React.FC = () => {
     setModalVisible(true);
   };
 
+  const handleCerrarModal = () => {
+    if (guardandoRef.current || guardando) return;
+    setModalVisible(false);
+  };
+
   const guardar = async () => {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
+    setGuardando(true);
     try {
       const values = await form.validateFields();
       if (sucursalActiva === undefined) return;
-      setGuardando(true);
       const payload: MonedaDTO = {
         id: editando?.id || 0,
         nombre: values.nombre,
@@ -136,6 +146,7 @@ const Monedas: React.FC = () => {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar moneda');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   };
@@ -204,7 +215,7 @@ const Monedas: React.FC = () => {
         <CatalogoListadoToolbar
           onSearch={handleSearch}
           pageSize={pageSize}
-          onPageSizeChange={(v) => { setPageSize(v); }}
+          onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onNuevo={abrirNuevo}
           onReload={() => refetch()}
           onExportarExcel={handleExportarExcel}
@@ -233,14 +244,19 @@ const Monedas: React.FC = () => {
       <Modal
         title={editando ? 'Editar Moneda' : 'Nueva Moneda'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={handleCerrarModal}
         onOk={guardar}
         confirmLoading={guardando}
+        okButtonProps={{ loading: guardando, disabled: guardando }}
+        cancelButtonProps={{ disabled: guardando }}
+        maskClosable={!guardando}
+        keyboard={!guardando}
+        closable={!guardando}
         width={520}
         okText="Guardar"
         cancelText="Cancelar"
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }} disabled={guardando}>
           <Form.Item
             name="nombre"
             label="Nombre"

@@ -1,6 +1,6 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Button, Table, Tag, Modal, Form, Input, Select, message, Typography } from 'antd';
+import { Card, Descriptions, Button, Table, Tag, Modal, Form, Input, Select, Space, Tooltip, Grid, message, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -8,11 +8,11 @@ import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { moduloApi } from '../../api/moduloApi';
 import { configModuloApi } from '../../api/configModuloApi';
 import type { ConfigModuloDTO } from '../../api/configModuloApi';
-import { toTitleCase } from '../../utils/formats';
+import { toTitleCase, extraerMensajeError } from '../../utils/formats';
 import PermissionGate from '../../components/PermissionGate';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
 
-const { Text, Title } = Typography;
+const { Title } = Typography;
 
 const TIPOS = ['STRING', 'INT', 'DECIMAL', 'BOOL'];
 
@@ -30,6 +30,11 @@ const ModuloDetalle: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [configLoading, setConfigLoading] = useState(false);
+  const [guardandoConfig, setGuardandoConfig] = useState(false);
+  const configLockRef = useRef(false);
+
+  const screens = Grid.useBreakpoint();
+  const isLarge = screens.xxl === true;
 
   // Modal de edición de config
   const [configModalOpen, setConfigModalOpen] = useState(false);
@@ -37,7 +42,11 @@ const ModuloDetalle: React.FC = () => {
   const [configForm] = Form.useForm();
 
   const cargar = useCallback(async () => {
-    if (!id) return;
+    if (!id) {
+      setLoading(false);
+      setError(true);
+      return;
+    }
     setLoading(true);
     setError(false);
     try {
@@ -55,7 +64,8 @@ const ModuloDetalle: React.FC = () => {
       setConfigLoading(true);
       const configList = await configModuloApi.obtenerListaCompleta(sucursalActiva, found.nombre);
       setConfigs(configList);
-    } catch {
+    } catch (err) {
+      message.error(extraerMensajeError(err, 'Error al cargar el módulo'));
       setError(true);
     } finally {
       setLoading(false);
@@ -85,6 +95,9 @@ const ModuloDetalle: React.FC = () => {
   };
 
   const handleConfigGuardar = async () => {
+    if (configLockRef.current) return;
+    configLockRef.current = true;
+    setGuardandoConfig(true);
     try {
       const values = await configForm.validateFields();
       const moduloNombre = modulo?.nombre;
@@ -109,10 +122,14 @@ const ModuloDetalle: React.FC = () => {
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar configuración');
+    } finally {
+      configLockRef.current = false;
+      setGuardandoConfig(false);
     }
   };
 
   const handleConfigEliminar = (cfg: ConfigModuloDTO) => {
+    if (configLockRef.current) return;
     Modal.confirm({
       title: 'Eliminar configuración',
       icon: <ExclamationCircleOutlined />,
@@ -120,12 +137,18 @@ const ModuloDetalle: React.FC = () => {
       okText: 'Eliminar',
       okButtonProps: { danger: true },
       onOk: async () => {
+        if (configLockRef.current) return;
+        configLockRef.current = true;
+        setGuardandoConfig(true);
         try {
           await configModuloApi.eliminar(sucursalActiva, cfg.modulo, cfg.clave);
           message.success('Configuración eliminada');
           cargar();
         } catch (err: any) {
           message.error(err?.response?.data?.errorMessage || 'Error al eliminar');
+        } finally {
+          configLockRef.current = false;
+          setGuardandoConfig(false);
         }
       },
     });
@@ -142,17 +165,23 @@ const ModuloDetalle: React.FC = () => {
     {
       title: 'Acciones', key: 'acciones', width: 120,
       render: (_: any, record: ConfigModuloDTO) => (
-        <div style={{ display: 'flex', gap: 4 }}>
+        <Space size={0}>
           <PermissionGate accion="EDITAR">
-            <Button type="link" icon={<EditOutlined />} onClick={() => openConfigModal(record)} />
+            <Tooltip title="Editar configuración">
+              <Button type="link" size="small" icon={<EditOutlined />} aria-label="Editar configuración"
+                onClick={() => openConfigModal(record)} disabled={guardandoConfig} />
+            </Tooltip>
           </PermissionGate>
-          <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleConfigEliminar(record)} />
-        </div>
+          <PermissionGate accion="ELIMINAR">
+            <Tooltip title="Eliminar configuración">
+              <Button type="link" size="small" danger icon={<DeleteOutlined />} aria-label="Eliminar configuración"
+                onClick={() => handleConfigEliminar(record)} disabled={guardandoConfig} />
+            </Tooltip>
+          </PermissionGate>
+        </Space>
       ),
     },
   ];
-
-  if (!modulo) return null;
 
   return (
     <DetalleCatalogoLayout
@@ -163,50 +192,63 @@ const ModuloDetalle: React.FC = () => {
       mensajeError="Error al cargar el módulo"
       onRecargar={cargar}
       dataDisponible={!!modulo}
-      onEditar={() => navigate(`/Mmodulo/${modulo.id}/editar`)}
+      onEditar={modulo ? () => navigate(`/Mmodulo/${modulo.id}/editar`) : undefined}
     >
-      {/* Datos generales */}
-      <Card className="paces-card" style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Title level={4} style={{ margin: 0 }}>{toTitleCase(modulo.nombre)}</Title>
-        </div>
-        <Descriptions bordered size="small" column={2}>
-          <Descriptions.Item label="ID">{modulo.id}</Descriptions.Item>
-          <Descriptions.Item label="Orden">{modulo.orden}</Descriptions.Item>
-          <Descriptions.Item label="Nombre">{toTitleCase(modulo.nombre)}</Descriptions.Item>
-        </Descriptions>
-      </Card>
+      {modulo && (
+        <>
+          {/* Datos generales */}
+          <Card className="paces-card" style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Title level={4} style={{ margin: 0 }}>{toTitleCase(modulo.nombre)}</Title>
+            </div>
+            <Descriptions bordered size="small" column={isLarge ? 2 : 1}
+              styles={{ content: { background: 'transparent' } }}>
+              <Descriptions.Item label="ID">{modulo.id}</Descriptions.Item>
+              <Descriptions.Item label="Orden">{modulo.orden}</Descriptions.Item>
+              <Descriptions.Item label="Nombre">{toTitleCase(modulo.nombre)}</Descriptions.Item>
+            </Descriptions>
+          </Card>
 
-      {/* Configuración del módulo */}
-      <Card className="paces-card" title="Configuración del módulo"
-        extra={
-          <PermissionGate accion="CREAR">
-            <Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => openConfigModal()}>
-              Agregar
-            </Button>
-          </PermissionGate>
-        }>
-        <Table
-          dataSource={configs}
-          columns={configColumns}
-          rowKey="clave"
-          loading={configLoading}
-          size="small"
-          pagination={false}
-          locale={{ emptyText: 'Sin configuraciones. Agregue una usando el botón superior.' }}
-        />
-      </Card>
+          {/* Configuración del módulo */}
+          <Card className="paces-card" title="Configuración del módulo"
+            extra={
+              <PermissionGate accion="CREAR">
+                <Button type="primary" icon={<PlusOutlined />} size="small" disabled={guardandoConfig}
+                  onClick={() => openConfigModal()}>
+                  Agregar
+                </Button>
+              </PermissionGate>
+            }>
+            <Table
+              dataSource={configs}
+              columns={configColumns}
+              rowKey="clave"
+              loading={configLoading}
+              size="small"
+              pagination={false}
+              locale={{ emptyText: 'Sin configuraciones. Agregue una usando el botón superior.' }}
+            />
+          </Card>
+        </>
+      )}
 
       {/* Modal crear/editar configuración */}
       <Modal
         title={editingConfig ? 'Editar configuración' : 'Nueva configuración'}
         open={configModalOpen}
-        onCancel={() => setConfigModalOpen(false)}
+        onCancel={() => { if (!guardandoConfig) setConfigModalOpen(false); }}
         onOk={handleConfigGuardar}
+        confirmLoading={guardandoConfig}
         okText="Guardar"
+        cancelText="Cancelar"
+        okButtonProps={{ disabled: guardandoConfig }}
+        cancelButtonProps={{ disabled: guardandoConfig }}
+        maskClosable={!guardandoConfig}
+        closable={!guardandoConfig}
+        keyboard={!guardandoConfig}
         destroyOnHidden
       >
-        <Form form={configForm} layout="vertical" size="small">
+        <Form form={configForm} layout="vertical" size="small" disabled={guardandoConfig}>
           <Form.Item name="clave" label="Clave"
             rules={[{ required: true, message: 'La clave es requerida' }]}>
             <Input placeholder="Ej: FACTOR_REDONDEO" disabled={!!editingConfig} />

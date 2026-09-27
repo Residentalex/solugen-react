@@ -9,6 +9,7 @@ import { transaccionApi } from '../../api/transaccionApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { formatCurrency, formatDateRaw, formatDateParam, toTitleCase } from '../../utils/formats';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import type { ApiResponse } from '../../types/auth';
 import type { TransaccionVistaDTO } from '../../types/transaccion';
 
@@ -131,7 +132,7 @@ const DocumentosAnulados: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (v: string) => <Text>{formatDateRaw(v)}</Text>,
+      render: (v: string) => <FechaColumnCell fecha={v} />,
     },
     {
       title: 'Entidad',

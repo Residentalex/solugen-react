@@ -4,7 +4,8 @@ import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Input, Tooltip, Typography, Empty, Alert, Switch
 } from 'antd';
 import {
-  ArrowLeftOutlined, LockFilled, ReloadOutlined
+  ArrowLeftOutlined, LockFilled, ReloadOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
@@ -447,7 +448,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${documentoActivo.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
@@ -524,7 +525,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
               },
               {
                 key: 'historial',
-                label: `Historial (${documentoActivo.logs?.length || 0})`,
+                icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),

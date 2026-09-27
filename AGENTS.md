@@ -94,7 +94,7 @@ import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
   - No usar `onChange` para actualizar `searchText` en tiempo real; solo `onSearch`.
   - Si se necesita búsqueda automática al escribir, usar debounce con al menos 300ms.
 - Visualmente, la barra de búsqueda debe replicar EXACTAMENTE el layout de `EntradaAlmacen.tsx`:
-  - `Input.Search` sin `enterButton`, con `prefix={<SearchOutlined className="paces-text-icon" />}` y `style={{ width: 400 }}`.
+  - `Input.Search` sin `enterButton`, con `prefix={<SearchOutlined className="paces-text-icon" />}` y `style={{ width: '100%', maxWidth: 400 }}`.
   - Botón de recargar con solo icono `ReloadOutlined`, sin texto.
   - Layout flex con `gap: '8px'`, `flexWrap: 'wrap'`, `<div style={{ flex: 1 }} />` como spacer antes de botones.
   - Ver `docs-ai/frontend-patron-listado.md` sección "Barra de búsqueda y filtros (layout visual)" para el patrón completo.
@@ -155,7 +155,7 @@ Estructura obligatoria:
     <div style={{ padding: '16px 24px 0' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
         <Input.Search placeholder="Buscar..." allowClear onSearch={handleSearch}
-          style={{ width: 400 }} prefix={<SearchOutlined className="paces-text-icon" />} />
+          style={{ width: '100%', maxWidth: 400 }} prefix={<SearchOutlined className="paces-text-icon" />} />
         <div style={{ flex: 1 }} />
         <PermissionGate accion="CREAR">
           <Button type="primary" icon={<PlusOutlined />}>Nuevo</Button>

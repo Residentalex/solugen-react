@@ -8,6 +8,7 @@ import {
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
   FileTextOutlined, FileSearchOutlined,
   ExclamationCircleOutlined, RedoOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import PermissionGate from '../../components/PermissionGate';
@@ -770,7 +771,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${documentoActivo.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
@@ -920,11 +921,11 @@ const FacturaSuplidorDetalle: React.FC = () => {
             },
             {
               key: 'historial',
-              label: `Historial (${documentoActivo.logs?.length || 0})`,
-                children: (
-                  <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
-                ),
-              },
+              icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
+              children: (
+                <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
+              ),
+            },
             ]}
         />
 

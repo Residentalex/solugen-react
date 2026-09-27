@@ -14,6 +14,7 @@ const themeList: ThemeName[] = [
   'light-amber', 'dark-amber',
   'light-genesis',
   'light-spa',
+  'light-flow',
   'basic-devexpress',
 ];
 
@@ -63,6 +64,7 @@ const ThemeSwitcher: React.FC = () => {
             <span style={{ fontSize: 10, color: '#666', textAlign: 'center' }}>
               {name === 'light-genesis' ? 'Genesis'
                 : name === 'light-spa' ? 'Spa Soft'
+                : name === 'light-flow' ? 'Flow'
                 : name === 'basic-devexpress' ? 'Basic DevExpress'
                 : name.replace('-', ' ')}
             </span>

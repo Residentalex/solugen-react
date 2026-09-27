@@ -18,6 +18,7 @@ import {
   DownOutlined,
   FilePdfOutlined,
   CheckCircleOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -755,7 +756,7 @@ const GeneradorORCDetalle: React.FC = () => {
     },
     {
       key: 'historial',
-      label: `Historial (${data.logs?.length || 0})`,
+      icon: <HistoryOutlined />, label: `Historial (${data.logs?.length || 0})`,
       children: (
         <LogTable dataSource={data.logs || []} scroll={{ x: 800 }} />
       ),
@@ -1161,7 +1162,7 @@ const GeneradorORCDetalle: React.FC = () => {
             )}
 
             {/* SECCIÓN C — Costos y Precio */}
-            <Divider orientation="left" style={{ fontSize: 12, color: '#8c8c8c' }}>Costos y Precio</Divider>
+            <Divider orientation={"left" as any} style={{ fontSize: 12, color: '#8c8c8c' }}>Costos y Precio</Divider>
             <div style={{ background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0', padding: '12px 0', marginBottom: 16 }}>
               <Row gutter={0}>
                 <Col span={8} style={{ borderRight: '1px solid #f0f0f0', textAlign: 'center' }}>

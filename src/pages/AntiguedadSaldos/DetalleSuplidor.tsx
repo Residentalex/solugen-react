@@ -9,6 +9,7 @@ import { conceptosApi } from '../../api/conceptosApi';
 import { entidadApi } from '../../api/entidadApi';
 import { tipoApi } from '../../api/tipoApi';
 import { toTitleCase, formatCurrency, formatDate } from '../../utils/formats';
+import FechaColumnCell from '../../components/FechaColumnCell';
 
 const { Text } = Typography;
 
@@ -177,7 +178,7 @@ const DetalleSuplidor: React.FC = () => {
         { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 150, render: (v: string) => v ? <Text style={{ fontSize: 12 }}>{v}</Text> : '-' },
         {
             title: 'Fecha', dataIndex: 'fechaDocumento', key: 'fecha', width: 100,
-            render: (v: string) => v ? formatDate(v) : '-',
+            render: (v: string) => v ? <FechaColumnCell fecha={v} /> : '-',
         },
         {
             title: 'Total', dataIndex: 'total', key: 'total', width: 120, align: 'right' as const,

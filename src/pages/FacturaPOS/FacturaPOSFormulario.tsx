@@ -17,6 +17,7 @@ import {
   BarcodeOutlined,
   CreditCardOutlined,
   FileTextOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -1602,7 +1603,7 @@ const FacturaPOSFormulario: React.FC = () => {
                 ...(data?.logs && data.logs.length > 0
                   ? [{
                       key: 'historial',
-                      label: `Historial (${data?.logs?.length || 0})`,
+                      icon: <HistoryOutlined />, label: `Historial (${data?.logs?.length || 0})`,
                       children: (
                         <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
                       ),
@@ -1709,7 +1710,7 @@ const FacturaPOSFormulario: React.FC = () => {
               ...(data?.logs && data.logs.length > 0
                 ? [{
                     key: 'historial',
-                    label: `Historial (${data?.logs?.length || 0})`,
+                    icon: <HistoryOutlined />, label: `Historial (${data?.logs?.length || 0})`,
                     children: (
                       <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
                     ),

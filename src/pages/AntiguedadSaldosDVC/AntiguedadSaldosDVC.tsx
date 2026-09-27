@@ -10,6 +10,7 @@ import {
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { antiguedadSaldosDVCApi } from '../../api/antiguedadSaldosDVCApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
@@ -548,7 +549,7 @@ const AntiguedadSaldosDVC: React.FC = () => {
       dataIndex: 'fechaDocumento',
       key: 'fechaDocumento',
       width: 110,
-      render: (f: string) => <Text>{formatDate(f)}</Text>,
+      render: (f: string) => <FechaColumnCell fecha={f} />,
     },
     {
       title: 'Total',

@@ -6,6 +6,7 @@ import { transferenciaAlmacenApi } from '../../api/transferenciaAlmacenApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { useDocumentoListado } from '../../hooks/useDocumentoListado';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { MovimientoVistaDTO } from '../../types/transferenciaAlmacen';
@@ -68,7 +69,7 @@ const TransferenciaAlmacen: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (f: string) => <Text>{formatDateRaw(f)}</Text>,
+      render: (f: string) => <FechaColumnCell fecha={f} />,
     },
     {
       title: 'Concepto',

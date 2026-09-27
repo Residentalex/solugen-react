@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Modal, Table, Button, Space, message, InputNumber } from 'antd';
+import { Modal, Table, Button, Space, message, InputNumber, Tag } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
+import { solicitudPagoApi } from '../../api/solicitudPagoApi';
 import { apiClient } from '../../api/client';
 import { formatDate, formatNumber } from '../../utils/formats';
 import { OrigenCuenta } from '../../types/contabilidad';
@@ -20,6 +21,12 @@ interface BuscarDocumentoModalProps {
   documentoEnviado?: string;
   /** Si false, el monto se asigna automaticamente y el InputNumber es readonly */
   puedeAsignar?: boolean;
+  /** ID de la transaccion (SPA) que se esta creando/editando */
+  transaccionId?: number;
+  /** ID de la SPA propia a excluir del chequeo (modo editar) */
+  excluirSpaId?: number;
+  /** Sucursal para el endpoint de bloqueo */
+  sucursalForBloqueo?: number;
 }
 
 /** Normaliza origenCuenta (string o number) al enum numerico OrigenCuenta */
@@ -36,6 +43,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   open, onClose, onSelect, tipoEntidad, codEntidad, origen,
   esDocumentoInventario, montoTotal,
   documentosIniciales, documentoEnviado, puedeAsignar = true,
+  transaccionId, excluirSpaId, sucursalForBloqueo,
 }) => {
   const TIPO_DOC_CODES: string[] = [
     'AID','AIC','ABN','AJA','CBI','CDC','CHK','CHN','CIE','CIT',
@@ -58,6 +66,12 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   const [distribuido, setDistribuido] = useState(0);
   // Evita warning duplicado cuando antd re-dispara onChange al re-sincronizar la selección controlada
   const warnAsociadoRef = useRef<Set<string>>(new Set());
+
+  // Mapa: transaccionId -> info de la SPA que bloquea. Solo para SPA no anulada sin pago generado.
+  interface BloqueoInfo { bloqueado: boolean; spaDocumento: string; spaId: number; }
+  const [bloqueosMap, setBloqueosMap] = useState<Record<number, BloqueoInfo>>({});
+
+  const sucursalBloqueo = sucursalForBloqueo ?? sucursalActiva;
 
   // ===== Helper: construir codigo completo del documento =====
   const obtenerCodigoCompleto = useCallback((doc: any): string => {
@@ -185,6 +199,43 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ===== Verificar SPA bloqueantes para documentos pendientes =====
+  useEffect(() => {
+    if (!open || !documentos.length || !transaccionId || !sucursalBloqueo) return;
+
+    const documentosIds = documentos.map(d => d.id);
+    // En batches para no sobrecargar el endpoint (aunque podriamos enviar todos)
+    const chequearBloqueos = async () => {
+      try {
+        // Para cada documento, verificar si tiene SPA bloqueante
+        const nuevosBloqueos: Record<number, BloqueoInfo> = {};
+        for (const doc of documentos) {
+          // Excluir si es parte de los documentos ya asociados (en modo editar)
+          if (documentosIniciales?.includes(doc.id)) continue;
+
+          const bloqueo = await solicitudPagoApi.obtenerBloqueoDocumento(
+            sucursalBloqueo,
+            doc.id,
+            excluirSpaId
+          );
+
+          if (bloqueo.bloqueado) {
+            nuevosBloqueos[doc.id] = {
+              bloqueado: true,
+              spaDocumento: bloqueo.spaDocumento!,
+              spaId: bloqueo.spaId!
+            };
+          }
+        }
+        setBloqueosMap(nuevosBloqueos);
+      } catch (err) {
+        console.error('Error al verificar bloqueos de SPA:', err);
+      }
+    };
+
+    chequearBloqueos();
+  }, [open, documentos, transaccionId, excluirSpaId, sucursalBloqueo, documentosIniciales]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ===== Asignar montos automáticamente al seleccionar/deseleccionar filas =====
   const handleSelectionChange = (keys: React.Key[]) => {
     // Detectar filas agregadas y removidas
@@ -197,7 +248,25 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       const doc = documentos.find((d) => d.id === k);
       return doc?.referencia && (!documentoEnviado || doc.referencia !== documentoEnviado);
     }));
-    const keysValidas = keys.filter((k) => !clavesConAsociado.has(k));
+
+    // Filas bloqueadas por SPA sin pago generado → no permitir selección
+    const clavesBloqueadas = new Set(keys.filter((k) => bloqueosMap[Number(k)]?.bloqueado));
+    clavesBloqueadas.forEach((k) => {
+      const doc = documentos.find((d) => d.id === k);
+      if (!warnAsociadoRef.current.has(String(k))) {
+        warnAsociadoRef.current.add(String(k));
+        message.warning(
+          `El documento ${obtenerCodigoCompleto(doc)} ya está asociado a la solicitud ${bloqueosMap[Number(k)]?.spaDocumento} sin documento de pago generado. No se puede agregar.`
+        );
+      }
+    });
+
+    // La fila bloqueada por SPA ya emitió su aviso especifico: no repetir con el aviso generico
+    const clavesConAsociadoSinAviso = new Set(
+      keys.filter((k) => clavesConAsociado.has(k) && !clavesBloqueadas.has(k))
+    );
+
+    const keysValidas = keys.filter((k) => !clavesConAsociadoSinAviso.has(k) && !clavesBloqueadas.has(k));
 
     setMontosPorFila((prev) => {
       const nuevos = { ...prev };
@@ -207,7 +276,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       });
       // Filas agregadas con doc asociado → deseleccionar (replicar desktop GridView_SelectionChanged)
       const addedValidos = added.filter((key) => {
-        if (clavesConAsociado.has(key)) {
+        if (clavesConAsociadoSinAviso.has(key)) {
           const doc = documentos.find((d) => d.id === key);
           const strKey = String(key);
           if (!warnAsociadoRef.current.has(strKey)) {
@@ -364,28 +433,30 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
 
   // ===== Confirmar selección =====
   const handleConfirm = () => {
-    const selected = selectedRowKeys.map((key) => {
-      const doc = documentos.find((d) => d.id === key);
-      const pendienteReal = _obtenerPendienteReal(doc);
-      const pendiente = calcularPendiente(doc);
-      const montoFila = montosPorFila[String(key)] ?? pendiente;
-      const esSobrepago = pendienteReal < 0;
-      return {
-        transaccionAsociadaID: doc?.id,
-        id: doc?.id,
-        documento: obtenerCodigoCompleto(doc),
-        nCF: doc?.ncf,
-        ncf: doc?.ncf,
-        montoOriginal: doc?.total || 0,
-        pagado: (doc?.total || 0) - pendienteReal,
-        saldoPendiente: pendiente,
-        monto: Math.min(montoFila, esSobrepago ? Math.abs(pendienteReal) : pendiente),
-        fecha: doc?.fechaDocumento,
-        tipoDocumento: doc?.tipoDocumento,
-        codigoSucursal: doc?.codigoSucursal,
-        sucursal: doc?.sucursal?.nombre,
-      };
-    });
+    const selected = selectedRowKeys
+      .filter((key) => !bloqueosMap[Number(key)]?.bloqueado)
+      .map((key) => {
+        const doc = documentos.find((d) => d.id === key);
+        const pendienteReal = _obtenerPendienteReal(doc);
+        const pendiente = calcularPendiente(doc);
+        const montoFila = montosPorFila[String(key)] ?? pendiente;
+        const esSobrepago = pendienteReal < 0;
+        return {
+          transaccionAsociadaID: doc?.id,
+          id: doc?.id,
+          documento: obtenerCodigoCompleto(doc),
+          nCF: doc?.ncf,
+          ncf: doc?.ncf,
+          montoOriginal: doc?.total || 0,
+          pagado: (doc?.total || 0) - pendienteReal,
+          saldoPendiente: pendiente,
+          monto: Math.min(montoFila, esSobrepago ? Math.abs(pendienteReal) : pendiente),
+          fecha: doc?.fechaDocumento,
+          tipoDocumento: doc?.tipoDocumento,
+          codigoSucursal: doc?.codigoSucursal,
+          sucursal: doc?.sucursal?.nombre,
+        };
+      });
     onSelect(selected);
     onClose();
   };

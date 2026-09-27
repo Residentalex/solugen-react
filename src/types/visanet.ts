@@ -117,3 +117,27 @@ export interface VisanetCierrePruebaRespuestaDTO {
   responseMessage?: string;
   acquirers?: VisanetCierrePruebaAdquirenteDTO[];
 }
+
+/**
+ * Voucher Visanet asociado a un turno (GET /visanet/{sucursal}/vouchers-turno/{noTurno}).
+ * NTipoTC trae la marca (VISA/MCARD/AMEX) a mostrar como HOST: en el reporte;
+ * Rrn es el REF.: del reporte. Anulado con 'T'/'S' significa anulada.
+ */
+export interface VisanetTurnoVoucherDTO {
+  noSec: string;
+  tokenId: string;
+  fecha?: string | null;
+  hora?: string;
+  monto?: number;
+  anulado?: string;
+  noLote?: string;
+  host?: string;
+  nTipoTC?: string;
+  notarjeta?: string;
+  noAprob?: string;
+  nombtar?: string;
+  tipoTC?: string;
+  rrn?: string;
+  merchantId?: string;
+  terminalId?: string;
+}

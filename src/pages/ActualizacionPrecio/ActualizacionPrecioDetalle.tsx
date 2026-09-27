@@ -2,10 +2,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  Typography, Descriptions, Alert, Modal, Input, message,
+  Typography, Descriptions, Alert, Modal, Input, message, Timeline,
 } from 'antd';
 import {
   ArrowLeftOutlined, EditOutlined, CloseCircleOutlined, ExclamationCircleOutlined,
+  ArrowUpOutlined, ArrowDownOutlined, CalendarOutlined, CheckCircleOutlined, ClockCircleOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -80,7 +81,7 @@ const ActualizacionPrecioDetalle: React.FC = () => {
   }, [id, sucursalActiva, setPageTitleOverride]);
 
   const handleAnular = () => {
-    if (!id || !data) return;
+    if (!id || !data || saving) return;
     Modal.confirm({
       title: 'Anular Actualización de Precio',
       icon: <ExclamationCircleOutlined />,
@@ -167,12 +168,36 @@ const ActualizacionPrecioDetalle: React.FC = () => {
       ),
     },
     {
-      title: 'Precio Actual',
+      title: 'Anterior',
       dataIndex: 'precio',
       key: 'precio',
       width: 130,
       align: 'right' as const,
       render: (val: number) => <Text style={{ fontFamily: 'monospace' }}>{formatNumber(val)}</Text>,
+    },
+    {
+      title: 'Nuevo',
+      dataIndex: 'precioSug',
+      key: 'precioSug',
+      width: 130,
+      align: 'right' as const,
+      render: (val: number) => <Text strong style={{ fontFamily: 'monospace' }}>{formatNumber(val)}</Text>,
+    },
+    {
+      title: 'Diferencia',
+      dataIndex: 'aumento',
+      key: 'aumento',
+      width: 130,
+      align: 'right' as const,
+      render: (val: number) => (
+        <Text style={{
+          fontFamily: 'monospace',
+          color: val > 0 ? '#52c41a' : val < 0 ? '#ff4d4f' : undefined,
+        }}>
+          {val > 0 ? <ArrowUpOutlined style={{ marginRight: 4 }} /> : val < 0 ? <ArrowDownOutlined style={{ marginRight: 4 }} /> : null}
+          {formatNumber(val)}
+        </Text>
+      ),
     },
     {
       title: '% Aumento',
@@ -181,22 +206,6 @@ const ActualizacionPrecioDetalle: React.FC = () => {
       width: 110,
       align: 'right' as const,
       render: (val: number) => <Text style={{ fontFamily: 'monospace' }}>{formatNumber(val)}%</Text>,
-    },
-    {
-      title: 'Aumento',
-      dataIndex: 'aumento',
-      key: 'aumento',
-      width: 110,
-      align: 'right' as const,
-      render: (val: number) => <Text style={{ fontFamily: 'monospace' }}>{formatNumber(val)}</Text>,
-    },
-    {
-      title: 'Precio Sugerido',
-      dataIndex: 'precioSug',
-      key: 'precioSug',
-      width: 130,
-      align: 'right' as const,
-      render: (val: number) => <Text strong style={{ fontFamily: 'monospace' }}>{formatNumber(val)}</Text>,
     },
     {
       title: 'Costo Pivote',
@@ -220,6 +229,40 @@ const ActualizacionPrecioDetalle: React.FC = () => {
 
   const contenidoDetalle = (
     <>
+      <Card className="paces-card" size="small" style={{ marginBottom: 16 }}>
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={12} lg={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Estado</Text>
+              <div style={{ marginTop: 4 }}><Tag color={estadoInfo.color}>{estadoInfo.label}</Tag></div>
+            </div>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Fecha</Text>
+              <div style={{ marginTop: 4 }}><Text strong>{formatDate(data.fecha)}</Text></div>
+            </div>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Productos</Text>
+              <div style={{ marginTop: 4 }}><Text strong>{data.lineas.length}</Text></div>
+            </div>
+          </Col>
+          <Col xs={24} sm={12} lg={6}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>Variación total</Text>
+              <div style={{ marginTop: 4 }}>
+                <Text strong>{formatNumber(totalAumento)}</Text>
+                {totalAumento >= 0
+                  ? <ArrowUpOutlined style={{ color: '#52c41a', marginLeft: 6 }} />
+                  : <ArrowDownOutlined style={{ color: '#ff4d4f', marginLeft: 6 }} />}
+              </div>
+            </div>
+          </Col>
+        </Row>
+      </Card>
+
       <Card className="paces-card" size="small" title={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 16, fontWeight: 600 }}>Datos Generales</span>
@@ -278,12 +321,47 @@ const ActualizacionPrecioDetalle: React.FC = () => {
             ),
           },
           {
-            key: 'historial',
-            label: 'Historial',
+            key: 'timeline',
+            label: 'Línea de tiempo',
             children: (
-              <div style={{ textAlign: 'center', padding: 40 }}>
-                <Text type="secondary">Historial próximamente</Text>
-              </div>
+              <Card className="paces-card" size="small">
+                <Timeline
+                  items={[
+                    {
+                      color: 'blue',
+                      dot: <CalendarOutlined />,
+                      children: (
+                        <div>
+                          <Text strong>Creación</Text>
+                          <div style={{ color: 'var(--ant-color-text-secondary)' }}>{formatDate(data.fecha)}</div>
+                        </div>
+                      ),
+                    },
+                    {
+                      color: data.autorizado ? 'green' : 'gray',
+                      dot: data.autorizado ? <CheckCircleOutlined /> : <ClockCircleOutlined />,
+                      children: (
+                        <div>
+                          <Text strong>{data.autorizado ? 'Aprobación' : 'Pendiente de aprobación'}</Text>
+                          <div style={{ color: 'var(--ant-color-text-secondary)' }}>
+                            {data.autorizado ? 'Documento autorizado' : 'Sin aprobación registrada'}
+                          </div>
+                        </div>
+                      ),
+                    },
+                    {
+                      color: 'gold',
+                      dot: <ClockCircleOutlined />,
+                      children: (
+                        <div>
+                          <Text strong>Aplicación</Text>
+                          <div style={{ color: 'var(--ant-color-text-secondary)' }}>{formatDate(data.fechaParaAplicar)}</div>
+                        </div>
+                      ),
+                    },
+                  ]}
+                />
+              </Card>
             ),
           },
         ]}
@@ -305,18 +383,18 @@ const ActualizacionPrecioDetalle: React.FC = () => {
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FActPrecio')}>Volver</Button>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/FActPrecio')} disabled={saving}>Volver</Button>
         <div style={{ flex: 1 }} />
         <Space>
           {esPendiente && (
             <>
               <PermissionGate accion="EDITAR">
-                <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FActPrecio/${id}/editar`)}>
+                <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/FActPrecio/${id}/editar`)} disabled={saving}>
                   Editar
                 </Button>
               </PermissionGate>
               <PermissionGate accion="ANULAR">
-                <Button danger icon={<CloseCircleOutlined />} loading={saving} onClick={handleAnular}>
+                <Button danger icon={<CloseCircleOutlined />} loading={saving} disabled={saving} onClick={handleAnular}>
                   Anular
                 </Button>
               </PermissionGate>

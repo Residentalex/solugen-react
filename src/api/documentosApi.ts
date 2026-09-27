@@ -42,6 +42,10 @@ export const documentosApi = {
     await apiClient.delete(`${BASE}/${sucursal}/${id}`);
   },
 
+  desactivar: async (sucursal: number, id: number): Promise<void> => {
+    await apiClient.post(`${BASE}/${sucursal}/${id}/desactivar`, {});
+  },
+
   obtenerPorId: async (sucursal: number, id: number): Promise<DocumentoDTO | null> => {
     try {
       const { data } = await apiClient.get<ApiResponse<DocumentoDTO>>(`${BASE}/${sucursal}/por-id/${id}`);

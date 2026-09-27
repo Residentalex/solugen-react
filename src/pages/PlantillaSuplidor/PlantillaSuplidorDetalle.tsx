@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Button, Row, Col, Grid,
-  message, Typography, Descriptions, Modal,
+  Card, Table, Tag, Button, Row, Col, Grid,
+  message, Typography, Descriptions, Modal, Tooltip,
 } from 'antd';
 import {
   ExclamationCircleOutlined, CheckCircleOutlined, PrinterOutlined,
@@ -62,8 +62,23 @@ const PlantillaSuplidorDetalle: React.FC = () => {
   const screens = Grid.useBreakpoint();
   const isLarge = screens.xxl === true;
 
+  const ocupado = useMemo(() => saving || generando || imprimiendo || loading, [saving, generando, imprimiendo, loading]);
+  const operacionRef = useRef(false);
+
+  const intentarTomarLock = () => {
+    if (operacionRef.current) return false;
+    operacionRef.current = true;
+    return true;
+  };
+
+  const liberarLock = () => {
+    operacionRef.current = false;
+  };
+
   const handleRefresh = useCallback(() => {
+    if (operacionRef.current || ocupado) return;
     if (!id) return;
+    if (!intentarTomarLock()) return;
     setLoadingError(false);
     setLoading(true);
     plantillaSuplidorApi.obtenerPorId(sucursalActiva, id)
@@ -76,8 +91,11 @@ const PlantillaSuplidorDetalle: React.FC = () => {
         message.error(msg);
         setLoadingError(true);
       })
-      .finally(() => setLoading(false));
-  }, [id, sucursalActiva, setPageTitleOverride]);
+      .finally(() => {
+        setLoading(false);
+        liberarLock();
+      });
+  }, [id, sucursalActiva, setPageTitleOverride, ocupado]);
 
   useEffect(() => {
     setActiveModule('mplantillasup');
@@ -106,6 +124,7 @@ const PlantillaSuplidorDetalle: React.FC = () => {
   }, [id, sucursalActiva, setPageTitleOverride]);
 
   const handleEliminar = () => {
+    if (operacionRef.current || ocupado) return;
     Modal.confirm({
       title: 'Eliminar plantilla',
       icon: <ExclamationCircleOutlined />,
@@ -114,7 +133,11 @@ const PlantillaSuplidorDetalle: React.FC = () => {
       okType: 'danger',
       cancelText: 'Cancelar',
       onOk: async () => {
-        if (!id) return;
+        if (!intentarTomarLock()) return;
+        if (!id) {
+          liberarLock();
+          return;
+        }
         setSaving(true);
         try {
           await plantillaSuplidorApi.eliminar(sucursalActiva, id);
@@ -125,12 +148,14 @@ const PlantillaSuplidorDetalle: React.FC = () => {
           message.error(msg);
         } finally {
           setSaving(false);
+          liberarLock();
         }
       },
     });
   };
 
   const handleGenerarAnalisis = () => {
+    if (operacionRef.current || ocupado) return;
     if (!data?.detalles?.length) {
       message.warning('La plantilla no tiene productos para procesar');
       return;
@@ -152,6 +177,7 @@ const PlantillaSuplidorDetalle: React.FC = () => {
       okText: 'Sí, generar',
       cancelText: 'Cancelar',
       onOk: async () => {
+        if (!intentarTomarLock()) return;
         setGenerando(true);
         try {
           const resultado = await analisisCompraApi.refrescarPorCodigosEnSegundoPlano(codigos);
@@ -161,12 +187,15 @@ const PlantillaSuplidorDetalle: React.FC = () => {
           message.error(msg);
         } finally {
           setGenerando(false);
+          liberarLock();
         }
       },
     });
   };
 
   const handleImprimir = async () => {
+    if (!id) return;
+    if (!intentarTomarLock()) return;
     setImprimiendo(true);
     try {
       const res = await plantillaSuplidorApi.imprimir(sucursalActiva, id!);
@@ -176,10 +205,9 @@ const PlantillaSuplidorDetalle: React.FC = () => {
       message.error('Error al generar el PDF');
     } finally {
       setImprimiendo(false);
+      liberarLock();
     }
   };
-
-  if (!data) return null;
 
   const detalleColumns = [
     {
@@ -233,18 +261,21 @@ const PlantillaSuplidorDetalle: React.FC = () => {
       onEditar={() => navigate(`/mplantillasup/${id}/editar`)}
       onEliminar={handleEliminar}
       eliminando={saving}
+      bloqueado={ocupado}
       extraActions={
         <>
           <PermissionGate accion="PROCESAR">
-            <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={handleImprimir} />
+            <Tooltip title="Imprimir">
+              <Button icon={<PrinterOutlined />} loading={imprimiendo} disabled={ocupado} onClick={handleImprimir} aria-label="Imprimir" />
+            </Tooltip>
           </PermissionGate>
           <PermissionGate accion="PROCESAR">
             <Button
               type="primary"
               icon={<CheckCircleOutlined />}
               loading={generando}
+              disabled={ocupado}
               onClick={handleGenerarAnalisis}
-              style={{ background: '#389e0d', borderColor: '#389e0d' }}
             >
               Generar Análisis
             </Button>
@@ -254,7 +285,7 @@ const PlantillaSuplidorDetalle: React.FC = () => {
     >
       {isLarge ? (
         <Row gutter={16}>
-          <Col lg={18}>
+          <Col span={24}>
             {/* Datos Generales */}
             <Card
               className="paces-card"
@@ -268,62 +299,40 @@ const PlantillaSuplidorDetalle: React.FC = () => {
                 column={2}
                 styles={{ content: { background: 'transparent' } }}
               >
-                <Descriptions.Item label="Número:">
-                  {data.numero || '-'}
+                <Descriptions.Item label="Número">
+                  {data?.numero || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Tipo:">{data.tipo || '—'}</Descriptions.Item>
-                <Descriptions.Item label="Fecha:">
-                  {formatDate(data.fecha)}
+                <Descriptions.Item label="Tipo">{data?.tipo || '—'}</Descriptions.Item>
+                <Descriptions.Item label="Fecha">
+                  {formatDate(data?.fecha || '')}
                 </Descriptions.Item>
-                <Descriptions.Item label="Suplidor:" span={2}>
-                  {toTitleCase(data.nombreSuplidor || '-')}
+                <Descriptions.Item label="Código Suplidor">
+                  {data?.codigoSuplidor || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Notas:" span={2}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.notas || '-'}</span>
+                <Descriptions.Item label="Suplidor" span={2}>
+                  {toTitleCase(data?.nombreSuplidor || '-')}
+                </Descriptions.Item>
+                <Descriptions.Item label="Notas" span={2}>
+                  <span style={{ whiteSpace: 'pre-wrap' }}>{data?.notas || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
 
-            {/* Tabs */}
-            <Tabs
-              defaultActiveKey="detalles"
-              type="card"
-              items={[
-                {
-                  key: 'detalles',
-                  label: `Detalles (${data.detalles?.length || 0})`,
-                  children: (
-                    <Table
-                      dataSource={data.detalles || []}
-                      columns={detalleColumns}
-                      rowKey={(r) => r.id || r.codigoProducto}
-                      size="small"
-                      pagination={false}
-                      scroll={{ x: 700 }}
-                    />
-                  ),
-                },
-              ]}
-            />
-          </Col>
-
-          <Col lg={6}>
-            {/* Sidebar info */}
+            {/* Productos */}
             <Card
-              title={<span style={{ fontSize: 16, fontWeight: 600 }}>Información</span>}
               className="paces-card"
+              size="small"
+              title={<span style={{ fontSize: 16, fontWeight: 600 }}>Productos ({data?.detalles?.length || 0})</span>}
               style={{ marginBottom: 16 }}
             >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div>
-                  <span className="paces-text-secondary">Código Suplidor: </span>
-                  <span>{data.codigoSuplidor || '-'}</span>
-                </div>
-                <div>
-                  <span className="paces-text-secondary">Productos: </span>
-                  <span>{data.detalles?.length || 0}</span>
-                </div>
-              </div>
+              <Table
+                dataSource={data?.detalles || []}
+                columns={detalleColumns}
+                rowKey={(r) => r.id || r.codigoProducto}
+                size="small"
+                pagination={{ pageSize: 25, showSizeChanger: false, showTotal: (t) => `${t} registros` }}
+                scroll={{ x: 700 }}
+              />
             </Card>
           </Col>
         </Row>
@@ -342,42 +351,43 @@ const PlantillaSuplidorDetalle: React.FC = () => {
               column={1}
               styles={{ content: { background: 'transparent' } }}
             >
-              <Descriptions.Item label="Número:">
-                {data.numero || '-'}
+              <Descriptions.Item label="Número">
+                {data?.numero || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="Tipo:">{data.tipo || '—'}</Descriptions.Item>
-              <Descriptions.Item label="Fecha:">
-                {formatDate(data.fecha)}
+              <Descriptions.Item label="Tipo">{data?.tipo || '—'}</Descriptions.Item>
+              <Descriptions.Item label="Fecha">
+                {formatDate(data?.fecha || '')}
               </Descriptions.Item>
-              <Descriptions.Item label="Suplidor:">
-                {toTitleCase(data.nombreSuplidor || '-')}
+              <Descriptions.Item label="Código Suplidor">
+                {data?.codigoSuplidor || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="Notas:">
-                <span style={{ whiteSpace: 'pre-wrap' }}>{data.notas || '-'}</span>
+              <Descriptions.Item label="Suplidor">
+                {toTitleCase(data?.nombreSuplidor || '-')}
+              </Descriptions.Item>
+              <Descriptions.Item label="Productos">
+                {data?.detalles?.length || 0}
+              </Descriptions.Item>
+              <Descriptions.Item label="Notas">
+                <span style={{ whiteSpace: 'pre-wrap' }}>{data?.notas || '-'}</span>
               </Descriptions.Item>
             </Descriptions>
           </Card>
 
-          <Tabs
-            defaultActiveKey="detalles"
-            type="card"
-            items={[
-              {
-                key: 'detalles',
-                label: `Detalles (${data.detalles?.length || 0})`,
-                children: (
-                  <Table
-                    dataSource={data.detalles || []}
-                    columns={detalleColumns}
-                    rowKey={(r) => r.id || r.codigoProducto}
-                    size="small"
-                    pagination={false}
-                    scroll={{ x: 700 }}
-                  />
-                ),
-              },
-            ]}
-          />
+          <Card
+            className="paces-card"
+            size="small"
+            title={<span style={{ fontSize: 16, fontWeight: 600 }}>Productos ({data?.detalles?.length || 0})</span>}
+            style={{ marginBottom: 16 }}
+          >
+            <Table
+              dataSource={data?.detalles || []}
+              columns={detalleColumns}
+              rowKey={(r) => r.id || r.codigoProducto}
+              size="small"
+              pagination={{ pageSize: 25, showSizeChanger: false, showTotal: (t) => `${t} registros` }}
+              scroll={{ x: 700 }}
+            />
+          </Card>
         </div>
       )}
     </DetalleCatalogoLayout>

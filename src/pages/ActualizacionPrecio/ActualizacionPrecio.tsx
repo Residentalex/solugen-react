@@ -5,6 +5,7 @@ import { Table, Input, Tag, Button, Card, Typography, DatePicker, Alert, Empty }
 import { PlusOutlined, ReloadOutlined, SearchOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { useAuthStore } from '../../stores/authStore';
 import { actualizacionPrecioApi } from '../../api/actualizacionPrecioApi';
 import type { ActualizacionPrecioDTO } from '../../types/actualizacionPrecio';
@@ -181,15 +182,48 @@ const ActualizacionPrecio: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 120,
-      render: (val: string) => <Text>{formatDate(val)}</Text>,
+      render: (val: string) => <FechaColumnCell fecha={val} />,
     },
-    {
-      title: 'Fecha Aplicar',
-      dataIndex: 'fechaParaAplicar',
-      key: 'fechaParaAplicar',
-      width: 120,
-      render: (val: string) => <Text>{formatDate(val)}</Text>,
-    },
+{
+  title: 'Fecha Aplicar',
+  dataIndex: 'fechaParaAplicar',
+  key: 'fechaParaAplicar',
+  width: 120,
+  render: (val: string, record: ActualizacionPrecioDTO) => {
+    const today = new Date();
+    const fechaAplicar = new Date(val);
+    const diffTime = fechaAplicar.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    let color = '#6b7280'; // gray-500
+    let label = formatDate(val);
+
+    if (diffDays < 0) {
+      color = '#ef4444'; // red-500 - vencida
+    } else if (diffDays === 0) {
+      color = '#f59e0b'; // yellow-500 - hoy
+      label = 'HOY';
+    } else if (diffDays === 1) {
+      color = '#10b981'; // green-500 - mañana
+      label = 'MAÑANA';
+    } else if (diffDays <= 3) {
+      color = '#8b5cf6'; // purple-500 - pronto
+    }
+
+    return (
+      <div style={{
+        background: `${color}15`,
+        padding: '2px 6px',
+        borderRadius: 3,
+        textAlign: 'center',
+        fontSize: diffDays === 0 || diffDays === 1 ? 11 : 12,
+        fontWeight: diffDays === 0 || diffDays === 1 ? 600 : 500
+      }}>
+        {label}
+      </div>
+    );
+  },
+},
     {
       title: 'Doc. Referencia',
       dataIndex: 'docReferencia',
@@ -206,15 +240,20 @@ const ActualizacionPrecio: React.FC = () => {
       render: (val: number) => (
         <Text style={{ fontFamily: 'monospace' }}>{val.toLocaleString('es-DO')}</Text>
       ),
-    },
+},
     {
       title: 'Estado',
       dataIndex: 'estado',
       key: 'estado',
-      width: 110,
-      render: (val: string) => {
+      width: 100,
+      render: (val: string, record: ActualizacionPrecioDTO) => {
         const info = ESTADO_TAG[val] || { color: 'default', label: val };
-        return <Tag color={info.color}>{info.label}</Tag>;
+        const baseClass = record.estado === 'Pendiente' || record.estado === 'P' ? 'paces-row-unread' : '';
+        return (
+          <Tag color={info.color} className={baseClass} style={{ fontWeight: 500, borderRadius: 4 }}>
+            {info.label}
+          </Tag>
+        );
       },
     },
     {
@@ -243,6 +282,26 @@ const ActualizacionPrecio: React.FC = () => {
           }
         />
       )}
+
+      {/* Resumen de actualizaciones */}
+      <div style={{ margin: '0 24px 20px', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <Card className="paces-card-erp" style={{ borderRadius: 8, padding: 16, flex: '1 1 220px', minWidth: 180, background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>Pendientes</div>
+          <div style={{ fontSize: 26, fontWeight: 600, color: '#f59e0b' }}>{Math.max(0, (totalData || 0) - (data?.datos?.filter(d => d.estado === 'Aplicado' || d.estado === 'A').length || 0))}</div>
+          <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>por aplicar</div>
+        </Card>
+        <Card className="paces-card-erp" style={{ borderRadius: 8, padding: 16, flex: '1 1 220px', minWidth: 180, background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>Aplicadas</div>
+          <div style={{ fontSize: 26, fontWeight: 600, color: '#10b981' }}>{data?.datos?.filter(d => d.estado === 'Aplicado' || d.estado === 'A').length || 0}</div>
+          <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>completadas</div>
+        </Card>
+        <Card className="paces-card-erp" style={{ borderRadius: 8, padding: 16, flex: '1 1 220px', minWidth: 180, background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>Canceladas</div>
+          <div style={{ fontSize: 26, fontWeight: 600, color: '#ef4444' }}>{data?.datos?.filter(d => d.estado === 'Anulado' || d.estado === 'N').length || 0}</div>
+          <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>reversadas</div>
+        </Card>
+      </div>
+
       <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }} styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '16px 24px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -250,11 +309,11 @@ const ActualizacionPrecio: React.FC = () => {
               placeholder="Buscar documento..."
               allowClear
               onSearch={handleSearch}
-              style={{ width: 400 }}
+              style={{ width: '100%', maxWidth: 400, flex: '1 1 auto', minWidth: 200 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
             <RangePicker
-              style={{ width: 220 }}
+              style={{ width: '100%', maxWidth: 220, flex: '0 0 auto' }}
               format="YYYY-MM-DD"
               onChange={handleDateChange}
               placeholder={["Desde", "Hasta"]}

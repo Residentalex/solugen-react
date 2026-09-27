@@ -7,6 +7,7 @@ import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { useDocumentoListado } from '../../hooks/useDocumentoListado';
 import EntidadColumnCell from '../../components/EntidadColumnCell';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import type { FacturaClienteResumenDTO } from '../../types/facturaCliente';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
@@ -98,7 +99,7 @@ const FacturaCliente: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (f: string) => <Text>{formatDateRaw(f)}</Text>,
+      render: (f: string) => <FechaColumnCell fecha={f} />,
     },
     {
       title: 'Cliente',

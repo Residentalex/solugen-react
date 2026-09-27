@@ -2,16 +2,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  Table,
-  Button,
-  Select,
-  Tag,
-  message,
-  Empty,
-  Alert,
-  Card,
-  Typography,
+  Table, Button, Select, Tag, message, Empty, Alert, Card, Typography, Tooltip,
 } from 'antd';
+import { ExclamationCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -37,6 +30,11 @@ const Pantallas: React.FC = () => {
   const [filtroGrupo, setFiltroGrupo] = useState<string | undefined>();
   const [modulosCatalogo, setModulosCatalogo] = useState<ModuloDTO[]>([]);
   const [entidadesPorPantalla, setEntidadesPorPantalla] = useState<Map<number, PantallaEntidadDTO[]>>(new Map());
+  const [entidadesCargando, setEntidadesCargando] = useState(false);
+  const [entidadesError, setEntidadesError] = useState(false);
+  const [todosLosGrupos, setTodosLosGrupos] = useState<string[]>([]);
+  const [gruposCargando, setGruposCargando] = useState(false);
+  const [gruposError, setGruposError] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['pantallas', sucursalActiva, page, pageSize, searchText, filtroModulo, filtroGrupo],
@@ -66,6 +64,8 @@ const Pantallas: React.FC = () => {
 
   const cargarEntidades = useCallback(async () => {
     if (sucursalActiva === undefined) return;
+    setEntidadesCargando(true);
+    setEntidadesError(false);
     try {
       const result = await pantallaApi.obtenerPantallasConEntidades(sucursalActiva);
       const map = new Map<number, PantallaEntidadDTO[]>();
@@ -73,8 +73,10 @@ const Pantallas: React.FC = () => {
         if (p.entidades?.length) map.set(p.id, p.entidades);
       });
       setEntidadesPorPantalla(map);
+      setEntidadesCargando(false);
     } catch {
-      // no crítico, las entidades son opcionales en el listado
+      setEntidadesError(true);
+      setEntidadesCargando(false);
     }
   }, [sucursalActiva]);
 
@@ -88,13 +90,30 @@ const Pantallas: React.FC = () => {
     }
   }, [sucursalActiva]);
 
+const cargarTodosLosGrupos = useCallback(async () => {
+    if (sucursalActiva === undefined) return;
+    setGruposCargando(true);
+    setGruposError(false);
+    try {
+      const result = await pantallaApi.filtrar(sucursalActiva, { cantidad: 1000, salto: 0 });
+      const gruposUnicos = [...new Set((result.datos || []).map((p: PantallaDTO) => p.grupo).filter(Boolean))].sort();
+      setTodosLosGrupos(gruposUnicos);
+    } catch (err: any) {
+      setGruposError(true);
+      message.error(err?.response?.data?.errorMessage || 'Error al cargar grupos');
+    } finally {
+      setGruposCargando(false);
+    }
+  }, [sucursalActiva]);
+
   useEffect(() => {
     setActiveModule('MPantalla');
     updateToolbar({});
     cargarEntidades();
     cargarModulos();
+    cargarTodosLosGrupos();
     return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarEntidades, cargarModulos]);
+  }, [setActiveModule, updateToolbar, resetToolbar, cargarEntidades, cargarModulos, cargarTodosLosGrupos]);
 
   const handleExportarExcel = async () => {
     const companyName = await getCompanyName(sucursalActiva);
@@ -162,20 +181,33 @@ const Pantallas: React.FC = () => {
           ? modulos.map((m) => <Tag key={m.id} style={{ marginBottom: 2 }}>{m.nombre}</Tag>)
           : <Tag style={{ color: '#999' }}>Sin módulo</Tag>,
     },
-    {
-      title: 'Entidad(es)',
-      key: 'entidades',
-      width: 240,
-      render: (_: any, record: PantallaDTO) => {
-        const ents = entidadesPorPantalla.get(record.id) || [];
-        if (!ents.length) return <Tag style={{ color: '#999' }}>—</Tag>;
-        return ents.map(e => (
-          <Tag key={`${e.entidadCodigo}-${e.tipoEntidad || ''}`} style={{ marginBottom: 2 }}>
-            {e.entidadCodigo}{e.tipoEntidad ? <Text type="secondary">/{e.tipoEntidad}</Text> : null}
-          </Tag>
-        ));
+{
+        title: 'Entidad(es)',
+        key: 'entidades',
+        width: 240,
+        render: (_: any, record: PantallaDTO) => {
+          const ents = entidadesPorPantalla.get(record.id) || [];
+          if (entidadesCargando) {
+            return <Tag style={{ color: '#556ee6' }}>Cargando...</Tag>;
+          }
+          if (entidadesError) {
+            return (
+              <>
+                <Tag style={{ color: '#ff4d4f' }}>No disponible</Tag>
+                <Tooltip title="Falló la carga de entidades">
+                  <ExclamationCircleOutlined style={{ color: '#ff4d4f', marginLeft: 4 }} />
+                </Tooltip>
+              </>
+            );
+          }
+          if (!ents.length) return <Tag style={{ color: '#999' }}>—</Tag>;
+          return ents.map(e => (
+            <Tag key={`${e.entidadCodigo}-${e.tipoEntidad || ''}`} style={{ marginBottom: 2 }}>
+              {e.entidadCodigo}{e.tipoEntidad ? <Text type="secondary">/{e.tipoEntidad}</Text> : null}
+            </Tag>
+          ));
+        },
       },
-    },
     {
       title: 'Grupo',
       dataIndex: 'grupo',
@@ -211,9 +243,22 @@ const Pantallas: React.FC = () => {
               Reintentar
             </Button>
           }
-        />
-      )}
-      <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }}
+/>
+       )}
+       {entidadesError && (
+         <Alert
+           title="No se pudieron cargar las entidades"
+           type="error"
+           showIcon
+           style={{ marginBottom: 16, marginTop: 8 }}
+           action={
+             <Button size="small" onClick={() => cargarEntidades()}>
+               Reintentar
+             </Button>
+           }
+         />
+       )}
+       <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }}
         styles={{ body: { padding: 0 } }}>
         <CatalogoListadoToolbar
           onSearch={handleSearch}
@@ -237,19 +282,34 @@ const Pantallas: React.FC = () => {
                   </Select.Option>
                 ))}
               </Select>
-              <Select
-                placeholder="Grupo"
-                allowClear
-                style={{ width: 160 }}
-                value={filtroGrupo}
-                onChange={handleGrupoChange}
-              >
-                {[...new Set((data?.datos || []).map((p: PantallaDTO) => p.grupo).filter(Boolean))].sort().map((g) => (
-                  <Select.Option key={g as string} value={g as string}>
-                    {g as string}
-                  </Select.Option>
-                ))}
-              </Select>
+<Select
+                  placeholder="Grupo"
+                  allowClear
+                  style={{ width: 160 }}
+                  value={filtroGrupo}
+                  onChange={handleGrupoChange}
+                  dropdownRender={(menu) => (
+                    <>
+                      {todosLosGrupos.length === 0 && gruposCargando ? (
+                        <div style={{ padding: '8px 12px' }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>Cargando grupos...</Text>
+                        </div>
+                      ) : null}
+                      {todosLosGrupos.length === 0 && !gruposCargando && !gruposError ? (
+                        <div style={{ padding: '8px 12px' }}>
+                          <Text type="secondary" style={{ fontSize: 12 }}>No hay grupos disponibles</Text>
+                        </div>
+                      ) : null}
+                      {menu}
+                    </>
+                  )}
+                >
+                  {todosLosGrupos.map((g) => (
+                    <Select.Option key={g} value={g}>
+                      {g}
+                    </Select.Option>
+                  ))}
+                </Select>
             </>
           }
         />

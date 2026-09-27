@@ -39,6 +39,12 @@ export interface TransaccionAsociadaDTO {
   saldoPendiente: number;
   /** Monto a Aplicar (editable en el formulario) */
   monto: number;
+  /** Si este documento esta bloqueado por otra SPA sin pago generado */
+  bloqueado?: boolean;
+  /** Documento de la SPA bloqueante (ej: "RI-000123") */
+  spaDocumento?: string;
+  /** ID de la SPA bloqueante */
+  spaId?: number;
 }
 
 export interface CobroDTO {

@@ -6,6 +6,7 @@ import PermissionGate from './PermissionGate';
 
 interface FormularioToolbarProps {
   saving?: boolean;
+  bloqueado?: boolean;
   estado?: number;
   periodo?: number;
   mode?: 'crear' | 'editar';
@@ -15,7 +16,7 @@ interface FormularioToolbarProps {
 }
 
 const FormularioToolbar: React.FC<FormularioToolbarProps> = ({
-  saving, estado, periodo, mode = 'crear', onGuardar, onCancelar, children,
+  saving, bloqueado = false, estado, periodo, mode = 'crear', onGuardar, onCancelar, children,
 }) => {
   return (
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
@@ -27,7 +28,7 @@ const FormularioToolbar: React.FC<FormularioToolbarProps> = ({
             Guardar
           </Button>
         </PermissionGate>
-        <Button icon={<CloseOutlined />} onClick={onCancelar}>
+        <Button icon={<CloseOutlined />} disabled={bloqueado || saving} onClick={onCancelar}>
           Cancelar
         </Button>
       </Space>

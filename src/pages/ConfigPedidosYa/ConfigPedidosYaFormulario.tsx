@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Modal, Form, Input, InputNumber, message, Radio, Space, Divider, Typography, Button } from 'antd';
 import { configPedidosYaApi } from '../../api/configPedidosYaApi';
 import type { ConfigPedidosYaDTO } from '../../types/configPedidosYa';
@@ -10,6 +10,7 @@ interface ConfigPedidosYaFormularioProps {
   editItem: ConfigPedidosYaDTO | null;
   onClose: () => void;
   onSaved: () => void;
+  onOcupadoChange?: (ocupado: boolean) => void;
 }
 
 const ConfigPedidosYaFormulario: React.FC<ConfigPedidosYaFormularioProps> = ({
@@ -17,6 +18,7 @@ const ConfigPedidosYaFormulario: React.FC<ConfigPedidosYaFormularioProps> = ({
   editItem,
   onClose,
   onSaved,
+  onOcupadoChange,
 }) => {
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const [form] = Form.useForm();
@@ -24,6 +26,12 @@ const ConfigPedidosYaFormulario: React.FC<ConfigPedidosYaFormularioProps> = ({
   const [authMethod, setAuthMethod] = useState<'password' | 'private_key'>('password');
   const [probando, setProbando] = useState(false);
   const [resultadoPrueba, setResultadoPrueba] = useState<{ exito: boolean; mensaje: string; fechaPrueba?: string; detalle?: string } | null>(null);
+  const ocupado = saving || probando;
+  const ocupadoRef = useRef(false);
+
+  useEffect(() => {
+    onOcupadoChange?.(ocupado);
+  }, [ocupado, onOcupadoChange]);
 
   useEffect(() => {
     if (visible) {
@@ -41,6 +49,8 @@ const ConfigPedidosYaFormulario: React.FC<ConfigPedidosYaFormularioProps> = ({
   }, [visible, editItem, form]);
 
   const handleProbar = async () => {
+    if (ocupadoRef.current) return;
+    ocupadoRef.current = true;
     try {
       const values = await form.validateFields(['servidor', 'puerto', 'usuario']);
       setProbando(true);
@@ -56,15 +66,19 @@ const ConfigPedidosYaFormulario: React.FC<ConfigPedidosYaFormularioProps> = ({
       setResultadoPrueba(res);
       message[res.exito ? 'success' : 'error'](res.exito ? 'Conexión exitosa' : 'Fallo en la conexión');
     } catch (err: any) {
+      if (err?.errorFields) return;
       const msg = err?.response?.data?.errorMessage || err?.message || 'Error al probar conexión';
       setResultadoPrueba({ exito: false, mensaje: 'Error al probar', fechaPrueba: new Date().toISOString(), detalle: msg });
       message.error(msg);
     } finally {
       setProbando(false);
+      ocupadoRef.current = false;
     }
   };
 
   const handleOk = async () => {
+    if (ocupadoRef.current) return;
+    ocupadoRef.current = true;
     try {
       const values = await form.validateFields();
       setSaving(true);
@@ -90,22 +104,33 @@ const ConfigPedidosYaFormulario: React.FC<ConfigPedidosYaFormularioProps> = ({
       message.error(err?.response?.data?.errorMessage || 'Error al guardar configuración de PedidosYa');
     } finally {
       setSaving(false);
+      ocupadoRef.current = false;
     }
+  };
+
+  const handleCancelarSeguro = () => {
+    if (ocupadoRef.current) return;
+    onClose();
   };
 
   return (
     <Modal
       title={editItem ? 'Editar Configuración PedidosYa' : 'Crear Configuración PedidosYa'}
       open={visible}
-      onCancel={onClose}
+      onCancel={handleCancelarSeguro}
       onOk={handleOk}
       confirmLoading={saving}
       width={640}
       okText="Guardar"
       cancelText="Cancelar"
       destroyOnClose
+      closable={!ocupado}
+      maskClosable={!ocupado}
+      keyboard={!ocupado}
+      okButtonProps={{ disabled: ocupado, loading: saving }}
+      cancelButtonProps={{ disabled: ocupado }}
     >
-      <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+      <Form form={form} layout="vertical" style={{ marginTop: 16 }} disabled={ocupado}>
         {/* Sección: Conexión SFTP */}
         <Typography.Title level={5} style={{ marginBottom: 4, fontWeight: 600 }}>Conexión SFTP</Typography.Title>
         <Typography.Text type="secondary" style={{ fontSize: 12, marginBottom: 12, display: 'block' }}>
@@ -165,7 +190,7 @@ const ConfigPedidosYaFormulario: React.FC<ConfigPedidosYaFormularioProps> = ({
 
         <Divider style={{ margin: '8px 0' }} />
         <Space>
-          <Button type="default" loading={probando} onClick={handleProbar} disabled={saving || probando}>
+          <Button type="default" loading={probando} onClick={handleProbar} disabled={ocupado}>
             Probar conexión
           </Button>
         </Space>

@@ -1,10 +1,11 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Table, Tag, Button, Card, Input, message, Empty, Modal, Select, Form, Alert, Typography } from 'antd';
 import { ReloadOutlined, SearchOutlined, PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { ticketApi } from '../../api/ticketApi';
 import { usuarioApi } from '../../api/usuarioApi';
 import TicketThreadModal from '../../components/TicketThreadModal';
@@ -50,6 +51,7 @@ const Tickets: React.FC = () => {
   const [pageSize, setPageSize] = useState(25);
   const [crearModal, setCrearModal] = useState(false);
   const [creando, setCreando] = useState(false);
+  const creandoRef = useRef(false);
   const [form] = Form.useForm();
   const [usuarios, setUsuarios] = useState<UsuarioDTO[]>([]);
 
@@ -93,9 +95,11 @@ const Tickets: React.FC = () => {
 
   const handleCrear = useCallback(async () => {
     if (!sucursal || !usuarioID) return;
+    if (creandoRef.current) return;
+    creandoRef.current = true;
+    setCreando(true);
     try {
       const values = await form.validateFields();
-      setCreando(true);
       const request: CrearTicketRequest = {
         titulo: values.titulo,
         mensaje: values.mensaje,
@@ -113,6 +117,7 @@ const Tickets: React.FC = () => {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al crear ticket');
     } finally {
+      creandoRef.current = false;
       setCreando(false);
     }
   }, [sucursal, usuarioID, form, refetch]);
@@ -170,9 +175,7 @@ const Tickets: React.FC = () => {
       dataIndex: 'fechaCreacion',
       key: 'fechaCreacion',
       width: 120,
-      render: (f: string) => (
-        <span style={{ fontSize: 12 }}>{formatFecha(f)}</span>
-      ),
+render: (f: string) => <FechaColumnCell fecha={f} />,
     },
   ];
 
@@ -238,13 +241,17 @@ const Tickets: React.FC = () => {
       <Modal
         title="Nuevo ticket"
         open={crearModal}
-        onCancel={() => { setCrearModal(false); form.resetFields(); }}
+        onCancel={() => { if (!creandoRef.current && !creando) { setCrearModal(false); form.resetFields(); } }}
         onOk={handleCrear}
         confirmLoading={creando}
         okText="Crear ticket"
+        cancelButtonProps={{ disabled: creando }}
+        closable={!creando}
+        maskClosable={!creando}
+        keyboard={!creando}
         width={500}
       >
-        <Form form={form} layout="vertical" size="small">
+        <Form form={form} layout="vertical" size="small" disabled={creando}>
           <Form.Item name="titulo" label="Título" rules={[{ required: true, message: 'Obligatorio' }]}>
             <Input placeholder="Asunto del ticket" />
           </Form.Item>

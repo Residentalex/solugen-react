@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Modal, Descriptions } from 'antd';
 import { Table, Tabs, Tag, Button, Tooltip, message, Card, Input, Empty, Row, Col, Select, Skeleton, Alert } from 'antd';
-import { SearchOutlined, ReloadOutlined, SendOutlined, CheckOutlined, ClockCircleOutlined, BellOutlined, WarningOutlined, CloseCircleOutlined, FileExcelOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, SendOutlined, CheckOutlined, ClockCircleOutlined, BellOutlined, WarningOutlined, CloseCircleOutlined, FileExcelOutlined, HistoryOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -62,6 +62,18 @@ const Notificaciones: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [verNotificacion, setVerNotificacion] = useState<NotificacionVista | null>(null);
   const [ticketModalID, setTicketModalID] = useState<number | null>(null);
+  // Bloqueo uniforme: evita repetir Leer / marcación masiva / Resolver en vuelo
+  const [marcandoIds, setMarcandoIds] = useState<Set<number>>(new Set());
+  const [marcandoLote, setMarcandoLote] = useState(false);
+  const [resolviendoTicket, setResolviendoTicket] = useState(false);
+  // Refs sincrónicas: el state es asíncrono y un doble clic rápido lo elude
+  const marcandoRef = useRef<Set<number>>(new Set());
+  const marcandoLoteRef = useRef(false);
+  const resolviendoRef = useRef(false);
+  // Candado global: una sola acción en vuelo entre Leer / lote / Resolver
+  const ocupadoRef = useRef(false);
+  // Bloqueo global: mientras haya una acción en vuelo se congela toda la bandeja
+  const procesandoNotifs = marcandoIds.size > 0 || marcandoLote || resolviendoTicket;
 
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
 
@@ -123,21 +135,57 @@ const Notificaciones: React.FC = () => {
     setSearchText(value);
   };
 
+  // Aplana columnas agrupadas (children) y excluye acciones, sin conversiones
+  // forzadas: trabaja sobre ColumnsType<T> con angostamiento por 'in'.
+  interface ColumnaExportPlana<T extends object> {
+    titulo: string;
+    clave: string;
+    key?: string;
+    leer: (item: T) => unknown;
+  }
+  const columnasExportables = <T extends object>(cols: ColumnsType<T>): Array<ColumnaExportPlana<T>> => {
+    const planas: Array<ColumnaExportPlana<T>> = [];
+    cols.forEach((c) => {
+      if (!c) return;
+      if ('key' in c && c.key === 'acciones') return;
+      if ('children' in c && Array.isArray(c.children)) {
+        planas.push(...columnasExportables(c.children));
+        return;
+      }
+      const titulo = 'title' in c && typeof c.title === 'string' ? c.title : undefined;
+      const dataIndex = 'dataIndex' in c ? c.dataIndex : undefined;
+      if (!titulo || (typeof dataIndex !== 'string' && typeof dataIndex !== 'number')) return;
+      const clave = String(dataIndex);
+      const key = 'key' in c && c.key !== undefined ? String(c.key) : undefined;
+      planas.push({
+        titulo,
+        clave,
+        key,
+        leer: (item: T): unknown => {
+          if (!(clave in item)) return undefined;
+          return item[clave as keyof T];
+        },
+      });
+    });
+    return planas;
+  };
+
   const handleExportarExcel = async () => {
     const companyName = await getCompanyName(sucursal);
     const dataSource = getDataSource();
-    const cols = columns.filter((c) => c.key !== 'acciones');
+    const cols = columnasExportables(columns);
     exportToExcel({
       fileName: `Notificaciones_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
       sheetName: 'Notificaciones',
       companyName,
-      columnHeaders: cols.map((c) => c.title as string),
-      dataRows: dataSource.map((item: any) =>
+      columnHeaders: cols.map((c) => c.titulo),
+      dataRows: dataSource.map((item: NotificacionVista) =>
         cols.map((col) => {
           if (col.key === 'estado') {
             return item.leida ? 'Leída' : 'No leída';
           }
-          const val = item[col.dataIndex as string];
+          const val = col.leer(item);
+          if (typeof val === 'boolean') return val ? 'Sí' : 'No';
           return val !== null && val !== undefined ? String(val) : '';
         })
       ),
@@ -154,16 +202,37 @@ const Notificaciones: React.FC = () => {
   };
 
   const handleTabChange = (key: string) => {
+    if (procesandoNotifs) return;
     setTabActiva(key);
     setSelectedRowKeys([]);
     setSelectedRow(null);
   };
 
   const handleMarcarLeida = async (notificacionUsuarioID: number) => {
-    await marcarComoLeida(notificacionUsuarioID);
+    if (ocupadoRef.current) return;
+    ocupadoRef.current = true;
+    if (marcandoRef.current.has(notificacionUsuarioID) || marcandoLoteRef.current) { ocupadoRef.current = false; return; }
+    marcandoRef.current.add(notificacionUsuarioID);
+    setMarcandoIds((prev) => new Set(prev).add(notificacionUsuarioID));
+    try {
+      await marcarComoLeida(notificacionUsuarioID);
+    } finally {
+      marcandoRef.current.delete(notificacionUsuarioID);
+      ocupadoRef.current = false;
+      setMarcandoIds((prev) => {
+        const next = new Set(prev);
+        next.delete(notificacionUsuarioID);
+        return next;
+      });
+    }
   };
 
   const handleMarcarSeleccionadas = async () => {
+    if (ocupadoRef.current) return;
+    ocupadoRef.current = true;
+    if (marcandoLoteRef.current || marcandoRef.current.size > 0) { ocupadoRef.current = false; return; }
+    marcandoLoteRef.current = true;
+    setMarcandoLote(true);
     try {
       await Promise.all(
         selectedRowKeys.map((key) => marcarComoLeida(key as number))
@@ -173,6 +242,30 @@ const Notificaciones: React.FC = () => {
       cargarPendientes();
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al marcar notificaciones');
+    } finally {
+      marcandoLoteRef.current = false;
+      ocupadoRef.current = false;
+      setMarcandoLote(false);
+    }
+  };
+
+  const handleResolverTicket = async () => {
+    if (ocupadoRef.current) return;
+    ocupadoRef.current = true;
+    if (resolviendoRef.current) { ocupadoRef.current = false; return; }
+    if (!sucursal || !verNotificacion?.referenciaID) { ocupadoRef.current = false; return; }
+    resolviendoRef.current = true;
+    setResolviendoTicket(true);
+    try {
+      await ticketApi.cambiarEstado(sucursal, verNotificacion.referenciaID, { estado: 'Resuelto', usuarioID: usuarioID! });
+      message.success('Ticket marcado como resuelto');
+      setVerNotificacion(null);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al marcar como resuelto');
+    } finally {
+      resolviendoRef.current = false;
+      ocupadoRef.current = false;
+      setResolviendoTicket(false);
     }
   };
 
@@ -223,7 +316,7 @@ const Notificaciones: React.FC = () => {
       width: 200,
       ellipsis: true,
       render: (text: string, record) => (
-        <a onClick={() => setVerNotificacion(record)} style={{ fontWeight: record.leida ? 400 : 600 }}>
+        <a onClick={() => { if (!procesandoNotifs) setVerNotificacion(record); }} style={{ fontWeight: record.leida ? 400 : 600, cursor: procesandoNotifs ? 'default' : 'pointer' }}>
           {text}
         </a>
       ),
@@ -270,6 +363,7 @@ const Notificaciones: React.FC = () => {
     },
     {
       title: 'Estado',
+      dataIndex: 'leida',
       key: 'estado',
       width: 100,
       render: (_, record) => (
@@ -293,6 +387,8 @@ const Notificaciones: React.FC = () => {
                     size="small"
                     icon={<CheckOutlined />}
                     onClick={() => handleMarcarLeida(record.notificacionUsuarioID)}
+                    loading={marcandoIds.has(record.notificacionUsuarioID)}
+                    disabled={procesandoNotifs}
                   >
                     Leer
                   </Button>
@@ -309,14 +405,14 @@ const Notificaciones: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Bandeja de Notificaciones</h4>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button onClick={() => navigate('/notificaciones/config')}>
+          <Button onClick={() => navigate('/notificaciones/config')} disabled={procesandoNotifs}>
             Configuración
           </Button>
-          <Button onClick={() => navigate('/notificaciones/personalizadas')}>
+          <Button onClick={() => navigate('/notificaciones/personalizadas')} disabled={procesandoNotifs}>
             SQL Personalizadas
           </Button>
           <PermissionGate permisoEspecial="pe_NOTIFICACION">
-            <Button type="primary" icon={<SendOutlined />} onClick={() => setModalVisible(true)}>
+            <Button type="primary" icon={<SendOutlined />} onClick={() => setModalVisible(true)} disabled={procesandoNotifs}>
               Enviar Notificación
             </Button>
           </PermissionGate>
@@ -324,7 +420,7 @@ const Notificaciones: React.FC = () => {
       </div>
 
       {/* KPIs — estilo Dashboard */}
-      <Row gutter={[24, 24]} style={{ marginBottom: 24 }}>
+      <Row gutter={[24, 24]} style={{ marginBottom: 32 }}>
         {[
           {
             icon: <BellOutlined />,
@@ -403,19 +499,21 @@ const Notificaciones: React.FC = () => {
               placeholder="Buscar por título, mensaje o módulo..."
               allowClear
               onSearch={handleSearch}
+              disabled={procesandoNotifs}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   (e.target as HTMLInputElement).blur();
                   handleSearch('');
                 }
               }}
-              style={{ width: 400 }}
+              style={{ width: '100%', maxWidth: 400, flex: '1 1 auto', minWidth: 200 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
             <Select
               mode="multiple"
               placeholder="Tipo"
               allowClear
+              disabled={procesandoNotifs}
               style={{ minWidth: 120, maxWidth: 200 }}
               value={filtroTipo}
               onChange={setFiltroTipo}
@@ -432,6 +530,7 @@ const Notificaciones: React.FC = () => {
               mode="multiple"
               placeholder="Módulo"
               allowClear
+              disabled={procesandoNotifs}
               style={{ minWidth: 120, maxWidth: 200 }}
               value={filtroModulo}
               onChange={setFiltroModulo}
@@ -441,6 +540,7 @@ const Notificaciones: React.FC = () => {
               style={{ width: 65 }}
               value={pageSize}
               onChange={(v) => { setPageSize(v); }}
+              disabled={procesandoNotifs}
               options={[
                 { value: 25, label: '25' },
                 { value: 50, label: '50' },
@@ -449,9 +549,9 @@ const Notificaciones: React.FC = () => {
             />
             <div style={{ flex: 1 }} />
             <PermissionGate accion="EXPORTAR">
-              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} disabled={procesandoNotifs} />
             </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh} disabled={procesandoNotifs} />
           </div>
         </div>
 
@@ -470,10 +570,10 @@ const Notificaciones: React.FC = () => {
             }}
           >
             <span style={{ fontSize: 13 }}>{selectedRowKeys.length} seleccionadas</span>
-            <Button size="small" type="primary" icon={<CheckOutlined />} onClick={handleMarcarSeleccionadas}>
+            <Button size="small" type="primary" icon={<CheckOutlined />} onClick={handleMarcarSeleccionadas} loading={marcandoLote} disabled={marcandoLote || marcandoIds.size > 0}>
               Marcar como leídas
             </Button>
-            <Button size="small" onClick={() => setSelectedRowKeys([])}>
+            <Button size="small" onClick={() => setSelectedRowKeys([])} disabled={procesandoNotifs}>
               Cancelar
             </Button>
           </div>
@@ -488,27 +588,35 @@ const Notificaciones: React.FC = () => {
             {
               key: 'pendientes',
               label: `Pendientes (${pendientes.length})`,
+              disabled: procesandoNotifs,
               children: isLoading ? (
                 <div style={{ padding: '16px 0' }}>
                   <Skeleton active paragraph={{ rows: 5 }} />
                 </div>
               ) : (
                 <Table<NotificacionVista>
-                  columns={columns}
-                  dataSource={getDataSource()}
-                  rowKey="notificacionUsuarioID"
-                  className="paces-border-top paces-list-table"
-                  rowClassName={(record) => selectedRow?.notificacionUsuarioID === record.notificacionUsuarioID ? 'paces-row-selected' : 'paces-row-hover'}
-                  onRow={(record) => ({
-                    onClick: () => setSelectedRow(record),
-                    style: { cursor: 'pointer' },
-                  })}
-                  scroll={{ x: 1100 }}
-                  size="middle"
-                  rowSelection={{
-                    selectedRowKeys,
-                    onChange: (keys) => setSelectedRowKeys(keys),
-                  }}
+columns={columns}
+                   dataSource={getDataSource()}
+                   rowKey="notificacionUsuarioID"
+                   className="paces-border-top paces-list-table"
+                   rowClassName={(record) => {
+                     const base = selectedRow?.notificacionUsuarioID === record.notificacionUsuarioID
+                       ? 'paces-row-selected'
+                       : 'paces-row-hover';
+                     if (!record.leida && tabActiva === 'pendientes') return `${base} paces-row-unread`;
+                     return base;
+                   }}
+                    onRow={(record) => ({
+                      onClick: () => { if (!procesandoNotifs) setSelectedRow(record); },
+                      style: { cursor: procesandoNotifs ? 'default' : 'pointer' },
+                    })}
+                   scroll={{ x: 1100 }}
+                   size="middle"
+                    rowSelection={{
+                      selectedRowKeys,
+                      onChange: (keys) => setSelectedRowKeys(keys),
+                      getCheckboxProps: () => ({ disabled: procesandoNotifs }),
+                    }}
                   locale={{
                     emptyText: (
                       <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -520,6 +628,7 @@ const Notificaciones: React.FC = () => {
                     pageSize,
                     showSizeChanger: false,
                     showTotal: (total) => `${total} registros`,
+                    disabled: procesandoNotifs,
                   }}
                 />
               ),
@@ -527,32 +636,37 @@ const Notificaciones: React.FC = () => {
             {
               key: 'enviadas',
               label: 'Enviadas',
+              disabled: procesandoNotifs,
               children: isLoading ? (
                 <div style={{ padding: '16px 0' }}>
                   <Skeleton active paragraph={{ rows: 5 }} />
                 </div>
               ) : (
                 <Table<NotificacionVista>
-                  columns={columns}
-                  dataSource={getDataSource()}
-                  rowKey="id"
-                  className="paces-border-top paces-list-table"
-                  rowClassName={(record) => selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'}
-                  onRow={(record) => ({
-                    onClick: () => setSelectedRow(record),
-                    style: { cursor: 'pointer' },
-                  })}
-                  scroll={{ x: 1100 }}
-                  size="middle"
+columns={columns}
+                   dataSource={getDataSource()}
+                   rowKey="notificacionUsuarioID"
+                   className="paces-border-top paces-list-table"
+                   rowClassName={(record) => {
+                     const base = selectedRow?.notificacionUsuarioID === record.notificacionUsuarioID ? 'paces-row-selected' : 'paces-row-hover';
+                     if (!record.leida && tabActiva === 'enviadas') return `${base} paces-row-unread`;
+                     return base;
+                   }}
+                    onRow={(record) => ({
+                      onClick: () => { if (!procesandoNotifs) setSelectedRow(record); },
+                      style: { cursor: procesandoNotifs ? 'default' : 'pointer' },
+                    })}
+                   scroll={{ x: 1100 }}
+                   size="middle"
                   locale={{
                     emptyText: (
                       <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Empty description="No has enviado notificaciones">
-                          <PermissionGate permisoEspecial="pe_NOTIFICACION">
-                            <Button type="primary" onClick={() => setModalVisible(true)}>
-                              Enviar primera notificación
-                            </Button>
-                          </PermissionGate>
+                           <PermissionGate permisoEspecial="pe_NOTIFICACION">
+                             <Button type="primary" onClick={() => setModalVisible(true)} disabled={procesandoNotifs}>
+                               Enviar primera notificación
+                             </Button>
+                           </PermissionGate>
                         </Empty>
                       </div>
                     ),
@@ -561,28 +675,36 @@ const Notificaciones: React.FC = () => {
                     pageSize,
                     showSizeChanger: false,
                     showTotal: (total) => `${total} registros`,
+                    disabled: procesandoNotifs,
                   }}
                 />
               ),
             },
             {
               key: 'historial',
-              label: `Historial (${historial.length})`,
+              icon: <HistoryOutlined />, label: `Historial (${historial.length})`,
+              disabled: procesandoNotifs,
               children: loadingHistorial ? (
                 <div style={{ padding: '16px 0' }}>
                   <Skeleton active paragraph={{ rows: 5 }} />
                 </div>
               ) : (
                 <Table<NotificacionVista>
-                  columns={columns}
-                  dataSource={getDataSource()}
-                  rowKey="notificacionUsuarioID"
-                  className="paces-border-top paces-list-table"
-                  rowClassName={(record) => selectedRow?.notificacionUsuarioID === record.notificacionUsuarioID ? 'paces-row-selected' : 'paces-row-hover'}
-                  onRow={(record) => ({
-                    onClick: () => setSelectedRow(record),
-                    style: { cursor: 'pointer' },
-                  })}
+columns={columns}
+                   dataSource={getDataSource()}
+                   rowKey="notificacionUsuarioID"
+                   className="paces-border-top paces-list-table"
+                   rowClassName={(record) => {
+                     const base = selectedRow?.notificacionUsuarioID === record.notificacionUsuarioID
+                       ? 'paces-row-selected'
+                       : 'paces-row-hover';
+                     if (!record.leida && tabActiva === 'historial') return `${base} paces-row-unread`;
+                     return base;
+                   }}
+                   onRow={(record) => ({
+                     onClick: () => { if (!procesandoNotifs) setSelectedRow(record); },
+                     style: { cursor: procesandoNotifs ? 'default' : 'pointer' },
+                   })}
                   scroll={{ x: 1100 }}
                   size="middle"
                   locale={{
@@ -596,6 +718,7 @@ const Notificaciones: React.FC = () => {
                     pageSize,
                     showSizeChanger: false,
                     showTotal: (total) => `${total} registros`,
+                    disabled: procesandoNotifs,
                   }}
                 />
               ),
@@ -609,7 +732,7 @@ const Notificaciones: React.FC = () => {
       <Modal
         title={verNotificacion?.titulo || 'Notificación'}
         open={!!verNotificacion}
-        onCancel={() => setVerNotificacion(null)}
+        onCancel={() => { if (!resolviendoTicket) setVerNotificacion(null); }}
         footer={null}
         width={600}
       >
@@ -639,21 +762,14 @@ const Notificaciones: React.FC = () => {
                   const id = verNotificacion.referenciaID!;
                   setVerNotificacion(null);
                   setTicketModalID(id);
-                }}>
+                }} disabled={resolviendoTicket}>
                   Ver ticket
                 </Button>
                 <Button
                   style={{ borderColor: '#34c38f', color: '#34c38f' }}
-                  onClick={async () => {
-                    if (!sucursal || !verNotificacion?.referenciaID) return;
-                    try {
-                      await ticketApi.cambiarEstado(sucursal, verNotificacion.referenciaID, { estado: 'Resuelto', usuarioID: usuarioID! });
-                      message.success('Ticket marcado como resuelto');
-                      setVerNotificacion(null);
-                    } catch (err: any) {
-                      message.error(err?.response?.data?.errorMessage || 'Error al marcar como resuelto');
-                    }
-                  }}
+                  onClick={handleResolverTicket}
+                  loading={resolviendoTicket}
+                  disabled={resolviendoTicket}
                 >
                   ✓ Resolver
                 </Button>

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Table,
@@ -43,6 +43,7 @@ const PermisosEspeciales: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<AuthPermisoEspecialDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const guardandoRef = useRef(false);
   const [form] = Form.useForm();
 
   // Modal detalle
@@ -78,14 +79,15 @@ const PermisosEspeciales: React.FC = () => {
 
   const handleExportarExcel = async () => {
     const companyName = await getCompanyName(securitySucursal);
-    const cols = columns.filter((c) => c.key !== 'acciones');
+    const exportCols = columns.filter((col: any) => col.key !== 'acciones' && col.dataIndex);
     exportToExcel({
       fileName: `PermisosEspeciales_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
       sheetName: 'Permisos Especiales',
       companyName,
-      columnHeaders: cols.map((c) => c.title as string),
+      columnHeaders: exportCols.map((col: any) => col.title as string),
       dataRows: filteredData.map((item: any) =>
-        cols.map((col) => {
+        exportCols.map((col: any) => {
+          if (!col.dataIndex) return '';
           const val = item[col.dataIndex as string];
           return val !== null && val !== undefined ? String(val) : '';
         })
@@ -99,6 +101,7 @@ const PermisosEspeciales: React.FC = () => {
   };
 
   const abrirNuevo = () => {
+    if (guardandoRef.current || guardando) return;
     setEditando(null);
     form.resetFields();
     form.setFieldsValue({ activo: true });
@@ -106,6 +109,7 @@ const PermisosEspeciales: React.FC = () => {
   };
 
   const abrirEditar = (permiso: AuthPermisoEspecialDTO) => {
+    if (guardandoRef.current || guardando) return;
     setEditando(permiso);
     form.setFieldsValue({
       codigo: permiso.codigo,
@@ -117,6 +121,7 @@ const PermisosEspeciales: React.FC = () => {
   };
 
   const abrirDetalle = async (permiso: AuthPermisoEspecialDTO) => {
+    if (guardandoRef.current || guardando) return;
     setDetalleItem(permiso);
     setDetalleVisible(true);
     setCargandoDetalle(true);
@@ -131,9 +136,11 @@ const PermisosEspeciales: React.FC = () => {
   };
 
   const guardar = async () => {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
+    setGuardando(true);
     try {
       const values = await form.validateFields();
-      setGuardando(true);
 
       const payload = {
         id: editando?.id || 0,
@@ -157,8 +164,14 @@ const PermisosEspeciales: React.FC = () => {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar permiso');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
+  };
+
+  const handleCerrarModal = () => {
+    if (guardandoRef.current || guardando) return;
+    setModalVisible(false);
   };
 
   const columns: ColumnsType<AuthPermisoEspecialDTO> = [
@@ -255,17 +268,22 @@ const PermisosEspeciales: React.FC = () => {
 
       {/* Modal crear/editar */}
       <Modal
-        title={editando ? 'Editar Permiso' : 'Nuevo Permiso'}
+        title={editando ? 'Editar permiso' : 'Nuevo permiso'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={handleCerrarModal}
         onOk={guardar}
         confirmLoading={guardando}
+        okButtonProps={{ loading: guardando, disabled: guardando }}
+        cancelButtonProps={{ disabled: guardando }}
+        maskClosable={!(guardandoRef.current || guardando)}
+        keyboard={!(guardandoRef.current || guardando)}
+        closable={!(guardandoRef.current || guardando)}
         width={520}
         okText="Guardar"
         cancelText="Cancelar"
         destroyOnHidden
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }} disabled={guardando}>
           <Form.Item
             name="codigo"
             label="Código"
@@ -284,13 +302,13 @@ const PermisosEspeciales: React.FC = () => {
             valuePropName="checked"
             initialValue={true}
           >
-            <Switch />
+            <Switch checkedChildren="Activo" unCheckedChildren="Inactivo" />
           </Form.Item>
 
           <Form.Item name="tipoValor" label="Tipo de valor" initialValue="BOOLEANO">
             <Select>
-              <Select.Option value="BOOLEANO">BOOLEANO</Select.Option>
-              <Select.Option value="NUMERICO">NUMÉRICO</Select.Option>
+              <Select.Option value="BOOLEANO">Booleano</Select.Option>
+              <Select.Option value="NUMERICO">Numérico</Select.Option>
             </Select>
           </Form.Item>
         </Form>
@@ -298,11 +316,14 @@ const PermisosEspeciales: React.FC = () => {
 
       {/* Modal detalle */}
       <Modal
-        title={`Detalle: ${detalleItem?.codigo || ''}`}
+        title={detalleItem?.codigo ? `Detalle del permiso: ${detalleItem.codigo}` : 'Detalle del permiso'}
         open={detalleVisible}
         onCancel={() => setDetalleVisible(false)}
         footer={
           detalleItem ? [
+            <Button key="cerrar" onClick={() => setDetalleVisible(false)}>
+              Cerrar
+            </Button>,
             <Button key="editar" type="primary" onClick={() => { setDetalleVisible(false); abrirEditar(detalleItem); }}>
               Editar
             </Button>,
@@ -319,6 +340,13 @@ const PermisosEspeciales: React.FC = () => {
                 <Tag color={detalleItem.activo ? 'green' : 'red'}>
                   {detalleItem.activo ? 'Activo' : 'Inactivo'}
                 </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Tipo de valor">
+                {detalleItem.tipoValor === 'NUMERICO'
+                  ? 'Numérico'
+                  : detalleItem.tipoValor === 'BOOLEANO'
+                    ? 'Booleano'
+                    : (detalleItem.tipoValor || '-')}
               </Descriptions.Item>
             </Descriptions>
           )}

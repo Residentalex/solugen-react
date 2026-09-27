@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Card, message, Modal, Form, Input, Select } from 'antd';
 import { useUIStore } from '../../stores/uiStore';
 import { reportesConfigApi } from '../../api/reportesConfigApi';
@@ -22,6 +22,9 @@ const ReportesConfig: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [modalNuevoOpen, setModalNuevoOpen] = useState(false);
   const [creando, setCreando] = useState(false);
+  const [asignandoKey, setAsignandoKey] = useState<string | null>(null);
+  const operacionPrincipalEnCurso = creando || asignandoKey !== null;
+  const bloqueoPrincipalRef = useRef(false);
   const [entdocAsignaciones, setEntdocAsignaciones] = useState<Record<string, number | null>>({});
   const [form] = Form.useForm();
 
@@ -60,9 +63,11 @@ const ReportesConfig: React.FC = () => {
   }, [cargarPlantillas]);
 
   const handleCrearPlantilla = useCallback(async () => {
+    if (bloqueoPrincipalRef.current) return;
+    bloqueoPrincipalRef.current = true;
+    setCreando(true);
     try {
       const values = await form.validateFields();
-      setCreando(true);
       const nueva = await reportesConfigApi.crear({
         codigo: values.codigo.toUpperCase(),
         nombre: values.nombre,
@@ -76,11 +81,16 @@ const ReportesConfig: React.FC = () => {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al crear la plantilla');
     } finally {
+      bloqueoPrincipalRef.current = false;
       setCreando(false);
     }
   }, [form, cargarPlantillas]);
 
   const handleAsignarEntdoc = useCallback(async (plantillaId: number, entdocCodigo: string | null) => {
+    if (bloqueoPrincipalRef.current) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    bloqueoPrincipalRef.current = true;
+    const key = `${plantillaId}:${entdocCodigo ?? 'null'}`;
+    setAsignandoKey(key);
     try {
       const codigoAnterior = Object.entries(entdocAsignaciones).find(([, pid]) => pid === plantillaId)?.[0];
       if (codigoAnterior && codigoAnterior !== entdocCodigo) {
@@ -96,12 +106,22 @@ const ReportesConfig: React.FC = () => {
       cargarPlantillas();
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al asignar la plantilla');
+    } finally {
+      bloqueoPrincipalRef.current = false;
+      setAsignandoKey(null);
     }
   }, [entdocAsignaciones, cargarPlantillas]);
 
   const handleNuevaPlantilla = useCallback(() => {
+    if (bloqueoPrincipalRef.current || operacionPrincipalEnCurso) { message.warning('Hay una operación en curso, espere a que termine'); return; }
     setModalNuevoOpen(true);
-  }, []);
+  }, [operacionPrincipalEnCurso]);
+
+  const handleCancelarCrear = useCallback(() => {
+    if (bloqueoPrincipalRef.current || creando) return;
+    setModalNuevoOpen(false);
+    form.resetFields();
+  }, [creando, form]);
 
   return (
     <>
@@ -113,6 +133,8 @@ const ReportesConfig: React.FC = () => {
           onNuevaPlantilla={handleNuevaPlantilla}
           onAsignarEntdoc={handleAsignarEntdoc}
           onRefresh={cargarPlantillas}
+          bloqueoExterno={operacionPrincipalEnCurso}
+          asignandoKey={asignandoKey}
         />
       </Card>
 
@@ -120,10 +142,15 @@ const ReportesConfig: React.FC = () => {
         title="Nueva plantilla"
         open={modalNuevoOpen}
         onOk={handleCrearPlantilla}
-        onCancel={() => { setModalNuevoOpen(false); form.resetFields(); }}
+        onCancel={creando ? undefined : handleCancelarCrear}
+        closable={!creando}
+        maskClosable={!creando}
+        keyboard={!creando}
         confirmLoading={creando}
         okText="Crear"
         cancelText="Cancelar"
+        okButtonProps={{ disabled: creando }}
+        cancelButtonProps={{ disabled: creando }}
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item

@@ -1,16 +1,18 @@
 ﻿import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   Card, Table, Input, Select, Button, Typography, message, Spin, DatePicker, Checkbox,
-  Modal, Space, Row, Col, Empty, Tabs,
+  Modal, Space, Row, Col, Empty, Tabs, Dropdown, Tooltip,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined, ReloadOutlined, PrinterOutlined, DownloadOutlined, CloseOutlined, EyeOutlined,
+  MoreOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { antiguedadSaldosApi } from '../../api/antiguedadSaldosApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { proveedorApi } from '../../api/proveedorApi';
@@ -174,6 +176,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
   /* ───── Cargar datos ───── */
 
   const generarReporte = useCallback(async () => {
+    if (loading) return;
     setLoading(true);
     try {
       const hasta = formatDateParam(fechaHasta.toDate());
@@ -212,6 +215,9 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
 
   /* ───── Handlers ───── */
 
+  // Bloqueo uniforme de acciones durante generar/imprimir
+  const procesando = loading || imprimiendo;
+
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
@@ -232,6 +238,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
   };
 
   const handlePrint = async () => {
+    if (loading || imprimiendo) return;
     if (!fechaHasta || data.length === 0) {
       message.warning('No hay datos para imprimir');
       return;
@@ -612,7 +619,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
       dataIndex: 'fechaDocumento',
       key: 'fechaDocumento',
       width: 110,
-      render: (f: string) => <Text>{formatDate(f)}</Text>,
+      render: (f: string) => <FechaColumnCell fecha={f} />,
     },
     {
       title: 'Balance',
@@ -855,6 +862,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                 onChange={(d) => d && setFechaHasta(d)}
                 style={{ width: '100%' }}
                 format="DD/MM/YYYY"
+                disabled={procesando}
               />
             </Col>
 
@@ -869,9 +877,9 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                   readOnly
                   style={{ width: '100%' }}
                 />
-                <Button icon={<SearchOutlined />} onClick={abrirModalEntidad} />
+                <Button icon={<SearchOutlined />} onClick={abrirModalEntidad} disabled={procesando} />
                 {nomEntidad ? (
-                  <Button icon={<CloseOutlined />} onClick={limpiarEntidad} />
+                  <Button icon={<CloseOutlined />} onClick={limpiarEntidad} disabled={procesando} />
                 ) : null}
               </Space.Compact>
             </Col>
@@ -893,12 +901,14 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                       size="small"
                       onClick={limpiarCategoria}
                       style={{ color: '#999' }}
+                      disabled={procesando}
                     >
                       ×
                     </Button>
                   ) : undefined
                 }
                 onClick={abrirModalCategoria}
+                disabled={procesando}
               />
             </Col>
 
@@ -919,12 +929,14 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                       size="small"
                       onClick={limpiarSucursal}
                       style={{ color: '#999' }}
+                      disabled={procesando}
                     >
                       ×
                     </Button>
                   ) : undefined
                 }
                 onClick={abrirModalSucursal}
+                disabled={procesando}
               />
             </Col>
 
@@ -932,7 +944,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
               <div style={{ marginBottom: 4 }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>&nbsp;</Text>
               </div>
-              <Checkbox checked={detallado} onChange={(e) => setDetallado(e.target.checked)}>
+              <Checkbox checked={detallado} onChange={(e) => setDetallado(e.target.checked)} disabled={procesando}>
                 Detallado
               </Checkbox>
             </Col>
@@ -941,10 +953,10 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
           <Row style={{ marginTop: 16 }}>
             <Col>
               <Space>
-                <Button type="primary" onClick={generarReporte} loading={loading}>
+                <Button type="primary" onClick={generarReporte} loading={loading} disabled={procesando}>
                   Generar
                 </Button>
-                <Button icon={<ReloadOutlined />} onClick={limpiarFiltros} />
+                <Button icon={<ReloadOutlined />} onClick={limpiarFiltros} disabled={procesando} />
               </Space>
             </Col>
           </Row>
@@ -957,77 +969,173 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
           <Spin size="large" />
         </div>
       ) : data.length > 0 ? (
-        <Card
-          className="paces-card-erp"
-          styles={{ body: { padding: 0 } }}
-          style={{ borderRadius: 8, overflow: 'hidden' }}
-        >
-          {/* Barra de búsqueda y acciones (no-print) */}
-          <div className="no-print" style={{ padding: '16px 24px 0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
-              <Input.Search
-                placeholder="Buscar por documento, entidad o NCF..."
-                allowClear
-                onSearch={handleSearch}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    (e.target as HTMLInputElement).blur();
-                    handleSearch('');
-                  }
-                }}
-                style={{ width: 400 }}
-                prefix={<SearchOutlined className="paces-text-icon" />}
-              />
-              <Select
-                style={{ width: 65 }}
-                value={pageSize}
-                onChange={(v) => { setPageSize(v); setPage(1); }}
-                options={[
-                  { value: 25, label: '25' },
-                  { value: 50, label: '50' },
-                  { value: 100, label: '100' },
-                ]}
-              />
-              <div style={{ flex: 1 }} />
-              <Button icon={<PrinterOutlined />} onClick={handlePrint} loading={imprimiendo}>
-                Imprimir PDF
-              </Button>
-              <PermissionGate accion="EXPORTAR">
-                <Button icon={<DownloadOutlined />} onClick={exportarExcel}>
-                  Exportar
-                </Button>
-              </PermissionGate>
-              <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+        <>
+          {/* ───── Resumen de rangos (siempre visible) ───── */}
+          <Card
+            className="paces-card-erp"
+            style={{ borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}
+            styles={{ body: { padding: 0 } }}
+          >
+            <div style={{ padding: '16px 24px' }}>
+              <Row gutter={[16, 12]} align="middle">
+                <Col xs={24} sm={12} md={4}>
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                    Total
+                  </div>
+                  <Text strong className="paces-text-total" style={{ fontSize: 24 }}>
+                    {formatCurrency(summaryTotals.total)}
+                  </Text>
+                </Col>
+                <Col xs={24} sm={12} md={4}>
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                    0-30 días
+                  </div>
+                  <Text strong style={{ fontSize: 24, color: '#52c41a' }}>
+                    {formatCurrency(summaryTotals.m0_30)}
+                  </Text>
+                </Col>
+                <Col xs={24} sm={12} md={4}>
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                    31-60 días
+                  </div>
+                  <Text strong style={{ fontSize: 24, color: '#1890ff' }}>
+                    {formatCurrency(summaryTotals.m31_60)}
+                  </Text>
+                </Col>
+              </Row>
+              <Row gutter={[16, 12]} align="middle" style={{ marginTop: 8 }}>
+                <Col xs={24} sm={12} md={4}>
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                    61-90 días
+                  </div>
+                  <Text strong style={{ fontSize: 24, color: '#1890ff' }}>
+                    {formatCurrency(summaryTotals.m61_90)}
+                  </Text>
+                </Col>
+                <Col xs={24} sm={12} md={4}>
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                    91-120 días
+                  </div>
+                  <Text strong style={{ fontSize: 24, color: '#faad14' }}>
+                    {formatCurrency(summaryTotals.m91_120)}
+                  </Text>
+                </Col>
+                <Col xs={24} sm={12} md={4}>
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                    Más 120 días
+                  </div>
+                  <Text strong style={{ fontSize: 24, color: '#f5222d' }}>
+                    {formatCurrency(summaryTotals.mMas120)}
+                  </Text>
+                </Col>
+              </Row>
             </div>
-          </div>
+          </Card>
 
-          {/* Tabla con aging */}
-          {detallado ? (
-            <Table<AgingRow>
-              columns={columnsDetallado}
-              dataSource={agingData}
-              rowKey="id"
-              loading={false}
-              scroll={{ x: 1300 }}
-              size="middle"
-              pagination={paginationProps}
-              summary={renderSummaryDetallado}
-              className="paces-border-top paces-list-table"
-            />
-          ) : (
-            <Table<ResumenAgingDTO>
-              columns={columnsResumen}
-              dataSource={resumenData}
-              rowKey="key"
-              loading={false}
-              scroll={{ x: 1100 }}
-              size="middle"
-              pagination={paginationProps}
-              summary={renderSummaryResumen}
-              className="paces-border-top paces-list-table"
-            />
-          )}
-        </Card>
+          {/* ───── Resultados principales ───── */}
+          <Card
+            className="paces-card-erp"
+            styles={{ body: { padding: 0 } }}
+            style={{ borderRadius: 8, overflow: 'hidden' }}
+          >
+            {/* Encabezado de resultados (no-print) */}
+            <div className="no-print" style={{ padding: '16px 24px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 12, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1 }}>
+                  <Text strong style={{ fontSize: 14 }}>
+                    {nomEntidad || 'Todas las entidades'}
+                  </Text>
+                  <div style={{ fontSize: 12, color: '#666' }}>
+                    {nomEntidad ? nomEntidad : `${resumenData.length} ${entidadLabel}s registrados`}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    Saldo total
+                  </Text>
+                  <Text strong className="paces-text-total" style={{ fontSize: 20 }}>
+                    {formatCurrency(summaryTotals.total)}
+                  </Text>
+                </div>
+              </div>
+            </div>
+
+            {/* Barra de búsqueda y acciones (no-print) */}
+            <div className="no-print" style={{ padding: '16px 24px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
+                <Input.Search
+                  placeholder="Buscar por documento, entidad o NCF..."
+                  allowClear
+                  onSearch={handleSearch}
+                  disabled={procesando}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      (e.target as HTMLInputElement).blur();
+                      handleSearch('');
+                    }
+                  }}
+                  style={{ width: 400 }}
+                  prefix={<SearchOutlined className="paces-text-icon" />}
+                />
+                <Select
+                  style={{ width: 65 }}
+                  value={pageSize}
+                  onChange={(v) => { setPageSize(v); setPage(1); }}
+                  disabled={procesando}
+                  options={[
+                    { value: 25, label: '25' },
+                    { value: 50, label: '50' },
+                    { value: 100, label: '100' },
+                  ]}
+                />
+                <div style={{ flex: 1 }} />
+                <Tooltip title="Imprimir PDF">
+                  <Button icon={<PrinterOutlined />} onClick={handlePrint} loading={imprimiendo} disabled={procesando} />
+                </Tooltip>
+                <PermissionGate accion="EXPORTAR">
+                  <Tooltip title="Exportar a Excel">
+                    <Button icon={<DownloadOutlined />} onClick={exportarExcel} disabled={procesando} />
+                  </Tooltip>
+                </PermissionGate>
+                <Dropdown
+                  menu={{ items: [
+                    { key: 'refresh', label: 'Actualizar', icon: <ReloadOutlined />, onClick: handleRefresh, disabled: procesando },
+                  ] }}
+                  trigger={['click']}
+                >
+                  <Button icon={<MoreOutlined />} title="Más acciones" disabled={procesando} />
+                </Dropdown>
+              </div>
+            </div>
+
+            {/* Tabla con aging */}
+            {detallado ? (
+              <Table<AgingRow>
+                columns={columnsDetallado}
+                dataSource={agingData}
+                rowKey="id"
+                loading={false}
+                scroll={{ x: 1300 }}
+                size="middle"
+                pagination={paginationProps}
+                summary={renderSummaryDetallado}
+                className="paces-border-top paces-list-table"
+              />
+            ) : (
+              <Table<ResumenAgingDTO>
+                columns={columnsResumen}
+                dataSource={resumenData}
+                rowKey="key"
+                loading={false}
+                scroll={{ x: 1100 }}
+                size="middle"
+                pagination={paginationProps}
+                summary={renderSummaryResumen}
+                className="paces-border-top paces-list-table"
+              />
+            )}
+          </Card>
+        </>
       ) : null}
 
       {/* ───── Modal búsqueda entidad ───── */}
@@ -1037,8 +1145,9 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
           open={modalEntidadAbierto}
           onCancel={() => setModalEntidadAbierto(false)}
           footer={null}
-          width={600}
+          width={500}
           destroyOnHidden
+          styles={{ body: { padding: '12px 16px' } }}
         >
           <Input.Search
             ref={entidadSearchRef}
@@ -1051,18 +1160,18 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
             columns={[
               { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
               { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', render: (val: string) => toTitleCase(val) },
-              { title: 'RNC', dataIndex: 'identificacion' as string, key: 'identificacion', width: 140 },
+              { title: 'RNC', dataIndex: 'identificacion' as string, key: 'identificacion', width: 120 },
             ]}
             dataSource={entidades}
             rowKey="codigo"
             loading={buscandoEntidad}
             size="small"
-            pagination={{ pageSize: 10, showSizeChanger: false }}
+            pagination={{ pageSize: 8, showSizeChanger: false, hideOnSinglePage: true }}
             onRow={(record: any) => ({
               onClick: () => seleccionarEntidad(record),
               style: { cursor: 'pointer' },
             })}
-            locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
+            locale={{ emptyText: <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
           />
         </Modal>
       ) : (
@@ -1071,8 +1180,9 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
           open={modalEntidadAbierto}
           onCancel={() => setModalEntidadAbierto(false)}
           footer={null}
-          width={600}
+          width={500}
           destroyOnHidden
+          styles={{ body: { padding: '12px 16px' } }}
         >
           <Input.Search
             ref={entidadSearchRef}
@@ -1084,6 +1194,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
           <Tabs
             activeKey={tabActiva}
             onChange={(key) => { setTabActiva(key as 'activos' | 'inactivos'); setSearchEntidad(''); setEntidades(entidadesOrig.filter(e => (e as ClienteDTO).activo === (key === 'activos'))); }}
+            size="small"
             items={[
               {
                 key: 'activos',
@@ -1093,18 +1204,18 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                     columns={[
                       { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
                       { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', render: (val: string) => toTitleCase(val) },
-                      { title: 'Identificación', dataIndex: 'identificacion' as string, key: 'identificacion', width: 140 },
+                      { title: 'Identificación', dataIndex: 'identificacion' as string, key: 'identificacion', width: 120 },
                     ]}
                     dataSource={entidades.filter(e => (e as ClienteDTO).activo === true)}
                     rowKey="codigo"
                     loading={buscandoEntidad}
                     size="small"
-                    pagination={{ pageSize: 10, showSizeChanger: false }}
+                    pagination={{ pageSize: 8, showSizeChanger: false, hideOnSinglePage: true }}
                     onRow={(record: any) => ({
                       onClick: () => seleccionarEntidad(record),
                       style: { cursor: 'pointer' },
                     })}
-                    locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
+                    locale={{ emptyText: <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
                   />
                 ),
               },
@@ -1116,18 +1227,18 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                     columns={[
                       { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
                       { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', render: (val: string) => toTitleCase(val) },
-                      { title: 'Identificación', dataIndex: 'identificacion' as string, key: 'identificacion', width: 140 },
+                      { title: 'Identificación', dataIndex: 'identificacion' as string, key: 'identificacion', width: 120 },
                     ]}
                     dataSource={entidades.filter(e => (e as ClienteDTO).activo === false)}
                     rowKey="codigo"
                     loading={buscandoEntidad}
                     size="small"
-                    pagination={{ pageSize: 10, showSizeChanger: false }}
+                    pagination={{ pageSize: 8, showSizeChanger: false, hideOnSinglePage: true }}
                     onRow={(record: any) => ({
                       onClick: () => seleccionarEntidad(record),
                       style: { cursor: 'pointer' },
                     })}
-                    locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
+                    locale={{ emptyText: <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
                   />
                 ),
               },
@@ -1138,16 +1249,17 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
 
       {/* ───── Modal búsqueda categoría ───── */}
       <Modal
-        title="Buscar Categoría"
+        title=" Buscar Categoría"
         open={modalCategoriaAbierto}
         onCancel={() => setModalCategoriaAbierto(false)}
         footer={null}
         width={500}
         destroyOnHidden
+        styles={{ body: { padding: '12px 16px' } }}
       >
         <Input.Search
           ref={categoriaSearchRef}
-          placeholder="Buscar por nombre o código..."
+          placeholder=" Buscar por nombre o código..."
           allowClear
           onSearch={buscarCategoria}
           style={{ marginBottom: 12 }}
@@ -1161,27 +1273,28 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
           rowKey={(r) => r.id || r.codigo}
           loading={buscandoCategoria}
           size="small"
-          pagination={{ pageSize: 10, showSizeChanger: false }}
+          pagination={{ pageSize: 8, showSizeChanger: false, hideOnSinglePage: true }}
           onRow={(record: any) => ({
             onClick: () => seleccionarCategoria(record),
             style: { cursor: 'pointer' },
           })}
-          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
+          locale={{ emptyText: <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
         />
       </Modal>
 
       {/* ───── Modal búsqueda sucursal/compañía ───── */}
       <Modal
-        title="Buscar Sucursal/Compañía"
+        title=" Buscar Sucursal/Compañía"
         open={modalSucursalAbierto}
         onCancel={() => setModalSucursalAbierto(false)}
         footer={null}
         width={500}
         destroyOnHidden
+        styles={{ body: { padding: '12px 16px' } }}
       >
         <Input.Search
           ref={sucursalSearchRef}
-          placeholder="Buscar por nombre o código..."
+          placeholder=" Buscar por nombre o código..."
           allowClear
           onSearch={buscarSucursal}
           style={{ marginBottom: 12 }}
@@ -1195,12 +1308,12 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
           rowKey={(r) => r.id || r.codigo}
           loading={buscandoSucursal}
           size="small"
-          pagination={{ pageSize: 10, showSizeChanger: false }}
+          pagination={{ pageSize: 8, showSizeChanger: false, hideOnSinglePage: true }}
           onRow={(record: any) => ({
             onClick: () => seleccionarSucursal(record),
             style: { cursor: 'pointer' },
           })}
-          locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
+          locale={{ emptyText: <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="Sin resultados" /></div> }}
         />
       </Modal>
 

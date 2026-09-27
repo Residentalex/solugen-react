@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Tree, Input, Tag, Button, message, Card, Modal, Form, Switch, Typography, Select, Alert, Row, Col, Empty, Spin, Pagination } from 'antd';
 import { SearchOutlined, ReloadOutlined, PlusOutlined, FolderOpenOutlined } from '@ant-design/icons';
@@ -8,7 +8,8 @@ import { useAuthStore } from '../../stores/authStore';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
 import { monedaApi } from '../../api/monedaApi';
 import PermissionGate from '../../components/PermissionGate';
-import type { TipoCuentaDTO, GrupoCuentaContableDTO, MonedaDTO } from '../../types/contabilidad';
+import type { TipoCuentaDTO, GrupoCuentaContableDTO, MonedaDTO, CuentaContableDTO, CuentaContableResumenDTO } from '../../types/contabilidad';
+import type { DataNode } from 'antd/es/tree';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 
 const ORIGEN_OPTIONS = [
@@ -23,28 +24,13 @@ function toTitleCase(str: string): string {
   return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-interface TreeNodeData {
+interface TreeNodeData extends DataNode {
   title: React.ReactNode;
   key: string;
   children?: TreeNodeData[];
   isLeaf?: boolean;
-  // Additional data for the account
-  cuentaData: {
-    noCuenta: string;
-    nombre: string;
-    tipoCuenta?: string;
-    tipoCuentaId?: string;
-    origen?: string;
-    grupoNombre?: string;
-    grupoCodigo?: string;
-    monedaCodigo?: string;
-    cuentaControlNo?: string;
-    cuentaPrimaNo?: string;
-    nota?: string;
-    activo?: string;
-    utilizaCentroCosto?: string;
-    idExterno?: string;
-  };
+  // La raíz viene como resumen plano; los hijos vienen como DTO completo.
+  cuentaData: CuentaContableResumenDTO | CuentaContableDTO;
 }
 
 const CuentasContables: React.FC = () => {
@@ -61,8 +47,9 @@ const CuentasContables: React.FC = () => {
   
   // States for create/edit
   const [modalVisible, setModalVisible] = useState(false);
-  const [editando, setEditando] = useState<any>(null); // Changed to any for flexibility
+  const [editando, setEditando] = useState<CuentaContableResumenDTO | CuentaContableDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const guardandoRef = useRef(false);
   const [form] = Form.useForm();
 
   // Options for selects in modal
@@ -73,9 +60,11 @@ const CuentasContables: React.FC = () => {
   // Tree data and loading states
   const [treeData, setTreeData] = useState<TreeNodeData[]>([]);
   const [loadingKeys, setLoadingKeys] = useState<string[]>([]);
+  const [loadedKeys, setLoadedKeys] = useState<string[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
 
 const updateTreeData = (nodes: TreeNodeData[], key: string, children: TreeNodeData[]): TreeNodeData[] => {
   return nodes.map(node => {
@@ -94,6 +83,7 @@ const loadRootNodes = useCallback(async () => {
     if (sucursalActiva === undefined) return;
     
     const salto = (page - 1) * pageSize;
+    setLoadingError(null);
     try {
       const result = await cuentaContableApi.obtenerPadresPaginado(
         sucursalActiva, 
@@ -121,51 +111,61 @@ const loadRootNodes = useCallback(async () => {
       setTreeData(rootNodes);
       setTotalItems(result.total);
       setInitialLoadDone(true);
-    } catch (error) {
-      message.error('Error al cargar cuentas raíz');
+    } catch (error: any) {
+      setInitialLoadDone(false);
+      setTreeData([]);
+      setLoadingError(error?.response?.data?.errorMessage || 'Error al cargar cuentas raíz');
+      message.error(error?.response?.data?.errorMessage || 'Error al cargar cuentas raíz');
       console.error(error);
     }
   }, [sucursalActiva, page, pageSize, filtro]);
 
   // Load children for a specific node
   const loadChildren = useCallback(async (node: TreeNodeData) => {
-    const cuentaNo = node.key;
-    
-    // Skip if already loaded to prevent infinite loop
+    const cuentaNo = String(node.key);
+
+    // Skip if already loading to prevent infinite loop
     if (loadingKeys.includes(cuentaNo)) {
       return;
     }
-    
+
     setLoadingKeys(prev => [...new Set([...prev, cuentaNo])]);
-    
+
     try {
       const hijos = await cuentaContableApi.obtenerHijos(sucursalActiva, cuentaNo);
-      
+
       // Filter by search term if exists
-      const filteredHijos = filtro 
-        ? hijos.filter(h => 
-            h.noCuenta.toLowerCase().includes(filtro.toLowerCase()) || 
+      const filteredHijos = filtro
+        ? hijos.filter(h =>
+            h.noCuenta.toLowerCase().includes(filtro.toLowerCase()) ||
             (h.nombre?.toLowerCase().includes(filtro.toLowerCase()))
           )
         : hijos;
-      
-      const childNodes: TreeNodeData[] = filteredHijos.map(hijo => ({
-        title: (
-          <span style={{ display: 'flex', alignItems: 'center' }}>
-            <FolderOpenOutlined />
-            <span style={{ marginLeft: 8, fontFamily: 'monospace' }}>
-              <strong>{hijo.noCuenta}</strong>
+
+      if (filteredHijos.length === 0) {
+        // Sin hijos: marcar el nodo como hoja
+        setTreeData(prev => updateTreeData(prev, cuentaNo, []));
+      } else {
+        const childNodes: TreeNodeData[] = filteredHijos.map(hijo => ({
+          title: (
+            <span style={{ display: 'flex', alignItems: 'center' }}>
+              <FolderOpenOutlined />
+              <span style={{ marginLeft: 8, fontFamily: 'monospace' }}>
+                <strong>{hijo.noCuenta}</strong>
+              </span>
+              <span style={{ marginLeft: 8 }}>{toTitleCase(hijo.nombre ?? '')}</span>
             </span>
-            <span style={{ marginLeft: 8 }}>{toTitleCase(hijo.nombre ?? '')}</span>
-          </span>
-        ),
-        key: hijo.noCuenta,
-        isLeaf: filteredHijos.length === 0, // Leaf if no children after filtering
-        cuentaData: hijo
-      }));
-      
-      // Update tree data by replacing the node with its children (recursive search)
-      setTreeData(prev => updateTreeData(prev, cuentaNo, childNodes));
+          ),
+          key: hijo.noCuenta,
+          // Se asume no-hoja hasta cargar sus hijos; al expandir se corregirá.
+          isLeaf: false,
+          cuentaData: hijo,
+        }));
+
+        // Update tree data by replacing the node with its children (recursive search)
+        setTreeData(prev => updateTreeData(prev, cuentaNo, childNodes));
+      }
+      setLoadedKeys(prev => [...new Set([...prev, cuentaNo])]);
     } catch (error) {
       message.error('Error al cargar cuentas hijas');
       console.error(error);
@@ -210,30 +210,39 @@ const loadRootNodes = useCallback(async () => {
     setModalVisible(true);
   };
 
-  const abrirEdicion = (cuenta: any) => {
+  const abrirEdicion = (cuenta: CuentaContableResumenDTO | CuentaContableDTO) => {
     setEditando(cuenta);
+    const r = cuenta as CuentaContableResumenDTO;
+    const d = cuenta as CuentaContableDTO;
+    const activo = typeof r.activo === 'string' ? r.activo === 'Sí' : !!d.activo;
+    const centroCosto = typeof r.utilizaCentroCosto === 'string' ? r.utilizaCentroCosto === 'Sí' : !!d.utilizaCentroCosto;
+    const origenDto = typeof r.origen === 'string'
+      ? (r.origen === 'Débito' ? 0 : 1)
+      : (typeof d.origen === 'number' ? d.origen : 0);
     form.setFieldsValue({
       noCuenta: cuenta.noCuenta,
       nombre: cuenta.nombre,
       nota: cuenta.nota || '',
-      activo: cuenta.activo === 'Sí',
-      origen: cuenta.origen === 'Débito' ? 0 : 1,
-      utilizaCentroCosto: cuenta.utilizaCentroCosto === 'Sí',
-      tipoCuentaCodigo: cuenta.tipoCuentaId || undefined,
-      grupoCodigo: cuenta.grupoCodigo || undefined,
-      monedaCodigo: cuenta.monedaCodigo || undefined,
-      cuentaControlNo: cuenta.cuentaControlNo || undefined,
-      cuentaPrimaNo: cuenta.cuentaPrimaNo || undefined,
+      activo,
+      origen: origenDto,
+      utilizaCentroCosto: centroCosto,
+      tipoCuentaCodigo: r.tipoCuentaId || d.tipoCuenta?.idExterno || undefined,
+      grupoCodigo: r.grupoCodigo || d.grupo?.codigo || undefined,
+      monedaCodigo: r.monedaCodigo || d.moneda?.codigo || undefined,
+      cuentaControlNo: r.cuentaControlNo || d.cuentaControl?.noCuenta || undefined,
+      cuentaPrimaNo: r.cuentaPrimaNo || d.cuentaPrima?.noCuenta || undefined,
     });
     setModalVisible(true);
   };
 
   const guardar = async () => {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
+    setGuardando(true);
     try {
       const values = await form.validateFields();
       if (sucursalActiva === undefined) return;
       
-      setGuardando(true);
       if (editando) {
         await cuentaContableApi.actualizar(sucursalActiva, editando.noCuenta, values);
         message.success('Cuenta contable actualizada correctamente');
@@ -243,19 +252,14 @@ const loadRootNodes = useCallback(async () => {
       }
       
       setModalVisible(false);
-      
-      // Refresh: if we were viewing a specific node, reload its parent
-      // For simplicity, refresh the entire tree
-      if (editando?.cuentaControlNo) {
-        // Would need to find parent and reload - simplified to full refresh for now
-        loadRootNodes();
-      } else {
-        loadRootNodes();
-      }
+
+      // Refresh completo del árbol
+      loadRootNodes();
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar cuenta contable');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   };
@@ -286,16 +290,32 @@ const loadRootNodes = useCallback(async () => {
       { title: 'Activo', dataIndex: 'activo' },
       { title: 'Centro Costo', dataIndex: 'utilizaCentroCosto' },
     ];
-    
-    const columnHeaders = exportCols.map(col => col.title);
-    const dataRows = flatData.map((item: any) =>
-      exportCols.map(col => {
-        if (col.dataIndex) {
-          const val = item[col.dataIndex];
+
+    const extraerValorExport = (item: CuentaContableResumenDTO | CuentaContableDTO, dataIndex: string): string => {
+      const r = item as CuentaContableResumenDTO;
+      const d = item as CuentaContableDTO;
+      switch (dataIndex) {
+        case 'tipoCuenta':
+          return r.tipoCuenta ?? d.tipoCuenta?.nombre ?? '';
+        case 'grupoNombre':
+          return r.grupoNombre ?? d.grupo?.nombre ?? '';
+        case 'monedaCodigo':
+          return r.monedaCodigo ?? d.moneda?.codigo ?? '';
+        case 'origen':
+          return typeof r.origen === 'string' ? r.origen : String(d.origen ?? '');
+        case 'activo':
+          return typeof r.activo === 'string' ? r.activo : (d.activo ? 'Sí' : 'No');
+        case 'utilizaCentroCosto':
+          return typeof r.utilizaCentroCosto === 'string' ? r.utilizaCentroCosto : (d.utilizaCentroCosto ? 'Sí' : 'No');
+        default:
+          const val = (item as any)[dataIndex];
           return val != null ? String(val) : '';
-        }
-        return '';
-      })
+      }
+    };
+
+    const columnHeaders = exportCols.map(col => col.title);
+    const dataRows = flatData.map((item) =>
+      exportCols.map(col => extraerValorExport(item, col.dataIndex))
     );
     
     exportToExcel({
@@ -312,6 +332,8 @@ const loadRootNodes = useCallback(async () => {
     setPage(1);
     // Reset tree when search changes
     setTreeData([]);
+    setLoadedKeys([]);
+    setLoadingKeys([]);
     setInitialLoadDone(false);
   };
 
@@ -330,14 +352,14 @@ const loadRootNodes = useCallback(async () => {
   return (
     <>
       {/* Error alert */}
-      {false && ( // Temporarily disabled until we implement proper error state
+      {loadingError && (
         <Alert
-          title="Error al cargar cuentas contables"
+          title={loadingError}
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={loadRootNodes}>
+            <Button size="small" onClick={() => { setInitialLoadDone(false); loadRootNodes(); }}>
               Reintentar
             </Button>
           }
@@ -357,6 +379,8 @@ const loadRootNodes = useCallback(async () => {
           onReload={() => {
             setPage(1);
             setTreeData([]);
+            setLoadedKeys([]);
+            setLoadingKeys([]);
             setInitialLoadDone(false);
             loadRootNodes();
           }}
@@ -364,19 +388,20 @@ const loadRootNodes = useCallback(async () => {
         />
         
         <Card
-          style={{ margin: '16px 24px', minHeight: 400 }}
-          style={{ borderRadius: 4, overflow: 'hidden', border: '1px solid #f0f0f0' }}
+          style={{ margin: '16px 24px', minHeight: 400, borderRadius: 4, overflow: 'hidden', border: '1px solid #f0f0f0' }}
         >
-          {!initialLoadDone && sucursalActiva !== undefined ? (
+          {!initialLoadDone && !loadingError && sucursalActiva !== undefined ? (
             <div style={{ textAlign: 'center', padding: '60px 0' }}>
               <Spin size="large" tip="Cargando cuentas contables..." />
             </div>
+          ) : loadingError ? (
+            <Empty description="No se pudieron cargar las cuentas contables." />
           ) : (
             <Tree
               showLine
               defaultExpandAll={false} // Start collapsed
-              loadData={loadChildren}
-              loadedKeys={loadingKeys}
+              loadData={loadChildren as (node: DataNode) => Promise<void>}
+              loadedKeys={loadedKeys}
               treeData={treeData}
               selectedKeys={selectedKeys}
               onSelect={(keys) => {
@@ -403,6 +428,8 @@ const loadRootNodes = useCallback(async () => {
               setPage(currentPage);
               if (size) setPageSize(size);
               setTreeData([]);
+              setLoadedKeys([]);
+              setLoadingKeys([]);
               setInitialLoadDone(false);
               loadRootNodes();
             }}
@@ -414,14 +441,15 @@ const loadRootNodes = useCallback(async () => {
       <Modal
         title={editando ? 'Editar Cuenta Contable' : 'Nueva Cuenta Contable'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => { if (!guardando) setModalVisible(false); }}
         onOk={guardar}
         confirmLoading={guardando}
+        cancelButtonProps={{ disabled: guardando }}
         width={640}
         okText="Guardar"
         cancelText="Cancelar"
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }} disabled={guardando}>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item

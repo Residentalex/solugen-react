@@ -56,6 +56,8 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
 }) => {
   const estadoNum = toEstadoNum(estado);
   const periodoNum = toPeriodoNum(periodo);
+  // Bloqueo uniforme de la barra durante cualquier operación en vuelo
+  const bloqueado = !!(saving || imprimiendo || operacionLoading);
 
   const wrapConfirm = (titulo: string, handler?: () => any) => {
     if (!handler) return undefined;
@@ -65,20 +67,20 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-      <Button icon={<ArrowLeftOutlined />} onClick={onVolver}>
+      <Button icon={<ArrowLeftOutlined />} onClick={onVolver} disabled={bloqueado}>
         Volver
       </Button>
       <div style={{ flex: 1 }} />
       <Space>
         {showImprimir && onImprimir && (
           <PermissionGate codigoPantalla={modulo} accion="IMPRIMIR">
-            <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={onImprimir} />
+            <Button icon={<PrinterOutlined />} loading={imprimiendo} disabled={bloqueado} onClick={onImprimir} />
           </PermissionGate>
         )}
 
         {onImprimirTicket && (
           <PermissionGate codigoPantalla={modulo} accion="IMPRIMIR">
-            <Button icon={<PrinterOutlined />} onClick={onImprimirTicket}>
+            <Button icon={<PrinterOutlined />} onClick={onImprimirTicket} disabled={bloqueado}>
               Ticket
             </Button>
           </PermissionGate>
@@ -88,7 +90,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
 
         {((estadoNum === 0 && periodoNum !== 6) || edicionSinRestricciones) && revisado !== true && onEditar && (
           <PermissionGate codigoPantalla={modulo} accion="EDITAR">
-            <Button type="primary" icon={<EditOutlined />} onClick={onEditar}>Editar</Button>
+            <Button type="primary" icon={<EditOutlined />} onClick={onEditar} disabled={bloqueado}>Editar</Button>
           </PermissionGate>
         )}
 
@@ -97,7 +99,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
             <Button
               style={{ background: '#389e0d', borderColor: '#389e0d', color: '#fff' }}
               icon={<CheckCircleOutlined />}
-              disabled={operacionLoading}
+              disabled={bloqueado}
               onClick={wrapConfirm('Aplicar', onAplicar)}
             >
               Aplicar
@@ -111,6 +113,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
               danger
               icon={<CloseCircleOutlined />}
               loading={saving}
+              disabled={bloqueado}
               onClick={wrapConfirm('Anular', onAnular)}
             >
               Anular
@@ -122,7 +125,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
           <PermissionGate codigoPantalla={modulo} accion="POSTEAR">
             <Button
               icon={<CheckCircleOutlined />}
-              disabled={operacionLoading}
+              disabled={bloqueado}
               onClick={wrapConfirm('Postear', onPostear)}
             >
               Postear
@@ -135,6 +138,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
             <Button
               icon={<CheckCircleOutlined />}
               loading={saving}
+              disabled={bloqueado}
               onClick={wrapConfirm('Marcar como revisado', onRevisado)}
             >
               Revisado
@@ -147,6 +151,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
             <Button
               icon={<RedoOutlined />}
               loading={saving}
+              disabled={bloqueado}
               onClick={wrapConfirm('Desaplicar', onDesaplicar)}
             >
               Desaplicar
@@ -160,6 +165,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
               danger
               icon={<RedoOutlined />}
               loading={saving}
+              disabled={bloqueado}
               onClick={wrapConfirm('Reversar', onReversar)}
             >
               Reversar
@@ -173,6 +179,7 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
               danger
               icon={<DeleteOutlined />}
               loading={saving}
+              disabled={bloqueado}
               onClick={wrapConfirm('Eliminar', onEliminar)}
             >
               Eliminar

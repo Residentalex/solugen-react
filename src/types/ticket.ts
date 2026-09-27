@@ -15,6 +15,7 @@ export interface TicketDTO {
   fechaActualizacion?: string;
   activo: boolean;
   respuestas: TicketRespuestaDTO[];
+  adjuntos: TicketAdjuntoDTO[];
 }
 
 export interface TicketRespuestaDTO {
@@ -43,4 +44,14 @@ export interface ResponderTicketRequest {
 export interface CambiarEstadoTicketRequest {
   estado: string;
   usuarioID: number;
+}
+
+export interface TicketAdjuntoDTO {
+  id: number;
+  ticketID: number;
+  usuarioID: number;
+  nombreArchivo: string;
+  tipoMime?: string;
+  tamano?: number;
+  fechaCreacion: string;
 }

@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Grid, Divider,
+  Card, Table, Tabs, Tag, Spin, Button, Grid, Divider, Dropdown,
   Descriptions, Alert, Typography, Space, Input, DatePicker, Tooltip, message, Modal,
   Checkbox
 } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   ArrowLeftOutlined, ReloadOutlined, FilterOutlined, FilterFilled,
   DollarCircleOutlined, FileTextOutlined, SwapOutlined,
@@ -14,19 +15,199 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { turnoApi } from '../../api/turnoApi';
-import type { TurnoDTO, CobroDTO } from '../../types/turno';
+import type { CobroDTO } from '../../types/turno';
 import { formatCurrency, formatDate, formatDateTime, toTitleCase, formatNumber } from '../../utils/formats';
 import DetalleToolbar from '../../components/DetalleToolbar';
-import AsientosContableTable from '../../components/AsientosContableTable';
-import LogTable from '../../components/LogTable';
 import FiltroSeleccionDropdown from '../../components/FiltroSeleccionDropdown';
 import PermissionGate from '../../components/PermissionGate';
 import { CODIGO_PLANTILLA_TURNO_CIERRE } from '../../utils/ticketPlantilla';
 import { companiaApi } from '../../api/companiaApi';
 import { reportesConfigApi } from '../../api/reportesConfigApi';
+import { visanetApi } from '../../api/visanetApi';
+import type { VisanetTurnoVoucherDTO } from '../../types/visanet';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
+import dayjs from 'dayjs';
 
 const { Text } = Typography;
+
+// Fila de detalle del turno (costos/ingresos). Los montos pueden llegar como
+// número, texto o vacío, por eso se tipan como number | string y se coercionan
+// con aNumero al totalizar.
+interface DetalleTurnoFila {
+  codigo?: string;
+  articulo?: string;
+  referencia?: string;
+  cantidad?: number | string;
+  subTotal?: number | string;
+  descuento?: number | string;
+  impuestos?: number | string;
+  total?: number | string;
+  impuesto?: { nombre?: string };
+}
+
+const aNumero = (v: unknown): number => {
+  if (typeof v === 'number') return Number.isNaN(v) ? 0 : v;
+  if (typeof v === 'string' && v.trim() !== '') {
+    const n = Number(v);
+    return Number.isNaN(n) ? 0 : n;
+  }
+  return 0;
+};
+
+// ─── Cierre de vouchers por turno (ventana HTML) ─────────────────────────────────
+// Replica el formato de VisanetTest.handleVisualizarCierre adaptado a
+// VisanetTurnoVoucherDTO: agrupación por marca+lote (marca = nTipoTC con
+// fallback a host), REF.: = rrn, VENTA NORMAL/ANULADA (anulada = T/S con monto
+// negativo), totales Ventas/Anulaciones/Total, cabecera del comercio,
+// 'DETALLES DEL CIERRE' y '** CIERRE COMPLETO **'.
+// La vía térmica VSNT_CIERRE no se usa: sus zonas por defecto solo imprimen
+// encabezado/resultado (ID_COMERCIO/FECHA/RESULTADO) y no el detalle itemizado
+// por marca+lote con totales que exige este reporte.
+const caracteresHtmlCierre: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#039;',
+};
+
+const escaparHtmlCierre = (valor: unknown): string =>
+  String(valor ?? '').replace(/[&<>"']/g, (caracter) => caracteresHtmlCierre[caracter] ?? caracter);
+
+/** Un voucher de turno está anulado si ANULADO es 'T' (actual) o 'S' (legacy). */
+const esVoucherAnuladoTurno = (valor?: string): boolean => valor === 'T' || valor === 'S';
+
+function generarHtmlCierreVouchersTurno(
+  vouchers: VisanetTurnoVoucherDTO[],
+  companyInfo: { nombre: string; direccion: string; telefono: string; fax: string; rnc: string },
+  simMoneda: string,
+  noTurno: string,
+  fechaEtiqueta: string,
+): string {
+  const formatoMonto = (monto: number) =>
+    `${simMoneda} ${monto.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const grupos = new Map<string, { marca: string; lote: string; vouchers: VisanetTurnoVoucherDTO[] }>();
+  vouchers.forEach((voucher) => {
+    const marca = voucher.nTipoTC?.trim() || voucher.host?.trim() || 'SIN MARCA';
+    const lote = voucher.noLote?.trim() || 'SIN LOTE';
+    const clave = `${marca}::${lote}`;
+    const grupo = grupos.get(clave);
+    if (grupo) {
+      grupo.vouchers.push(voucher);
+    } else {
+      grupos.set(clave, { marca, lote, vouchers: [voucher] });
+    }
+  });
+
+  const ventas = vouchers.filter((voucher) => !esVoucherAnuladoTurno(voucher.anulado));
+  const anulaciones = vouchers.filter((voucher) => esVoucherAnuladoTurno(voucher.anulado));
+  const montoVentas = ventas.reduce((total, voucher) => total + Number(voucher.monto || 0), 0);
+  const montoAnulaciones = anulaciones.reduce((total, voucher) => total + Number(voucher.monto || 0), 0);
+
+  const gruposHtml = Array.from(grupos.values()).map(({ marca, lote, vouchers: vouchersGrupo }) => {
+    const marcaMostrada = marca.toUpperCase() === 'MCARD' ? 'MASTERCARD' : marca;
+    const movimientos = vouchersGrupo.map((voucher) => {
+      const esAnulacion = esVoucherAnuladoTurno(voucher.anulado);
+      const monto = Number(voucher.monto || 0);
+      const tarjeta = voucher.notarjeta?.trim() || 'SIN TARJETA';
+      const marcaLinea = voucher.nombtar?.trim() || voucher.tipoTC?.trim() || '';
+      const aprobacion = voucher.noAprob?.trim();
+      const fechaMovimiento = voucher.fecha && dayjs(voucher.fecha).isValid()
+        ? dayjs(voucher.fecha).format('DD/MM/YY')
+        : (typeof voucher.fecha === 'string' ? voucher.fecha.trim() : '');
+      const horaMovimiento = voucher.hora?.trim();
+      const detalles = [
+        aprobacion ? escaparHtmlCierre(aprobacion) : '',
+        fechaMovimiento ? `FECHA: ${escaparHtmlCierre(fechaMovimiento)}` : '',
+        horaMovimiento ? `HORA: ${escaparHtmlCierre(horaMovimiento)}` : '',
+      ].filter(Boolean).join('   ');
+
+      return `<div class="movimiento ${esAnulacion ? 'anulacion' : ''}">
+            <div class="movimiento-cabecera">
+              <span>REF.: ${escaparHtmlCierre(voucher.rrn?.trim() || 'SIN REF.')}</span>
+              <span>${escaparHtmlCierre(tarjeta)}</span>
+              <span>${escaparHtmlCierre(marcaLinea)}</span>
+            </div>
+            ${detalles ? `<div class="movimiento-detalle">${detalles}</div>` : ''}
+            <div class="movimiento-estado">
+              <strong>${esAnulacion ? 'VENTA ANULADA' : 'VENTA NORMAL'}</strong>
+              <strong>${escaparHtmlCierre(formatoMonto(esAnulacion ? -monto : monto))}</strong>
+            </div>
+          </div>`;
+    }).join('');
+
+    return `<section class="grupo">
+          <div class="fila-meta grupo-meta"><strong>HOST: ${escaparHtmlCierre(marcaMostrada)}</strong><strong>LOTE: ${escaparHtmlCierre(lote)}</strong></div>
+          <div class="separador"></div>
+          ${movimientos}
+          <div class="separador"></div>
+        </section>`;
+  }).join('');
+
+  const merchantId = vouchers.map((v) => v.merchantId?.trim()).find(Boolean) || '';
+  const encabezadoEmpresa = [
+    merchantId && `<div>${escaparHtmlCierre(merchantId)}</div>`,
+    companyInfo.nombre && `<div class="nombre-comercio">${escaparHtmlCierre(companyInfo.nombre)}</div>`,
+    companyInfo.rnc && `<div>${escaparHtmlCierre(companyInfo.rnc)}</div>`,
+    companyInfo.direccion && `<div class="etiqueta">DIRECCION DEL COMERCIO</div><div>${escaparHtmlCierre(companyInfo.direccion)}</div>`,
+  ].filter(Boolean).join('');
+
+  return `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Cierre Visanet Turno ${escaparHtmlCierre(noTurno)}</title>
+<style>
+  @page { size: 80mm auto; margin: 3mm; }
+  * { box-sizing: border-box; }
+  body { width: 74mm; margin: 0 auto; padding: 2mm 0; color: #171717; font-family: Arial, sans-serif; font-size: 9px; line-height: 1.25; }
+  .recibo { min-height: 120mm; border: 1px solid #62738d; padding: 7mm 3.5mm 5mm; }
+  .encabezado { text-align: center; margin-bottom: 9px; text-transform: uppercase; }
+  .nombre-comercio { margin-bottom: 8px; font-size: 16px; font-weight: 700; }
+  .etiqueta { margin-top: 1px; }
+  h1 { margin: 2px 0 0; font-size: 10px; }
+  .fecha { font-weight: 700; }
+  .grupo { margin-top: 10px; break-inside: avoid; }
+  .fila-meta, .movimiento-pie { display: flex; justify-content: space-between; gap: 7px; }
+  .grupo-meta { justify-content: flex-start; gap: 14px; }
+  .movimiento-cabecera { display: grid; grid-template-columns: auto 1fr auto; gap: 5px; }
+  .movimiento-cabecera span:nth-child(2) { text-align: center; }
+  .movimiento-cabecera span:last-child { text-align: right; }
+  .separador { border-top: 1px solid #565656; margin: 4px 0; }
+  .movimiento { margin: 4px 0; }
+  .movimiento-detalle { color: #333; overflow-wrap: anywhere; }
+  .anulacion { font-weight: 700; }
+  .resumen { margin-top: 13px; }
+  .fila-total { display: grid; grid-template-columns: 1fr 20px auto; gap: 5px; padding: 2px 0; }
+  .fila-total strong:last-child { text-align: right; }
+  .neto { font-weight: 700; }
+  .pie { margin-top: 17px; text-align: center; font-weight: 700; }
+  @media print { body { width: auto; padding: 0; } .recibo { min-height: 0; } }
+</style>
+</head>
+<body>
+<main class="recibo">
+  <header class="encabezado">
+    ${encabezadoEmpresa}
+    <h1>DETALLES DEL CIERRE</h1>
+    <div class="fecha">TURNO: ${escaparHtmlCierre(noTurno)}</div>
+    <div class="fecha">FECHA: ${escaparHtmlCierre(fechaEtiqueta)}</div>
+  </header>
+  ${gruposHtml}
+  <section class="resumen">
+    <div class="separador"></div>
+    <div class="fila-total"><span>Ventas:</span><strong>${ventas.length}</strong><strong>${escaparHtmlCierre(formatoMonto(montoVentas))}</strong></div>
+    <div class="fila-total anulacion"><span>Anulaciones:</span><strong>${anulaciones.length}</strong><strong>${escaparHtmlCierre(formatoMonto(-montoAnulaciones))}</strong></div>
+    <div class="fila-total neto"><span>Total:</span><strong>${ventas.length - anulaciones.length}</strong><strong>${escaparHtmlCierre(formatoMonto(montoVentas - montoAnulaciones))}</strong></div>
+  </section>
+  <footer class="pie">** CIERRE COMPLETO **</footer>
+</main>
+</body>
+</html>`;
+}
 
 // ─── Componente de filtro por rango de fechas ─────────────────────────────────
 const FiltroFechaDropdown: React.FC<{
@@ -124,7 +305,7 @@ const TurnoDetalle: React.FC = () => {
       okText: 'Postear',
       cancelText: 'Cancelar',
       onOk: async () => {
-        if (!data) return;
+        if (!data || posteando || imprimiendo) return;
         setPosteando(true);
         try {
           await turnoApi.postear(sucursalActiva, data.noTurno, sucursalContable);
@@ -142,13 +323,82 @@ const TurnoDetalle: React.FC = () => {
 const [filtrosActivos, setFiltrosActivos] = useState<Record<string, any>>({});
    const [costosFiltrosActivos, setCostosFiltrosActivos] = useState<Record<string, any>>({});
    const [ingresosFiltrosActivos, setIngresosFiltrosActivos] = useState<Record<string, any>>({});
-   const [costosSearch, setCostosSearch] = useState('');
-   const [ingresosSearch, setIngresosSearch] = useState('');
-   const [posteando, setPosteando] = useState(false);
-   const [imprimiendo, setImprimiendo] = useState(false);
-   const asientos = data?.factura?.asientos || [];
-   const logs = data?.factura?.logs || [];
-   const detalles = data?.factura?.detalles || [];
+const [costosSearch, setCostosSearch] = useState('');
+    const [ingresosSearch, setIngresosSearch] = useState('');
+    const [articulosSearch, setArticulosSearch] = useState('');
+    const [posteando, setPosteando] = useState(false);
+    const [imprimiendo, setImprimiendo] = useState(false);
+    const asientos = data?.factura?.asientos || [];
+    const logs = data?.factura?.logs || [];
+    const detalles: DetalleTurnoFila[] = data?.factura?.detalles ?? [];
+
+    const articulosFiltrados = React.useMemo(() => {
+      if (!detalles) return [];
+      if (!articulosSearch) return detalles;
+      const q = articulosSearch.toLowerCase();
+      return detalles.filter((d: any) =>
+        String(d.codigo ?? '').toLowerCase().includes(q) ||
+        String(d.articulo ?? '').toLowerCase().includes(q) ||
+        String(d.referencia ?? '').toLowerCase().includes(q)
+      );
+    }, [detalles, articulosSearch]);
+
+    const articulosColumns = [
+      {
+        title: 'Código',
+        dataIndex: 'codigo',
+        key: 'codigo',
+        width: 120,
+        fixed: 'left' as const,
+        render: (_: any, record: any) => (
+          <div style={{ fontSize: 14, fontWeight: 500 }}>{record.codigo || '-'}</div>
+        ),
+      },
+      {
+        title: 'Artículo',
+        dataIndex: 'articulo',
+        key: 'articulo',
+        ellipsis: true,
+        render: (_: any, record: any) => (
+          <div style={{ fontSize: 14 }}>
+            <div>{toTitleCase(String(record.articulo ?? ''))}</div>
+            {record.familia?.nombre && (
+              <Tag style={{ fontSize: 11 }}>{toTitleCase(record.familia.nombre)}</Tag>
+            )}
+          </div>
+        ),
+      },
+      {
+        title: 'Cantidad',
+        dataIndex: 'cantidad',
+        key: 'cantidad',
+        width: 100,
+        align: 'right' as const,
+        render: (_: any, record: any) => (
+          <div style={{ fontSize: 14 }}>{formatNumber(record.cantidad || 0)}</div>
+        ),
+      },
+      {
+        title: 'Precio',
+        dataIndex: 'precio',
+        key: 'precio',
+        width: 130,
+        align: 'right' as const,
+        render: (_: any, record: any) => (
+          <div style={{ fontFamily: 'monospace', fontSize: 14 }}>{formatCurrency(record.precio || 0)}</div>
+        ),
+      },
+      {
+        title: 'Subtotal',
+        dataIndex: 'total',
+        key: 'total',
+        width: 130,
+        align: 'right' as const,
+        render: (_: any, record: any) => (
+          <div style={{ fontSize: 14 }}>{formatNumber(record.total || 0)}</div>
+        ),
+      },
+    ];
 
   // ─── Helpers de filtros ──────────────────────────────────────────────────────
   const limpiarFiltro = React.useCallback((key: string) => {
@@ -175,13 +425,24 @@ const [filtrosActivos, setFiltrosActivos] = useState<Record<string, any>>({});
     setIngresosFiltrosActivos({});
   }, []);
 
-  // ─── Handler de impresión del ticket de cierre ─────────────────────────────────
-  const handleImprimirTicket = async () => {
-    if (!data) return;
-    setImprimiendo(true);
-    try {
-      // Datos de la compañía desde la sucursal activa
-      let companyInfo = { nombre: '', direccion: '', telefono: '', rnc: '', fax: '', slogan: '' };
+  // Bloqueo uniforme durante postear/imprimir
+  const procesandoTurno = posteando || imprimiendo;
+
+  // ─── Impresión dual del cierre de turno ────────────────────────────────────────
+  // Ticket de cierre (plantilla TURNO_CIERRE) + cierre de vouchers Visanet
+  // (ventana HTML con el formato de VisanetTest). El flag imprimiendo lo
+  // gobierna handleImprimir; los núcleos devuelven boolean sin tocarlo.
+  type OpcionImpresion = 'ticket' | 'vouchers' | 'ambos';
+
+  const itemsImpresion: MenuProps['items'] = [
+    { key: 'ticket', label: 'Ticket de cierre', icon: <PrinterOutlined /> },
+    { key: 'vouchers', label: 'Cierre de vouchers', icon: <CreditCardOutlined /> },
+    { key: 'ambos', label: 'Ambos' },
+  ];
+
+  // Info de la compañía para los reportes (misma fuente que el ticket de cierre).
+  const obtenerCompanyInfoTurno = async () => {
+    let companyInfo = { nombre: '', direccion: '', telefono: '', rnc: '', fax: '', slogan: '' };
     try {
       const lista = await companiaApi.obtenerTodas(sucursalActiva);
       if (lista.length > 0) {
@@ -198,12 +459,21 @@ const [filtrosActivos, setFiltrosActivos] = useState<Record<string, any>>({});
       const sucursales = useAuthStore.getState().sucursalesPermitidas;
       companyInfo.nombre = sucursales.find((sp: any) => sp.sucursal === sucursalActiva)?.nombre || '';
     }
+    return companyInfo;
+  };
+
+  // Núcleo de impresión del ticket de cierre (plantilla TURNO_CIERRE, TICKET_TC).
+  const imprimirTicketCierre = async (): Promise<boolean> => {
+    if (!data) return false;
+    try {
+      // Datos de la compañía desde la sucursal activa
+      const companyInfo = await obtenerCompanyInfoTurno();
 
     // Plantilla ESC/POS de cierre de turno (por codigo fijo TURNO_CIERRE)
     const plantilla = await reportesConfigApi.obtenerPorCodigo(CODIGO_PLANTILLA_TURNO_CIERRE);
     if (!plantilla) {
       message.error('No hay plantilla ESC/POS asignada para el cierre de turno.');
-      return;
+      return false;
     }
 
     // JSON de impresión resumido para el ticket de cierre (TURNO_CIERRE).
@@ -257,9 +527,10 @@ const [filtrosActivos, setFiltrosActivos] = useState<Record<string, any>>({});
     const resultado = await reportesConfigApi.imprimirLocal(payload, servicioLocalUrl);
     if (resultado.ok) {
       message.success('Ticket de cierre enviado a la impresora');
-    } else {
-      message.error(resultado.error ?? 'Error al imprimir: el servicio local no respondio');
+      return true;
     }
+    message.error(resultado.error ?? 'Error al imprimir: el servicio local no respondio');
+    return false;
   } catch (err: any) {
     const msg =
       err?.response?.data?.errorMessage ||
@@ -267,10 +538,71 @@ const [filtrosActivos, setFiltrosActivos] = useState<Record<string, any>>({});
       err?.message ||
       'Error al imprimir el ticket';
     message.error(msg);
-  } finally {
-    setImprimiendo(false);
+    return false;
   }
 };
+
+  // Núcleo del cierre de vouchers del turno (ventana HTML con el formato de
+  // VisanetTest). Si el turno no tiene vouchers muestra message.info.
+  const imprimirCierreVouchers = async (): Promise<boolean> => {
+    if (!data) return false;
+    let vouchers: VisanetTurnoVoucherDTO[];
+    try {
+      // El backend espera el NoTurno exacto de TURNOS.TURNO (mismo valor que
+      // TurnoController.Cerrar usa al pedir los vouchers del turno).
+      vouchers = await visanetApi.obtenerVouchersTurno(sucursalActiva, data.noTurno);
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al obtener los vouchers del turno');
+      return false;
+    }
+    if (!vouchers || vouchers.length === 0) {
+      message.info('Este turno no tiene vouchers Visanet.');
+      return false;
+    }
+    const ventana = window.open('', '_blank');
+    if (!ventana) {
+      message.error('El navegador bloqueó la vista del cierre. Permite las ventanas emergentes e inténtalo de nuevo.');
+      return false;
+    }
+    try {
+      const companyInfo = await obtenerCompanyInfoTurno();
+      const simMoneda = getMonedaSucursalActiva().simbolo;
+      const fechaCierre = data.fechaCierre || data.fechaApertura;
+      const fechaEtiqueta = fechaCierre && dayjs(fechaCierre).isValid()
+        ? dayjs(fechaCierre).format('DD/MM/YYYY')
+        : String(fechaCierre ?? '');
+      ventana.document.write(generarHtmlCierreVouchersTurno(vouchers, companyInfo, simMoneda, data.noTurno, fechaEtiqueta));
+      ventana.document.close();
+      ventana.focus();
+      return true;
+    } catch {
+      ventana.close();
+      message.error('No se pudo generar la vista del cierre.');
+      return false;
+    }
+  };
+
+  // Dispatcher del Dropdown.Button de impresión. Respeta el bloqueo
+  // procesandoTurno (imprimiendo/posteando). 'ambos' imprime secuencialmente
+  // el ticket y luego los vouchers; sin vouchers solo sale el ticket.
+  const handleImprimir = async (opcion: OpcionImpresion) => {
+    if (!data || imprimiendo || posteando) return;
+    setImprimiendo(true);
+    try {
+      if (opcion === 'ticket') {
+        await imprimirTicketCierre();
+        return;
+      }
+      if (opcion === 'vouchers') {
+        await imprimirCierreVouchers();
+        return;
+      }
+      await imprimirTicketCierre();
+      await imprimirCierreVouchers();
+    } finally {
+      setImprimiendo(false);
+    }
+  };
 
   // Calcular cobros totales
   const cobrosTotales: CobroDTO = React.useMemo(() => {
@@ -347,14 +679,14 @@ const total = data?.total ?? 0;
   };
 
   const ICONO_MAP: Record<string, React.ReactNode> = {
-    efectivo: <DollarCircleOutlined style={{ fontSize: 16, color: '#52c41a' }} />,
-    cheque: <FileTextOutlined style={{ fontSize: 16, color: '#1890ff' }} />,
-    transferencia: <SwapOutlined style={{ fontSize: 16, color: '#722ed1' }} />,
-    tarjetaCredito: <CreditCardOutlined style={{ fontSize: 16, color: '#13c2c2' }} />,
-    tarjetaDebito: <CreditCardFilled style={{ fontSize: 16, color: '#2f54eb' }} />,
-    bono: <GiftOutlined style={{ fontSize: 16, color: '#faad14' }} />,
-    tarjetaRegalo: <TagOutlined style={{ fontSize: 16, color: '#fa8c16' }} />,
-    notaCredito: <RollbackOutlined style={{ fontSize: 16, color: '#ff4d4f' }} />,
+    efectivo: <DollarCircleOutlined style={{ fontSize: 18, color: '#52c41a' }} />,
+    cheque: <FileTextOutlined style={{ fontSize: 18, color: '#1890ff' }} />,
+    transferencia: <SwapOutlined style={{ fontSize: 18, color: '#722ed1' }} />,
+    tarjetaCredito: <CreditCardOutlined style={{ fontSize: 18, color: '#13c2c2' }} />,
+    tarjetaDebito: <CreditCardFilled style={{ fontSize: 18, color: '#2f54eb' }} />,
+    bono: <GiftOutlined style={{ fontSize: 18, color: '#faad14' }} />,
+    tarjetaRegalo: <TagOutlined style={{ fontSize: 18, color: '#fa8c16' }} />,
+    notaCredito: <RollbackOutlined style={{ fontSize: 18, color: '#ff4d4f' }} />,
   };
 
   // Columnas de facturas con filtro tipo Excel
@@ -406,7 +738,7 @@ const total = data?.total ?? 0;
       filterIcon: () => filtrosActivos.fechaDocumento
         ? <FilterFilled style={{ color: '#556ee6', fontSize: 12 }} />
         : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />,
-      render: (val: string) => <Text>{val ? formatDate(val) : '-'}</Text>,
+      render: (val: string) => <FechaColumnCell fecha={val} />,
     },
     {
       title: 'Entidad/Cliente',
@@ -627,7 +959,7 @@ const total = data?.total ?? 0;
     // Apply column filters
     Object.entries(costosFiltrosActivos).forEach(([key, filtro]) => {
       if (!filtro) return;
-      result = result.filter((d: any) => {
+      result = result.filter((d: DetalleTurnoFila) => {
         if (key === 'codigo') {
           const val = d.codigo || '';
           return Array.isArray(filtro.valor) ? filtro.valor.includes(val) : true;
@@ -643,7 +975,7 @@ const total = data?.total ?? 0;
     // Apply text search
     if (costosSearch) {
       const q = costosSearch.toLowerCase();
-      result = result.filter((d: any) =>
+      result = result.filter((d: DetalleTurnoFila) =>
         (d.codigo?.toLowerCase() || '').includes(q) ||
         (d.articulo?.toLowerCase() || '').includes(q) ||
         (d.referencia?.toLowerCase() || '').includes(q)
@@ -659,7 +991,7 @@ const total = data?.total ?? 0;
     // Apply column filters
     Object.entries(ingresosFiltrosActivos).forEach(([key, filtro]) => {
       if (!filtro) return;
-      result = result.filter((d: any) => {
+      result = result.filter((d: DetalleTurnoFila) => {
         if (key === 'codigo') {
           const val = d.codigo || '';
           return Array.isArray(filtro.valor) ? filtro.valor.includes(val) : true;
@@ -679,7 +1011,7 @@ const total = data?.total ?? 0;
     // Apply text search
     if (ingresosSearch) {
       const q = ingresosSearch.toLowerCase();
-      result = result.filter((d: any) =>
+      result = result.filter((d: DetalleTurnoFila) =>
         (d.codigo?.toLowerCase() || '').includes(q) ||
         (d.articulo?.toLowerCase() || '').includes(q) ||
         (d.referencia?.toLowerCase() || '').includes(q)
@@ -690,33 +1022,37 @@ const total = data?.total ?? 0;
   }, [ingresosSearch, detalles, ingresosFiltrosActivos]);
 
   // ===== Totales de tablas =====
-  const totalesDocumentos = React.useMemo(() => {
-    return documentosFiltrados.reduce(
-      (acc, doc: any) => ({
-        total: acc.total + (doc.total || 0),
+  interface TotalDocumento { total: number }
+  interface TotalCosto { cantidad: number; total: number }
+  interface TotalIngreso { cantidad: number; subTotal: number; descuento: number; impuestos: number; total: number }
+
+  const totalesDocumentos = React.useMemo((): TotalDocumento => {
+    return documentosFiltrados.reduce<TotalDocumento>(
+      (acc, doc) => ({
+        total: acc.total + aNumero(doc.total),
       }),
       { total: 0 }
     );
   }, [documentosFiltrados]);
 
-  const totalesCostos = React.useMemo(() => {
-    return costosFiltrados.reduce(
-      (acc, item: any) => ({
-        cantidad: acc.cantidad + (item.cantidad || 0),
-        total: acc.total + (item.total || 0),
+  const totalesCostos = React.useMemo((): TotalCosto => {
+    return costosFiltrados.reduce<TotalCosto>(
+      (acc, item) => ({
+        cantidad: acc.cantidad + aNumero(item.cantidad),
+        total: acc.total + aNumero(item.total),
       }),
       { cantidad: 0, total: 0 }
     );
   }, [costosFiltrados]);
 
-  const totalesIngresos = React.useMemo(() => {
-    return ingresosFiltrados.reduce(
-      (acc, item: any) => ({
-        cantidad: acc.cantidad + (item.cantidad || 0),
-        subTotal: acc.subTotal + (item.subTotal || 0),
-        descuento: acc.descuento + (item.descuento || 0),
-        impuestos: acc.impuestos + (item.impuestos || 0),
-        total: acc.total + (item.total || 0),
+  const totalesIngresos = React.useMemo((): TotalIngreso => {
+    return ingresosFiltrados.reduce<TotalIngreso>(
+      (acc, item) => ({
+        cantidad: acc.cantidad + aNumero(item.cantidad),
+        subTotal: acc.subTotal + aNumero(item.subTotal),
+        descuento: acc.descuento + aNumero(item.descuento),
+        impuestos: acc.impuestos + aNumero(item.impuestos),
+        total: acc.total + aNumero(item.total),
       }),
       { cantidad: 0, subTotal: 0, descuento: 0, impuestos: 0, total: 0 }
     );
@@ -762,6 +1098,7 @@ const total = data?.total ?? 0;
     <Card
       className="paces-card"
       size="small"
+      style={{ position: 'sticky', top: 0, background: 'var(--paces-bg-container, #fff)', zIndex: 10 }}
       title={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 16, fontWeight: 600 }}>Datos Generales</span>
@@ -770,7 +1107,6 @@ const total = data?.total ?? 0;
           </Space>
         </div>
       }
-      style={{ marginBottom: 16 }}
     >
       <Descriptions
         bordered
@@ -1030,9 +1366,9 @@ const total = data?.total ?? 0;
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
+        <div style={{ fontSize: 14 }}>
           <div>{formatNumber(record.precio || 0)}</div>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+          <div style={{ fontSize: 12, lineHeight: 1.5 }}>&nbsp;</div>
         </div>
       ),
     },
@@ -1060,9 +1396,9 @@ const total = data?.total ?? 0;
         ? <FilterFilled style={{ color: '#556ee6', fontSize: 12 }} />
         : <FilterOutlined style={{ color: '#8c8c8c', fontSize: 12 }} />,
       render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
+        <div style={{ fontSize: 14 }}>
           <div>{formatNumber(record.impuestos || 0)}</div>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12, lineHeight: 1.5 }}>
             {record.impuesto?.nombre || ''}
           </div>
         </div>
@@ -1076,9 +1412,9 @@ const total = data?.total ?? 0;
       align: 'right' as const,
       onCell: () => ({ style: { verticalAlign: 'top' } }),
       render: (_: any, record: any) => (
-        <div style={{ fontSize: 13 }}>
+        <div style={{ fontSize: 14 }}>
           <div>{formatNumber(record.descuento || 0)}</div>
-          <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+          <div style={{ fontSize: 12, lineHeight: 1.5 }}>&nbsp;</div>
         </div>
       ),
     },
@@ -1101,280 +1437,213 @@ const total = data?.total ?? 0;
 
   const nDetalles = detalles.length;
 
-  const tabsItems = [
-    {
-      key: 'documentos',
-      label: `Documentos (${
-        Object.keys(filtrosActivos).length > 0
-          ? `${documentosFiltrados.length}/${data?.facturas?.length || 0}`
-          : data?.facturas?.length || 0
-      })`,
-      children: (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, minHeight: 32 }}>
-            {Object.keys(filtrosActivos).length > 0 && (
-              <>
-                <Text type="secondary" style={{ fontSize: 13 }}>Filtros:</Text>
-                {Object.entries(filtrosActivos).map(([key, f]) => (
-                  <Tag key={key} closable onClose={() => limpiarFiltro(key)}>
-                    {key === 'noDocumento' ? 'No. Documento' : key === 'cliente' ? 'Entidad/Cliente' : key === 'fechaDocumento' ? 'Fecha' : key === 'pagos' ? 'Pagos' : key === 'pendiente' ? 'Pendiente' : key}: {Array.isArray(f?.valor) ? f.valor.map((v: string) => v === 'sin_pago' ? 'Sin pago' : METODO_PAGO_LABELS[v] || v).join(', ') : f?.valor || `${f?.value?.[0] || ''} - ${f?.value?.[1] || ''}`}
-                  </Tag>
-                ))}
-                <Button size="small" onClick={limpiarTodosFiltros} type="link" style={{ padding: 0 }}>
-                  Limpiar filtros
-                </Button>
-              </>
-            )}
-            <div style={{ flex: 1 }} />
-          </div>
-          <Table
-            dataSource={documentosFiltrados}
-            columns={facturaColumns}
-            rowKey="id"
-            rowClassName={(record: any) => {
-              const pagos = pagosPorFactura[record.id];
-              const cobrado = pagos?.totalPagado || 0;
-              const pendiente = record.total - cobrado;
-              if (pendiente > 0.01) return 'paces-row-pendiente';
-              return '';
-            }}
-            size="small"
-            pagination={{
-              pageSize: 25,
-              showSizeChanger: false,
-              showTotal: (total: number) => `${total} registros`,
-            }}
-            scroll={{ x: 1100 }}
-            locale={{ emptyText: 'Sin facturas registradas' }}
-            summary={() => (
-              <Table.Summary fixed="bottom">
-                <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
-                  <Table.Summary.Cell index={0} colSpan={3}>
-                    <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={3} align="right">
-                    <Text strong>{formatNumber(totalesDocumentos.total)}</Text>
-                  </Table.Summary.Cell>
-                </Table.Summary.Row>
-              </Table.Summary>
-            )}
-          />
-        </div>
-      ),
-    },
-    {
-      key: 'detallesCostos',
-      label: `Costos (${
-        costosSearch || Object.keys(costosFiltrosActivos).length > 0
-          ? `${costosFiltrados.length}/${detalles.length}`
-          : detalles.length
-      })`,
-      children: (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, minHeight: 32 }}>
-            {Object.keys(costosFiltrosActivos).length > 0 && (
-              <>
-                <Text type="secondary" style={{ fontSize: 13 }}>Filtros:</Text>
-                {Object.entries(costosFiltrosActivos).map(([key, f]) => (
-                  <Tag key={key} closable onClose={() => limpiarFiltroCostos(key)}>
-                    {key === 'codigo' ? 'Código' : key === 'articulo' ? 'Artículo' : key}: {Array.isArray(f?.valor) ? f.valor.join(', ') : f?.valor || ''}
-                  </Tag>
-                ))}
-                <Button size="small" onClick={limpiarTodosFiltrosCostos} type="link" style={{ padding: 0 }}>
-                  Limpiar filtros
-                </Button>
-              </>
-            )}
-            <div style={{ flex: 1 }} />
-            <Input.Search
-              placeholder="Buscar producto..."
-              allowClear
-              style={{ maxWidth: 250 }}
-              onSearch={(value) => setCostosSearch(value)}
-              onChange={(e) => { if (!e.target.value) setCostosSearch(''); }}
-            />
-          </div>
-          <Table
-            dataSource={costosFiltrados}
-            columns={costosColumns}
-            rowKey="id"
-            size="small"
-            pagination={{
-              pageSize: 25,
-              showSizeChanger: false,
-              showTotal: (total: number) => `${total} registros`,
-            }}
-            scroll={{ x: 900 }}
-            locale={{ emptyText: 'Sin detalles de costo' }}
-            summary={() => (
-              <Table.Summary fixed="bottom">
-                <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
-                  <Table.Summary.Cell index={0} colSpan={2}>
-                    <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={2} align="right">
-                    {formatNumber(totalesCostos.cantidad)}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={3} align="right">
-                    {formatNumber(totalesCostos.total)}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={4} align="right">
-                    <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalesCostos.total)}</Text>
-                  </Table.Summary.Cell>
-                </Table.Summary.Row>
-              </Table.Summary>
-            )}
-          />
-        </div>
-      ),
-    },
-    {
-      key: 'detallesIngresos',
-      label: `Ingresos (${
-        ingresosSearch || Object.keys(ingresosFiltrosActivos).length > 0
-          ? `${ingresosFiltrados.length}/${detalles.length}`
-          : detalles.length
-      })`,
-      children: (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, minHeight: 32 }}>
-            {Object.keys(ingresosFiltrosActivos).length > 0 && (
-              <>
-                <Text type="secondary" style={{ fontSize: 13 }}>Filtros:</Text>
-                {Object.entries(ingresosFiltrosActivos).map(([key, f]) => (
-                  <Tag key={key} closable onClose={() => limpiarFiltroIngresos(key)}>
-                    {key === 'codigo' ? 'Código' : key === 'articulo' ? 'Artículo' : key === 'impuesto' ? 'Impuesto' : key}: {Array.isArray(f?.valor) ? f.valor.join(', ') : f?.valor || ''}
-                  </Tag>
-                ))}
-                <Button size="small" onClick={limpiarTodosFiltrosIngresos} type="link" style={{ padding: 0 }}>
-                  Limpiar filtros
-                </Button>
-              </>
-            )}
-            <div style={{ flex: 1 }} />
-            <Input.Search
-              placeholder="Buscar producto..."
-              allowClear
-              style={{ maxWidth: 250 }}
-              onSearch={(value) => setIngresosSearch(value)}
-              onChange={(e) => { if (!e.target.value) setIngresosSearch(''); }}
-            />
-          </div>
-          <Table
-            dataSource={ingresosFiltrados}
-            columns={ingresosColumns}
-            rowKey="id"
-            size="small"
-            pagination={{
-              pageSize: 25,
-              showSizeChanger: false,
-              showTotal: (total: number) => `${total} registros`,
-            }}
-            scroll={{ x: 1100 }}
-            locale={{ emptyText: 'Sin detalles de ingreso' }}
-            summary={() => (
-              <Table.Summary fixed="bottom">
-                <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
-                  <Table.Summary.Cell index={0} colSpan={2}>
-                    <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={2} align="right">
-                    {formatNumber(totalesIngresos.cantidad)}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={3} align="right" responsive={['md', 'lg', 'xl', 'xxl']}>
-                    {formatNumber(totalesIngresos.subTotal)}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={4} align="right" responsive={['lg', 'xl', 'xxl']}>
-                    {formatNumber(totalesIngresos.descuento)}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={5} align="right" responsive={['lg', 'xl', 'xxl']}>
-                    {formatNumber(totalesIngresos.impuestos)}
-                  </Table.Summary.Cell>
-                  <Table.Summary.Cell index={6} align="right">
-                    <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalesIngresos.total)}</Text>
-                  </Table.Summary.Cell>
-                </Table.Summary.Row>
-              </Table.Summary>
-            )}
-          />
-        </div>
-      ),
-    },
-    {
-      key: 'cobros',
-      label: `Cobros (${data.cobros?.length || 0})`,
-      children: (
-        <div>
-          <Table
-            dataSource={metodosPago}
-            columns={metodoPagoColumns}
-            rowKey="key"
-            size="small"
-            pagination={false}
-            style={{ marginBottom: 16 }}
-            locale={{ emptyText: 'Sin cobros registrados' }}
-          />
-          <Card
-            className="paces-card"
-            size="small"
-            title={<span style={{ fontSize: 14, fontWeight: 600 }}>Totales</span>}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-                <span className="paces-text-secondary">Total Facturado</span>
-                <Text strong>{formatNumber(total)}</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-                <span className="paces-text-secondary">Cobrado</span>
-                <Text strong style={{ color: '#34c38f' }}>{formatNumber(cobrado)}</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-                <span className="paces-text-secondary">Devuelta</span>
-                <Text strong>{formatNumber(cobrosTotales.devuelta)}</Text>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-                <span className="paces-text-secondary">Por Cobrar</span>
-                <Text strong style={{ color: porCobrar > 0 ? '#f46a6a' : '#595959' }}>
-                  {formatNumber(porCobrar)}
-                </Text>
-              </div>
-            </div>
-          </Card>
-        </div>
-      ),
-    },
-    ...(asientos.length > 0 ? [{
-      key: 'asientos',
-      label: `Asientos (${asientos.length})`,
-      children: <AsientosContableTable asientos={asientos} scroll={{ x: 800 }} />,
-    }] : []),
-    ...(logs.length > 0 ? [{
-      key: 'historial',
-      label: `Historial (${logs.length})`,
-      children: <LogTable dataSource={logs} scroll={{ x: 800 }} />,
-    }] : []),
-    {
-      key: 'desglose',
-      label: 'Desglose Monedas',
-      children: (
-        <div>
-          <Table
-            dataSource={desgloseData || []}
-            columns={[
-              { title: 'Valor', dataIndex: 'valor', key: 'valor', width: 120, align: 'right', render: (v: number) => formatNumber(v) },
-              { title: 'Cantidad', dataIndex: 'cantidad', key: 'cantidad', width: 120, align: 'right', render: (v: number) => formatNumber(v) },
-              { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 160, align: 'right', render: (v: number) => formatCurrency(v) },
-            ]}
-            rowKey={(r: any) => `desglose-${r.valor}-${r.cantidad}`}
-            size="small"
-            pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (t) => `${t} registros` }}
-            loading={cargandoDesglose}
-            locale={{ emptyText: 'Sin desglose de monedas' }}
-          />
-        </div>
-      ),
-    },
-  ];
+const tabsItems = [
+     {
+       key: 'resumen',
+       label: 'Resumen',
+       children: (
+         <div>
+           <Card className="paces-card" size="small" title={<span style={{ fontSize: 14, fontWeight: 600 }}>Datos Generales</span>}>
+             <Descriptions bordered size="small" column={isLarge ? 3 : 1} styles={{ content: { background: 'transparent' } }}>
+               <Descriptions.Item label="No. Turno">{data.noTurno}</Descriptions.Item>
+               <Descriptions.Item label="Cajero">{toTitleCase(data.usuario?.nombre || '')}</Descriptions.Item>
+               <Descriptions.Item label="POS">{data.nombrePOS || '-'}</Descriptions.Item>
+               <Descriptions.Item label="Fecha Apertura">{formatDateTime(data.fechaApertura)}</Descriptions.Item>
+               <Descriptions.Item label="Fecha Cierre">{data.fechaCierre ? formatDateTime(data.fechaCierre) : '-'}</Descriptions.Item>
+               <Descriptions.Item label="Cerrado">
+                 <Tag color={data.cerrado ? 'green' : 'default'}>{data.cerrado ? 'Sí' : 'No'}</Tag>
+               </Descriptions.Item>
+             </Descriptions>
+             <Divider plain style={{ margin: '8px 0', fontSize: 12 }}>Totales</Divider>
+             <div style={{ display: 'flex', flexDirection: isLarge ? 'row' : 'column', gap: 16, padding: '0 8px' }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', flex: 1 }}>
+                 <span className="paces-text-secondary" style={{ fontSize: 14 }}>Total Facturado</span>
+                 <Text strong style={{ fontSize: 14 }}>{formatCurrency(total)}</Text>
+               </div>
+               <div style={{ display: 'flex', justifyContent: 'space-between', flex: 1 }}>
+                 <span className="paces-text-secondary" style={{ fontSize: 14 }}>Cobrado</span>
+                 <Text strong style={{ color: '#34c38f', fontSize: 14 }}>{formatCurrency(cobrado)}</Text>
+               </div>
+               <div style={{ display: 'flex', justifyContent: 'space-between', flex: 1 }}>
+                 <span className="paces-text-secondary" style={{ fontSize: 14 }}>Por Cobrar</span>
+                 <Text strong style={{ color: porCobrar > 0 ? '#f46a6a' : '#595959', fontSize: 14 }}>
+                   {formatCurrency(porCobrar)}
+                 </Text>
+               </div>
+             </div>
+           </Card>
+         </div>
+       ),
+     },
+     {
+       key: 'articulos',
+       label: `Artículos (${detalles.length})`,
+       children: (
+         <div>
+           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+             <Input.Search
+               placeholder="Buscar artículo..."
+               allowClear
+               style={{ width: '100%', maxWidth: 250, flex: '1 1 auto' }}
+               onChange={(e) => setArticulosSearch(e.target.value)}
+               onSearch={(value) => setArticulosSearch(value)}
+             />
+             <div style={{ flex: 1 }} />
+             <Text type="secondary" style={{ fontSize: 13 }}>
+               {detalles.length} artículos
+             </Text>
+           </div>
+           <Table
+             dataSource={articulosFiltrados}
+             columns={articulosColumns}
+             rowKey={(record: any) => `${record.codigo}-${record.id || record.facturaID || ''}`}
+             size="middle"
+             pagination={{ pageSize: 25, showSizeChanger: false, showTotal: (t: number) => `${t} registros` }}
+             scroll={{ x: 1100 }}
+             locale={{ emptyText: 'Sin artículos registrados' }}
+           />
+         </div>
+       ),
+     },
+     {
+       key: 'ventas',
+       label: `Ventas (${data.facturas?.length || 0})`,
+       children: (
+         <div>
+           <Table
+             dataSource={documentosFiltrados}
+             columns={facturaColumns}
+             rowKey="id"
+             rowClassName={(record: any) => {
+               const pagos = pagosPorFactura[record.id];
+               const cobrado = pagos?.totalPagado || 0;
+               const pendiente = record.total - cobrado;
+               if (pendiente > 0.01) return 'paces-row-pendiente';
+               return '';
+             }}
+             size="small"
+             pagination={{ pageSize: 25, showSizeChanger: false, showTotal: (t: number) => `${t} registros` }}
+             scroll={{ x: 1100 }}
+             locale={{ emptyText: 'Sin facturas registradas' }}
+             summary={() => (
+               <Table.Summary fixed="bottom">
+                 <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+                   <Table.Summary.Cell index={0} colSpan={3}>
+                     <Text strong style={{ paddingLeft: 8 }}>Totales</Text>
+                   </Table.Summary.Cell>
+                   <Table.Summary.Cell index={3} align="right">
+                     <Text strong>{formatNumber(totalesDocumentos.total)}</Text>
+                   </Table.Summary.Cell>
+                 </Table.Summary.Row>
+               </Table.Summary>
+             )}
+           />
+         </div>
+       ),
+     },
+     {
+       key: 'cobros',
+       label: `Cobros (${data.cobros?.length || 0})`,
+       children: (
+         <div>
+           <Table
+             dataSource={metodosPago}
+             columns={metodoPagoColumns}
+             rowKey="key"
+             size="small"
+             pagination={false}
+             style={{ marginBottom: 16 }}
+             locale={{ emptyText: 'Sin cobros registrados' }}
+           />
+           <Card className="paces-card" size="small" title={<span style={{ fontSize: 14, fontWeight: 600 }}>Totales</span>}>
+             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                 <span className="paces-text-secondary" style={{ fontSize: 14 }}>Total Facturado</span>
+                 <Text strong style={{ fontSize: 14 }}>{formatNumber(total)}</Text>
+               </div>
+               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                 <span className="paces-text-secondary" style={{ fontSize: 14 }}>Cobrado</span>
+                 <Text strong style={{ color: '#34c38f', fontSize: 14 }}>{formatNumber(cobrado)}</Text>
+               </div>
+               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                 <span className="paces-text-secondary" style={{ fontSize: 14 }}>Devuelta</span>
+                 <Text strong style={{ fontSize: 14 }}>{formatNumber(cobrosTotales.devuelta)}</Text>
+               </div>
+               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                 <span className="paces-text-secondary" style={{ fontSize: 14 }}>Por Cobrar</span>
+                 <Text strong style={{ color: porCobrar > 0 ? '#f46a6a' : '#595959', fontSize: 14 }}>
+                   {formatNumber(porCobrar)}
+                 </Text>
+               </div>
+             </div>
+           </Card>
+         </div>
+       ),
+     },
+     {
+       key: 'diferencias',
+       label: `Diferencias`,
+       children: (
+         <div>
+           <Card
+             className="paces-card"
+             size="small"
+             style={{
+               background: porCobrar > 0 ? '#fff7e6' : '#f6ffed',
+               border: `1px solid ${porCobrar > 0 ? '#ffd591' : '#b7eb8f'}`,
+               borderRadius: 8,
+               marginBottom: 16,
+             }}
+           >
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+               <span style={{ fontSize: 16, fontWeight: 600, color: porCobrar > 0 ? '#d46b08' : '#52c41a' }}>
+                 {porCobrar > 0 ? '⚠️ Atención: Diferencia en Caja' : '✅ Caja Equilibrada'}
+               </span>
+             </div>
+             <div style={{ display: 'flex', gap: 32, marginTop: 16, flexWrap: 'wrap' }}>
+               <div>
+                 <span className="paces-text-secondary" style={{ fontSize: 13 }}>Total Facturado</span>
+                 <div style={{ fontSize: 18, fontWeight: 600 }}>{formatCurrency(total)}</div>
+               </div>
+               <div>
+                 <span className="paces-text-secondary" style={{ fontSize: 13 }}>Cobrado</span>
+                 <div style={{ fontSize: 18, fontWeight: 600, color: '#34c38f' }}>{formatCurrency(cobrado)}</div>
+               </div>
+               <div>
+                 <span className="paces-text-secondary" style={{ fontSize: 13 }}>Por Cobrar</span>
+                 <div style={{ fontSize: 18, fontWeight: 600, color: porCobrar > 0 ? '#f46a6a' : '#595959' }}>
+                   {formatCurrency(porCobrar)}
+                 </div>
+               </div>
+               <div>
+                 <span className="paces-text-secondary" style={{ fontSize: 13 }}>Devuelta</span>
+                 <div style={{ fontSize: 18, fontWeight: 600, color: '#722ed1' }}>{formatCurrency(cobrosTotales.devuelta)}</div>
+               </div>
+             </div>
+           </Card>
+           {porCobrar > 0 && (
+             <Alert
+               message="Existe una diferencia en la caja"
+               description={`El turno ${data.noTurno} tiene un saldo pendiente de cobro de ${formatCurrency(porCobrar)}. Verifique los cobros registrados.`}
+               type="warning"
+               showIcon
+               style={{ marginBottom: 16 }}
+             />
+           )}
+           <Card className="paces-card" size="small" title={<span style={{ fontSize: 14, fontWeight: 600 }}>Detalle por Método de Pago</span>}>
+             <Table
+               dataSource={metodosPago}
+               columns={metodoPagoColumns}
+               rowKey="key"
+               size="small"
+               pagination={false}
+               locale={{ emptyText: 'Sin cobros registrados' }}
+             />
+           </Card>
+         </div>
+       ),
+     },
+   ];
 
   return (
     <div>
@@ -1409,19 +1678,24 @@ const total = data?.total ?? 0;
         onPostear={handlePostear}
         extraButtons={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh} disabled={procesandoTurno} />
             <PermissionGate codigoPantalla="FTURNOS" accion="IMPRIMIR">
-              <Button icon={<PrinterOutlined />} loading={imprimiendo} onClick={handleImprimirTicket}>
+              <Dropdown.Button
+                icon={<PrinterOutlined />}
+                loading={imprimiendo}
+                disabled={procesandoTurno}
+                onClick={() => handleImprimir('ticket')}
+                menu={{ items: itemsImpresion, onClick: (e) => handleImprimir(e.key as OpcionImpresion) }}
+              >
                 Ticket Cierre
-              </Button>
+              </Dropdown.Button>
             </PermissionGate>
           </Space>
         }
       />
 
       <div>
-        {contentCard}
-        <Tabs defaultActiveKey="documentos" type="card" items={tabsItems} />
+        <Tabs defaultActiveKey="resumen" type="card" items={tabsItems} />
       </div>
     </div>
   );

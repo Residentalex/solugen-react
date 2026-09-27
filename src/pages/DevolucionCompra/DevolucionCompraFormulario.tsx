@@ -22,6 +22,7 @@ import {
   CloseCircleOutlined,
   RedoOutlined,
   PercentageOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -170,6 +171,7 @@ const DevolucionCompraFormulario: React.FC = () => {
   ) ?? false;
   const [generandoAsientos, setGenerandoAsientos] = useState(false);
   const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
+  const [asientosModificados, setAsientosModificados] = useState(false);
 
   const editValuesRef = useRef<Record<string, any>>({});
   const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
@@ -1875,21 +1877,24 @@ const DevolucionCompraFormulario: React.FC = () => {
                   key: 'asientos',
                   label: `Asientos (${data?.asientos?.length || 0})`,
                   children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
-                    <AsientosContableEditables
-                      asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
-                      onChange={setAsientosLocales}
-                      editable={true}
-                      scroll={{ x: 900 }}
-                      onGenerar={handleGenerarAsientos}
-                      generando={generandoAsientos}
-                    />
+<AsientosContableEditables
+  asientos={asientosModificados ? asientosLocales : (asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []))}
+  onChange={(nuevosAsientos) => {
+    setAsientosLocales(nuevosAsientos);
+    setAsientosModificados(true);
+  }}
+  editable={true}
+  scroll={{ x: 900 }}
+  onGenerar={handleGenerarAsientos}
+  generando={generandoAsientos}
+/>
                   ) : (
                     <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
                   ),
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${data?.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${data?.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
                   ),
@@ -1972,21 +1977,24 @@ const DevolucionCompraFormulario: React.FC = () => {
                 key: 'asientos',
                 label: `Asientos (${data?.asientos?.length || 0})`,
                 children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
-                  <AsientosContableEditables
-                    asientos={asientosLocales.length > 0 ? asientosLocales : (data?.asientos || [])}
-                    onChange={setAsientosLocales}
-                    editable={true}
-                    scroll={{ x: 900 }}
-                    onGenerar={handleGenerarAsientos}
-                    generando={generandoAsientos}
-                  />
+<AsientosContableEditables
+  asientos={asientosModificados ? asientosLocales : (asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []))}
+  onChange={(nuevosAsientos) => {
+    setAsientosLocales(nuevosAsientos);
+    setAsientosModificados(true);
+  }}
+  editable={true}
+  scroll={{ x: 900 }}
+  onGenerar={handleGenerarAsientos}
+  generando={generandoAsientos}
+/>
                 ) : (
                   <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
                 ),
               },
               {
                 key: 'historial',
-                label: `Historial (${data?.logs?.length || 0})`,
+                icon: <HistoryOutlined />, label: `Historial (${data?.logs?.length || 0})`,
                 children: (
                   <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
                 ),

@@ -85,6 +85,8 @@ const PlantillaSuplidorFormulario: React.FC = () => {
 
   const [form] = Form.useForm();
   const navigationConfirmedRef = useRef(false);
+  const guardandoRef = useRef(false);
+  const ocupado = saving;
 
   const isLarge = screens.xxl === true;
 
@@ -151,6 +153,10 @@ const PlantillaSuplidorFormulario: React.FC = () => {
 
   useEffect(() => {
     const handlePopState = () => {
+      if (guardandoRef.current) {
+        window.history.pushState(null, '', window.location.pathname);
+        return;
+      }
       const leave = window.confirm('Los cambios no guardados se perderán. ¿Está seguro que desea salir?');
       if (!leave) {
         window.history.pushState(null, '', window.location.pathname);
@@ -163,6 +169,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
   useEffect(() => {
     const originalPushState = window.history.pushState.bind(window.history);
     window.history.pushState = function (data: any, unused: string, url?: string | URL | null) {
+      if (guardandoRef.current) return;
       const currentPath = window.location.pathname;
       const newPath = typeof url === 'string' ? url.split('?')[0] : (url instanceof URL ? url.pathname : null);
       if (newPath && currentPath !== newPath && !navigationConfirmedRef.current) {
@@ -179,6 +186,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
 
   // ===== Handlers =====
   const handleCancelar = () => {
+    if (guardandoRef.current || saving) return;
     Modal.confirm({
       title: 'Cancelar',
       icon: <ExclamationCircleOutlined />,
@@ -228,14 +236,15 @@ const PlantillaSuplidorFormulario: React.FC = () => {
   };
 
   const handleGuardar = async () => {
-    const error = validarFormulario();
-    if (error) {
-      message.error(error);
-      return;
-    }
-
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
     setSaving(true);
     try {
+      const error = validarFormulario();
+      if (error) {
+        message.error(error);
+        return;
+      }
       const dto = construirDTO();
       if (mode === 'crear') {
         const nuevoId = await plantillaSuplidorApi.crear(sucursalActiva, dto);
@@ -252,16 +261,19 @@ const PlantillaSuplidorFormulario: React.FC = () => {
       const msg = extraerMensajeError(err, 'Error al guardar');
       message.error(msg);
     } finally {
+      guardandoRef.current = false;
       setSaving(false);
     }
   };
 
   // ===== Handlers de detalles =====
   const handleAgregarFila = () => {
+    if (guardandoRef.current || saving) return;
     setDetalles((prev) => [...prev, filaVacia(prev.length + 1)]);
   };
 
   const handleEliminarFila = (index: number) => {
+    if (guardandoRef.current || saving) return;
     setDetalles((prev) => {
       const updated = prev.filter((_, i) => i !== index);
       return updated.map((d, i) => ({ ...d, orden: i + 1 }));
@@ -269,6 +281,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
   };
 
   const handleDetalleChange = (index: number, field: string, value: any) => {
+    if (guardandoRef.current || saving) return;
     setDetalles((prev) =>
       prev.map((d, i) => (i !== index ? d : { ...d, [field]: value } as DetallePlantillaSuplidorDTO))
     );
@@ -306,6 +319,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
           value={detalles[index]?.codigoProducto || ''}
           onChange={(e) => handleDetalleChange(index, 'codigoProducto', e.target.value)}
           placeholder="Código"
+          disabled={ocupado}
         />
       ),
     },
@@ -320,6 +334,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
           value={detalles[index]?.descripcion || ''}
           onChange={(e) => handleDetalleChange(index, 'descripcion', e.target.value)}
           placeholder="Descripción del producto"
+          disabled={ocupado}
         />
       ),
     },
@@ -334,6 +349,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
           value={detalles[index]?.referencia || ''}
           onChange={(e) => handleDetalleChange(index, 'referencia', e.target.value)}
           placeholder="Referencia"
+          disabled={ocupado}
         />
       ),
     },
@@ -350,6 +366,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
           danger
           icon={<DeleteOutlined />}
           onClick={() => handleEliminarFila(index)}
+          disabled={ocupado}
         />
       ),
     },
@@ -366,16 +383,16 @@ const PlantillaSuplidorFormulario: React.FC = () => {
         />
       )}
 
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+      {/* Toolbar fija */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 10, background: '#fff', padding: '8px 0', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
         <div style={{ flex: 1 }} />
         <Space wrap>
           <PermissionGate accion={id ? 'EDITAR' : 'CREAR'}>
-            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
+            <Button type="primary" icon={<SaveOutlined />} loading={saving} disabled={ocupado} onClick={handleGuardar}>
               Guardar
             </Button>
           </PermissionGate>
-          <Button icon={<CloseOutlined />} onClick={handleCancelar}>
+          <Button icon={<CloseOutlined />} onClick={handleCancelar} disabled={ocupado}>
             Cancelar
           </Button>
         </Space>
@@ -396,6 +413,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
                 layout="vertical"
                 size="middle"
                 style={{ paddingTop: 24 }}
+                disabled={ocupado}
               >
                 <Row gutter={[16, 24]}>
                   <Col xs={24} sm={12} lg={8}>
@@ -460,7 +478,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
               style={{ marginBottom: 16 }}
             >
               <div style={{ marginBottom: 12 }}>
-                <Button type="primary" icon={<PlusOutlined />} onClick={handleAgregarFila}>
+                <Button type="primary" icon={<PlusOutlined />} onClick={handleAgregarFila} disabled={ocupado}>
                   Agregar producto
                 </Button>
               </div>
@@ -511,6 +529,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
               layout="vertical"
               size="middle"
               style={{ paddingTop: 24 }}
+              disabled={ocupado}
             >
               <Row gutter={[16, 24]}>
                 <Col xs={24}>
@@ -574,7 +593,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
             style={{ marginBottom: 16 }}
           >
             <div style={{ marginBottom: 12 }}>
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAgregarFila}>
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleAgregarFila} disabled={ocupado}>
                 Agregar producto
               </Button>
             </div>

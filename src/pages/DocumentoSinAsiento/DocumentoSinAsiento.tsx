@@ -13,6 +13,7 @@ import FiltrosDocumento from '../../components/FiltrosDocumento/FiltrosDocumento
 import { formatCurrency, formatDateRaw, formatDateParam, toTitleCase } from '../../utils/formats';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import type { DocumentoSinAsientoDTO } from '../../types/integridad';
 import type { DocumentoDTO } from '../../types/documento';
 import dayjs from 'dayjs';
@@ -147,7 +148,7 @@ const DocumentoSinAsiento: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (v: string) => <Text>{formatDateRaw(v)}</Text>,
+      render: (v: string) => <FechaColumnCell fecha={v} />,
     },
     {
       title: 'Entidad',

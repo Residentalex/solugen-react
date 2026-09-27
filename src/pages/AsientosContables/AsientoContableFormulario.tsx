@@ -11,6 +11,7 @@ import {
   EditOutlined,
   ExclamationCircleOutlined,
   BankOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -253,6 +254,80 @@ const AsientoContableFormulario: React.FC = () => {
 
   const navigationConfirmedRef = useFormularioNavigation();
 
+  // Ref para evitar doble guardado con dos clics rápidos
+  const lastSaveRef = useRef<number>(0);
+
+  // ===== Handler para recargar datos en caso de error =====
+  const handleRetry = () => {
+    setLoadingError(false);
+    if (mode === 'editar' && id) {
+      const idNum = parseInt(id, 10);
+      if (!isNaN(idNum)) {
+        setLoading(true);
+        transaccionApi.obtenerPorId(sucursalActiva, idNum)
+          .then((res) => {
+            if (!res) {
+              message.error('Documento no encontrado');
+              setLoadingError(true);
+              return;
+            }
+            setData(res);
+            setPageTitleOverride(`Editar - ${res.noDocumento || `Transacción #${res.id}`}`);
+            setAsientos((res.asientos || []).map((a: TransaccionAsientoDTO) => ({
+              ...a,
+              noCuenta: a.cuentaContable?.noCuenta || a.noCuenta || '',
+              cuentaContable: a.cuentaContable || { noCuenta: a.noCuenta || '', nombre: '' },
+            })));
+            setSelectedConcepto(res.concepto ? { codigo: res.concepto.codigo || '', nombre: res.concepto.nombre || '' } : null);
+            setConceptoSearchText(res.concepto?.codigo ? `${res.concepto.codigo} - ${toTitleCase(res.concepto.nombre || '')}` : '');
+            const entidad: EntidadDTO | null = res.entidad
+              ? { codigo: res.entidad.codigo || res.codigoEntidad || '', nombre: res.entidad.nombre || res.nombreEntidad || '', identificacion: '' }
+              : null;
+            setSelectedEntidad(entidad);
+            setSelectedMoneda(res.codigoMoneda || getMonedaSucursalActiva().codigo);
+            setSelectedSucursal(res.codigoSucursal || res.sucursal?.codigo || '');
+            setSelectedCuenta(res.ctaBancaria || '');
+            setDocumentosAsociados((res.transaccionesAsociadas || []).map((d: any) => ({
+              id: d.transaccionAsociadaID ?? d.id ?? Math.random(),
+              transaccionAsociadaID: d.transaccionAsociadaID ?? d.id,
+              transaccionID: d.id,
+              fecha: d.fecha ? dayjs(d.fecha).format('YYYY-MM-DD') : '',
+              documento: d.documento || '',
+              nCF: d.nCF || d.ncf || '',
+              montoOriginal: d.montoOriginal ?? 0,
+              monto: d.monto ?? d.montoOriginal ?? 0,
+              descuento: d.descuento ?? 0,
+              retencion: d.retencion ?? 0,
+              pagado: d.pagado ?? 0,
+              pendiente: pendienteEfectivo(d),
+            })));
+            setDetallesEditable(res.detalles || []);
+            form.setFieldsValue({
+              fechaDocumento: res.fechaDocumento ? dayjs(res.fechaDocumento) : null,
+              conceptoNombre: res.concepto?.nombre || '',
+              concepto: res.concepto?.codigo || '',
+              entidad: entidad?.codigo || '',
+              ncf: res.ncf || '',
+              referencia: res.referencia || '',
+              nota: res.nota || '',
+              tipoDocumento: res.documento?.codigo || documentCode,
+              noDocumento: res.noDocumento || '',
+              moneda: res.codigoMoneda || getMonedaSucursalActiva().codigo,
+              sucursal: res.codigoSucursal || res.sucursal?.codigo || '',
+              cuentaBancaria: res.ctaBancaria || '',
+              beneficiario: res.nombreBeneficiario || '',
+            });
+          })
+          .catch((err: any) => {
+            const msg = err?.response?.data?.errorMessage || 'Error al cargar el asiento contable';
+            message.error(msg);
+            setLoadingError(true);
+          })
+          .finally(() => setLoading(false));
+      }
+    }
+  };
+
   // ===== Handlers de campos rápidos =====
   const openFieldEditor = (field: string) => {
     const val = form.getFieldValue(field);
@@ -405,11 +480,18 @@ const AsientoContableFormulario: React.FC = () => {
 
   // ===== Guardar =====
   const handleGuardar = async () => {
+    if (saving) return;
     const error = validarFormulario();
     if (error) {
       message.error(error);
       return;
     }
+
+    const now = Date.now();
+    if (now - lastSaveRef.current < 1000) {
+      return;
+    }
+    lastSaveRef.current = now;
 
     setSaving(true);
     try {
@@ -695,6 +777,8 @@ const AsientoContableFormulario: React.FC = () => {
           danger
           icon={<DeleteOutlined />}
           onClick={() => handleEliminarAsiento(idx)}
+          disabled={saving}
+          title="Eliminar asiento"
         />
       ),
     },
@@ -719,7 +803,7 @@ const AsientoContableFormulario: React.FC = () => {
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={() => { setLoadingError(false); window.location.reload(); }}>
+            <Button size="small" onClick={handleRetry}>
               Reintentar
             </Button>
           }
@@ -770,7 +854,7 @@ const AsientoContableFormulario: React.FC = () => {
       >
         <Row gutter={16}>
           <Col xs={24} xxl={18}>
-            <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
+            <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }} disabled={saving}>
               <Row gutter={[16, 24]}>
                 {/* Fila 1: Concepto + Fecha */}
                 <Col xs={24} sm={12} lg={15}>
@@ -1036,11 +1120,11 @@ const AsientoContableFormulario: React.FC = () => {
               label: `Asientos (${asientos.length})`,
               children: (
                 <>
-                  <div style={{ marginBottom: 8 }}>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={handleAgregarAsiento}>
-                      Agregar asiento
-                    </Button>
-                  </div>
+                   <div style={{ marginBottom: 8 }}>
+                     <Button type="primary" icon={<PlusOutlined />} onClick={handleAgregarAsiento} disabled={saving}>
+                       Agregar asiento
+                     </Button>
+                   </div>
                   <Table
                     dataSource={asientos}
                     columns={asientoColumns}
@@ -1065,9 +1149,9 @@ const AsientoContableFormulario: React.FC = () => {
               key: 'detalles',
               label: `Detalles (${detallesEditable.length})`,
               children: (
-                <>
+<>
                   <div style={{ marginBottom: 8 }}>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={handleAgregarDetalle}>
+                    <Button type="primary" icon={<PlusOutlined />} onClick={handleAgregarDetalle} disabled={saving}>
                       Agregar detalle
                     </Button>
                   </div>
@@ -1161,6 +1245,8 @@ const AsientoContableFormulario: React.FC = () => {
                             danger
                             icon={<DeleteOutlined />}
                             onClick={() => handleEliminarDetalle(idx)}
+                            disabled={saving}
+                            title="Eliminar detalle"
                           />
                         ),
                       },
@@ -1262,16 +1348,15 @@ const AsientoContableFormulario: React.FC = () => {
                         key: 'descuento',
                         width: 140,
                         align: 'right' as const,
-                        render: (_: any, record: any) => (
-                          <InputNumber
-                            size="small"
-                            style={{ width: '100%' }}
-                            inputStyle={{ textAlign: 'right' as const }}
-                            className="input-number-right"
-                            min={0}
-                            step={0.01}
-                            precision={2}
-                            value={record.descuento}
+render: (_: any, record: any) => (
+                            <InputNumber
+                                size="small"
+                                style={{ width: '100%', textAlign: 'right' }}
+                                className="input-number-right"
+                                min={0}
+                                step={0.01}
+                                precision={2}
+                                value={record.descuento}
                             onChange={(val) => handleDescuentoChange(record.transaccionAsociadaID ?? record.id, val)}
                           />
                         ),
@@ -1281,17 +1366,16 @@ const AsientoContableFormulario: React.FC = () => {
                         key: 'monto',
                         width: 140,
                         align: 'right' as const,
-                        render: (_: any, record: any) => (
-                          <InputNumber
-                            size="small"
-                            style={{ width: '100%' }}
-                            inputStyle={{ textAlign: 'right' as const }}
-                            className="input-number-right"
-                            min={0}
-                            max={pendienteEfectivo(record)}
-                            step={0.01}
-                            precision={2}
-                            value={record.monto}
+render: (_: any, record: any) => (
+                            <InputNumber
+                                size="small"
+                                style={{ width: '100%', textAlign: 'right' }}
+                                className="input-number-right"
+                                min={0}
+                                max={pendienteEfectivo(record)}
+                                step={0.01}
+                                precision={2}
+                                value={record.monto}
                             onChange={(val) => handleMontoChange(record.transaccionAsociadaID ?? record.id, val)}
                           />
                         ),
@@ -1317,7 +1401,7 @@ const AsientoContableFormulario: React.FC = () => {
             },
             {
               key: 'historial',
-              label: `Historial (${data?.logs?.length || 0})`,
+              icon: <HistoryOutlined />, label: `Historial (${data?.logs?.length || 0})`,
               children: (
                 <LogTable dataSource={data?.logs || []} scroll={{ x: 800 }} />
               ),

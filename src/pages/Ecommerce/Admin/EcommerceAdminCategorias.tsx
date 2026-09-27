@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Table, Button, Card, Modal, Form, Input, InputNumber, Switch, Typography, Tooltip, message, Popconfirm,
 } from 'antd';
@@ -19,8 +19,17 @@ const EcommerceAdminCategorias: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AdminCategoriaDTO | null>(null);
   const [form] = Form.useForm();
+  const [guardando, setGuardando] = useState(false);
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null);
+  const [exportando, setExportando] = useState(false);
+  const operacionRef = useRef(false);
+  const ocupado = guardando || eliminandoId !== null || exportando || loading;
 
   const handleExportarExcel = async () => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setExportando(true);
+    try {
     const companyName = await getCompanyName(sucursalActiva);
     const cols = columns.filter((c) => c.key !== 'acciones');
     exportToExcel({
@@ -30,11 +39,15 @@ const EcommerceAdminCategorias: React.FC = () => {
       columnHeaders: cols.map((c) => c.title as string),
       dataRows: data.map((item: any) =>
         cols.map((col) => {
-          const val = item[col.dataIndex as string];
+           const val = item[(col as any).dataIndex as string];
           return val !== null && val !== undefined ? String(val) : '';
         })
       ),
     });
+    } finally {
+      setExportando(false);
+      operacionRef.current = false;
+    }
   };
 
   const cargar = useCallback(async () => {
@@ -54,12 +67,14 @@ const EcommerceAdminCategorias: React.FC = () => {
   }, [cargar]);
 
   const openCrear = () => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
     setEditing(null);
     form.resetFields();
     setModalOpen(true);
   };
 
   const openEditar = (record: AdminCategoriaDTO) => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
     setEditing(record);
     form.setFieldsValue({
       nombre: record.nombre,
@@ -71,8 +86,11 @@ const EcommerceAdminCategorias: React.FC = () => {
   };
 
   const handleGuardar = async () => {
-    const values = await form.validateFields();
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setGuardando(true);
     try {
+      const values = await form.validateFields();
       if (editing) {
         await ecommerceApi.adminActualizarCategoria(editing.id, values);
         message.success('Categoría actualizada');
@@ -81,19 +99,29 @@ const EcommerceAdminCategorias: React.FC = () => {
         message.success('Categoría creada');
       }
       setModalOpen(false);
-      cargar();
+      await cargar();
     } catch (err: any) {
+      if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar');
+    } finally {
+      setGuardando(false);
+      operacionRef.current = false;
     }
   };
 
   const handleEliminar = async (id: string) => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setEliminandoId(id);
     try {
       await ecommerceApi.adminEliminarCategoria(id);
       message.success('Categoría eliminada');
-      cargar();
+      await cargar();
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al eliminar');
+    } finally {
+      setEliminandoId(null);
+      operacionRef.current = false;
     }
   };
 
@@ -144,7 +172,7 @@ const EcommerceAdminCategorias: React.FC = () => {
       render: (_: any, record: AdminCategoriaDTO) => (
         <div style={{ display: 'flex', gap: 4 }}>
           <Tooltip title="Editar">
-            <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openEditar(record)} />
+            <Button type="text" size="small" icon={<EditOutlined />} disabled={ocupado} onClick={() => openEditar(record)} />
           </Tooltip>
           <Popconfirm
             title="¿Eliminar categoría?"
@@ -152,9 +180,11 @@ const EcommerceAdminCategorias: React.FC = () => {
             onConfirm={() => handleEliminar(record.id)}
             okText="Eliminar"
             cancelText="Cancelar"
+            okButtonProps={{ danger: true, disabled: ocupado, loading: eliminandoId === record.id }}
+            cancelButtonProps={{ disabled: ocupado }}
           >
             <Tooltip title="Eliminar">
-              <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+              <Button type="text" size="small" danger icon={<DeleteOutlined />} disabled={ocupado} loading={eliminandoId === record.id} />
             </Tooltip>
           </Popconfirm>
         </div>
@@ -168,20 +198,20 @@ const EcommerceAdminCategorias: React.FC = () => {
         <div style={{ padding: '16px 24px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
             <div style={{ flex: 1 }} />
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCrear}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCrear} disabled={ocupado}>
               Nueva Categoría
             </Button>
             <PermissionGate accion="EXPORTAR">
-              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} disabled={ocupado} loading={exportando} />
             </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={cargar} />
+            <Button icon={<ReloadOutlined spin={loading} />} onClick={() => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } cargar(); }} disabled={ocupado} loading={loading} />
           </div>
         </div>
         <Table<AdminCategoriaDTO>
           columns={columns}
           dataSource={data}
           rowKey="id"
-          loading={loading}
+          loading={loading || ocupado}
           size="middle"
           className="paces-border-top paces-list-table"
           rowClassName="paces-row-hover"
@@ -193,23 +223,29 @@ const EcommerceAdminCategorias: React.FC = () => {
         title={editing ? 'Editar Categoría' : 'Nueva Categoría'}
         open={modalOpen}
         onOk={handleGuardar}
-        onCancel={() => setModalOpen(false)}
+        onCancel={() => { if (operacionRef.current || guardando) return; setModalOpen(false); }}
         okText="Guardar"
         cancelText="Cancelar"
+        confirmLoading={guardando}
+        okButtonProps={{ disabled: guardando }}
+        cancelButtonProps={{ disabled: guardando }}
+        closable={!guardando}
+        maskClosable={!guardando}
+        keyboard={!guardando}
       >
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" disabled={guardando}>
           <Form.Item name="nombre" label="Nombre" rules={[{ required: true, message: 'Requerido' }]}>
-            <Input />
+            <Input disabled={guardando} />
           </Form.Item>
           <Form.Item name="descripcion" label="Descripción">
-            <Input.TextArea rows={2} />
+            <Input.TextArea rows={2} disabled={guardando} />
           </Form.Item>
           <Form.Item name="orden" label="Orden" rules={[{ required: true, message: 'Requerido' }]}>
-            <InputNumber style={{ width: '100%' }} min={0} />
+            <InputNumber style={{ width: '100%' }} min={0} disabled={guardando} />
           </Form.Item>
           {editing && (
             <Form.Item name="activo" label="Activo" valuePropName="checked">
-              <Switch />
+              <Switch disabled={guardando} />
             </Form.Item>
           )}
         </Form>

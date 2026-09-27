@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo } from 'react';
+﻿import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import { Table, Card, Tag, Space, Button, Typography, Popconfirm, message, Empty, Modal, Alert, Input } from 'antd';
@@ -21,7 +21,11 @@ const ApiTokens: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [revokingId, setRevokingId] = useState<number | null>(null);
+  const [renovandoId, setRenovandoId] = useState<number | null>(null);
+  const [creandoToken, setCreandoToken] = useState(false);
   const [renovarModal, setRenovarModal] = useState<{ open: boolean; token: string; nombre: string }>({ open: false, token: '', nombre: '' });
+  const operacionRef = useRef(false);
+  const ocupado = revokingId !== null || renovandoId !== null || creandoToken;
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['apiTokens'],
@@ -44,6 +48,7 @@ const ApiTokens: React.FC = () => {
   };
 
   const handleExportarExcel = async () => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
     const companyName = await getCompanyName(sucursalActiva);
     const cols = columns.filter((c) => c.key !== 'acciones');
     exportToExcel({
@@ -53,7 +58,8 @@ const ApiTokens: React.FC = () => {
       columnHeaders: cols.map((c) => c.title as string),
       dataRows: filteredData.map((item: any) =>
         cols.map((col) => {
-          const val = item[col.dataIndex as string];
+          const dataIndex = 'dataIndex' in col ? (col as { dataIndex?: string }).dataIndex : undefined;
+          const val = dataIndex ? item[dataIndex] : '';
           return val !== null && val !== undefined ? String(val) : '';
         })
       ),
@@ -61,6 +67,8 @@ const ApiTokens: React.FC = () => {
   };
 
   const handleRevocar = async (id: number) => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
     setRevokingId(id);
     try {
       await apiTokenApi.revocar(id);
@@ -70,6 +78,7 @@ const ApiTokens: React.FC = () => {
       message.error(err?.response?.data?.errorMessage || 'Error al revocar token');
     } finally {
       setRevokingId(null);
+      operacionRef.current = false;
     }
   };
 
@@ -78,6 +87,9 @@ const ApiTokens: React.FC = () => {
   };
 
   const handleRenovar = async (id: number, nombre: string) => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setRenovandoId(id);
     try {
       const result = await apiTokenApi.renovar(id);
       setRenovarModal({ open: true, token: result.token, nombre });
@@ -85,6 +97,9 @@ const ApiTokens: React.FC = () => {
       refetch();
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al renovar token');
+    } finally {
+      setRenovandoId(null);
+      operacionRef.current = false;
     }
   };
 
@@ -166,8 +181,10 @@ const ApiTokens: React.FC = () => {
             description="¿Estás seguro de revocar este token? Los servicios que lo usen dejarán de funcionar."
             okText="Revocar"
             cancelText="Cancelar"
-            okButtonProps={{ danger: true }}
+            okButtonProps={{ danger: true, disabled: ocupado, loading: revokingId === record.id }}
+            cancelButtonProps={{ disabled: ocupado }}
             onConfirm={() => handleRevocar(record.id)}
+            onCancel={() => {}}
           >
             <Button
               type="text"
@@ -175,12 +192,13 @@ const ApiTokens: React.FC = () => {
               danger
               icon={<StopOutlined />}
               loading={revokingId === record.id}
+              disabled={ocupado}
             >
               Revocar
             </Button>
           </Popconfirm>
         ) : (
-          <Button type="text" size="small" icon={<KeyOutlined />} onClick={() => handleRenovar(record.id, record.nombre)}>
+          <Button type="text" size="small" icon={<KeyOutlined />} disabled={ocupado} loading={renovandoId === record.id} onClick={() => handleRenovar(record.id, record.nombre)}>
             Renovar
           </Button>
         ),
@@ -212,15 +230,16 @@ const ApiTokens: React.FC = () => {
           pageSize={25}
           onPageSizeChange={(v) => {}}
           ocultarPageSize
-          onNuevo={() => setModalOpen(true)}
-          onReload={() => refetch()}
+          onNuevo={() => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } setModalOpen(true); }}
+          onReload={() => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } refetch(); }}
           onExportarExcel={handleExportarExcel}
+          deshabilitado={ocupado}
         />
         <Table<AuthApiTokenListadoDTO>
           columns={columns}
           dataSource={filteredData}
           rowKey="id"
-          loading={isLoading}
+          loading={isLoading || ocupado}
           scroll={{ x: 850 }}
           size="middle"
           rowClassName="paces-row-hover"
@@ -236,8 +255,9 @@ const ApiTokens: React.FC = () => {
 
       <ApiTokenCrearModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { if (operacionRef.current || ocupado) return; setModalOpen(false); }}
         onCreated={handleTokenCreated}
+        onGenerando={setCreandoToken}
       />
 
       <Modal

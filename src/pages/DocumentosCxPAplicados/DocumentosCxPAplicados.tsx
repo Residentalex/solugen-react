@@ -11,6 +11,7 @@ import { useDocumentosReporte } from '../../hooks/useDocumentosReporte';
 import { documentosCxPReporteApi } from '../../api/documentosCxPReporteApi';
 import type { MovimientoVistaDTO } from '../../types/entradaAlmacen';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import PermissionGate from '../../components/PermissionGate';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
@@ -82,7 +83,7 @@ const columnas: ColumnsType<MovimientoVistaDTO> = [
   {
     title: 'Fecha Aplicado',
     width: 130,
-    render: (_, record) => (record.fechaAccion ? formatDateRaw(record.fechaAccion) : '-'),
+    render: (_, record) => (record.fechaAccion ? <FechaColumnCell fecha={record.fechaAccion} /> : '-'),
   },
   {
     title: 'Aplicado por',

@@ -11,6 +11,7 @@ import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats'
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useAuthStore } from '../../stores/authStore';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import type { TransaccionVistaDTO } from '../../types/transaccion';
 import type { DocumentoDTO } from '../../types/documento';
 
@@ -113,7 +114,7 @@ const AsientosContables: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (v: string) => <Text>{formatDateRaw(v)}</Text>,
+      render: (v: string) => <FechaColumnCell fecha={v} />,
     },
     {
       title: 'Entidad',
@@ -178,7 +179,7 @@ const AsientosContables: React.FC = () => {
             placeholder="Tipo Documento"
             allowClear
             showSearch
-            style={{ minWidth: 250 }}
+            style={{ minWidth: 150 }}
             value={tipoDoc}
             onChange={(val) => { actions.handleSetTipoDoc(val); }}
             options={documentos.map((d) => ({ value: d.codigo, label: `${d.codigo} - ${toTitleCase(d.nombre || '')}` }))}
@@ -204,7 +205,7 @@ const AsientosContables: React.FC = () => {
         showEditar: true,
         editarDisabled: !state.selectedRow,
         onEditar: () => navigate(`/FAsientoContable/${state.selectedRow!.id}/editar`),
-        showClonar: true,
+        showClonar: false,
         clonarDisabled: !state.selectedRow,
         onClonar: handleClonar,
       }}

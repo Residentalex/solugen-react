@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   Card,
   Row,
@@ -13,6 +13,7 @@ import {
   Modal,
   Spin,
   Empty,
+  theme,
 } from 'antd';
 import {
   FileDoneOutlined,
@@ -28,6 +29,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useUIStore } from '../../stores/uiStore';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { useAuthStore } from '../../stores/authStore';
 import PermissionGate from '../../components/PermissionGate';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
@@ -64,6 +66,7 @@ function toTitleCase(str?: string): string {
 }
 
 const CFacturasElectronicas: React.FC = () => {
+  const { token } = theme.useToken();
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
@@ -83,6 +86,28 @@ const CFacturasElectronicas: React.FC = () => {
   const [tamanoPagina, setTamanoPagina] = useState(25);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Bloqueo global de acciones masivas: Enviar, Reasignar y Marcar nunca coexisten
+  const [procesando, setProcesando] = useState(false);
+  // Ref sincronica: el state es asincrono y un doble clic rapido lo elude
+  const procesandoRef = useRef(false);
+
+  const iniciarProcesamiento = useCallback((): boolean => {
+    if (procesandoRef.current) return false;
+    procesandoRef.current = true;
+    setProcesando(true);
+    return true;
+  }, []);
+
+  const finalizarProcesamiento = useCallback(() => {
+    procesandoRef.current = false;
+    setProcesando(false);
+  }, []);
+
+  const handleSearch = useCallback((value: string) => {
+    setSearchTerm(value);
+    setPagina(1);
+  }, []);
 
   const cargarDashboard = useCallback(async () => {
     const desde = fechaRango[0];
@@ -158,12 +183,14 @@ const CFacturasElectronicas: React.FC = () => {
   const handleEnviar = useCallback(async (ids: React.Key[]) => {
     const items = getSelectedItems(ids);
     if (items.length === 0) return;
+    if (!iniciarProcesamiento()) return;
 
     Modal.confirm({
       title: 'Reenviar a DGII',
       content: `¿Está seguro que desea reenviar ${items.length} comprobante(s)?`,
       okText: 'Sí, enviar',
       cancelText: 'Cancelar',
+      onCancel: finalizarProcesamiento,
       onOk: async () => {
         const errores: string[] = [];
         const key = 'envio';
@@ -206,91 +233,104 @@ const CFacturasElectronicas: React.FC = () => {
           }
           setSelectedRowKeys([]);
           cargarTabla(1, tamanoPagina);
+          finalizarProcesamiento();
         }
       },
     });
-  }, [pendientes, cargarTabla, tamanoPagina]);
+  }, [pendientes, cargarTabla, tamanoPagina, iniciarProcesamiento, finalizarProcesamiento]);
 
   const handleReasignar = useCallback(async (ids: React.Key[]) => {
     const items = getSelectedItems(ids);
     if (items.length === 0) return;
+    if (!iniciarProcesamiento()) return;
 
     Modal.confirm({
       title: 'Reasignar NCF',
       content: `¿Está seguro que desea reasignar NCF a ${items.length} comprobante(s)?`,
       okText: 'Sí, reasignar',
       cancelText: 'Cancelar',
+      onCancel: finalizarProcesamiento,
       onOk: async () => {
-        const errores: string[] = [];
-        const key = 'reasignar';
-        const metodoCache = new Map<number, number>();
+        try {
+          const errores: string[] = [];
+          const key = 'reasignar';
+          const metodoCache = new Map<number, number>();
 
-        message.loading({ content: `Reasignando 0 / ${items.length}...`, key, duration: 0 });
-        let completados = 0;
+          message.loading({ content: `Reasignando 0 / ${items.length}...`, key, duration: 0 });
+          let completados = 0;
 
-        for (const item of items) {
-          try {
-            if (!metodoCache.has(item.sucursal)) {
-              const metodo = await dgiiApi.obtenerMetodoFacturacion(item.sucursal);
-              metodoCache.set(item.sucursal, metodo);
+          for (const item of items) {
+            try {
+              if (!metodoCache.has(item.sucursal)) {
+                const metodo = await dgiiApi.obtenerMetodoFacturacion(item.sucursal);
+                metodoCache.set(item.sucursal, metodo);
+              }
+              const tipoNCF = determinarTipoNCF(item, metodoCache.get(item.sucursal)!);
+              await dgiiApi.reasignarNCF(item.sucursal, tipoNCF, item.transaccionID);
+              completados++;
+              message.loading({ content: `Reasignando ${completados} / ${items.length}...`, key, duration: 0 });
+            } catch (err: any) {
+              errores.push(`ID ${item.transaccionID}: ${err?.message || err}`);
             }
-            const tipoNCF = determinarTipoNCF(item, metodoCache.get(item.sucursal)!);
-            await dgiiApi.reasignarNCF(item.sucursal, tipoNCF, item.transaccionID);
-            completados++;
-            message.loading({ content: `Reasignando ${completados} / ${items.length}...`, key, duration: 0 });
-          } catch (err: any) {
-            errores.push(`ID ${item.transaccionID}: ${err?.message || err}`);
           }
-        }
 
-        if (errores.length > 0) {
-          const msj = `Se produjeron ${errores.length} errores:\n${errores.slice(0, 10).join('\n')}${errores.length > 10 ? '\n... (más errores)' : ''}`;
-          message.error({ content: msj, key, duration: 6 });
-        } else {
-          message.success({ content: `${items.length} NCF reasignado(s) correctamente`, key, duration: 3 });
+          if (errores.length > 0) {
+            const msj = `Se produjeron ${errores.length} errores:\n${errores.slice(0, 10).join('\n')}${errores.length > 10 ? '\n... (más errores)' : ''}`;
+            message.error({ content: msj, key, duration: 6 });
+          } else {
+            message.success({ content: `${items.length} NCF reasignado(s) correctamente`, key, duration: 3 });
+          }
+          setSelectedRowKeys([]);
+          cargarTabla(1, tamanoPagina);
+        } finally {
+          finalizarProcesamiento();
         }
-        setSelectedRowKeys([]);
-        cargarTabla(1, tamanoPagina);
       },
     });
-  }, [pendientes, cargarTabla, tamanoPagina]);
+  }, [pendientes, cargarTabla, tamanoPagina, iniciarProcesamiento, finalizarProcesamiento]);
 
   const handleMarcarEnviado = useCallback(async (ids: React.Key[]) => {
     const items = getSelectedItems(ids);
     if (items.length === 0) return;
+    if (!iniciarProcesamiento()) return;
 
     Modal.confirm({
       title: 'Marcar como Enviado',
       content: `¿Está seguro que desea marcar como enviado ${items.length} comprobante(s)?`,
       okText: 'Sí, marcar',
       cancelText: 'Cancelar',
+      onCancel: finalizarProcesamiento,
       onOk: async () => {
-        const errores: string[] = [];
-        const key = 'marcar';
-        message.loading({ content: `Marcando 0 / ${items.length}...`, key, duration: 0 });
-        let completados = 0;
+        try {
+          const errores: string[] = [];
+          const key = 'marcar';
+          message.loading({ content: `Marcando 0 / ${items.length}...`, key, duration: 0 });
+          let completados = 0;
 
-        for (const item of items) {
-          try {
-            await dgiiApi.marcarEnviado(item.sucursal, item.transaccionID);
-            completados++;
-            message.loading({ content: `Marcando ${completados} / ${items.length}...`, key, duration: 0 });
-          } catch (err: any) {
-            errores.push(`ID ${item.transaccionID}: ${err?.message || err}`);
+          for (const item of items) {
+            try {
+              await dgiiApi.marcarEnviado(item.sucursal, item.transaccionID);
+              completados++;
+              message.loading({ content: `Marcando ${completados} / ${items.length}...`, key, duration: 0 });
+            } catch (err: any) {
+              errores.push(`ID ${item.transaccionID}: ${err?.message || err}`);
+            }
           }
-        }
 
-        if (errores.length > 0) {
-          const msj = `Se produjeron ${errores.length} errores:\n${errores.slice(0, 10).join('\n')}${errores.length > 10 ? '\n... (más errores)' : ''}`;
-          message.error({ content: msj, key, duration: 6 });
-        } else {
-          message.success({ content: `${items.length} comprobante(s) marcado(s) como enviado(s)`, key, duration: 3 });
+          if (errores.length > 0) {
+            const msj = `Se produjeron ${errores.length} errores:\n${errores.slice(0, 10).join('\n')}${errores.length > 10 ? '\n... (más errores)' : ''}`;
+            message.error({ content: msj, key, duration: 6 });
+          } else {
+            message.success({ content: `${items.length} comprobante(s) marcado(s) como enviado(s)`, key, duration: 3 });
+          }
+          setSelectedRowKeys([]);
+          cargarTabla(1, tamanoPagina);
+        } finally {
+          finalizarProcesamiento();
         }
-        setSelectedRowKeys([]);
-        cargarTabla(1, tamanoPagina);
       },
     });
-  }, [pendientes, cargarTabla, tamanoPagina]);
+  }, [pendientes, cargarTabla, tamanoPagina, iniciarProcesamiento, finalizarProcesamiento]);
 
   const handleExportarExcel = async () => {
     const sucursalActiva = useAuthStore.getState().sucursalActiva;
@@ -474,7 +514,7 @@ const CFacturasElectronicas: React.FC = () => {
 
   const columns = useMemo(() => {
     const base: any[] = [
-      { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => v?.split('T')[0] },
+      { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => <FechaColumnCell fecha={v} /> },
       { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 180 },
       { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 150 },
       { title: 'Cliente', dataIndex: 'cliente', key: 'cliente', ellipsis: true, render: (v: string) => toTitleCase(v) },
@@ -509,17 +549,17 @@ const CFacturasElectronicas: React.FC = () => {
     return base;
   }, [vista]);
 
-  const statCardStyle = (color: string) => ({
+  const statCardStyle = (fondo: string) => ({
     borderRadius: 12,
-    background: `linear-gradient(135deg, ${color}15 0%, ${color}05 100%)`,
-    border: `1px solid ${color}30`,
+    background: `linear-gradient(135deg, ${fondo} 0%, ${token.colorBgContainer} 100%)`,
+    border: `1px solid ${token.colorBorderSecondary}`,
   });
 
   const statIconStyle = (color: string) => ({
     width: 48,
     height: 48,
     borderRadius: 12,
-    background: `linear-gradient(135deg, ${color}, ${color}cc)`,
+    background: color,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -532,6 +572,8 @@ const CFacturasElectronicas: React.FC = () => {
     fontSize: 24,
     lineHeight: 1.2,
   });
+
+  const COLOR_ICONO = token.colorTextLightSolid;
 
   const handleRangoChange = (vals: any) => {
     if (vals && vals[0] && vals[1]) {
@@ -571,40 +613,40 @@ const CFacturasElectronicas: React.FC = () => {
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={12} lg={6}>
-          <Card style={statCardStyle('#34c38f')} styles={{ body: { padding: '20px 24px' } }}>
+          <Card style={statCardStyle(token.colorSuccessBg)} styles={{ body: { padding: '20px 24px' } }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={statIconStyle('#34c38f')}>
-                <FileDoneOutlined style={{ fontSize: 22, color: '#fff' }} />
+              <div style={statIconStyle(token.colorSuccess)}>
+                <FileDoneOutlined style={{ fontSize: 22, color: COLOR_ICONO }} />
               </div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, marginBottom: 2, whiteSpace: 'nowrap' }} className="paces-text-light">Total Emitidos</div>
-                <div style={statValueStyle('#34c38f')}>{totalEmitidos.toLocaleString()}</div>
+                <div style={statValueStyle(token.colorSuccess)}>{totalEmitidos.toLocaleString()}</div>
               </div>
             </div>
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card style={statCardStyle('#f46a6a')} styles={{ body: { padding: '20px 24px' } }}>
+          <Card style={statCardStyle(token.colorErrorBg)} styles={{ body: { padding: '20px 24px' } }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={statIconStyle('#f46a6a')}>
-                <FileSyncOutlined style={{ fontSize: 22, color: '#fff' }} />
+              <div style={statIconStyle(token.colorError)}>
+                <FileSyncOutlined style={{ fontSize: 22, color: COLOR_ICONO }} />
               </div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, marginBottom: 2, whiteSpace: 'nowrap' }} className="paces-text-light">Total Pendientes</div>
-                <div style={statValueStyle('#f46a6a')}>{totalPendientes.toLocaleString()}</div>
+                <div style={statValueStyle(token.colorError)}>{totalPendientes.toLocaleString()}</div>
               </div>
             </div>
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card style={statCardStyle('#6f42c1')} styles={{ body: { padding: '20px 24px' } }}>
+          <Card style={statCardStyle(token.colorPrimaryBg)} styles={{ body: { padding: '20px 24px' } }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={statIconStyle('#6f42c1')}>
-                <DollarOutlined style={{ fontSize: 22, color: '#fff' }} />
+              <div style={statIconStyle(token.colorPrimary)}>
+                <DollarOutlined style={{ fontSize: 22, color: COLOR_ICONO }} />
               </div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, marginBottom: 2, whiteSpace: 'nowrap' }} className="paces-text-light">Monto Facturado</div>
-                <div style={statValueStyle('#6f42c1')}>
+                <div style={statValueStyle(token.colorPrimary)}>
                   ${montoTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
@@ -612,14 +654,14 @@ const CFacturasElectronicas: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card style={statCardStyle('#f0b345')} styles={{ body: { padding: '20px 24px' } }}>
+          <Card style={statCardStyle(token.colorWarningBg)} styles={{ body: { padding: '20px 24px' } }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={statIconStyle('#f0b345')}>
-                <ShopOutlined style={{ fontSize: 22, color: '#fff' }} />
+              <div style={statIconStyle(token.colorWarning)}>
+                <ShopOutlined style={{ fontSize: 22, color: COLOR_ICONO }} />
               </div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13, marginBottom: 2, whiteSpace: 'nowrap' }} className="paces-text-light">Sucursales</div>
-                <div style={statValueStyle('#f0b345')}>{sucursalesActivas}</div>
+                <div style={statValueStyle(token.colorWarning)}>{sucursalesActivas}</div>
               </div>
             </div>
           </Card>
@@ -645,11 +687,18 @@ const CFacturasElectronicas: React.FC = () => {
         style={{ borderRadius: 12 }}
         styles={{ body: { padding: 0 } }}
       >
-        <Row gutter={[16, 16]}>
-          <Col xs={24}>
-            <Input.Search placeholder="Buscar NCF o Cliente" allowClear onSearch={(value) => { setSearchTerm(value); setPagina(1); }} style={{ width: 400, borderRadius: 8, border: '1px solid #e0e0e0', padding: '6px 12px' }} />
-          </Col>
-        </Row>
+        <div style={{ padding: '16px 24px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <Input.Search
+              placeholder="Buscar NCF, documento o Cliente"
+              allowClear
+              prefix={<SearchOutlined className="paces-text-icon" />}
+              onSearch={handleSearch}
+              style={{ width: '100%', maxWidth: 400 }}
+            />
+            <div style={{ flex: 1 }} />
+          </div>
+        </div>
         {vista === 'pendientes' && selectedRowKeys.length > 0 && (
           <div className="paces-border-bottom-light paces-bg-light-2" style={{
             padding: '10px 16px',
@@ -663,19 +712,19 @@ const CFacturasElectronicas: React.FC = () => {
             <span style={{ fontSize: 13 }} className="paces-text-light">seleccionado(s)</span>
             <div style={{ flex: 1 }} />
             <PermissionGate permisoEspecial="pe_reenviar_DGII">
-              <Button type="primary" size="small" icon={<SendOutlined />}
+              <Button type="primary" size="small" icon={<SendOutlined />} disabled={procesando}
                 onClick={() => handleEnviar(selectedRowKeys)}>
                 Enviar
               </Button>
             </PermissionGate>
             <PermissionGate permisoEspecial="pe_preasignar_ncf">
-              <Button size="small" icon={<SwapOutlined />}
+              <Button size="small" icon={<SwapOutlined />} disabled={procesando}
                 onClick={() => handleReasignar(selectedRowKeys)}>
                 Reasignar
               </Button>
             </PermissionGate>
             <PermissionGate permisoEspecial="pe_marcar_enviado">
-              <Button size="small" icon={<CheckOutlined />}
+              <Button size="small" icon={<CheckOutlined />} disabled={procesando}
                 onClick={() => handleMarcarEnviado(selectedRowKeys)}>
                 Marcar como Enviado
               </Button>
@@ -686,7 +735,8 @@ const CFacturasElectronicas: React.FC = () => {
           rowSelection={{
             type: 'checkbox',
             selectedRowKeys,
-            onChange: (keys) => setSelectedRowKeys(keys),
+            getCheckboxProps: () => ({ disabled: procesando }),
+            onChange: (keys) => { if (procesandoRef.current) return; setSelectedRowKeys(keys); },
           }}
           columns={columns}
           dataSource={filteredData}

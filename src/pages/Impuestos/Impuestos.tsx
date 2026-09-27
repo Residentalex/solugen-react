@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Table, message, Card, Button, Modal, Form, Input, InputNumber, Select, Switch, Tag, Typography, Alert, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -19,10 +19,10 @@ import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const TIPO_IMPUESTO_LABEL: Record<string, { label: string }> = {
-  I: { label: 'Impuesto', color: 'blue' },
-  L: { label: 'Liquidación', color: 'orange' },
-  V: { label: 'Informativo', color: 'purple' },
-  R: { label: 'Retención', color: 'red' },
+  I: { label: 'Impuesto' },
+  L: { label: 'Liquidación' },
+  V: { label: 'Informativo' },
+  R: { label: 'Retención' },
 };
 
 const AMBITO_LABEL: Record<string, string> = {
@@ -51,6 +51,7 @@ const Impuestos: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<ImpuestoDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const guardandoRef = useRef(false);
   const [cuentaModalOpen, setCuentaModalOpen] = useState(false);
   const [cuentaDisplay, setCuentaDisplay] = useState('');
   const [form] = Form.useForm();
@@ -105,14 +106,26 @@ const Impuestos: React.FC = () => {
   };
   const abrirNuevo = () => {
     if (!puedeCrear) return;
+    if (guardandoRef.current || guardando) return;
     setEditando(null);
     setModalVisible(true);
   };
 
   const abrirEditar = (item: ImpuestoDTO) => {
     if (!puedeEditar) return;
+    if (guardandoRef.current || guardando) return;
     setEditando(item);
     setModalVisible(true);
+  };
+
+  const handleCerrarModal = () => {
+    if (guardandoRef.current || guardando) return;
+    setModalVisible(false);
+  };
+
+  const abrirBusquedaCuenta = () => {
+    if (guardandoRef.current || guardando) return;
+    setCuentaModalOpen(true);
   };
 
   useEffect(() => {
@@ -146,10 +159,12 @@ const Impuestos: React.FC = () => {
   }, [modalVisible, editando, form]);
 
   const guardar = async () => {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
+    setGuardando(true);
     try {
       const values = await form.validateFields();
       if (sucursalActiva === undefined) return;
-      setGuardando(true);
       const payload = { ...values };
       if (editando) {
         await impuestoApi.actualizar(sucursalActiva, editando.idExterno, payload);
@@ -164,6 +179,7 @@ const Impuestos: React.FC = () => {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar impuesto');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   };
@@ -256,7 +272,7 @@ const Impuestos: React.FC = () => {
         <CatalogoListadoToolbar
           onSearch={handleSearch}
           pageSize={pageSize}
-          onPageSizeChange={(v) => { setPageSize(v); }}
+          onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onNuevo={abrirNuevo}
           onReload={() => refetch()}
           onExportarExcel={handleExportarExcel}
@@ -290,14 +306,19 @@ const Impuestos: React.FC = () => {
       <Modal
         title={editando ? 'Editar Impuesto' : 'Nuevo Impuesto'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={handleCerrarModal}
         onOk={guardar}
         confirmLoading={guardando}
+        okButtonProps={{ loading: guardando, disabled: guardando }}
+        cancelButtonProps={{ disabled: guardando }}
+        maskClosable={!guardando}
+        keyboard={!guardando}
+        closable={!guardando}
         width={600}
         okText="Guardar"
         cancelText="Cancelar"
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }} disabled={guardando}>
           <Form.Item
             name="codigo"
             label="Código"
@@ -372,8 +393,8 @@ const Impuestos: React.FC = () => {
               placeholder=" "
               readOnly
               value={cuentaDisplay}
-              onClick={() => setCuentaModalOpen(true)}
-              suffix={<SearchOutlined style={{ cursor: 'pointer' }} onClick={() => setCuentaModalOpen(true)} />}
+              onClick={abrirBusquedaCuenta}
+              suffix={<SearchOutlined style={{ cursor: 'pointer' }} onClick={abrirBusquedaCuenta} />}
             />
           </Form.Item>
           <Form.Item
@@ -390,6 +411,7 @@ const Impuestos: React.FC = () => {
           open={cuentaModalOpen}
           onClose={() => setCuentaModalOpen(false)}
           onSelect={(cuenta) => {
+            if (guardandoRef.current || guardando) return;
             form.setFieldsValue({ noCuenta: cuenta.noCuenta });
             setCuentaDisplay(`${cuenta.noCuenta} - ${cuenta.nombre}`);
           }}

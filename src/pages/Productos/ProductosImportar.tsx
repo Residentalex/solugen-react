@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Card, Button, Upload, Table, Steps, message, Typography, Space, Tag, Result, Alert, Spin,
@@ -24,6 +24,7 @@ const ProductosImportar: React.FC = () => {
   const [resultado, setResultado] = useState<ResultadoImportacionDTO | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [loadingError, setLoadingError] = useState(false);
+  const importandoRef = useRef(false);
 
   const handleRefresh = () => {
     setLoadingError(false);
@@ -48,6 +49,7 @@ const ProductosImportar: React.FC = () => {
   };
 
   const handleDescargarPlantilla = async () => {
+    if (importandoRef.current) return;
     try {
       const blob = await productoApi.descargarPlantilla(sucursalProductos);
       const url = window.URL.createObjectURL(blob);
@@ -68,6 +70,7 @@ const ProductosImportar: React.FC = () => {
     accept: '.xlsx',
     showUploadList: true,
     beforeUpload: (file) => {
+      if (importandoRef.current) return Upload.LIST_IGNORE;
       const isXlsx = file.name.endsWith('.xlsx');
       if (!isXlsx) {
         message.error('Solo se permiten archivos .xlsx');
@@ -78,13 +81,15 @@ const ProductosImportar: React.FC = () => {
       return false; // Prevent auto upload
     },
     onRemove: () => {
+      if (importandoRef.current) return false;
       setFile(null);
       setStep(0);
     },
   };
 
   const handleImportar = async () => {
-    if (!file) return;
+    if (!file || importandoRef.current) return;
+    importandoRef.current = true;
     setImportando(true);
     setErrorMsg('');
     try {
@@ -95,11 +100,18 @@ const ProductosImportar: React.FC = () => {
       setErrorMsg(err?.response?.data?.errorMessage || 'Error al importar');
       setStep(2);
     } finally {
+      importandoRef.current = false;
       setImportando(false);
     }
   };
 
+  const handleVolver = () => {
+    if (importandoRef.current) return;
+    navigate('/MProducto');
+  };
+
   const resetear = () => {
+    if (importandoRef.current) return;
     setFile(null);
     setResultado(null);
     setErrorMsg('');
@@ -115,12 +127,12 @@ const ProductosImportar: React.FC = () => {
     <div>
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/MProducto')}>
+        <Button icon={<ArrowLeftOutlined />} onClick={handleVolver} disabled={importando}>
           Volver
         </Button>
         <div style={{ flex: 1 }} />
         {step > 0 && (
-          <Button onClick={resetear}>Nueva Importación</Button>
+          <Button onClick={resetear} disabled={importando}>Nueva Importación</Button>
         )}
       </div>
 
@@ -141,12 +153,16 @@ const ProductosImportar: React.FC = () => {
       <Card className="paces-card-erp" style={{ borderRadius: 8, marginBottom: 16 }}>
         <div style={{ padding: '16px 24px' }}>
           <Steps
-            current={step}
+            current={importando ? 2 : step}
             size="small"
             items={[
-              { title: 'Descargar Plantilla', content: 'Obtén el formato' },
-              { title: 'Subir Archivo', content: 'Selecciona tu Excel' },
-              { title: 'Resultado', content: 'Revisa la importación' },
+              { title: 'Descargar Plantilla', content: 'Obtén el formato', status: importando ? 'finish' : 'wait' },
+              { title: 'Subir Archivo', content: 'Selecciona tu Excel', status: importando ? 'finish' : 'wait' },
+              {
+                title: 'Resultado',
+                content: importando ? 'Importando archivo…' : 'Revisa la importación',
+                status: importando ? 'process' : 'wait',
+              },
             ]}
           />
         </div>
@@ -167,6 +183,7 @@ const ProductosImportar: React.FC = () => {
                 icon={<DownloadOutlined />}
                 size="large"
                 block
+                disabled={importando}
                 onClick={handleDescargarPlantilla}
               >
                 Descargar Plantilla Excel
@@ -218,9 +235,22 @@ const ProductosImportar: React.FC = () => {
           <div style={{ padding: '40px 24px' }}>
             <Spin size="large" />
             <div style={{ marginTop: 16 }}>
-              <Title level={4}>Procesando importación...</Title>
+              <Title level={4}>Importando archivo…</Title>
               <Text type="secondary">Esto puede tomar unos segundos. Por favor espere.</Text>
             </div>
+            <Alert
+              type="info"
+              showIcon
+              icon={<Spin size="small" />}
+              style={{ marginTop: 24, textAlign: 'left' }}
+              message="Procesando importación"
+              description={
+                <Space orientation="vertical" size={0}>
+                  <Text strong>{file?.name}</Text>
+                  <Text type="secondary">{file ? `${(file.size / 1024).toFixed(1)} KB` : '-'}</Text>
+                </Space>
+              }
+            />
           </div>
         </Card>
       )}

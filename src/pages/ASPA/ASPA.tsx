@@ -13,6 +13,7 @@ import { documentosReporteApi } from '../../api/documentosReporteApi';
 import type { MovimientoVistaDTO } from '../../types/entradaAlmacen';
 import type { TransaccionBancariaVistaDTO } from '../../types/transaccion';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import PermissionGate from '../../components/PermissionGate';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
@@ -78,7 +79,7 @@ const columnas: ColumnsType<TransaccionBancariaVistaDTO> = [
   {
     title: 'Fecha Acción',
     width: 130,
-    render: (_, record) => (record.fechaAccion ? formatDateRaw(record.fechaAccion) : '-'),
+    render: (_, record) => (record.fechaAccion ? <FechaColumnCell fecha={record.fechaAccion} /> : '-'),
   },
   {
     title: 'Autorizado por',

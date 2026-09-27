@@ -4,6 +4,7 @@ import { Alert, Table, Card, Button, Modal, Descriptions, Typography, Tag, Divid
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { ofertaApi } from '../../api/ofertaApi';
 import type { OfertaDTO, DetalleOfertaDTO } from '../../types/oferta';
 import { formatCurrency } from '../../utils/formats';
@@ -143,14 +144,14 @@ const Ofertas: React.FC = () => {
       dataIndex: 'fechaInicio',
       key: 'fechaInicio',
       width: 140,
-      render: (val: string) => <Text>{formatDate(val)}</Text>,
+      render: (val: string) => <FechaColumnCell fecha={val} />,
     },
     {
       title: 'Fecha Final',
       dataIndex: 'fechaFinal',
       key: 'fechaFinal',
       width: 140,
-      render: (val: string) => <Text>{formatDate(val)}</Text>,
+      render: (val: string) => <FechaColumnCell fecha={val} />,
     },
     {
       title: 'Vigencia',

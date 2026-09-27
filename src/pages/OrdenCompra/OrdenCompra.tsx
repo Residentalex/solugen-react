@@ -9,6 +9,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { Sucursal } from '../../types/auth';
 import type { OrdenCompraVistaDTO } from '../../types/entradaAlmacen';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
@@ -83,7 +84,7 @@ const OrdenCompra: React.FC = () => {
       dataIndex: 'fechaDocumento',
       key: 'fechaDocumento',
       width: 110,
-      render: (f: string) => <Text>{formatDateRaw(f)}</Text>,
+      render: (f: string) => <FechaColumnCell fecha={f} />,
     },
     {
       title: 'Suplidor',

@@ -1,13 +1,61 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Table, Card, Button, Modal, Form, Select, Input, Switch, Tag, Tooltip, Alert,
-  message, Empty, Space, Row, Col,
+  message, Empty, Space, Row, Col, Divider, Typography, Badge,
 } from 'antd';
-import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, SafetyOutlined, TeamOutlined, MailOutlined, BellOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
 import { notificacionesApi } from '../../api/notificacionesApi';
 import type { NotificacionConfig, NotificacionConfigDestino } from '../../types/notificaciones';
+
+const { Text } = Typography;
+
+// Descripciones legibles para eventos técnicos
+const EVENTOS_DESCRIPCIONES: Record<string, string> = {
+  StockBajo: 'Stock del artículo por debajo del mínimo',
+  StockCritico: 'Stock del artículo en nivel crítico',
+  VencimientoProximo: 'Artículo con vencimiento cercano',
+  CompraRecibida: 'Orden de compra recibida',
+  FacturaPendiente: 'Factura pendiente de pago',
+  FacturaVencida: 'Factura con fecha de vencimiento alcanzada',
+  PagoRecibido: 'Pago recibido del proveedor',
+  NotaDebitoCreada: 'Nota de débito creada',
+  NotaCreditoCreada: 'Nota de crédito creada',
+  DevolucionProcesada: 'Devolución procesada',
+  TransferenciaCreada: 'Transferencia de almacen creada',
+  AdjusteInventario: 'Ajuste de inventario registrado',
+  NuevoUsuario: 'Nuevo usuario registrado',
+  CambioRol: 'Cambio de rol de usuario',
+  AccesoDenegado: 'Intento de acceso denegado',
+  ErrorSistema: 'Error del sistema detectado',
+  BackupCompletado: 'Copia de seguridad completada',
+  ReporteGenerado: 'Reporte disponible',
+  FacturaCreada: 'Factura creada',
+  PagoAplicado: 'Pago aplicado a documento',
+  DocumentoRechazado: 'Documento rechazado',
+  DocumentoAprobado: 'Documento aprobado',
+  SesionExpiro: 'Sesión de usuario expirada',
+  NuevoRegistro: 'Nuevo registro creado en el sistema',
+};
+
+// Helper para obtener descripción del evento
+const getEventDescription = (evento: string): string => {
+  return EVENTOS_DESCRIPCIONES[evento] || 'Eventos del sistema';
+};
+
+// Helper para determinar el canal basado en el tipo
+const getCanalFromTipo = (tipo: string): string => {
+  const canalMap: Record<string, string> = {
+    Alerta: 'Sistema',
+    Info: 'Sistema',
+    Error: 'Sistema',
+    Advertencia: 'Sistema',
+    Exito: 'Sistema',
+    Ticket: 'Soporte',
+  };
+  return canalMap[tipo] || 'Sistema';
+};
 
 const MODULOS_OPCIONES = [
   { label: 'Inventario', value: 'Inventario' },
@@ -40,7 +88,8 @@ const DestinoRow: React.FC<{
   roles: any[];
   onRemove: () => void;
   form: any;
-}> = ({ name, restField, usuarios, roles, onRemove, form }) => {
+  disabled?: boolean;
+}> = ({ name, restField, usuarios, roles, onRemove, form, disabled }) => {
   const destinoTipo = Form.useWatch(['destinos', name, 'destinoTipo'], form);
 
   const opcionesDestino = destinoTipo === 'Rol'
@@ -73,13 +122,13 @@ const DestinoRow: React.FC<{
               (option?.label || '').toLowerCase().includes(input.toLowerCase())
             }
             options={opcionesDestino}
-            notFoundContent={destinoTipo ? 'Sin resultados' : 'Seleccione un tipo primero'}
+            notFoundContent={destinoTipo ? 'Sin resultados' : 'Selecciona un tipo primero'}
             key={destinoTipo || 'empty'}
           />
         </Form.Item>
       </Col>
       <Col span={4}>
-        <Button type="text" danger icon={<DeleteOutlined />} onClick={onRemove} />
+        <Button type="text" danger icon={<DeleteOutlined />} onClick={onRemove} disabled={disabled} />
       </Col>
     </Row>
   );
@@ -174,6 +223,7 @@ const Configuracion: React.FC = () => {
   };
 
   const handleGuardar = async () => {
+    if (guardando) return;
     try {
       const values: ConfiguracionFormValues = await form.validateFields();
       setGuardando(true);
@@ -216,20 +266,112 @@ const Configuracion: React.FC = () => {
     return r ? r.nombre : `Rol #${destino.destinoID}`;
   };
 
-  const columns: ColumnsType<NotificacionConfig> = [
+  const buildPayload = (): NotificacionConfig => {
+    const values: ConfiguracionFormValues = form.getFieldsValue();
+    return {
+      configID: editando?.configID || 0,
+      modulo: values.modulo,
+      evento: values.evento,
+      tipo: values.tipo,
+      tituloTemplate: values.tituloTemplate,
+      mensajeTemplate: values.mensajeTemplate,
+      activa: values.activa,
+      fechaCreacion: editando?.fechaCreacion || new Date().toISOString(),
+      destinos: (values.destinos || []).map((d, i) => ({
+        id: editando?.destinos?.[i]?.id || 0,
+        configID: editando?.configID || 0,
+        destinoTipo: d.destinoTipo,
+        destinoID: d.destinoID,
+      })),
+    };
+  };
+
+  // Handler para probar configuración
+  const probarConfiguracion = async () => {
+    try {
+      const payload = buildPayload();
+      const tituloPreview = payload.tituloTemplate || `[${payload.tipo}] ${payload.evento}`;
+      const mensajePreview = payload.mensajeTemplate || `Evento: ${payload.evento} - Módulo: ${payload.modulo}`;
+
+      Modal.info({
+        title: 'Vista previa de la notificación',
+        content: (
+          <div style={{ padding: 8 }}>
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>Título:</Text>
+                <div style={{ fontWeight: 500, marginTop: 4 }}>{tituloPreview}</div>
+              </div>
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>Mensaje:</Text>
+                <div style={{ marginTop: 4 }}>{mensajePreview}</div>
+              </div>
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>Canal:</Text>
+                <Tag style={{ marginLeft: 4, fontSize: 11 }}>{getCanalFromTipo(payload.tipo)}</Tag>
+              </div>
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>Destinatarios:</Text>
+                <div style={{ marginTop: 4 }}>
+                  {(payload.destinos || []).length === 0 ? (
+                    <Text type="warning">Sin destinatarios configurados</Text>
+                  ) : (
+                    <Space wrap size={4}>
+                      {(payload.destinos || []).map((d, i) => (
+                        <Tag key={i} color={d.destinoTipo === 'Usuario' ? 'cyan' : 'purple'} style={{ fontSize: 11 }}>
+                          {getDestinoLabel(d)}
+                        </Tag>
+                      ))}
+                    </Space>
+                  )}
+                </div>
+              </div>
+            </Space>
+          </div>
+        ),
+        okText: 'Entendido',
+        width: 500,
+      });
+    } catch (err: any) {
+      if (err?.errorFields) {
+        message.error('Complete los campos requeridos para probar la configuración');
+      }
+    }
+  };
+
+  const columns = useMemo<ColumnsType<NotificacionConfig>>(() => [
     {
-      title: 'Módulo',
-      dataIndex: 'modulo',
-      key: 'modulo',
-      width: 150,
-      render: (text: string) => <Tag color="blue" style={{ fontSize: 11 }}>{text}</Tag>,
+      title: 'Canal',
+      dataIndex: 'modulo', // Usaremos módulo como proxy para canal
+      key: 'canal',
+      width: 120,
+      render: (text: string, record: NotificacionConfig) => {
+        const canal = getCanalFromTipo(record.tipo);
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Badge color="blue" />
+            <span style={{ fontWeight: 500, fontSize: 12 }}>{canal}</span>
+          </div>
+        );
+      },
     },
     {
       title: 'Evento',
       dataIndex: 'evento',
       key: 'evento',
-      width: 160,
+      width: 180,
       ellipsis: true,
+      render: (text: string, record: NotificacionConfig) => {
+        const descripcion = getEventDescription(text);
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: 12, fontWeight: 500 }}>{text}</span>
+            <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.4 }}>
+              {descripcion}
+            </Text>
+          </div>
+        );
+      },
     },
     {
       title: 'Tipo',
@@ -249,13 +391,13 @@ const Configuracion: React.FC = () => {
       key: 'activa',
       width: 80,
       render: (activa: boolean) => (
-        <Tag color={activa ? 'green' : 'default'}>{activa ? 'Sí' : 'No'}</Tag>
+        <Tag color={activa ? 'green' : 'volcano'}>{activa ? 'Sí' : 'No'}</Tag>
       ),
     },
     {
       title: 'Destinatarios',
       key: 'destinos',
-      width: 250,
+      width: 220,
       ellipsis: true,
       render: (_, record) => (
         <Space wrap size={4}>
@@ -283,7 +425,7 @@ const Configuracion: React.FC = () => {
         </Tooltip>
       ),
     },
-  ];
+  ], [usuarios, roles, editando]);
 
   return (
     <>
@@ -312,6 +454,10 @@ const Configuracion: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
             <div style={{ flex: 1 }} />
             <Button icon={<ReloadOutlined />} onClick={cargarConfigs} />
+            <Divider style={{ margin: '0 8' }} />
+            <Button type="text" size="small" icon={<PlayCircleOutlined />} onClick={probarConfiguracion} title="Probar configuración">
+              Probar
+            </Button>
           </div>
         </div>
         <Table<NotificacionConfig>
@@ -329,14 +475,15 @@ const Configuracion: React.FC = () => {
       <Modal
         title={editando ? 'Editar Regla de Notificación' : 'Nueva Regla de Notificación'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => { if (!guardando) setModalVisible(false); }}
         onOk={handleGuardar}
         confirmLoading={guardando}
         okText="Guardar"
         cancelText="Cancelar"
+        cancelButtonProps={{ disabled: guardando }}
         width={700}
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }} disabled={guardando}>
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item name="modulo" label="Módulo" rules={[{ required: true, message: 'Obligatorio' }]}>
@@ -372,37 +519,45 @@ const Configuracion: React.FC = () => {
             <Switch checkedChildren="Sí" unCheckedChildren="No" />
           </Form.Item>
 
-          {/* Destinatarios */}
-          <Form.List name="destinos">
-            {(fields, { add, remove }) => (
-              <div style={{ marginTop: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>Destinatarios</span>
-                  <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => add({ destinoTipo: 'Usuario', destinoID: undefined })}>
-                    Agregar destinatario
-                  </Button>
-                </div>
+          {/* Divisiones visuales para el formulario */}
+          <Divider style={{ margin: '16px 0' }} />
 
-                {fields.length === 0 && (
-                  <div className="paces-text-muted" style={{ fontSize: 13, padding: '8px 0' }}>
-                    No hay destinatarios configurados
+          {/* Sección: Destinatarios */}
+          <Form.Item name="destinos" label="Destinatarios" rules={[{ required: true, message: 'Obligatorio' }]}>
+            <Form.List name="destinos">
+              {(fields, { add, remove }) => (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>Destinatarios</span>
+                    <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => add({ destinoTipo: 'Usuario', destinoID: undefined })} disabled={guardando}>
+                      Agregar destinatario
+                    </Button>
                   </div>
-                )}
 
-                {fields.map(({ key, name, ...restField }) => (
-                  <DestinoRow
-                    key={key}
-                    name={name}
-                    restField={restField}
-                    usuarios={usuarios}
-                    roles={roles}
-                    onRemove={() => remove(name)}
-                    form={form}
-                  />
-                ))}
-              </div>
-            )}
-          </Form.List>
+                  {fields.length === 0 && (
+                    <div className="paces-text-muted" style={{ fontSize: 13, padding: '8px 0' }}>
+                      No hay destinatarios configurados
+                    </div>
+                  )}
+
+                  {fields.map(({ key, name, ...restField }) => (
+                    <DestinoRow
+                      key={key}
+                      name={name}
+                      restField={restField}
+                      usuarios={usuarios}
+                      roles={roles}
+                      onRemove={() => remove(name)}
+                      form={form}
+                      disabled={guardando}
+                    />
+                  ))}
+                </div>
+              )}
+            </Form.List>
+          </Form.Item>
+
+          <Divider style={{ margin: '16px 0' }} />
         </Form>
       </Modal>
     </>

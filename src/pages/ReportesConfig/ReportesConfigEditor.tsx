@@ -594,6 +594,8 @@ interface ReportesConfigEditorProps {
   onNuevaPlantilla: () => void;
   onAsignarEntdoc: (plantillaId: number, entdocCodigo: string | null) => void;
   onRefresh: () => void;
+  bloqueoExterno?: boolean;
+  asignandoKey?: string | null;
 }
 
 const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({
@@ -602,6 +604,8 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({
   onNuevaPlantilla,
   onAsignarEntdoc,
   onRefresh,
+  bloqueoExterno,
+  asignandoKey,
 }) => {
   const screens = Grid.useBreakpoint();
   const isLarge = screens.xxl === true;
@@ -625,6 +629,7 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({
     migrarConfig(esVSNT_CIERRE ? normalizarConfigVSNT_CIERRE(null) : esVSNT_ANULACION ? normalizarConfigVSNT_ANULACION(null) : esVSNT ? normalizarConfigVSNT(null) : esFRI ? normalizarConfigRI(null) : normalizarConfig(null)));
   const [saving, setSaving] = useState(false);
   const [restableciendo, setRestableciendo] = useState(false);
+  const [probandoPayload, setProbandoPayload] = useState(false);
   const [zonasColapsadas, setZonasColapsadas] = useState<Record<string, boolean>>({});
   const [zonaActivaId, setZonaActivaId] = useState<string | null>(null);
   const [lineaActiva, setLineaActiva] = useState<{ zonaIdx: number; lineaIdx: number } | null>(null);
@@ -653,6 +658,9 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({
   const [modalJsonPayloadOpen, setModalJsonPayloadOpen] = useState(false);
   const [jsonPayloadContent, setJsonPayloadContent] = useState('');
   const [loadingPayload, setLoadingPayload] = useState(false);
+
+  const ocupado = saving || restableciendo || loadingPayload || probandoPayload || (bloqueoExterno ?? false);
+  const ocupadoRef = useRef(false);
 
   const labelsDefault = esVSNT_PLANTILLA ? CAMPOS_TICKET_LABELS_VSNT : esFRI ? CAMPOS_TICKET_LABELS_RI : CAMPOS_TICKET_LABELS;
   const catalogoDTO = esVSNT_PLANTILLA ? CAMPOS_DTO_DISPONIBLES.VSNT : esFRI ? CAMPOS_DTO_DISPONIBLES.FRI : CAMPOS_DTO_DISPONIBLES.FPV;
@@ -788,10 +796,12 @@ const anchoPapelPreview = Math.ceil(
 
   /* ===== Handlers de zona ===== */
   const updZonas = useCallback((fn: (z: ZonaTicketConfig[]) => ZonaTicketConfig[]) => {
+    if (ocupadoRef.current || ocupado) return;
     setConfig((prev) => actualizarOpcion(prev, { zonas: fn([...(prev.zonas || [])]) }));
-  }, []);
+  }, [ocupado]);
 
   const agregarZona = (tipo: TipoZonaTicket) => {
+    if (ocupadoRef.current || ocupado) { message.warning('Espere a que termine la operación en curso'); return; }
     updZonas((z) => {
       const sugeridas = LINEAS_SUGERIDAS[tipo] || [];
       return [...z, { id: `zona_${Date.now()}`, tipo, lineas: [...sugeridas] }];
@@ -799,18 +809,28 @@ const anchoPapelPreview = Math.ceil(
   };
 
   const quitarZona = (idx: number) => {
+    if (ocupadoRef.current || ocupado) { message.warning('Espere a que termine la operación en curso'); return; }
+    ocupadoRef.current = true;
     Modal.confirm({
       title: 'Eliminar zona',
       content: `¿Eliminar la zona "${zonas[idx]?.nombre || LABEL_ZONA[zonas[idx]?.tipo || 'encabezado_reporte']}"?`,
       okText: 'Eliminar', okButtonProps: { danger: true }, cancelText: 'Cancelar',
+      onCancel: () => { ocupadoRef.current = false; },
       onOk: () => {
-        updZonas((z) => { z.splice(idx, 1); return z; });
-        limpiarHuerfanos();
+        ocupadoRef.current = false;
+        try {
+          if (ocupado) return;
+          updZonas((z) => { z.splice(idx, 1); return z; });
+          limpiarHuerfanos();
+        } finally {
+          ocupadoRef.current = false;
+        }
       },
     });
   };
 
   const moverZona = (idx: number, delta: number) => {
+    if (ocupadoRef.current || ocupado) return;
     updZonas((z) => {
       const dest = idx + delta;
       if (dest < 0 || dest >= z.length) return z;
@@ -821,6 +841,7 @@ const anchoPapelPreview = Math.ceil(
   };
 
   const setZonaAlineacion = (idx: number, al: AlineacionTicket | undefined) => {
+    if (ocupadoRef.current || ocupado) return;
     updZonas((z) => { z[idx] = { ...z[idx], alineacion: al }; return z; });
   };
 
@@ -881,11 +902,13 @@ const anchoPapelPreview = Math.ceil(
   };
 
   const quitarLinea = (zIdx: number, lIdx: number) => {
+    if (ocupadoRef.current || ocupado) { message.warning('Espere a que termine la operación en curso'); return; }
     updZonaLineas(zIdx, (l) => { l.splice(lIdx, 1); return l; });
     limpiarHuerfanos();
   };
 
   const moverLinea = (zIdx: number, lIdx: number, delta: number) => {
+    if (ocupadoRef.current || ocupado) return;
     const zona = config.zonas?.[zIdx];
     const dest = lIdx + delta;
     if (!zona || dest < 0 || dest >= (zona.lineas?.length ?? 0)) return;
@@ -902,6 +925,7 @@ const anchoPapelPreview = Math.ceil(
   };
 
   const setLineaLabel = (zIdx: number, lIdx: number, label: string) => {
+    if (ocupadoRef.current || ocupado) return;
     setConfig(prev => {
       const zonas = [...(prev.zonas || [])];
       const zonaActual = zonas[zIdx];
@@ -918,6 +942,7 @@ const anchoPapelPreview = Math.ceil(
   };
 
   const setContenidoLibre = (zIdx: number, lIdx: number, contenido: string) => {
+    if (ocupadoRef.current || ocupado) return;
     setConfig(prev => {
       const zonas = [...(prev.zonas || [])];
       const zonaActual = zonas[zIdx];
@@ -937,22 +962,27 @@ const anchoPapelPreview = Math.ceil(
   };
 
   const setLineaFormato = (zIdx: number, lIdx: number, fmt: FormatoItemTicket | null) => {
+    if (ocupadoRef.current || ocupado) return;
     updZonaLineas(zIdx, (l) => { l[lIdx] = { ...l[lIdx], formato: fmt || undefined }; return l; });
   };
 
   const setLineaFormatoLabel = (zIdx: number, lIdx: number, fmt: FormatoItemTicket | null) => {
+    if (ocupadoRef.current || ocupado) return;
     updZonaLineas(zIdx, (l) => { l[lIdx] = { ...l[lIdx], formatoLabel: fmt || undefined }; return l; });
   };
 
   const setLineaFormatoValor = (zIdx: number, lIdx: number, fmt: FormatoItemTicket | null) => {
+    if (ocupadoRef.current || ocupado) return;
     updZonaLineas(zIdx, (l) => { l[lIdx] = { ...l[lIdx], formatoValor: fmt || undefined }; return l; });
   };
 
   const setLineaCalculo = (zIdx: number, lIdx: number, calculo: CalculoCampo | null | undefined) => {
+    if (ocupadoRef.current || ocupado) return;
     updZonaLineas(zIdx, (l) => { l[lIdx] = { ...l[lIdx], calculo: calculo || undefined }; return l; });
   };
 
   const setLineaTabular = (zIdx: number, lIdx: number, active: boolean, ancho?: number) => {
+    if (ocupadoRef.current || ocupado) return;
     updZonaLineas(zIdx, (l) => {
       if (!active) { l[lIdx] = { ...l[lIdx], tabular: undefined }; }
       else { l[lIdx] = { ...l[lIdx], tabular: { ancho: ancho ?? l[lIdx].tabular?.ancho ?? 12 } }; }
@@ -961,6 +991,7 @@ const anchoPapelPreview = Math.ceil(
   };
 
   const setLineaSeparador = (zIdx: number, lIdx: number, caracter: CaracterSeparadorTicket) => {
+    if (ocupadoRef.current || ocupado) return;
     updZonaLineas(zIdx, (l) => { l[lIdx] = { ...l[lIdx], caracter } as LineaZonaConfig; return l; });
   };
 
@@ -982,14 +1013,16 @@ const anchoPapelPreview = Math.ceil(
   }, [zonas]);
 
   const agregarLinea = useCallback((zIdx: number, ref: string) => {
+    if (ocupadoRef.current || ocupado) { message.warning('Espere a que termine la operación en curso'); return; }
     const sigNum = getSiguienteLineaNum(zIdx);
     const zona = zonas[zIdx];
     const alineacionZona = zona?.alineacion || 'izquierda';
     updZonaLineas(zIdx, (l) => [...l, { ref: ref as LineaZonaConfig['ref'], lineaNum: sigNum, formatoLabel: { alineacion: alineacionZona } }]);
-  }, [getSiguienteLineaNum, updZonaLineas, zonas]);
+  }, [getSiguienteLineaNum, updZonaLineas, zonas, ocupado]);
 
   const setLineaNum = useCallback((zIdx: number, lIdx: number, nuevoNum: number): Promise<'empujar' | 'compartir' | 'cancel'> => {
     return new Promise((resolve) => {
+      if (ocupadoRef.current || ocupado) { resolve('cancel'); return; }
       const zona = zonas[zIdx];
       if (!zona) { resolve('cancel'); return; }
       const lineasEnNuevoNum = zona.lineas.filter((l, i) => i !== lIdx && l.lineaNum === nuevoNum);
@@ -1062,7 +1095,7 @@ const anchoPapelPreview = Math.ceil(
         },
       });
     });
-  }, [zonas, setLineaActiva]);
+  }, [zonas, setLineaActiva, ocupado]);
 
   const calcularAnchosLinea = useCallback((zIdx: number, lineaNum: number): Map<number, number> => {
     const zona = zonas[zIdx];
@@ -1100,6 +1133,7 @@ const anchoPapelPreview = Math.ceil(
 
   /* ===== Config vieja: handlers globales que aun se usan ===== */
   const setEncabezadoFormato = (campo: 'compania' | 'direccion' | 'telefono' | 'rnc', fmt: FormatoItemTicket | null) => {
+    if (ocupadoRef.current || ocupado) return;
     setConfig((prev) => {
       const encabezado = { ...(prev.encabezado || {}) };
       const formato = { ...(encabezado.formato || {}) };
@@ -1110,22 +1144,27 @@ const anchoPapelPreview = Math.ceil(
   };
 
   const setAnchoLinea = (valor: AnchoLineaTicket) => {
+    if (ocupadoRef.current || ocupado) return;
     setConfig((prev) => actualizarOpcion(prev, { opciones: { ...(prev.opciones || {}), anchoLinea: valor } }));
   };
   const setFeedCorte = (valor: number | null) => {
+    if (ocupadoRef.current || ocupado) return;
     setConfig((prev) => actualizarOpcion(prev, { opciones: { ...(prev.opciones || {}), feedCorte: valor ?? 0 } }));
   };
   const setFontFamily = (valor: string) => {
+    if (ocupadoRef.current || ocupado) return;
     setConfig((prev) => actualizarOpcion(prev, { opciones: { ...(prev.opciones || {}), fontFamily: valor || undefined } }));
   };
 
   /* ===== Logo configurable ===== */
   const setLogo = (patch: Partial<NonNullable<PlantillaConfig['logo']>>) => {
+    if (ocupadoRef.current || ocupado) return;
     setConfig((prev) => actualizarOpcion(prev, { logo: { mostrar: false, ...(prev.logo || {}), ...patch } }));
   };
 
   /* ===== Modales ===== */
   const abrirModalLibre = (id?: string, zonaIdx?: number) => {
+    if (ocupadoRef.current || ocupado) { message.warning('Espere a que termine la operación en curso'); return; }
     setLibreTempZonaIdx(zonaIdx);
     setLibreTempEditId(id);
     if (id) {
@@ -1161,6 +1200,7 @@ const anchoPapelPreview = Math.ceil(
   };
 
   const abrirModalFirma = (id?: string, zonaIdx?: number) => {
+    if (ocupadoRef.current || ocupado) { message.warning('Espere a que termine la operación en curso'); return; }
     setFirmaTempZonaIdx(zonaIdx);
     setFirmaTempEditId(id);
     setFirmaTempValorInicial(id ? config.firmas?.[id] : undefined);
@@ -1189,6 +1229,7 @@ const anchoPapelPreview = Math.ceil(
   };
 
   const abrirModalDTO = (id?: string, zonaIdx?: number) => {
+    if (ocupadoRef.current || ocupado) { message.warning('Espere a que termine la operación en curso'); return; }
     setDtoTempZonaIdx(zonaIdx);
     if (id) {
       const def = config.camposDTO?.[id] || config.campos?.camposDTO?.[id];
@@ -1237,12 +1278,14 @@ const anchoPapelPreview = Math.ceil(
   /* ===== Acciones ===== */
   const handleGuardar = async () => {
     if (!plantillaActual) { message.warning('Seleccione una plantilla primero'); return; }
+    if (ocupadoRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    ocupadoRef.current = true;
+    setSaving(true);
     // Validaciones no bloqueantes
   if (!(config.zonas || []).some((z) => z.tipo === 'detalle')) message.warning('No hay zona de tipo "Detalle"');
   if (!(config.zonas || []).some((z) => z.tipo === 'totales')) message.warning('No hay zona de tipo "Totales"');
   const configuracionParaGuardar = completarEtiquetasPredeterminadas(config);
   setConfig(configuracionParaGuardar);
-  setSaving(true);
   try {
     const toSave = (configuracionParaGuardar.zonas && configuracionParaGuardar.zonas.length > 0) ? configuracionParaGuardar : null;
       const d = await reportesConfigApi.actualizarConfig(plantillaActual.plantillaId, toSave as any);
@@ -1252,14 +1295,16 @@ const anchoPapelPreview = Math.ceil(
       setPreviewConfig({ ...cfg });
       onRefresh();
     } catch (err: any) { message.error(err?.response?.data?.errorMessage || 'Error al guardar'); }
-    finally { setSaving(false); }
+    finally { ocupadoRef.current = false; setSaving(false); }
   };
 
   const handleVerJsonConfig = () => {
+    if (ocupadoRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
     setModalJsonConfigOpen(true);
   };
 
   const handleCargarEsquema = (file: File) => {
+    if (ocupadoRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return false; }
     const reader = new FileReader();
     reader.onload = () => {
       try {
@@ -1281,6 +1326,8 @@ const anchoPapelPreview = Math.ceil(
 
   const handleVerJsonPayload = async () => {
     if (!plantillaActual) { message.warning('Seleccione una plantilla primero'); return; }
+    if (ocupadoRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    ocupadoRef.current = true;
     setLoadingPayload(true);
     try {
       const datosEjemplo = esVSNT_ANULACION
@@ -1303,6 +1350,7 @@ const anchoPapelPreview = Math.ceil(
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al obtener payload');
     } finally {
+      ocupadoRef.current = false;
       setLoadingPayload(false);
     }
   };
@@ -1315,6 +1363,9 @@ const anchoPapelPreview = Math.ceil(
 
   const handleProbarPayload = async () => {
     if (!jsonPayloadContent) return;
+    if (ocupadoRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    ocupadoRef.current = true;
+    setProbandoPayload(true);
     try {
       const payload = JSON.parse(jsonPayloadContent);
       const resultado = await reportesConfigApi.imprimirLocal(payload);
@@ -1325,14 +1376,20 @@ const anchoPapelPreview = Math.ceil(
       }
     } catch (err: any) {
       message.error('Error al procesar payload: ' + (err?.message || 'Error desconocido'));
+    } finally {
+      ocupadoRef.current = false;
+      setProbandoPayload(false);
     }
   };
 
   const handleRestablecer = () => {
+    if (ocupadoRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    ocupadoRef.current = true;
     Modal.confirm({
       title: 'Restablecer plantilla',
       content: `¿Desea restablecer "${plantillaActual?.nombre}" a su configuración predeterminada?`,
       okText: 'Restablecer', okButtonProps: { danger: true }, cancelText: 'Cancelar',
+      onCancel: () => { ocupadoRef.current = false; },
       onOk: async () => {
         setRestableciendo(true);
         try {
@@ -1342,7 +1399,7 @@ const anchoPapelPreview = Math.ceil(
           setDetalle(d); const cfg = normalizarSegunPlantilla(d.config); setConfig(cfg); setConfigInicial(cfg);
           onRefresh();
         } catch (err: any) { message.error(err?.response?.data?.errorMessage || 'Error al restablecer'); }
-        finally { setRestableciendo(false); }
+        finally { ocupadoRef.current = false; setRestableciendo(false); }
       },
     });
   };
@@ -1471,7 +1528,8 @@ const anchoPapelPreview = Math.ceil(
             style={{ width: 280 }}
             placeholder="Seleccionar plantilla"
             value={selectedId}
-            onChange={(id) => setSelectedId(id as number)}
+            disabled={ocupado}
+            onChange={(id) => { if (ocupado) return; setSelectedId(id as number); }}
             filterOption={(input, option) =>
               (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
             }
@@ -1488,7 +1546,8 @@ const anchoPapelPreview = Math.ceil(
               ),
             }))}
           />
-          <Button size="small" icon={<PlusOutlined />} onClick={onNuevaPlantilla}>Nueva</Button>
+          <Button size="small" icon={<PlusOutlined />} disabled={ocupado} onClick={onNuevaPlantilla}>Nueva</Button>
+          {asignandoKey && <Tag color="processing" style={{ margin: 0, fontSize: 11 }}>Asignando…</Tag>}
           <div style={{ flex: 1 }} />
           {plantillaActual && (
             <>
@@ -1501,33 +1560,39 @@ const anchoPapelPreview = Math.ceil(
             </>
           )}
           {dirty && <Tag color="orange" style={{ margin: 0, fontSize: 11 }}>Sin guardar</Tag>}
+          {ocupado && <Tag color="processing" style={{ margin: 0, fontSize: 11 }}>Procesando…</Tag>}
           <Tooltip title="Refrescar vista previa">
-            <Button size="small" icon={<SyncOutlined />} onClick={handleRefreshPreview} />
+            <Button size="small" icon={<SyncOutlined />} disabled={ocupado} onClick={handleRefreshPreview} />
           </Tooltip>
           <Tooltip title="Recargar plantillas">
-            <Button size="small" icon={<ReloadOutlined />} onClick={onRefresh} />
-          </Tooltip>
-          <Tooltip title="Cargar Esquema JSON">
-            <Upload accept="application/json,.json" showUploadList={false} beforeUpload={handleCargarEsquema}>
-              <Button size="small" icon={<UploadOutlined />} />
-            </Upload>
+            <Button size="small" icon={<ReloadOutlined />} disabled={ocupado} onClick={() => { if (ocupado) return; onRefresh(); }} />
           </Tooltip>
           {config.esquema !== undefined && (
             <Tag color="green" style={{ margin: 0, fontSize: 11 }}>
               Esquema: {rutasEsquema.length} campos
             </Tag>
           )}
-          <Tooltip title="Ver JSON Config">
-            <Button size="small" icon={<CodeOutlined />} onClick={handleVerJsonConfig} />
-          </Tooltip>
-          <Tooltip title="Ver JSON Payload">
-            <Button size="small" icon={<FileTextOutlined />} loading={loadingPayload} onClick={handleVerJsonPayload} />
-          </Tooltip>
-          <Button size="small" type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>
+          <Popover
+            placement="bottomRight"
+            trigger="click"
+            content={(
+              <Space direction="vertical" style={{ minWidth: 200 }} size="small">
+                <Text type="secondary" style={{ fontSize: 11 }}>Avanzado</Text>
+                <Upload accept="application/json,.json" showUploadList={false} beforeUpload={handleCargarEsquema} disabled={ocupado}>
+                  <Button size="small" icon={<UploadOutlined />} disabled={ocupado} block>Cargar esquema JSON</Button>
+                </Upload>
+                <Button size="small" icon={<CodeOutlined />} disabled={ocupado} block onClick={handleVerJsonConfig}>Ver JSON Config</Button>
+                <Button size="small" icon={<FileTextOutlined />} disabled={ocupado} loading={loadingPayload} block onClick={handleVerJsonPayload}>Ver JSON Payload</Button>
+              </Space>
+            )}
+          >
+            <Button size="small" icon={<CodeOutlined />} disabled={ocupado}>Avanzado</Button>
+          </Popover>
+          <Button size="small" type="primary" icon={<SaveOutlined />} loading={saving} disabled={ocupado} onClick={handleGuardar}>
             Guardar
           </Button>
           {dirty && (
-            <Button size="small" danger icon={<RollbackOutlined />} onClick={() => { setConfig({ ...configInicial }); setPreviewConfig({ ...configInicial }); message.info('Cambios descartados'); }}>
+            <Button size="small" danger icon={<RollbackOutlined />} disabled={ocupado} onClick={() => { if (ocupado) return; setConfig({ ...configInicial }); setPreviewConfig({ ...configInicial }); message.info('Cambios descartados'); }}>
               Descartar
             </Button>
           )}
@@ -1548,17 +1613,19 @@ const anchoPapelPreview = Math.ceil(
             <Card key={zona.id} className={`paces-card-erp rc-zona ${zonaActivaId === zona.id || lineaActiva?.zonaIdx === zIdx ? 'is-activa' : ''}`}
                 style={{ borderRadius: 8, marginBottom: 16 }}
                 title={
-                <div className="rc-zona-header" onClick={() => seleccionarZona(zona.id)}>
+                <div className="rc-zona-header" onClick={() => { if (ocupado) return; seleccionarZona(zona.id); }}>
                     <span style={{ color: '#556ee6', marginRight: 4 }}>{ICONO_ZONA[zona.tipo] || <SettingOutlined />}</span>
                     <Input size="small" style={{ width: 140, fontWeight: 600 }} bordered={false}
                       value={zona.nombre || ''}
                       placeholder={LABEL_ZONA[zona.tipo]}
+                      disabled={ocupado}
                       onChange={(e) => setZonaNombre(zIdx, e.target.value)}
                       onClick={(e: any) => e.stopPropagation()} />
                     <Tooltip title="Alinea las líneas editables de esta zona. Las columnas del detalle y cabecera usan su propia alineación.">
                       <Segmented
                         size="small"
                         value={zona.alineacion || 'izquierda'}
+                        disabled={ocupado}
                         onChange={(v) => setZonaAlineacion(zIdx, v as AlineacionTicket)}
                         onClick={(e: any) => e.stopPropagation()}
                         options={[
@@ -1573,13 +1640,13 @@ const anchoPapelPreview = Math.ceil(
                       <Button size="small" type="text" icon={colapsada ? <RightOutlined /> : <DownOutlined />}
                         onClick={() => toggleZona(zona.id)} />
                       <Tooltip title="Mover arriba">
-                        <Button size="small" type="text" icon={<ArrowUpOutlined />} disabled={zIdx === 0} onClick={() => moverZona(zIdx, -1)} />
+                        <Button size="small" type="text" icon={<ArrowUpOutlined />} disabled={zIdx === 0 || ocupado} onClick={() => moverZona(zIdx, -1)} />
                       </Tooltip>
                       <Tooltip title="Mover abajo">
-                        <Button size="small" type="text" icon={<ArrowDownOutlined />} disabled={zIdx === zonas.length - 1} onClick={() => moverZona(zIdx, 1)} />
+                        <Button size="small" type="text" icon={<ArrowDownOutlined />} disabled={zIdx === zonas.length - 1 || ocupado} onClick={() => moverZona(zIdx, 1)} />
                       </Tooltip>
                       <Tooltip title="Eliminar zona">
-                        <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => quitarZona(zIdx)} />
+                        <Button size="small" type="text" danger icon={<DeleteOutlined />} disabled={ocupado} onClick={() => quitarZona(zIdx)} />
                       </Tooltip>
                     </div>
                   </div>
@@ -1596,6 +1663,7 @@ const anchoPapelPreview = Math.ceil(
                           placeholder={rutasArrayEsquema.length > 0 ? 'Seleccione un array…' : 'No hay arrays en el esquema'}
                           options={rutasArrayEsquema.map((r) => ({ label: r, value: r }))}
                           allowClear
+                          disabled={ocupado}
                           onChange={(v) => setZonaArrayOrigen(zIdx, v || '')}
                           onClick={(e: any) => e.stopPropagation()} />
                       </div>
@@ -1607,7 +1675,7 @@ const anchoPapelPreview = Math.ceil(
                         Zona vacía — agregue líneas con el botón de abajo
                       </div>
                     )}
-                        {zona.lineas.map((linea, lIdx) => <FilaLinea key={`${zIdx}-${lIdx}`} zonaIdx={zIdx} lineaIdx={lIdx} linea={linea} zonaLineas={zona.lineas} tipo={zona.tipo} esActiva={lineaActiva?.zonaIdx === zIdx && lineaActiva?.lineaIdx === lIdx} onSeleccionarLinea={() => seleccionarLinea(zIdx, lIdx)} />)}
+                        {zona.lineas.map((linea, lIdx) => <FilaLinea key={`${zIdx}-${lIdx}`} zonaIdx={zIdx} lineaIdx={lIdx} linea={linea} zonaLineas={zona.lineas} tipo={zona.tipo} esActiva={lineaActiva?.zonaIdx === zIdx && lineaActiva?.lineaIdx === lIdx} onSeleccionarLinea={() => { if (ocupado) return; seleccionarLinea(zIdx, lIdx); }} />)}
 
                     {/* Boton agregar linea */}
                     <div className="rc-zona-agregar-linea">
@@ -1673,8 +1741,8 @@ const anchoPapelPreview = Math.ceil(
 
                           return items;
                         })(),
-                      }} trigger={['click']} overlayStyle={{ maxHeight: 480, overflow: 'auto' }}>
-                        <Button type="dashed" size="small" icon={<PlusOutlined />} block>
+                      }} trigger={['click']} overlayStyle={{ maxHeight: 480, overflow: 'auto' }} disabled={ocupado}>
+                        <Button type="dashed" size="small" icon={<PlusOutlined />} block disabled={ocupado}>
                           Agregar línea
                         </Button>
                       </Dropdown>
@@ -1687,8 +1755,8 @@ const anchoPapelPreview = Math.ceil(
 
           {/* Boton agregar zona */}
           <div style={{ marginBottom: 16 }}>
-            <Dropdown menu={menuAgregarZona} trigger={['click']}>
-              <Button type="dashed" icon={<PlusOutlined />} block>
+            <Dropdown menu={menuAgregarZona} trigger={['click']} disabled={ocupado}>
+              <Button type="dashed" icon={<PlusOutlined />} block disabled={ocupado}>
                 Agregar zona
               </Button>
             </Dropdown>
@@ -1703,12 +1771,13 @@ const anchoPapelPreview = Math.ceil(
                 <Select<AnchoLineaTicket> style={{ width: '100%' }}
                   value={config.opciones?.anchoLinea ?? 48}
                   options={ANCHO_LINEA_OPCIONES.map((w) => ({ label: `${w} caracteres`, value: w }))}
+                  disabled={ocupado}
                   onChange={setAnchoLinea} />
               </Col>
               <Col xs={12} md={8}>
                 <Text style={{ display: 'block', marginBottom: 4 }}>Feed antes del corte</Text>
                 <InputNumber style={{ width: '100%' }} min={0} max={10}
-                  value={config.opciones?.feedCorte ?? 4} onChange={setFeedCorte} />
+                  value={config.opciones?.feedCorte ?? 4} onChange={setFeedCorte} disabled={ocupado} />
               </Col>
               <Col xs={12} md={8}>
                 <Text style={{ display: 'block', marginBottom: 4 }}>Fuente del preview</Text>
@@ -1716,6 +1785,7 @@ const anchoPapelPreview = Math.ceil(
                   size="small"
                   style={{ width: 160 }}
                   value={config.opciones?.fontFamily ?? 'Courier New'}
+                  disabled={ocupado}
                   onChange={setFontFamily}
                   options={[
                     { label: 'Courier New', value: 'Courier New' },
@@ -1740,7 +1810,7 @@ const anchoPapelPreview = Math.ceil(
             <Space direction="vertical" style={{ width: '100%' }} size="small">
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Text strong>Logo</Text>
-                <Switch checked={config.logo?.mostrar ?? false} onChange={(v) => setLogo({ mostrar: v })} />
+                <Switch checked={config.logo?.mostrar ?? false} disabled={ocupado} onChange={(v) => setLogo({ mostrar: v })} />
                 <Text type="secondary" style={{ fontSize: 12 }}>Mostrar logo al inicio del ticket</Text>
               </div>
               {config.logo?.mostrar && (
@@ -1751,7 +1821,9 @@ const anchoPapelPreview = Math.ceil(
                       <Upload
                         accept="image/png,image/jpeg"
                         showUploadList={false}
+                        disabled={ocupado}
                         beforeUpload={(file) => {
+                          if (ocupado) return false;
                           const reader = new FileReader();
                           reader.onload = () => {
                             setLogo({ base64: String(reader.result) });
@@ -1760,25 +1832,28 @@ const anchoPapelPreview = Math.ceil(
                           return false; // no subir al servidor
                         }}
                       >
-                        <Button icon={<UploadOutlined />}>Subir logo</Button>
+                        <Button icon={<UploadOutlined />} disabled={ocupado}>Subir logo</Button>
                       </Upload>
                     </Col>
                     <Col xs={12} md={4}>
                       <Text style={{ display: 'block', marginBottom: 4 }}>Ancho del logo (px)</Text>
                       <InputNumber style={{ width: '100%' }} min={100} max={576}
                         value={config.logo?.anchoPx ?? 384}
+                        disabled={ocupado}
                         onChange={(v) => setLogo({ anchoPx: v ?? 384 })} />
                     </Col>
                     <Col xs={12} md={4}>
                       <Text style={{ display: 'block', marginBottom: 4 }}>Alto del logo (px)</Text>
                       <InputNumber style={{ width: '100%' }} min={20} max={500}
                         value={config.logo?.altoPx ?? 120}
+                        disabled={ocupado}
                         onChange={(v) => setLogo({ altoPx: v ?? 120 })} />
                     </Col>
                     <Col xs={24} md={8}>
                       <Text style={{ display: 'block', marginBottom: 4 }}>Alineación</Text>
                       <Segmented
                         value={config.logo?.alineacion ?? 'centro'}
+                        disabled={ocupado}
                         onChange={(v) => setLogo({ alineacion: v as AlineacionTicket })}
                         options={[
                           { label: <><AlignLeftOutlined /> Izq</>, value: 'izquierda' },
@@ -1793,6 +1868,7 @@ const anchoPapelPreview = Math.ceil(
                       <Text style={{ display: 'block', marginBottom: 4 }}>URL del logo (opcional)</Text>
                       <Input placeholder="Ej: /images/visanet.png"
                         value={config.logo?.url ?? ''}
+                        disabled={ocupado}
                         onChange={(e) => setLogo({ url: e.target.value || undefined })} />
                     </Col>
                   </Row>
@@ -1819,7 +1895,7 @@ const anchoPapelPreview = Math.ceil(
             <div style={{ fontWeight: 600, marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Propiedades</span>
                     {(zonaActivaId || lineaActiva) && (
-                      <Button size="small" type="text" onClick={() => { setZonaActivaId(null); setLineaActiva(null); }}>×</Button>
+                      <Button size="small" type="text" disabled={ocupado} onClick={() => { if (ocupado) return; setZonaActivaId(null); setLineaActiva(null); }}>×</Button>
                     )}
                   </div>
                   {zonaActivaId ? (() => {
@@ -1836,6 +1912,7 @@ const anchoPapelPreview = Math.ceil(
                             style={{ width: '100%', marginTop: 6 }}
                             value={zona.nombre || ''}
                             placeholder={LABEL_ZONA[zona.tipo]}
+                            disabled={ocupado}
                             onChange={(e) => setZonaNombre(zonaIdx, e.target.value)}
                           />
                         </div>
@@ -1854,6 +1931,7 @@ const anchoPapelPreview = Math.ceil(
                             size="small"
                             style={{ width: '100%', marginTop: 2 }}
                             value={zona.alineacion || 'izquierda'}
+                            disabled={ocupado}
                             onChange={(value) => setZonaAlineacion(zonaIdx, value as AlineacionTicket)}
                             options={[
                               { value: 'izquierda', icon: <AlignLeftOutlined />, title: 'Izquierda' },
@@ -1872,6 +1950,7 @@ const anchoPapelPreview = Math.ceil(
                               placeholder={rutasArrayEsquema.length > 0 ? 'Seleccione un array…' : 'No hay arrays en el esquema'}
                               options={rutasArrayEsquema.map((ruta) => ({ label: ruta, value: ruta }))}
                               allowClear
+                              disabled={ocupado}
                               onChange={(value) => setZonaArrayOrigen(zonaIdx, value || '')}
                             />
                           </div>
@@ -1889,6 +1968,7 @@ const anchoPapelPreview = Math.ceil(
                               { value: 'ambos', label: 'Encima y debajo' },
                             ]}
                             allowClear
+                            disabled={ocupado}
                             onChange={(value) => {
                               if (!value) {
                                 setZonaSeparador(zonaIdx, undefined);
@@ -1906,6 +1986,7 @@ const anchoPapelPreview = Math.ceil(
                                   size="small"
                                   style={{ width: '100%', marginTop: 2 }}
                                   value={zona.separador?.caracter || '-'}
+                                  disabled={ocupado}
                                   onChange={(value) => setZonaSeparador(zonaIdx, { ...zona.separador, caracter: value as CaracterSeparadorTicket })}
                                   options={[
                                     { value: '-', label: 'Guion (-)' },
@@ -1923,6 +2004,7 @@ const anchoPapelPreview = Math.ceil(
                                   size="small"
                                   style={{ width: '100%', marginTop: 2 }}
                                   value={zona.separador?.alineacionSep || 'centro'}
+                                  disabled={ocupado}
                                   onChange={(value) => setZonaSeparador(zonaIdx, { ...zona.separador, alineacionSep: value as AlineacionTicket })}
                                   options={[
                                     { value: 'izquierda', icon: <AlignLeftOutlined />, title: 'Izquierda' },
@@ -1938,6 +2020,7 @@ const anchoPapelPreview = Math.ceil(
                                   style={{ width: '100%', marginTop: 2 }}
                                   value={zona.separador?.ancho != null ? String(zona.separador?.ancho) : ''}
                                   placeholder="Ancho completo"
+                                  disabled={ocupado}
                                   onChange={(e) => {
                                     const raw = e.target.value.trim();
                                     const ancho: number | string | undefined = raw === '' ? undefined : raw !== '' && /^\d+$/.test(raw) ? Number(raw) : raw;
@@ -1952,6 +2035,7 @@ const anchoPapelPreview = Math.ceil(
                                     size="small"
                                     style={{ width: '100%', marginTop: 2 }}
                                     value={zona.separador?.grosor || 1}
+                                    disabled={ocupado}
                                     onChange={(value) => setZonaSeparador(zonaIdx, { ...zona.separador, grosor: value as number })}
                                     options={[
                                       { value: 1, label: '1' },
@@ -1965,6 +2049,7 @@ const anchoPapelPreview = Math.ceil(
                                 <div style={{ marginTop: 8 }}>
                                   <Checkbox
                                     checked={zona.separador?.imprimirSiVacio === true}
+                                    disabled={ocupado}
                                     onChange={(e) => setZonaSeparador(zonaIdx, { ...zona.separador, imprimirSiVacio: e.target.checked })}
                                   >
                                     Imprimir aunque el detalle esté vacío
@@ -1997,7 +2082,7 @@ const anchoPapelPreview = Math.ceil(
                 <Space direction="vertical" style={{ width: '100%' }} size="middle">
                   <div>
                     <Text type="secondary" style={{ fontSize: 11 }}>Referencia</Text>
-                    <Select size="small" style={{ width: '100%', marginTop: 2 }} value={ref.startsWith('LIBRE:') ? 'texto_libre' : 'referencia'} onChange={(v) => {
+                    <Select size="small" style={{ width: '100%', marginTop: 2 }} value={ref.startsWith('LIBRE:') ? 'texto_libre' : 'referencia'} disabled={ocupado} onChange={(v) => {
                       if (v === 'texto_libre') {
                         const nuevoId = `LIBRE-${Date.now()}`;
                         updZonaLineas(lineaActiva.zonaIdx, (l) => {
@@ -2014,6 +2099,7 @@ const anchoPapelPreview = Math.ceil(
                           rows={3}
                           style={{ width: '100%', marginTop: 2 }}
                           value={(textoLibrePorId(ref.slice('LIBRE:'.length))?.texto || '')}
+                          disabled={ocupado}
                           onChange={(e) => setContenidoLibre(lineaActiva.zonaIdx, lineaActiva.lineaIdx, e.target.value)}
                           placeholder="Escribe el texto libre (Enter para varias líneas). Escribe {, {{ o dentro de CONCAT(...) para ver sugerencias..."
                         />
@@ -2031,6 +2117,7 @@ const anchoPapelPreview = Math.ceil(
                           optionFilterProp="label"
                           placeholder={esEsquema ? undefined : 'Asociar campo del esquema…'}
                           value={esEsquema ? clave : undefined}
+                          disabled={ocupado}
                           onChange={(v) => updZonaLineas(lineaActiva.zonaIdx, (l) => {
                             l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], ref: `ESQUEMA:${v}` } as any;
                             return l;
@@ -2043,16 +2130,18 @@ const anchoPapelPreview = Math.ceil(
                       <div style={{ marginTop: 6 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <Text type="secondary" style={{ fontSize: 11 }}>Campo calculado</Text>
-                          <Switch size="small" checked={!!linea.calculo} onChange={(v) => setLineaCalculo(lineaActiva.zonaIdx, lineaActiva.lineaIdx, v ? { tipo: 'SUM', ruta: rutasArrayEsquema.includes(clave) ? clave : (rutasArrayEsquema[0] || '') } : null)} />
+                          <Switch size="small" checked={!!linea.calculo} disabled={ocupado} onChange={(v) => setLineaCalculo(lineaActiva.zonaIdx, lineaActiva.lineaIdx, v ? { tipo: 'SUM', ruta: rutasArrayEsquema.includes(clave) ? clave : (rutasArrayEsquema[0] || '') } : null)} />
                         </div>
                         {linea.calculo && (
                           <Space direction="vertical" style={{ width: '100%', marginTop: 4 }} size={4}>
                             <Text type="secondary" style={{ fontSize: 11 }}>Operación</Text>
                             <Select size="small" style={{ width: '100%' }} value={linea.calculo.tipo}
+                              disabled={ocupado}
                               onChange={(tipo) => setLineaCalculo(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.calculo, tipo })}
                               options={OPCIONES_CALCULO} />
                             <Text type="secondary" style={{ fontSize: 11 }}>Ruta (array del esquema)</Text>
                             <Select size="small" style={{ width: '100%' }} showSearch optionFilterProp="label" value={linea.calculo.ruta}
+                              disabled={ocupado}
                               onChange={(ruta) => setLineaCalculo(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.calculo, ruta })}
                               options={rutasArrayEsquema.map((r) => ({ label: r, value: r }))} placeholder={rutasArrayEsquema.length > 0 ? 'Seleccione un array…' : 'No hay arrays en el esquema'} />
                           </Space>
@@ -2067,29 +2156,31 @@ const anchoPapelPreview = Math.ceil(
                     <Text strong style={{ fontSize: 12 }}>Etiqueta</Text>
                     <Space direction="vertical" style={{ width: '100%', marginTop: 6 }} size={6}>
                       <Input size="small" style={{ width: '100%' }} value={linea.label || ''}
+                        disabled={ocupado}
                         onChange={(e) => setLineaLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, e.target.value)}
                         placeholder={labelDefault} />
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Switch size="small" checked={linea.mostrarLabel !== false} onChange={(v) => setLineaMostrarLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, v)} />
+                        <Switch size="small" checked={linea.mostrarLabel !== false} disabled={ocupado} onChange={(v) => setLineaMostrarLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, v)} />
                         <span style={{ fontSize: 12 }}>Mostrar</span>
                       </div>
                       <div>
                         <Text type="secondary" style={{ fontSize: 11 }}>Alineación</Text>
                         <Space size={4} style={{ marginTop: 2 }}>
-                          <Button size="small" type={linea.formatoLabel?.alineacion === 'izquierda' ? 'primary' : 'default'} icon={<AlignLeftOutlined />} onClick={() => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, alineacion: 'izquierda' } as FormatoItemTicket)} />
-                          <Button size="small" type={linea.formatoLabel?.alineacion === 'centro' ? 'primary' : 'default'} icon={<AlignCenterOutlined />} onClick={() => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, alineacion: 'centro' } as FormatoItemTicket)} />
-                          <Button size="small" type={linea.formatoLabel?.alineacion === 'derecha' ? 'primary' : 'default'} icon={<AlignRightOutlined />} onClick={() => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, alineacion: 'derecha' } as FormatoItemTicket)} />
+                          <Button size="small" disabled={ocupado} type={linea.formatoLabel?.alineacion === 'izquierda' ? 'primary' : 'default'} icon={<AlignLeftOutlined />} onClick={() => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, alineacion: 'izquierda' } as FormatoItemTicket)} />
+                          <Button size="small" disabled={ocupado} type={linea.formatoLabel?.alineacion === 'centro' ? 'primary' : 'default'} icon={<AlignCenterOutlined />} onClick={() => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, alineacion: 'centro' } as FormatoItemTicket)} />
+                          <Button size="small" disabled={ocupado} type={linea.formatoLabel?.alineacion === 'derecha' ? 'primary' : 'default'} icon={<AlignRightOutlined />} onClick={() => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, alineacion: 'derecha' } as FormatoItemTicket)} />
                         </Space>
                       </div>
                       <div>
                         <Text type="secondary" style={{ fontSize: 11 }}>Estilo</Text>
                         <Space size={4} style={{ marginTop: 2 }}>
-                          <Button size="small" type={linea.formatoLabel?.negrita ? 'primary' : 'default'} onClick={() => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, negrita: !linea.formatoLabel?.negrita } as FormatoItemTicket)}>N</Button>
+                          <Button size="small" disabled={ocupado} type={linea.formatoLabel?.negrita ? 'primary' : 'default'} onClick={() => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, negrita: !linea.formatoLabel?.negrita } as FormatoItemTicket)}>N</Button>
                         </Space>
                       </div>
                       <div>
                         <Text type="secondary" style={{ fontSize: 11 }}>Tamaño</Text>
                         <Select size="small" style={{ width: '100%', marginTop: 2 }} value={linea.formatoLabel?.tamano || 'normal'}
+                          disabled={ocupado}
                           onChange={(v) => setLineaFormatoLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoLabel, tamano: v } as FormatoItemTicket)}
                           options={[
                             { label: 'Normal', value: 'normal' },
@@ -2111,6 +2202,7 @@ const anchoPapelPreview = Math.ceil(
                       <div>
                         <Text type="secondary" style={{ fontSize: 11 }}>Tipo de dato</Text>
                         <Select size="small" style={{ width: '100%', marginTop: 2 }} value={linea.tipoDato || 'texto'}
+                          disabled={ocupado}
                           onChange={(v) => updZonaLineas(lineaActiva.zonaIdx, (l) => { l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], tipoDato: v } as any; return l; })}
                           options={[
                             { label: 'Texto', value: 'texto' },
@@ -2122,26 +2214,28 @@ const anchoPapelPreview = Math.ceil(
                       <div>
                         <Text type="secondary" style={{ fontSize: 11 }}>Formato</Text>
                         <Input size="small" style={{ width: '100%', marginTop: 2 }} value={linea.formatoDato || ''}
+                          disabled={ocupado}
                           onChange={(e) => updZonaLineas(lineaActiva.zonaIdx, (l) => { l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], formatoDato: e.target.value } as any; return l; })}
                           placeholder={linea.tipoDato === 'fecha' ? 'dd/MM/yyyy' : '#,##0.00'} />
                       </div>
                       <div>
                         <Text type="secondary" style={{ fontSize: 11 }}>Alineación</Text>
                         <Space size={4} style={{ marginTop: 2 }}>
-                          <Button size="small" type={linea.formatoValor?.alineacion === 'izquierda' || (!linea.formatoValor && linea.formato?.alineacion === 'izquierda') ? 'primary' : 'default'} icon={<AlignLeftOutlined />} onClick={() => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, alineacion: 'izquierda' } as FormatoItemTicket)} />
-                          <Button size="small" type={linea.formatoValor?.alineacion === 'centro' || (!linea.formatoValor && linea.formato?.alineacion === 'centro') ? 'primary' : 'default'} icon={<AlignCenterOutlined />} onClick={() => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, alineacion: 'centro' } as FormatoItemTicket)} />
-                          <Button size="small" type={linea.formatoValor?.alineacion === 'derecha' || (!linea.formatoValor && linea.formato?.alineacion === 'derecha') ? 'primary' : 'default'} icon={<AlignRightOutlined />} onClick={() => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, alineacion: 'derecha' } as FormatoItemTicket)} />
+                          <Button size="small" disabled={ocupado} type={linea.formatoValor?.alineacion === 'izquierda' || (!linea.formatoValor && linea.formato?.alineacion === 'izquierda') ? 'primary' : 'default'} icon={<AlignLeftOutlined />} onClick={() => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, alineacion: 'izquierda' } as FormatoItemTicket)} />
+                          <Button size="small" disabled={ocupado} type={linea.formatoValor?.alineacion === 'centro' || (!linea.formatoValor && linea.formato?.alineacion === 'centro') ? 'primary' : 'default'} icon={<AlignCenterOutlined />} onClick={() => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, alineacion: 'centro' } as FormatoItemTicket)} />
+                          <Button size="small" disabled={ocupado} type={linea.formatoValor?.alineacion === 'derecha' || (!linea.formatoValor && linea.formato?.alineacion === 'derecha') ? 'primary' : 'default'} icon={<AlignRightOutlined />} onClick={() => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, alineacion: 'derecha' } as FormatoItemTicket)} />
                         </Space>
                       </div>
                       <div>
                         <Text type="secondary" style={{ fontSize: 11 }}>Estilo</Text>
                         <Space size={4} style={{ marginTop: 2 }}>
-                          <Button size="small" type={linea.formatoValor?.negrita || linea.formato?.negrita ? 'primary' : 'default'} onClick={() => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, negrita: !linea.formatoValor?.negrita } as FormatoItemTicket)}>N</Button>
+                          <Button size="small" disabled={ocupado} type={linea.formatoValor?.negrita || linea.formato?.negrita ? 'primary' : 'default'} onClick={() => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, negrita: !linea.formatoValor?.negrita } as FormatoItemTicket)}>N</Button>
                         </Space>
                       </div>
                       <div>
                         <Text type="secondary" style={{ fontSize: 11 }}>Tamaño</Text>
                         <Select size="small" style={{ width: '100%', marginTop: 2 }} value={linea.formatoValor?.tamano || linea.formato?.tamano || 'normal'}
+                          disabled={ocupado}
                           onChange={(v) => setLineaFormatoValor(lineaActiva.zonaIdx, lineaActiva.lineaIdx, { ...linea.formatoValor, tamano: v } as FormatoItemTicket)}
                           options={[
                             { label: 'Normal', value: 'normal' },
@@ -2166,6 +2260,7 @@ const anchoPapelPreview = Math.ceil(
                           size="small"
                           style={{ width: '100%', marginTop: 2 }}
                           value={linea.lineaNum ?? 1}
+                          disabled={ocupado}
                           onChange={async (v) => {
                             await setLineaNum(lineaActiva.zonaIdx, lineaActiva.lineaIdx, v);
                           }}
@@ -2178,6 +2273,7 @@ const anchoPapelPreview = Math.ceil(
                               {menu}
                               <Divider style={{ margin: '4px 0' }} />
                               <Button size="small" type="link" icon={<PlusOutlined />} style={{ padding: '0 8px' }}
+                                disabled={ocupado}
                                 onClick={() => {
                                   const sig = getSiguienteLineaNum(lineaActiva.zonaIdx);
                                   setLineaNum(lineaActiva.zonaIdx, lineaActiva.lineaIdx, sig);
@@ -2194,6 +2290,7 @@ const anchoPapelPreview = Math.ceil(
                           size="small"
                           style={{ width: '100%', marginTop: 2 }}
                           value={linea.anchoTipo ?? 'porcentual'}
+                          disabled={ocupado}
                           onChange={(v) => {
                             const maximo = v === 'fijo' ? (config.opciones?.anchoLinea ?? 48) : 100;
                             updZonaLineas(lineaActiva.zonaIdx, (l) => {
@@ -2216,6 +2313,7 @@ const anchoPapelPreview = Math.ceil(
                           min={5}
                           max={linea.anchoTipo === 'fijo' ? (config.opciones?.anchoLinea ?? 48) : 100}
                           style={{ width: '100%', marginTop: 2 }}
+                          disabled={ocupado}
                           value={linea.anchoValor ?? (() => {
                             const enLinea = (config.zonas?.[lineaActiva.zonaIdx]?.lineas ?? []).filter(l => l.lineaNum === linea.lineaNum);
                             return enLinea.length <= 1 ? 100 : Math.round(100 / enLinea.length);
@@ -2245,21 +2343,23 @@ const anchoPapelPreview = Math.ceil(
                         ) : null;
                       })()}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Switch size="small" checked={!!linea.tabular} onChange={(v) => setLineaTabular(lineaActiva.zonaIdx, lineaActiva.lineaIdx, v)} />
+                        <Switch size="small" checked={!!linea.tabular} disabled={ocupado} onChange={(v) => setLineaTabular(lineaActiva.zonaIdx, lineaActiva.lineaIdx, v)} />
                         <span style={{ fontSize: 12 }}>Espacio label-valor</span>
                         {linea.tabular && (
                           <InputNumber size="small" min={1} max={48} style={{ width: 50, marginLeft: 4 }}
+                            disabled={ocupado}
                             value={linea.tabular.ancho ?? 12}
                             onChange={(v) => setLineaTabular(lineaActiva.zonaIdx, lineaActiva.lineaIdx, true, v ?? 12)} />
                         )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Switch size="small" checked={!!linea.ocultarSiVacio} onChange={(v) => updZonaLineas(lineaActiva.zonaIdx, (l) => { l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], ocultarSiVacio: v || undefined }; return l; })} />
+                        <Switch size="small" checked={!!linea.ocultarSiVacio} disabled={ocupado} onChange={(v) => updZonaLineas(lineaActiva.zonaIdx, (l) => { l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], ocultarSiVacio: v || undefined }; return l; })} />
                         <span style={{ fontSize: 12 }}>Ocultar si vacío</span>
                       </div>
                       <div>
                         <Text type="secondary" style={{ fontSize: 11 }}>Ubicación (padding izq)</Text>
                         <InputNumber size="small" min={0} max={48} style={{ width: 60, marginTop: 2 }}
+                          disabled={ocupado}
                           value={(linea as any).margen ?? 0}
                           onChange={(v) => updZonaLineas(lineaActiva.zonaIdx, (l) => { l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], margen: v ?? 0 } as any; return l; })} />
                       </div>
@@ -2269,12 +2369,12 @@ const anchoPapelPreview = Math.ceil(
                   <Divider style={{ margin: '4px 0' }} />
 
                   <Space>
-                    <Button size="small" icon={<ArrowUpOutlined />} disabled={lineaActiva.lineaIdx === 0}
+                    <Button size="small" icon={<ArrowUpOutlined />} disabled={lineaActiva.lineaIdx === 0 || ocupado}
                       onClick={() => moverLinea(lineaActiva.zonaIdx, lineaActiva.lineaIdx, -1)} />
-                    <Button size="small" icon={<ArrowDownOutlined />} disabled={lineaActiva.lineaIdx === (config.zonas?.[lineaActiva.zonaIdx]?.lineas.length ?? 0) - 1}
+                    <Button size="small" icon={<ArrowDownOutlined />} disabled={lineaActiva.lineaIdx === (config.zonas?.[lineaActiva.zonaIdx]?.lineas.length ?? 0) - 1 || ocupado}
                       onClick={() => moverLinea(lineaActiva.zonaIdx, lineaActiva.lineaIdx, 1)} />
-                    <Button size="small" danger icon={<DeleteOutlined />}
-                      onClick={() => { quitarLinea(lineaActiva.zonaIdx, lineaActiva.lineaIdx); setLineaActiva(null); }} />
+                    <Button size="small" danger icon={<DeleteOutlined />} disabled={ocupado}
+                      onClick={() => { if (ocupado) return; quitarLinea(lineaActiva.zonaIdx, lineaActiva.lineaIdx); setLineaActiva(null); }} />
                   </Space>
                 </Space>
               );
@@ -2407,15 +2507,17 @@ const anchoPapelPreview = Math.ceil(
       <Modal
         title="JSON Payload"
         open={modalJsonPayloadOpen}
-        onCancel={() => setModalJsonPayloadOpen(false)}
+        onCancel={() => { if (probandoPayload) return; setModalJsonPayloadOpen(false); }}
+        maskClosable={!probandoPayload}
+        closable={!probandoPayload}
         footer={[
-          <Button key="copy" icon={<CopyOutlined />} onClick={() => handleCopiarJson(jsonPayloadContent)}>
+          <Button key="copy" icon={<CopyOutlined />} disabled={probandoPayload} onClick={() => handleCopiarJson(jsonPayloadContent)}>
             Copiar
           </Button>,
-          <Button key="test" type="primary" onClick={handleProbarPayload}>
+          <Button key="test" type="primary" loading={probandoPayload} disabled={ocupado} onClick={handleProbarPayload}>
             Probar Impresión
           </Button>,
-          <Button key="close" onClick={() => setModalJsonPayloadOpen(false)}>
+          <Button key="close" disabled={probandoPayload} onClick={() => setModalJsonPayloadOpen(false)}>
             Cerrar
           </Button>,
         ]}
@@ -2423,7 +2525,8 @@ const anchoPapelPreview = Math.ceil(
       >
         <Input.TextArea
           value={jsonPayloadContent}
-          onChange={(e) => setJsonPayloadContent(e.target.value)}
+          onChange={(e) => { if (probandoPayload) return; setJsonPayloadContent(e.target.value); }}
+          disabled={probandoPayload}
           style={{ fontFamily: 'monospace', minHeight: 400 }}
           rows={20}
         />

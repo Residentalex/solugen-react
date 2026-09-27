@@ -162,4 +162,18 @@ export const solicitudPagoApi = {
     );
     return data.data;
   },
+
+  obtenerBloqueoDocumento: async (
+    sucursal: number,
+    transaccionId: number,
+    excluirSpaId?: number
+  ): Promise<{ bloqueado: boolean; spaDocumento: string | null; spaId: number | null }> => {
+    const params: Record<string, string | number> = {};
+    if (excluirSpaId !== undefined) params.excluirSpaId = excluirSpaId;
+    const { data } = await apiClient.get<ApiResponse<{ bloqueado: boolean; spaDocumento: string | null; spaId: number | null }>>(
+      `${BASE}/${sucursal}/bloqueo-documento/${transaccionId}`,
+      { params }
+    );
+    return data.data ?? { bloqueado: false, spaDocumento: null, spaId: null };
+  },
 };

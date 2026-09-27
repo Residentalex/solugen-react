@@ -15,6 +15,7 @@ import {
   PlusOutlined,
   DeleteOutlined,
   EditOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -1161,16 +1162,15 @@ const TransaccionBancariaFormulario: React.FC = () => {
                         key: 'descuento',
                         width: 140,
                         align: 'right' as const,
-                        render: (_: any, record: any) => (
-                          <InputNumber
-                            size="small"
-                            style={{ width: '100%' }}
-                            inputStyle={{ textAlign: 'right' as const }}
-                            className="input-number-right"
-                            min={0}
-                            step={0.01}
-                            precision={2}
-                            value={record.descuento}
+render: (_: any, record: any) => (
+                            <InputNumber
+                                size="small"
+                                style={{ width: '100%', textAlign: 'right' }}
+                                className="input-number-right"
+                                min={0}
+                                step={0.01}
+                                precision={2}
+                                value={record.descuento}
                             onChange={(val) => handleDescuentoChange(record.transaccionAsociadaID ?? record.id, val)}
                           />
                         ),
@@ -1180,17 +1180,16 @@ const TransaccionBancariaFormulario: React.FC = () => {
                         key: 'monto',
                         width: 140,
                         align: 'right' as const,
-                        render: (_: any, record: any) => (
-                          <InputNumber
-                            size="small"
-                            style={{ width: '100%' }}
-                            inputStyle={{ textAlign: 'right' as const }}
-                            className="input-number-right"
-                            min={0}
-                            max={pendienteEfectivo(record)}
-                            step={0.01}
-                            precision={2}
-                            value={record.monto}
+render: (_: any, record: any) => (
+                            <InputNumber
+                                size="small"
+                                style={{ width: '100%', textAlign: 'right' }}
+                                className="input-number-right"
+                                min={0}
+                                max={pendienteEfectivo(record)}
+                                step={0.01}
+                                precision={2}
+                                value={record.monto}
                             onChange={(val) => handleMontoChange(record.transaccionAsociadaID ?? record.id, val)}
                           />
                         ),
@@ -1251,7 +1250,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
             },
             {
               key: 'historial',
-              label: `Historial (${data?.logs?.length || 0})`,
+              icon: <HistoryOutlined />, label: `Historial (${data?.logs?.length || 0})`,
               children: (
                 <LogTable dataSource={data?.logs || []} scroll={{ x: 900 }} />
               ),

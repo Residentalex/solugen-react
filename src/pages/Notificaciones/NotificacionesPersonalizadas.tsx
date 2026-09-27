@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Table, Card, Button, Tag, Tooltip, message, Input, Select, Alert, Space, Popconfirm, Empty,
 } from 'antd';
@@ -88,17 +88,54 @@ const NotificacionesPersonalizadas: React.FC = () => {
     setPagina(1);
   };
 
+  // Aplana columnas agrupadas (children) y excluye acciones, sin conversiones
+  // forzadas: trabaja sobre ColumnsType<T> con angostamiento por 'in'.
+  interface ColumnaExportPlana<T extends object> {
+    titulo: string;
+    clave: string;
+    key?: string;
+    leer: (item: T) => unknown;
+  }
+  const columnasExportables = <T extends object>(cols: ColumnsType<T>): Array<ColumnaExportPlana<T>> => {
+    const planas: Array<ColumnaExportPlana<T>> = [];
+    cols.forEach((c) => {
+      if (!c) return;
+      if ('key' in c && c.key === 'acciones') return;
+      if ('children' in c && Array.isArray(c.children)) {
+        planas.push(...columnasExportables(c.children));
+        return;
+      }
+      const titulo = 'title' in c && typeof c.title === 'string' ? c.title : undefined;
+      const dataIndex = 'dataIndex' in c ? c.dataIndex : undefined;
+      if (!titulo || (typeof dataIndex !== 'string' && typeof dataIndex !== 'number')) return;
+      const clave = String(dataIndex);
+      const key = 'key' in c && c.key !== undefined ? String(c.key) : undefined;
+      planas.push({
+        titulo,
+        clave,
+        key,
+        leer: (item: T): unknown => {
+          if (!(clave in item)) return undefined;
+          return item[clave as keyof T];
+        },
+      });
+    });
+    return planas;
+  };
+
   const handleExportarExcel = async () => {
     const companyName = await getCompanyName(sucursalActiva);
-    const cols = columns.filter((c) => c.key !== 'acciones');
+    const cols = columnasExportables(columns);
     exportToExcel({
       fileName: `NotificacionesPersonalizadas_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
       sheetName: 'Notificaciones Personalizadas',
       companyName,
-      columnHeaders: cols.map((c) => c.title as string),
-      dataRows: dataSource.map((item: any) =>
+      columnHeaders: cols.map((c) => c.titulo),
+      dataRows: dataSource.map((item: NotificacionSQLConfig) =>
         cols.map((col) => {
-          const val = item[col.dataIndex as string];
+          if (col.key === 'activo') return item.activo ? 'Activo' : 'Inactivo';
+          const val = col.leer(item);
+          if (typeof val === 'boolean') return val ? 'Sí' : 'No';
           return val !== null && val !== undefined ? String(val) : '';
         })
       ),
@@ -126,6 +163,13 @@ const NotificacionesPersonalizadas: React.FC = () => {
     cargarDatos();
   };
 
+  // Bloqueo uniforme: evita Activar/Eliminar simultáneos por fila
+  const [procesandoIds, setProcesandoIds] = useState<Set<number>>(new Set());
+  // Ref sincrónica: el state es asíncrono y un doble clic rápido lo elude
+  const procesandoRef = useRef<Set<number>>(new Set());
+  // Bloqueo global: mientras cualquier fila procesa, se congela toda la lista
+  const procesandoGlobal = procesandoIds.size > 0;
+
   const handleProbar = (config: NotificacionSQLConfig) => {
     setConfigIdResultado(config.id);
     setConfigNombreResultado(config.nombre);
@@ -133,29 +177,51 @@ const NotificacionesPersonalizadas: React.FC = () => {
   };
 
   const handleActivar = async (config: NotificacionSQLConfig) => {
+    // Bloqueo global inmediato: ni la misma fila ni otra pueden iniciar nada en vuelo
+    if (procesandoRef.current.size > 0) return;
+    procesandoRef.current.add(config.id);
+    setProcesandoIds((prev) => new Set(prev).add(config.id));
     try {
       await notificacionesApi.activarSQLConfig(config.id, !config.activo);
       message.success(config.activo ? 'Configuración desactivada' : 'Configuración activada');
       cargarDatos();
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cambiar estado');
+    } finally {
+      procesandoRef.current.delete(config.id);
+      setProcesandoIds((prev) => {
+        const next = new Set(prev);
+        next.delete(config.id);
+        return next;
+      });
     }
   };
 
   const handleEliminar = async (id: number) => {
+    // Bloqueo global inmediato: ni la misma fila ni otra pueden iniciar nada en vuelo
+    if (procesandoRef.current.size > 0) return;
+    procesandoRef.current.add(id);
+    setProcesandoIds((prev) => new Set(prev).add(id));
     try {
       await notificacionesApi.eliminarSQLConfig(id);
       message.success('Configuración eliminada');
       cargarDatos();
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al eliminar');
+    } finally {
+      procesandoRef.current.delete(id);
+      setProcesandoIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
   const dataSource = searchText
     ? configs.filter((c) =>
         c.nombre.toLowerCase().includes(searchText.toLowerCase()) ||
-        c.tipo.toLowerCase().includes(searchText.toLowerCase())
+        (c.tipo || '').toLowerCase().includes(searchText.toLowerCase())
       )
     : configs;
 
@@ -203,38 +269,52 @@ const NotificacionesPersonalizadas: React.FC = () => {
         <span className="paces-text-secondary">{formatIntervalo(minutos)}</span>
       ),
     },
-    {
-      title: 'Última ejecución',
-      dataIndex: 'ultimaEjecucion',
-      key: 'ultimaEjecucion',
-      width: 170,
-      render: (text: string) => (
-        <span className="paces-text-secondary" style={{ fontSize: 12 }}>
-          {formatFecha(text)}
-        </span>
-      ),
-    },
-    {
-      title: 'Activo',
-      dataIndex: 'activo',
-      key: 'activo',
-      width: 90,
-      render: (activo: boolean) => (
-        <Tag color={activo ? 'green' : 'default'}>{activo ? 'Activo' : 'Inactivo'}</Tag>
-      ),
-    },
+{
+  title: 'Última ejecución',
+  dataIndex: 'ultimaEjecucion',
+  key: 'ultimaEjecucion',
+  width: 170,
+  render: (text: string) => {
+    if (!text) return <span className="paces-text-secondary">Nunca</span>;
+    const lastExecution = new Date(text);
+    const now = new Date();
+    const diffHours = (now.getTime() - lastExecution.getTime()) / (1000 * 60 * 60);
+
+    let color = '#6b7280'; // gray-500
+    if (diffHours < 24) color = '#10b981'; // green-500
+    else if (diffHours < 168) color = '#f59e0b'; // yellow-500 (1 week)
+    else color = '#ef4444'; // red-500
+
+    return (
+      <span style={{ fontSize: 12, color }}>
+        {formatFecha(text)}
+      </span>
+    );
+  },
+},
+{
+  title: 'Activo',
+  dataIndex: 'activo',
+  key: 'activo',
+  width: 90,
+  render: (activo: boolean) => (
+    <Tag color={activo ? 'green' : 'red'} style={{ fontWeight: 500 }}>
+      {activo ? 'Activo' : 'Inactivo'}
+    </Tag>
+  ),
+},
     {
       title: 'Acciones',
       key: 'acciones',
       width: 180,
-      fixed: 'right',
+      fixed: 'right' as const,
       render: (_, record) => (
         <Space size={0}>
           <Tooltip title="Editar">
-            <Button type="text" size="small" icon={<EditOutlined />} onClick={() => abrirEditar(record)} />
+            <Button type="text" size="small" icon={<EditOutlined />} onClick={() => abrirEditar(record)} disabled={procesandoGlobal} />
           </Tooltip>
           <Tooltip title="Probar SQL">
-            <Button type="text" size="small" icon={<PlayCircleOutlined />} onClick={() => handleProbar(record)} />
+            <Button type="text" size="small" icon={<PlayCircleOutlined />} onClick={() => handleProbar(record)} disabled={procesandoGlobal} />
           </Tooltip>
           <Tooltip title={record.activo ? 'Desactivar' : 'Activar'}>
             <Button
@@ -242,6 +322,8 @@ const NotificacionesPersonalizadas: React.FC = () => {
               size="small"
               icon={<PoweroffOutlined />}
               onClick={() => handleActivar(record)}
+              loading={procesandoIds.has(record.id)}
+              disabled={procesandoGlobal}
             />
           </Tooltip>
           <Popconfirm
@@ -253,7 +335,7 @@ const NotificacionesPersonalizadas: React.FC = () => {
             okButtonProps={{ danger: true }}
           >
             <Tooltip title="Eliminar">
-              <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+              <Button type="text" size="small" danger icon={<DeleteOutlined />} loading={procesandoIds.has(record.id)} disabled={procesandoGlobal} />
             </Tooltip>
           </Popconfirm>
         </Space>
@@ -266,7 +348,7 @@ const NotificacionesPersonalizadas: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Notificaciones Personalizadas SQL</h4>
         <PermissionGate permisoEspecial="pe_NOTIFICACIONESPECIAL">
-          <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={abrirNuevo} disabled={procesandoGlobal}>
             Nueva configuración SQL
           </Button>
         </PermissionGate>
@@ -293,13 +375,15 @@ const NotificacionesPersonalizadas: React.FC = () => {
               placeholder="Buscar por nombre o tipo..."
               allowClear
               onSearch={handleSearch}
-              style={{ width: 400 }}
+              disabled={procesandoGlobal}
+              style={{ width: '100%', maxWidth: 400, flex: '1 1 auto', minWidth: 200 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
             <Select
               style={{ width: 65 }}
               value={pageSize}
               onChange={(v) => { setPageSize(v); setPagina(1); }}
+              disabled={procesandoGlobal}
               options={[
                 { value: 25, label: '25' },
                 { value: 50, label: '50' },
@@ -308,9 +392,9 @@ const NotificacionesPersonalizadas: React.FC = () => {
             />
             <div style={{ flex: 1 }} />
             <PermissionGate accion="EXPORTAR">
-              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} disabled={procesandoGlobal} />
             </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh} disabled={procesandoGlobal} />
           </div>
         </div>
 
@@ -319,7 +403,7 @@ const NotificacionesPersonalizadas: React.FC = () => {
           dataSource={dataSource}
           rowKey="id"
           className="paces-border-top paces-list-table"
-          rowClassName="paces-row-hover"
+          rowClassName={() => 'paces-row-hover'}
           onRow={() => ({ style: { cursor: 'pointer' } })}
           loading={loading}
           scroll={{ x: 950 }}
@@ -335,6 +419,7 @@ const NotificacionesPersonalizadas: React.FC = () => {
             onChange: (p) => setPagina(p),
             showSizeChanger: false,
             showTotal: (total) => `${total} registros`,
+            disabled: procesandoGlobal,
           }}
         />
       </Card>

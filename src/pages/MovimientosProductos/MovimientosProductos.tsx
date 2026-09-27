@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Table, Card, Input, Typography, Alert, Button, Select, Switch, Space, Popover, Badge, DatePicker, Empty, Tooltip } from 'antd';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { Table, Card, Input, Typography, Alert, Button, Select, Switch, Space, Popover, Badge, DatePicker, Empty, Tooltip, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined,
@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { formatCurrency } from '../../utils/formats';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import PermissionGate from '../../components/PermissionGate';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import { useAuthStore } from '../../stores/authStore';
@@ -35,7 +36,15 @@ const TIPO_DOC_OPTIONS = [
   { value: 'DEV', label: 'Devolución Venta' },
 ];
 
-// Configuración de columnas para el toggle de visibilidad
+const TIPO_DOC_STYLE: Record<string, { color: string; label: string }> = {
+  ENP: { color: 'success', label: 'Entrada' },
+  SAP: { color: 'error', label: 'Salida' },
+  FAC: { color: 'processing', label: 'Factura' },
+  PV: { color: 'processing', label: 'POS' },
+  DVC: { color: 'warning', label: 'Dev. Compra' },
+  DEV: { color: 'warning', label: 'Dev. Venta' },
+};
+
 const ALL_COLUMNS_CONFIG: ColumnConfig[] = [
   { key: 'fecha', label: 'Fecha', defaultVisible: true },
   { key: 'documento', label: 'Documento', defaultVisible: true },
@@ -118,6 +127,8 @@ const MovimientosProductos: React.FC = () => {
 
   const [data, setData] = useState<MovimientoDTO[]>([]);
   const [loading, setLoading] = useState(false);
+  // Guardia contra ejecuciones concurrentes (el state no bloquea el doble clic)
+  const loadingRef = useRef(false);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(FILAS_POR_PAGINA);
   const [searchText, setSearchText] = useState('');
@@ -159,6 +170,8 @@ const MovimientosProductos: React.FC = () => {
   const [generated, setGenerated] = useState(false);
 
   const cargarDatos = useCallback(async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     try {
       const params: MovimientoFiltros = {
@@ -180,6 +193,7 @@ const MovimientosProductos: React.FC = () => {
     } catch {
       setLoadingError(true);
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, [sucursalActiva, filtros]);
@@ -280,6 +294,13 @@ const MovimientosProductos: React.FC = () => {
     return { cantidad, costo };
   }, [datosFiltrados]);
 
+  const resumenMovimiento = useMemo(() => {
+    const entradas = datosFiltrados.filter((r) => r.tipoDocumento === 'ENP').length;
+    const salidas = datosFiltrados.filter((r) => r.tipoDocumento === 'SAP').length;
+    const saldo = entradas - salidas;
+    return { entradas, salidas, saldo };
+  }, [datosFiltrados]);
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filtros.desde !== rangoDefault.desde || filtros.hasta !== rangoDefault.hasta) count++;
@@ -289,6 +310,19 @@ const MovimientosProductos: React.FC = () => {
     if (filtros.noCuenta) count++;
     if (!filtros.existencia) count++;
     return count;
+  }, [filtros, rangoDefault]);
+
+  const filterTags = useMemo(() => {
+    const tags: { key: string; label: string }[] = [];
+    if (filtros.desde !== rangoDefault.desde || filtros.hasta !== rangoDefault.hasta) {
+      tags.push({ key: 'fecha', label: `Período: ${formatDate(filtros.desde)} - ${formatDate(filtros.hasta)}` });
+    }
+    if (filtros.codigo) tags.push({ key: 'codigo', label: `Código: ${filtros.codigo}` });
+    if (filtros.almacen) tags.push({ key: 'almacen', label: `Almacén: ${filtros.almacen}` });
+    if (filtros.tipoDoc.length > 0) tags.push({ key: 'tipoDoc', label: `Tipos: ${filtros.tipoDoc.join(', ')}` });
+    if (filtros.noCuenta) tags.push({ key: 'noCuenta', label: `No. Cuenta: ${filtros.noCuenta}` });
+    if (!filtros.existencia) tags.push({ key: 'existencia', label: 'Sin existencia' });
+    return tags;
   }, [filtros, rangoDefault]);
 
   function strToDayjs(val: string): dayjs.Dayjs | null {
@@ -437,8 +471,8 @@ const MovimientosProductos: React.FC = () => {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: '1px solid #f0f0f0', paddingTop: 12 }}>
-        <Button onClick={limpiarFiltros}>Limpiar</Button>
-        <Button type="primary" onClick={aplicarFiltros}>Aplicar</Button>
+        <Button onClick={limpiarFiltros} disabled={loading}>Limpiar</Button>
+        <Button type="primary" onClick={aplicarFiltros} disabled={loading}>Aplicar</Button>
       </div>
     </div>
   );
@@ -449,7 +483,7 @@ const MovimientosProductos: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 130,
-      render: (f: string) => <Text>{formatDate(f)}</Text>,
+      render: (f: string) => <FechaColumnCell fecha={f} />,
     },
     {
       title: 'Documento',
@@ -508,7 +542,10 @@ const MovimientosProductos: React.FC = () => {
       dataIndex: 'tipoDocumento',
       key: 'tipoDocumento',
       width: 100,
-      render: (val: string) => <Text>{val || '-'}</Text>,
+      render: (val: string) => {
+        const tag = TIPO_DOC_STYLE[val] || { color: 'default', label: val || '-' };
+        return <Tag color={tag.color}>{tag.label}</Tag>;
+      },
     },
     {
       title: 'Entidad',
@@ -551,6 +588,24 @@ const MovimientosProductos: React.FC = () => {
     const visibleSet = new Set(visibleColumnKeys);
     return ALL_COLUMN_DEFS.filter((col) => visibleSet.has(col.key as string));
   }, [visibleColumnKeys]);
+
+  const handleRemoveFilterTag = (key: string) => {
+    if (key === 'fecha') {
+      setFiltros({ ...filtros, desde: rangoDefault.desde, hasta: rangoDefault.hasta });
+    } else if (key === 'codigo') {
+      setFiltros({ ...filtros, codigo: '' });
+    } else if (key === 'almacen') {
+      setFiltros({ ...filtros, almacen: '' });
+    } else if (key === 'tipoDoc') {
+      setFiltros({ ...filtros, tipoDoc: [] });
+    } else if (key === 'noCuenta') {
+      setFiltros({ ...filtros, noCuenta: '' });
+    } else if (key === 'existencia') {
+      setFiltros({ ...filtros, existencia: true });
+    }
+    setPage(1);
+    cargarDatos();
+  };
 
   return (
     <>
@@ -596,6 +651,7 @@ const MovimientosProductos: React.FC = () => {
                 <Button
                   icon={<FilterOutlined />}
                   onClick={abrirPopover}
+                  disabled={loading}
                   style={activeFilterCount > 0 ? { borderColor: '#556ee6', color: '#556ee6' } : undefined}
                 >
                   Filtros
@@ -606,30 +662,67 @@ const MovimientosProductos: React.FC = () => {
               columns={ALL_COLUMNS_CONFIG}
               visibleKeys={visibleColumnKeys}
               onChange={setVisibleColumnKeys}
+              disabled={loading}
             />
-            <Button type="primary" onClick={handleGenerar} style={{ minWidth: 100 }}>
+            <Button type="primary" onClick={handleGenerar} loading={loading} disabled={loading} style={{ minWidth: 100 }}>
               Generar
             </Button>
             <Input.Search
               placeholder="Buscar en resultados..."
               allowClear
               onSearch={handleSearch}
+              disabled={loading}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   (e.target as HTMLInputElement).blur();
                   handleSearch('');
                 }
               }}
-              style={{ width: 350 }}
+              style={{ width: '100%', maxWidth: 350 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
             <div style={{ flex: 1 }} />
             <PermissionGate accion="EXPORTAR">
-              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} disabled={loading} />
             </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh} disabled={loading} />
           </div>
         </div>
+
+        {/* Filtros activos visibles fuera del panel */}
+        {filterTags.length > 0 && (
+          <div style={{ padding: '8px 24px 0', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Text type="secondary" style={{ fontSize: 12 }}>Filtros aplicados:</Text>
+              {filterTags.map((tag) => (
+              <Tooltip title={`Eliminar filtro: ${tag.label}`}>
+                <Button size="small" type="dashed" onClick={() => handleRemoveFilterTag(tag.key)} key={tag.key} disabled={loading}>
+                  {tag.label} ×
+                </Button>
+              </Tooltip>
+            ))}
+          </div>
+        )}
+
+        {/* Indicadores rápidos */}
+        {generated && (
+          <div style={{ padding: '8px 24px 0', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <Badge count={resumenMovimiento.entradas} style={{ backgroundColor: '#52c41a' }}>
+              <Card size="small" style={{ width: 100, textAlign: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Entradas</Text>
+              </Card>
+            </Badge>
+            <Badge count={resumenMovimiento.salidas} style={{ backgroundColor: '#f5222d' }}>
+              <Card size="small" style={{ width: 100, textAlign: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Salidas</Text>
+              </Card>
+            </Badge>
+            <Badge count={resumenMovimiento.saldo} style={{ backgroundColor: resumenMovimiento.saldo > 0 ? '#52c41a' : '#f5222d' }}>
+              <Card size="small" style={{ width: 100, textAlign: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Saldo</Text>
+              </Card>
+            </Badge>
+          </div>
+        )}
 
         <Table<MovimientoDTO>
           columns={columns}
@@ -645,6 +738,7 @@ const MovimientosProductos: React.FC = () => {
             total: datosFiltrados.length,
             showSizeChanger: false,
             showTotal: (t) => `${t} registros`,
+            disabled: loading,
           }}
           className="paces-border-top paces-list-table"
           locale={{

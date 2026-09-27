@@ -25,6 +25,8 @@ const ModalMovimientosPosteriores: React.FC<ModalMovimientosPosterioresProps> = 
       title={`Movimientos posteriores — ${sucursal} — ${codigo || ''}`}
       open={open}
       onCancel={onClose}
+      maskClosable={!loading}
+      keyboard={!loading}
       footer={null}
       width={700}
       destroyOnHidden

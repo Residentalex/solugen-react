@@ -32,6 +32,7 @@ interface DetalleCatalogoLayoutProps {
 
   guardando?: boolean;
   eliminando?: boolean;
+  bloqueado?: boolean;
 
   extraLeft?: React.ReactNode;
   extraActions?: React.ReactNode;
@@ -62,6 +63,7 @@ const DetalleCatalogoLayout: React.FC<DetalleCatalogoLayoutProps> = ({
 
   guardando = false,
   eliminando = false,
+  bloqueado = false,
 
   extraLeft,
   extraActions,
@@ -102,7 +104,7 @@ const DetalleCatalogoLayout: React.FC<DetalleCatalogoLayoutProps> = ({
         showIcon
         style={{ marginBottom: 16 }}
         action={
-          <Button size="small" onClick={onRecargar}>
+          <Button size="small" onClick={onRecargar} disabled={bloqueado}>
             Reintentar
           </Button>
         }
@@ -125,7 +127,7 @@ const DetalleCatalogoLayout: React.FC<DetalleCatalogoLayoutProps> = ({
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={onRecargar}>
+            <Button size="small" onClick={onRecargar} disabled={bloqueado}>
               Reintentar
             </Button>
           }
@@ -134,7 +136,7 @@ const DetalleCatalogoLayout: React.FC<DetalleCatalogoLayoutProps> = ({
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={onVolver ?? (() => navigate(rutaVolver))}>
+        <Button icon={<ArrowLeftOutlined />} onClick={onVolver ?? (() => navigate(rutaVolver))} disabled={bloqueado || guardando || eliminando}>
           Volver
         </Button>
         {extraLeft}
@@ -143,7 +145,7 @@ const DetalleCatalogoLayout: React.FC<DetalleCatalogoLayoutProps> = ({
 
         {onEditar && (
           <PermissionGate accion="EDITAR">
-            <Button type="primary" icon={<EditOutlined />} onClick={onEditar}>
+            <Button type="primary" icon={<EditOutlined />} onClick={onEditar} disabled={bloqueado || guardando || eliminando}>
               Editar
             </Button>
           </PermissionGate>
@@ -151,7 +153,7 @@ const DetalleCatalogoLayout: React.FC<DetalleCatalogoLayoutProps> = ({
 
         {onGuardar && (
           <PermissionGate accion={modo === 'crear' ? 'CREAR' : 'EDITAR'}>
-            <Button type="primary" icon={<SaveOutlined />} loading={guardando} onClick={onGuardar}>
+            <Button type="primary" icon={<SaveOutlined />} loading={guardando} disabled={bloqueado || guardando || eliminando} onClick={onGuardar}>
               Guardar
             </Button>
           </PermissionGate>
@@ -159,7 +161,7 @@ const DetalleCatalogoLayout: React.FC<DetalleCatalogoLayoutProps> = ({
 
         {onEliminar && (
           <PermissionGate accion="ELIMINAR">
-            <Button danger icon={<DeleteOutlined />} loading={eliminando} onClick={onEliminar}>
+            <Button danger icon={<DeleteOutlined />} loading={eliminando} disabled={bloqueado || guardando || eliminando} onClick={onEliminar}>
               Eliminar
             </Button>
           </PermissionGate>

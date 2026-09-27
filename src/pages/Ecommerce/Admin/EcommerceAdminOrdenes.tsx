@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  Table, Input, Button, Card, Select, Tag, Typography, Modal, Descriptions, DatePicker, message, Tooltip,
+  Table, Input, Button, Card, Select, Tag, Typography, Modal, Descriptions, DatePicker, message, Tooltip, Spin,
 } from 'antd';
 import { SearchOutlined, ReloadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -45,6 +45,12 @@ const EcommerceAdminOrdenes: React.FC = () => {
   const [detalle, setDetalle] = useState<AdminOrdenDetalleDTO | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [nuevoEstado, setNuevoEstado] = useState<string>('');
+  const [cargandoDetalleId, setCargandoDetalleId] = useState<number | null>(null);
+  const [guardandoEstado, setGuardandoEstado] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const [refrescando, setRefrescando] = useState(false);
+  const operacionRef = useRef(false);
+  const ocupado = cargandoDetalleId !== null || guardandoEstado || exportando || refrescando || loading;
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -78,6 +84,10 @@ const EcommerceAdminOrdenes: React.FC = () => {
   }, [cargar]);
 
   const handleExportarExcel = async () => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setExportando(true);
+    try {
     const companyName = await getCompanyName(sucursalActiva);
     const cols = columns.filter((c) => c.key !== 'acciones');
     exportToExcel({
@@ -87,24 +97,40 @@ const EcommerceAdminOrdenes: React.FC = () => {
       columnHeaders: cols.map((c) => c.title as string),
       dataRows: data.map((item: any) =>
         cols.map((col) => {
-          const val = item[col.dataIndex as string];
+           const val = item[(col as any).dataIndex as string];
           return val !== null && val !== undefined ? String(val) : '';
         })
       ),
     });
+    } finally {
+      setExportando(false);
+      operacionRef.current = false;
+    }
   };
 
   const handleSearch = (value: string) => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
     setSearchText(value);
     setPage(1);
   };
 
-  const handleRefresh = () => {
-    setPage(1);
-    cargar();
+  const handleRefresh = async () => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setRefrescando(true);
+    try {
+      setPage(1);
+      await cargar();
+    } finally {
+      setRefrescando(false);
+      operacionRef.current = false;
+    }
   };
 
   const openDetalle = async (record: AdminOrdenListadoDTO) => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setCargandoDetalleId(record.id);
     try {
       const data = await ecommerceApi.adminObtenerOrdenDetalle(record.id);
       setDetalle(data);
@@ -112,18 +138,27 @@ const EcommerceAdminOrdenes: React.FC = () => {
       setModalOpen(true);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar detalle');
+    } finally {
+      setCargandoDetalleId(null);
+      operacionRef.current = false;
     }
   };
 
   const handleCambiarEstado = async () => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
     if (!detalle || !nuevoEstado) return;
+    operacionRef.current = true;
+    setGuardandoEstado(true);
     try {
       await ecommerceApi.adminActualizarEstadoOrden(detalle.id, nuevoEstado);
       message.success('Estado actualizado');
       setModalOpen(false);
-      cargar();
+      await cargar();
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cambiar estado');
+    } finally {
+      setGuardandoEstado(false);
+      operacionRef.current = false;
     }
   };
 
@@ -135,7 +170,7 @@ const EcommerceAdminOrdenes: React.FC = () => {
       width: 110,
       fixed: 'left',
       render: (val: number, record: AdminOrdenListadoDTO) => (
-        <Text strong style={{ color: '#556ee6', cursor: 'pointer' }} onClick={() => openDetalle(record)}>
+        <Text strong style={{ color: ocupado ? 'var(--paces-text-secondary)' : '#556ee6', cursor: ocupado ? 'default' : 'pointer' }} onClick={() => openDetalle(record)}>
           #{val}
         </Text>
       ),
@@ -188,6 +223,7 @@ const EcommerceAdminOrdenes: React.FC = () => {
               placeholder="Buscar orden..."
               allowClear
               onSearch={handleSearch}
+              disabled={ocupado}
               style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
@@ -195,40 +231,44 @@ const EcommerceAdminOrdenes: React.FC = () => {
               placeholder="Estado"
               style={{ width: 150 }}
               value={estadoFiltro || undefined}
-              onChange={(v) => { setEstadoFiltro(v); setPage(1); }}
+              disabled={ocupado}
+              onChange={(v) => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } setEstadoFiltro(v); setPage(1); }}
               options={ESTADOS_OPCIONES}
             />
             <RangePicker
               placeholder={['Desde', 'Hasta']}
               value={rangoFecha}
-              onChange={(dates) => { setRangoFecha(dates as any); setPage(1); }}
+              disabled={ocupado}
+              onChange={(dates) => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } setRangoFecha(dates as any); setPage(1); }}
               format="DD/MM/YYYY"
             />
             <div style={{ flex: 1 }} />
             <PermissionGate accion="EXPORTAR">
-              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} disabled={ocupado} loading={exportando} />
             </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+            <Button icon={<ReloadOutlined spin={refrescando || loading} />} onClick={handleRefresh} disabled={ocupado} loading={refrescando || loading} />
           </div>
         </div>
         <Table<AdminOrdenListadoDTO>
           columns={columns}
           dataSource={data}
           rowKey="id"
-          loading={loading}
+          loading={loading || ocupado}
           size="middle"
           scroll={{ x: 900 }}
           className="paces-border-top paces-list-table"
           rowClassName="paces-row-hover"
           onRow={(record) => ({
             onClick: () => openDetalle(record),
-            style: { cursor: 'pointer' },
+            style: { cursor: ocupado ? 'default' : 'pointer' },
           })}
           pagination={{
             current: page,
             pageSize,
             total,
+            disabled: ocupado,
             onChange: (p, ps) => {
+              if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
               if (ps !== pageSize) {
                 setPageSize(ps || 25);
                 setPage(1);
@@ -244,18 +284,27 @@ const EcommerceAdminOrdenes: React.FC = () => {
       <Modal
         title={`Orden #${detalle?.noOrden ?? ''}`}
         open={modalOpen}
-        onCancel={() => setModalOpen(false)}
+        onCancel={() => { if (operacionRef.current || guardandoEstado) return; setModalOpen(false); }}
         width={800}
+        closable={!guardandoEstado}
+        maskClosable={!guardandoEstado}
+        keyboard={!guardandoEstado}
+        confirmLoading={guardandoEstado}
         footer={[
-          <Button key="cerrar" onClick={() => setModalOpen(false)}>
+          <Button key="cerrar" onClick={() => { if (operacionRef.current || guardandoEstado) return; setModalOpen(false); }} disabled={guardandoEstado}>
             Cerrar
           </Button>,
-          <Button key="guardar" type="primary" onClick={handleCambiarEstado}>
+          <Button key="guardar" type="primary" onClick={handleCambiarEstado} loading={guardandoEstado} disabled={guardandoEstado || !detalle || !nuevoEstado}>
             Guardar Estado
           </Button>,
         ]}
       >
-        {detalle && (
+        {cargandoDetalleId !== null && !detalle ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <Spin size="large" />
+            <div style={{ marginTop: 12 }}><Text type="secondary">Cargando detalle...</Text></div>
+          </div>
+        ) : detalle && (
           <div>
             <Descriptions bordered size="small" column={2} style={{ marginBottom: 16 }}>
               <Descriptions.Item label="Cliente">{detalle.nombreCliente}</Descriptions.Item>
@@ -273,7 +322,8 @@ const EcommerceAdminOrdenes: React.FC = () => {
               <Select
                 style={{ width: 180 }}
                 value={nuevoEstado}
-                onChange={setNuevoEstado}
+                disabled={guardandoEstado}
+                onChange={(v) => { if (operacionRef.current || guardandoEstado) { message.warning('Hay una operación en curso, espere a que termine'); return; } setNuevoEstado(v); }}
                 options={ESTADOS_OPCIONES.filter((o) => o.value !== '')}
               />
             </div>

@@ -8,6 +8,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { cuentaBancariaApi } from '../../api/cuentaBancariaApi';
 import type { CuentaBancariaDTO } from '../../api/cuentaBancariaApi';
 import DocumentListadoToolbar from '../../components/DocumentListadoToolbar';
@@ -362,7 +363,7 @@ const FTransBanco: React.FC = () => {
     { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 160, fixed: 'left' as const,
       render: (doc: string) => <Text strong>{doc}</Text> },
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 130,
-      render: (val: string) => formatDateRaw(val) },
+      render: (val: string) => <FechaColumnCell fecha={val} /> },
     { title: 'Entidad / Beneficiario', dataIndex: 'entidad', key: 'entidad',
       render: (val: string) => <Text>{toTitleCase(val ?? '')}</Text> },
     { title: 'Concepto', dataIndex: 'concepto', key: 'concepto', width: 280, ellipsis: true,

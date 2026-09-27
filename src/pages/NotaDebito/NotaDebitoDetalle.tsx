@@ -7,6 +7,7 @@ import {
   LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
   FileTextOutlined, FileSearchOutlined, ReloadOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
@@ -467,7 +468,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${documentoActivo.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
@@ -587,7 +588,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${documentoActivo.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),

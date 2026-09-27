@@ -1,9 +1,9 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { Modal, Typography, Select, Input, Button, Space, Spin, Tag, message, Divider, Empty } from 'antd';
+import { Modal, Typography, Select, Input, Button, Space, Spin, Tag, message, Divider, Empty, Image } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../stores/authStore';
 import { ticketApi } from '../api/ticketApi';
-import type { TicketDTO } from '../types/ticket';
+import type { TicketDTO, TicketAdjuntoDTO } from '../types/ticket';
 
 const { TextArea } = Input;
 
@@ -30,6 +30,58 @@ interface Props {
   ticketID: number;
   onClose: () => void;
 }
+
+const TicketAdjunto: React.FC<{ adjunto: TicketAdjuntoDTO }> = ({ adjunto }) => {
+  const [url, setUrl] = useState<string | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [fallo, setFallo] = useState(false);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let cancelado = false;
+
+    ticketApi.descargarAdjunto(adjunto.id)
+      .then((blob) => {
+        if (cancelado) return;
+        objectUrl = window.URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelado) setFallo(true);
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+
+    return () => {
+      cancelado = true;
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+    };
+  }, [adjunto.id]);
+
+  return (
+    <div style={{ border: '1px solid #f0f0f0', borderRadius: 6, padding: 8, background: '#fafafa' }}>
+      {cargando ? (
+        <div style={{ height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Spin size="small" />
+        </div>
+      ) : fallo || !url ? (
+        <div style={{ padding: 8, fontSize: 12, color: '#888' }}>
+          No se pudo cargar {adjunto.nombreArchivo}
+        </div>
+      ) : (
+        <Image
+          src={url}
+          alt={adjunto.nombreArchivo}
+          style={{ maxHeight: 240, objectFit: 'contain', objectPosition: 'top', width: '100%' }}
+        />
+      )}
+      <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>
+        {adjunto.nombreArchivo} · {formatFecha(adjunto.fechaCreacion)}
+      </div>
+    </div>
+  );
+};
 
 const TicketThreadModal: React.FC<Props> = ({ open, ticketID, onClose }) => {
   const sucursal = useAuthStore((s) => s.compania);
@@ -122,6 +174,19 @@ const TicketThreadModal: React.FC<Props> = ({ open, ticketID, onClose }) => {
           }}>
             <Typography.Text>{ticket.mensaje}</Typography.Text>
           </div>
+
+          {ticket.adjuntos?.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <Typography.Text strong style={{ fontSize: 13 }}>
+                Adjuntos ({ticket.adjuntos.length})
+              </Typography.Text>
+              <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                {ticket.adjuntos.map((a) => (
+                  <TicketAdjunto key={a.id} adjunto={a} />
+                ))}
+              </Space>
+            </div>
+          )}
 
           <Divider style={{ margin: '12px 0' }}>Historial de respuestas</Divider>
 

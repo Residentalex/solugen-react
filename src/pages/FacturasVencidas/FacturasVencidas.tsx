@@ -11,6 +11,7 @@ import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { formatCurrency, formatDateParam } from '../../utils/formats';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import PermissionGate from '../../components/PermissionGate';
 import ModalBuscarSuplidor from '../../components/ModalBuscarSuplidor/ModalBuscarSuplidor';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
@@ -204,7 +205,7 @@ const FacturasVencidas: React.FC = () => {
       dataIndex: 'fechaDocumento',
       key: 'fechaDocumento',
       width: 110,
-      render: (f: string) => <Text>{formatDate(f)}</Text>,
+      render: (f: string) => <FechaColumnCell fecha={f} />,
     },
     {
       title: 'Suplidor',
@@ -225,7 +226,7 @@ const FacturasVencidas: React.FC = () => {
       dataIndex: 'fechaVence',
       key: 'fechaVence',
       width: 110,
-      render: (f: string) => <Text>{formatDate(f)}</Text>,
+      render: (f: string) => <FechaColumnCell fecha={f} />,
     },
     {
       title: 'Días Vencidos',

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Row, Col, Button, Form, Input, InputNumber, Switch, Select, Skeleton, Spin, message, Tabs, Tag, Space, Typography, Alert, Table, Modal } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, SearchOutlined, CloseOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
@@ -91,7 +91,8 @@ const UsuarioFormulario: React.FC = () => {
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
 
-  const navigationConfirmedRef = useFormularioNavigation();
+  const guardandoRef = useRef(false);
+  const navigationConfirmedRef = useFormularioNavigation(guardandoRef);
 
   const securitySucursal = useAuthStore((s) => s.securitySucursal);
 
@@ -277,6 +278,8 @@ const UsuarioFormulario: React.FC = () => {
   }, [rolesDisponibles]);
 
   const guardar = async () => {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
     try {
       const values = await form.validateFields();
       setGuardando(true);
@@ -317,11 +320,13 @@ const UsuarioFormulario: React.FC = () => {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar usuario');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   };
 
   const handleCancelar = () => {
+    if (guardandoRef.current || guardando) return;
     Modal.confirm({
       title: 'Cancelar',
       icon: <ExclamationCircleOutlined />,
@@ -385,7 +390,7 @@ const UsuarioFormulario: React.FC = () => {
             <PermissionGate accion="CREAR">
               <Button type="primary" icon={<SaveOutlined />} onClick={guardar} loading={guardando}>Guardar</Button>
             </PermissionGate>
-            <Button icon={<ArrowLeftOutlined />} onClick={handleCancelar}>Volver</Button>
+            <Button icon={<ArrowLeftOutlined />} onClick={handleCancelar} disabled={guardando}>Volver</Button>
           </Space>
         </div>
       )}
@@ -396,7 +401,7 @@ const UsuarioFormulario: React.FC = () => {
           label: 'Información General',
           children: (
             <Card title="Información General" style={{ borderRadius: 8, marginBottom: 16 }}>
-              <Form form={form} layout="vertical" size="small">
+              <Form form={form} layout="vertical" size="small" disabled={guardando}>
                 <Row gutter={16}>
                   <Col xs={24} sm={12} lg={8}>
                     <Form.Item name="nombreUsuario" label="Usuario" rules={[{ required: true, message: 'Obligatorio' }]}>
@@ -411,7 +416,10 @@ const UsuarioFormulario: React.FC = () => {
                   <Col xs={24} sm={12} lg={6}>
                     <div>
                       <Form.Item label="Empleado" style={{ marginBottom: 0 }}>
-                        <Input placeholder=" " value={empleadoLabel} readOnly suffix={<SearchOutlined />} onClick={() => setBuscarEmpleadoOpen(true)} />
+                        <Input placeholder=" " value={empleadoLabel} readOnly disabled={guardando} suffix={<SearchOutlined />} onClick={() => {
+                          if (guardandoRef.current) return;
+                          setBuscarEmpleadoOpen(true);
+                        }} />
                       </Form.Item>
                     </div>
                     <Form.Item name="empleadoID" hidden>
@@ -446,7 +454,10 @@ const UsuarioFormulario: React.FC = () => {
               <Tabs
                 type="card"
                 activeKey={String(sucursalActivaTab)}
-                onChange={(key) => setSucursalActivaTab(Number(key) as Sucursal)}
+                onChange={(key) => {
+                  if (guardandoRef.current) return;
+                  setSucursalActivaTab(Number(key) as Sucursal);
+                }}
                 items={SUCURSALES.map((s) => ({
                   key: String(s),
                   label: SUCURSAL_NOMBRES[s] || `Sucursal ${s}`,
@@ -463,7 +474,8 @@ const UsuarioFormulario: React.FC = () => {
                         ) : (
                           <Space wrap size={4}>
                             {rolesSucursalActiva.map((r) => (
-                              <Tag key={r.id} color="blue" closable onClose={() => {
+                              <Tag key={r.id} color="blue" closable={!guardando} onClose={() => {
+                                if (guardandoRef.current) return;
                                 const nuevosIds = rolesSucursalActiva
                                   .filter((x) => x.id !== r.id)
                                   .map((x) => x.id);
@@ -484,13 +496,17 @@ const UsuarioFormulario: React.FC = () => {
                           mode="multiple"
                           placeholder="Seleccionar roles..."
                           value={rolesSucursalActiva.map((r) => r.id)}
-                          onChange={(ids) => handleRolesChange(s, ids)}
+                          onChange={(ids) => {
+                            if (guardandoRef.current) return;
+                            handleRolesChange(s, ids);
+                          }}
                           options={rolesDisponibles[s]?.map((r) => ({
                             label: r.nombre,
                             value: r.id,
                           })) || []}
                           style={{ width: '100%' }}
                           loading={cargandoRoles}
+                          disabled={guardando}
                           filterOption={(input, option) =>
                             (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                           }
@@ -522,6 +538,7 @@ const UsuarioFormulario: React.FC = () => {
         open={buscarEmpleadoOpen}
         onClose={() => setBuscarEmpleadoOpen(false)}
         onSelect={(emp) => {
+          if (guardandoRef.current) return;
           form.setFieldValue('empleadoID', emp.codigo);
           setEmpleadoLabel(`${emp.codigo} - ${emp.nombre}`);
           form.setFieldValue('nombre', emp.nombre);

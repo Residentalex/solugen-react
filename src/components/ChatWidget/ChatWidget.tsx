@@ -112,7 +112,7 @@ const ChatWidget: React.FC = () => {
     return (
       <>
         {noLeidos > 0 && (
-          <div style={{
+          <div data-captura-ocultar style={{
             position: 'fixed', bottom: pos.bottom + 48, right: pos.right,
             background: '#ff4d4f', color: '#fff', borderRadius: 10,
             padding: '1px 6px', fontSize: 11, fontWeight: 600,
@@ -121,7 +121,7 @@ const ChatWidget: React.FC = () => {
             {noLeidos}
           </div>
         )}
-        <button onClick={abrir} title="Chat"
+        <button onClick={abrir} title="Chat" data-captura-ocultar
           style={{
             position: 'fixed', bottom: pos.bottom, right: pos.right,
             width: 48, height: 48,
@@ -154,7 +154,7 @@ const ChatWidget: React.FC = () => {
   }
 
   return (
-    <div ref={widgetRef} style={{
+    <div ref={widgetRef} data-captura-ocultar style={{
       position: 'fixed', bottom: 20, right: 20, width: CHAT_WIDTH,
       height: CHAT_HEIGHT, background: 'var(--paces-bg-elevated)',
       borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.15)',

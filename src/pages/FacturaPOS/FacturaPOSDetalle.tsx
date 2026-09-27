@@ -13,9 +13,11 @@ import {
   CloseCircleOutlined,
   CreditCardOutlined,
   RollbackOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { apiClient } from '../../api/client';
 import { companiaApi } from '../../api/companiaApi';
@@ -894,7 +896,7 @@ const FacturaPOSDetalle: React.FC = () => {
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${data.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${data.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                   ),
@@ -1198,7 +1200,7 @@ const FacturaPOSDetalle: React.FC = () => {
               },
               {
                 key: 'historial',
-                label: `Historial (${data.logs?.length || 0})`,
+                icon: <HistoryOutlined />, label: `Historial (${data.logs?.length || 0})`,
                 children: (
                   <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                 ),

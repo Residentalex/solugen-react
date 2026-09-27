@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Table, Card, Button, Alert, Typography, message, Tag, Select, Empty } from 'antd';
+import { Table, Card, Button, Alert, Typography, message, Tag, Select, Empty, Tooltip } from 'antd';
 import { ArrowLeftOutlined, ReloadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { notificacionesApi } from '../../api/notificacionesApi';
@@ -15,6 +15,7 @@ const VisualizarConsulta: React.FC = () => {
   const [filas, setFilas] = useState<Record<string, any>[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [exportando, setExportando] = useState(false);
   const [error, setError] = useState('');
   const [pageSize, setPageSize] = useState(25);
 
@@ -50,27 +51,35 @@ const VisualizarConsulta: React.FC = () => {
     : [];
 
   const handleExportarExcel = async () => {
-    const companyName = await getCompanyName(sucursalActiva);
-    const cols = columnas.length > 0
-      ? columnas.map((c) => ({ title: c.title as string, key: c.key as string }))
-      : [];
-    exportToExcel({
-      fileName: `ConsultaSQL_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
-      sheetName: 'Resultado Consulta',
-      companyName,
-      columnHeaders: cols.map((c) => c.title),
-      dataRows: filas.map((item: any) =>
-        cols.map((col) => {
-          const val = item[col.key];
-          return val !== null && val !== undefined ? String(val) : '';
-        })
-      ),
-    });
+    if (loading || exportando || filas.length === 0) return;
+    setExportando(true);
+    try {
+      const companyName = await getCompanyName(sucursalActiva);
+      const cols = columnas.length > 0
+        ? columnas.map((c) => ({ title: c.title as string, key: c.key as string }))
+        : [];
+      exportToExcel({
+        fileName: `ConsultaSQL_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+        sheetName: 'Resultado Consulta',
+        companyName,
+        columnHeaders: cols.map((c) => c.title),
+        dataRows: filas.map((item: any) =>
+          cols.map((col) => {
+            const val = item[col.key];
+            return val !== null && val !== undefined ? String(val) : '';
+          })
+        ),
+      });
+    } catch {
+      message.error('No se pudo generar el archivo Excel');
+    } finally {
+      setExportando(false);
+    }
   };
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>Volver</Button>
         <Typography.Title level={4} style={{ margin: 0, flex: 1 }}>
           Resultado de consulta SQL
@@ -79,6 +88,7 @@ const VisualizarConsulta: React.FC = () => {
         <Select
           style={{ width: 65 }}
           value={pageSize}
+          disabled={loading}
           onChange={(v) => setPageSize(v)}
           options={[
             { value: 25, label: '25' },
@@ -87,7 +97,15 @@ const VisualizarConsulta: React.FC = () => {
           ]}
         />
         <PermissionGate accion="EXPORTAR">
-          <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+          <Tooltip title="Exportar Excel">
+            <Button
+              icon={<FileExcelOutlined />}
+              onClick={handleExportarExcel}
+              loading={exportando}
+              disabled={loading || exportando || filas.length === 0}
+              aria-label="Exportar Excel"
+            />
+          </Tooltip>
         </PermissionGate>
         <Button icon={<ReloadOutlined />} onClick={cargarDatos} loading={loading}>Recargar</Button>
       </div>

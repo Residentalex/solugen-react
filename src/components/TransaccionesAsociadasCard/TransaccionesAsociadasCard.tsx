@@ -177,25 +177,25 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
 
           return (
             <Table.Summary.Row>
-              <Table.Summary.Cell align="left">
+              <Table.Summary.Cell index={0} align="left">
                 <Text strong>Totales</Text>
               </Table.Summary.Cell>
-              <Table.Summary.Cell />
-              <Table.Summary.Cell />
-              <Table.Summary.Cell align="right">
+              <Table.Summary.Cell index={1} />
+              <Table.Summary.Cell index={2} />
+              <Table.Summary.Cell index={3} align="right">
                 <Text strong>{formatNumber(totales.montoOriginal)}</Text>
               </Table.Summary.Cell>
-              <Table.Summary.Cell align="right">
+              <Table.Summary.Cell index={4} align="right">
                 <Text strong>{formatNumber(totales.pagado)}</Text>
               </Table.Summary.Cell>
-              <Table.Summary.Cell align="right">
+              <Table.Summary.Cell index={5} align="right">
                 <Text strong>{formatNumber(totales.descuento)}</Text>
               </Table.Summary.Cell>
-              <Table.Summary.Cell align="right">
+              <Table.Summary.Cell index={6} align="right">
                 <Text strong>{formatNumber(totales.monto)}</Text>
               </Table.Summary.Cell>
               {!ocultarPerdida && (
-                <Table.Summary.Cell align="right">
+                <Table.Summary.Cell index={7} align="right">
                   <Text strong>{formatNumber(totales.perdida)}</Text>
                 </Table.Summary.Cell>
               )}

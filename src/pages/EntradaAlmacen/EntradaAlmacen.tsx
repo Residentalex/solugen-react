@@ -8,6 +8,7 @@ import { useDocumentoListado } from '../../hooks/useDocumentoListado';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import EntidadColumnCell from '../../components/EntidadColumnCell';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { MovimientoVistaDTO } from '../../types/entradaAlmacen';
@@ -68,10 +69,7 @@ const EntradaAlmacen: React.FC = () => {
       key: 'fecha',
       width: 130,
       render: (f: string, record: MovimientoVistaDTO) => (
-        <div style={{ lineHeight: 1.4 }}>
-          <div style={{ fontSize: 12 }}>{formatDateRaw(f)}</div>
-          <div style={{ fontSize: 10, color: '#888' }}>Recibo: {record.fechaEntrega ? formatDateRaw(record.fechaEntrega) : '-'}</div>
-        </div>
+        <FechaColumnCell fecha={f} fechaSecundaria={record.fechaEntrega} labelSecundario="Recibo" />
       ),
     },
     {

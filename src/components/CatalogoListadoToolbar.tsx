@@ -20,6 +20,8 @@ interface CatalogoListadoToolbarProps {
   onClonar?: () => void;
   onReload: () => void;
   onExportarExcel?: () => void;
+  exportando?: boolean;
+  deshabilitado?: boolean;
 }
 
 const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
@@ -36,6 +38,8 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
   onClonar,
   onReload,
   onExportarExcel,
+  exportando = false,
+  deshabilitado = false,
 }) => {
   return (
     <div style={{ padding: '16px 24px 0' }}>
@@ -52,7 +56,7 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
         <div style={{ flex: 1 }} />
         {onNuevo && (
           <PermissionGate accion="CREAR">
-            <Button type="primary" icon={<PlusOutlined />} onClick={onNuevo}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={onNuevo} disabled={deshabilitado}>
               Nuevo
             </Button>
           </PermissionGate>
@@ -60,15 +64,15 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
         {acciones}
         {showClonar && onClonar && (
           <PermissionGate accion="CLONAR">
-            <Button icon={<CopyOutlined />} disabled={clonarDisabled} onClick={onClonar} />
+            <Button icon={<CopyOutlined />} disabled={clonarDisabled || deshabilitado} onClick={onClonar} />
           </PermissionGate>
         )}
         {onExportarExcel && (
           <PermissionGate accion="EXPORTAR">
-            <Button icon={<FileExcelOutlined />} onClick={onExportarExcel} />
+            <Button icon={<FileExcelOutlined />} onClick={onExportarExcel} disabled={deshabilitado} loading={exportando} />
           </PermissionGate>
         )}
-        <Button icon={<ReloadOutlined />} onClick={onReload} />
+        <Button icon={<ReloadOutlined />} onClick={onReload} disabled={deshabilitado} />
       </div>
     </div>
   );

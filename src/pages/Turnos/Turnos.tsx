@@ -1,8 +1,8 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  Alert, Table, DatePicker, Tag, Card, Button, Typography, Empty, Input
+  Alert, Table, DatePicker, Tag, Card, Button, Typography, Empty, Input, Tooltip,
 } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -10,16 +10,16 @@ import { turnoApi } from '../../api/turnoApi';
 import type { TurnoDTO } from '../../types/turno';
 import type { ColumnsType } from 'antd/es/table';
 import { ReloadOutlined, SearchOutlined, FileExcelOutlined } from '@ant-design/icons';
-import { formatCurrency } from '../../utils/formats';
+import { formatCurrency, formatNumber } from '../../utils/formats';
 import PermissionGate from '../../components/PermissionGate';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { RangePicker } = DatePicker;
 const { Text } = Typography;
 
-const PERIODO_MAP: Record<number, { label: string; color: string }> = {
-  0: { label: 'Abierto', color: 'warning' },
-  1: { label: 'Cerrado', color: 'success' },
+const ESTADO_TAG: Record<string, { color: string; label: string }> = {
+  Abierto: { color: 'warning', label: 'Abierto' },
+  Cerrado: { color: 'success', label: 'Cerrado' },
 };
 
 const DIAS_POR_DEFECTO = 30;
@@ -169,9 +169,11 @@ const Turnos: React.FC = () => {
       key: 'noTurno',
       width: 140,
       render: (val: string, record: TurnoDTO) => (
-        <Text strong className="paces-doc-link" onClick={() => openDetalle(record)}>
-          {val}
-        </Text>
+        <Tooltip title={`Turno ${val}`}>
+          <Text strong className="paces-doc-link" onClick={() => openDetalle(record)}>
+            {val}
+          </Text>
+        </Tooltip>
       ),
     },
     {
@@ -211,18 +213,52 @@ const Turnos: React.FC = () => {
       key: 'total',
       width: 140,
       align: 'right',
-      render: (val: number) => <Text strong>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text strong style={{ textAlign: 'right' }}>{formatCurrency(val)}</Text>,
+    },
+    {
+      title: 'Diferencia',
+      key: 'diferencia',
+      width: 120,
+      align: 'right',
+      render: (_: any, record: TurnoDTO) => {
+        const cobrado = (record.cobros || []).reduce(
+          (sum: number, c: any) => sum + (c.efectivo || 0) + (c.cheque || 0) + (c.transferencia || 0) +
+          (c.tarjetaCredito || 0) + (c.tarjetaDebito || 0) + (c.bono || 0) +
+          (c.tarjetaRegalo || 0) + (c.notaCredito || 0) + (c.pago || 0), 0
+        );
+        const diferencia = record.total - cobrado;
+        const color = diferencia > 0 ? '#f46a6a' : '#52c41a';
+        return <Text strong style={{ color, textAlign: 'right' }}>{formatCurrency(diferencia)}</Text>;
+      },
     },
     {
       title: 'Cerrado',
       dataIndex: 'cerrado',
       key: 'cerrado',
       width: 90,
-      render: (val: boolean) => (
-        <Tag color={val ? 'green' : 'default'}>{val ? 'Sí' : 'No'}</Tag>
-      ),
+      render: (val: boolean) => {
+        const info = val ? ESTADO_TAG.Cerrado : ESTADO_TAG.Abierto;
+        return (
+          <Tag color={info.color}>{info.label}</Tag>
+        );
+      },
     },
   ];
+
+  const resumen = useMemo(() => {
+    const datos = data?.datos || [];
+    const abiertos = datos.filter((r: TurnoDTO) => !r.cerrado).length;
+    const cerrados = datos.length - abiertos;
+    const conDiferencia = datos.filter((r: TurnoDTO) => {
+      const cobrado = (r.cobros || []).reduce(
+        (sum: number, c: any) => sum + (c.efectivo || 0) + (c.cheque || 0) + (c.transferencia || 0) +
+        (c.tarjetaCredito || 0) + (c.tarjetaDebito || 0) + (c.bono || 0) +
+        (c.tarjetaRegalo || 0) + (c.notaCredito || 0) + (c.pago || 0), 0
+      );
+      return Math.abs(r.total - cobrado) > 0.01;
+    }).length;
+    return { abiertos, cerrados, conDiferencia };
+  }, [data?.datos]);
 
   return (
     <>
@@ -242,16 +278,32 @@ const Turnos: React.FC = () => {
       <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }}
         styles={{ body: { padding: 0 } }}>
         <div style={{ padding: '16px 24px 0' }}>
+          {/* Resumen */}
+          <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+            <Card size="small" style={{ flex: 1, minWidth: 120, textAlign: 'center', borderColor: '#faad14' }}>
+              <Text type="secondary">Abiertos</Text>
+              <div><Text strong style={{ fontSize: 22, color: '#faad14' }}>{resumen.abiertos}</Text></div>
+            </Card>
+            <Card size="small" style={{ flex: 1, minWidth: 120, textAlign: 'center', borderColor: '#52c41a' }}>
+              <Text type="secondary">Cerrados</Text>
+              <div><Text strong style={{ fontSize: 22, color: '#52c41a' }}>{resumen.cerrados}</Text></div>
+            </Card>
+            <Card size="small" style={{ flex: 1, minWidth: 120, textAlign: 'center', borderColor: '#f46a6a' }}>
+              <Text type="secondary">Con diferencia</Text>
+              <div><Text strong style={{ fontSize: 22, color: resumen.conDiferencia ? '#f46a6a' : '#595959' }}>{resumen.conDiferencia}</Text></div>
+            </Card>
+          </div>
+          {/* Filtros */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
             <Input.Search
               placeholder="Buscar turno..."
               allowClear
               onSearch={handleSearch}
-              style={{ width: 400 }}
+              style={{ width: '100%', maxWidth: 300 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
             <RangePicker
-              style={{ width: 180 }}
+              style={{ width: '100%', maxWidth: 200 }}
               format="YYYY-MM-DD"
               onChange={handleDateChange}
               placeholder={["Desde", "Hasta"]}
@@ -271,7 +323,7 @@ const Turnos: React.FC = () => {
           rowKey="id"
           loading={isLoading}
           size="middle"
-          scroll={{ x: 900 }}
+          scroll={{ x: 1100 }}
           locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay turnos registrados" /></div> }}
           pagination={{
             current: page,
@@ -288,7 +340,10 @@ const Turnos: React.FC = () => {
           }
           onRow={(record) => ({
             onClick: () => handleRowClick(record),
-            style: { cursor: 'pointer' },
+            style: {
+              cursor: 'pointer',
+              backgroundColor: record.cerrado ? '#f6ffed' : '#fffbe6',
+            }
           })}
         />
       </Card>

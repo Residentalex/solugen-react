@@ -1,4 +1,4 @@
-﻿import React, { useState, useCallback } from 'react';
+﻿import React, { useState, useCallback, useRef } from 'react';
 import { Modal, Form, Input, Button, Typography, message, Alert } from 'antd';
 import { CopyOutlined, CheckOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
@@ -10,20 +10,23 @@ interface ApiTokenCrearModalProps {
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
+  onGenerando?: (generando: boolean) => void;
 }
 
 type ModalState = 'form' | 'created';
 
-const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, onCreated }) => {
+const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, onCreated, onGenerando }) => {
   const usuario = useAuthStore((s) => s.usuario);
   const [form] = Form.useForm();
   const [modalState, setModalState] = useState<ModalState>('form');
   const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
   const [createdToken, setCreatedToken] = useState<AuthApiTokenResponseDTO | null>(null);
   const [copied, setCopied] = useState(false);
   const [closingConfirmed, setClosingConfirmed] = useState(false);
 
   const handleClose = useCallback(() => {
+    if (creatingRef.current || creating) return;
     if (modalState === 'created' && !copied && !closingConfirmed) {
       Modal.confirm({
         title: '¿Copiaste el token?',
@@ -47,7 +50,7 @@ const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, 
     setClosingConfirmed(false);
     form.resetFields();
     onClose();
-  }, [modalState, copied, closingConfirmed, form, onClose]);
+  }, [modalState, copied, closingConfirmed, creating, form, onClose]);
 
   const copiarAlPortapapeles = useCallback(async (texto: string) => {
     // Intentar con Clipboard API moderna
@@ -89,9 +92,12 @@ const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, 
 
   const handleGenerate = useCallback(async () => {
     if (!usuario) return;
+    if (creatingRef.current || creating) return;
+    creatingRef.current = true;
+    setCreating(true);
+    onGenerando?.(true);
     try {
       const values = await form.validateFields();
-      setCreating(true);
       const result = await apiTokenApi.crear({
         usuarioID: usuario.id,
         nombre: values.nombre,
@@ -103,13 +109,17 @@ const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, 
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al generar token');
     } finally {
+      creatingRef.current = false;
       setCreating(false);
+      onGenerando?.(false);
     }
-  }, [usuario, form, onCreated]);
+  }, [usuario, form, onCreated, onGenerando, creating]);
 
   // Reset state when modal opens
   React.useEffect(() => {
     if (open) {
+      creatingRef.current = false;
+      setCreating(false);
       setModalState('form');
       setCreatedToken(null);
       setCopied(false);
@@ -126,22 +136,24 @@ const ApiTokenCrearModal: React.FC<ApiTokenCrearModalProps> = ({ open, onClose, 
       footer={null}
       width={560}
       destroyOnHidden
-      closable={modalState !== 'created' || copied}
-      mask={{ closable: modalState !== 'created' }}
+      closable={!creating && (modalState !== 'created' || copied)}
+      mask={{ closable: !creating && modalState !== 'created' }}
+      maskClosable={!creating}
+      keyboard={!creating}
     >
       {modalState === 'form' && (
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }} disabled={creating}>
           <Form.Item
             name="nombre"
             label="Nombre del token"
             rules={[{ required: true, message: 'El nombre es obligatorio' }]}
           >
-            <Input placeholder="Ej. Integración POS" maxLength={100} />
+            <Input placeholder="Ej. Integración POS" maxLength={100} disabled={creating} />
           </Form.Item>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Button onClick={handleClose}>Cancelar</Button>
-            <Button type="primary" loading={creating} onClick={handleGenerate}>
+            <Button onClick={handleClose} disabled={creating}>Cancelar</Button>
+            <Button type="primary" loading={creating} disabled={creating} onClick={handleGenerate}>
               Generar token
             </Button>
           </div>

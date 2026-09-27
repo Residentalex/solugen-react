@@ -13,6 +13,7 @@ import {
   FileSearchOutlined,
   RollbackOutlined,
   ScanOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -1185,7 +1186,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${documentoActivo.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 800 }} />
                   ),
@@ -1403,7 +1404,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
               },
               {
                 key: 'historial',
-                label: `Historial (${documentoActivo.logs?.length || 0})`,
+                icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                 children: (
                   <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 800 }} />
                 ),

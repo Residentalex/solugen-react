@@ -53,7 +53,8 @@ const DestinoRow: React.FC<{
   roles: any[];
   onRemove: () => void;
   form: any;
-}> = ({ name, restField, usuarios, roles, onRemove, form }) => {
+  disabled?: boolean;
+}> = ({ name, restField, usuarios, roles, onRemove, form, disabled }) => {
   const destinoTipo = Form.useWatch(['destinos', name, 'destinoTipo'], form);
 
   const opcionesDestino = destinoTipo === 'Rol'
@@ -92,7 +93,7 @@ const DestinoRow: React.FC<{
         </Form.Item>
       </Col>
       <Col span={4}>
-        <Button type="text" danger icon={<DeleteOutlined />} onClick={onRemove} />
+        <Button type="text" danger icon={<DeleteOutlined />} onClick={onRemove} disabled={disabled} />
       </Col>
     </Row>
   );
@@ -161,6 +162,7 @@ const NotificacionSQLFormulario: React.FC<NotificacionSQLFormularioProps> = ({
   };
 
   const handleProbar = async () => {
+    if (guardando || probando) return;
     const sql = form.getFieldValue('sqlConsulta');
     if (!sql?.trim()) {
       message.warning('Escriba una consulta SQL primero');
@@ -191,6 +193,7 @@ const NotificacionSQLFormulario: React.FC<NotificacionSQLFormularioProps> = ({
   };
 
   const handleGuardar = async () => {
+    if (guardando || probando) return;
     const error = validarFormulario();
     if (error) {
       message.error(error);
@@ -231,33 +234,42 @@ const NotificacionSQLFormulario: React.FC<NotificacionSQLFormularioProps> = ({
     }
   };
 
+  // Bloqueo cruzado: no guardar mientras se prueba ni probar/guardar en simultáneo
+  const ocupado = guardando || probando;
+
   return (
     <Modal
       title={editando ? 'Editar configuración SQL' : 'Nueva configuración SQL'}
       open={visible}
-      onCancel={onClose}
+      onCancel={() => { if (!ocupado) onClose(); }}
       onOk={handleGuardar}
       confirmLoading={guardando}
       okText="Guardar"
       cancelText="Cancelar"
+      cancelButtonProps={{ disabled: ocupado }}
       width={800}
-      footer={(_, { OkBtn, CancelBtn }) => (
+      footer={
         <Space>
-          <CancelBtn />
+          <Button onClick={onClose} disabled={ocupado}>
+            Cancelar
+          </Button>
           {editando && (
             <Button
               icon={<PlayCircleOutlined />}
               onClick={handleProbar}
               loading={probando}
+              disabled={ocupado}
             >
               Probar SQL
             </Button>
           )}
-          <OkBtn />
+          <Button type="primary" onClick={handleGuardar} loading={guardando} disabled={ocupado}>
+            Guardar
+          </Button>
         </Space>
-      )}
+      }
     >
-      <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+      <Form form={form} layout="vertical" style={{ marginTop: 16 }} disabled={ocupado}>
         <Row gutter={16}>
           <Col span={12}>
             <Form.Item name="nombre" label="Nombre" rules={[{ required: true, message: 'Obligatorio' }]}>
@@ -320,7 +332,7 @@ const NotificacionSQLFormulario: React.FC<NotificacionSQLFormularioProps> = ({
             <div style={{ marginTop: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontWeight: 600, fontSize: 13 }}>Destinatarios</span>
-                <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => add({ destinoTipo: 'Usuario', destinoID: undefined })}>
+                <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={() => add({ destinoTipo: 'Usuario', destinoID: undefined })} disabled={ocupado}>
                   Agregar destinatario
                 </Button>
               </div>
@@ -340,6 +352,7 @@ const NotificacionSQLFormulario: React.FC<NotificacionSQLFormularioProps> = ({
                   roles={roles}
                   onRemove={() => remove(name)}
                   form={form}
+                  disabled={ocupado}
                 />
               ))}
             </div>

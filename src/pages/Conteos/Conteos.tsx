@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -11,13 +11,15 @@ import {
   Typography,
   Alert,
   Empty,
+  Tooltip,
+  Badge,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { conteoApi } from '../../api/conteoApi';
-import type { ConteoFisicoDTO } from '../../types/conteo';
+import type { ConteoFisicoDTO, DetalleConteoFisicoDTO } from '../../types/conteo';
 import { formatCurrency } from '../../utils/formats';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import { message } from 'antd';
@@ -72,6 +74,12 @@ function formatDateParam(d: Date): string {
   const ss = String(d.getSeconds()).padStart(2, '0');
   return `${y}${m}${day}${hh}${mm}${ss}`;
 }
+
+const ESTADO_TAG: Record<number, { color: string; label: string }> = {
+  0: { color: 'default', label: 'Borrador' },
+  1: { color: 'success', label: 'Cerrado' },
+  2: { color: 'processing', label: 'Abierto' },
+};
 
 const Conteos: React.FC = () => {
   const navigate = useNavigate();
@@ -165,10 +173,7 @@ const Conteos: React.FC = () => {
   };
 
   const puedeEditar = (record: ConteoFisicoDTO) => {
-    // Permitir edición si no está bloqueado y el periodo está abierto (periodo != cerrado)
-    // En el backend, Periodo = Cerrado cuando fecha <= fechaCierre
-    // Asumimos: 0=Borrador, 1=Cerrado, 2=Abierto
-    const periodoAbierto = record.periodo !== 1; // 1 = Cerrado
+    const periodoAbierto = record.periodo !== 1;
     const noBloqueado = !record.bloqueado;
     return periodoAbierto && noBloqueado;
   };
@@ -181,6 +186,30 @@ const Conteos: React.FC = () => {
     navigate(`/FConteos/editar/${record.documento}`, { state: record });
   };
 
+  const calcularAvance = (record: ConteoFisicoDTO) => {
+    const detalles = record.detalles || [];
+    if (detalles.length === 0) return 0;
+    const itemsConCantidad = detalles.filter((d: DetalleConteoFisicoDTO) => d.cantidad > 0).length;
+    return Math.round((itemsConCantidad / detalles.length) * 100);
+  };
+
+  const contarDiferencias = (record: ConteoFisicoDTO) => {
+    const detalles = record.detalles || [];
+    return detalles.filter((d: DetalleConteoFisicoDTO) => {
+      const diff = Math.abs(d.cantidad - (d.cantidad || 0));
+      return diff > 0.01;
+    }).length;
+  };
+
+  const resumen = useMemo(() => {
+    const datos = data?.datos || [];
+    const abiertos = datos.filter((r: ConteoFisicoDTO) => r.periodo === 2).length;
+    const cerrados = datos.filter((r: ConteoFisicoDTO) => r.periodo === 1).length;
+    const borradores = datos.filter((r: ConteoFisicoDTO) => r.periodo === 0).length;
+    const conDiferencias = datos.filter((r: ConteoFisicoDTO) => contarDiferencias(r) > 0).length;
+    return { abiertos, cerrados, borradores, conDiferencias };
+  }, [data?.datos]);
+
   const columns: ColumnsType<ConteoFisicoDTO> = [
     {
       title: 'Documento',
@@ -188,13 +217,15 @@ const Conteos: React.FC = () => {
       key: 'documento',
       width: 140,
       render: (doc: string, record: ConteoFisicoDTO) => (
-        <Text
-          strong
-          className="paces-doc-link"
-          onClick={() => abrirDetalle(record)}
-        >
-          {doc}
-        </Text>
+        <Tooltip title={`Ver detalle ${doc}`}>
+          <Text
+            strong
+            className="paces-doc-link"
+            onClick={() => abrirDetalle(record)}
+          >
+            {doc}
+          </Text>
+        </Tooltip>
       ),
     },
     {
@@ -202,7 +233,7 @@ const Conteos: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 120,
-      render: (f: string) => <Text>{formatDate(f)}</Text>,
+      render: (f: string) => <FechaColumnCell fecha={f} />,
     },
     {
       title: 'Almacén',
@@ -231,9 +262,7 @@ const Conteos: React.FC = () => {
       key: 'cantidad',
       width: 100,
       align: 'right',
-      render: (val: number) => (
-        <Text>{val.toLocaleString('es-DO')}</Text>
-      ),
+      render: (val: number) => <Text>{val.toLocaleString('es-DO')}</Text>,
     },
     {
       title: 'Costo',
@@ -243,33 +272,70 @@ const Conteos: React.FC = () => {
       align: 'right',
       render: (val: number) => <Text>{formatCurrency(val)}</Text>,
     },
-
     {
-      title: 'Bloqueado',
-      dataIndex: 'bloqueado',
-      key: 'bloqueado',
+      title: 'Estado',
+      dataIndex: 'periodo',
+      key: 'periodo',
+      width: 110,
+      render: (val: number) => {
+        const estado = ESTADO_TAG[val] || { color: 'default', label: 'Desconocido' };
+        return <Tag color={estado.color}>{estado.label}</Tag>;
+      },
+    },
+    {
+      title: '% Avance',
+      key: 'avance',
       width: 100,
-      render: (val: boolean) => (
-        <Tag color={val ? 'red' : 'green'}>{val ? 'Sí' : 'No'}</Tag>
-      ),
+      align: 'right',
+      render: (_: any, record: ConteoFisicoDTO) => {
+        const avance = calcularAvance(record);
+        const color = avance === 100 ? '#52c41a' : avance >= 50 ? '#faad14' : '#ff4d4f';
+        return <Text strong style={{ color, textAlign: 'right' }}>{avance}%</Text>;
+      },
+    },
+    {
+      title: 'Diferencias',
+      key: 'diferencias',
+      width: 100,
+      align: 'right',
+      render: (_: any, record: ConteoFisicoDTO) => {
+        const diff = contarDiferencias(record);
+        const color = diff > 0 ? '#f46a6a' : '#52c41a';
+        return <Text strong style={{ color, textAlign: 'right' }}>{diff}</Text>;
+      },
     },
     {
       title: 'Acciones',
-      dataIndex: 'documento',
       key: 'acciones',
-      width: 100,
+      width: 120,
       render: (doc: string, record: ConteoFisicoDTO) => {
         const puede = puedeEditar(record);
+        const diff = contarDiferencias(record);
         return (
           <div style={{ display: 'flex', gap: 4 }}>
-            <a
-              href="javascript:void(0)"
-              onClick={() => manejarEditar(record)}
-              style={{ color: puede ? '#1890ff' : '#aaa', cursor: puede ? 'pointer' : 'not-allowed' }}
-              title={puede ? 'Editar' : 'No se puede editar'}
-            >
-              <SearchOutlined />
-            </a>
+            <Tooltip title={puede ? 'Editar conteo' : 'Edición bloqueada'}>
+              <a
+                href="javascript:void(0)"
+                onClick={() => puede && manejarEditar(record)}
+                style={{ color: puede ? '#1890ff' : '#aaa', cursor: puede ? 'pointer' : 'not-allowed' }}
+              >
+                <EditOutlined />
+              </a>
+            </Tooltip>
+            <Tooltip title="Ver detalle">
+              <a
+                href="javascript:void(0)"
+                onClick={() => abrirDetalle(record)}
+                style={{ color: '#1890ff', cursor: 'pointer' }}
+              >
+                <EyeOutlined />
+              </a>
+            </Tooltip>
+            {diff > 0 && (
+              <Tooltip title={`${diff} diferencia(s) detectada(s)`}>
+                <Badge count={diff} size="small" style={{ backgroundColor: '#f46a6a' }} />
+              </Tooltip>
+            )}
           </div>
         );
       },
@@ -305,20 +371,51 @@ const Conteos: React.FC = () => {
           onExportarExcel={handleExportarExcel}
           filtros={
             <RangePicker
-              style={{ width: 180 }}
+              style={{ width: '100%', maxWidth: 200 }}
               format="YYYY-MM-DD"
               onChange={handleDateChange}
               placeholder={["Desde", "Hasta"]}
             />
           }
         />
+        {/* Resumen */}
+        <div style={{ display: 'flex', gap: 12, padding: '8px 24px', flexWrap: 'wrap' }}>
+          <Tooltip title="Conteos abiertos">
+            <Badge count={resumen.abiertos} style={{ backgroundColor: '#1890ff' }}>
+              <Card size="small" style={{ width: 100, textAlign: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Abiertos</Text>
+              </Card>
+            </Badge>
+          </Tooltip>
+          <Tooltip title="Conteos cerrados">
+            <Badge count={resumen.cerrados} style={{ backgroundColor: '#52c41a' }}>
+              <Card size="small" style={{ width: 100, textAlign: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Cerrados</Text>
+              </Card>
+            </Badge>
+          </Tooltip>
+          <Tooltip title="Borradores">
+            <Badge count={resumen.borradores} style={{ backgroundColor: '#8c8c8c' }}>
+              <Card size="small" style={{ width: 100, textAlign: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Borradores</Text>
+              </Card>
+            </Badge>
+          </Tooltip>
+          <Tooltip title="Con diferencias">
+            <Badge count={resumen.conDiferencias} style={{ backgroundColor: resumen.conDiferencias > 0 ? '#f46a6a' : '#52c41a' }}>
+              <Card size="small" style={{ width: 110, textAlign: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 11 }}>Diferencias</Text>
+              </Card>
+            </Badge>
+          </Tooltip>
+        </div>
 
         <Table<ConteoFisicoDTO>
           columns={columns}
           dataSource={data?.datos || []}
           rowKey="documento"
           loading={isLoading}
-          scroll={{ x: 1200 }}
+          scroll={{ x: 1300 }}
           size="middle"
           locale={{
             emptyText: (
@@ -329,7 +426,10 @@ const Conteos: React.FC = () => {
           }}
           onRow={(record) => ({
             onClick: () => abrirDetalle(record),
-            style: { cursor: 'pointer' },
+            style: {
+              cursor: 'pointer',
+              backgroundColor: contarDiferencias(record) > 0 ? '#fff1f0' : '#ffffff',
+            }
           })}
           onChange={handleTableChange}
           pagination={{

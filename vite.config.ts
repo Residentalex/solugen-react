@@ -8,10 +8,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       treeshake: {
-        moduleSideEffects: (id) => {
-          if (id.includes('antd') || id.includes('@ant-design')) return true;
-          return undefined;
-        },
+        moduleSideEffects: 'no-external',
       },
     },
   },

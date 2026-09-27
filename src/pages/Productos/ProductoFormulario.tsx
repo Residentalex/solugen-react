@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Row, Col, Button, Form, Input, InputNumber, Switch, Select, Tag, Table, Space,
@@ -22,21 +22,23 @@ import type {
   ProductoDTO, FamiliaArticuloDTO, CategoriaArticuloDTO,
   UnidadMedidaDTO, DatosExtraProductoDTO, ImpuestoProductoDTO,
 } from '../../types/productos';
+import type { TipoImpuesto, AmbitoImpuesto } from '../../types/contabilidad';
 
 const { Text } = Typography;
 const { TextArea } = Input;
 const { Dragger } = Upload;
 
-const TIPO_IMPUESTO_MAP: Record<number, string> = {
-  0: 'Exento',
-  1: 'Gravado',
-  2: 'No Gravado',
+const TIPO_IMPUESTO_MAP: Record<TipoImpuesto, string> = {
+  I: 'Impuesto',
+  L: 'Liquidación',
+  V: 'Informativo',
+  R: 'Retencion',
 };
 
-const AMBITO_IMPUESTO_MAP: Record<number, string> = {
-  0: 'Venta',
-  1: 'Compra',
-  2: 'Ambos',
+const AMBITO_IMPUESTO_MAP: Record<AmbitoImpuesto, string> = {
+  Venta: 'Venta',
+  Compra: 'Compra',
+  Ninguno: 'Ninguno',
 };
 
 function formatNumber(n: number): string {
@@ -54,7 +56,8 @@ const ProductoFormulario: React.FC = () => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalProductos = useCompanyStore((s) => s.data.sucursalProductos);
 
-  const navigationConfirmedRef = useFormularioNavigation();
+  const guardandoRef = useRef(false);
+  const navigationConfirmedRef = useFormularioNavigation(guardandoRef);
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
 
@@ -93,6 +96,7 @@ const ProductoFormulario: React.FC = () => {
 
   const cargarTodo = async () => {
     setLoading(true);
+    setLoadingError(false);
     try {
       const [familiasData, categoriasData, unidadesData, comodinesData] = await Promise.all([
         familiaArticuloApi.obtenerTodo(sucursalProductos),
@@ -177,8 +181,10 @@ const ProductoFormulario: React.FC = () => {
             idExterno: imp.impuesto?.idExterno || '',
             nombre: imp.impuesto?.nombre || '',
             porcentaje: imp.impuesto?.porcentaje || 0,
-            tipo: 'Impuesto',
+            tipo: imp.impuesto?.tipo ? (TIPO_IMPUESTO_MAP[imp.impuesto.tipo] || 'Otro') : 'Otro',
             monto: 0,
+            tipoCodigo: imp.impuesto?.tipo,
+            ambito: imp.impuesto?.ambito,
           }))
         );
       } else {
@@ -194,6 +200,8 @@ const ProductoFormulario: React.FC = () => {
   };
 
   const handleGuardar = async () => {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
     try {
       const values = await form.validateFields();
 
@@ -268,14 +276,14 @@ const ProductoFormulario: React.FC = () => {
         productoControl: productoControlSelected,
         impuestos: selectedImpuestos.length > 0
           ? selectedImpuestos
-              .filter((imp) => imp.idExterno)
+              .filter((imp) => imp.idExterno && imp.tipoCodigo && imp.ambito)
               .map((imp) => ({
               impuesto: {
                 codigo: imp.codigo,
                 nombre: imp.nombre,
                 porcentaje: imp.porcentaje,
-                tipo: 1 as any,
-                ambito: 0 as any,
+                tipo: imp.tipoCodigo,
+                ambito: imp.ambito,
                 idExterno: imp.idExterno,
               },
             }))
@@ -297,11 +305,13 @@ const ProductoFormulario: React.FC = () => {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar producto');
     } finally {
+      guardandoRef.current = false;
       setSaving(false);
     }
   };
 
   const handleCancelar = () => {
+    if (guardandoRef.current) return;
     Modal.confirm({
       title: 'Cancelar',
       icon: <ExclamationCircleOutlined />,
@@ -317,6 +327,7 @@ const ProductoFormulario: React.FC = () => {
   };
 
   const handleImageChange = (info: any) => {
+    if (guardandoRef.current) return;
     const file = info.fileList?.[0]?.originFileObj;
     if (file) {
       const reader = new FileReader();
@@ -328,6 +339,7 @@ const ProductoFormulario: React.FC = () => {
   };
 
   const handleRemoveImage = () => {
+    if (guardandoRef.current) return;
     setImagePreview(null);
   };
 
@@ -655,6 +667,7 @@ const ProductoFormulario: React.FC = () => {
       {/* Toolbar con FormularioToolbar */}
       <FormularioToolbar
         saving={saving}
+        bloqueado={saving}
         mode={mode}
         onGuardar={handleGuardar}
         onCancelar={handleCancelar}
@@ -664,7 +677,7 @@ const ProductoFormulario: React.FC = () => {
         </h4>
       </FormularioToolbar>
 
-      <Form form={form} layout="vertical" size="middle">
+      <Form form={form} layout="vertical" size="middle" disabled={saving}>
         <Row gutter={16}>
           {/* ========== COLUMNA IZQUIERDA ========== */}
           <Col xs={24} md={14} xl={17}>
@@ -837,6 +850,7 @@ const ProductoFormulario: React.FC = () => {
                     icon={<DeleteOutlined />}
                     danger
                     size="small"
+                    disabled={saving}
                     onClick={handleRemoveImage}
                   >
                     Eliminar imagen
@@ -848,6 +862,7 @@ const ProductoFormulario: React.FC = () => {
                   multiple={false}
                   showUploadList={false}
                   accept="image/png,image/jpeg,image/webp"
+                  disabled={saving}
                   onChange={handleImageChange}
                   style={{ background: 'var(--paces-topbar-search-bg)', borderRadius: 8 }}
                 >

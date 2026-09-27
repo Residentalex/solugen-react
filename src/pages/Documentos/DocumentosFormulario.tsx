@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Layout, Menu, Grid, Card, Switch, Button, Modal, Space, Typography,
@@ -73,6 +73,8 @@ const DocumentosFormulario: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const accionEnCursoRef = useRef(false);
   const [guardado, setGuardado] = useState(false);
   const [idGuardado, setIdGuardado] = useState<number | null>(null);
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
@@ -184,6 +186,7 @@ const DocumentosFormulario: React.FC = () => {
 
   // ----- Danger zone -----
   const handleDesactivarDocumento = () => {
+    if (accionEnCursoRef.current) return;
     Modal.confirm({
       title: 'Desactivar tipo de documento',
       icon: <ExclamationCircleOutlined />,
@@ -191,29 +194,44 @@ const DocumentosFormulario: React.FC = () => {
       okText: 'Sí, desactivar',
       okType: 'danger',
       cancelText: 'Cancelar',
-      onOk: () => {
-        message.success('Tipo de documento desactivado correctamente');
+      onOk: async () => {
+        if (accionEnCursoRef.current) return;
+        accionEnCursoRef.current = true;
+        setSaving(true);
+        try {
+          await documentosApi.desactivar(sucursalActiva, parseInt(id!));
+          message.success('Tipo de documento desactivado correctamente');
+          navigate('/MDocumento');
+        } catch (err: any) {
+          const msg = extraerMensajeError(err, 'Error al desactivar el tipo de documento');
+          message.error(msg);
+        } finally {
+          accionEnCursoRef.current = false;
+          setSaving(false);
+        }
       },
     });
   };
 
   // ----- Toolbar handlers -----
   const handleGuardar = async () => {
-    if (!codigo.trim()) {
-      message.error('El código es requerido');
-      return;
-    }
-    if (!nombre.trim()) {
-      message.error('El nombre es requerido');
-      return;
-    }
-    if (sucursalActiva === undefined) {
-      message.error('No hay sucursal activa');
-      return;
-    }
-
+    if (accionEnCursoRef.current) return;
+    accionEnCursoRef.current = true;
     setSaving(true);
     try {
+      if (!codigo.trim()) {
+        message.error('El código es requerido');
+        return;
+      }
+      if (!nombre.trim()) {
+        message.error('El nombre es requerido');
+        return;
+      }
+      if (sucursalActiva === undefined) {
+        message.error('No hay sucursal activa');
+        return;
+      }
+
       const payload: DocumentoDTO = {
         id: mode === 'editar' ? parseInt(id!) : 0,
         codigo: codigo.trim(),
@@ -271,6 +289,7 @@ const DocumentosFormulario: React.FC = () => {
       const msg = extraerMensajeError(err, 'Error al guardar el tipo de documento');
       message.error(msg);
     } finally {
+      accionEnCursoRef.current = false;
       setSaving(false);
     }
   };
@@ -488,15 +507,15 @@ const DocumentosFormulario: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
                 <Text style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500, color: '#374151' }}>
-                  Código
-                </Text>
-                <Input
-                  placeholder="Código del tipo de documento"
-                  value={codigo}
-                  onChange={(e) => setCodigo(e.target.value)}
-                  maxLength={10}
-                  disabled={mode === 'editar' || guardado}
-                />
+                   Código
+                 </Text>
+                 <Input
+                   placeholder="Código del tipo de documento"
+                   value={codigo}
+                   onChange={(e) => setCodigo(e.target.value)}
+                   maxLength={10}
+                   disabled={mode === 'editar' || guardado || saving}
+                 />
               </div>
               <div>
                 <Text style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500, color: '#374151' }}>
@@ -507,7 +526,7 @@ const DocumentosFormulario: React.FC = () => {
                   value={nombre}
                   onChange={(e) => setNombre(e.target.value)}
                   maxLength={100}
-                  disabled={guardado}
+                  disabled={guardado || saving}
                 />
               </div>
               <Row gutter={16}>
@@ -524,7 +543,7 @@ const DocumentosFormulario: React.FC = () => {
                       onChange={setTipo}
                       style={{ width: '100%' }}
                       options={tipoOptions}
-                      disabled={guardado}
+                      disabled={guardado || saving}
                     />
                   </div>
                 </Col>
@@ -540,7 +559,7 @@ const DocumentosFormulario: React.FC = () => {
                       min={1}
                       max={20}
                       style={{ width: '100%' }}
-                      disabled={guardado}
+                      disabled={guardado || saving}
                     />
                   </div>
                 </Col>
@@ -560,43 +579,43 @@ const DocumentosFormulario: React.FC = () => {
               <Col xs={12}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Estado de cuenta</Text>
-                    <Switch checked={estadoCuenta} onChange={setEstadoCuenta} disabled={guardado} />
+                    <Switch checked={estadoCuenta} onChange={setEstadoCuenta} disabled={guardado || saving} />
                   </div>
               </Col>
               <Col xs={12}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Precios con impuestos</Text>
-                    <Switch checked={preciosConImpuestos} onChange={setPreciosConImpuestos} disabled={guardado} />
+                    <Switch checked={preciosConImpuestos} onChange={setPreciosConImpuestos} disabled={guardado || saving} />
                   </div>
               </Col>
               <Col xs={12}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Afecta inventario</Text>
-                    <Switch checked={afectaInventario} onChange={setAfectaInventario} disabled={guardado} />
+                    <Switch checked={afectaInventario} onChange={setAfectaInventario} disabled={guardado || saving} />
                   </div>
               </Col>
               <Col xs={12}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Requiere asiento</Text>
-                    <Switch checked={requiereAsiento} onChange={setRequiereAsiento} disabled={guardado} />
+                    <Switch checked={requiereAsiento} onChange={setRequiereAsiento} disabled={guardado || saving} />
                   </div>
               </Col>
               <Col xs={12}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Mod. precio</Text>
-                    <Switch checked={modPrecio} onChange={setModPrecio} disabled={guardado} />
+                    <Switch checked={modPrecio} onChange={setModPrecio} disabled={guardado || saving} />
                   </div>
               </Col>
               <Col xs={12}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Mod. descripción</Text>
-                    <Switch checked={modDescripcion} onChange={setModDescripcion} disabled={guardado} />
+                    <Switch checked={modDescripcion} onChange={setModDescripcion} disabled={guardado || saving} />
                   </div>
               </Col>
               <Col xs={12}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Trabajar en unidad</Text>
-                    <Switch checked={trabajarEnUnidad} onChange={setTrabajarEnUnidad} disabled={guardado} />
+                    <Switch checked={trabajarEnUnidad} onChange={setTrabajarEnUnidad} disabled={guardado || saving} />
                   </div>
               </Col>
             </Row>
@@ -624,7 +643,7 @@ const DocumentosFormulario: React.FC = () => {
                       onChange={setTipoNumeracion}
                       style={{ width: '100%' }}
                       options={tipoNumeracionOptions}
-                      disabled={guardado}
+                      disabled={guardado || saving}
                     />
                 </div>
               </Col>
@@ -641,7 +660,7 @@ const DocumentosFormulario: React.FC = () => {
                       onChange={setMetodoAplicar}
                       style={{ width: '100%' }}
                       options={metodoAplicarOptions}
-                      disabled={guardado}
+                      disabled={guardado || saving}
                     />
                 </div>
               </Col>
@@ -675,7 +694,7 @@ const DocumentosFormulario: React.FC = () => {
                       { value: 1, label: 'Crédito' },
                       { value: 2, label: 'Desconocido' },
                     ]}
-                    disabled={guardado}
+                    disabled={guardado || saving}
                   />
                 </div>
               </Col>
@@ -696,7 +715,7 @@ const DocumentosFormulario: React.FC = () => {
                       { value: 1, label: 'Compra' },
                       { value: 2, label: 'Ninguno' },
                     ]}
-                    disabled={guardado}
+                    disabled={guardado || saving}
                   />
                 </div>
               </Col>
@@ -722,7 +741,7 @@ const DocumentosFormulario: React.FC = () => {
                       { value: 2, label: 'Al Imprimir' },
                       { value: 3, label: 'Al Aplicar' },
                     ]}
-                    disabled={guardado}
+                    disabled={guardado || saving}
                   />
                 </div>
               </Col>
@@ -746,7 +765,7 @@ const DocumentosFormulario: React.FC = () => {
                       { value: 4, label: 'Fecha del Día' },
                       { value: 5, label: 'Menor o Igual Fecha' },
                     ]}
-                    disabled={guardado}
+                    disabled={guardado || saving}
                   />
                 </div>
               </Col>
@@ -757,19 +776,19 @@ const DocumentosFormulario: React.FC = () => {
               <Col xs={8}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Puede reimprimir</Text>
-                  <Switch checked={puedeReimprimir} onChange={setPuedeReimprimir} disabled={guardado} />
+                  <Switch checked={puedeReimprimir} onChange={setPuedeReimprimir} disabled={guardado || saving} />
                 </div>
               </Col>
               <Col xs={8}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Recibe pagos</Text>
-                  <Switch checked={recibePagos} onChange={setRecibePagos} disabled={guardado} />
+                  <Switch checked={recibePagos} onChange={setRecibePagos} disabled={guardado || saving} />
                 </div>
               </Col>
               <Col xs={8}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Excluir estados contables</Text>
-                  <Switch checked={excluirEstadoContable} onChange={setExcluirEstadoContable} disabled={guardado} />
+                  <Switch checked={excluirEstadoContable} onChange={setExcluirEstadoContable} disabled={guardado || saving} />
                 </div>
               </Col>
             </Row>
@@ -786,7 +805,7 @@ const DocumentosFormulario: React.FC = () => {
                     value={documentoReverso}
                     onChange={(e) => setDocumentoReverso(e.target.value)}
                     maxLength={20}
-                    disabled={guardado}
+                    disabled={guardado || saving}
                   />
                 </div>
               </Col>
@@ -800,7 +819,7 @@ const DocumentosFormulario: React.FC = () => {
                     value={idExterno}
                     onChange={(e) => setIdExterno(e.target.value)}
                     maxLength={50}
-                    disabled={guardado}
+                    disabled={guardado || saving}
                   />
                 </div>
               </Col>
@@ -830,7 +849,7 @@ const DocumentosFormulario: React.FC = () => {
                     onChange={(val) => setPlantillaId(val ?? null)}
                     style={{ width: '100%' }}
                     options={plantillas.map((p) => ({ value: p.plantillaId, label: `${p.nombre} (${p.codigo})` }))}
-                    disabled={guardado}
+                    disabled={guardado || saving}
                   />
                   <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
                     Plantilla ESC/POS que se usa al imprimir tickets de este tipo de documento.
@@ -840,41 +859,46 @@ const DocumentosFormulario: React.FC = () => {
             </Row>
           </HoverableCard>
 
+{/* ========================================================== */}
+          {/* 6. Danger Zone (solo en edición de documento persistido)   */}
           {/* ========================================================== */}
-          {/* 6. Danger Zone                                             */}
-          {/* ========================================================== */}
-          <Title level={5} style={{ marginBottom: 16, fontSize: 15, fontWeight: 600, color: '#ef4444' }}>
-            Danger Zone
-          </Title>
+          {mode === 'editar' && (idGuardado || id) && (
+            <>
+              <Title level={5} style={{ marginBottom: 16, fontSize: 15, fontWeight: 600, color: '#ef4444' }}>
+                Danger Zone
+              </Title>
 
-          <HoverableCard
-            style={{
-              borderColor: '#fecaca',
-              background: '#FFFBFB',
-            }}
-          >
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <ExclamationCircleOutlined style={{ fontSize: 20, color: '#ef4444', marginTop: 2 }} />
-                <div>
-                  <Text strong style={{ fontSize: 14, color: '#991b1b' }}>
-                    Desactivar tipo de documento
-                  </Text>
-                  <Text style={{ fontSize: 13, color: '#b91c1c', display: 'block', marginTop: 2 }}>
-                    Esta acción desactivará el tipo de documento. Los documentos existentes no se verán afectados, pero no podrá crear nuevos documentos con este tipo. Esta acción puede revertirse posteriormente.
-                  </Text>
-                </div>
-              </div>
-              <Button
-                danger
-                icon={<ExclamationCircleOutlined />}
-                onClick={handleDesactivarDocumento}
-                style={{ borderRadius: 8, alignSelf: 'flex-start' }}
+              <HoverableCard
+                style={{
+                  borderColor: '#fecaca',
+                  background: '#FFFBFB',
+                }}
               >
-                Desactivar documento
-              </Button>
-            </Space>
-          </HoverableCard>
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <ExclamationCircleOutlined style={{ fontSize: 20, color: '#ef4444', marginTop: 2 }} />
+                    <div>
+                      <Text strong style={{ fontSize: 14, color: '#991b1b' }}>
+                        Desactivar tipo de documento
+                      </Text>
+                      <Text style={{ fontSize: 13, color: '#b91c1c', display: 'block', marginTop: 2 }}>
+                        Esta acción desactivará el tipo de documento. Los documentos existentes no se verán afectados, pero no podrá crear nuevos documentos con este tipo. Esta acción puede revertirse posteriormente.
+                      </Text>
+                    </div>
+                  </div>
+<Button
+                     danger
+                     icon={<ExclamationCircleOutlined />}
+                     onClick={handleDesactivarDocumento}
+                     style={{ borderRadius: 8, alignSelf: 'flex-start' }}
+                     disabled={saving}
+                   >
+                     Desactivar documento
+                   </Button>
+                </Space>
+              </HoverableCard>
+            </>
+          )}
 
           {/* ---- Footer spacer ---- */}
           <div style={{ height: 40 }} />

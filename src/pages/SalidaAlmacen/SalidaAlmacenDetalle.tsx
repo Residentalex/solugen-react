@@ -17,6 +17,7 @@ import {
   PrinterOutlined,
   FileTextOutlined,
   FileSearchOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
@@ -814,7 +815,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${documentoActivo.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 800 }} />
                   ),
@@ -934,7 +935,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${documentoActivo.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 800 }} />
                   ),

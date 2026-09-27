@@ -14,6 +14,7 @@ import {
   ClearOutlined,
   ExclamationCircleOutlined,
   EditOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -1638,7 +1639,7 @@ render: (v: number) => formatNumber(v ?? 0),
     },
     {
       key: 'historial',
-      label: `Historial (${data?.logs?.length || 0})`,
+      icon: <HistoryOutlined />, label: `Historial (${data?.logs?.length || 0})`,
       children: (
         <LogTable dataSource={(data?.logs || []) as any} scroll={{ x: 900 }} />
       ),

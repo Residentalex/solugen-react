@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Form, Input, InputNumber, Button, message, Typography, Switch } from 'antd';
 import { SaveOutlined, CloseOutlined } from '@ant-design/icons';
@@ -23,6 +23,7 @@ const ModuloFormulario: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savingLockRef = useRef(false);
   const navigationConfirmedRef = useFormularioNavigation();
 
   const mode: 'crear' | 'editar' = id && id !== 'nuevo' ? 'editar' : 'crear';
@@ -50,10 +51,12 @@ const ModuloFormulario: React.FC = () => {
     return () => { resetToolbar(); setPageTitleOverride(''); };
   }, [setActiveModule, setPageTitleOverride, resetToolbar, screenCode, mode, id, sucursalActiva, form, navigate]);
 
-  const handleGuardar = async () => {
+const handleGuardar = async () => {
+    if (savingLockRef.current) return;
+    savingLockRef.current = true;
+    setSaving(true);
     try {
       const values = await form.validateFields();
-      setSaving(true);
 
       if (mode === 'crear') {
         const result = await moduloApi.crear(sucursalActiva, values);
@@ -71,10 +74,12 @@ const ModuloFormulario: React.FC = () => {
       message.error(err?.response?.data?.errorMessage || 'Error al guardar');
     } finally {
       setSaving(false);
+      savingLockRef.current = false;
     }
   };
 
   const handleCancelar = () => {
+    if (saving) return;
     navigationConfirmedRef.current = true;
     navigate('/Mmodulo', { replace: true });
   };
@@ -86,14 +91,14 @@ const ModuloFormulario: React.FC = () => {
           {mode === 'crear' ? 'Nuevo Módulo' : 'Editar Módulo'}
         </Text>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Button icon={<CloseOutlined />} onClick={handleCancelar}>Cancelar</Button>
+          <Button icon={<CloseOutlined />} onClick={handleCancelar} disabled={saving}>Cancelar</Button>
           <Button type="primary" icon={<SaveOutlined />} onClick={handleGuardar} loading={saving}>
             Guardar
           </Button>
         </div>
       </div>
 
-      <Form form={form} layout="vertical" size="small" style={{ maxWidth: 600 }}>
+      <Form form={form} layout="vertical" size="small" style={{ maxWidth: 600 }} disabled={saving}>
         <Form.Item name="codigo" label="Código"
           rules={[{ required: true, message: 'El código es obligatorio' }]}
         >

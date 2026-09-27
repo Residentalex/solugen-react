@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Table, Input, Button, Card, Switch, Modal, Form, InputNumber, Select, Typography, Tooltip, message,
 } from 'antd';
@@ -34,6 +34,12 @@ const EcommerceAdminProductos: React.FC = () => {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<string>('');
   const [uploading, setUploading] = useState(false);
+  const [toggleKey, setToggleKey] = useState<string | null>(null);
+  const [guardandoPrecio, setGuardandoPrecio] = useState(false);
+  const [refrescando, setRefrescando] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const operacionRef = useRef(false);
+  const ocupado = toggleKey !== null || guardandoPrecio || uploading || refrescando || exportando || loading;
 
   const cargarCategorias = useCallback(async () => {
     try {
@@ -80,6 +86,10 @@ const EcommerceAdminProductos: React.FC = () => {
   }, [cargarProductos]);
 
   const handleExportarExcel = async () => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setExportando(true);
+    try {
     const companyName = await getCompanyName(sucursalActiva);
     const cols = columns.filter((c) => c.key !== 'acciones' && c.dataIndex !== 'imagenUrl');
     exportToExcel({
@@ -94,19 +104,35 @@ const EcommerceAdminProductos: React.FC = () => {
         })
       ),
     });
+    } finally {
+      setExportando(false);
+      operacionRef.current = false;
+    }
   };
 
   const handleSearch = (value: string) => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
     setSearchText(value);
     setPage(1);
   };
 
-  const handleRefresh = () => {
-    setPage(1);
-    cargarProductos();
+  const handleRefresh = async () => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setRefrescando(true);
+    try {
+      setPage(1);
+      await cargarProductos();
+    } finally {
+      setRefrescando(false);
+      operacionRef.current = false;
+    }
   };
 
   const handleToggleCatalogo = async (record: AdminProductoListadoDTO) => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setToggleKey(`catalogo:${record.id}`);
     try {
       await ecommerceApi.adminToggleCatalogo(record.id, !record.enCatalogo);
       setData((prev) =>
@@ -115,10 +141,16 @@ const EcommerceAdminProductos: React.FC = () => {
       message.success('Estado actualizado');
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al actualizar');
+    } finally {
+      setToggleKey(null);
+      operacionRef.current = false;
     }
   };
 
   const handleToggleDestacado = async (record: AdminProductoListadoDTO) => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setToggleKey(`destacado:${record.id}`);
     try {
       await ecommerceApi.adminToggleDestacado(record.id, !record.destacado);
       setData((prev) =>
@@ -127,19 +159,26 @@ const EcommerceAdminProductos: React.FC = () => {
       message.success('Estado actualizado');
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al actualizar');
+    } finally {
+      setToggleKey(null);
+      operacionRef.current = false;
     }
   };
 
   const openPrecioOferta = (record: AdminProductoListadoDTO) => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
     setSelectedProducto(record);
     precioOfertaForm.setFieldsValue({ precioOferta: record.precioOferta });
     setModalOpen(true);
   };
 
   const handleGuardarPrecioOferta = async () => {
-    const values = await precioOfertaForm.validateFields();
-    if (!selectedProducto) return;
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setGuardandoPrecio(true);
     try {
+      const values = await precioOfertaForm.validateFields();
+      if (!selectedProducto) return;
       await ecommerceApi.adminActualizarPrecioOferta(selectedProducto.id, values.precioOferta ?? null);
       setData((prev) =>
         prev.map((p) => (p.id === selectedProducto.id ? { ...p, precioOferta: values.precioOferta ?? null } : p))
@@ -147,11 +186,16 @@ const EcommerceAdminProductos: React.FC = () => {
       message.success('Precio de oferta actualizado');
       setModalOpen(false);
     } catch (err: any) {
+      if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al actualizar precio');
+    } finally {
+      setGuardandoPrecio(false);
+      operacionRef.current = false;
     }
   };
 
   const openUploadModal = (record: AdminProductoListadoDTO) => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
     setUploadProducto(record);
     setUploadFile(null);
     setUploadPreview('');
@@ -159,6 +203,7 @@ const EcommerceAdminProductos: React.FC = () => {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadFile(file);
@@ -166,7 +211,9 @@ const EcommerceAdminProductos: React.FC = () => {
   };
 
   const handleUpload = async () => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
     if (!uploadFile || !uploadProducto) return;
+    operacionRef.current = true;
     setUploading(true);
     try {
       const result = await ecommerceApi.adminSubirImagen(uploadProducto.id, uploadFile);
@@ -179,6 +226,7 @@ const EcommerceAdminProductos: React.FC = () => {
       message.error(err?.response?.data?.errorMessage || 'Error al subir imagen');
     } finally {
       setUploading(false);
+      operacionRef.current = false;
     }
   };
 
@@ -198,7 +246,7 @@ const EcommerceAdminProductos: React.FC = () => {
             </div>
           )}
           <Tooltip title="Subir imagen">
-            <Button type="text" size="small" icon={<UploadOutlined />} onClick={() => openUploadModal(record)} />
+            <Button type="text" size="small" icon={<UploadOutlined />} disabled={ocupado} onClick={() => openUploadModal(record)} />
           </Tooltip>
         </div>
       ),
@@ -250,7 +298,7 @@ const EcommerceAdminProductos: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
           <Text style={{ color: val ? '#34c38f' : undefined }}>{val ? formatCurrency(val) : '-'}</Text>
           <Tooltip title="Editar precio oferta">
-            <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openPrecioOferta(record)} />
+            <Button type="text" size="small" icon={<EditOutlined />} disabled={ocupado} onClick={() => openPrecioOferta(record)} />
           </Tooltip>
         </div>
       ),
@@ -270,7 +318,7 @@ const EcommerceAdminProductos: React.FC = () => {
       width: 110,
       align: 'center',
       render: (val: boolean, record: AdminProductoListadoDTO) => (
-        <Switch size="small" checked={val} onChange={() => handleToggleCatalogo(record)} />
+        <Switch size="small" checked={val} disabled={ocupado} loading={toggleKey === `catalogo:${record.id}`} onChange={() => handleToggleCatalogo(record)} />
       ),
     },
     {
@@ -280,7 +328,7 @@ const EcommerceAdminProductos: React.FC = () => {
       width: 100,
       align: 'center',
       render: (val: boolean, record: AdminProductoListadoDTO) => (
-        <Switch size="small" checked={val} onChange={() => handleToggleDestacado(record)} />
+        <Switch size="small" checked={val} disabled={ocupado} loading={toggleKey === `destacado:${record.id}`} onChange={() => handleToggleDestacado(record)} />
       ),
     },
   ];
@@ -294,6 +342,7 @@ const EcommerceAdminProductos: React.FC = () => {
               placeholder="Buscar producto..."
               allowClear
               onSearch={handleSearch}
+              disabled={ocupado}
               style={{ width: 400 }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
@@ -302,14 +351,16 @@ const EcommerceAdminProductos: React.FC = () => {
               allowClear
               style={{ width: 180 }}
               value={categoriaFiltro || undefined}
-              onChange={(v) => { setCategoriaFiltro(v || ''); setPage(1); }}
+              disabled={ocupado}
+              onChange={(v) => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } setCategoriaFiltro(v || ''); setPage(1); }}
               options={categorias.map((c) => ({ value: c.nombre, label: c.nombre }))}
             />
             <Select
               placeholder="En Catálogo"
               style={{ width: 140 }}
               value={catalogoFiltro}
-              onChange={(v) => { setCatalogoFiltro(v); setPage(1); }}
+              disabled={ocupado}
+              onChange={(v) => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } setCatalogoFiltro(v); setPage(1); }}
               options={[
                 { value: 'todos', label: 'Todos' },
                 { value: 'si', label: 'Sí' },
@@ -320,7 +371,8 @@ const EcommerceAdminProductos: React.FC = () => {
               placeholder="Destacado"
               style={{ width: 140 }}
               value={destacadoFiltro}
-              onChange={(v) => { setDestacadoFiltro(v); setPage(1); }}
+              disabled={ocupado}
+              onChange={(v) => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } setDestacadoFiltro(v); setPage(1); }}
               options={[
                 { value: 'todos', label: 'Todos' },
                 { value: 'si', label: 'Sí' },
@@ -329,16 +381,16 @@ const EcommerceAdminProductos: React.FC = () => {
             />
             <div style={{ flex: 1 }} />
             <PermissionGate accion="EXPORTAR">
-              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} disabled={ocupado} loading={exportando} />
             </PermissionGate>
-            <Button icon={<ReloadOutlined />} onClick={handleRefresh} />
+            <Button icon={<ReloadOutlined spin={refrescando} />} onClick={handleRefresh} disabled={ocupado} loading={refrescando} />
           </div>
         </div>
         <Table<AdminProductoListadoDTO>
           columns={columns}
           dataSource={data}
           rowKey="id"
-          loading={loading}
+          loading={loading || ocupado}
           size="middle"
           scroll={{ x: 1400 }}
           className="paces-border-top paces-list-table"
@@ -347,7 +399,9 @@ const EcommerceAdminProductos: React.FC = () => {
             current: page,
             pageSize,
             total,
+            disabled: ocupado,
             onChange: (p, ps) => {
+              if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
               if (ps !== pageSize) {
                 setPageSize(ps || 25);
                 setPage(1);
@@ -364,11 +418,17 @@ const EcommerceAdminProductos: React.FC = () => {
         title={`Editar Precio Oferta - ${selectedProducto?.nombre ?? ''}`}
         open={modalOpen}
         onOk={handleGuardarPrecioOferta}
-        onCancel={() => setModalOpen(false)}
+        onCancel={() => { if (operacionRef.current || guardandoPrecio) return; setModalOpen(false); }}
         okText="Guardar"
         cancelText="Cancelar"
+        confirmLoading={guardandoPrecio}
+        okButtonProps={{ disabled: guardandoPrecio }}
+        cancelButtonProps={{ disabled: guardandoPrecio }}
+        closable={!guardandoPrecio}
+        maskClosable={!guardandoPrecio}
+        keyboard={!guardandoPrecio}
       >
-        <Form form={precioOfertaForm} layout="vertical">
+        <Form form={precioOfertaForm} layout="vertical" disabled={guardandoPrecio}>
           <Form.Item
             name="precioOferta"
             label="Precio de Oferta"
@@ -379,6 +439,7 @@ const EcommerceAdminProductos: React.FC = () => {
               min={0}
               precision={2}
               prefix="$"
+              disabled={guardandoPrecio}
               placeholder="Dejar vacío para quitar oferta"
             />
           </Form.Item>
@@ -388,12 +449,15 @@ const EcommerceAdminProductos: React.FC = () => {
       <Modal
         title={`Subir Imagen - ${uploadProducto?.nombre ?? ''}`}
         open={uploadModalOpen}
-        onCancel={() => setUploadModalOpen(false)}
+        onCancel={() => { if (operacionRef.current || uploading) return; setUploadModalOpen(false); }}
         footer={null}
         destroyOnHidden
+        closable={!uploading}
+        maskClosable={!uploading}
+        keyboard={!uploading}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', padding: '16px 0' }}>
-          <input type="file" accept="image/*" onChange={handleFileChange} />
+          <input type="file" accept="image/*" onChange={handleFileChange} disabled={uploading || ocupado} />
           {uploadPreview && (
             <img
               src={uploadPreview}
@@ -401,15 +465,20 @@ const EcommerceAdminProductos: React.FC = () => {
               alt="preview"
             />
           )}
+          <div style={{ display: 'flex', gap: 8 }}>
           <Button
             type="primary"
             icon={<UploadOutlined />}
             loading={uploading}
             onClick={handleUpload}
-            disabled={!uploadFile}
+            disabled={!uploadFile || uploading || ocupado}
           >
             Subir
           </Button>
+          <Button onClick={() => { if (operacionRef.current || uploading) return; setUploadModalOpen(false); }} disabled={uploading}>
+            Cerrar
+          </Button>
+          </div>
         </div>
       </Modal>
     </>

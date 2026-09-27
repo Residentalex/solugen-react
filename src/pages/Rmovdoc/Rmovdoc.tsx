@@ -636,7 +636,7 @@ const Rmovdoc: React.FC = () => {
         )}
 
         {/* SECCIÓN C — Costos y Precio */}
-        <Divider orientation="left" style={{ fontSize: 12, color: '#8c8c8c' }}>Costos y Precio</Divider>
+        <Divider orientation={"left" as any} style={{ fontSize: 12, color: '#8c8c8c' }}>Costos y Precio</Divider>
         <div style={{ background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0', padding: '12px 0', marginBottom: 16 }}>
           <Row gutter={0}>
             <Col span={8} style={{ borderRight: '1px solid #f0f0f0', textAlign: 'center' }}>

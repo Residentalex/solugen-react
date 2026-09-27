@@ -16,6 +16,7 @@ import {
   BarChartOutlined,
   ShopOutlined,
   ReloadOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import DetalleToolbar from '../../components/DetalleToolbar';
@@ -439,11 +440,11 @@ const OrdenCompraDetalle: React.FC = () => {
     {
       title: 'Artículo',
       key: 'articulo',
-      onCell: () => ({ style: { verticalAlign: 'top', whiteSpace: 'normal', wordBreak: 'break-word' } }),
+      onCell: () => ({ style: { verticalAlign: 'top', whiteSpace: 'normal' } }),
       render: (_: any, record: any) => (
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 500, fontSize: 13, wordBreak: 'break-word', whiteSpace: 'normal', overflowWrap: 'break-word' }}>{toTitleCase(record.articulo || '')}</div>
+            <div style={{ fontWeight: 500, fontSize: 13, whiteSpace: 'normal', overflowWrap: 'break-word' }}>{toTitleCase(record.articulo || '')}</div>
             <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5 }}>
               <span>{record.codigo}</span>
               {record.codigo && record.referencia && <span>{' | '}</span>}
@@ -684,7 +685,7 @@ const OrdenCompraDetalle: React.FC = () => {
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${data.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${data.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                   ),
@@ -779,7 +780,7 @@ const OrdenCompraDetalle: React.FC = () => {
               },
               {
                 key: 'historial',
-                label: `Historial (${data.logs?.length || 0})`,
+                icon: <HistoryOutlined />, label: `Historial (${data.logs?.length || 0})`,
                 children: <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />,
               },
             ]}
@@ -1022,7 +1023,7 @@ const OrdenCompraDetalle: React.FC = () => {
             )}
 
             {/* SECCIÓN C — Costos y Precio */}
-            <Divider orientation="left" style={{ fontSize: 12, color: '#8c8c8c' }}>Costos y Precio</Divider>
+            <Divider orientation={"left" as any} style={{ fontSize: 12, color: '#8c8c8c' }}>Costos y Precio</Divider>
             <div style={{ background: '#fafafa', borderRadius: 8, border: '1px solid #f0f0f0', padding: '12px 0', marginBottom: 16 }}>
               <Row gutter={0}>
                 <Col span={8} style={{ borderRight: '1px solid #f0f0f0', textAlign: 'center' }}>

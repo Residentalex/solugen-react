@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { authApi } from '../../api/authApi';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Descriptions, Tag, Spin, Button, Space, message, Modal, Alert, Tabs, Typography, Table } from 'antd';
@@ -120,7 +120,22 @@ const UsuarioDetalle: React.FC = () => {
   const [pantallasPorSucursal, setPantallasPorSucursal] = useState<Record<number, PantallaConRoles[]>>({});
   const [sucursalActivaTab, setSucursalActivaTab] = useState<Sucursal>(0 as Sucursal);
   const [cargandoPantallas, setCargandoPantallas] = useState(false);
+  const [reseteandoClave, setReseteandoClave] = useState(false);
+  const [cambiandoEstado, setCambiandoEstado] = useState(false);
   const securitySucursal = useAuthStore((s) => s.securitySucursal);
+
+  const ocupado = reseteandoClave || cambiandoEstado;
+  const operacionRef = useRef(false);
+
+  const intentarTomarLock = () => {
+    if (operacionRef.current) return false;
+    operacionRef.current = true;
+    return true;
+  };
+
+  const liberarLock = () => {
+    operacionRef.current = false;
+  };
 
   /* ─── efectos de montaje ─── */
   useEffect(() => {
@@ -220,6 +235,9 @@ const UsuarioDetalle: React.FC = () => {
   /* ─── handlers de acciones ─── */
   const handleResetPassword = useCallback(async () => {
     if (!data) return;
+    if (operacionRef.current || ocupado) return;
+    if (!intentarTomarLock()) return;
+    setReseteandoClave(true);
     try {
       const nuevaClave = await usuarioApi.resetearPassword(securitySucursal, data.id);
       Modal.success({
@@ -228,19 +246,29 @@ const UsuarioDetalle: React.FC = () => {
       });
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al resetear contraseña');
+    } finally {
+      liberarLock();
+      setReseteandoClave(false);
     }
-  }, [data, securitySucursal]);
+  }, [data, securitySucursal, ocupado]);
 
   const handleToggleEstado = useCallback(async () => {
     if (!data) return;
+    if (operacionRef.current || ocupado) return;
+    if (!intentarTomarLock()) return;
+    const nuevoEstado = !data.activo;
+    setCambiandoEstado(true);
     try {
-      await usuarioApi.cambiarEstado(securitySucursal, data.id, !data.activo);
-      message.success(`Usuario ${data.activo ? 'desactivado' : 'activado'} correctamente`);
-      setData({ ...data, activo: !data.activo });
+      await usuarioApi.cambiarEstado(securitySucursal, data.id, nuevoEstado);
+      message.success(`Usuario ${nuevoEstado ? 'activado' : 'desactivado'} correctamente`);
+      setData({ ...data, activo: nuevoEstado });
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cambiar estado');
+    } finally {
+      liberarLock();
+      setCambiandoEstado(false);
     }
-  }, [data, securitySucursal]);
+  }, [data, securitySucursal, ocupado]);
 
   /* ─── render: Informacion General ─── */
   const renderInfoGeneral = () => {
@@ -338,11 +366,17 @@ const UsuarioDetalle: React.FC = () => {
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-        <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate('/MUsuario')} style={{ padding: 0, fontSize: 14 }}>
+        <Button type="link" icon={<ArrowLeftOutlined />} disabled={ocupado} onClick={() => {
+          if (operacionRef.current || ocupado) return;
+          navigate('/MUsuario');
+        }} style={{ padding: 0, fontSize: 14 }}>
           Volver a usuarios
         </Button>
         <div style={{ flex: 1 }} />
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/MUsuario/nuevo')}>
+        <Button type="primary" icon={<PlusOutlined />} disabled={ocupado} onClick={() => {
+          if (operacionRef.current || ocupado) return;
+          navigate('/MUsuario/nuevo');
+        }}>
           Nuevo
         </Button>
       </div>
@@ -365,10 +399,15 @@ const UsuarioDetalle: React.FC = () => {
           </div>
 
           <Space>
-            <Button icon={<EditOutlined />} onClick={() => navigate(`/MUsuario/${data.id}/editar`)}>Editar</Button>
-            <Button icon={<KeyOutlined />} onClick={handleResetPassword}>Resetear contraseña</Button>
+            <Button icon={<EditOutlined />} disabled={ocupado} onClick={() => {
+              if (operacionRef.current || ocupado) return;
+              navigate(`/MUsuario/${data.id}/editar`);
+            }}>Editar</Button>
+            <Button icon={<KeyOutlined />} loading={reseteandoClave} disabled={ocupado} onClick={handleResetPassword}>Resetear contraseña</Button>
             <Button
               icon={data.activo ? <StopOutlined /> : <CheckCircleOutlined />}
+              loading={cambiandoEstado}
+              disabled={ocupado}
               onClick={handleToggleEstado}
               danger={data.activo}
             >

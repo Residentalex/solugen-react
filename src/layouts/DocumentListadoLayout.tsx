@@ -3,6 +3,7 @@ import { Card, Table, Typography, Empty } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import ListadoErrorAlert from '../components/ListadoErrorAlert';
 import DocumentListadoToolbar from '../components/DocumentListadoToolbar';
+import EmptyState from '../components/EmptyState';
 
 const { Text } = Typography;
 
@@ -117,7 +118,14 @@ function DocumentListadoLayout<T extends { id?: number | string }>(
             showTotal: (t) => `${t} registros`,
           }}
           className="paces-border-top paces-list-table"
-          locale={emptyText ? { emptyText } : undefined}
+          locale={{
+            emptyText: (
+              <EmptyState
+                title={emptyText ? undefined : 'Sin registros'}
+                description={emptyText ? String(emptyText) : 'No hay datos para los filtros aplicados.'}
+              />
+            ),
+          }}
         />
 
         {extraFooter && (

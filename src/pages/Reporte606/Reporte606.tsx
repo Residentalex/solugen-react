@@ -11,6 +11,7 @@ import ReporteToolbar from '../../components/ReporteToolbar';
 import FiltrosDocumento from '../../components/FiltrosDocumento/FiltrosDocumento';
 import { formatCurrency, formatDateRaw, formatDateParam, parseDateRaw, toTitleCase } from '../../utils/formats';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import type { Reporte606DTO } from '../../types/facturacion';
 import dayjs from 'dayjs';
 
@@ -152,7 +153,7 @@ const Reporte606: React.FC = () => {
       dataIndex: 'fechaComprobante',
       key: 'fechaComprobante',
       width: 100,
-      render: (v: string) => formatDateRaw(v),
+      render: (v: string) => <FechaColumnCell fecha={v} />,
     },
     {
       title: 'Documento',

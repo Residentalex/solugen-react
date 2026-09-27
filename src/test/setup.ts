@@ -5,7 +5,7 @@ import { vi } from 'vitest';
 (globalThis as any).jest = vi;
 
 // Polyfill for ResizeObserver used by Ant Design components
-global.ResizeObserver = class ResizeObserver {
+globalThis.ResizeObserver = class ResizeObserver {
   observe() {}
   unobserve() {}
   disconnect() {}

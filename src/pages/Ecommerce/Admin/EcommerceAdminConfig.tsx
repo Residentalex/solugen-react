@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Card, Form, Input, InputNumber, Button, message, Spin, Space, Row, Col, Switch,
+  Card, Form, Input, InputNumber, Button, message, Spin, Space, Row, Col, Switch, Modal,
 } from 'antd';
 import {
   SaveOutlined, ReloadOutlined, ArrowLeftOutlined, ShopOutlined, ContactsOutlined, DollarOutlined, SyncOutlined,
@@ -32,7 +32,10 @@ const EcommerceAdminConfig: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [configMap, setConfigMap] = useState<Record<string, AdminConfigDTO>>({});
+  const savingRef = useRef(false);
+  const ocupado = saving || loading;
   const navigate = useNavigate();
 
   const cargar = useCallback(async () => {
@@ -55,6 +58,7 @@ const EcommerceAdminConfig: React.FC = () => {
         }
       });
       form.setFieldsValue(valores);
+      setDirty(false);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar configuración');
     } finally {
@@ -67,9 +71,11 @@ const EcommerceAdminConfig: React.FC = () => {
   }, [cargar]);
 
   const handleGuardar = async () => {
-    const values = await form.validateFields();
+    if (savingRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    savingRef.current = true;
     setSaving(true);
     try {
+      const values = await form.validateFields();
       const payload = CAMPOS_CONFIG.map((c) => ({
         clave: c.clave,
         valor: String(c.tipo === 'switch' ? (values[c.clave] ? '1' : '0') : (values[c.clave] ?? '')),
@@ -87,23 +93,56 @@ const EcommerceAdminConfig: React.FC = () => {
         }
       }
       message.info(`Total filas afectadas: ${respuesta.totalFilasAfectadas}`);
-      cargar();
+      setDirty(false);
+      await cargar();
     } catch (err: any) {
+      if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar configuración');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
 
+  const handleRestaurar = () => {
+    if (savingRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    if (dirty) {
+      Modal.confirm({
+        title: 'Restaurar valores',
+        content: 'Tienes cambios sin guardar. ¿Deseas descartarlos y recargar?',
+        okText: 'Restaurar',
+        cancelText: 'Cancelar',
+        onOk: () => cargar(),
+      });
+      return;
+    }
+    cargar();
+  };
+
+  const handleVolver = () => {
+    if (savingRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    if (dirty) {
+      Modal.confirm({
+        title: 'Volver sin guardar',
+        content: 'Tienes cambios sin guardar. ¿Deseas salir sin guardar?',
+        okText: 'Salir',
+        cancelText: 'Cancelar',
+        onOk: () => navigate('/EDashboard'),
+      });
+      return;
+    }
+    navigate('/EDashboard');
+  };
+
   return (
-    <Spin spinning={loading}>
+    <Spin spinning={loading || saving} tip={saving ? 'Guardando configuración...' : 'Cargando configuración...'}>
       <Card
         className="paces-card-erp"
         style={{ borderRadius: 8, overflow: 'hidden' }}
         styles={{ body: { padding: 0 } }}
         title="Configuración del Ecommerce"
       >
-        <Form form={form} layout="vertical" style={{ padding: 24 }} onFinish={handleGuardar}>
+        <Form form={form} layout="vertical" style={{ padding: 24 }} onFinish={handleGuardar} disabled={ocupado} onValuesChange={() => setDirty(true)}>
           {/* Card secundario 1: General */}
           <Card
             className="paces-card"
@@ -259,14 +298,14 @@ const EcommerceAdminConfig: React.FC = () => {
           </Card>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 24, flexWrap: 'wrap' }}>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/EDashboard')}>
+            <Button icon={<ArrowLeftOutlined />} onClick={handleVolver} disabled={ocupado}>
               Volver
             </Button>
             <div style={{ flex: 1 }} />
-            <Button icon={<ReloadOutlined />} onClick={cargar}>
+            <Button icon={<ReloadOutlined spin={loading} />} onClick={handleRestaurar} disabled={ocupado} loading={loading}>
               Restaurar
             </Button>
-            <Button type="primary" icon={<SaveOutlined />} htmlType="submit" loading={saving}>
+            <Button type="primary" icon={<SaveOutlined />} htmlType="submit" loading={saving} disabled={ocupado}>
               Guardar
             </Button>
           </div>

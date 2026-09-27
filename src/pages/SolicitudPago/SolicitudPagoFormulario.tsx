@@ -12,6 +12,7 @@ import {
   BankOutlined,
   PlusOutlined,
   DeleteOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -95,7 +96,14 @@ const SolicitudPagoFormulario: React.FC = () => {
   const [cuentaModalOpen, setCuentaModalOpen] = useState(false);
 
   // Documentos relacionados
-  const [transaccionesAsociadas, setTransaccionesAsociadas] = useState<TransaccionAsociadaDTO[]>([]);
+  // descuento/impuesto son campos editables locales, no vienen del backend DTO.
+  type TransaccionAsociadaForm = TransaccionAsociadaDTO & { descuento?: number; impuesto?: number };
+  const normalizarAsociada = (t: TransaccionAsociadaDTO): TransaccionAsociadaForm => ({
+    ...t,
+    descuento: (t as TransaccionAsociadaForm).descuento ?? 0,
+    impuesto: (t as TransaccionAsociadaForm).impuesto ?? 0,
+  });
+  const [transaccionesAsociadas, setTransaccionesAsociadas] = useState<TransaccionAsociadaForm[]>([]);
   const [documentoModalOpen, setDocumentoModalOpen] = useState(false);
 
   // Cuenta contable para asientos manuales
@@ -114,13 +122,14 @@ const SolicitudPagoFormulario: React.FC = () => {
     const baseSubTotal = transaccionesAsociadas.reduce((s, t) => s + (t.monto || 0) + (t.descuento || 0), 0);
     const baseDescuento = transaccionesAsociadas.reduce((s, t) => s + (t.descuento || 0), 0);
     const baseImpuestos = transaccionesAsociadas.reduce((s, t) => s + (t.impuesto || 0), 0);
+    const baseRetenciones = transaccionesAsociadas.reduce((s, t) => s + (t.retencion || 0), 0);
     // Si no hay documentos relacionados (avance efectivo), subtotal = total del documento
     const tieneDocs = transaccionesAsociadas && transaccionesAsociadas.length > 0;
     return {
       subTotal: tieneDocs ? baseSubTotal : (data?.subTotal || data?.total || form.getFieldValue('subTotal') || 0),
       descuento: tieneDocs ? baseDescuento : (data?.descuento || form.getFieldValue('descuento') || 0),
       impuestos: tieneDocs ? baseImpuestos : (data?.impuestos || form.getFieldValue('impuestos') || 0),
-      retenciones: 0,
+      retenciones: tieneDocs ? baseRetenciones : (data?.retenciones || form.getFieldValue('retenciones') || 0),
     };
   }, [transaccionesAsociadas, data, form]);
 
@@ -215,13 +224,13 @@ const isLarge = screens.xxl === true;
         setData(res);
         setAsientos(res.asientos || []);
         setLogs(res.logs || []);
-        setTransaccionesAsociadas(res.transaccionesAsociadas || []);
+        setTransaccionesAsociadas((res.transaccionesAsociadas || []).map(normalizarAsociada));
 
         // Concepto
         const resAny = res as any;
         const conceptoRaw = resAny.concepto;
         const concepto = typeof conceptoRaw === 'object' && conceptoRaw !== null ? conceptoRaw as ConceptoDTO : null;
-        const conceptoCodigo = concepto?.codigo || res.codigoConcepto || '';
+        const conceptoCodigo = concepto?.codigo || '';
         if (concepto) {
           setSelectedConcepto({ ...concepto, codigo: conceptoCodigo });
           setConceptoSearchText(`${conceptoCodigo} - ${concepto.nombre || ''}`);
@@ -254,11 +263,12 @@ const isLarge = screens.xxl === true;
           }
         }
 
-        // Entidad
+        // Entidad: el DTO la trae como string; si el backend envía objeto se soporta sin leer codigoEntidad.
         const entidadRaw = resAny.entidad;
         const entidad = typeof entidadRaw === 'object' && entidadRaw !== null ? entidadRaw as EntidadDTO : null;
+        const entidadCodigo = entidad?.codigo || (typeof entidadRaw === 'string' ? entidadRaw : '');
         if (entidad) {
-          setSelectedEntidad({ ...entidad, codigo: entidad.codigo || res.codigoEntidad || '' });
+          setSelectedEntidad({ ...entidad, codigo: entidadCodigo });
         }
 
         // Fecha (forzar interpretación local para evitar desplazamiento UTC)
@@ -267,8 +277,8 @@ const isLarge = screens.xxl === true;
         form.setFieldsValue({
           fechaDocumento: fechaDoc,
           tipo: tipoRaw?.codigo || resAny.codigoTipo || '',
-          concepto: concepto?.codigo || res.codigoConcepto || '',
-          entidad: entidad?.codigo || res.codigoEntidad || '',
+          concepto: concepto?.codigo || '',
+          entidad: entidadCodigo,
           cuentaBancaria: res.cuentaBancaria || '',
           referencia: res.referencia || '',
           ncf: res.ncf || '',
@@ -337,17 +347,18 @@ nota: res.nota || '',
     }
 
     // === ConfigurarMoneda (siempre desde concepto) ===
+    // MonedaDTO no trae tasa; la tasa se mantiene desde el form o data.
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     setData((prev) => {
       if (!prev) return prev;
-      return { ...prev, moneda: monedaObj };
+      return { ...prev, moneda: { simbolo: monedaObj.simbolo, nombre: monedaObj.nombre } };
     });
 
     form.setFieldsValue({
       concepto: concepto.codigo,
       entidad: undefined,
       moneda: monedaObj.nombre,
-      tasa: monedaObj.tasa ?? 1,
+      tasa: form.getFieldValue('tasa') ?? data?.tasa ?? 1,
       nombreBeneficiario: '',
     });
 
@@ -411,14 +422,14 @@ nota: res.nota || '',
   };
 
   // ===== Handler para documentos relacionados =====
-  const handleAgregarDocumentos = (docs: any[]) => {
+  const handleAgregarDocumentos = (docs: TransaccionAsociadaDTO[]) => {
     setTransaccionesAsociadas((prev) => {
       const idsExistentes = new Set(
         prev.map((t) => t.transaccionAsociadaID || t.id)
       );
-      const nuevos = docs.filter(
-        (d) => !idsExistentes.has(d.transaccionAsociadaID || d.id)
-      );
+      const nuevos = docs
+        .filter((d) => !idsExistentes.has(d.transaccionAsociadaID || d.id))
+        .map(normalizarAsociada);
       return [...prev, ...nuevos];
     });
   };
@@ -498,8 +509,9 @@ nota: res.nota || '',
     // Entidad
     const entidad = selectedEntidad || { nombre: '', codigo: '', identificacion: '' };
 
-    // Moneda
-    const moneda = base.moneda || (selectedConcepto?.moneda) || getMonedaSucursalActiva();
+    // Moneda: SolicitudPagoDTO.moneda solo trae simbolo/nombre; codigo desde concepto o sucursal.
+    const moneda = base.moneda || selectedConcepto?.moneda || getMonedaSucursalActiva();
+    const monedaCodigo = (moneda as { codigo?: string })?.codigo || getMonedaSucursalActiva().codigo;
 
     return {
       id: base.id || 0,
@@ -511,7 +523,7 @@ nota: res.nota || '',
       referencia: values.referencia || '',
       nota: values.nota || '',
       tasa: tasaValue,
-      total: totalDisplay,
+      total: Math.round((totalesDocs.subTotal - totalesDocs.descuento + totalesDocs.impuestos) * 100) / 100,
       subTotal: totalesDocs.subTotal,
       descuento: totalesDocs.descuento,
       impuestos: totalesDocs.impuestos,
@@ -522,11 +534,11 @@ nota: res.nota || '',
       entidad,
       moneda,
       cuentaBancaria: values.cuentaBancaria || '',
-      numeroCuenta: base.numeroCuenta || selectedEntidad?.numeroCuenta || selectedEntidad?.cuentaContable?.noCuenta || '',
+      numeroCuenta: values.cuentaBancaria || '',
       codigoTipo: tipoValue || '',
-      codigoEntidad: entidad.codigo || base.codigoEntidad || '',
-      codigoConcepto: concepto.codigo || base.codigoConcepto || '',
-      codigoMoneda: moneda.codigo || '',
+      codigoEntidad: entidad.codigo || '',
+      codigoConcepto: concepto.codigo || '',
+      codigoMoneda: monedaCodigo,
       nombreEntidad: entidad.nombre || base.nombreEntidad || '',
       nombreBeneficiario: values.nombreBeneficiario || '',
       transaccionesAsociadas: transaccionesAsociadas.map((t) => ({
@@ -541,6 +553,7 @@ nota: res.nota || '',
       tasaValue, totalCalculado, totalDisplay, totalesDocs, tipoValue, transaccionesAsociadas, asientos, logs]);
 
   const handleGenerarAsientos = async () => {
+    if (saving) return;
     if (sucursalActiva === undefined) return;
     const values = form.getFieldsValue();
     if (!values.cuentaBancaria) {
@@ -564,7 +577,21 @@ nota: res.nota || '',
     }
   };
 
+  const handleAgregarAsientoManual = (cuenta: { noCuenta: string; nombre: string }) => {
+    if (saving) return;
+    const nuevoAsiento: AsientoContableDTO = {
+      id: Date.now(),
+      cuentaContable: { noCuenta: cuenta.noCuenta, nombre: cuenta.nombre },
+      monto: 0,
+      tipoAsiento: 'D',
+      generado: false,
+      descripcion: '',
+    };
+    setAsientos((prev) => [...prev, nuevoAsiento]);
+  };
+
   const handleGuardarConMonto = async (monto: number) => {
+    if (saving) return;
     setSaving(true);
     try {
       const dto = construirDTO();
@@ -579,13 +606,33 @@ nota: res.nota || '',
           saldoPendiente: pendienteEfectivo(t),
         })) : [],
       } as SolicitudPagoCrearDTO | SolicitudPagoActualizarDTO;
+
+      // Generar asientos si no existen (como en handleGuardar)
+      let asientosActualizados = asientos || [];
+      if (!asientos || asientos.length === 0) {
+        try {
+          const tempDTO = construirDTOGenerarAsientos();
+          const generados = await solicitudPagoApi.generarAsientos(sucursalActiva, tempDTO);
+          setAsientos((prev) => {
+            const manuales = prev.filter((a) => a.generado === false);
+            return [...manuales, ...generados];
+          });
+          asientosActualizados = generados;
+        } catch (errAsientos) {
+          message.warning('No se pudo generar asientos automáticamente');
+        }
+      }
+      const dtoConAsientos = {
+        ...dtoConMonto,
+        asientos: asientosActualizados,
+      };
       if (mode === 'crear') {
-        const result = await solicitudPagoApi.crear(sucursalActiva, dtoConMonto as SolicitudPagoCrearDTO);
+        const result = await solicitudPagoApi.crear(sucursalActiva, dtoConAsientos as SolicitudPagoCrearDTO);
         navigationConfirmedRef.current = true;
         message.success('Solicitud de pago creada exitosamente');
         navigate(`/FSPA/${result.id}`, { replace: true });
       } else {
-        await solicitudPagoApi.actualizar(sucursalActiva, dtoConMonto as SolicitudPagoActualizarDTO);
+        await solicitudPagoApi.actualizar(sucursalActiva, dtoConAsientos as SolicitudPagoActualizarDTO);
         navigationConfirmedRef.current = true;
         message.success('Solicitud de pago actualizada exitosamente');
         navigate(`/FSPA/${id}`, { replace: true });
@@ -714,11 +761,11 @@ nota: res.nota || '',
         setData(res);
         setAsientos(res.asientos || []);
         setLogs(res.logs || []);
-        setTransaccionesAsociadas(res.transaccionesAsociadas || []);
+        setTransaccionesAsociadas((res.transaccionesAsociadas || []).map(normalizarAsociada));
         const resAny = res as any;
         const conceptoRaw = resAny.concepto;
         const conceptoH = typeof conceptoRaw === 'object' && conceptoRaw !== null ? conceptoRaw as ConceptoDTO : null;
-        const conceptoCodigoH = conceptoH?.codigo || res.codigoConcepto || '';
+        const conceptoCodigoH = conceptoH?.codigo || '';
         if (conceptoH) {
           setSelectedConcepto({ ...conceptoH, codigo: conceptoCodigoH });
           setConceptoSearchText(`${conceptoCodigoH} - ${conceptoH.nombre || ''}`);
@@ -732,16 +779,17 @@ nota: res.nota || '',
         if (tipoPagoRaw) setTipoPago(tipoPagoRaw);
         const entidadRaw = resAny.entidad;
         const entidadH = typeof entidadRaw === 'object' && entidadRaw !== null ? entidadRaw as EntidadDTO : null;
+        const entidadCodigoH = entidadH?.codigo || (typeof entidadRaw === 'string' ? entidadRaw : '');
         if (entidadH) {
-          setSelectedEntidad({ ...entidadH, codigo: entidadH.codigo || res.codigoEntidad || '' });
+          setSelectedEntidad({ ...entidadH, codigo: entidadCodigoH });
         }
         // Fecha (forzar interpretación local para evitar desplazamiento UTC)
         const fechaDoc = res.fechaDocumento ? dayjs(res.fechaDocumento.substring(0, 10)) : null;
         form.setFieldsValue({
           fechaDocumento: fechaDoc,
           tipo: tipoRaw?.codigo || resAny.codigoTipo || '',
-          concepto: conceptoH?.codigo || res.codigoConcepto || '',
-          entidad: entidadH?.codigo || res.codigoEntidad || '',
+          concepto: conceptoH?.codigo || '',
+          entidad: entidadCodigoH,
           cuentaBancaria: res.cuentaBancaria || '',
           referencia: res.referencia || '',
           ncf: res.ncf || '',
@@ -964,7 +1012,7 @@ subTotal: res.subTotal ?? 0,
   // ===== Pendiente efectivo por fila =====
   // DOCASOC.PENDIENTE puede venir mal (0) cuando en realidad DEBITADO - ACREDITADO != 0.
   // El pendiente efectivo se calcula como max(montoOriginal - pagado, saldoPendiente), nunca negativo.
-  const pendienteEfectivo = (t: TransaccionAsociadaDTO): number => {
+  const pendienteEfectivo = (t: TransaccionAsociadaForm): number => {
     const v = Math.max(0, (t.montoOriginal || 0) - (t.pagado || 0), t.saldoPendiente || 0);
     return Math.round(v * 100) / 100;
   };
@@ -973,14 +1021,14 @@ subTotal: res.subTotal ?? 0,
   const asociadasColumns = [
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110, render: (v: string) => v ? formatDate(v) : '-' },
     { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 160 },
-    { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 130, render: (v: string) => v || '-' },
+    { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 130, render: (v: string, record: TransaccionAsociadaForm) => v || (record as any).ncf || '-' },
     { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v ?? 0) },
     {
       title: 'Acreditado/Abonado',
       key: 'pagado',
       width: 150,
       align: 'right' as const,
-      render: (_: any, record: TransaccionAsociadaDTO) => (
+      render: (_: any, record: TransaccionAsociadaForm) => (
         <Text type="secondary">{formatNumber(record.pagado ?? 0)}</Text>
       ),
     },
@@ -989,7 +1037,7 @@ subTotal: res.subTotal ?? 0,
       key: 'descuento',
       width: 140,
       align: 'right' as const,
-      render: (_: any, record: TransaccionAsociadaDTO) => (
+      render: (_: any, record: TransaccionAsociadaForm) => (
         <InputNumber
           size="small"
           style={{ width: '100%' }}
@@ -1003,18 +1051,32 @@ subTotal: res.subTotal ?? 0,
       ),
     },
     {
+      title: 'Documentos Asociados',
+      key: 'spaDocumento',
+      width: 180,
+      render: (_: any, record: TransaccionAsociadaForm) => {
+        if (!record.bloqueado) return '-';
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Tag color="error">{record.spaDocumento || 'SPA bloqueante'}</Tag>
+            {record.spaId && <span title={`SPA ID: ${record.spaId}`} style={{ fontSize: 10, color: '#8c8c8c' }}>#{record.spaId}</span>}
+          </div>
+        );
+      },
+    },
+    {
       title: 'Retenciones',
       key: 'retencion',
       width: 120,
       align: 'right' as const,
-      render: (_: any, record: TransaccionAsociadaDTO) => formatNumber(record.retencion ?? 0),
+      render: (_: any, record: TransaccionAsociadaForm) => formatNumber(record.retencion ?? 0),
     },
     {
       title: 'Monto',
       key: 'monto',
       width: 140,
       align: 'right' as const,
-      render: (_: any, record: TransaccionAsociadaDTO) => (
+      render: (_: any, record: TransaccionAsociadaForm) => (
         <InputNumber
           size="small"
           style={{ width: '100%' }}
@@ -1030,7 +1092,7 @@ subTotal: res.subTotal ?? 0,
     },
     {
       title: '', key: 'accion', width: 50,
-      render: (_: any, record: TransaccionAsociadaDTO) => (
+      render: (_: any, record: TransaccionAsociadaForm) => (
         <Button type="text" danger size="small" icon={<DeleteOutlined />}
           onClick={() => handleDocRelacionadoRemove(record.transaccionAsociadaID || record.id)} />
       ),
@@ -1055,7 +1117,7 @@ subTotal: res.subTotal ?? 0,
               type="primary"
               size="small"
               icon={<PlusOutlined />}
-              disabled={!selectedEntidad}
+              disabled={!selectedEntidad || saving}
               onClick={() => setDocumentoModalOpen(true)}
             >
               Agregar
@@ -1085,14 +1147,14 @@ subTotal: res.subTotal ?? 0,
       children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
         <>
           <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
-            <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)}>
+            <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)} disabled={saving}>
               Agregar asiento manual
             </Button>
           </div>
           <AsientosContableEditables
             asientos={asientos}
             onChange={setAsientos}
-            editable={true}
+            editable={!saving}
             onGenerar={handleGenerarAsientos}
             generando={saving}
           />
@@ -1103,7 +1165,7 @@ subTotal: res.subTotal ?? 0,
     },
     {
       key: 'historial',
-      label: `Historial (${logs.length})`,
+      icon: <HistoryOutlined />, label: `Historial (${logs.length})`,
       children: (
         <LogTable dataSource={logs} scroll={{ x: 900 }} />
       ),
@@ -1161,6 +1223,9 @@ subTotal: res.subTotal ?? 0,
         documentosIniciales={transaccionesAsociadas
           .map(t => t.id || t.transaccionAsociadaID)
           .filter((id): id is number => id != null && id > 0)}
+        transaccionId={id}
+        excluirSpaId={id}
+        sucursalForBloqueo={sucursalActiva}
       />
 
       {/* Modal de búsqueda de cuenta contable para asientos manuales */}
@@ -1174,20 +1239,22 @@ subTotal: res.subTotal ?? 0,
          sucursal={sucursalActiva}
        />
 
-       {/* Modal para especificar monto cuando no hay documentos relacionados (avance de efectivo) */}
-       <Modal
-         title="Especificar Monto de Avance de Efectivo"
-         open={modalMontoSinDocsOpen}
-         onOk={() => {
-           if (modalMontoSinDocsValue !== null) {
-             handleGuardarConMonto(modalMontoSinDocsValue);
-           }
-         }}
-         onCancel={() => setModalMontoSinDocsOpen(false)}
-         okText="Confirmar Monto"
-         cancelText="Cancelar"
-         width={500}
-       >
+        {/* Modal para especificar monto cuando no hay documentos relacionados (avance de efectivo) */}
+        <Modal
+          title="Especificar Monto de Avance de Efectivo"
+          open={modalMontoSinDocsOpen}
+          onOk={() => {
+            if (modalMontoSinDocsValue !== null) {
+              handleGuardarConMonto(modalMontoSinDocsValue);
+            }
+          }}
+          onCancel={() => { if (!saving) setModalMontoSinDocsOpen(false); }}
+          okText="Confirmar Monto"
+          cancelText="Cancelar"
+          okButtonProps={{ loading: saving, disabled: saving }}
+          cancelButtonProps={{ disabled: saving }}
+          width={500}
+        >
          <div style={{ padding: 24 }}>
            <p style={{ marginBottom: 16, fontSize: 16 }}>
              No se han especificado documentos relacionados para esta solicitud de pago.
@@ -1199,19 +1266,20 @@ subTotal: res.subTotal ?? 0,
              <label style={{ display: 'block', marginBottom: 8, fontWeight: 500, fontSize: 14 }}>
                Monto del Avance de Efectivo (RD$):
              </label>
-             <InputNumber
-               style={{ width: '100%' }}
-               min={0}
-               step={0.01}
-               precision={2}
-               placeholder="Ingrese el monto..."
-               value={modalMontoSinDocsValue ?? 0}
-               onChange={(value) => setModalMontoSinDocsValue(value)}
-               onPressEnter={() => {
-                 if (value !== null) {
-                   handleGuardarConMonto(value);
-                 }
-               }}
+              <InputNumber
+                style={{ width: '100%' }}
+                min={0}
+                step={0.01}
+                precision={2}
+                placeholder="Ingrese el monto..."
+                value={modalMontoSinDocsValue ?? 0}
+                disabled={saving}
+                onChange={(value) => setModalMontoSinDocsValue(value)}
+                onPressEnter={() => {
+                  if (modalMontoSinDocsValue !== null) {
+                    handleGuardarConMonto(modalMontoSinDocsValue);
+                  }
+                }}
              />
            </div>
            <div style={{ background: '#fff7e6', borderRadius: 4, padding: 16, border: '1px solid #ffd591' }}>

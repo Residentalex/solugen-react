@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Card, Row, Col, Statistic, Button, Typography, message, Table, Tag,
@@ -54,6 +54,9 @@ const EcommerceAdminDashboard: React.FC = () => {
   const [resumen, setResumen] = useState<AdminDashboardResumenDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [refrescando, setRefrescando] = useState(false);
+  const operacionRef = useRef(false);
+  const ocupado = syncing || refrescando || loading;
   const [ordenes, setOrdenes] = useState<AdminOrdenListadoDTO[]>([]);
   const [ordenesLoading, setOrdenesLoading] = useState(false);
   const [busqueda, setBusqueda] = useState('');
@@ -80,15 +83,30 @@ const EcommerceAdminDashboard: React.FC = () => {
   }, [cargarDatos]);
 
   const handleSincronizar = async () => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
     setSyncing(true);
     try {
       await ecommerceApi.adminSincronizar();
       message.success('¡Sincronización completada exitosamente!');
-      cargarDatos();
+      await cargarDatos();
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al sincronizar');
     } finally {
       setSyncing(false);
+      operacionRef.current = false;
+    }
+  };
+
+  const handleActualizar = async () => {
+    if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; }
+    operacionRef.current = true;
+    setRefrescando(true);
+    try {
+      await cargarDatos();
+    } finally {
+      setRefrescando(false);
+      operacionRef.current = false;
     }
   };
 
@@ -226,7 +244,8 @@ const EcommerceAdminDashboard: React.FC = () => {
         <Space wrap>
           <Button
             icon={<SettingOutlined />}
-            onClick={() => navigate('/EConfig')}
+            onClick={() => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } navigate('/EConfig'); }}
+            disabled={ocupado}
             style={{ borderRadius: 10 }}
           >
             Configuración
@@ -235,6 +254,7 @@ const EcommerceAdminDashboard: React.FC = () => {
             type="primary"
             icon={<SyncOutlined spin={syncing} />}
             loading={syncing}
+            disabled={ocupado}
             onClick={handleSincronizar}
             style={{ borderRadius: 10, boxShadow: token.boxShadow }}
           >
@@ -248,26 +268,28 @@ const EcommerceAdminDashboard: React.FC = () => {
         {kpis.map((kpi) => (
           <Col xs={24} sm={12} lg={6} key={kpi.key}>
             <Card
-              hoverable
+              hoverable={!ocupado}
               style={{
                 borderRadius: 18,
                 border: 'none',
                 boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
                 background: token.colorBgContainer,
                 transition: 'all 0.3s ease',
-                cursor: 'pointer',
+                cursor: ocupado ? 'default' : 'pointer',
                 height: '100%',
               }}
               styles={{ body: { padding: 24 } }}
               onMouseEnter={(e) => {
+                if (ocupado) return;
                 e.currentTarget.style.transform = 'translateY(-4px)';
                 e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.08)';
               }}
               onMouseLeave={(e) => {
+                if (ocupado) return;
                 e.currentTarget.style.transform = 'translateY(0)';
                 e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.04)';
               }}
-              onClick={() => navigate(kpi.path)}
+              onClick={() => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } navigate(kpi.path); }}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                 <div style={{ flex: 1 }}>
@@ -326,7 +348,8 @@ const EcommerceAdminDashboard: React.FC = () => {
               </div>
               <Segmented
                 value={periodo}
-                onChange={(val) => setPeriodo(val as PeriodFilter)}
+                onChange={(val) => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } setPeriodo(val as PeriodFilter); }}
+                disabled={ocupado}
                 options={[
                   { value: 'dia' as PeriodFilter, label: 'Día' },
                   { value: 'semana' as PeriodFilter, label: 'Semana' },
@@ -487,14 +510,15 @@ const EcommerceAdminDashboard: React.FC = () => {
                 <Input.Search
                   placeholder="Buscar orden..."
                   allowClear
-                  onSearch={(val) => setBusqueda(val)}
+                  onSearch={(val) => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } setBusqueda(val); }}
+                  disabled={ocupado}
                   style={{ width: 280, borderRadius: 10 }}
                   prefix={<SearchOutlined style={{ color: 'var(--paces-text-secondary)' }} />}
                 />
                 <Tooltip title="Recargar">
-                  <Button icon={<ReloadOutlined />} onClick={cargarDatos} style={{ borderRadius: 10 }} />
+                  <Button icon={<ReloadOutlined spin={refrescando} />} onClick={handleActualizar} loading={refrescando} disabled={ocupado} style={{ borderRadius: 10 }} />
                 </Tooltip>
-                <Button type="link" onClick={() => navigate('/EOrdenes')} style={{ borderRadius: 10 }}>
+                <Button type="link" onClick={() => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } navigate('/EOrdenes'); }} disabled={ocupado} style={{ borderRadius: 10 }}>
                   Ver todas <ArrowRightOutlined />
                 </Button>
               </div>
@@ -509,13 +533,13 @@ const EcommerceAdminDashboard: React.FC = () => {
               className="paces-list-table"
               locale={{ emptyText: <Empty description="No hay órdenes registradas" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
               onRow={(record) => ({
-                onClick: () => navigate(`/EOrdenes`),
-                style: { cursor: 'pointer' },
+                onClick: () => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } navigate(`/EOrdenes`); },
+                style: { cursor: ocupado ? 'default' : 'pointer' },
               })}
             />
             {ordenes.length > 10 && (
               <div style={{ padding: '12px 24px', textAlign: 'right', borderTop: '1px solid var(--paces-border)' }}>
-                <Button type="text" onClick={() => navigate('/EOrdenes')}>
+                <Button type="text" onClick={() => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } navigate('/EOrdenes'); }} disabled={ocupado}>
                   Ver todas las órdenes <ArrowRightOutlined />
                 </Button>
               </div>
@@ -546,25 +570,27 @@ const EcommerceAdminDashboard: React.FC = () => {
               ].map((item, idx) => (
                 <Col xs={24} sm={12} md={8} lg={4} key={idx}>
                   <Card
-                    hoverable
+                    hoverable={!ocupado}
                     style={{
                       borderRadius: 14,
                       border: 'none',
                       background: 'var(--paces-hover-bg)',
-                      cursor: 'pointer',
+                      cursor: ocupado ? 'default' : 'pointer',
                       transition: 'all 0.2s ease',
                       textAlign: 'center',
                     }}
                     styles={{ body: { padding: '16px 12px' } }}
                     onMouseEnter={(e) => {
+                      if (ocupado) return;
                       e.currentTarget.style.transform = 'translateY(-2px)';
                       e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.06)';
                     }}
                     onMouseLeave={(e) => {
+                      if (ocupado) return;
                       e.currentTarget.style.transform = 'translateY(0)';
                       e.currentTarget.style.boxShadow = 'none';
                     }}
-                    onClick={() => navigate(item.path)}
+                    onClick={() => { if (operacionRef.current || ocupado) { message.warning('Hay una operación en curso, espere a que termine'); return; } navigate(item.path); }}
                   >
                     <div style={{ fontSize: 24, color: item.color, marginBottom: 8 }}>{item.icon}</div>
                     <Text style={{ fontSize: 12, fontWeight: 500, color: token.colorText }}>{item.label}</Text>

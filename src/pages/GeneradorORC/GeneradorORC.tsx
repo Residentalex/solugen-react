@@ -8,6 +8,7 @@ import { generadorOrcApi } from '../../api/generadorOrcApi';
 import { apiClient } from '../../api/client';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import type { GeneradorOrdenCompraDTO } from '../../types/generadorOrc';
 
 const { Text } = Typography;
@@ -113,7 +114,7 @@ const GeneradorORC: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 110,
-      render: (f: string) => <Text>{formatDateRaw(f)}</Text>,
+      render: (f: string) => <FechaColumnCell fecha={f} />,
     },
     {
       title: 'Suplidor',

@@ -7,22 +7,24 @@ import { useCompanyStore } from '../../stores/companyStore';
 import { useUIStore } from '../../stores/uiStore';
 import { productoApi } from '../../api/productoApi';
 import type { ProductoDTO, ImpuestoProductoDTO } from '../../types/productos';
+import type { TipoImpuesto, AmbitoImpuesto } from '../../types/contabilidad';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import { formatCurrency } from '../../utils/formats';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
 
 const { Text } = Typography;
 
-const TIPO_IMPUESTO_MAP: Record<number, string> = {
-  0: 'Exento',
-  1: 'Gravado',
-  2: 'No Gravado',
+const TIPO_IMPUESTO_MAP: Record<TipoImpuesto, string> = {
+  I: 'Impuesto',
+  L: 'Liquidación',
+  V: 'Informativo',
+  R: 'Retencion',
 };
 
-const AMBITO_IMPUESTO_MAP: Record<number, string> = {
-  0: 'Venta',
-  1: 'Compra',
-  2: 'Ambos',
+const AMBITO_IMPUESTO_MAP: Record<AmbitoImpuesto, string> = {
+  Venta: 'Venta',
+  Compra: 'Compra',
+  Ninguno: 'Ninguno',
 };
 
 function formatNumber(n: number): string {
@@ -65,7 +67,7 @@ const ProductoDetalle: React.FC = () => {
       .then((res) => {
         if (abortController.signal.aborted) return;
         if (!res) {
-          message.error('Documento no encontrado en la sucursal seleccionada.');
+          message.error('Producto no encontrado en la sucursal seleccionada');
           setLoadingError(true);
           return;
         }
@@ -92,7 +94,7 @@ const ProductoDetalle: React.FC = () => {
       .then((res) => {
         if (abortController.signal.aborted) return;
         if (!res) {
-          message.error('Documento no encontrado en la sucursal seleccionada.');
+          message.error('Producto no encontrado en la sucursal seleccionada');
           setLoadingError(true);
           return;
         }

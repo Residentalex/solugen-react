@@ -8,6 +8,7 @@ import { useDocumentoListado } from '../../hooks/useDocumentoListado';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatCurrency, formatDate, formatDateParam } from '../../utils/formats';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import { useAuthStore } from '../../stores/authStore';
 
 const { Text } = Typography;
@@ -79,7 +80,7 @@ const ConciliacionBancaria: React.FC = () => {
       dataIndex: 'fecha',
       key: 'fecha',
       width: 130,
-      render: (val: string) => <Text>{formatDate(val)}</Text>,
+      render: (val: string) => <FechaColumnCell fecha={val} />,
     },
     {
       title: 'Balance Bancos',

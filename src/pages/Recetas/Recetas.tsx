@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Table, Input, Select, Button, Typography, message, Tag, Alert, Empty } from 'antd';
+import { Card, Table, Input, Select, Button, Typography, message, Tag, Alert, Empty, Divider } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, ArrowLeftOutlined, CalculatorOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { recetaApi } from '../../api/recetaApi';
@@ -97,6 +97,10 @@ const Recetas: React.FC = () => {
     setIngredientes([]);
   };
 
+  const costoEstimado = useMemo(() => {
+    return ingredientes.reduce((sum, ing) => sum + (ing.costo ?? 0), 0);
+  }, [ingredientes]);
+
   const filteredProductos = (data || []).filter(
     (p) =>
       !searchText ||
@@ -189,73 +193,85 @@ const Recetas: React.FC = () => {
         style={{ borderRadius: 8, overflow: 'hidden' }}
       >
         {productoSeleccionado ? (
-          <div style={{ padding: "16px 24px 0" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: 16, flexWrap: "wrap" }}>
-              <Button icon={<ArrowLeftOutlined />} onClick={handleVolver}>
-                Volver
-              </Button>
-              <Text strong style={{ fontSize: 15 }}>
-                <Tag color="blue" style={{ marginLeft: 4 }}>{productoSeleccionado}</Tag>
-                {toTitleCase(productoNombre)}
-              </Text>
-              <div style={{ flex: 1 }} />
-              <Button icon={<ReloadOutlined />} onClick={() => refetch()} />
+          <>
+            <div style={{ padding: "16px 24px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: 24, flexWrap: "wrap" }}>
+                <Button icon={<ArrowLeftOutlined />} onClick={handleVolver}>
+                  Volver
+                </Button>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <Tag color="blue" style={{ marginRight: 8 }}>{productoSeleccionado}</Tag>
+                  <Text strong style={{ fontSize: 18 }}>{toTitleCase(productoNombre)}</Text>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <Text>Estado:</Text>
+                    <Tag color="green">Activo</Tag>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <Text>Costo estimado:</Text>
+                    <Text strong>
+                      <CalculatorOutlined /> {formatCurrency(costoEstimado)}
+                    </Text>
+                  </div>
+                </div>
+                <div style={{ flex: 1 }} />
+                <Button icon={<ReloadOutlined />} onClick={() => refetch()} />
+              </div>
+              <Divider />
+              <h4 style={{ margin: "16px 24px 8px", color: "rgba(0,0,0,0.65)" }}>Composición de la receta</h4>
+              <Table<IngredienteDTO>
+                columns={columnasIngredientes}
+                dataSource={ingredientes}
+                rowKey="id"
+                loading={loadingIngredientes}
+                scroll={{ x: 750 }}
+                size="middle"
+                pagination={false}
+                locale={{
+                  emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Empty description="No hay ingredientes registrados para este producto. Agregue ingredientes desde el módulo de productos." />
+                  </div>,
+                }}
+                className="paces-border-top paces-list-table"
+              />
             </div>
-          </div>
+          </>
         ) : (
-          <CatalogoListadoToolbar
-            onSearch={(val) => setSearchText(val)}
-            pageSize={pageSize}
-            onPageSizeChange={(v) => { setPageSize(v); }}
-            onReload={() => refetch()}
-            onExportarExcel={handleExportarExcel}
-          />
+          <>
+            <CatalogoListadoToolbar
+              onSearch={(val) => setSearchText(val)}
+              pageSize={pageSize}
+              onPageSizeChange={(v) => { setPageSize(v); }}
+              onReload={() => refetch()}
+              onExportarExcel={handleExportarExcel}
+            />
+            <Divider />
+            <h4 style={{ margin: "16px 24px 8px", color: "rgba(0,0,0,0.65)" }}>Productos</h4>
+            <Table<ProductoRecetaDTO>
+              columns={columnasProductos}
+              dataSource={filteredProductos}
+              rowKey="codigo"
+              loading={isLoading}
+              scroll={{ x: 600 }}
+              size="middle"
+              pagination={{
+                pageSize,
+                showSizeChanger: false,
+                showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} productos`,
+              }}
+              onRow={(record) => ({
+                onClick: () => handleSeleccionar(record.codigo, record.nombre),
+                style: { cursor: "pointer" },
+              })}
+              locale={{
+                emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Empty description="No hay productos con receta registrados" />
+                </div>,
+              }}
+              className="paces-border-top paces-list-table"
+            />
+          </>
         )}
-
-        {!productoSeleccionado && (
-          <Table<ProductoRecetaDTO>
-            columns={columnasProductos}
-            dataSource={filteredProductos}
-            rowKey="codigo"
-            loading={isLoading}
-            scroll={{ x: 600 }}
-            size="middle"
-            pagination={{
-              pageSize,
-              showSizeChanger: false,
-              showTotal: (total, range) => `${range[0]}-${range[1]} de ${total} productos`,
-            }}
-            onRow={(record) => ({
-              onClick: () => handleSeleccionar(record.codigo, record.nombre),
-              style: { cursor: "pointer" },
-          })}
-          locale={{
-            emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Empty description="No hay productos con receta registrados" />
-            </div>,
-          }}
-          className="paces-border-top paces-list-table"
-          />
-        )}
-
-        {productoSeleccionado && (
-          <Table<IngredienteDTO>
-            columns={columnasIngredientes}
-            dataSource={ingredientes}
-            rowKey="id"
-            loading={loadingIngredientes}
-            scroll={{ x: 750 }}
-            size="middle"
-            pagination={false}
-          locale={{
-            emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Empty description="No hay ingredientes registrados" />
-            </div>,
-          }}
-          className="paces-border-top paces-list-table"
-          />
-        )}
-    </Card>
+      </Card>
     </>
   );
 };

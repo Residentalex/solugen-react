@@ -11,6 +11,7 @@ import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
 import { formatCurrency, formatDateRaw, formatDateParam, toTitleCase } from '../../utils/formats';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
+import FechaColumnCell from '../../components/FechaColumnCell';
 import type { TransaccionDTO } from '../../types/transaccion';
 import type { DocumentoDTO } from '../../types/documento';
 
@@ -127,7 +128,7 @@ const IntegridadAsientos: React.FC = () => {
       dataIndex: 'fechaDocumento',
       key: 'fechaDocumento',
       width: 110,
-      render: (v: string) => <Text>{formatDateRaw(v)}</Text>,
+      render: (v: string) => <FechaColumnCell fecha={v} />,
     },
     {
       title: 'Entidad',

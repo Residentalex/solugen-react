@@ -27,6 +27,8 @@ const Modulos: React.FC = () => {
   const [pageSize, setPageSize] = useState(25);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingModulo, setEditingModulo] = useState<ModuloDTO | null>(null);
+  const [saving, setSaving] = useState(false);
+  const processingLockRef = React.useRef(false);
   const [form] = Form.useForm();
 
   const cargar = useCallback(async () => {
@@ -91,11 +93,15 @@ const Modulos: React.FC = () => {
   }, []);
 
   const handleNuevo = () => {
+    if (saving) return;
     setEditingModulo(null);
     setModalOpen(true);
   };
 
   const handleGuardar = async () => {
+    if (processingLockRef.current) return;
+    processingLockRef.current = true;
+    setSaving(true);
     try {
       const values = await form.validateFields();
       if (editingModulo) {
@@ -110,6 +116,9 @@ const Modulos: React.FC = () => {
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar');
+    } finally {
+      setSaving(false);
+      processingLockRef.current = false;
     }
   };
 
@@ -125,6 +134,9 @@ const Modulos: React.FC = () => {
     : data;
 
   const handleDelete = (record: ModuloDTO) => {
+    if (processingLockRef.current) return;
+    processingLockRef.current = true;
+    setLoading(true);
     Modal.confirm({
       title: 'Eliminar módulo',
       icon: <ExclamationCircleOutlined />,
@@ -139,8 +151,15 @@ const Modulos: React.FC = () => {
           cargar();
         } catch (err: any) {
           message.error(err?.response?.data?.errorMessage || 'Error al eliminar');
+        } finally {
+          setLoading(false);
+          processingLockRef.current = false;
         }
       },
+      onCancel: () => {
+        setLoading(false);
+        processingLockRef.current = false;
+      }
     });
   };
 
@@ -223,6 +242,7 @@ const Modulos: React.FC = () => {
         onOk={handleGuardar}
         onCancel={handleCancelar}
         width={600}
+        confirmLoading={saving}
       >
         <Form form={form} layout="vertical">
           <Form.Item

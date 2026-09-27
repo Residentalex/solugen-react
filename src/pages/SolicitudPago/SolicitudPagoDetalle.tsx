@@ -6,7 +6,9 @@ import {
 import {
   LockFilled,
   BankOutlined,
+  EyeOutlined,
   PrinterOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
@@ -14,6 +16,8 @@ import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
 import { transaccionApi } from '../../api/transaccionApi';
+import { documentoRelacionApi } from '../../api/documentoRelacionApi';
+import type { DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import { apiClient } from '../../api/client';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard/TransaccionesAsociadasCard';
 import SucursalField from '../../components/SucursalField';
@@ -77,6 +81,8 @@ const SolicitudPagoDetalle: React.FC = () => {
   const [mostrandoReverso, setMostrandoReverso] = useState(false);
   const [reversoData, setReversoData] = useState<any>(null);
   const [imprimiendo, setImprimiendo] = useState(false);
+  const [pagoGenerado, setPagoGenerado] = useState<DocumentoRelacionDTO | null>(null);
+  const [cargandoRelacion, setCargandoRelacion] = useState(false);
 
   // Módulo activo
   useEffect(() => {
@@ -115,6 +121,33 @@ const SolicitudPagoDetalle: React.FC = () => {
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
 
+  // Cargar documento de pago generado (relacion GENERA en DOCUMENTOS_RELACION)
+  const cargarPagoGenerado = useCallback(async () => {
+    if (!id) return;
+    setCargandoRelacion(true);
+    try {
+      const relaciones = await documentoRelacionApi.obtenerPorTransaccion(parseInt(id), sucursalActiva);
+      const relacion = (relaciones || []).find(
+        (r) => r.tipoRelacion === 'GENERA' && r.origenTipoDoc === 'SPA' && r.idDestino > 0
+      );
+      setPagoGenerado(relacion ?? null);
+    } catch (err: any) {
+      setPagoGenerado(null);
+      message.error(err?.response?.data?.errorMessage || 'No se pudo consultar el pago generado de la solicitud');
+    } finally {
+      setCargandoRelacion(false);
+    }
+  }, [id, sucursalActiva, message]);
+
+  useEffect(() => {
+    cargarPagoGenerado();
+  }, [cargarPagoGenerado]);
+
+  const handleVerPagoGenerado = () => {
+    if (!pagoGenerado?.idDestino) return;
+    window.open(`/FTransBanco/${pagoGenerado.idDestino}`, '_blank');
+  };
+
   const handleRefresh = useCallback(() => {
     if (!id) return;
     setLoadingError(false);
@@ -147,8 +180,9 @@ const SolicitudPagoDetalle: React.FC = () => {
         const msg = err?.response?.data?.errorMessage || 'Error al recargar';
         message.error(msg);
         setLoadingError(true);
-      })
-  }, [id, sucursalActiva, setPageTitleOverride]);
+      });
+    cargarPagoGenerado();
+  }, [id, sucursalActiva, setPageTitleOverride, cargarPagoGenerado]);
 
   // === Handlers de estado ===
   const handleDesaplicar = async () => {
@@ -249,7 +283,8 @@ const SolicitudPagoDetalle: React.FC = () => {
     try {
       const resultado = await solicitudPagoApi.generarPago(sucursalActiva, parseInt(id));
       message.success('Pago generado exitosamente');
-      navigate(`/FTransBanco/${resultado.id}`);
+      window.open(`/FTransBanco/${resultado.id}`, '_blank');
+      cargarPagoGenerado();
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar pago');
       message.error(msg);
@@ -287,6 +322,9 @@ const SolicitudPagoDetalle: React.FC = () => {
   const isLarge = screens.xxl === true;
   const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(documentoActivo.estado)] || { label: 'Desconocido', color: 'default' };
   const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
+  const pagoGeneradoDoc = pagoGenerado
+    ? `${pagoGenerado.destinoTipoDoc}-${pagoGenerado.destinoNumDoc}`
+    : null;
 
   // asientoColumns reemplazado por AsientosContableTable compartido
 
@@ -350,17 +388,25 @@ const SolicitudPagoDetalle: React.FC = () => {
             {toEstadoNum(data?.estado) === 2 && (data as any)?.tipoPagoCodigo && (
               <>
                 <Divider type="vertical" />
-                <Tooltip title={data.pagoGenerado ? 'Ya existe un pago generado' : 'Generar documento de pago'}>
-                  <Button
-                    type="primary"
-                    icon={<BankOutlined />}
-                    onClick={handleGenerarPago}
-                    loading={saving}
-                    disabled={!!data.pagoGenerado}
-                  >
-                    {data.pagoGenerado ? 'Pago generado' : `Generar ${(data as any)?.tipoPagoCodigo}`}
-                  </Button>
-                </Tooltip>
+                {pagoGeneradoDoc ? (
+                  <Tooltip title={`Ver documento de pago generado ${pagoGeneradoDoc}`}>
+                    <Button icon={<EyeOutlined />} onClick={handleVerPagoGenerado}>
+                      Ver {pagoGeneradoDoc}
+                    </Button>
+                  </Tooltip>
+                ) : (
+                  <Tooltip title="Generar documento de pago">
+                    <Button
+                      type="primary"
+                      icon={<BankOutlined />}
+                      onClick={handleGenerarPago}
+                      loading={saving || cargandoRelacion}
+                      disabled={cargandoRelacion || (!!data.pagoGenerado && !pagoGeneradoDoc)}
+                    >
+                      {`Generar ${(data as any)?.tipoPagoCodigo}`}
+                    </Button>
+                  </Tooltip>
+                )}
               </>
             )}
           </>
@@ -406,7 +452,16 @@ const SolicitudPagoDetalle: React.FC = () => {
                 </Descriptions.Item>
                 <Descriptions.Item label="Cta. Bancaria">{toTitleCase(documentoActivo.cuentaBancaria || '') || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Doc. a Generar">{toTitleCase((data as any)?.tipoPagoCodigo || '') || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Nota" span={3}>
+                <Descriptions.Item label="Pago generado">
+                  {pagoGeneradoDoc ? (
+                    <span className="paces-doc-link" style={{ cursor: 'pointer' }} onClick={handleVerPagoGenerado}>
+                      {pagoGeneradoDoc}
+                    </span>
+                  ) : (
+                    <span className="paces-text-secondary">-</span>
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label="Nota" span={2}>
                   <span style={{ whiteSpace: 'pre-wrap' }}>{toTitleCase(documentoActivo.nota || '') || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
@@ -437,7 +492,7 @@ const SolicitudPagoDetalle: React.FC = () => {
                 },
                 {
                   key: 'historial',
-                  label: `Historial (${documentoActivo.logs?.length || 0})`,
+                  icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                   children: (
                     <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                   ),
@@ -496,6 +551,15 @@ const SolicitudPagoDetalle: React.FC = () => {
                 </Descriptions.Item>
               <Descriptions.Item label="Cta. Bancaria">{toTitleCase(documentoActivo.cuentaBancaria || '') || '-'}</Descriptions.Item>
               <Descriptions.Item label="Doc. a Generar">{toTitleCase((data as any)?.tipoPagoCodigo || '') || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Pago generado">
+                {pagoGeneradoDoc ? (
+                  <span className="paces-doc-link" style={{ cursor: 'pointer' }} onClick={handleVerPagoGenerado}>
+                    {pagoGeneradoDoc}
+                  </span>
+                ) : (
+                  <span className="paces-text-secondary">-</span>
+                )}
+              </Descriptions.Item>
               <Descriptions.Item label="Nota">
                 <span style={{ whiteSpace: 'pre-wrap' }}>{toTitleCase(documentoActivo.nota || '') || '-'}</span>
               </Descriptions.Item>
@@ -527,7 +591,7 @@ const SolicitudPagoDetalle: React.FC = () => {
               },
               {
                 key: 'historial',
-                label: `Historial (${documentoActivo.logs?.length || 0})`,
+                icon: <HistoryOutlined />, label: `Historial (${documentoActivo.logs?.length || 0})`,
                 children: (
                   <LogTable dataSource={documentoActivo.logs || []} scroll={{ x: 900 }} />
                 ),

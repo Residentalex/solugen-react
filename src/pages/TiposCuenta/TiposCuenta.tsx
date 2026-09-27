@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -38,6 +38,9 @@ const TiposCuenta: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<TipoCuentaDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const exportandoRef = useRef(false);
+  const guardandoRef = useRef(false);
   const [form] = Form.useForm();
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -62,26 +65,34 @@ const TiposCuenta: React.FC = () => {
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleExportarExcel = async () => {
-    const companyName = await getCompanyName(sucursalActiva);
-    const dataSource = data?.datos || [];
-    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
-    const columnHeaders = exportCols.map((col: any) => col.title);
-    const dataRows = dataSource.map((item: any) =>
-      exportCols.map((col: any) => {
-        if (col.dataIndex) {
-          const val = item[col.dataIndex];
-          return val != null ? String(val) : '';
-        }
-        return '';
-      })
-    );
-    exportToExcel({
-      fileName: `TiposCuenta_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
-      sheetName: 'TiposCuenta',
-      companyName,
-      columnHeaders,
-      dataRows,
-    });
+    if (exportandoRef.current) return;
+    exportandoRef.current = true;
+    setExportando(true);
+    try {
+      const companyName = await getCompanyName(sucursalActiva);
+      const dataSource = data?.datos || [];
+      const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+      const columnHeaders = exportCols.map((col: any) => col.title);
+      const dataRows = dataSource.map((item: any) =>
+        exportCols.map((col: any) => {
+          if (col.dataIndex) {
+            const val = item[col.dataIndex];
+            return val != null ? String(val) : '';
+          }
+          return '';
+        })
+      );
+      exportToExcel({
+        fileName: `TiposCuenta_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+        sheetName: 'TiposCuenta',
+        companyName,
+        columnHeaders,
+        dataRows,
+      });
+    } finally {
+      setExportando(false);
+      exportandoRef.current = false;
+    }
   };
 
   const handleSearch = (value: string) => {
@@ -106,11 +117,18 @@ const TiposCuenta: React.FC = () => {
     setModalVisible(true);
   };
 
+  const handleCerrarModal = () => {
+    if (guardandoRef.current || guardando) return;
+    setModalVisible(false);
+  };
+
   const guardar = async () => {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
+    setGuardando(true);
     try {
       const values = await form.validateFields();
       if (sucursalActiva === undefined) return;
-      setGuardando(true);
       const payload: TipoCuentaDTO = {
         id: editando?.id || 0,
         nombre: values.nombre,
@@ -129,6 +147,7 @@ const TiposCuenta: React.FC = () => {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar tipo de cuenta');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   };
@@ -184,10 +203,11 @@ const TiposCuenta: React.FC = () => {
         <CatalogoListadoToolbar
           onSearch={handleSearch}
           pageSize={pageSize}
-          onPageSizeChange={(v) => { setPageSize(v); }}
+          onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onNuevo={abrirNuevo}
           onReload={() => refetch()}
           onExportarExcel={handleExportarExcel}
+          exportando={exportando}
         />
         <Table<TipoCuentaDTO>
           columns={columns}
@@ -213,14 +233,19 @@ const TiposCuenta: React.FC = () => {
       <Modal
         title={editando ? 'Editar Tipo de Cuenta' : 'Nuevo Tipo de Cuenta'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={handleCerrarModal}
         onOk={guardar}
         confirmLoading={guardando}
+        okButtonProps={{ loading: guardando, disabled: guardando }}
+        cancelButtonProps={{ disabled: guardando }}
+        closable={!guardando}
+        maskClosable={!guardando}
+        keyboard={!guardando}
         width={520}
         okText="Guardar"
         cancelText="Cancelar"
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }} disabled={guardando}>
           <Form.Item
             name="idExterno"
             label="Código"

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
@@ -38,6 +38,8 @@ const Acciones: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<AccionDTO | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [operando, setOperando] = useState(false);
+  const guardarRef = useRef(false);
   const [searchText, setSearchText] = useState('');
   const [pageSize, setPageSize] = useState(25);
   const [form] = Form.useForm();
@@ -60,12 +62,14 @@ const Acciones: React.FC = () => {
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const abrirNuevo = () => {
+    if (guardarRef.current) return;
     setEditando(null);
     form.resetFields();
     setModalVisible(true);
   };
 
   const abrirEditar = (accion: AccionDTO) => {
+    if (guardarRef.current) return;
     setEditando(accion);
     form.setFieldsValue({
       codigo: accion.codigo,
@@ -76,10 +80,13 @@ const Acciones: React.FC = () => {
   };
 
   const guardar = async () => {
+    if (guardarRef.current) return;
+    guardarRef.current = true;
     try {
       const values = await form.validateFields();
       if (sucursalActiva === undefined) return;
       setGuardando(true);
+      setOperando(true);
       const payload: AccionDTO = {
         id: editando?.id || 0,
         codigo: values.codigo,
@@ -99,11 +106,14 @@ const Acciones: React.FC = () => {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar acción');
     } finally {
+      guardarRef.current = false;
       setGuardando(false);
+      setOperando(false);
     }
   };
 
   const handleEliminar = (accion: AccionDTO) => {
+    if (guardarRef.current) return;
     Modal.confirm({
       title: 'Eliminar Acción',
       content: `¿Está seguro que desea eliminar la acción "${accion.nombre}"?`,
@@ -112,12 +122,18 @@ const Acciones: React.FC = () => {
       cancelText: 'Cancelar',
       onOk: async () => {
         if (sucursalActiva === undefined) return;
+        if (guardarRef.current) return;
+        guardarRef.current = true;
+        setOperando(true);
         try {
           await accionApi.eliminar(sucursalActiva, accion.id);
           message.success('Acción eliminada correctamente');
           refetch();
         } catch (err: any) {
           message.error(err?.response?.data?.errorMessage || 'Error al eliminar acción');
+        } finally {
+          guardarRef.current = false;
+          setOperando(false);
         }
       },
     });
@@ -188,33 +204,35 @@ const Acciones: React.FC = () => {
         </Tag>
       ),
     },
-    {
-      title: 'Acciones',
-      key: 'acciones',
-      fixed: 'right',
-      width: 100,
-      render: (_, record) => (
-        <Space size={0}>
-          <Tooltip title="Editar acción">
-            <Button
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => abrirEditar(record)}
-            />
-          </Tooltip>
-          <Tooltip title="Eliminar acción">
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleEliminar(record)}
-            />
-          </Tooltip>
-        </Space>
-      ),
-    },
+{
+        title: 'Acciones',
+        key: 'acciones',
+        fixed: 'right',
+        width: 100,
+        render: (_, record) => (
+          <Space size={0}>
+            <Tooltip title="Editar acción">
+              <Button
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => abrirEditar(record)}
+                disabled={operando}
+              />
+            </Tooltip>
+            <Tooltip title="Eliminar acción">
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => handleEliminar(record)}
+                disabled={operando}
+              />
+            </Tooltip>
+          </Space>
+        ),
+      },
   ];
 
   return (
@@ -262,12 +280,14 @@ const Acciones: React.FC = () => {
       <Modal
         title={editando ? 'Editar Acción' : 'Nueva Acción'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => !operando && setModalVisible(false)}
         onOk={guardar}
-        confirmLoading={guardando}
+        confirmLoading={operando}
         width={520}
         okText="Guardar"
         cancelText="Cancelar"
+        cancelButtonProps={{ disabled: operando }}
+        maskClosable={!operando}
         destroyOnHidden
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
@@ -275,23 +295,26 @@ const Acciones: React.FC = () => {
             name="codigo"
             label="Código"
             rules={[{ required: true, message: 'El código es obligatorio' }]}
+            disabled={operando}
           >
-            <Input placeholder="Ej. ACC01" maxLength={20} />
+            <Input placeholder="Ej. ACC01" maxLength={20} disabled={operando} />
           </Form.Item>
           <Form.Item
             name="nombre"
             label="Nombre"
             rules={[{ required: true, message: 'El nombre es obligatorio' }]}
+            disabled={operando}
           >
-            <Input placeholder="Descripción de la acción" maxLength={80} />
+            <Input placeholder="Descripción de la acción" maxLength={80} disabled={operando} />
           </Form.Item>
           <Form.Item
             name="activo"
             label="Activo"
             valuePropName="checked"
             initialValue={true}
+            disabled={operando}
           >
-            <Switch checkedChildren="Activo" unCheckedChildren="Inactivo" />
+            <Switch checkedChildren="Activo" unCheckedChildren="Inactivo" disabled={operando} />
           </Form.Item>
         </Form>
       </Modal>

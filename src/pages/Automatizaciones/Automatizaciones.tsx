@@ -24,20 +24,18 @@ import {
   Alert,
   Empty,
   Descriptions,
+  Drawer,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined,
-  ReloadOutlined,
-  PlayCircleOutlined,
   RiseOutlined,
   AlertOutlined,
   CheckCircleOutlined,
   SyncOutlined,
-  DeleteOutlined,
-  ClockCircleOutlined,
   CopyOutlined,
   InfoCircleOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
 import { hangfireApi } from '../../api/hangfireApi';
@@ -47,6 +45,11 @@ import { useCompanyStore } from '../../stores/companyStore';
 import type { JobHangfire, JobTemplate } from '../../types/hangfire';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
+import { KPICard } from './components/KPICard';
+import { EstadoActualBadge } from './components/EstadoActualBadge';
+import { SwitchProgramado } from './components/SwitchProgramado';
+import { FechaEjecucionCell } from './components/FechaEjecucionCell';
+import { TiempoEjecucionCell } from './components/TiempoEjecucionCell';
 
 const { Text, Title } = Typography;
 
@@ -58,13 +61,6 @@ const MODULO_MAP: Record<string, { label: string; color: string }> = {
   DGII: { label: 'DGII', color: 'purple' },
   Facturacion: { label: 'Facturacion', color: 'geekblue' },
   Transferencias: { label: 'Transferencias', color: 'orange' },
-};
-
-const ESTADO_BADGE: Record<string, { status: 'success' | 'error' | 'processing' | 'default'; text: string }> = {
-  Exitoso: { status: 'success', text: 'Exitoso' },
-  Fallido: { status: 'error', text: 'Fallido' },
-  Ejecutando: { status: 'processing', text: 'Ejecutando' },
-  NuncaEjecutado: { status: 'default', text: 'Nunca ejecutado' },
 };
 
 type FrecuenciaTipo = 'hours' | 'minutes' | 'custom';
@@ -160,40 +156,33 @@ const Automatizaciones: React.FC = () => {
   // â”€â”€ Jobs state â”€â”€
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [resumenInfo, setResumen] = useState<{ total: number; fallidos: number; exitosos: number }>({
-    total: 0,
-    fallidos: 0,
-    exitosos: 0,
-  });
   const [searchText, setSearchText] = useState('');
   const [filtroModulo, setFiltroModulo] = useState<string | undefined>(undefined);
   const [kpiActiveCell, setKpiActiveCell] = useState<'total' | 'exitosos' | 'fallidos' | 'activos' | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const [resumenInfo, setResumenInfo] = useState({ total: 0, exitosos: 0, fallidos: 0 });
+
   const { data: jobsQuery, isLoading, isError, refetch } = useQuery({
     queryKey: ['automatizacionesJobs'],
     queryFn: async () => {
       const data = await hangfireApi.obtenerJobs();
+      const resumen = {
+        total: data.total ?? data.jobs?.length ?? 0,
+        fallidos: data.fallidos ?? 0,
+        exitosos: data.exitosos ?? 0,
+      };
+      setResumenInfo(resumen);
       return {
         jobs: data.jobs || [],
-        resumen: {
-          total: data.total ?? data.jobs?.length ?? 0,
-          fallidos: data.fallidos ?? 0,
-          exitosos: data.exitosos ?? 0,
-        },
+        resumen,
       };
     },
     placeholderData: (prev) => prev,
   });
 
-  const jobs = jobsQuery?.jobs || [];
-  const resumen = jobsQuery?.resumen || { total: 0, fallidos: 0, exitosos: 0 };
-  useEffect(() => {
-    if (jobsQuery?.resumen) {
-      setResumen(jobsQuery.resumen);
-    }
-  }, [jobsQuery?.resumen]);
+  const jobs = useMemo(() => jobsQuery?.jobs || [], [jobsQuery?.jobs]);
   const [errorModal, setErrorModal] = useState<{ visible: boolean; job: JobHangfire | null }>({
     visible: false,
     job: null,
@@ -216,6 +205,7 @@ const Automatizaciones: React.FC = () => {
 
   // â”€â”€ UI state â”€â”€
   const [activeTab, setActiveTab] = useState('jobs');
+  const [templateConfigModal, setTemplateConfigModal] = useState({ visible: false });
 
   // â”€â”€ Sucursales â”€â”€
   const sucursalOptions = useMemo(() => {
@@ -234,8 +224,8 @@ const Automatizaciones: React.FC = () => {
       }));
     }
     return (sucursalesData || [])
-      .filter((s: any) => s.sucursal >= 0 && s.sucursal <= 3)
-      .map((s: any) => ({ value: s.nombre, label: s.nombre }));
+      .filter((s) => s.sucursal >= 0 && s.sucursal <= 3)
+      .map((s) => ({ value: s.nombre, label: s.nombre }));
   }, [sucursalesPermitidas, sucursalesData]);
 
   // â”€â”€ Computed â”€â”€
@@ -265,8 +255,9 @@ const Automatizaciones: React.FC = () => {
     try {
       const data = await hangfireApi.obtenerTemplates();
       setTemplates(data || []);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar plantillas');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al cargar plantillas';
+      message.error(errorMessage);
     } finally {
       setTemplatesLoading(false);
     }
@@ -277,11 +268,12 @@ const Automatizaciones: React.FC = () => {
     setActiveModule('MAutomatizacion');
     updateToolbar({});
     refetch();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     cargarTemplates();
     return () => {
       resetToolbar();
     };
-  }, [setActiveModule, updateToolbar, resetToolbar, cargarTemplates]);
+  }, [setActiveModule, updateToolbar, resetToolbar, cargarTemplates, refetch]);
 
   // â”€â”€ Auto-refresh (solo en tab jobs y sin modal abierto) â”€â”€
   useEffect(() => {
@@ -298,27 +290,53 @@ const Automatizaciones: React.FC = () => {
         intervalRef.current = null;
       }
     };
-  }, [autoRefresh, activeTab, errorModal.visible]);
-
-  // â”€â”€ Auto-seleccionar primer template al entrar al tab registrar â”€â”€
-  useEffect(() => {
-    if (activeTab === 'registrar' && templates.length > 0 && !selectedTemplateId) {
-      handleSelectTemplate(templates[0].tipoJobId);
-    }
-  }, [activeTab, templates, selectedTemplateId]);
+  }, [autoRefresh, activeTab, errorModal.visible, refetch]);
 
   // â”€â”€ Exportar Excel â”€â”€
+  // Aplana columnas agrupadas (children) y excluye acciones, sin conversiones
+  // forzadas: trabaja sobre ColumnsType<T> con angostamiento por 'in'.
+  interface ColumnaExportPlana<T extends object> {
+    titulo: string;
+    clave: string;
+    leer: (item: T) => unknown;
+  }
+  const columnasExportables = <T extends object>(cols: ColumnsType<T>): Array<ColumnaExportPlana<T>> => {
+    const planas: Array<ColumnaExportPlana<T>> = [];
+    cols.forEach((c) => {
+      if (!c) return;
+      if ('key' in c && c.key === 'acciones') return;
+      if ('children' in c && Array.isArray(c.children)) {
+        planas.push(...columnasExportables(c.children));
+        return;
+      }
+      const titulo = 'title' in c && typeof c.title === 'string' ? c.title : undefined;
+      const dataIndex = 'dataIndex' in c ? c.dataIndex : undefined;
+      if (!titulo || (typeof dataIndex !== 'string' && typeof dataIndex !== 'number')) return;
+      const clave = String(dataIndex);
+      planas.push({
+        titulo,
+        clave,
+        leer: (item: T): unknown => {
+          if (!(clave in item)) return undefined;
+          return item[clave as keyof T];
+        },
+      });
+    });
+    return planas;
+  };
+
   const handleExportarExcel = async () => {
     const companyName = await getCompanyName(sucursalActiva);
-    const cols = columns.filter((c) => c.key !== 'acciones');
+    const exportCols = columnasExportables(columns);
     exportToExcel({
       fileName: `Automatizaciones_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
       sheetName: 'Automatizaciones',
       companyName,
-      columnHeaders: cols.map((c) => c.title as string),
-      dataRows: filteredJobs.map((item: any) =>
-        cols.map((col) => {
-          const val = item[col.dataIndex as string];
+      columnHeaders: exportCols.map((c) => c.titulo),
+      dataRows: filteredJobs.map((item) =>
+        exportCols.map((col) => {
+          const val = col.leer(item);
+          if (typeof val === 'boolean') return val ? 'Sí' : 'No';
           return val !== null && val !== undefined ? String(val) : '';
         })
       ),
@@ -332,7 +350,6 @@ const Automatizaciones: React.FC = () => {
   };
 
   const handleRefresh = () => {
-    refetch();
     refetch();
   };
 
@@ -354,49 +371,13 @@ const Automatizaciones: React.FC = () => {
             message.success(`${result.procesados} jobs re-registrados correctamente`);
           }
           refetch();
-        } catch (err: any) {
-          message.error(err?.response?.data?.errorMessage || 'Error al re-registrar jobs');
+        } catch (err: unknown) {
+          const errorMessage = err instanceof Error ? err.message : 'Error al re-registrar jobs';
+          message.error(errorMessage);
         }
       },
     });
-  };
-
-  const handleTrigger = (job: JobHangfire) => {
-    Modal.confirm({
-      title: 'Ejecutar automatización',
-      content: `¿Está seguro de ejecutar "${job.nombre}" manualmente?`,
-      okText: 'Ejecutar',
-      cancelText: 'Cancelar',
-      onOk: async () => {
-        try {
-          await hangfireApi.triggerJob(job.id);
-          message.success(`Job "${job.nombre}" disparado correctamente`);
-          refetch();
-        } catch (err: any) {
-          message.error(err?.response?.data?.errorMessage || 'Error al ejecutar job');
-        }
-      },
-    });
-  };
-
-  const handleEliminar = (job: JobHangfire) => {
-    Modal.confirm({
-      title: 'Eliminar job',
-      content: `¿Está seguro de eliminar "${job.nombre}"?`,
-      okText: 'Eliminar',
-      okType: 'danger',
-      cancelText: 'Cancelar',
-      onOk: async () => {
-        try {
-          await hangfireApi.eliminarJob(job.id);
-          message.success(`Job "${job.nombre}" eliminado`);
-          refetch();
-        } catch (err: any) {
-          message.error(err?.response?.data?.errorMessage || 'Error al eliminar job');
-        }
-      },
-    });
-  };
+};
 
   const handleRowClick = (record: JobHangfire) => {
     if (record.ultimoEstado === 'Fallido' && record.error) {
@@ -439,10 +420,12 @@ const Automatizaciones: React.FC = () => {
         cancelText: 'Cancelar',
         onOk: () => {
           doSelectTemplate(tipoJobId);
+          setTemplateConfigModal({ visible: true });
         },
       });
     } else {
       doSelectTemplate(tipoJobId);
+      setTemplateConfigModal({ visible: true });
     }
   };
 
@@ -456,7 +439,7 @@ const Automatizaciones: React.FC = () => {
     setInitialFormData(initForm);
   };
 
-  const updateFormField = (field: keyof TemplateFormState, value: any) => {
+  const updateFormField = (field: keyof TemplateFormState, value: string | number) => {
     setTemplateForm((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
@@ -486,7 +469,7 @@ const Automatizaciones: React.FC = () => {
   };
 
   const handleRegistrar = async () => {
-    if (!selectedTemplate || !templateForm) return;
+    if (!selectedTemplate || !templateForm || submitting) return;
 
     setFormError(null);
 
@@ -544,15 +527,16 @@ const Automatizaciones: React.FC = () => {
       setTemplateForm(initForm);
       setInitialFormData(initForm);
       refetch();
-    } catch (err: any) {
-      setFormError(err?.response?.data?.errorMessage || `Error al registrar job "${selectedTemplate.nombre}"`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : `Error al registrar job "${selectedTemplate.nombre}"`;
+      setFormError(errorMessage);
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleCancelForm = () => {
-    if (!selectedTemplate) return;
+    if (!selectedTemplate || submitting) return;
     const initForm = buildInitialFormState(selectedTemplate);
     setTemplateForm(initForm);
     setInitialFormData(initForm);
@@ -655,6 +639,55 @@ const Automatizaciones: React.FC = () => {
         </span>
       ),
     },
+{
+        title: 'Estado',
+        dataIndex: 'ultimoEstado',
+        key: 'ultimoEstado',
+        width: 160,
+        render: (estado: string) => <EstadoActualBadge estado={estado} />,
+      },
+    {
+      title: 'Última ejecución',
+      dataIndex: 'ultimaEjecucion',
+      key: 'ultimaEjecucion',
+      width: 170,
+      render: (val: string | null) => (
+        <FechaEjecucionCell value={val} label="Última ejecución" />
+      ),
+    },
+    {
+      title: 'Próxima ejecución',
+      dataIndex: 'proximaEjecucion',
+      key: 'proximaEjecucion',
+      width: 170,
+      render: (val: string | null) => (
+        <FechaEjecucionCell value={val} label="Próxima ejecución" />
+      ),
+    },
+    {
+      title: 'Duración',
+      dataIndex: 'duracionSegundos',
+      key: 'duracionSegundos',
+      width: 90,
+      align: 'right',
+      render: (val: number | null) => <TiempoEjecucionCell value={val} />,
+    },
+    {
+      title: 'Frecuencia',
+      dataIndex: 'cron',
+      key: 'cron',
+      width: 110,
+      render: (cron: string) => (
+        <Tooltip title={`Programación: ${describirCron(cron)}`}>
+          <Space size={4}>
+            <ClockCircleOutlined style={{ fontSize: 12, color: 'var(--paces-text-secondary)' }} />
+            <Text code className="paces-text-secondary" style={{ fontSize: 10 }}>
+              {cron}
+            </Text>
+          </Space>
+        </Tooltip>
+      ),
+    },
     {
       title: 'Módulo',
       dataIndex: 'modulo',
@@ -679,106 +712,12 @@ const Automatizaciones: React.FC = () => {
         sucursal ? <Tag color="default">{sucursal}</Tag> : <Text className="paces-text-secondary">-</Text>,
     },
     {
-      title: 'Último Estado',
-      dataIndex: 'ultimoEstado',
-      key: 'ultimoEstado',
-      width: 150,
-      render: (estado: string) => {
-        const info = ESTADO_BADGE[estado] || { status: 'default', text: estado };
-        return (
-          <Space>
-            <Badge status={info.status} />
-            <Text>{info.text}</Text>
-          </Space>
-        );
-      },
-    },
-    {
-      title: 'Última Ejecución',
-      dataIndex: 'ultimaEjecucion',
-      key: 'ultimaEjecucion',
-      width: 160,
-      render: (val: string | null) => (
-        <Text className="paces-text-secondary">{formatFecha(val)}</Text>
-      ),
-    },
-    {
-      title: 'Próxima Ejecución',
-      dataIndex: 'proximaEjecucion',
-      key: 'proximaEjecucion',
-      width: 160,
-      render: (val: string | null) => (
-        <Text className="paces-text-secondary">{formatFecha(val)}</Text>
-      ),
-    },
-    {
-      title: 'Duración',
-      dataIndex: 'duracionSegundos',
-      key: 'duracionSegundos',
-      width: 90,
-      align: 'right',
-      render: (val: number | null) => (
-        <Text className="paces-text-secondary">{formatDuracion(val)}</Text>
-      ),
-    },
-    {
-      title: 'Cron',
-      dataIndex: 'cron',
-      key: 'cron',
-      width: 110,
-      render: (cron: string) => (
-        <Tooltip title={`Expresión Cron: ${cron}`}>
-          <Space size={4}>
-            <ClockCircleOutlined style={{ fontSize: 12, color: 'var(--paces-text-secondary)' }} />
-            <Text code className="paces-text-secondary" style={{ fontSize: 10 }}>
-              {cron}
-            </Text>
-          </Space>
-        </Tooltip>
-      ),
-    },
-    {
       title: 'Activo',
       dataIndex: 'activo',
       key: 'activo',
       width: 80,
       align: 'center',
-      render: (activo: boolean) => (
-        <Switch size="small" checked={activo} disabled />
-      ),
-    },
-    {
-      title: 'Acciones',
-      key: 'acciones',
-      fixed: 'right',
-      width: 90,
-      render: (_: unknown, record: JobHangfire) => (
-        <Space>
-          <Tooltip title="Ejecutar ahora">
-            <Button
-              type="text"
-              size="small"
-              icon={<PlayCircleOutlined style={{ color: 'var(--paces-primary)', fontSize: 16 }} />}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleTrigger(record);
-              }}
-            />
-          </Tooltip>
-          <Tooltip title="Eliminar">
-            <Button
-              type="text"
-              size="small"
-              danger
-              icon={<DeleteOutlined style={{ fontSize: 16 }} />}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleEliminar(record);
-              }}
-            />
-          </Tooltip>
-        </Space>
-      ),
+      render: (activo: boolean) => <SwitchProgramado activo={activo} />,
     },
   ];
 
@@ -795,18 +734,18 @@ const Automatizaciones: React.FC = () => {
       }}
     >
       <Space>
-        <PermissionGate accion="CREAR">
-            <Tooltip title="Re-registrar todos los jobs para incluir notificaciones automáticas">
-            <Button icon={<SyncOutlined />} onClick={handleReRegistrarTodos}>
-              Re-registrar Jobs
+          <PermissionGate accion="CREAR">
+            <Tooltip title="Re-registrar todas las automatizaciones para incluir notificaciones automáticas">
+              <Button icon={<SyncOutlined />} onClick={handleReRegistrarTodos}>
+                Re-registrar automatizaciones
+              </Button>
+            </Tooltip>
+          </PermissionGate>
+          <Tooltip title="Ir al dashboard de ejecuciones">
+            <Button icon={<SyncOutlined />} onClick={() => window.open('/hangfire', '_blank')}>
+              Dashboard de ejecuciones
             </Button>
           </Tooltip>
-        </PermissionGate>
-        <Tooltip title="Ir a Hangfire Dashboard">
-          <Button icon={<SyncOutlined />} onClick={() => window.open('/hangfire', '_blank')}>
-            Hangfire Dashboard
-          </Button>
-        </Tooltip>
       </Space>
     </div>
   );
@@ -817,34 +756,30 @@ const Automatizaciones: React.FC = () => {
       {
         key: 'total' as const,
         icon: <SyncOutlined />,
-        value: resumenInfo.total,
-        label: 'jobs',
-        color: 'var(--paces-primary)',
-        bgColor: 'rgba(85,110,230,0.08)',
+        value: (jobsQuery?.resumen || resumenInfo).total,
+        label: 'Automatizaciones activas',
+        variant: 'primary' as const,
       },
       {
         key: 'exitosos' as const,
         icon: <CheckCircleOutlined />,
-        value: resumenInfo.exitosos,
-        label: 'últimas ejecuciones',
-        color: '#34c38f',
-        bgColor: 'rgba(52,195,143,0.08)',
+        value: (jobsQuery?.resumen || resumenInfo).exitosos,
+        label: 'Últimas ejecuciones',
+        variant: 'success' as const,
       },
       {
         key: 'fallidos' as const,
         icon: <AlertOutlined />,
-        value: resumenInfo.fallidos,
-        label: 'últimas ejecuciones',
-        color: '#f46a6a',
-        bgColor: 'rgba(244,106,106,0.08)',
+        value: (jobsQuery?.resumen || resumenInfo).fallidos,
+        label: 'Últimas ejecuciones',
+        variant: 'danger' as const,
       },
       {
         key: 'activos' as const,
         icon: <RiseOutlined />,
         value: jobsActivos,
-        label: 'programados',
-        color: '#f0b345',
-        bgColor: 'rgba(240,179,69,0.08)',
+        label: 'Programadas',
+        variant: 'warning' as const,
       },
     ];
 
@@ -852,61 +787,21 @@ const Automatizaciones: React.FC = () => {
       <Card
         className="paces-card-erp"
         style={{ borderRadius: 8, height: 92, marginBottom: 16, overflow: 'hidden' }}
-        styles={{ body: { padding: '16px 20px', height: '100%' } }}
+        styles={{ body: { padding: 0 } }}
       >
         <div style={{ display: 'flex', height: '100%', alignItems: 'stretch' }}>
-          {cells.map((cell, idx) => {
+          {cells.map((cell) => {
             const isActive = kpiActiveCell === cell.key;
             return (
-              <div
+              <KPICard
                 key={cell.key}
+                icon={cell.icon}
+                value={cell.value}
+                label={cell.label}
+                variant={cell.variant}
                 onClick={() => handleKpiClick(cell.key)}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 16,
-                  padding: '0 16px',
-                  cursor: 'pointer',
-                  borderRight: idx < cells.length - 1 ? '1px solid var(--paces-border)' : 'none',
-                  borderTop: isActive ? `2px solid ${cell.color}` : '2px solid transparent',
-                  background: isActive ? cell.bgColor : 'transparent',
-                  transition: 'background 0.2s, border-color 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) {
-                    (e.currentTarget as HTMLElement).style.background = 'var(--paces-row-hover)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) {
-                    (e.currentTarget as HTMLElement).style.background = 'transparent';
-                  }
-                }}
-              >
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 8,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: `${cell.color}15`,
-                    color: cell.color,
-                    fontSize: 22,
-                    flexShrink: 0,
-                  }}
-                >
-                  {cell.icon}
-                </div>
-                <div>
-                  <div style={{ fontSize: 24, fontWeight: 600, lineHeight: 1.2 }}>{cell.value}</div>
-                  <div style={{ fontSize: 12, color: 'var(--paces-text-secondary)', lineHeight: 1.3 }}>
-                    {cell.label}
-                  </div>
-                </div>
-              </div>
+                active={isActive}
+              />
             );
           })}
         </div>
@@ -935,7 +830,7 @@ const Automatizaciones: React.FC = () => {
       acciones={
         <Space size={8}>
           <Text className="paces-text-secondary" style={{ fontSize: 13 }}>
-            Auto · 30s
+            AutoActualización (30s)
           </Text>
           <Switch
             size="small"
@@ -1019,24 +914,26 @@ const Automatizaciones: React.FC = () => {
     );
   };
 
-  // â”€â”€ Render: Modal de detalle de job â”€â”€
-  const renderDetalleJobModal = () => (
-    <Modal
+  // â”€â”€ Render: Drawer de detalle de job â”€â”€
+  const renderDetalleJobDrawer = () => (
+    <Drawer
       open={detalleJobModal.visible}
-      onCancel={() => setDetalleJobModal({ visible: false, job: null })}
+      onClose={() => setDetalleJobModal({ visible: false, job: null })}
       width={600}
       title={
         <Space>
           <InfoCircleOutlined style={{ color: 'var(--paces-primary)', fontSize: 18 }} />
           <span>
-            Detalle del Job: <Text strong>{detalleJobModal.job?.nombre || ''}</Text>
+            Detalle del job: <Text strong>{detalleJobModal.job?.nombre || ''}</Text>
           </span>
         </Space>
       }
       footer={
-        <Button type="primary" onClick={() => setDetalleJobModal({ visible: false, job: null })}>
-          Cerrar
-        </Button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Button type="primary" onClick={() => setDetalleJobModal({ visible: false, job: null })}>
+            Cerrar
+          </Button>
+        </div>
       }
     >
       {detalleJobModal.job && (
@@ -1044,21 +941,20 @@ const Automatizaciones: React.FC = () => {
           <Descriptions.Item label="Nombre">{detalleJobModal.job.nombre}</Descriptions.Item>
           <Descriptions.Item label="Módulo">{detalleJobModal.job.modulo || '-'}</Descriptions.Item>
           <Descriptions.Item label="Sucursal">{detalleJobModal.job.sucursal || '-'}</Descriptions.Item>
-          <Descriptions.Item label="Cron">
+          <Descriptions.Item label="Frecuencia">
             <Text code>{detalleJobModal.job.cron}</Text>
           </Descriptions.Item>
-          <Descriptions.Item label="Último Estado">
-            <Badge status={ESTADO_BADGE[detalleJobModal.job.ultimoEstado]?.status || 'default'} />
-            {ESTADO_BADGE[detalleJobModal.job.ultimoEstado]?.text || detalleJobModal.job.ultimoEstado}
+          <Descriptions.Item label="Estado actual">
+            <EstadoActualBadge estado={detalleJobModal.job.ultimoEstado} />
           </Descriptions.Item>
-          <Descriptions.Item label="Última Ejecución">{formatFecha(detalleJobModal.job.ultimaEjecucion)}</Descriptions.Item>
-          <Descriptions.Item label="Próxima Ejecución">{formatFecha(detalleJobModal.job.proximaEjecucion)}</Descriptions.Item>
+          <Descriptions.Item label="Última ejecución">{formatFecha(detalleJobModal.job.ultimaEjecucion)}</Descriptions.Item>
+          <Descriptions.Item label="Próxima ejecución">{formatFecha(detalleJobModal.job.proximaEjecucion)}</Descriptions.Item>
           <Descriptions.Item label="Duración">{formatDuracion(detalleJobModal.job.duracionSegundos)}</Descriptions.Item>
           <Descriptions.Item label="Activo">
-            <Switch size="small" checked={detalleJobModal.job.activo} disabled />
+            <SwitchProgramado activo={detalleJobModal.job.activo} />
           </Descriptions.Item>
           {detalleJobModal.job.ultimoEstado === 'Fallido' && detalleJobModal.job.error && (
-            <Descriptions.Item label="Error">
+            <Descriptions.Item label="Error de ejecución">
               <pre style={{
                 background: 'var(--paces-topbar-search-bg)',
                 padding: 12,
@@ -1078,20 +974,20 @@ const Automatizaciones: React.FC = () => {
           )}
         </Descriptions>
       )}
-    </Modal>
+    </Drawer>
   );
 
-  // â”€â”€ Render: Modal de error mejorado â”€â”€
-  const renderErrorModal = () => (
-    <Modal
+  // â”€â”€ Render: Drawer de error mejorado â”€â”€
+  const renderErrorDrawer = () => (
+    <Drawer
       open={errorModal.visible}
-      onCancel={() => setErrorModal({ visible: false, job: null })}
+      onClose={() => setErrorModal({ visible: false, job: null })}
       width={720}
       title={
         <Space>
           <AlertOutlined style={{ color: '#f46a6a', fontSize: 18 }} />
           <span>
-            Error del job: <Text strong>{errorModal.job?.nombre || ''}</Text>
+            Error de ejecución: <Text strong>{errorModal.job?.nombre || ''}</Text>
           </span>
         </Space>
       }
@@ -1139,7 +1035,7 @@ const Automatizaciones: React.FC = () => {
       >
         {errorModal.job?.error || 'Sin detalle de error disponible'}
       </pre>
-    </Modal>
+    </Drawer>
   );
 
   // â”€â”€ Render: Template List (columna izquierda) â”€â”€
@@ -1291,16 +1187,10 @@ const Automatizaciones: React.FC = () => {
     );
   };
 
-  // â”€â”€ Render: Template Detail (columna derecha) â”€â”€
-  const renderTemplateDetail = () => {
+  // â”€â”€ Render: Contenido interno del formulario de plantilla (sin Card wrapper) â”€â”€
+  const renderTemplateFormContent = () => {
     if (!selectedTemplate || !templateForm) {
-      return (
-        <Card className="paces-card-erp" style={{ borderRadius: 8, height: '100%' }}>
-          <div style={{ textAlign: 'center', padding: 48 }}>
-            <Text className="paces-text-secondary">Seleccione una plantilla para configurarla</Text>
-          </div>
-        </Card>
-      );
+      return <Text className="paces-text-secondary">Seleccione una plantilla para configurarla</Text>;
     }
 
     const modInfo = selectedTemplate.modulo ? MODULO_MAP[selectedTemplate.modulo] : null;
@@ -1313,18 +1203,10 @@ const Automatizaciones: React.FC = () => {
         if (p.tipo === 'destino' && !templateForm.destino) missingFields.push(p.label);
       }
     });
-    const formInvalidTooltip =
-      missingFields.length > 0
-        ? `Complete los campos requeridos: ${missingFields.join(', ')}`
-        : undefined;
 
     return (
-      <Card
-        className="paces-card-erp"
-        style={{ borderRadius: 8, height: '100%' }}
-        styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', height: '100%' } }}
-      >
-        {/* â”€â”€ Zona A: Header compacto + descripción â”€â”€ */}
+      <>
+        {/* Header */}
         <div
           style={{
             padding: '12px 24px',
@@ -1383,7 +1265,7 @@ const Automatizaciones: React.FC = () => {
           </div>
         </div>
 
-        {/* â”€â”€ Scrollable content â”€â”€ */}
+        {/* Scrollable content */}
         <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
           {/* Error inline */}
           {formError && (
@@ -1551,48 +1433,58 @@ const Automatizaciones: React.FC = () => {
             </div>
           </div>
         </div>
-
-        {/* â”€â”€ Zona D: Footer sticky â”€â”€ */}
-        <div
-          style={{
-            position: 'sticky',
-            bottom: 0,
-            background: 'inherit',
-            borderTop: '1px solid var(--paces-border)',
-            padding: '12px 24px',
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Button disabled={!isFormDirty} onClick={handleCancelForm}>
-              Restablecer
-            </Button>
-            <PermissionGate accion="CREAR">
-              <Tooltip title={formInvalidTooltip}>
-                <Button
-                  type="primary"
-                  disabled={!isFormValid}
-                  loading={submitting}
-                  onClick={handleRegistrar}
-                >
-                  Registrar automatización
-                </Button>
-              </Tooltip>
-            </PermissionGate>
-          </div>
-        </div>
-      </Card>
+      </>
     );
   };
 
   // â”€â”€ Render: Contenido del tab Jobs â”€â”€
   const renderJobsTab = () => (
     <>
-      {renderKpiStrip()}
       {renderJobsTable()}
-      {renderErrorModal()}
-      {renderDetalleJobModal()}
+      {renderErrorDrawer()}
+      {renderDetalleJobDrawer()}
     </>
+  );
+
+  // â”€â”€ Render: Drawer de configuración de plantilla â”€â”€
+  const renderTemplateConfigDrawer = () => (
+    <Drawer
+      open={templateConfigModal.visible}
+      onClose={() => { if (!submitting) setTemplateConfigModal({ visible: false }); }}
+      closable={!submitting}
+      maskClosable={!submitting}
+      width={900}
+      title={
+        <Space>
+          <InfoCircleOutlined style={{ color: 'var(--paces-primary)', fontSize: 18 }} />
+          <span>
+            Configurar automatización: <Text strong>{selectedTemplate?.nombre || ''}</Text>
+          </span>
+        </Space>
+      }
+      extra={
+        <Space>
+          <Button disabled={!isFormDirty || submitting} onClick={handleCancelForm}>
+            Restablecer
+          </Button>
+          <Button onClick={() => setTemplateConfigModal({ visible: false })} disabled={submitting}>
+            Cerrar
+          </Button>
+          <PermissionGate accion="CREAR">
+            <Button
+              type="primary"
+              disabled={!isFormValid || submitting}
+              loading={submitting}
+              onClick={handleRegistrar}
+            >
+              Registrar automatización
+            </Button>
+          </PermissionGate>
+        </Space>
+      }
+    >
+      {renderTemplateFormContent()}
+    </Drawer>
   );
 
   // â”€â”€ Render: Contenido del tab Registrar â”€â”€
@@ -1612,35 +1504,27 @@ const Automatizaciones: React.FC = () => {
     if (templates.length === 0) {
       return (
         <Card className="paces-card-erp" style={{ borderRadius: 8 }}>
-          <Empty description="No hay plantillas de jobs disponibles." />
+          <Empty description="No hay plantillas de automatizaciones disponibles." />
         </Card>
       );
     }
 
     return (
-      <Row gutter={[24, 24]}>
-        <Col xs={24} md={8} lg={7}>
-          {renderTemplateList()}
-        </Col>
-        <Col xs={24} md={16} lg={17}>
-          {renderTemplateDetail()}
-        </Col>
-      </Row>
+      <>
+        {renderTemplateList()}
+        {renderTemplateConfigDrawer()}
+      </>
     );
   };
 
   // â”€â”€ Render principal â”€â”€
   // Memoizar tabs para evitar re-render completo al escribir en el formulario
-  const jobsContent = useMemo(() => renderJobsTab(), [
-    jobs, resumenInfo, isLoading, searchText, filtroModulo,
-    kpiActiveCell, autoRefresh, filteredJobs, columns, errorModal
-  ]);
+  // Se renderiza directo (sin useMemo intermedio): las funciones render se recrean
+  // en cada render y memoizarlas con deps parciales dejaba closures obsoletos.
+  // El filtrado costoso sigue memoizado en filteredJobs/filteredTemplates.
+  const jobsContent = renderJobsTab();
 
-  const registrarContent = useMemo(() => renderRegistrarTab(), [
-    templates, templatesLoading, filteredTemplates, selectedTemplateId,
-    templateForm, initialFormData, submitting, formError, templateFiltroModulo,
-    sucursalOptions, isFormValid, isFormDirty, templateForm?.frecuenciaTipo
-  ]);
+  const registrarContent = renderRegistrarTab();
 
   return (
     <div>
@@ -1665,10 +1549,19 @@ const Automatizaciones: React.FC = () => {
         tabBarStyle={{ marginBottom: 16 }}
         items={[
           {
+            key: 'resumen',
+            label: (
+              <span style={{ fontSize: 14, fontWeight: 600 }}>
+                Resumen
+              </span>
+            ),
+            children: renderKpiStrip(),
+          },
+          {
             key: 'jobs',
             label: (
               <span style={{ fontSize: 14, fontWeight: 600 }}>
-                Jobs Registrados{' '}
+                Ejecuciones{' '}
                 <Badge
                   count={resumenInfo.total}
                   size="small"
@@ -1682,7 +1575,7 @@ const Automatizaciones: React.FC = () => {
             key: 'registrar',
             label: (
               <span style={{ fontSize: 14, fontWeight: 600 }}>
-                Registrar Nuevo{' '}
+                Configuración{' '}
                 <Badge
                   count={templates.length}
                   size="small"

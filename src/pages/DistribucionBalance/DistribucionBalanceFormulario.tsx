@@ -13,6 +13,7 @@ import {
   ClearOutlined,
   ExclamationCircleOutlined,
   EditOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -1063,7 +1064,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   // Tab 4: Historial
   tabItems.push({
     key: 'historial',
-    label: `Historial (${logs.length})`,
+    icon: <HistoryOutlined />, label: `Historial (${logs.length})`,
     children: (
       <LogTable dataSource={logs} scroll={{ x: 900 }} />
     ),
