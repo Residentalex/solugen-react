@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Card, Form, Input, Select, Switch, Button, message, Row, Col, Divider } from 'antd';
+import { Card, Form, Input, Select, Switch, Button, message, Row, Col, Divider, Spin } from 'antd';
 import { SaveOutlined, CloseOutlined, BankOutlined, UserOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -11,6 +11,7 @@ import type { MonedaDTO } from '../../types/contabilidad';
 import type { CuentaBancariaDTO } from '../../api/cuentaBancariaApi';
 import PlantillaImportacion from '../../components/PlantillaImportacion';
 import { toTitleCase } from '../../utils/formats';
+import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 
 const { TextArea } = Input;
 
@@ -27,7 +28,9 @@ const CuentaBancariaFormulario: React.FC<Props> = ({ mode }) => {
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
 
-  const [saving, setSaving] = useState(false);
+  const guardandoRef = useRef(false);
+  const navigationConfirmedRef = useFormularioNavigation(guardandoRef);
+  const [guardando, setGuardando] = useState(false);
   const [cuentaContable, setCuentaContable] = useState('');
   const [noCuenta, setNoCuenta] = useState('');
   const [bancos, setBancos] = useState<BancoDTO[]>([]);
@@ -110,7 +113,9 @@ const CuentaBancariaFormulario: React.FC<Props> = ({ mode }) => {
   }, [cuentaContableWatcher]);
 
   const handleFinish = async (values: any) => {
-    setSaving(true);
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
+    setGuardando(true);
     try {
       const dto: Partial<CuentaBancariaDTO> = {
         nombre: values.nombre,
@@ -127,6 +132,7 @@ const CuentaBancariaFormulario: React.FC<Props> = ({ mode }) => {
       if (mode === 'crear') {
         await cuentaBancariaApi.crear(sucursalActiva, dto);
         message.success('Cuenta bancaria creada correctamente');
+        navigationConfirmedRef.current = true;
       } else {
         const cuenta = (location.state as any)?.cuenta as CuentaBancariaDTO | undefined;
         const noCuenta = cuenta?.noCuenta || values.noCuenta;
@@ -142,11 +148,13 @@ const CuentaBancariaFormulario: React.FC<Props> = ({ mode }) => {
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al guardar cuenta bancaria');
     } finally {
-      setSaving(false);
+      guardandoRef.current = false;
+      setGuardando(false);
     }
   };
 
   const handleCancel = () => {
+    if (guardandoRef.current || guardando) return;
     navigate('/MCuentaBanco');
   };
 
@@ -156,15 +164,16 @@ const CuentaBancariaFormulario: React.FC<Props> = ({ mode }) => {
         className="paces-card-erp"
         styles={{ body: { padding: 0 } }}
       >
-        <div style={{
-          padding: '20px 24px',
-          borderBottom: '1px solid rgba(0,0,0,0.06)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 12
-        }}>
+        <Spin spinning={guardando} tip="Guardando cuenta bancaria..." size="large">
+          <div style={{
+            padding: '20px 24px',
+            borderBottom: '1px solid rgba(0,0,0,0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12
+          }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
               width: 40,
@@ -185,10 +194,10 @@ const CuentaBancariaFormulario: React.FC<Props> = ({ mode }) => {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Button icon={<CloseOutlined />} onClick={handleCancel}>
+            <Button icon={<CloseOutlined />} onClick={handleCancel} disabled={guardando}>
               Cancelar
             </Button>
-            <Button type="primary" icon={<SaveOutlined />} onClick={() => form.submit()} loading={saving}>
+            <Button type="primary" icon={<SaveOutlined />} onClick={() => form.submit()} loading={guardando}>
               Guardar
             </Button>
           </div>
@@ -296,7 +305,8 @@ const CuentaBancariaFormulario: React.FC<Props> = ({ mode }) => {
             </Row>
           </Form>
         </div>
-      </Card>
+      </Spin>
+    </Card>
 
       {noCuenta && (
         <PlantillaImportacion cuentaBanc={noCuenta} />

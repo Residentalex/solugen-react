@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Button, Spin, Alert, Empty, Typography, Tag, Row, Col, Grid, message, Select
@@ -210,6 +210,8 @@ const FTransBanco: React.FC = () => {
   const [movimientos, setMovimientos] = useState<TransaccionVistaDTO[]>([]);
   const [loadingMov, setLoadingMov] = useState(false);
   const [totalMov, setTotalMov] = useState(0);
+  
+  const movimientoRef = useRef(false); // candado para navegación
 
   const cuentaActiva = useMemo(() => cuentas[activeIndex] || null, [activeIndex, cuentas]);
 
@@ -368,8 +370,30 @@ const FTransBanco: React.FC = () => {
       render: (val: string) => <Text>{toTitleCase(val ?? '')}</Text> },
     { title: 'Concepto', dataIndex: 'concepto', key: 'concepto', width: 280, ellipsis: true,
       render: (val: string) => <Text>{toTitleCase(val ?? '')}</Text> },
+    { title: 'Tipo', key: 'tipo', width: 100, align: 'center' as const,
+      render: (_: any, record: TransaccionVistaDTO) => {
+        const esEntrada = (record.total ?? 0) >= 0;
+        return esEntrada
+          ? <Tag color="green">Entrada</Tag>
+          : <Tag color="red">Salida</Tag>;
+      } },
     { title: 'Total', dataIndex: 'total', key: 'total', width: 160, align: 'right' as const,
-      render: (val: number) => <Text strong className="paces-text-total">{formatCurrency(val, monedaActual)}</Text> },
+      render: (val: number) => {
+        const esEntrada = (val ?? 0) >= 0;
+        return (
+          <Text strong style={{ color: esEntrada ? '#52c41a' : '#ff4d4f' }}>
+            {formatCurrency(val, monedaActual)}
+          </Text>
+        );
+      } },
+    { title: 'Saldo posterior', key: 'saldoPosterior', width: 160, align: 'right' as const,
+      render: (_: any, record: TransaccionVistaDTO, index: number) => {
+        let saldo = 0;
+        for (let i = 0; i <= index; i++) {
+          saldo += (movimientosFiltrados[i]?.total ?? 0);
+        }
+        return <Text strong>{formatCurrency(saldo, monedaActual)}</Text>;
+      } },
     { title: 'Estado', dataIndex: 'estado', key: 'estado', width: 130,
       render: (est: number) => <EstadoColumnCell estado={est} /> },
   ];
@@ -532,13 +556,26 @@ const FTransBanco: React.FC = () => {
               rowClassName="paces-row-hover"
               onRow={(record) => ({
                 onClick: () => {
+                  if (movimientoRef.current || loadingMov) return;
                   if (record.id) {
                     navigate(`/FTransBanco/${record.id}`, { state: { cuentaCodigo: cuentaActiva?.noCuenta } });
                   }
                 },
-                style: { cursor: record.id ? 'pointer' : 'default' },
+                style: { cursor: record.id && !movimientoRef.current && !loadingMov ? 'pointer' : 'default' },
               })}
-              locale={{ emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No hay movimientos para esta cuenta" /></div> }}
+              locale={{ emptyText: (
+              <div style={{ minHeight: 160, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <Empty
+                  image={<BankOutlined style={{ fontSize: 40, color: '#d9d9d9' }} />}
+                  description={
+                    <span>
+                      No hay movimientos en el rango seleccionado.<br />
+                      <Text type="secondary" style={{ fontSize: 12 }}>Puede cambiar el rango de fechas o limpiar los filtros.</Text>
+                    </span>
+                  }
+                />
+              </div>
+            ) }}
             />
           </div>
         </>
