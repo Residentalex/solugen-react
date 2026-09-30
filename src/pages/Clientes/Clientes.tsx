@@ -9,7 +9,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';
 import { clienteApi } from '../../api/clienteApi';
-import { formatCurrency } from '../../utils/formats';
+import { formatCurrency, getColorMonograma } from '../../utils/formats';
 import type { ClienteVistaDTO } from '../../types/facturacion';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import EntidadColumnCell from '../../components/EntidadColumnCell';
@@ -17,7 +17,10 @@ import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 
-
+const FILTRO_ACTIVO_LABEL: Record<string, string> = {
+  activos: 'clientes activos',
+  inactivos: 'clientes inactivos',
+};
 
 const Clientes: React.FC = () => {
 
@@ -90,6 +93,43 @@ const Clientes: React.FC = () => {
   };
 
   const abrirNuevo = () => window.location.href = '/MCliente/nuevo';
+
+  const hayFiltros = searchText.trim() !== '' || filtroActivo !== 'todos';
+  const listaVacia = !isLoading && (data?.datos || []).length === 0;
+
+  const renderEmpty = () => {
+    const wrap = (children: React.ReactNode) => (
+      <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
+        {children}
+      </div>
+    );
+
+    if (!hayFiltros) {
+      return wrap(
+        <>
+          <Empty description="No hay clientes registrados" />
+          {puedeEditar && (
+            <Button type="primary" size="small" onClick={abrirNuevo}>Crear primer cliente</Button>
+          )}
+        </>
+      );
+    }
+
+    const detalleFiltro = searchText.trim() !== ''
+      ? `la búsqueda "${searchText.trim()}"`
+      : FILTRO_ACTIVO_LABEL[filtroActivo] || 'los filtros aplicados';
+
+    return wrap(
+      <>
+        <Empty description={`No se encontraron clientes para ${detalleFiltro}`} />
+        {filtroActivo !== 'todos' && (
+          <Button size="small" onClick={() => { setFiltroActivo('todos'); setPage(1); }}>
+            Ver todos los clientes
+          </Button>
+        )}
+      </>
+    );
+  };
 
   const columns: ColumnsType<ClienteVistaDTO> = [
     {
@@ -191,9 +231,7 @@ const Clientes: React.FC = () => {
           rowClassName="paces-row-hover"
           className="paces-border-top paces-list-table"
           locale={{
-            emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Empty description="No hay clientes registrados" />
-            </div>,
+            emptyText: listaVacia ? renderEmpty() : <div style={{ minHeight: 160 }} />,
           }}
           pagination={{
             current: page,
@@ -205,18 +243,26 @@ const Clientes: React.FC = () => {
           }}
         />
         <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', padding: '8px 16px' }}>
-          <Space size={4}>
-            <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#E05252' }} />
-            <Text type="secondary" style={{ fontSize: 12 }}>0-14 días</Text>
-          </Space>
-          <Space size={4}>
-            <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#4A8FD4' }} />
-            <Text type="secondary" style={{ fontSize: 12 }}>15-29 días</Text>
-          </Space>
-          <Space size={4}>
-            <div style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: '#2BA88C' }} />
-            <Text type="secondary" style={{ fontSize: 12 }}>30+ días</Text>
-          </Space>
+          {[
+            { dias: 7, label: '0-14 días' },
+            { dias: 20, label: '15-29 días' },
+            { dias: 35, label: '30+ días' },
+          ].map((item) => (
+            <Space size={4} key={item.label}>
+              <div
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  backgroundColor: getColorMonograma(item.dias),
+                  border: '1px solid var(--paces-border)',
+                  boxShadow: '0 0 0 2px var(--paces-bg-container)',
+                  flexShrink: 0,
+                }}
+              />
+              <Text type="secondary" style={{ fontSize: 12 }}>{item.label}</Text>
+            </Space>
+          ))}
         </div>
       </Card>
     </>

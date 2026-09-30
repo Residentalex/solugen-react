@@ -1,0 +1,69 @@
+/* Altura ocupada por el chrome del layout sobre el area de contenido:
+   .paces-topbar 56px + .paces-page-header ~60px + .paces-content 16px + 20px
+   Ajustar esta variable si cambia la cabecera de MainLayout. */
+.chat-page {
+  --chat-page-offset: 152px;
+
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  height: calc(100dvh - var(--chat-page-offset));
+  min-height: 520px;
+  overflow: hidden;
+  background: var(--paces-bg-elevated);
+  border: 1px solid var(--paces-card-border);
+  border-radius: 12px;
+}
+
+/* SaasMainLayout: topbar 64px + padding 24px del area de contenido, sin page-header. */
+.chat-page--saas {
+  --chat-page-offset: 112px;
+}
+
+.chat-page__lista {
+  min-width: 0;
+  overflow: hidden;
+  background: var(--paces-bg-elevated);
+  border-right: 1px solid var(--paces-card-border);
+}
+
+.chat-page__contenido {
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.chat-page__contenido > * {
+  width: 100%;
+  min-width: 0;
+}
+
+.chat-page__contenido > .ant-empty {
+  margin: auto;
+}
+
+@media (max-width: 768px) {
+  .chat-page {
+    --chat-page-offset: 110px;
+
+    display: block;
+    height: calc(100dvh - var(--chat-page-offset));
+    min-height: 0;
+    border-radius: 0;
+  }
+
+  .chat-page--lista .chat-page__contenido {
+    display: none;
+  }
+
+  .chat-page--conversacion .chat-page__lista {
+    display: none;
+  }
+
+  .chat-page__lista,
+  .chat-page__contenido {
+    height: 100%;
+    border-right: 0;
+  }
+}

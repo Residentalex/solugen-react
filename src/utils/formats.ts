@@ -37,6 +37,12 @@ export function formatDateRaw(val: string): string {
   return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
+export function formatDateShort(val: string): string {
+  const d = parseDateRaw(val);
+  if (!d) return val || '';
+  return d.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
 export function formatDateTime(iso?: string): string {
   if (!iso) return '-';
   const d = new Date(iso);
@@ -100,15 +106,23 @@ export function toISOFormat(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-export function extraerMensajeError(err: any, fallback: string): string {
-  const data = err?.response?.data;
-  if (!data) return fallback;
-  if (data.errorMessage) return data.errorMessage;
-  if (data.errors && typeof data.errors === 'object') {
+function esObjeto(val: unknown): val is Record<string, unknown> {
+  return typeof val === 'object' && val !== null;
+}
+
+export function extraerMensajeError(err: unknown, fallback: string): string {
+  if (!esObjeto(err)) return fallback;
+  const response = err.response;
+  if (!esObjeto(response)) return fallback;
+  const data = response.data;
+  if (!esObjeto(data)) return fallback;
+  if (typeof data.errorMessage === 'string' && data.errorMessage) return data.errorMessage;
+  const errors = data.errors;
+  if (esObjeto(errors)) {
     const mensajes: string[] = [];
-    for (const key of Object.keys(data.errors)) {
-      const val = data.errors[key];
-      if (Array.isArray(val)) mensajes.push(...val);
+    for (const key of Object.keys(errors)) {
+      const val = errors[key];
+      if (Array.isArray(val)) mensajes.push(...val.map((m) => String(m)));
       else if (typeof val === 'string') mensajes.push(val);
     }
     if (mensajes.length > 0) return mensajes.join('; ');

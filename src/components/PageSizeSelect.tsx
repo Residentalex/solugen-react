@@ -9,7 +9,7 @@ interface PageSizeSelectProps {
 const PageSizeSelect: React.FC<PageSizeSelectProps> = ({ value, onChange }) => {
   return (
     <Select
-      style={{ width: 65 }}
+      style={{ width: 65, flexShrink: 0 }}
       value={value}
       onChange={onChange}
       options={[

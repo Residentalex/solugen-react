@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Button, Modal, Form, Input, Switch, Tag, Card, message, Popconfirm, Space } from 'antd';
+import { Table, Button, Modal, Form, Input, Switch, Tag, Card, message, Popconfirm, Space, Tooltip } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
 import { personaAutorizadaApi } from '../../../api/personaAutorizadaApi';
 import type { PersonaAutorizadaDTO } from '../../../types/facturacion';
@@ -101,10 +101,10 @@ const PersonasAutorizadasTab: React.FC<Props> = ({ codigoCliente, sucursal }) =>
   };
 
   const columns = [
-    { title: 'CÃ³digo', dataIndex: 'codigo', key: 'codigo', width: 100 },
+    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
     { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true },
-    { title: 'CÃ©dula', dataIndex: 'cedula', key: 'cedula', width: 140 },
-    { title: 'TelÃ©fono', dataIndex: 'telefono', key: 'telefono', width: 130 },
+    { title: 'Cédula', dataIndex: 'cedula', key: 'cedula', width: 140 },
+    { title: 'Teléfono', dataIndex: 'telefono', key: 'telefono', width: 130 },
     { title: 'Email', dataIndex: 'email', key: 'email', width: 200, ellipsis: true },
     {
       title: 'Cred. Fiscal',
@@ -112,7 +112,7 @@ const PersonasAutorizadasTab: React.FC<Props> = ({ codigoCliente, sucursal }) =>
       key: 'creditoFiscal',
       width: 120,
       render: (val: boolean) => (
-        <Tag color={val ? 'green' : 'default'}>{val ? 'SÃ­' : 'No'}</Tag>
+        <Tag color={val ? 'green' : 'default'}>{val ? 'Sí' : 'No'}</Tag>
       ),
     },
     {
@@ -121,9 +121,30 @@ const PersonasAutorizadasTab: React.FC<Props> = ({ codigoCliente, sucursal }) =>
       width: 120,
       render: (_: any, record: PersonaAutorizadaDTO) => (
         <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditar(record)} />
-          <Popconfirm title="Â¿Eliminar esta persona autorizada?" onConfirm={() => handleEliminar(record.id!)} okText="SÃ­" cancelText="No">
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+          <Tooltip title="Editar persona autorizada">
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEditar(record)}
+              aria-label={`Editar ${record.nombre}`}
+            />
+          </Tooltip>
+          <Popconfirm
+            title="¿Eliminar esta persona autorizada?"
+            onConfirm={() => handleEliminar(record.id!)}
+            okText="Sí"
+            cancelText="No"
+          >
+            <Tooltip title="Eliminar persona autorizada">
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                aria-label={`Eliminar ${record.nombre}`}
+              />
+            </Tooltip>
           </Popconfirm>
         </Space>
       ),
@@ -138,7 +159,13 @@ const PersonasAutorizadasTab: React.FC<Props> = ({ codigoCliente, sucursal }) =>
             Agregar
           </Button>
           <div style={{ flex: 1 }} />
-          <Button icon={<ReloadOutlined />} onClick={cargar} />
+          <Tooltip title="Recargar personas autorizadas">
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={cargar}
+              aria-label="Recargar personas autorizadas"
+            />
+          </Tooltip>
         </div>
       </div>
       <Table
@@ -162,32 +189,36 @@ const PersonasAutorizadasTab: React.FC<Props> = ({ codigoCliente, sucursal }) =>
         cancelText="Cancelar"
       >
         <Form form={form} layout="vertical" size="small">
-          <Form.Item name="codigo" label="CÃ³digo">
-            <Input placeholder="CÃ³digo" maxLength={20} />
+          <Form.Item name="codigo" label="Código">
+            <Input placeholder="Código" maxLength={20} />
           </Form.Item>
           <Form.Item name="nombre" label="Nombre" rules={[{ required: true, message: 'Obligatorio' }]}>
             <Input placeholder="Nombre completo" maxLength={100} />
           </Form.Item>
-          <Form.Item name="cedula" label="CÃ©dula">
-            <Input placeholder="CÃ©dula" maxLength={20} />
+          <Form.Item name="cedula" label="Cédula">
+            <Input placeholder="Cédula" maxLength={20} />
           </Form.Item>
-          <Form.Item name="telefono" label="TelÃ©fono">
-            <Input placeholder="TelÃ©fono" maxLength={20} />
+          <Form.Item name="telefono" label="Teléfono">
+            <Input placeholder="Teléfono" maxLength={20} />
           </Form.Item>
           <Form.Item name="fax" label="Fax">
             <Input placeholder="Fax" maxLength={20} />
           </Form.Item>
-          <Form.Item name="email" label="Email">
+          <Form.Item
+            name="email"
+            label="Email"
+            rules={[{ type: 'email', message: 'Ingresa un correo electrónico válido' }]}
+          >
             <Input placeholder="correo@ejemplo.com" maxLength={80} />
           </Form.Item>
-          <Form.Item name="direccion" label="DirecciÃ³n">
-            <Input.TextArea placeholder="DirecciÃ³n" rows={2} maxLength={200} />
+          <Form.Item name="direccion" label="Dirección">
+            <Input.TextArea placeholder="Dirección" rows={2} maxLength={200} />
           </Form.Item>
           <Form.Item name="noContrato" label="No. Contrato">
-            <Input placeholder="NÃºmero de contrato" maxLength={50} />
+            <Input placeholder="Número de contrato" maxLength={50} />
           </Form.Item>
-          <Form.Item name="creditoFiscal" label="CrÃ©dito Fiscal" valuePropName="checked">
-            <Switch checkedChildren="SÃ­" unCheckedChildren="No" />
+          <Form.Item name="creditoFiscal" label="Crédito Fiscal" valuePropName="checked">
+            <Switch checkedChildren="Sí" unCheckedChildren="No" />
           </Form.Item>
         </Form>
       </Modal>

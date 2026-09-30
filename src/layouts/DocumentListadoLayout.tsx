@@ -73,9 +73,27 @@ function DocumentListadoLayout<T extends { id?: number | string }>(
     emptyText,
   } = props;
 
+  const contenedorRef = React.useRef<HTMLDivElement>(null);
+  const [indiceFocado, setIndiceFocado] = React.useState(0);
+
+  const ultimoIndice = Math.max(0, data.length - 1);
+  const indiceEfectivo = Math.min(indiceFocado, ultimoIndice);
+
+  const enfocarFila = (indice: number) => {
+    setIndiceFocado(indice);
+    requestAnimationFrame(() => {
+      const filas = contenedorRef.current?.querySelectorAll<HTMLElement>('tbody > tr[data-row-key]');
+      filas?.[indice]?.focus();
+    });
+  };
+
   const handleTableChange = (pagination: TablePaginationConfig) => {
+    setIndiceFocado(0);
     if (pagination.current) onPageChange(pagination.current);
   };
+
+  const esFilaSeleccionada = (record: T) =>
+    Boolean(selectedRowId) && (record as any).id === selectedRowId;
 
   return (
     <>
@@ -93,40 +111,68 @@ function DocumentListadoLayout<T extends { id?: number | string }>(
           </div>
         )}
 
-        <Table<T>
-          columns={columns}
-          dataSource={data}
-          rowKey={rowKey}
-          loading={loading}
-          scroll={{ x: scrollX }}
-          size="middle"
-          rowClassName={(record) =>
-            selectedRowId && (record as any).id === selectedRowId
-              ? 'paces-row-selected'
-              : 'paces-row-hover'
-          }
-          onRow={(record) => ({
-            onClick: () => onRowClick(record),
-            style: { cursor: 'pointer' },
-          })}
-          onChange={handleTableChange}
-          pagination={{
-            current: page,
-            pageSize,
-            total,
-            showSizeChanger: false,
-            showTotal: (t) => `${t} registros`,
-          }}
-          className="paces-border-top paces-list-table"
-          locale={{
-            emptyText: (
-              <EmptyState
-                title={emptyText ? undefined : 'Sin registros'}
-                description={emptyText ? String(emptyText) : 'No hay datos para los filtros aplicados.'}
-              />
-            ),
-          }}
-        />
+        <div ref={contenedorRef}>
+          <Table<T>
+            columns={columns}
+            dataSource={data}
+            rowKey={rowKey}
+            loading={loading}
+            scroll={{ x: scrollX }}
+            size="middle"
+            rowClassName={(record) =>
+              esFilaSeleccionada(record)
+                ? 'paces-row-selected'
+                : 'paces-row-hover'
+            }
+            onRow={(record, index) => {
+              const idx = index ?? 0;
+              return {
+                onClick: () => {
+                  setIndiceFocado(idx);
+                  onRowClick(record);
+                },
+                tabIndex: idx === indiceEfectivo ? 0 : -1,
+                onKeyDown: (e: React.KeyboardEvent<HTMLTableRowElement>) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    if (e.key === ' ') e.preventDefault();
+                    onRowClick(record);
+                  } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    enfocarFila(Math.min(idx + 1, ultimoIndice));
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    enfocarFila(Math.max(idx - 1, 0));
+                  } else if (e.key === 'Home') {
+                    e.preventDefault();
+                    enfocarFila(0);
+                  } else if (e.key === 'End') {
+                    e.preventDefault();
+                    enfocarFila(ultimoIndice);
+                  }
+                },
+                'aria-selected': esFilaSeleccionada(record),
+                style: { cursor: 'pointer' },
+              };
+            }}
+            onChange={handleTableChange}
+            pagination={{
+              current: page,
+              pageSize,
+              total,
+              showSizeChanger: false,
+              showTotal: (t) => `${t} registros`,
+            }}
+            className="paces-border-top paces-list-table"
+            locale={{
+              emptyText: (
+                <EmptyState
+                  title={emptyText ? undefined : 'Sin registros'}
+                  description={emptyText ? String(emptyText) : 'No hay datos para los filtros aplicados.'}
+                />
+              ),
+            }}
+          />
+        </div>
 
         {extraFooter && (
           <div style={{ padding: '8px 24px 12px' }}>

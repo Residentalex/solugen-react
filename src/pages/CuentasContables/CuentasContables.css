@@ -1,0 +1,111 @@
+/* ===== Cuentas Contables - Arbol de cuentas ===== */
+
+/* Contenedor principal del arbol (reemplaza la Card anidada) */
+.cuentas-contables-contenido {
+  margin: 16px 24px 0;
+  min-height: 420px;
+  max-height: calc(100vh - 320px);
+  overflow: auto;
+  border: 1px solid var(--paces-border-secondary);
+  border-radius: 8px;
+  background: var(--paces-bg-container);
+}
+
+.cuentas-contables-contenido .ant-tree {
+  padding: 8px 0;
+  background: transparent;
+}
+
+.cuentas-contables-contenido .ant-tree-treenode {
+  width: 100%;
+  padding: 3px 12px;
+}
+
+.cuentas-contables-contenido .ant-tree-node-content-wrapper {
+  min-width: 0;
+  flex: 1;
+  border-radius: 6px;
+}
+
+/* Encabezado de contexto cuando hay busqueda activa */
+.cuentas-resultado-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 24px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--paces-border-secondary);
+  border-left: 3px solid var(--paces-primary);
+  border-radius: 6px;
+  background: var(--paces-bg-container);
+  color: var(--paces-text-secondary);
+  font-size: 12px;
+}
+
+.cuentas-resultado-header strong {
+  color: var(--paces-text);
+}
+
+/* Fila de cada cuenta: codigo fijo + nombre flexible */
+.cuenta-tree-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.cuenta-tree-codigo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-weight: 600;
+  color: var(--paces-text);
+  white-space: nowrap;
+}
+
+.cuenta-tree-nombre {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--paces-text-secondary);
+}
+
+/* Estados de carga / vacio dentro del contenido */
+.cuentas-contables-estado {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 72px 16px;
+}
+
+/* Paginacion integrada dentro de la tarjeta */
+.cuentas-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 24px;
+  margin-top: 16px;
+  border-top: 1px solid var(--paces-border-secondary);
+}
+
+@media (max-width: 768px) {
+  .cuentas-contables-contenido,
+  .cuentas-resultado-header {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+
+  .cuentas-pagination {
+    padding: 16px;
+    justify-content: center;
+  }
+
+  .cuenta-tree-row {
+    grid-template-columns: 110px minmax(0, 1fr);
+    gap: 8px;
+  }
+}

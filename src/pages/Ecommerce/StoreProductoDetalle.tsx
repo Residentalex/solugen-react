@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Row,
@@ -52,6 +52,12 @@ const StoreProductoDetalle: React.FC = () => {
   const [notFound, setNotFound] = useState(false);
   const [cantidad, setCantidad] = useState(1);
 
+  // Bloqueo inmediato contra doble clic en acciones asincronas
+  const processingRef = useRef(false);
+  const [procesandoCarrito, setProcesandoCarrito] = useState(false);
+  const [procesandoFavorito, setProcesandoFavorito] = useState(false);
+  const procesando = procesandoCarrito || procesandoFavorito;
+
   // Hooks de favoritos (SIEMPRE antes de cualquier early return)
   const favoritos = useFavoritosStore((state) => state.favoritos);
   const toggleFavorito = useFavoritosStore((state) => state.toggleFavorito);
@@ -85,19 +91,38 @@ const StoreProductoDetalle: React.FC = () => {
     cargarProducto();
   }, [cargarProducto]);
 
+  // Ajustar la cantidad si la existencia cambia y quedo fuera del rango
+  useEffect(() => {
+    const existencia = producto?.existencia;
+    if (existencia == null) return;
+    setCantidad((prev) => Math.min(Math.max(prev, 1), Math.max(existencia, 1)));
+  }, [producto?.existencia]);
+
   const handleAddToCart = useCallback(async () => {
-    if (!producto) return;
+    if (!producto || processingRef.current) return;
+    processingRef.current = true;
+    setProcesandoCarrito(true);
     try {
       await useCarritoStore.getState().agregarProducto(producto.codigo, cantidad);
       message.success('Agregado al carrito');
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al agregar al carrito');
+    } finally {
+      processingRef.current = false;
+      setProcesandoCarrito(false);
     }
   }, [cantidad, producto]);
 
   const handleToggleFavorito = useCallback(async () => {
-    if (!producto) return;
-    await toggleFavorito(producto.codigo);
+    if (!producto || processingRef.current) return;
+    processingRef.current = true;
+    setProcesandoFavorito(true);
+    try {
+      await toggleFavorito(producto.codigo);
+    } finally {
+      processingRef.current = false;
+      setProcesandoFavorito(false);
+    }
   }, [toggleFavorito, producto]);
 
   // Loading
@@ -171,6 +196,7 @@ const StoreProductoDetalle: React.FC = () => {
                 type="text"
                 icon={<ArrowLeftOutlined />}
                 onClick={() => navigate('/store')}
+                disabled={procesando}
                 className="store-back-btn"
               >
                 Volver al catálogo
@@ -195,7 +221,7 @@ const StoreProductoDetalle: React.FC = () => {
                   </Text>
 
                   <div style={{ marginTop: 8, marginBottom: 16 }}>
-                    <Space>
+                    <Space wrap size={[4, 8]}>
                       {producto.familia && <Tag color="blue">{producto.familia}</Tag>}
                       {producto.categoria && <Tag>{producto.categoria}</Tag>}
                       {producto.marca && <Tag color="purple">{producto.marca}</Tag>}
@@ -255,10 +281,11 @@ const StoreProductoDetalle: React.FC = () => {
                     </Text>
                     <InputNumber
                       min={1}
-                      max={999}
+                      max={producto.existencia != null && producto.existencia > 0 ? producto.existencia : 999}
                       value={cantidad}
                       onChange={(val) => setCantidad(val || 1)}
                       size="large"
+                      disabled={procesando || producto.existencia === 0}
                       style={{ width: 120 }}
                     />
                   </div>
@@ -269,7 +296,8 @@ const StoreProductoDetalle: React.FC = () => {
                       size="large"
                       icon={<ShoppingCartOutlined />}
                       onClick={handleAddToCart}
-                      disabled={producto.existencia === 0}
+                      loading={procesandoCarrito}
+                      disabled={producto.existencia === 0 || procesandoFavorito}
                       style={{
                         height: 48,
                         paddingInline: 32,
@@ -283,6 +311,9 @@ const StoreProductoDetalle: React.FC = () => {
                       size="large"
                       icon={esFav ? <HeartFilled style={{ color: '#ff4d4f' }} /> : <HeartOutlined />}
                       onClick={handleToggleFavorito}
+                      loading={procesandoFavorito}
+                      disabled={procesandoCarrito}
+                      aria-label={esFav ? 'Quitar de favoritos' : 'Agregar a favoritos'}
                       style={{
                         height: 48,
                         width: 48,

@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Card, Table, Button, DatePicker, Typography, Empty, message } from 'antd';
+import { Card, Table, Button, DatePicker, Typography, Empty, Tooltip, message } from 'antd';
 import { SearchOutlined, ReloadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -20,13 +20,15 @@ const { Text } = Typography;
 const columnas: ColumnsType<SalidaAlmacenDTO> = [
   {
     title: 'Fecha Doc.',
+    dataIndex: 'fechaDocumento',
     width: 120,
-    render: (_, record) => (
-      <Text>{formatDateRaw(record.fechaDocumento)}</Text>
+    render: (valor: string) => (
+      <Text>{formatDateRaw(valor)}</Text>
     ),
   },
   {
     title: 'Documento',
+    dataIndex: 'noDocumento',
     width: 180,
     fixed: 'left',
     render: (_, record) => (
@@ -37,29 +39,46 @@ const columnas: ColumnsType<SalidaAlmacenDTO> = [
   },
   {
     title: 'Origen',
+    dataIndex: 'codigoAlmacenOrigen',
     width: 150,
-    render: (_, record) => toTitleCase(record.codigoAlmacenOrigen ?? ''),
+    render: (valor?: string) => toTitleCase(valor ?? ''),
   },
   {
     title: 'Destino',
+    dataIndex: 'codigoAlmacenDestino',
     width: 150,
-    render: (_, record) => toTitleCase(record.codigoAlmacenDestino ?? ''),
+    render: (valor?: string) => toTitleCase(valor ?? ''),
   },
   {
     title: 'Total',
+    dataIndex: 'total',
     width: 140,
     align: 'right',
-    render: (_, record) => (
+    render: (valor?: number) => (
       <Text strong className="paces-text-total">
-        {formatCurrency(record.total ?? 0)}
+        {formatCurrency(valor ?? 0)}
       </Text>
     ),
   },
   {
     title: 'Creado por',
+    dataIndex: ['creadoPor', 'nombre'],
     width: 160,
-    render: (_, record) => record.creadoPor?.nombre ?? '',
   },
+];
+
+type ColumnaExcel = {
+  header: string;
+  valor: (item: SalidaAlmacenDTO) => string | number;
+};
+
+const columnasExcel: ColumnaExcel[] = [
+  { header: 'Fecha Doc.', valor: (item) => formatDateRaw(item.fechaDocumento) },
+  { header: 'Documento', valor: (item) => `${item.documento?.codigo ?? ''}-${item.noDocumento ?? ''}` },
+  { header: 'Origen', valor: (item) => toTitleCase(item.codigoAlmacenOrigen ?? '') },
+  { header: 'Destino', valor: (item) => toTitleCase(item.codigoAlmacenDestino ?? '') },
+  { header: 'Total', valor: (item) => item.total ?? 0 },
+  { header: 'Creado por', valor: (item) => item.creadoPor?.nombre ?? '' },
 ];
 
 const TransferenciaSucursales: React.FC = () => {
@@ -74,6 +93,9 @@ const TransferenciaSucursales: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [fechas, setFechas] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().startOf('month'), dayjs()]);
   const [hasQueried, setHasQueried] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const consultandoRef = useRef(false);
+  const exportandoRef = useRef(false);
 
   useEffect(() => {
     setActiveModule('RSAPENP');
@@ -83,6 +105,8 @@ const TransferenciaSucursales: React.FC = () => {
   }, [setActiveModule, resetToolbar]);
 
   const handleConsultar = useCallback(async () => {
+    if (consultandoRef.current) return;
+    consultandoRef.current = true;
     setLoading(true);
     setLoadingError(false);
     try {
@@ -91,36 +115,51 @@ const TransferenciaSucursales: React.FC = () => {
       const items = await salidaAlmacenApi.obtenerTransferencias(sucursalActiva, desde, hasta);
       setData(items || []);
       setHasQueried(true);
-    } catch (err: any) {
-      const msg = err?.response?.data?.errorMessage || 'Error al cargar transferencias';
+    } catch (err) {
+      const msg =
+        (err as { response?: { data?: { errorMessage?: string } } })?.response?.data?.errorMessage ||
+        'Error al cargar transferencias';
       message.error(msg);
       setLoadingError(true);
     } finally {
       setLoading(false);
+      consultandoRef.current = false;
     }
   }, [sucursalActiva, fechas]);
 
   const handleRefresh = useCallback(() => {
+    if (consultandoRef.current) return;
     if (hasQueried) handleConsultar();
   }, [hasQueried, handleConsultar]);
 
   const handleExportarExcel = async () => {
-    const companyName = await getCompanyName(sucursalActiva);
-    const exportCols = columnas.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
-    const columnHeaders = exportCols.map((col: any) => col.title);
-    const dataRows = data.map((item: any) =>
-      exportCols.map((col: any) => {
-        const val = item[col.dataIndex];
-        return val != null ? String(val) : '';
-      })
-    );
-    exportToExcel({
-      fileName: `TransferenciaSucursales_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
-      sheetName: 'TransferenciaSucursales',
-      companyName,
-      columnHeaders,
-      dataRows,
-    });
+    if (exportandoRef.current) return;
+    if (consultandoRef.current) return;
+    if (data.length === 0) {
+      message.warning('No hay datos para exportar');
+      return;
+    }
+
+    exportandoRef.current = true;
+    setExportando(true);
+    try {
+      const companyName = await getCompanyName(sucursalActiva);
+      exportToExcel({
+        fileName: `TransferenciaSucursales_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+        sheetName: 'TransferenciaSucursales',
+        companyName,
+        columnHeaders: columnasExcel.map((c) => c.header),
+        dataRows: data.map((item) => columnasExcel.map((c) => c.valor(item))),
+      });
+    } catch (err) {
+      const msg =
+        (err as { response?: { data?: { errorMessage?: string } } })?.response?.data?.errorMessage ||
+        'Error al exportar a Excel';
+      message.error(msg);
+    } finally {
+      exportandoRef.current = false;
+      setExportando(false);
+    }
   };
 
   return (
@@ -142,6 +181,7 @@ const TransferenciaSucursales: React.FC = () => {
               }}
               format="DD/MM/YYYY"
               allowClear={false}
+              disabled={loading}
               presets={[
                 { label: 'Este mes', value: [dayjs().startOf('month'), dayjs()] as [dayjs.Dayjs, dayjs.Dayjs] },
                 { label: 'Mes anterior', value: [dayjs().subtract(1, 'month').startOf('month'), dayjs().subtract(1, 'month').endOf('month')] as [dayjs.Dayjs, dayjs.Dayjs] },
@@ -153,9 +193,25 @@ const TransferenciaSucursales: React.FC = () => {
             </Button>
             <div style={{ flex: 1 }} />
             <PermissionGate accion="EXPORTAR">
-              <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+              <Tooltip title="Exportar a Excel">
+                <Button
+                  icon={<FileExcelOutlined />}
+                  aria-label="Exportar a Excel"
+                  loading={exportando}
+                  disabled={loading || exportando || !hasQueried || data.length === 0}
+                  onClick={handleExportarExcel}
+                />
+              </Tooltip>
             </PermissionGate>
-            <Button icon={<ReloadOutlined />} disabled={!hasQueried} onClick={handleRefresh} />
+            <Tooltip title="Actualizar">
+              <Button
+                icon={<ReloadOutlined />}
+                aria-label="Actualizar"
+                loading={loading}
+                disabled={!hasQueried}
+                onClick={handleRefresh}
+              />
+            </Tooltip>
           </div>
         </div>
         <Table

@@ -1,21 +1,39 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Tag, Button, Spin, message, Empty, Grid, Tooltip, Avatar, Alert, Modal, Descriptions, Typography, Input, Space } from 'antd';
+import { Card, Row, Col, Tag, Button, Spin, message, Empty, Grid, Tooltip, Avatar, Alert, Modal, Descriptions, Typography, Input, Space, Table } from 'antd';
 import { PlusOutlined, EditOutlined, EyeOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
-import { Sucursal } from '../../types/auth';
 import { rolApi } from '../../api/rolApi';
+import type { ColumnsType } from 'antd/es/table';
 import type { RolFullDTO } from '../../types/administracion';
 
 const { Text } = Typography;
 
+type ApiError = {
+  response?: {
+    data?: {
+      errorMessage?: string;
+      message?: string;
+    };
+  };
+};
+
+const obtenerMensajeError = (error: unknown, mensajePredeterminado: string) => {
+  const apiError = error as ApiError;
+  return (
+    apiError.response?.data?.errorMessage ??
+    apiError.response?.data?.message ??
+    (error instanceof Error ? error.message : mensajePredeterminado)
+  );
+};
+
 const Roles: React.FC = () => {
   const navigate = useNavigate();
-  const setActiveModule = useUIStore((s: any) => s.setActiveModule);
-  const updateToolbar = useUIStore((s: any) => s.updateToolbar);
-  const resetToolbar = useUIStore((s: any) => s.resetToolbar);
+  const setActiveModule = useUIStore((s) => s.setActiveModule);
+  const updateToolbar = useUIStore((s) => s.updateToolbar);
+  const resetToolbar = useUIStore((s) => s.resetToolbar);
   const screens = Grid.useBreakpoint();
   const securitySucursal = useAuthStore((s) => s.securitySucursal);
 
@@ -33,8 +51,9 @@ const Roles: React.FC = () => {
     try {
       const data = await rolApi.obtenerListado(securitySucursal);
       setRoles(data || []);
-    } catch {
+    } catch (error) {
       setLoadingError(true);
+      message.error(obtenerMensajeError(error, 'Error al cargar roles'));
     } finally {
       setLoading(false);
     }
@@ -43,8 +62,13 @@ const Roles: React.FC = () => {
   useEffect(() => {
     setActiveModule('MROL');
     updateToolbar({});
-    cargarRoles();
-    return () => resetToolbar();
+    const temporizadorCarga = window.setTimeout(() => {
+      void cargarRoles();
+    }, 0);
+    return () => {
+      window.clearTimeout(temporizadorCarga);
+      resetToolbar();
+    };
   }, [setActiveModule, updateToolbar, resetToolbar, cargarRoles]);
 
   const abrirDetalle = async (rol: RolFullDTO) => {
@@ -54,8 +78,8 @@ const Roles: React.FC = () => {
     try {
       const completo = await rolApi.obtenerPorId(securitySucursal, rol.id);
       setDetalleItem(completo);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar detalle del rol');
+    } catch (error) {
+      message.error(obtenerMensajeError(error, 'Error al cargar detalle del rol'));
     } finally {
       setCargandoDetalle(false);
     }
@@ -67,6 +91,88 @@ const Roles: React.FC = () => {
 
   const isSmall = !screens.md;
   const cardSpan = isSmall ? 24 : screens.xl ? 8 : screens.lg ? 12 : 12;
+
+  const columns: ColumnsType<RolFullDTO> = [
+    {
+      title: 'Nombre',
+      dataIndex: 'nombre',
+      key: 'nombre',
+      render: (text, record) => (
+        <Text strong className="paces-doc-link" style={{ cursor: 'pointer' }} onClick={() => abrirDetalle(record)}>
+          {text}
+        </Text>
+      ),
+    },
+    {
+      title: 'Descripción',
+      dataIndex: 'descripcion',
+      key: 'descripcion',
+      render: (text) => <Text type="secondary">{text || 'Sin descripción'}</Text>,
+    },
+    {
+      title: 'Estado',
+      dataIndex: 'activo',
+      key: 'activo',
+      render: (activo) => (
+        <Tag color={activo ? 'green' : 'default'}>
+          {activo ? 'Activo' : 'Inactivo'}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Usuarios',
+      key: 'usuarios',
+      render: (_, record) => {
+        const count = record.cantidadUsuarios ?? record.nombresUsuarios?.length ?? 0;
+        if (count === 0) return <Text type="secondary">Sin usuarios</Text>;
+        return (
+          <Avatar.Group max={{ count: 3, style: { backgroundColor: '#f0f0f0', color: '#595959', fontSize: 11, fontWeight: 600 } }}>
+            {(record.nombresUsuarios || []).slice(0, 3).map((nombre, i) => {
+              const inicial = nombre.trim().charAt(0).toUpperCase();
+              const colores = ['#556ee6', '#f46a6a', '#34c38f', '#f1b44c', '#50a5f1', '#f46a6a', '#e060a0', '#7c6bcb'];
+              return (
+                <Avatar key={`${record.id}-${i}`} style={{ backgroundColor: colores[i % colores.length], verticalAlign: 'middle', fontSize: 11 }} size={24}>
+                  {inicial}
+                </Avatar>
+              );
+            })}
+          </Avatar.Group>
+        );
+      },
+    },
+    {
+      title: 'Permisos',
+      key: 'permisos',
+      render: (_, record) => {
+        const pantallas = record.pantallas || [];
+        const totalAcciones = pantallas.reduce((acc, p) => acc + (p.acciones?.length || 0), 0);
+        return (
+          <span>
+            {pantallas.length} pantalla{pantallas.length !== 1 ? 's' : ''} · {totalAcciones} acción{totalAcciones !== 1 ? 'es' : ''}
+          </span>
+        );
+      },
+    },
+    {
+      title: 'Acciones',
+      key: 'acciones',
+      width: 90,
+      fixed: 'right' as const,
+      align: 'center',
+      render: (_, record) => (
+        <Space size={4}>
+          <Tooltip title="Ver detalle">
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => abrirDetalle(record)} />
+          </Tooltip>
+          <PermissionGate accion="EDITAR">
+            <Tooltip title="Editar rol">
+              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => navigate(`/MROL/${record.id}/editar`)} />
+            </Tooltip>
+          </PermissionGate>
+        </Space>
+      ),
+    },
+  ];
 
   const rolesFiltrados = searchText
     ? roles.filter((r) => {
@@ -124,7 +230,7 @@ const Roles: React.FC = () => {
       <Spin spinning={loading}>
         {rolesFiltrados.length === 0 && !loading ? (
           <Empty description={searchText ? 'No hay roles que coincidan con la búsqueda' : 'No hay roles registrados'} />
-        ) : (
+        ) : isSmall ? (
           <Row gutter={[16, 16]}>
             {rolesFiltrados.map((rol) => (
               <Col key={rol.id} span={cardSpan}>
@@ -158,7 +264,7 @@ const Roles: React.FC = () => {
                         <Avatar.Group max={{ count: maxShow, style: { backgroundColor: '#f0f0f0', color: '#595959', fontSize: 11, fontWeight: 600 } }}>
                           {users.map((nombre, i) => {
                             const inicial = nombre.trim().charAt(0).toUpperCase();
-                            const colores = ['#556ee6','#f46a6a','#34c38f','#f1b44c','#50a5f1','#f46a6a','#e060a0','#7c6bcb'];
+                            const colores = ['#556ee6', '#f46a6a', '#34c38f', '#f1b44c', '#50a5f1', '#f46a6a', '#e060a0', '#7c6bcb'];
                             return (
                               <Avatar key={`${rol.id}-${i}`} style={{ backgroundColor: colores[i % colores.length], verticalAlign: 'middle', fontSize: 11 }} size={24}>
                                 {inicial}
@@ -204,6 +310,18 @@ const Roles: React.FC = () => {
               </Col>
             ))}
           </Row>
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={rolesFiltrados}
+            rowKey="id"
+            pagination={{
+              showTotal: (t) => `${t} roles`,
+              pageSize: 15,
+            }}
+            scroll={{ x: 900 }}
+            size="middle"
+          />
         )}
       </Spin>
 

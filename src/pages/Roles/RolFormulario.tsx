@@ -1,615 +1,737 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Button, Form, Input, InputNumber, Switch,   Checkbox, Spin, Skeleton, message, Grid, Collapse, Alert, Modal, Tag } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
-import { useUIStore } from '../../stores/uiStore';
-import { useAuthStore } from '../../stores/authStore';
-import { Sucursal } from '../../types/auth';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Collapse,
+  Empty,
+  Form,
+  Input,
+  InputNumber,
+  message,
+  Modal,
+  Space,
+  Spin,
+  Switch,
+  Typography,
+} from 'antd';
+import {
+  ArrowLeftOutlined,
+  ExclamationCircleOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
+import { useNavigate, useParams } from 'react-router-dom';
 import { rolApi } from '../../api/rolApi';
-import type { RolFullDTO } from '../../types/administracion';
-import type { PantallaDTO, AuthPermisoEspecialDTO } from '../../types/auth';
-import { useMemo } from 'react';
 import { permisoEspecialApi } from '../../api/permisoEspecialApi';
+import { useAuthStore } from '../../stores/authStore';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import PermissionGate from '../../components/PermissionGate';
-import { toTitleCase } from '../../utils/formats';
+import type { RolFullDTO } from '../../types/administracion';
+import type {
+  AuthPermisoEspecialDTO,
+  PantallaDTO,
+  PermisoEspecialConRolDTO,
+} from '../../types/auth';
 
-const RolFormulario: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+const { Text, Title } = Typography;
+
+type RolFormValues = Pick<RolFullDTO, 'nombre' | 'descripcion' | 'activo'>;
+
+type PermisoValor = {
+  valor: boolean;
+  valorNumerico?: number;
+};
+
+type PermisosPorPantalla = Record<number, Record<number, PermisoValor>>;
+
+type GrupoModulo = {
+  key: string;
+  nombre: string;
+  orden: number;
+  pantallas: PantallaDTO[];
+};
+
+type ApiError = {
+  response?: {
+    data?: {
+      errorMessage?: string;
+      message?: string;
+    };
+  };
+};
+
+const obtenerMensajeError = (error: unknown, mensajePredeterminado: string) => {
+  const apiError = error as ApiError;
+  return (
+    apiError.response?.data?.errorMessage ??
+    apiError.response?.data?.message ??
+    (error instanceof Error ? error.message : mensajePredeterminado)
+  );
+};
+
+const normalizarTexto = (texto?: string) =>
+  (texto ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase();
+
+const obtenerFirmaRol = (
+  rol: Pick<RolFullDTO, 'nombre' | 'descripcion' | 'activo' | 'pantallas'>,
+) =>
+  JSON.stringify({
+    nombre: rol.nombre,
+    descripcion: rol.descripcion,
+    activo: rol.activo,
+    pantallas: rol.pantallas,
+  });
+
+const fusionarPantallas = (...listas: PantallaDTO[][]): PantallaDTO[] => {
+  const resultado = new Map<number, PantallaDTO>();
+
+  listas.flat().forEach((pantalla) => {
+    const existente = resultado.get(pantalla.id);
+    if (!existente) {
+      resultado.set(pantalla.id, {
+        ...pantalla,
+        acciones: [...(pantalla.acciones ?? [])],
+        modulos: [...(pantalla.modulos ?? [])],
+        permisosEspeciales: [...(pantalla.permisosEspeciales ?? [])],
+      });
+      return;
+    }
+
+    const modulos = new Map(existente.modulos.map((modulo) => [modulo.id, modulo]));
+    (pantalla.modulos ?? []).forEach((modulo) => modulos.set(modulo.id, modulo));
+
+    resultado.set(pantalla.id, {
+      ...existente,
+      ...pantalla,
+      acciones: [...new Set([...(existente.acciones ?? []), ...(pantalla.acciones ?? [])])],
+      modulos: [...modulos.values()],
+      permisosEspeciales: [
+        ...new Set([
+          ...(existente.permisosEspeciales ?? []),
+          ...(pantalla.permisosEspeciales ?? []),
+        ]),
+      ],
+    });
+  });
+
+  return [...resultado.values()].sort((a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre));
+};
+
+const fusionarCatalogoPermisos = (
+  catalogo: AuthPermisoEspecialDTO[],
+  asignados: PermisoEspecialConRolDTO[],
+) => {
+  const resultado = new Map<number, AuthPermisoEspecialDTO>();
+  catalogo.filter((permiso) => permiso.activo).forEach((permiso) => resultado.set(permiso.id, permiso));
+
+  asignados.forEach((permiso) => {
+    const existente = resultado.get(permiso.id);
+    resultado.set(permiso.id, {
+      ...existente,
+      ...permiso,
+      activo: existente?.activo ?? permiso.activo ?? true,
+    });
+  });
+
+  return [...resultado.values()];
+};
+
+const RolFormulario = () => {
   const navigate = useNavigate();
-  const setActiveModule = useUIStore((s: any) => s.setActiveModule);
-  const updateToolbar = useUIStore((s: any) => s.updateToolbar);
-  const resetToolbar = useUIStore((s: any) => s.resetToolbar);
-  const screens = Grid.useBreakpoint();
-  const securitySucursal = useAuthStore((s) => s.securitySucursal);
+  const { id } = useParams<{ id: string }>();
+  const securitySucursal = useAuthStore((state) => state.securitySucursal);
+  const [form] = Form.useForm<RolFormValues>();
 
-  // Candado inmediato para impedir dobles guardados por clics rapidos
-  const guardandoRef = useRef(false);
-  // Id del rol ya persistido en esta sesion: evita volver a crear en el reintento
-  const rolGuardadoRef = useRef<number>(0);
-  const navigationConfirmedRef = useFormularioNavigation(guardandoRef);
-
-  const [dashboardPermisoChecked, setDashboardPermisoChecked] = useState(false);
-
-  const [loading, setLoading] = useState(false);
-  const [loadingError, setLoadingError] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
-  const [pantallasDisponibles, setPantallasDisponibles] = useState<PantallaDTO[]>([]);
-  // Catalogo de permisos especiales (id, codigo, nombre, tipoValor) — informacion de referencia
-  const [catalogoPermisosEspeciales, setCatalogoPermisosEspeciales] = useState<AuthPermisoEspecialDTO[]>([]);
-  // Valores de permisos por pantalla: clave "${pantallaId}-${permisoId}" → { valor, valorNumerico }
-  const [permisosPorPantalla, setPermisosPorPantalla] = useState<Record<string, { valor: boolean; valorNumerico?: number }>>({});
-  const [cargandoPermisosEspeciales, setCargandoPermisosEspeciales] = useState(false);
+  const [confirmandoCancelacion, setConfirmandoCancelacion] = useState(false);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
+  const [busqueda, setBusqueda] = useState('');
+  const [pantallas, setPantallas] = useState<PantallaDTO[]>([]);
+  const [catalogoPermisos, setCatalogoPermisos] = useState<AuthPermisoEspecialDTO[]>([]);
+  const [pantallasSeleccionadas, setPantallasSeleccionadas] = useState<number[]>([]);
+  const [accionesSeleccionadas, setAccionesSeleccionadas] = useState<Record<number, string[]>>({});
+  const [permisosSeleccionados, setPermisosSeleccionados] = useState<PermisosPorPantalla>({});
 
-  // Deduplicar por id (safety: si backend devuelve la misma pantalla múltiples veces)
-  const pantallasUnicas = useMemo(() => {
-    const map = new Map<number, PantallaDTO>();
-    for (const pp of pantallasDisponibles) {
-      if (map.has(pp.id)) {
-        const existing = map.get(pp.id)!;
-        existing.acciones = [...new Set([...existing.acciones, ...pp.acciones])];
-      } else {
-        map.set(pp.id, { ...pp });
-      }
+  const bloqueoAccionRef = useRef(false);
+  const navigationConfirmedRef = useFormularioNavigation(bloqueoAccionRef);
+  const rolGuardadoRef = useRef<RolFullDTO | null>(null);
+  const firmaRolGuardadoRef = useRef<string | null>(null);
+  const pantallasPermisosInicialesRef = useRef<Set<number>>(new Set());
+  const esEdicion = Boolean(id);
+  const interfazBloqueada = guardando || confirmandoCancelacion;
+
+  const cargarDatos = useCallback(async () => {
+    if (!securitySucursal) {
+      setLoading(false);
+      setLoadingError('No hay una sucursal activa para consultar el rol.');
+      return;
     }
-    return Array.from(map.values());
-  }, [pantallasDisponibles]);
 
-  // Agrupar por módulo → tipo
-  const gruposPorModulo = useMemo(() => {
-    const modulos = new Map<string, { nombre: string; tipos: Map<string, PantallaDTO[]> }>();
-    for (const pp of pantallasUnicas) {
-      const modsAsignados = (pp as any).modulos || [];
-      if (modsAsignados.length === 0) {
-        // Sin módulo
-        const keyMod = 'mod-0';
-        if (!modulos.has(keyMod)) {
-          modulos.set(keyMod, { nombre: 'Sin módulo', tipos: new Map() });
-        }
-        const modulo = modulos.get(keyMod)!;
-        const tipo = pp.tipo || 'General';
-        if (!modulo.tipos.has(tipo)) modulo.tipos.set(tipo, []);
-        modulo.tipos.get(tipo)!.push(pp);
-      } else {
-        for (const m of modsAsignados) {
-          const keyMod = `mod-${m.id}`;
-          if (!modulos.has(keyMod)) {
-            modulos.set(keyMod, { nombre: m.nombre || `Módulo ${m.id}`, tipos: new Map() });
-          }
-          const modulo = modulos.get(keyMod)!;
-          const tipo = pp.tipo || 'General';
-          if (!modulo.tipos.has(tipo)) modulo.tipos.set(tipo, []);
-          modulo.tipos.get(tipo)!.push(pp);
-        }
-      }
+    const rolId = id ? Number(id) : null;
+    if (id && (!Number.isInteger(rolId) || (rolId ?? 0) <= 0)) {
+      setLoading(false);
+      setLoadingError('El identificador del rol no es válido.');
+      return;
     }
-    return modulos;
-  }, [pantallasUnicas]);
-  const [selectedPantallas, setSelectedPantallas] = useState<Record<number, string[]>>({});
-  const [rolData, setRolData] = useState<RolFullDTO | null>(null);
-  const [form] = Form.useForm();
 
-  useEffect(() => {
-    setActiveModule('MROL');
-    updateToolbar({});
-    cargarDatos();
-    return () => resetToolbar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+      setLoading(true);
+      setLoadingError(null);
+      rolGuardadoRef.current = null;
+      firmaRolGuardadoRef.current = null;
 
-  const cargarDatos = async () => {
-    setLoading(true);
     try {
-      const [pantallas] = await Promise.all([
+      const [disponibles, catalogo, rol, permisosAsignados] = await Promise.all([
         rolApi.obtenerPantallasDisponibles(securitySucursal),
+        permisoEspecialApi.obtenerListado(securitySucursal),
+        rolId ? rolApi.obtenerPorId(securitySucursal, rolId) : Promise.resolve(null),
+        rolId ? permisoEspecialApi.obtenerPorRol(securitySucursal, rolId) : Promise.resolve([]),
       ]);
-      setPantallasDisponibles(pantallas || []);
 
-      if (id) {
-        const rol = await rolApi.obtenerPorId(securitySucursal, parseInt(id));
-        setRolData(rol);
-        form.setFieldsValue({
-          nombre: rol.nombre,
-          descripcion: rol.descripcion,
-          activo: rol.activo,
-        });
-        const sel: Record<number, string[]> = {};
-        // El backend devuelve PantallaDTO[] plano, no PantallaFullDTO[] anidado
-        const pantallas = (rol.pantallas || []) as any[];
-        for (const pp of pantallas) {
-          sel[pp.id] = [...(pp.acciones || [])];
-        }
-        setSelectedPantallas(sel);
+      const pantallasUnificadas = fusionarPantallas(disponibles, rol?.pantallas ?? []);
+      const catalogoUnificado = fusionarCatalogoPermisos(catalogo, permisosAsignados);
+      const seleccionadas = rol?.pantallas.map((pantalla) => pantalla.id) ?? [];
+      const acciones = (rol?.pantallas ?? []).reduce<Record<number, string[]>>((acumulado, pantalla) => {
+        acumulado[pantalla.id] = [...(pantalla.acciones ?? [])];
+        return acumulado;
+      }, {});
+      const permisos = permisosAsignados.reduce<PermisosPorPantalla>((acumulado, permiso) => {
+        if (permiso.pantallaId == null) return acumulado;
+        acumulado[permiso.pantallaId] ??= {};
+        acumulado[permiso.pantallaId][permiso.id] = {
+          valor: permiso.valor,
+          valorNumerico: permiso.valorNumerico,
+        };
+        return acumulado;
+      }, {});
 
-        setCargandoPermisosEspeciales(true);
-        try {
-          const result = await permisoEspecialApi.obtenerPorRol(securitySucursal, parseInt(id));
-          // Construir catalogo deduplicado por id (para tener id, codigo, nombre, tipoValor)
-          const catalogMap = new Map<number, AuthPermisoEspecialDTO>();
-          for (const p of result || []) {
-            if (!catalogMap.has(p.id)) {
-              catalogMap.set(p.id, { id: p.id, codigo: p.codigo, nombre: p.nombre, activo: p.activo, valor: p.valor, tipoValor: p.tipoValor, valorNumerico: p.valorNumerico, pantallaId: p.pantallaId });
-            }
-          }
-          setCatalogoPermisosEspeciales(Array.from(catalogMap.values()));
-          // Construir mapa de valores por pantalla
-          const map: Record<string, { valor: boolean; valorNumerico?: number }> = {};
-          for (const p of result || []) {
-            const pantallaId = p.pantallaId ?? 0;
-            const key = `${pantallaId}-${p.id}`;
-            map[key] = { valor: p.valor, valorNumerico: p.valorNumerico };
-          }
-          setPermisosPorPantalla(map);
-          // Cargar valor del permiso Dashboard si existe
-          const dashboardPerm = result.find((p: any) => p.codigo === 'PE_DASHBOARD_CONFIG' && (p.pantallaId === 0 || p.pantallaId == null));
-          if (dashboardPerm) {
-            setDashboardPermisoChecked(dashboardPerm.valor);
-          }
-        } catch {
-          // no crítico, los permisos especiales se cargan aparte
-        } finally {
-          setCargandoPermisosEspeciales(false);
-        }
-      } else {
-        form.setFieldsValue({ activo: true });
+      setPantallas(pantallasUnificadas);
+      setCatalogoPermisos(catalogoUnificado);
+      setPantallasSeleccionadas(seleccionadas);
+      setAccionesSeleccionadas(acciones);
+      setPermisosSeleccionados(permisos);
+      pantallasPermisosInicialesRef.current = new Set(
+        permisosAsignados
+          .map((permiso) => permiso.pantallaId)
+          .filter((pantallaId): pantallaId is number => pantallaId != null),
+      );
 
-        try {
-          const catalogo = await permisoEspecialApi.obtenerListado(securitySucursal);
-          setCatalogoPermisosEspeciales((catalogo || []).filter(p => p.activo));
-          // permisosPorPantalla se queda vacio (sin valores asignados aun)
-        } catch { /* ignorar */ }
-      }
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar datos');
-      setLoadingError(true);
-      if (id) navigate('/MROL', { replace: true });
+      form.setFieldsValue(
+        rol
+          ? { nombre: rol.nombre, descripcion: rol.descripcion, activo: rol.activo }
+          : { nombre: '', descripcion: '', activo: true },
+      );
+    } catch (error) {
+      const detalle = obtenerMensajeError(error, 'No fue posible cargar el formulario del rol.');
+      setLoadingError(detalle);
+      message.error(detalle);
     } finally {
       setLoading(false);
     }
-  };
+  }, [form, id, securitySucursal]);
 
-  const handleRefresh = useCallback(() => {
-    cargarDatos();
-    setLoadingError(false);
-  }, [id]);
+  useEffect(() => {
+    const temporizadorCarga = window.setTimeout(() => {
+      void cargarDatos();
+    }, 0);
 
-  const handleToggleAccion = (pantallaId: number, accionCodigo: string, checked: boolean) => {
-    setSelectedPantallas((prev) => {
-      const current = prev[pantallaId] || [];
-      const updated = checked
-        ? [...current, accionCodigo]
-        : current.filter((a) => a !== accionCodigo);
-      return { ...prev, [pantallaId]: updated };
+    return () => window.clearTimeout(temporizadorCarga);
+  }, [cargarDatos]);
+
+  const permisosPorPantalla = useMemo(() => {
+    return catalogoPermisos.reduce<Record<number, AuthPermisoEspecialDTO[]>>((acumulado, permiso) => {
+      if (permiso.pantallaId == null) return acumulado;
+      acumulado[permiso.pantallaId] ??= [];
+      acumulado[permiso.pantallaId].push(permiso);
+      return acumulado;
+    }, {});
+  }, [catalogoPermisos]);
+
+  const pantallasFiltradas = useMemo(() => {
+    const termino = normalizarTexto(busqueda.trim());
+    if (!termino) return pantallas;
+
+    return pantallas.filter((pantalla) => {
+      const permisos = permisosPorPantalla[pantalla.id] ?? [];
+      return [
+        pantalla.nombre,
+        pantalla.codigo,
+        ...pantalla.acciones,
+        ...permisos.flatMap((permiso) => [permiso.nombre, permiso.codigo]),
+      ].some((valor) => normalizarTexto(valor).includes(termino));
     });
-  };
+  }, [busqueda, pantallas, permisosPorPantalla]);
 
-  const handleTogglePantalla = (pantallaId: number, checked: boolean, todasAcciones: string[]) => {
-    setSelectedPantallas((prev) => ({
-      ...prev,
-      [pantallaId]: checked ? todasAcciones : [],
-    }));
-  };
+  const gruposModulo = useMemo<GrupoModulo[]>(() => {
+    const mapa = new Map<string, GrupoModulo>();
+    const sinModulo: PantallaDTO[] = [];
 
-  const handleToggleDashboardPermiso = (checked: boolean) => {
-    setDashboardPermisoChecked(checked);
-    // Also update the global permisosPorPantalla for consistency
-    const permisoCatalogo = catalogoPermisosEspeciales.find(p => p.codigo === 'PE_DASHBOARD_CONFIG');
-    if (permisoCatalogo) {
-      const key = `0-${permisoCatalogo.id}`;
-      setPermisosPorPantalla((prev) => ({
-        ...prev,
-        [key]: { valor: checked, valorNumerico: prev[key]?.valorNumerico },
+    for (const pantalla of pantallasFiltradas) {
+      const modulos = pantalla.modulos ?? [];
+      if (modulos.length === 0) {
+        sinModulo.push(pantalla);
+        continue;
+      }
+
+      for (const modulo of modulos) {
+        const key = `mod-${modulo.id}`;
+        if (!mapa.has(key)) {
+          mapa.set(key, {
+            key,
+            nombre: modulo.nombre || `Módulo ${modulo.id}`,
+            orden: modulo.orden ?? 999,
+            pantallas: [],
+          });
+        }
+        const grupo = mapa.get(key)!;
+        if (!grupo.pantallas.some((p) => p.id === pantalla.id)) {
+          grupo.pantallas.push(pantalla);
+        }
+      }
+    }
+
+    const grupos = [...mapa.values()].sort(
+      (a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre),
+    );
+
+    if (sinModulo.length > 0) {
+      grupos.push({ key: 'mod-0', nombre: 'Sin módulo', orden: 9999, pantallas: sinModulo });
+    }
+
+    return grupos;
+  }, [pantallasFiltradas]);
+
+  const cambiarPantalla = (pantalla: PantallaDTO, seleccionada: boolean) => {
+    if (bloqueoAccionRef.current) return;
+
+    setPantallasSeleccionadas((actuales) =>
+      seleccionada
+        ? [...new Set([...actuales, pantalla.id])]
+        : actuales.filter((pantallaId) => pantallaId !== pantalla.id),
+    );
+
+    if (seleccionada) {
+      setAccionesSeleccionadas((actuales) => ({
+        ...actuales,
+        [pantalla.id]: actuales[pantalla.id] ?? [],
       }));
     }
   };
 
-  const handleTogglePermisoEspecial = (pantallaId: number, permisoId: number, checked: boolean, valorNumerico?: number) => {
-    const key = `${pantallaId}-${permisoId}`;
-    setPermisosPorPantalla((prev) => ({
-      ...prev,
-      [key]: { valor: checked, valorNumerico: valorNumerico ?? prev[key]?.valorNumerico },
+  const cambiarAcciones = (pantallaId: number, acciones: string[]) => {
+    if (bloqueoAccionRef.current) return;
+    setAccionesSeleccionadas((actuales) => ({ ...actuales, [pantallaId]: acciones }));
+  };
+
+  const cambiarPermiso = (
+    pantallaId: number,
+    permisoId: number,
+    valor: PermisoValor,
+  ) => {
+    if (bloqueoAccionRef.current) return;
+    setPermisosSeleccionados((actuales) => ({
+      ...actuales,
+      [pantallaId]: {
+        ...(actuales[pantallaId] ?? {}),
+        [permisoId]: valor,
+      },
     }));
   };
 
+  const seleccionarModulo = (grupo: GrupoModulo, seleccionar: boolean) => {
+    if (bloqueoAccionRef.current) return;
+
+    const ids = grupo.pantallas.map((pantalla) => pantalla.id);
+
+    setPantallasSeleccionadas((actuales) =>
+      seleccionar
+        ? [...new Set([...actuales, ...ids])]
+        : actuales.filter((pantallaId) => !ids.includes(pantallaId)),
+    );
+
+    if (seleccionar) {
+      setAccionesSeleccionadas((actuales) => {
+        const siguientes = { ...actuales };
+        for (const pantalla of grupo.pantallas) {
+          siguientes[pantalla.id] = [...(pantalla.acciones ?? [])];
+        }
+        return siguientes;
+      });
+    }
+  };
+
+  const guardarPermisosEspeciales = async (rolId: number) => {
+    if (!securitySucursal) return;
+
+    const pantallasAProcesar = new Set([
+      ...pantallasPermisosInicialesRef.current,
+      ...Object.keys(permisosSeleccionados).map(Number),
+    ]);
+
+    await Promise.all(
+      [...pantallasAProcesar].map((pantallaId) => {
+        const permisos = permisosPorPantalla[pantallaId] ?? [];
+        const valores = permisosSeleccionados[pantallaId] ?? {};
+        const activos = permisos.flatMap((permiso) => {
+          const valor = valores[permiso.id];
+          const esNumerico = normalizarTexto(permiso.tipoValor) === 'numerico';
+          const valorNumerico = valor?.valorNumerico ?? 0;
+
+          if (esNumerico) {
+            return valorNumerico > 0
+              ? [{ permisoId: permiso.id, valor: true, valorNumerico }]
+              : [];
+          }
+
+          return valor?.valor ? [{ permisoId: permiso.id, valor: true }] : [];
+        });
+
+        return permisoEspecialApi.asignarARol(
+          securitySucursal,
+          rolId,
+          pantallaId,
+          activos,
+        );
+      }),
+    );
+
+    pantallasPermisosInicialesRef.current = new Set(pantallasAProcesar);
+  };
+
   const guardar = async () => {
-    if (guardandoRef.current) return;
-    guardandoRef.current = true;
+    if (bloqueoAccionRef.current || !securitySucursal) return;
+
+    bloqueoAccionRef.current = true;
+    setGuardando(true);
+
     try {
-      const values = await form.validateFields();
-      setGuardando(true);
-      // El backend espera PantallaDTO[] plano: { id, acciones: string[] }
-      const pantallasPayload = Object.entries(selectedPantallas)
-        .filter(([, accs]) => accs.length > 0)
-        .map(([pantallaId, accs]) => ({
-          id: parseInt(pantallaId),
-          acciones: accs,
+      const valores = await form.validateFields();
+      const pantallasRol = pantallas
+        .filter((pantalla) => pantallasSeleccionadas.includes(pantalla.id))
+        .map((pantalla) => ({
+          ...pantalla,
+          acciones: [...(accionesSeleccionadas[pantalla.id] ?? [])],
+          modulos: [...pantalla.modulos],
+          permisosEspeciales: [...(pantalla.permisosEspeciales ?? [])],
         }));
-      // Si el rol ya se creo en un intento anterior de esta sesion se conserva su id para no duplicarlo
-      const idExistente = rolData?.id || rolGuardadoRef.current;
-      const payload = {
-        id: idExistente,
-        nombre: values.nombre,
-        descripcion: values.descripcion || '',
-        activo: values.activo ?? true,
-        pantallas: pantallasPayload,
+
+      const rolPersistido = rolGuardadoRef.current;
+      const rol: RolFullDTO = {
+        id: rolPersistido?.id ?? (id ? Number(id) : 0),
+        nombre: valores.nombre.trim(),
+        descripcion: valores.descripcion?.trim() ?? '',
+        activo: valores.activo,
+        pantallas: pantallasRol,
       };
-      let rolId = idExistente;
-      if (idExistente > 0) {
-        await rolApi.actualizar(securitySucursal, payload as any);
+
+      const firmaRol = obtenerFirmaRol(rol);
+      let rolGuardado: RolFullDTO;
+
+      if (rolPersistido && firmaRolGuardadoRef.current === firmaRol) {
+        rolGuardado = rolPersistido;
       } else {
-        const creado = await rolApi.crear(securitySucursal, payload as any);
-        rolId = creado.id;
-        rolGuardadoRef.current = creado.id;
+        rolGuardado = esEdicion || rolPersistido
+          ? await rolApi.actualizar(securitySucursal, rol)
+          : await rolApi.crear(securitySucursal, rol);
+        rolGuardadoRef.current = rolGuardado;
+        firmaRolGuardadoRef.current = firmaRol;
       }
 
       try {
-        // Agrupar permisos por pantallaId
-        const permisosPorPantallaId: Record<number, { permisoId: number; valor: boolean; valorNumerico?: number }[]> = {};
-        for (const [key, val] of Object.entries(permisosPorPantalla)) {
-          const [pantallaIdStr, permisoIdStr] = key.split('-');
-          const pantallaId = parseInt(pantallaIdStr, 10);
-          const permisoId = parseInt(permisoIdStr, 10);
-          if (!val.valor && !((val.valorNumerico ?? 0) > 0)) continue;
-          if (!permisosPorPantallaId[pantallaId]) permisosPorPantallaId[pantallaId] = [];
-          const permCatalogo = catalogoPermisosEspeciales.find(p => p.id === permisoId);
-          permisosPorPantallaId[pantallaId].push({
-            permisoId,
-            valor: val.valor,
-            valorNumerico: permCatalogo?.tipoValor === 'NUMERICO' ? val.valorNumerico : undefined,
-          });
-        }
-        for (const [pantallaId, payloadPermisos] of Object.entries(permisosPorPantallaId)) {
-          if (payloadPermisos.length > 0) {
-            await permisoEspecialApi.asignarARol(securitySucursal, rolId, parseInt(pantallaId), payloadPermisos);
-          }
-        }
-      } catch (errPermisos) {
-        // El rol ya quedó guardado: se informa el fallo parcial y se permanece en la pantalla para reintentar
-        const motivo = (errPermisos as { response?: { data?: { errorMessage?: string } } })?.response?.data?.errorMessage;
+        await guardarPermisosEspeciales(rolGuardado.id);
+      } catch (error) {
         message.warning(
-          motivo
-            ? `Rol guardado, pero no se pudieron guardar los permisos especiales: ${motivo}`
-            : 'Rol guardado, pero no se pudieron guardar los permisos especiales. Presione Guardar para reintentar.'
+          `El rol fue guardado, pero no se pudieron completar sus permisos especiales: ${obtenerMensajeError(
+            error,
+            'error desconocido',
+          )}`,
         );
         return;
       }
 
-      // Si el rol se creo en esta sesion se mantiene el mensaje de alta aunque el reintento use actualizar
-      message.success(rolGuardadoRef.current > 0 ? 'Rol creado correctamente' : 'Rol actualizado correctamente');
+      message.success(esEdicion ? 'Rol actualizado correctamente.' : 'Rol creado correctamente.');
       navigationConfirmedRef.current = true;
       navigate('/MROL', { replace: true });
-    } catch (err: any) {
-      if (err?.errorFields) return;
-      message.error(err?.response?.data?.errorMessage || 'Error al guardar rol');
+    } catch (error) {
+      if ((error as { errorFields?: unknown }).errorFields) return;
+      message.error(obtenerMensajeError(error, 'No fue posible guardar el rol.'));
     } finally {
-      guardandoRef.current = false;
+      bloqueoAccionRef.current = false;
       setGuardando(false);
     }
   };
 
+  const handleCancelar = () => {
+    if (bloqueoAccionRef.current || guardando) return;
+
+    bloqueoAccionRef.current = true;
+    setConfirmandoCancelacion(true);
+    let navegando = false;
+
+    Modal.confirm({
+      title: 'Cancelar',
+      icon: <ExclamationCircleOutlined />,
+      content: '¿Está seguro que desea cancelar los cambios realizados?',
+      okText: 'Si, cancelar',
+      cancelText: 'No, continuar editando',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        navegando = true;
+        navigationConfirmedRef.current = true;
+        navigate('/MROL', { replace: true });
+      },
+      afterClose: () => {
+        if (!navegando) {
+          bloqueoAccionRef.current = false;
+          setConfirmandoCancelacion(false);
+        }
+      },
+    });
+  };
+
+  const renderPantallaItem = (pantalla: PantallaDTO) => {
+    const seleccionada = pantallasSeleccionadas.includes(pantalla.id);
+    const acciones = pantalla.acciones ?? [];
+    const accionesMarcadas = accionesSeleccionadas[pantalla.id] ?? [];
+    const permisos = permisosPorPantalla[pantalla.id] ?? [];
+
+    return {
+      key: String(pantalla.id),
+      label: (
+        <Space onClick={(evento) => evento.stopPropagation()}>
+          <Checkbox
+            checked={seleccionada}
+            disabled={interfazBloqueada}
+            onChange={(evento) => cambiarPantalla(pantalla, evento.target.checked)}
+          />
+          <Text strong>{pantalla.nombre}</Text>
+          <Text type="secondary">{pantalla.codigo}</Text>
+        </Space>
+      ),
+      children: (
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          {acciones.length > 0 && (
+            <div>
+              <Space style={{ marginBottom: 10 }}>
+                <Text strong>Acciones permitidas</Text>
+                <Button
+                  type="link"
+                  size="small"
+                  disabled={!seleccionada || interfazBloqueada}
+                  onClick={() =>
+                    cambiarAcciones(
+                      pantalla.id,
+                      accionesMarcadas.length === acciones.length ? [] : [...acciones],
+                    )
+                  }
+                >
+                  {accionesMarcadas.length === acciones.length ? 'Desmarcar todas' : 'Marcar todas'}
+                </Button>
+              </Space>
+              <Checkbox.Group
+                value={accionesMarcadas}
+                disabled={!seleccionada || interfazBloqueada}
+                onChange={(valores) => cambiarAcciones(pantalla.id, valores as string[])}
+                style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}
+              >
+                {acciones.map((accion) => (
+                  <Checkbox key={accion} value={accion}>{accion}</Checkbox>
+                ))}
+              </Checkbox.Group>
+            </div>
+          )}
+
+          {permisos.length > 0 && (
+            <div>
+              <Text strong style={{ display: 'block', marginBottom: 10 }}>Permisos especiales</Text>
+              <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                {permisos.map((permiso) => {
+                  const valor = permisosSeleccionados[pantalla.id]?.[permiso.id];
+                  const esNumerico = normalizarTexto(permiso.tipoValor) === 'numerico';
+
+                  return (
+                    <Card key={permiso.id} size="small">
+                      <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+                        <div>
+                          <Text>{permiso.nombre || permiso.codigo}</Text>
+                          {permiso.nombre && <Text type="secondary"> · {permiso.codigo}</Text>}
+                        </div>
+                        {esNumerico ? (
+                          <InputNumber
+                            min={0}
+                            value={valor?.valorNumerico ?? 0}
+                            disabled={!seleccionada || interfazBloqueada}
+                            onChange={(numero) =>
+                              cambiarPermiso(pantalla.id, permiso.id, {
+                                valor: (numero ?? 0) > 0,
+                                valorNumerico: numero ?? 0,
+                              })
+                            }
+                          />
+                        ) : (
+                          <Switch
+                            checked={valor?.valor ?? false}
+                            disabled={!seleccionada || interfazBloqueada}
+                            onChange={(activo) =>
+                              cambiarPermiso(pantalla.id, permiso.id, { valor: activo })
+                            }
+                          />
+                        )}
+                      </Space>
+                    </Card>
+                  );
+                })}
+              </Space>
+            </div>
+          )}
+
+          {acciones.length === 0 && permisos.length === 0 && (
+            <Text type="secondary">Esta pantalla no tiene acciones ni permisos especiales configurados.</Text>
+          )}
+        </Space>
+      ),
+    };
+  };
+
   if (loading) {
     return (
-      <div style={{ padding: 24 }}>
-        <Skeleton active paragraph={{ rows: 6 }} />
+      <div style={{ minHeight: 360, display: 'grid', placeItems: 'center' }}>
+        <Spin size="large" tip="Cargando rol..." />
       </div>
     );
   }
 
-  const isSmall = !screens.md;
-
   return (
-    <Spin spinning={guardando} tip="Guardando rol..." size="large">
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 140px)' }}>
-        {loadingError && (
-          <Alert
-            message="Error al cargar formulario de rol"
-            type="error"
-            showIcon
-            style={{ marginBottom: 16 }}
-            action={
-              <Button size="small" onClick={handleRefresh}>
-                Reintentar
-              </Button>
-            }
-          />
-        )}
-        {/* Toolbar */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 24,
-            flexWrap: 'wrap',
-            gap: 8,
-          }}
-        >
-          <h4 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-            {id ? 'Editar Rol' : 'Nuevo Rol'}
-          </h4>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button icon={<ArrowLeftOutlined />} disabled={guardando} onClick={() => {
-              if (guardandoRef.current || guardando) return;
-              Modal.confirm({
-                title: 'Cancelar',
-                icon: <ExclamationCircleOutlined />,
-                content: '¿Está seguro que desea cancelar los cambios realizados?',
-                okText: 'Si, cancelar',
-                cancelText: 'No, continuar editando',
-                okButtonProps: { danger: true },
-                onOk: () => {
-                  navigationConfirmedRef.current = true;
-                  navigate('/MROL', { replace: true });
-                },
-              });
-            }}>
-              Volver
-            </Button>
-            <PermissionGate accion={id ? 'EDITAR' : 'CREAR'}>
-              <Button type="primary" icon={<SaveOutlined />} loading={guardando} disabled={guardando} onClick={guardar}>
-                Guardar
-              </Button>
-            </PermissionGate>
-          </div>
+    <Space direction="vertical" size="large" style={{ width: '100%' }}>
+      <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
+        <div>
+          <Title level={2} style={{ margin: 0 }}>{esEdicion ? 'Editar rol' : 'Nuevo rol'}</Title>
+          <Text type="secondary">Define la información general y los accesos del rol.</Text>
         </div>
+        <Space>
+          <Button icon={<ArrowLeftOutlined />} disabled={interfazBloqueada} onClick={handleCancelar}>
+            Volver
+          </Button>
+          <PermissionGate accion={esEdicion ? 'EDITAR' : 'CREAR'}>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              loading={guardando}
+              disabled={Boolean(loadingError) || confirmandoCancelacion}
+              onClick={() => void guardar()}
+            >
+              Guardar
+            </Button>
+          </PermissionGate>
+        </Space>
+      </Space>
 
-        <Row gutter={[16, 16]} style={{ flex: 1 }}>
-          <Col xs={24} md={8}>
-            {/* Formulario */}
-            <Card className="paces-card" style={{ height: '100%' }}>
-              <Form form={form} layout="vertical" size={isSmall ? 'middle' : undefined} disabled={guardando}>
-                <Form.Item
-                  name="nombre"
-                  label="Nombre"
-                  rules={[{ required: true, message: 'El nombre es obligatorio' }]}
-                >
-                  <Input placeholder="Nombre del rol" />
-                </Form.Item>
-                <Form.Item name="descripcion" label="Descripción">
-                  <Input.TextArea rows={3} placeholder="Descripción del rol" />
-                </Form.Item>
-                <Form.Item name="activo" label="Estado" valuePropName="checked" initialValue={true}>
-                  <Switch checkedChildren="Activo" unCheckedChildren="Inactivo" />
-                </Form.Item>
-              </Form>
-              {id && (
-                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--paces-border)' }}>
-                  <div className="paces-text-muted" style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-                    Usuarios Asignados ({rolData?.nombresUsuarios?.length || 0})
-                  </div>
-                  {(rolData?.nombresUsuarios || []).length === 0 ? (
-                    <span className="paces-text-muted" style={{ fontSize: 13 }}>Sin usuarios</span>
-                  ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {(rolData?.nombresUsuarios || []).map((nombre, i) => (
-                        <Tag key={i} color="geekblue">{nombre}</Tag>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </Card>
-          </Col>
-          <Col xs={24} md={16} style={{ height: '100%' }}>
-            {/* Dashboard global permission */}
-            {(() => {
-              const dashboardPermisoCatalogo = catalogoPermisosEspeciales.find(p => p.codigo === 'PE_DASHBOARD_CONFIG');
-              if (!dashboardPermisoCatalogo) return null;
-              return (
-                <Card
-                  className="paces-card"
-                  title={
-                    <span style={{ fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 18 }}>◈</span>
-                      Dashboard
-                    </span>
-                  }
-                  style={{ marginBottom: 16 }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Checkbox
-                      checked={dashboardPermisoChecked}
-                      onChange={(e) => handleToggleDashboardPermiso(e.target.checked)}
-                    >
-                      <span style={{ fontSize: 13 }}>{dashboardPermisoCatalogo.nombre || 'PE_DASHBOARD_CONFIG'}</span>
-                    </Checkbox>
-                    <Tag color="purple" style={{ fontSize: 11 }}>Global</Tag>
-                  </div>
-                  <div style={{ marginTop: 8, fontSize: 12, color: 'var(--paces-text-muted)' }}>
-                    Permite configurar qué widgets del dashboard son visibles por rol.
-                  </div>
-                </Card>
-              );
-            })()}
-            {/* Permisos por Pantalla */}
-            <Card className="paces-card" title="Permisos por Pantalla" style={{ height: '100%', display: 'flex', flexDirection: 'column' }} styles={{ body: { flex: 1, overflow: 'auto', padding: 16 } }}>
-            {pantallasUnicas.length === 0 ? (
-              <Spin size="small" />
-            ) : (
-              <div style={{ padding: 4 }}>
-                <Collapse
-                  ghost
-                  defaultActiveKey={[]}
-                  items={Array.from(gruposPorModulo.entries()).map(([key, modulo]) => ({
-                    key,
-                    label: (
-                      <span
-                        style={{
-                          fontSize: 15,
-                          fontWeight: 700,
-                          color: '#556ee6',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                        }}
+      {loadingError && (
+        <Alert
+          type="error"
+          showIcon
+          message="No se pudo cargar el formulario"
+          description={loadingError}
+          action={
+            <Button icon={<ReloadOutlined />} disabled={interfazBloqueada} onClick={() => void cargarDatos()}>
+              Reintentar
+            </Button>
+          }
+        />
+      )}
+
+      <Card title="Información general">
+        <Form<RolFormValues>
+          form={form}
+          layout="vertical"
+          disabled={interfazBloqueada || Boolean(loadingError)}
+          initialValues={{ activo: true }}
+        >
+          <Form.Item
+            label="Nombre"
+            name="nombre"
+            rules={[
+              { required: true, message: 'Ingresa el nombre del rol.' },
+              { whitespace: true, message: 'El nombre no puede estar vacío.' },
+            ]}
+          >
+            <Input maxLength={100} placeholder="Ej.: Supervisor de ventas" />
+          </Form.Item>
+          <Form.Item label="Descripción" name="descripcion">
+            <Input.TextArea rows={3} maxLength={300} showCount placeholder="Describe el alcance del rol" />
+          </Form.Item>
+          <Form.Item label="Estado" name="activo" valuePropName="checked" style={{ marginBottom: 0 }}>
+            <Switch checkedChildren="Activo" unCheckedChildren="Inactivo" />
+          </Form.Item>
+        </Form>
+      </Card>
+
+      <Card
+        title="Pantallas y permisos"
+        extra={<Text type="secondary">{pantallasSeleccionadas.length} seleccionadas</Text>}
+      >
+        <Input
+          allowClear
+          prefix={<SearchOutlined />}
+          placeholder="Buscar por pantalla, código, acción o permiso"
+          value={busqueda}
+          disabled={interfazBloqueada || Boolean(loadingError)}
+          onChange={(evento) => setBusqueda(evento.target.value)}
+          style={{ marginBottom: 16 }}
+        />
+
+        {gruposModulo.length > 0 ? (
+          <Collapse
+            items={gruposModulo.map((grupo) => {
+              const seleccionadasGrupo = grupo.pantallas.filter((pantalla) =>
+                pantallasSeleccionadas.includes(pantalla.id),
+              ).length;
+
+              return {
+                key: grupo.key,
+                label: (
+                  <Space>
+                    <Text strong>{grupo.nombre}</Text>
+                    <Text type="secondary">
+                      {seleccionadasGrupo}/{grupo.pantallas.length} seleccionadas
+                    </Text>
+                  </Space>
+                ),
+                children: (
+                  <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                    <Space wrap>
+                      <Button
+                        size="small"
+                        disabled={interfazBloqueada || seleccionadasGrupo === grupo.pantallas.length}
+                        onClick={() => seleccionarModulo(grupo, true)}
                       >
-                        <span style={{ fontSize: 18 }}>◈</span>
-                        {modulo.nombre}
-                      </span>
-                    ),
-                    children: (
-                      <div style={{ paddingTop: 8 }}>
-                        {Array.from(modulo.tipos.entries()).map(([tipo, pantallas]) => (
-                          <div key={tipo} style={{ marginBottom: 16 }}>
-                            {tipo !== 'General' && (
-                              <div
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  textTransform: 'uppercase',
-                                  letterSpacing: 0.5,
-                                  color: '#8c8c8c',
-                                  marginBottom: 8,
-                                  paddingLeft: 4,
-                                }}
-                              >
-                                {tipo}
-                              </div>
-                            )}
-                            {pantallas.map((pp) => {
-                              const pantallaId = pp.id;
-                              const selected = selectedPantallas[pantallaId] || [];
-                              const todas = pp.acciones;
-                              const todasSeleccionadas =
-                                todas.length > 0 && todas.every((a) => selected.includes(a));
-                              const algunaSeleccionada = selected.length > 0;
-                              return (
-                                <div
-                                  key={`p-${pantallaId}`}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'flex-start',
-                                    padding: '6px 8px',
-                                    borderRadius: 6,
-                                    marginBottom: 4,
-                                    background: algunaSeleccionada ? 'var(--paces-selected-bg)' : 'var(--paces-topbar-search-bg)',
-                                    border: algunaSeleccionada
-                                      ? '1px solid var(--paces-primary)'
-                                      : '1px solid transparent',
-                                    flexWrap: 'wrap',
-                                    gap: 4,
-                                  }}
-                                >
-                                  <Checkbox
-                                    checked={todasSeleccionadas}
-                                    indeterminate={algunaSeleccionada && !todasSeleccionadas}
-                                    onChange={(e) =>
-                                      handleTogglePantalla(pantallaId, e.target.checked, todas)
-                                    }
-                                    style={{
-                                      minWidth: 150,
-                                      fontWeight: 500,
-                                      fontSize: 13,
-                                      flexShrink: 0,
-                                    }}
-                                  >
-                                    {pp.nombre}
-                                  </Checkbox>
-                                  <div
-                                    style={{
-                                      display: 'flex',
-                                      flexWrap: 'wrap',
-                                      gap: 3,
-                                      alignItems: 'center',
-                                    }}
-                                  >
-                                    {pp.acciones.map((acc) => (
-                                      <div
-                                        key={`${pantallaId}-${acc}`}
-                                        style={{
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          padding: '1px 2px',
-                                          borderRadius: 4,
-                                          background: selected.includes(acc)
-                                            ? 'var(--paces-hover-bg)'
-                                            : 'transparent',
-                                          border: selected.includes(acc)
-                                            ? '1px solid var(--paces-primary)'
-                                            : '1px solid var(--paces-border)',
-                                        }}
-                                      >
-                                        <Checkbox
-                                          checked={selected.includes(acc)}
-                                          onChange={(e) =>
-                                            handleToggleAccion(pantallaId, acc, e.target.checked)
-                                          }
-                                          style={{ fontSize: 12, marginRight: 0 }}
-                                        >
-                                          <span style={{ fontSize: 12 }}>{acc}</span>
-                                        </Checkbox>
-                                      </div>
-                                     ))}
-                                  </div>
-                                  {/* Permisos especiales de la pantalla */}
-                                  {pp.permisosEspeciales && pp.permisosEspeciales.length > 0 && (
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4, marginLeft: 24, width: '100%' }}>
-                                      {pp.permisosEspeciales.map((peCodigo) => {
-                                        const permisoCatalogo = catalogoPermisosEspeciales.find(p => p.codigo === peCodigo);
-                                        if (!permisoCatalogo) return null;
-                                        const key = `${pantallaId}-${permisoCatalogo.id}`;
-                                        // Buscar valor especifico de esta pantalla, o global (pantallaId=0) como fallback
-                                        const valorActual = permisosPorPantalla[key] ?? permisosPorPantalla[`0-${permisoCatalogo.id}`] ?? { valor: false };
-                                        const esNumerico = permisoCatalogo.tipoValor === 'NUMERICO';
-                                        const checked = valorActual.valor;
-                                        return (
-                                          <div key={peCodigo}
-                                            style={{
-                                              display: 'inline-flex', alignItems: 'center', padding: '1px 2px',
-                                              borderRadius: 4, fontSize: 11,
-                                              background: checked ? 'var(--paces-selected-bg)' : 'transparent',
-                                              border: checked ? '1px solid var(--paces-primary)' : '1px solid var(--paces-border)',
-                                              gap: 4,
-                                            }}
-                                          >
-                                            {esNumerico ? (
-                                              <>
-                                                <span style={{ fontSize: 11, marginRight: 2 }}>{permisoCatalogo.nombre || peCodigo}:</span>
-                                                <InputNumber
-                                                  min={0}
-                                                  step={0.01}
-                                                  size="small"
-                                                  style={{ width: 90 }}
-                                                  value={valorActual.valorNumerico}
-                                                  onChange={(val) => {
-                                                    handleTogglePermisoEspecial(pantallaId, permisoCatalogo.id, true, val ?? 0);
-                                                  }}
-                                                  placeholder="Tope"
-                                                />
-                                              </>
-                                            ) : (
-                                              <Checkbox
-                                                checked={checked}
-                                                onChange={(e) => {
-                                                  handleTogglePermisoEspecial(pantallaId, permisoCatalogo.id, e.target.checked);
-                                                }}
-                                                style={{ fontSize: 11, marginRight: 0 }}
-                                              >
-                                                <span style={{ fontSize: 11 }}>{permisoCatalogo.nombre || peCodigo}</span>
-                                              </Checkbox>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </div>
-                    ),
-                  }))}
-                />
-              </div>
-            )}
-            {/* Permisos especiales ahora se muestran dentro de cada pantalla */}
-          </Card>
-        </Col>
-      </Row>
-      </div>
-    </Spin>
+                        Seleccionar todo
+                      </Button>
+                      <Button
+                        size="small"
+                        disabled={interfazBloqueada || seleccionadasGrupo === 0}
+                        onClick={() => seleccionarModulo(grupo, false)}
+                      >
+                        Limpiar
+                      </Button>
+                    </Space>
+                    <Collapse items={grupo.pantallas.map(renderPantallaItem)} />
+                  </Space>
+                ),
+              };
+            })}
+          />
+        ) : (
+          <Empty description={busqueda ? 'No hay coincidencias para la búsqueda.' : 'No hay pantallas disponibles.'} />
+        )}
+      </Card>
+    </Space>
   );
 };
 

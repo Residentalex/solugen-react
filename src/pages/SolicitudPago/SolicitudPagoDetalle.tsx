@@ -9,6 +9,7 @@ import {
   EyeOutlined,
   PrinterOutlined,
   HistoryOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
@@ -374,7 +375,7 @@ const SolicitudPagoDetalle: React.FC = () => {
             setImprimiendo(false);
           }
         }}
-        extraButtons={id ? (
+extraButtons={id ? (
           <>
             {toEstadoNum(data?.estado) === 3 && reversoData && (
               <Switch
@@ -385,7 +386,7 @@ const SolicitudPagoDetalle: React.FC = () => {
                 style={{ marginLeft: 8 }}
               />
             )}
-            {toEstadoNum(data?.estado) === 2 && (data as any)?.tipoPagoCodigo && (
+            { (toEstadoNum(data?.estado) === 1 || toEstadoNum(data?.estado) === 3) && (data as any)?.tipoPagoCodigo && (
               <>
                 <Divider type="vertical" />
                 {pagoGeneradoDoc ? (
@@ -474,6 +475,7 @@ const SolicitudPagoDetalle: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
+                  icon: <FileTextOutlined />,
                   label: `Documentos Asociados (${(data as any)?.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <TransaccionesAsociadasCard
@@ -573,6 +575,7 @@ const SolicitudPagoDetalle: React.FC = () => {
             items={[
               {
                 key: 'detalles',
+                icon: <FileTextOutlined />,
                 label: `Documentos Asociados (${(data as any)?.transaccionesAsociadas?.length || 0})`,
                 children: (
                   <TransaccionesAsociadasCard

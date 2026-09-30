@@ -6,6 +6,7 @@ import {
   Switch, Empty,
 } from 'antd';
 import {
+  InboxOutlined,
   SaveOutlined,
   CloseOutlined,
   DeleteOutlined,
@@ -15,6 +16,7 @@ import {
   ExclamationCircleOutlined,
   EditOutlined,
   HistoryOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -189,14 +191,16 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       }
 
       // Normalizar impuestos: estructura anidada → plana para la UI
-      setImpuestosRetenciones((enc.impuestosFactura || []).map((imp: any) => ({
+      const impuestosNormalizados = (enc.impuestosFactura || []).map((imp: any) => ({
         codigo: imp.impuesto?.codigo,
         idExterno: imp.impuesto?.idExterno,
         nombre: imp.impuesto?.nombre,
         porcentaje: imp.impuesto?.porcentaje,
         tipo: imp.tipo,
         monto: imp.monto,
-      })));
+      }));
+      // Forzar reactividad en el estado, asegurando que los cambios se procesen
+      setImpuestosRetenciones(impuestosNormalizados);
 
       setAsientos(enc.asientos || []);
       setNcfModificadoVal(enc.ncfModificado || '');
@@ -273,6 +277,21 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     },
   });
 
+  // ===== Sincronizar impuestos cuando la sección carga en paralelo =====
+  useEffect(() => {
+    if (data?.impuestosFactura?.length) {
+      const impuestosNormalizados = data.impuestosFactura.map((imp: any) => ({
+        codigo: imp.impuesto?.codigo,
+        idExterno: imp.impuesto?.idExterno,
+        nombre: imp.impuesto?.nombre,
+        porcentaje: imp.impuesto?.porcentaje,
+        tipo: imp.tipo,
+        monto: imp.monto,
+      }));
+      setImpuestosRetenciones(impuestosNormalizados);
+    }
+  }, [data?.impuestosFactura]);
+
   // ===== States =====
   const [saving, setSaving] = useState(false);
   const [entidadesCache, setEntidadesCache] = useState<EntidadDTO[]>([]);
@@ -319,6 +338,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const [fechaCierreContable, setFechaCierreContable] = useState<string | null>(null);
   const [sucursalesCache, setSucursalesCache] = useState<any[]>([]);
   const [selectedSucursal, setSelectedSucursal] = useState<any>(null);
+  const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
   // Refs para la guía
   const conceptoRef = useRef<HTMLDivElement>(null);
   const sucursalRef = useRef<HTMLDivElement>(null);
@@ -983,6 +1003,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const handleGenerarAsientos = async () => {
     if (sucursalActiva === undefined) return;
     setSaving(true);
+    setErrorGeneracion(null);
     try {
       const dto = construirDTO();
       const asientosGenerados = await notaDebitoApi.generarAsientos(sucursalActiva, dto);
@@ -990,6 +1011,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
+      setErrorGeneracion(msg);
       message.error(msg);
     } finally {
       setSaving(false);
@@ -1500,6 +1522,7 @@ render: (v: number) => formatNumber(v ?? 0),
   const tabItems = [
     {
       key: 'documentos',
+      icon: <FileTextOutlined />,
       label: `Documentos (${documentosRelacionados.length})`,
       children: (
         <div ref={documentosRef}>
@@ -1522,7 +1545,7 @@ render: (v: number) => formatNumber(v ?? 0),
     // Tab 2: Artículos (solo CLI)
     ...(tipoEntidad === 'CLI' ? [{
       key: 'articulos',
-      label: `Artículos (${detallesMovimiento.length})`,
+      icon: <InboxOutlined />, label: `Productos/Servicios (${detallesMovimiento.length})`,
       children: (
         <div>
           <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-start' }}>
@@ -1574,6 +1597,7 @@ render: (v: number) => formatNumber(v ?? 0),
     }] : []),
     {
       key: 'impuestos',
+      icon: <FileTextOutlined />,
       label: `Impuestos y Retenciones (${impuestosRetenciones.length})`,
       children: (
         <>
@@ -1613,28 +1637,43 @@ render: (v: number) => formatNumber(v ?? 0),
     },
     {
       key: 'asientos',
-      label: `Asientos (${asientos.length})`,
-      children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
+label: `Asientos (${asientos.length})`,
+      children: (
         <>
-          <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
-            <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)}>
-              Agregar asiento manual
-            </Button>
-          </div>
-          <AsientosContableEditables
-            asientos={asientos}
-            onChange={setAsientos}
-            editable={true}
-            onGenerar={handleGenerarAsientos}
-            generando={saving}
-          />
+          {errorGeneracion && (
+            <Alert
+              type="error"
+              showIcon
+              closable
+              onClose={() => setErrorGeneracion(null)}
+              style={{ marginBottom: 8 }}
+              message="Error al generar asientos"
+              description={errorGeneracion}
+            />
+          )}
+          {(permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
+            <>
+              <div style={{ marginBottom: 8, display: 'flex', gap: 8 }}>
+                <Button icon={<PlusOutlined />} onClick={() => setCuentaModalAsientoOpen(true)}>
+                  Agregar asiento manual
+                </Button>
+              </div>
+              <AsientosContableEditables
+                asientos={asientos}
+                onChange={setAsientos}
+                editable={true}
+                onGenerar={handleGenerarAsientos}
+                generando={saving}
+              />
+            </>
+          ) : (
+            <AsientosContableTable
+              asientos={asientos}
+              scroll={{ x: 600 }}
+              rowKey={(r: any) => r.id || r.asientoID}
+            />
+          )}
         </>
-      ) : (
-        <AsientosContableTable
-          asientos={asientos}
-          scroll={{ x: 600 }}
-          rowKey={(r: any) => r.id || r.asientoID}
-        />
       ),
     },
     {

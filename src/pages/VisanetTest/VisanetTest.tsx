@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Button, Input, InputNumber, Select, Modal, Tag, Typography, Space, Row, Col, Alert, Table, Drawer, Tabs, message, DatePicker } from 'antd';
+import { Card, Button, Input, InputNumber, Select, Modal, Tag, Typography, Space, Row, Col, Alert, Table, Drawer, Tabs, message, DatePicker, theme, Tooltip } from 'antd';
 import { ArrowLeftOutlined, CopyOutlined, PrinterOutlined, CreditCardOutlined, StopOutlined, FolderOpenOutlined, FileExcelOutlined, ReloadOutlined, CodeOutlined, HeartOutlined, IdcardOutlined, ReadOutlined, EyeOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
@@ -124,6 +124,19 @@ const conFechaTransaccion = (res: VisanetResponseDTO): VisanetResponseDTO => {
  */
 const esAnulado = (valor?: string): boolean => valor === 'T' || valor === 'S';
 
+/**
+ * Extrae la fecha (yyyy-MM-dd) del prefijo del NOSEC (VN{yyMMdd}-...).
+ * La tabla VOUCHERS no tiene una columna de fecha utilizable: TRANSACTION_DATE
+ * llega vacia desde el ECR, y la hora solo existe en CTRANSAC (endpoint vouchers-cierre).
+ * Para los vouchers del dia la unica fuente es el prefijo del NOSEC.
+ */
+const FECHA_EN_NOSEC = /^VN(\d{2})(\d{2})(\d{2})-/;
+
+const fechaIsoDeNoSec = (noSec?: string): string | undefined => {
+  const match = FECHA_EN_NOSEC.exec(noSec || '');
+  return match ? `20${match[1]}-${match[2]}-${match[3]}` : undefined;
+};
+
 /** Tipo de operación que determina la plantilla y el label del voucher. */
 type TipoOpVoucher = 'venta' | 'subsidio' | 'anulacion' | 'cierre';
 
@@ -172,6 +185,13 @@ const VisanetTest: React.FC = () => {
   const [resultado, setResultado] = useState<VisanetResponseDTO | string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Bloqueo global de operacion: solo una accion incompatible puede ejecutarse a
+  // la vez. El ref evita que un doble clic dispare dos veces la misma peticion en
+  // el mismo tick; el estado bloquea la UI mientras dura la operacion.
+  const operacionRef = useRef<string | null>(null);
+  const [operacionEnProceso, setOperacionEnProceso] = useState(false);
+  const [operacionActual, setOperacionActual] = useState<string | null>(null);
+
   // Última venta ejecutada (se conserva para imprimir el voucher)
   const [montoPesos, setMontoPesos] = useState<number | null>(null);
   const [tokenECR, setTokenECR] = useState<string>('');
@@ -215,6 +235,7 @@ const VisanetTest: React.FC = () => {
   const [vouchersLoading, setVouchersLoading] = useState(false);
   const [generandoCierre, setGenerandoCierre] = useState(false);
   const [fechaFiltro, setFechaFiltro] = useState<dayjs.Dayjs | null>(dayjs());
+  const cargarVouchersRef = useRef<string | null>(null);
 
   // Cierre con rango (GET /visanet/{sucursal}/vouchers-cierre): JSON + impresión térmica
   const [cierreVouchers, setCierreVouchers] = useState<VisanetCierreDTO[] | null>(null);
@@ -232,6 +253,34 @@ const VisanetTest: React.FC = () => {
   const [simMoneda, setSimMoneda] = useState('RD$');
   const [tipoOperacion, setTipoOperacion] = useState<'venta' | 'subsidio'>('venta');
 
+  // Tokens del tema: sustituyen fondosclaros hardcodeados para no romper el modo oscuro.
+  const { token } = theme.useToken();
+
+  /** Devuelve true si ya hay una operacion en proceso y avisa al usuario. */
+  const bloquearSiOcupado = (): boolean => {
+    if (!operacionRef.current) return false;
+    message.warning(`Espera a que termine la operacion en proceso: ${operacionRef.current}.`);
+    return true;
+  };
+
+  /** Toma el candado global e inicializa el estado de carga de la accion. */
+  const iniciarOperacion = (clave: string, etiqueta: string): boolean => {
+    if (bloquearSiOcupado()) return false;
+    operacionRef.current = etiqueta;
+    setOperacionEnProceso(true);
+    setOperacionActual(etiqueta);
+    setLoading(clave);
+    return true;
+  };
+
+  /** Libera el candado global y limpia el estado de carga. */
+  const finalizarOperacion = () => {
+    operacionRef.current = null;
+    setOperacionEnProceso(false);
+    setOperacionActual(null);
+    setLoading(null);
+  };
+
   // Obtener datos de empresa al iniciar
   useEffect(() => {
     getCompanyName(sucursalActiva).then(setCompanyName);
@@ -242,15 +291,25 @@ const VisanetTest: React.FC = () => {
 
   // Carga los vouchers del día (GET /visanet/{sucursal}/vouchers-dia?fecha=yyyy-MM-dd)
   const cargarVouchersDelDia = useCallback(async (fecha?: dayjs.Dayjs) => {
+    const clave = fecha?.format('YYYY-MM-DD') || 'hoy';
+    // Evita solicitudes superpuestas para la misma fecha
+    if (cargarVouchersRef.current === clave) return;
+    cargarVouchersRef.current = clave;
     setVouchersLoading(true);
     try {
       const fechaParam = fecha ? fecha.format('YYYY-MM-DD') : undefined;
       const data = await visanetApi.obtenerVouchersDelDia(sucursalActiva, fechaParam);
-      setVouchers(data || []);
+      // Solo actualizar si esta sigue siendo la última solicitud
+      if (cargarVouchersRef.current === clave) {
+        setVouchers(data || []);
+      }
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar los vouchers');
     } finally {
-      setVouchersLoading(false);
+      if (cargarVouchersRef.current === clave) {
+        setVouchersLoading(false);
+      }
+      cargarVouchersRef.current = null;
     }
   }, [sucursalActiva]);
 
@@ -260,15 +319,15 @@ const VisanetTest: React.FC = () => {
   }, [cargarVouchersDelDia]);
 
   // Handlers
-  const ejecutarVenta = async (montoPesosParam: number, tokenECRParam?: string) => {
-    setLoading('vender');
+  const ejecutarVenta = async (montoPesosParam: number, tokenECRParam?: string): Promise<boolean> => {
+    if (!montoPesosParam || montoPesosParam <= 0) {
+      setError('Ingresa un monto válido mayor a 0');
+      return false;
+    }
+    if (!iniciarOperacion('vender', 'la venta')) return false;
     setError(null);
     setResultado(null);
     try {
-      if (!montoPesosParam || montoPesosParam <= 0) {
-        setError('Ingresa un monto válido mayor a 0');
-        return;
-      }
       const res = conFechaTransaccion(await visanetApi.vender(sucursalActiva, 0, montoPesosParam, tokenECRParam || undefined));
       setResultado(res);
       setTipoOperacion('venta');
@@ -279,10 +338,12 @@ const VisanetTest: React.FC = () => {
       if (res?.exitoso) {
         imprimirVoucherConDatos('venta', res, montoPesosParam);
       }
+      return !!res?.exitoso;
     } catch (err: any) {
       setError(err?.response?.data?.errorMessage || err.message || 'Error al vender');
+      return false;
     } finally {
-      setLoading(null);
+      finalizarOperacion();
     }
   };
 
@@ -304,6 +365,7 @@ const VisanetTest: React.FC = () => {
       return;
     }
 
+    if (!iniciarOperacion('cierrePrueba', 'el comprobante de cierre')) return;
     setGenerandoCierre(true);
 
     try {
@@ -403,6 +465,7 @@ const VisanetTest: React.FC = () => {
       message.error('No fue posible generar el comprobante.');
     } finally {
       setGenerandoCierre(false);
+      finalizarOperacion();
     }
   };
 
@@ -427,6 +490,7 @@ const VisanetTest: React.FC = () => {
   };
 
   const handleGuardarCierrePruebaPdf = async () => {
+    if (!iniciarOperacion('exportar', 'la exportacion del cierre')) return;
     setExportandoCierrePrueba(true);
     try {
       const lienzo = await capturarCierrePrueba();
@@ -458,10 +522,12 @@ const VisanetTest: React.FC = () => {
       message.error('No fue posible generar el PDF del cierre.');
     } finally {
       setExportandoCierrePrueba(false);
+      finalizarOperacion();
     }
   };
 
   const handleDescargarCierrePruebaPng = async () => {
+    if (!iniciarOperacion('exportar', 'la exportacion del cierre')) return;
     setExportandoCierrePrueba(true);
     try {
       const lienzo = await capturarCierrePrueba();
@@ -481,6 +547,7 @@ const VisanetTest: React.FC = () => {
       message.error('No fue posible descargar la imagen del cierre.');
     } finally {
       setExportandoCierrePrueba(false);
+      finalizarOperacion();
     }
   };
 
@@ -489,19 +556,22 @@ const VisanetTest: React.FC = () => {
       message.warning('Ingresa un monto válido mayor a 0');
       return;
     }
-    setVenderModalOpen(false);
-    await ejecutarVenta(venderMonto, venderTokenECR || undefined);
+    // El modal permanece abierto durante el procesamiento: se cierra solo si la venta fue exitosa.
+    const exitoso = await ejecutarVenta(venderMonto, venderTokenECR || undefined);
+    if (exitoso) {
+      setVenderModalOpen(false);
+    }
   };
 
-  const ejecutarVentaSubsidio = async (subsidyIdParam: string, montoPesosParam: number) => {
-    setLoading('subsidio');
+  const ejecutarVentaSubsidio = async (subsidyIdParam: string, montoPesosParam: number): Promise<boolean> => {
+    if (!montoPesosParam || montoPesosParam <= 0) {
+      setError('Ingresa un monto válido mayor a 0');
+      return false;
+    }
+    if (!iniciarOperacion('subsidio', 'la venta de subsidio')) return false;
     setError(null);
     setResultado(null);
     try {
-      if (!montoPesosParam || montoPesosParam <= 0) {
-        setError('Ingresa un monto válido mayor a 0');
-        return;
-      }
       const res = conFechaTransaccion(await visanetApi.venderSubsidio(sucursalActiva, 0, montoPesosParam, subsidyIdParam));
       setResultado(res);
       setTipoOperacion('subsidio');
@@ -510,10 +580,12 @@ const VisanetTest: React.FC = () => {
       if (res?.exitoso) {
         imprimirVoucherConDatos('subsidio', res, montoPesosParam, subsidyIdParam);
       }
+      return !!res?.exitoso;
     } catch (err: any) {
       setError(err?.response?.data?.errorMessage || err.message || 'Error al vender con subsidio');
+      return false;
     } finally {
-      setLoading(null);
+      finalizarOperacion();
     }
   };
 
@@ -521,8 +593,8 @@ const VisanetTest: React.FC = () => {
     await ejecutarVentaSubsidio(subsidyId, subsidioMontoPesos ?? 0);
   };
 
-  const ejecutarAnulacion = async (tokenIdParam: string) => {
-    setLoading('anular');
+  const ejecutarAnulacion = async (tokenIdParam: string): Promise<boolean> => {
+    if (!iniciarOperacion('anular', 'la anulacion')) return false;
     setError(null);
     setResultado(null);
     try {
@@ -534,10 +606,12 @@ const VisanetTest: React.FC = () => {
         // Imprime el voucher de anulación con su plantilla (VSNT_ANULACION)
         await imprimirVoucherConDatos('anulacion', conFechaTransaccion(res), Number(res.totalAmount) || 0);
       }
+      return !!res?.exitoso;
     } catch (err: any) {
       setError(err?.response?.data?.errorMessage || err.message || 'Error al anular');
+      return false;
     } finally {
-      setLoading(null);
+      finalizarOperacion();
     }
   };
 
@@ -547,13 +621,17 @@ const VisanetTest: React.FC = () => {
       message.warning('Ingresa el TokenId a anular');
       return;
     }
-    setAnularModalOpen(false);
-    await ejecutarAnulacion(token);
+    // El modal permanece abierto durante el procesamiento: se cierra solo si la anulacion fue exitosa.
+    const exitoso = await ejecutarAnulacion(token);
+    if (exitoso) {
+      setAnularModalOpen(false);
+      setAnularTokenId('');
+    }
   };
 
   const confirmarCerrarLoteModal = async () => {
-    setCerrarLoteModalOpen(false);
-    setLoading('cerrar');
+    // El modal permanece abierto durante el procesamiento: se cierra solo si el cierre fue exitoso.
+    if (!iniciarOperacion('cerrar', 'el cierre de lote')) return;
     setError(null);
     setResultado(null);
     try {
@@ -563,10 +641,11 @@ const VisanetTest: React.FC = () => {
       await cargarVouchersDelDia(dayjs());
       // Imprime el comprobante de cierre de lote con su plantilla (VSNT_CIERRE)
       await imprimirVoucherConDatos('cierre', parseCierre(res), 0);
+      setCerrarLoteModalOpen(false);
     } catch (err: any) {
       setError(err?.response?.data?.errorMessage || err.message || 'Error al cerrar lote');
     } finally {
-      setLoading(null);
+      finalizarOperacion();
     }
   };
 
@@ -670,6 +749,8 @@ const VisanetTest: React.FC = () => {
     } catch (err: any) {
       const msg = err?.response?.data?.errorMessage || err?.response?.data?.ErrorMessage || 'Error al imprimir el voucher';
       message.error(msg);
+    } finally {
+      finalizarOperacion();
     }
   };
 
@@ -696,6 +777,8 @@ const VisanetTest: React.FC = () => {
       setEscposModalOpen(true);
     } catch (err: any) {
       message.error(err?.message || 'Error al generar la vista ESC/POS');
+    } finally {
+      finalizarOperacion();
     }
   };
 
@@ -718,6 +801,7 @@ const VisanetTest: React.FC = () => {
   const handlePrint = async () => {
     const ctx = resolverContextoResultado();
     if (!ctx) return;
+    if (!iniciarOperacion('imprimir', 'la impresion')) return;
     await imprimirVoucherConDatos(ctx.tipoOp, ctx.res, ctx.monto, subsidyId);
   };
 
@@ -725,6 +809,7 @@ const VisanetTest: React.FC = () => {
   const handleVisualizar = async () => {
     const ctx = resolverContextoResultado();
     if (!ctx) return;
+    if (!iniciarOperacion('visualizar', 'la visualizacion del voucher')) return;
     await visualizarVoucher(ctx.tipoOp, ctx.res, ctx.monto, subsidyId);
   };
 
@@ -761,8 +846,8 @@ const VisanetTest: React.FC = () => {
     // (VN{yyMMdd}-...) porque la tabla VOUCHERS no tiene columna de fecha.
     // Se envía con T12:00:00 (mediodía local) para que new Date() no la
     // interprete como medianoche UTC y muestre el día anterior en UTC-4.
-    const matchFecha = /^VN(\d{2})(\d{2})(\d{2})-/.exec(record.noSec || '');
-    const transactionDate = matchFecha ? `20${matchFecha[1]}-${matchFecha[2]}-${matchFecha[3]}T12:00:00` : undefined;
+    const fechaIso = fechaIsoDeNoSec(record.noSec);
+    const transactionDate = fechaIso ? `${fechaIso}T12:00:00` : undefined;
     const res: VisanetResponseDTO = {
       // La operación fue aprobada (el voucher está en el listado; si está
       // anulado es porque la anulación también lo fue).
@@ -792,12 +877,14 @@ const VisanetTest: React.FC = () => {
   // Reimprimir voucher desde la tabla de registros del día
   const handleReimprimir = async (record: VisanetVoucherDTO) => {
     const { res, monto } = reconstruirRespuestaDeRecord(record);
+    if (!iniciarOperacion('reimprimir', 'la reimpresion')) return;
     await imprimirVoucherConDatos(tipoOpDeRecord(record), res, monto);
   };
 
   // Visualizar el voucher de un registro del día sin imprimirlo
   const handleVisualizarReimpresion = async (record: VisanetVoucherDTO) => {
     const { res, monto } = reconstruirRespuestaDeRecord(record);
+    if (!iniciarOperacion('visualizarReimpresion', 'la visualizacion')) return;
     await visualizarVoucher(tipoOpDeRecord(record), res, monto);
   };
 
@@ -846,6 +933,7 @@ const VisanetTest: React.FC = () => {
             size="small"
             icon={<EyeOutlined />}
             title={esAnulado(record.anulado) ? 'Visualizar anulación (ESC/POS)' : 'Visualizar ESC/POS'}
+            disabled={operacionEnProceso}
             onClick={() => handleVisualizarReimpresion(record)}
           />
           <Button
@@ -853,6 +941,7 @@ const VisanetTest: React.FC = () => {
             size="small"
             icon={<PrinterOutlined />}
             title={esAnulado(record.anulado) ? 'Reimprimir comprobante de anulación' : 'Reimprimir voucher'}
+            disabled={operacionEnProceso}
             onClick={() => handleReimprimir(record)}
           />
         </Space>
@@ -865,6 +954,7 @@ const VisanetTest: React.FC = () => {
       message.info('No hay vouchers para la fecha seleccionada.');
       return;
     }
+    if (bloquearSiOcupado()) return;
 
     const ventana = window.open('', '_blank');
     if (!ventana) {
@@ -872,6 +962,10 @@ const VisanetTest: React.FC = () => {
       return;
     }
 
+    if (!iniciarOperacion('verCierre', 'el cierre del dia')) {
+      ventana.close();
+      return;
+    }
     setGenerandoCierre(true);
     try {
       const suc = companyStore.data.sucursales.find((s: any) => s.sucursal === sucursalActiva);
@@ -927,14 +1021,12 @@ const VisanetTest: React.FC = () => {
           const tarjeta = voucher.notarjeta?.trim() || 'SIN TARJETA';
           const marca = voucher.nombtar?.trim() || voucher.tipoTC?.trim() || '';
           const aprobacion = voucher.noAprob?.trim();
-          const fechaMovimiento = voucher.fecha && dayjs(voucher.fecha).isValid()
-            ? dayjs(voucher.fecha).format('DD/MM/YY')
-            : voucher.fecha?.trim();
-          const horaMovimiento = voucher.hora?.trim();
+          // La fecha se deriva del prefijo del NOSEC; la hora no existe para los
+          // vouchers del dia (solo existe en CTRANSAC, endpoint vouchers-cierre).
+          const fechaMovimiento = fechaIsoDeNoSec(voucher.noSec);
           const detalles = [
             aprobacion ? escaparHtml(aprobacion) : '',
-            fechaMovimiento ? `FECHA: ${escaparHtml(fechaMovimiento)}` : '',
-            horaMovimiento ? `HORA: ${escaparHtml(horaMovimiento)}` : '',
+            fechaMovimiento ? `FECHA: ${escaparHtml(dayjs(fechaMovimiento).format('DD/MM/YY'))}` : '',
           ].filter(Boolean).join('   ');
 
           return `<div class="movimiento ${esAnulacion ? 'anulacion' : ''}">
@@ -1025,34 +1117,48 @@ const VisanetTest: React.FC = () => {
       message.error('No se pudo generar la vista del cierre.');
     } finally {
       setGenerandoCierre(false);
+      finalizarOperacion();
     }
   };
 
   const handleExportarExcelVouchers = async () => {
-    const companyName = await getCompanyName(sucursalActiva);
-    const cols = columnasVouchers.filter((c) => c.key !== 'acciones');
-    exportToExcel({
-      fileName: `VisanetVouchers_${fechaFiltro?.format('YYYYMMDD') || dayjs().format('YYYYMMDD')}`,
-      sheetName: 'VisanetVouchers',
-      companyName,
-      columnHeaders: cols.map((c) => c.title as string),
-      dataRows: vouchers.map((item: any) =>
-        cols.map((col) => {
-          if (col.key === 'estado') {
-            return item.anulado === 'T' || item.anulado === 'S' ? 'ANULADO' : 'APROBADO';
-          }
-          if (col.key === 'monto') {
-            return item.monto != null ? item.monto.toFixed(2) : '';
-          }
-          const val = item[col.dataIndex as string];
-          return val !== null && val !== undefined ? String(val) : '';
-        })
-      ),
-    });
+    if (!iniciarOperacion('exportar', 'la exportacion')) return;
+    try {
+      const companyName = await getCompanyName(sucursalActiva);
+      const cols = columnasVouchers.filter((c) => c.key !== 'acciones');
+      exportToExcel({
+        fileName: `VisanetVouchers_${fechaFiltro?.format('YYYYMMDD') || dayjs().format('YYYYMMDD')}`,
+        sheetName: 'VisanetVouchers',
+        companyName,
+        columnHeaders: cols.map((c) => c.title as string),
+        dataRows: vouchers.map((item) =>
+          cols.map((col) => {
+            if (col.key === 'estado') {
+              return esAnulado(item.anulado) ? 'ANULADO' : 'APROBADO';
+            }
+            if (col.key === 'monto') {
+              return item.monto != null ? item.monto.toFixed(2) : '';
+            }
+            // ColumnsType es ColumnGroupType | ColumnType y ColumnGroupType omite
+            // dataIndex: hay que comprobar que la columna lo tenga antes de leerlo.
+            if (!('dataIndex' in col)) return '';
+            // Además dataIndex admite number y rutas anidadas (array): solo se indexa
+            // el registro cuando la columna apunta a una propiedad simple.
+            const campo = Array.isArray(col.dataIndex) ? col.dataIndex[0] : col.dataIndex;
+            if (typeof campo !== 'string') return '';
+            const val = item[campo as keyof VisanetVoucherDTO];
+            return val !== null && val !== undefined ? String(val) : '';
+          })
+        ),
+      });
+    } finally {
+      finalizarOperacion();
+    }
   };
 
   // Obtiene el JSON del cierre para la fecha seleccionada (GET vouchers-cierre) y abre el Drawer.
   const handleObtenerCierre = async () => {
+    if (!iniciarOperacion('obtenerCierre', 'la consulta del cierre')) return;
     setObteniendoCierre(true);
     try {
       const fecha = (fechaFiltro ?? dayjs()).format('YYYYMMDD');
@@ -1063,6 +1169,7 @@ const VisanetTest: React.FC = () => {
       message.error(err?.response?.data?.errorMessage || 'Error al obtener el cierre');
     } finally {
       setObteniendoCierre(false);
+      finalizarOperacion();
     }
   };
 
@@ -1111,6 +1218,7 @@ const VisanetTest: React.FC = () => {
       message.warning('No hay vouchers para imprimir.');
       return;
     }
+    if (!iniciarOperacion('imprimirCierre', 'la impresion del cierre')) return;
     setImprimiendoCierre(true);
     try {
       await imprimirVoucherConDatos('cierre', mapearCierreParaPlantilla(cierreVouchers), 0, undefined);
@@ -1118,6 +1226,7 @@ const VisanetTest: React.FC = () => {
       message.error('No fue posible imprimir el cierre.');
     } finally {
       setImprimiendoCierre(false);
+      finalizarOperacion();
     }
   };
 
@@ -1142,6 +1251,7 @@ const VisanetTest: React.FC = () => {
           icon={<CreditCardOutlined />}
           style={{ height: 40 }}
           loading={loading === 'vender'}
+          disabled={operacionEnProceso}
           onClick={() => {
             setVenderMonto(null);
             setVenderTokenECR('');
@@ -1155,6 +1265,7 @@ const VisanetTest: React.FC = () => {
           icon={<StopOutlined />}
           style={{ height: 40 }}
           loading={loading === 'anular'}
+          disabled={operacionEnProceso}
           onClick={() => {
             setAnularTokenId('');
             setAnularModalOpen(true);
@@ -1166,6 +1277,7 @@ const VisanetTest: React.FC = () => {
           icon={<FolderOpenOutlined />}
           style={{ height: 40 }}
           loading={loading === 'cerrar'}
+          disabled={operacionEnProceso}
           onClick={() => setCerrarLoteModalOpen(true)}
         >
           Cerrar Lote
@@ -1173,6 +1285,7 @@ const VisanetTest: React.FC = () => {
           <Button
             icon={<EyeOutlined />}
             style={{ height: 40 }}
+            disabled={operacionEnProceso}
             onClick={() => setCierrePruebaModalOpen(true)}
   title="Generar un comprobante desde una respuesta JSON sin enviarlo al terminal"
 >
@@ -1197,8 +1310,15 @@ const VisanetTest: React.FC = () => {
                   <Col xs={24} sm={8} key={id}>
                     <div
                       className="dashboard-kpi-card"
-                      style={{ cursor: 'pointer', '--kpi-accent': kpi.color } as React.CSSProperties}
-                      onClick={() => setSubsidioConfirmacion({ subsidyId: id, montoPesos: monto })}
+                      style={{
+                        cursor: operacionEnProceso ? 'default' : 'pointer',
+                        opacity: operacionEnProceso ? 0.6 : 1,
+                        '--kpi-accent': kpi.color,
+                      } as React.CSSProperties}
+                      onClick={() => {
+                        if (operacionEnProceso) return;
+                        setSubsidioConfirmacion({ subsidyId: id, montoPesos: monto });
+                      }}
                     >
                       <div className="dashboard-kpi-top">
                         <div className="dashboard-kpi-icon" style={{ background: kpi.bg, color: kpi.color }}>
@@ -1232,6 +1352,7 @@ const VisanetTest: React.FC = () => {
                 precision={2}
                 min={0}
                 value={subsidioMontoPesos}
+                disabled={operacionEnProceso}
                 onChange={(v) => setSubsidioMontoPesos(v ?? null)}
                 onPressEnter={handleVenderSubsidio}
               />
@@ -1241,6 +1362,7 @@ const VisanetTest: React.FC = () => {
                 allowClear
                 options={SUBSIDIO_OPCIONES}
                 value={subsidyId || undefined}
+                disabled={operacionEnProceso}
                 onChange={(val) => {
                   const value = val ?? '';
                   setSubsidyId(value);
@@ -1250,7 +1372,13 @@ const VisanetTest: React.FC = () => {
                   }
                 }}
               />
-              <Button type="primary" block loading={loading === 'subsidio'} onClick={handleVenderSubsidio}>
+              <Button
+                type="primary"
+                block
+                loading={loading === 'subsidio'}
+                disabled={operacionEnProceso}
+                onClick={handleVenderSubsidio}
+              >
                 Vender
               </Button>
             </Space>
@@ -1259,6 +1387,16 @@ const VisanetTest: React.FC = () => {
       </Row>
 
       {/* Área de resultado */}
+      {operacionEnProceso && operacionActual && (
+        <Alert
+          type="info"
+          showIcon
+          message={`Procesando ${operacionActual}...`}
+          description="Espera a que termine la operacion antes de ejecutar o abrir otra accion."
+          style={{ marginTop: 16 }}
+        />
+      )}
+
       {error && (
         <Alert type="error" message="Error" description={error} showIcon style={{ marginTop: 16 }} />
       )}
@@ -1266,14 +1404,26 @@ const VisanetTest: React.FC = () => {
       {resultado && !error && (
         <Space style={{ marginTop: 16 }}>
           {typeof resultado === 'object' && 'exitoso' in resultado && (
-            <Button icon={<PrinterOutlined />} onClick={() => setVoucherVisible(true)}>
+            <Button
+              icon={<PrinterOutlined />}
+              disabled={operacionEnProceso}
+              onClick={() => setVoucherVisible(true)}
+            >
               Ver Voucher
             </Button>
           )}
-          <Button icon={<EyeOutlined />} onClick={handleVisualizar}>
+          <Button
+            icon={<EyeOutlined />}
+            disabled={operacionEnProceso}
+            onClick={handleVisualizar}
+          >
             Visualizar ESC/POS
           </Button>
-          <Button icon={<CodeOutlined />} onClick={() => setJsonDrawerOpen(true)}>
+          <Button
+            icon={<CodeOutlined />}
+            disabled={operacionEnProceso}
+            onClick={() => setJsonDrawerOpen(true)}
+          >
             Ver JSON (soporte)
           </Button>
         </Space>
@@ -1309,29 +1459,47 @@ const VisanetTest: React.FC = () => {
               value={fechaFiltro}
               onChange={(date) => {
                 setFechaFiltro(date);
-                cargarVouchersDelDia(date ?? dayjs());
+                if (!iniciarOperacion('cargar', 'la carga de vouchers')) return;
+                void cargarVouchersDelDia(date ?? dayjs()).finally(() => finalizarOperacion());
               }}
               format="DD/MM/YYYY"
-              style={{ width: 140 }}
-     />
-     <div style={{ flex: 1 }} />
-     <Button
-       icon={<EyeOutlined />}
-       loading={generandoCierre}
-       disabled={!vouchers.length}
-       onClick={handleVisualizarCierre}
-     >
-       Ver cierre
-     </Button>
-     <Button
-       icon={<PrinterOutlined />}
-       loading={obteniendoCierre}
-       onClick={handleObtenerCierre}
-     >
-       Cierre → JSON
-     </Button>
-     <Button icon={<FileExcelOutlined />} onClick={handleExportarExcelVouchers} />
-     <Button icon={<ReloadOutlined />} onClick={() => cargarVouchersDelDia(fechaFiltro ?? dayjs())} />
+              style={{ width: 140, maxWidth: '100%' }}
+              disabled={operacionEnProceso}
+            />
+            <div style={{ flex: 1 }} />
+            <Button
+              icon={<EyeOutlined />}
+              loading={generandoCierre}
+              disabled={operacionEnProceso || !vouchers.length}
+              onClick={handleVisualizarCierre}
+            >
+              Ver cierre
+            </Button>
+            <Button
+              icon={<PrinterOutlined />}
+              loading={obteniendoCierre}
+              disabled={operacionEnProceso}
+              onClick={handleObtenerCierre}
+            >
+              Cierre → JSON
+            </Button>
+            <Tooltip title="Exportar a Excel">
+              <Button
+                icon={<FileExcelOutlined />}
+                disabled={operacionEnProceso}
+                onClick={handleExportarExcelVouchers}
+              />
+            </Tooltip>
+            <Tooltip title="Actualiza los registros del día">
+              <Button
+                icon={<ReloadOutlined />}
+                disabled={operacionEnProceso}
+                onClick={() => {
+                  if (!iniciarOperacion('actualizar', 'la actualizacion de vouchers')) return;
+                  void cargarVouchersDelDia(fechaFiltro ?? dayjs()).finally(() => finalizarOperacion());
+                }}
+              />
+            </Tooltip>
           </div>
         </div>
         <Table
@@ -1350,12 +1518,20 @@ const VisanetTest: React.FC = () => {
       <Modal
         title="Generar cierre desde JSON"
         open={cierrePruebaModalOpen}
-        onCancel={() => setCierrePruebaModalOpen(false)}
+        onCancel={() => {
+          if (operacionEnProceso) return;
+          setCierrePruebaModalOpen(false);
+        }}
         onOk={handleVisualizarCierrePrueba}
         okText="Abrir comprobante"
         cancelText="Cancelar"
         confirmLoading={generandoCierre}
-        width={760}
+        okButtonProps={{ disabled: operacionEnProceso }}
+        cancelButtonProps={{ disabled: operacionEnProceso }}
+        closable={!operacionEnProceso}
+        maskClosable={!operacionEnProceso}
+        keyboard={!operacionEnProceso}
+        width="min(760px, 100vw)"
       >
         <Alert
           type="info"
@@ -1371,6 +1547,7 @@ const VisanetTest: React.FC = () => {
           autoSize={{ minRows: 14, maxRows: 22 }}
           placeholder="Pega aqui la respuesta JSON del cierre de Visanet."
           spellCheck={false}
+          disabled={operacionEnProceso}
           style={{ marginTop: 8, fontFamily: 'Consolas, monospace' }}
         />
       </Modal>
@@ -1378,15 +1555,23 @@ const VisanetTest: React.FC = () => {
       <Modal
         title="Cierre Visanet"
         open={vistaCierrePruebaOpen}
-        onCancel={() => setVistaCierrePruebaOpen(false)}
+        onCancel={() => {
+          if (exportandoCierrePrueba) return;
+          setVistaCierrePruebaOpen(false);
+        }}
         footer={[
-          <Button key="cerrar" onClick={() => setVistaCierrePruebaOpen(false)}>
+          <Button
+            key="cerrar"
+            disabled={exportandoCierrePrueba}
+            onClick={() => setVistaCierrePruebaOpen(false)}
+          >
             Cerrar
           </Button>,
           <Button
             key="png"
             onClick={handleDescargarCierrePruebaPng}
             loading={exportandoCierrePrueba}
+            disabled={exportandoCierrePrueba}
           >
             Descargar PNG
           </Button>,
@@ -1395,18 +1580,22 @@ const VisanetTest: React.FC = () => {
             type="primary"
             onClick={handleGuardarCierrePruebaPdf}
             loading={exportandoCierrePrueba}
+            disabled={exportandoCierrePrueba}
           >
             Abrir PDF de 80 mm
           </Button>,
         ]}
-        width={560}
+        closable={!exportandoCierrePrueba}
+        maskClosable={!exportandoCierrePrueba}
+        keyboard={!exportandoCierrePrueba}
+        width="min(560px, 100vw)"
       >
         <div
           style={{
             maxHeight: '70vh',
             overflow: 'auto',
             padding: '12px 0',
-            background: '#f0f0f0',
+            background: token.colorFillTertiary,
           }}
         >
           <style>{ESTILOS_COMPROBANTE_CIERRE_VISANET}</style>
@@ -1423,19 +1612,29 @@ const VisanetTest: React.FC = () => {
       <Modal
         title="Confirmar venta de subsidio"
         open={subsidioConfirmacion !== null}
-        onCancel={() => setSubsidioConfirmacion(null)}
-        onOk={() => {
+        onCancel={() => {
+          if (operacionEnProceso) return;
+          setSubsidioConfirmacion(null);
+        }}
+        onOk={async () => {
           const confirmacion = subsidioConfirmacion;
           if (!confirmacion) return;
           const { subsidyId: subsId, montoPesos: monto } = confirmacion;
           setSubsidyId(subsId);
           setSubsidioMontoPesos(monto);
-          setSubsidioConfirmacion(null);
-          ejecutarVentaSubsidio(subsId, monto);
+          // El modal permanece abierto durante el procesamiento: se cierra solo si la venta fue exitosa.
+          const exitoso = await ejecutarVentaSubsidio(subsId, monto);
+          if (exitoso) {
+            setSubsidioConfirmacion(null);
+          }
         }}
         okText="Vender"
         cancelText="Cancelar"
-        okButtonProps={{ loading: loading === 'subsidio' }}
+        okButtonProps={{ loading: loading === 'subsidio', disabled: operacionEnProceso }}
+        cancelButtonProps={{ disabled: operacionEnProceso }}
+        closable={!operacionEnProceso}
+        maskClosable={!operacionEnProceso}
+        keyboard={!operacionEnProceso}
       >
         {subsidioConfirmacion && (
           <p style={{ margin: 0 }}>
@@ -1458,11 +1657,19 @@ const VisanetTest: React.FC = () => {
       <Modal
         title="Vender (PAX)"
         open={venderModalOpen}
-        onCancel={() => setVenderModalOpen(false)}
+        onCancel={() => {
+          if (operacionEnProceso) return;
+          setVenderModalOpen(false);
+        }}
         onOk={confirmarVentaModal}
         okText="Vender"
         cancelText="Cancelar"
-        okButtonProps={{ loading: loading === 'vender' }}
+        okButtonProps={{ loading: loading === 'vender', disabled: operacionEnProceso }}
+        cancelButtonProps={{ disabled: operacionEnProceso }}
+        closable={!operacionEnProceso}
+        maskClosable={!operacionEnProceso}
+        keyboard={!operacionEnProceso}
+        width="min(520px, 100vw)"
       >
         <Space direction="vertical" style={{ width: '100%' }} size="small">
           <div>
@@ -1472,6 +1679,7 @@ const VisanetTest: React.FC = () => {
               precision={2}
               min={0}
               value={venderMonto}
+              disabled={operacionEnProceso}
               onChange={(v) => setVenderMonto(v ?? null)}
               onPressEnter={confirmarVentaModal}
               placeholder="Ej: 1500.00"
@@ -1483,6 +1691,7 @@ const VisanetTest: React.FC = () => {
             <Input
               placeholder="TokenECR"
               value={venderTokenECR}
+              disabled={operacionEnProceso}
               onChange={(e) => setVenderTokenECR(e.target.value)}
             />
           </div>
@@ -1493,17 +1702,26 @@ const VisanetTest: React.FC = () => {
       <Modal
         title="Anular (PAX)"
         open={anularModalOpen}
-        onCancel={() => setAnularModalOpen(false)}
+        onCancel={() => {
+          if (operacionEnProceso) return;
+          setAnularModalOpen(false);
+        }}
         onOk={confirmarAnularModal}
         okText="Anular"
         cancelText="Cancelar"
-        okButtonProps={{ loading: loading === 'anular', danger: true }}
+        okButtonProps={{ loading: loading === 'anular', danger: true, disabled: operacionEnProceso }}
+        cancelButtonProps={{ disabled: operacionEnProceso }}
+        closable={!operacionEnProceso}
+        maskClosable={!operacionEnProceso}
+        keyboard={!operacionEnProceso}
+        width="min(520px, 100vw)"
       >
         <div>
           <Text type="secondary">TokenId a anular</Text>
           <Input
             placeholder="TokenId"
             value={anularTokenId}
+            disabled={operacionEnProceso}
             onChange={(e) => setAnularTokenId(e.target.value)}
             autoFocus
           />
@@ -1514,11 +1732,19 @@ const VisanetTest: React.FC = () => {
       <Modal
         title="Cerrar Lote (PAX)"
         open={cerrarLoteModalOpen}
-        onCancel={() => setCerrarLoteModalOpen(false)}
+        onCancel={() => {
+          if (operacionEnProceso) return;
+          setCerrarLoteModalOpen(false);
+        }}
         onOk={confirmarCerrarLoteModal}
         okText="Cerrar Lote"
         cancelText="Cancelar"
-        okButtonProps={{ loading: loading === 'cerrar' }}
+        okButtonProps={{ loading: loading === 'cerrar', disabled: operacionEnProceso }}
+        cancelButtonProps={{ disabled: operacionEnProceso }}
+        closable={!operacionEnProceso}
+        maskClosable={!operacionEnProceso}
+        keyboard={!operacionEnProceso}
+        width="min(480px, 100vw)"
       >
         <p style={{ margin: 0 }}>
           ¿Deseas cerrar el lote de transacciones del PAX? Esta acción no se puede deshacer.
@@ -1530,7 +1756,7 @@ const VisanetTest: React.FC = () => {
         title={escposContenido?.titulo || 'ESC/POS'}
         open={escposModalOpen}
         onCancel={() => setEscposModalOpen(false)}
-        width={720}
+        width="min(720px, 100vw)"
         footer={[
           <Button key="copiar" icon={<CopyOutlined />} onClick={handleCopiarEscPos}>
             Copiar ESC/POS
@@ -1548,7 +1774,8 @@ const VisanetTest: React.FC = () => {
               children: (
                 <div
                   style={{
-                    background: '#fff',
+                    background: token.colorBgContainer,
+                    color: token.colorText,
                     width: `${(escposContenido?.anchoLinea ?? 42) * 10}px`,
                     minWidth: `${(escposContenido?.anchoLinea ?? 42) * 8.5}px`,
                     maxWidth: '100%',
@@ -1557,9 +1784,9 @@ const VisanetTest: React.FC = () => {
                     fontFamily: escposContenido?.fontFamily ? `'${escposContenido.fontFamily}', monospace` : "'Courier New', Courier, monospace",
                     fontSize: 14,
                     lineHeight: 1.5,
-                    border: '1px solid #d9d9d9',
+                    border: `1px solid ${token.colorBorder}`,
                     borderRadius: 4,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    boxShadow: token.boxShadowTertiary,
                     maxHeight: 'calc(100vh - 300px)',
                     overflowY: 'auto',
                   }}
@@ -1575,7 +1802,8 @@ const VisanetTest: React.FC = () => {
                   style={{
                     maxHeight: 'calc(100vh - 300px)',
                     overflow: 'auto',
-                    background: '#f5f5f5',
+                    background: token.colorFillTertiary,
+                    color: token.colorText,
                     padding: 12,
                     borderRadius: 4,
                     fontSize: 12,
@@ -1597,7 +1825,7 @@ const VisanetTest: React.FC = () => {
         title="JSON de respuesta"
         open={jsonDrawerOpen}
         onClose={() => setJsonDrawerOpen(false)}
-        width={560}
+        width="min(560px, 100vw)"
       >
         <p style={{ marginTop: 0 }}>
           Si necesitas soporte técnico, copia este JSON y envíalo al equipo de desarrollo.
@@ -1611,7 +1839,8 @@ const VisanetTest: React.FC = () => {
           style={{
             maxHeight: 'calc(100vh - 260px)',
             overflow: 'auto',
-            background: '#f5f5f5',
+            background: token.colorFillTertiary,
+            color: token.colorText,
             padding: 12,
             borderRadius: 4,
             fontSize: 12,
@@ -1627,7 +1856,7 @@ const VisanetTest: React.FC = () => {
         title={`Cierre del ${(fechaFiltro ?? dayjs()).format('DD/MM/YYYY')}`}
         open={cierreDrawerOpen}
         onClose={() => setCierreDrawerOpen(false)}
-        width={560}
+        width="min(560px, 100vw)"
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
           <Button size="small" icon={<CopyOutlined />} onClick={handleCopiarJsonCierre}>
@@ -1638,7 +1867,7 @@ const VisanetTest: React.FC = () => {
             type="primary"
             icon={<PrinterOutlined />}
             loading={imprimiendoCierre}
-            disabled={!cierreVouchers?.length}
+            disabled={operacionEnProceso || !cierreVouchers?.length}
             onClick={handleImprimirCierre}
           >
             Enviar a impresora térmica
@@ -1653,7 +1882,8 @@ const VisanetTest: React.FC = () => {
           style={{
             maxHeight: 'calc(100vh - 260px)',
             overflow: 'auto',
-            background: '#f5f5f5',
+            background: token.colorFillTertiary,
+            color: token.colorText,
             padding: 12,
             borderRadius: 4,
             fontSize: 12,

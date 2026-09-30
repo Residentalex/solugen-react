@@ -5,6 +5,7 @@ import {
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
+  InboxOutlined,
   ArrowLeftOutlined,
   PrinterOutlined,
   EditOutlined,
@@ -14,6 +15,7 @@ import {
   CreditCardOutlined,
   RollbackOutlined,
   HistoryOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -727,6 +729,52 @@ const FacturaPOSDetalle: React.FC = () => {
     }
   };
 
+  // ===== Documentos relacionados (devoluciones asociadas) =====
+  const renderDocumentosRelacionados = () => (
+    <Table
+      dataSource={data.transaccionesAsociadas!}
+      rowKey="id"
+      size="small"
+      pagination={false}
+      scroll={{ x: 600 }}
+      columns={[
+        { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110,
+          render: (v: string) => formatDate(v),
+        },
+        { title: 'Documento', key: 'documento', width: 160,
+          render: (_: any, rec: any) => (
+            <a className="paces-doc-link"
+              onClick={() => navigate(`/FDEV/${rec.transaccionAsociadaID}`)}
+              style={{ cursor: 'pointer' }}>
+              {rec.documento || 'DEV'}
+            </a>
+          ),
+        },
+        { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 150,
+          render: (v: string) => v || '-',
+        },
+        { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const,
+          render: (v: number) => <Text strong>{formatNumber(v || 0)}</Text>,
+        },
+      ]}
+      summary={() => {
+        const totalMonto = (data.transaccionesAsociadas || []).reduce((sum: number, r: any) => sum + (r.monto || 0), 0);
+        return (
+          <Table.Summary fixed="bottom">
+            <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+              <Table.Summary.Cell index={0} colSpan={3}>
+                <Text strong style={{ paddingLeft: 8 }}>Total</Text>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell index={3} align="right">
+                <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(totalMonto)}</Text>
+              </Table.Summary.Cell>
+            </Table.Summary.Row>
+          </Table.Summary>
+        );
+      }}
+    />
+  );
+
   return (
     <div>
       <DetalleToolbar
@@ -854,7 +902,7 @@ const FacturaPOSDetalle: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${data.detalles?.length || 0})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${data.detalles?.length || 0})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                       <div style={{ minHeight: 220 }}>
@@ -901,8 +949,9 @@ const FacturaPOSDetalle: React.FC = () => {
                     <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                   ),
                 },
-                {
+{
                   key: 'impuestos',
+                  icon: <FileTextOutlined />,
                   label: `Impuestos (${data.impuestosFactura?.length || 0})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('impuestos')} tip="Cargando impuestos...">
@@ -1034,35 +1083,7 @@ const FacturaPOSDetalle: React.FC = () => {
                         style={{ marginLeft: 6, backgroundColor: '#556ee6' }} />
                     </span>
                   ),
-                  children: (
-                    <Table
-                      dataSource={data.transaccionesAsociadas!}
-                      rowKey="id"
-                      size="small"
-                      pagination={false}
-                      scroll={{ x: 600 }}
-                      columns={[
-                        { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110,
-                          render: (v: string) => formatDate(v),
-                        },
-                        { title: 'Documento', key: 'documento', width: 160,
-                          render: (_: any, rec: any) => (
-                            <a className="paces-doc-link"
-                              onClick={() => navigate(`/FDEV/${rec.transaccionAsociadaID}`)}
-                              style={{ cursor: 'pointer' }}>
-                              {rec.documento || 'DEV'}
-                            </a>
-                          ),
-                        },
-                        { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 150,
-                          render: (v: string) => v || '-',
-                        },
-                        { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const,
-                          render: (v: number) => <Text strong>{formatNumber(v || 0)}</Text>,
-                        },
-                      ]}
-                    />
-                  ),
+                  children: renderDocumentosRelacionados(),
                 }] : []),
               ]}
             />
@@ -1158,7 +1179,7 @@ const FacturaPOSDetalle: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${data.detalles?.length || 0})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${data.detalles?.length || 0})`,
                 children: (
                   <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                     <div style={{ minHeight: 220 }}>
@@ -1205,8 +1226,9 @@ const FacturaPOSDetalle: React.FC = () => {
                   <LogTable dataSource={data.logs || []} scroll={{ x: 900 }} />
                 ),
               },
-              {
+{
                 key: 'impuestos',
+                icon: <FileTextOutlined />,
                 label: `Impuestos (${data.impuestosFactura?.length || 0})`,
                 children: (
                   <Table
@@ -1330,35 +1352,7 @@ const FacturaPOSDetalle: React.FC = () => {
                       style={{ marginLeft: 6, backgroundColor: '#556ee6' }} />
                   </span>
                 ),
-                children: (
-                  <Table
-                    dataSource={data.transaccionesAsociadas!}
-                    rowKey="id"
-                    size="small"
-                    pagination={false}
-                    scroll={{ x: 600 }}
-                    columns={[
-                      { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110,
-                        render: (v: string) => formatDate(v),
-                      },
-                      { title: 'Documento', key: 'documento', width: 160,
-                        render: (_: any, rec: any) => (
-                          <a className="paces-doc-link"
-                            onClick={() => navigate(`/FDEV/${rec.transaccionAsociadaID}`)}
-                            style={{ cursor: 'pointer' }}>
-                            {rec.documento || 'DEV'}
-                          </a>
-                        ),
-                      },
-                      { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 150,
-                        render: (v: string) => v || '-',
-                      },
-                      { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const,
-                        render: (v: number) => <Text strong>{formatNumber(v || 0)}</Text>,
-                      },
-                    ]}
-                  />
-                ),
+                children: renderDocumentosRelacionados(),
               }] : []),
             ]}
           />

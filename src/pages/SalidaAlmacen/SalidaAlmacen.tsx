@@ -71,7 +71,13 @@ const SalidaAlmacen: React.FC = () => {
       key: 'fecha',
       width: 130,
       render: (f: string, record: MovimientoVistaDTO) => (
-        <FechaColumnCell fecha={f} fechaSecundaria={record.fechaEntrega} labelSecundario="Entregado" />
+        <FechaColumnCell
+          fecha={f}
+          fechaSecundaria={record.fechaEntrega}
+          labelSecundario="Ent."
+          labelSecundarioTitle="Entregado"
+          secundariaCompacta
+        />
       ),
     },
     {

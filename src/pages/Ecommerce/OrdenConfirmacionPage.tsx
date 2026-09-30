@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card,
@@ -8,7 +8,6 @@ import {
   Divider,
   Spin,
   Alert,
-  Descriptions,
   Row,
   Col,
   message,
@@ -52,28 +51,31 @@ const OrdenConfirmacionPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const cargarOrden = useCallback(async () => {
     if (!id) {
       setError('No se proporcionó un ID de orden');
       setLoading(false);
       return;
     }
-
-    const cargarOrden = async () => {
-      try {
-        const data = await ecommerceApi.obtenerOrden(id);
-        setOrden(data);
-      } catch (err: any) {
-        const msg = err?.response?.data?.errorMessage || 'Error al cargar la orden';
-        setError(msg);
-        message.error(msg);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    cargarOrden();
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await ecommerceApi.obtenerOrden(id);
+      setOrden(data);
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al cargar la orden';
+      setError(msg);
+      message.error(msg);
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    cargarOrden();
+  }, [cargarOrden]);
+
+  const puedeReintentar = !!id && !!error && error !== 'No se proporcionó un ID de orden' && !/no se (encontró|existe)|no existe/i.test(error);
 
   if (loading) {
     return (
@@ -96,6 +98,11 @@ const OrdenConfirmacionPage: React.FC = () => {
         <Button type="primary" icon={<ShoppingOutlined />} onClick={() => navigate('/store')}>
           Volver a la tienda
         </Button>
+        {puedeReintentar && (
+          <Button style={{ marginLeft: 8 }} onClick={() => cargarOrden()}>
+            Reintentar
+          </Button>
+        )}
       </div>
     );
   }
@@ -180,15 +187,24 @@ const OrdenConfirmacionPage: React.FC = () => {
         <Title level={5} style={{ marginBottom: 16 }}>
           Datos del cliente
         </Title>
-        <Descriptions bordered size="small" column={1}>
-          <Descriptions.Item label="Nombre">{orden.nombreCliente}</Descriptions.Item>
-          <Descriptions.Item label="Email">{orden.email}</Descriptions.Item>
-          <Descriptions.Item label="Teléfono">{orden.telefono}</Descriptions.Item>
-          <Descriptions.Item label="Dirección">{orden.direccion}</Descriptions.Item>
-          {orden.notas && (
-            <Descriptions.Item label="Notas">{orden.notas}</Descriptions.Item>
-          )}
-        </Descriptions>
+        <Row gutter={[16, 12]}>
+          {[
+            { label: 'Nombre', value: orden.nombreCliente },
+            { label: 'Email', value: orden.email },
+            { label: 'Teléfono', value: orden.telefono },
+            { label: 'Dirección', value: orden.direccion },
+            ...(orden.notas ? [{ label: 'Notas', value: orden.notas }] : []),
+          ].map((dato) => (
+            <Col xs={24} sm={12} key={dato.label}>
+              <div style={{ borderBottom: '1px solid var(--paces-border)', paddingBottom: 8 }}>
+                <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 2 }}>
+                  {dato.label}
+                </Text>
+                <Text style={{ wordBreak: 'break-word' }}>{dato.value}</Text>
+              </div>
+            </Col>
+          ))}
+        </Row>
       </Card>
 
       <Row gutter={[16, 16]} justify="center">

@@ -10,27 +10,38 @@ interface CategoriasCarouselProps {
   categorias: CategoriaCatalogoDTO[];
   categoriaActiva?: string;
   onCategoriaClick?: (id: string) => void;
+  /** Bloquea la selección mientras hay una consulta en vuelo */
+  disabled?: boolean;
 }
 
 const CategoriasCarousel: React.FC<CategoriasCarouselProps> = ({
   categorias,
   categoriaActiva,
   onCategoriaClick,
+  disabled = false,
 }) => {
   const navigate = useNavigate();
 
   const handleClick = useCallback((id: string) => {
+    if (disabled) return;
     if (onCategoriaClick) {
       onCategoriaClick(id);
     } else {
       navigate(`/store?categoria=${encodeURIComponent(id)}`);
     }
-  }, [navigate, onCategoriaClick]);
+  }, [navigate, onCategoriaClick, disabled]);
 
   return (
     <section className="store-section">
       <Title level={4} className="store-section-title">Categorías Populares</Title>
-      <div className="store-categorias-scroll">
+      <div
+        className="store-categorias-scroll"
+        style={{
+          opacity: disabled ? 0.6 : 1,
+          pointerEvents: disabled ? 'none' : 'auto',
+          transition: 'opacity .2s',
+        }}
+      >
         {categorias.map((cat) => {
           const isActive = categoriaActiva === cat.id;
           return (

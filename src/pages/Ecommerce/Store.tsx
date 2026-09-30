@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Input,
@@ -11,7 +11,7 @@ import {
   Result,
   Alert,
   Button,
-  Typography,
+  Spin,
 } from 'antd';
 import {
   SearchOutlined,
@@ -22,8 +22,6 @@ import {
 import { ecommerceApi } from '../../api/ecommerceApi';
 import type { CatalogoProductoDTO, CategoriaCatalogoDTO } from '../../api/ecommerceApi';
 import './Ecommerce.css';
-
-const { Text } = Typography;
 
 /** Formatear moneda en RD$ */
 function formatCurrency(value: number): string {
@@ -49,6 +47,10 @@ const Store: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [categoriaActiva, setCategoriaActiva] = useState('');
 
+  // Cancela la petición en vuelo e ignora respuestas de consultas anteriores que llegan tarde.
+  const abortRef = useRef<AbortController | null>(null);
+  const requestIdRef = useRef(0);
+
   // Carga de categorías
   const cargarCategorias = useCallback(async () => {
     try {
@@ -61,6 +63,11 @@ const Store: React.FC = () => {
 
   // Carga de productos
   const cargarProductos = useCallback(async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const requestId = ++requestIdRef.current;
+
     setLoading(true);
     setLoadingError(false);
     try {
@@ -76,13 +83,16 @@ const Store: React.FC = () => {
       if (searchText) params.buscar = searchText;
       if (categoriaActiva) params.categoria = categoriaActiva;
 
-      const result = await ecommerceApi.obtenerProductos(params);
+      const result = await ecommerceApi.obtenerProductos(params, controller.signal);
+      if (requestId !== requestIdRef.current) return;
       setProductos(result.items);
       setTotal(result.total);
     } catch {
+      // Petición cancelada o respondida después de una consulta más reciente: no es un fallo.
+      if (requestId !== requestIdRef.current || controller.signal.aborted) return;
       setLoadingError(true);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [pagina, searchText, categoriaActiva]);
 
@@ -93,6 +103,13 @@ const Store: React.FC = () => {
   useEffect(() => {
     cargarProductos();
   }, [cargarProductos]);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      requestIdRef.current += 1;
+    };
+  }, []);
 
   // Handlers
   const handleSearch = useCallback((value: string) => {
@@ -113,6 +130,9 @@ const Store: React.FC = () => {
     setPagina(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
+
+  const hasPreviousData = productos.length > 0;
+  const disabledControls = loading;
 
   // Render de tarjeta de producto
   const renderProductCard = (producto: CatalogoProductoDTO) => (
@@ -173,6 +193,7 @@ const Store: React.FC = () => {
             placeholder="Buscar productos..."
             allowClear
             onSearch={handleSearch}
+            disabled={disabledControls}
             prefix={<SearchOutlined className="paces-text-icon" />}
           />
         </div>
@@ -186,12 +207,16 @@ const Store: React.FC = () => {
         {loadingError && (
           <Alert
             message="Error al cargar productos"
-            description="No se pudieron cargar los productos. Verifica la conexión e intenta de nuevo."
-            type="error"
+            description={
+              hasPreviousData
+                ? 'No se pudieron cargar los productos de la búsqueda o categoría actual. Se mantienen los productos anteriores.'
+                : 'No se pudieron cargar los productos. Verifica la conexión e intenta de nuevo.'
+            }
+            type={hasPreviousData ? 'warning' : 'error'}
             showIcon
             style={{ marginBottom: 16 }}
             action={
-              <Button size="small" onClick={handleRefresh} icon={<ReloadOutlined />}>
+              <Button size="small" onClick={handleRefresh} disabled={disabledControls} icon={<ReloadOutlined />}>
                 Reintentar
               </Button>
             }
@@ -200,7 +225,14 @@ const Store: React.FC = () => {
 
         {/* Categorías */}
         {categorias.length > 0 && (
-          <div className="store-categories">
+          <div
+            className="store-categories"
+            style={{
+              opacity: disabledControls ? 0.6 : 1,
+              pointerEvents: disabledControls ? 'none' : 'auto',
+              transition: 'opacity .2s',
+            }}
+          >
             {categorias.map((cat) => (
               <div
                 key={cat.id}
@@ -213,8 +245,8 @@ const Store: React.FC = () => {
           </div>
         )}
 
-        {/* Loading */}
-        {loading && renderSkeletonCards()}
+        {/* Loading: skeletons solo en la carga inicial */}
+        {loading && !hasPreviousData && renderSkeletonCards()}
 
         {/* Empty */}
         {!loading && !loadingError && productos.length === 0 && (
@@ -242,9 +274,9 @@ const Store: React.FC = () => {
           />
         )}
 
-        {/* Grid de productos */}
-        {!loading && !loadingError && productos.length > 0 && (
-          <>
+        {/* Grid de productos: se conserva la cuadrícula con capa de carga durante las recargas */}
+        {productos.length > 0 && (
+          <Spin spinning={loading} tip="Cargando productos..." size="small">
             <Row gutter={[16, 16]}>
               {productos.map((prod) => (
                 <Col xs={24} sm={12} lg={6} key={prod.codigo}>
@@ -255,18 +287,25 @@ const Store: React.FC = () => {
 
             {/* Paginación */}
             {total > PAGE_SIZE && (
-              <div className="store-pagination">
+              <div
+                className="store-pagination"
+                style={{
+                  opacity: disabledControls ? 0.6 : 1,
+                  pointerEvents: disabledControls ? 'none' : 'auto',
+                  transition: 'opacity .2s',
+                }}
+              >
                 <Pagination
                   current={pagina}
                   total={total}
                   pageSize={PAGE_SIZE}
-                  onChange={handlePageChange}
+                  onChange={disabledControls ? () => {} : handlePageChange}
                   showSizeChanger={false}
                   showTotal={(t) => `${t} producto${t !== 1 ? 's' : ''}`}
                 />
               </div>
             )}
-          </>
+          </Spin>
         )}
       </main>
     </div>

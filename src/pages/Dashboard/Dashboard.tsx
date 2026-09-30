@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Row, Col, Card, Typography, Button, Space, Tag, message, Spin, Empty,
@@ -25,6 +25,7 @@ import type {
 } from '../../api/dashboardApi';
 import EntidadImagen from '../../components/EntidadImagen';
 import { formatDateParam, formatCurrency, formatNumber, extraerMensajeError } from '../../utils/formats';
+import { obtenerIconoModulo } from '../../utils/iconosModulo';
 import { ESTADO_DOCUMENTO_MAP } from '../../utils/estadoDocumento';
 import type { PantallaDTO } from '../../types/auth';
 import type { DashboardWidgetDto } from '../../types/dashboard';
@@ -46,7 +47,7 @@ function guardarPreferidas(usuarioID: number, codigos: string[]) {
   localStorage.setItem(`${STORAGE_KEY}-${usuarioID}`, JSON.stringify(codigos));
 }
 
-function formatKPIValue(value: number, kind: 'currency' | 'number'): string {
+const formatKPIValue = (value: number, kind: 'currency' | 'number'): string => {
   if (kind === 'currency') {
     if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
     if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
@@ -54,9 +55,45 @@ function formatKPIValue(value: number, kind: 'currency' | 'number'): string {
   }
   if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return value.toLocaleString('es-DO');
-}
+};
+
+const activarConTeclado = (e: React.KeyboardEvent, accion: () => void) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    if (e.key === ' ') e.preventDefault();
+    accion();
+  }
+};
+
+const DashboardBlockError: React.FC<{
+  mensaje: string;
+  onRetry: () => void;
+  cargando?: boolean;
+}> = ({ mensaje, onRetry, cargando }) => (
+  <div className="dashboard-block-error" style={{ padding: '12px 14px', background: 'rgba(244,106,106,0.06)', border: '1px solid rgba(244,106,106,0.18)', borderRadius: 6, margin: '0 0 8px' }}>
+    <Space size={8} align="start" wrap>
+      <WarningOutlined style={{ color: '#f46a6a', fontSize: 14 }} />
+      <div style={{ maxWidth: 320 }}>
+        <Text style={{ fontSize: 13, color: 'var(--paces-text-heading)' }}>
+          No se pudieron cargar los datos de este bloque.
+        </Text>
+        <details style={{ marginTop: 4 }}>
+          <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--paces-primary)' }}>
+            Ver detalle técnico
+          </summary>
+          <Text code style={{ display: 'block', marginTop: 4, fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {mensaje}
+          </Text>
+        </details>
+      </div>
+      <Button size="small" onClick={onRetry} loading={cargando} icon={<ReloadOutlined spin={cargando} />} style={{ fontSize: 12, padding: '0 8px' }}>
+        Reintentar
+      </Button>
+    </Space>
+  </div>
+);
 
 const Dashboard: React.FC = () => {
+  const fechasRef = useRef<{ desde: string; hasta: string }>({ desde: '', hasta: '' });
   const navigate = useNavigate();
   const usuario = useAuthStore((s) => s.usuario);
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
@@ -64,18 +101,26 @@ const Dashboard: React.FC = () => {
   const { token: themeToken } = theme.useToken();
   const { misWidgets, fetchMisWidgets } = useDashboardWidgetStore();
 
-  // ── Estados ──────────────────────────────────────────────
+// ── Estados ──────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [resumen, setResumen] = useState<DashboardResumenDTO | null>(null);
   const [recientes, setRecientes] = useState<DocumentoRecienteDTO[]>([]);
   const [ventasPorMes, setVentasPorMes] = useState<VentaPorMesDTO[]>([]);
   const [docsPorTipo, setDocsPorTipo] = useState<DocumentosPorTipoDTO[]>([]);
   const [comparativo, setComparativo] = useState<SucursalComparativoDTO[]>([]);
   const [evolucionDiaria, setEvolucionDiaria] = useState<EvolucionDiariaDTO[]>([]);
-const [pendientesNCF, setPendientesNCF] = useState<EnvioDGIIDTO[]>([]);
-const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
+  const [pendientesNCF, setPendientesNCF] = useState<EnvioDGIIDTO[]>([]);
+  const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
   const [periodo, setPeriodo] = useState<'dia' | 'semana' | 'mes' | 'ano'>('mes');
+  // Errores parciales (cargas auxiliares)
+  const [errorNCF, setErrorNCF] = useState<string | null>(null);
+  const [errorDocsNC, setErrorDocsNC] = useState<string | null>(null);
+  const [errorSucursales, setErrorSucursales] = useState<string | null>(null);
+  // Cargas auxiliares independientes
+  const [loadingNCF, setLoadingNCF] = useState(false);
+  const [loadingDocsNC, setLoadingDocsNC] = useState(false);
+  const [loadingSucursales, setLoadingSucursales] = useState(false);
 
   // Estados accesos rápidos
   const [configOpen, setConfigOpen] = useState(false);
@@ -134,41 +179,46 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
     }
   }, [periodo]);
 
-  // ── Carga de datos ──────────────────────────────────────
+  const formatoFecha = (d: Date): string => {
+  const ahora = new Date();
+  const diff = ahora.getTime() - d.getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'justo ahora';
+  if (min < 60) return `hace ${min} min`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `hace ${hrs} h`;
+  const dias = Math.floor(hrs / 24);
+  return dias === 1 ? 'ayer' : `hace ${dias} d`;
+};
   const cargarDatos = useCallback(async () => {
     setLoading(true);
-    const now = new Date();
-
+    fechasRef.current = { desde: '', hasta: '' };
     let desde: string;
-    let meses: number;
 
     switch (periodo) {
       case 'dia':
-        desde = formatDateParam(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
-        meses = 1;
+        desde = formatDateParam(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()));
         break;
       case 'semana':
-        desde = formatDateParam(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
-        meses = 3;
+        desde = formatDateParam(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
         break;
       case 'ano':
-        desde = formatDateParam(new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()));
-        meses = 12;
+        desde = formatDateParam(new Date(new Date().getFullYear() - 1, new Date().getMonth(), new Date().getDate()));
         break;
       case 'mes':
       default:
-        desde = formatDateParam(new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()));
-        meses = 6;
+        desde = formatDateParam(new Date(new Date().getFullYear(), new Date().getMonth() - 1, new Date().getDate()));
         break;
     }
 
-    const hasta = formatDateParam(now);
+    const hasta = formatDateParam(new Date());
+    fechasRef.current = { desde, hasta };
 
     try {
       const [res, rec, ventas, docs, comp, evolucion] = await Promise.all([
         dashboardApi.obtenerResumen(sucursalActiva, desde, hasta),
         dashboardApi.obtenerRecientes(sucursalActiva, 10),
-        dashboardApi.obtenerVentasPorMes(sucursalActiva, meses),
+        dashboardApi.obtenerVentasPorMes(sucursalActiva, 6),
         dashboardApi.obtenerDocsPorTipo(sucursalActiva, desde, hasta),
         dashboardApi.obtenerComparativoSucursales(desde, hasta),
         dashboardApi.obtenerEvolucionDiaria(sucursalActiva, desde, hasta),
@@ -180,28 +230,41 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
       setComparativo(comp);
       setEvolucionDiaria(evolucion);
 
-      // Cargar pendientes NCF
+      // Cargar pendientes NCF (periférico, no bloquea dashboard)
+      setLoadingNCF(true);
+      setErrorNCF(null);
       try {
         const ncf = await dashboardApi.obtenerPendientesNCF(desde, hasta);
         setPendientesNCF(ncf);
-      } catch {
-        // Silencioso: carga periférica
+      } catch (err: any) {
+        setErrorNCF(extraerMensajeError(err, 'Error al cargar pendientes NCF'));
+        message.error(setErrorNCF!);
+      } finally {
+        setLoadingNCF(false);
       }
 
-      // Cargar docs no cuadrados
+      // Cargar docs no cuadrados (periférico)
+      setLoadingDocsNC(true);
+      setErrorDocsNC(null);
       try {
         const nc = await dashboardApi.obtenerDocsNoCuadrados(sucursalActiva, desde, hasta);
         setDocsNoCuadrados(nc);
-      } catch {
-        // Silencioso: carga periférica
+      } catch (err: any) {
+        setErrorDocsNC(extraerMensajeError(err, 'Error al cargar docs no cuadrados'));
+        message.error(setErrorDocsNC!);
+      } finally {
+        setLoadingDocsNC(false);
       }
 
       // Cargar sucursales activas por separado (no bloquea el dashboard si falla)
+      setLoadingSucursales(true);
+      setErrorSucursales(null);
       let sucActivas: SucursalActivaDTO[] = [];
       try {
         sucActivas = await dashboardApi.obtenerSucursalesActivas();
-      } catch {
-        // Silencioso: carga periférica
+      } catch (err: any) {
+        setErrorSucursales(extraerMensajeError(err, 'Error al cargar sucursales activas'));
+        message.error(setErrorSucursales!);
       }
       setSucursalesActivas(sucActivas);
       if (sucActivas.length > 0) {
@@ -212,9 +275,60 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
       message.error(msg);
     } finally {
       setLoading(false);
-      setLastUpdated(new Date().toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }));
+      setLastUpdatedAt(new Date());
     }
   }, [sucursalActiva, periodo]);
+
+  const reintentarNCF = useCallback(async () => {
+    setErrorNCF(null);
+    setLoadingNCF(true);
+    try {
+      const ncf = await dashboardApi.obtenerPendientesNCF(fechasRef.current.desde, fechasRef.current.hasta ?? '');
+      setPendientesNCF(ncf);
+      setErrorNCF(null);
+    } catch (err: any) {
+      setErrorNCF(extraerMensajeError(err, 'Error al reintentar pendientes NCF'));
+      message.error(setErrorNCF!);
+    } finally {
+      setLoadingNCF(false);
+    }
+  }, []);
+
+  const reintentarDocsNC = useCallback(async () => {
+    setErrorDocsNC(null);
+    setLoadingDocsNC(true);
+    try {
+      const nc = await dashboardApi.obtenerDocsNoCuadrados(sucursalActiva, fechasRef.current.desde, fechasRef.current.hasta ?? '');
+      setDocsNoCuadrados(nc);
+      setErrorDocsNC(null);
+    } catch (err: any) {
+      setErrorDocsNC(extraerMensajeError(err, 'Error al reintentar docs no cuadrados'));
+      message.error(setErrorDocsNC!);
+    } finally {
+      setLoadingDocsNC(false);
+    }
+  }, [sucursalActiva]);
+
+  const reintentarSucursales = useCallback(async () => {
+    setErrorSucursales(null);
+    setLoadingSucursales(true);
+    try {
+      let sucActivas: SucursalActivaDTO[] = [];
+      try {
+        sucActivas = await dashboardApi.obtenerSucursalesActivas();
+      } catch (err: any) {
+        setErrorSucursales(extraerMensajeError(err, 'Error al reintentar sucursales activas'));
+        message.error(setErrorSucursales!);
+      }
+      setSucursalesActivas(sucActivas);
+      if (sucActivas.length > 0) {
+        setSucursalStock((prev) => prev || sucActivas[0].codigo);
+      }
+      setErrorSucursales(null);
+    } finally {
+      setLoadingSucursales(false);
+    }
+  }, [sucursalActiva]);
 
   useEffect(() => {
     cargarDatos();
@@ -228,6 +342,17 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
       );
     }
   }, [configOpen, usuario?.id]);
+
+  // Forzar re-render cada minuto para actualizar el texto "hace X min"
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!lastUpdatedAt) return;
+    const interval = setInterval(() => setTick(t => t + 1), 60_000);
+    return () => clearInterval(interval);
+  }, [lastUpdatedAt]);
+
+  const tiempoActualizacion = useMemo(() => lastUpdatedAt ? formatoFecha(lastUpdatedAt) : null, [lastUpdatedAt, tick]);
+  const cargando = loading || loadingNCF || loadingDocsNC || loadingSucursales;
 
   // ── Cargar stock negativo cuando cambia sucursal o página ─
   useEffect(() => {
@@ -449,36 +574,12 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
       <div className="dashboard-hero" style={{ padding: '20px 0 16px' }}>
         <div className="dashboard-hero-copy">
           <h1 className="dashboard-hero-title" style={{ fontSize: 24, marginBottom: 2 }}>Hola, {nombreCortoUsuario}</h1>
-          <div className="dashboard-hero-meta" style={{ fontSize: 12, color: '#6b7280', gap: 12 }}>
+          <div className="dashboard-hero-meta" style={{ fontSize: 12, color: 'var(--paces-text-secondary)', gap: 12 }}>
             <span>{todayStr}</span>
             <span>·</span>
             <span>{companyData?.sucursales?.length ?? 0} sucursales</span>
             <span>·</span>
             <span>{totalPendientesOperativos} alertas operativas</span>
-          </div>
-          <Text className="paces-text-secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
-            Datos mostrados para: <strong>{etiquetaPeriodo}</strong> ({periodo === 'dia' ? 'Hoy' : periodo === 'semana' ? 'Últimos 7 días' : periodo === 'ano' ? 'Últimos 12 meses' : 'Últimos 30 días'})
-          </Text>
-        </div>
-        <div className="dashboard-hero-actions">
-          <div className="dashboard-hero-actions-top">
-            <Tag icon={<SyncOutlined spin={loading} />} color={loading ? 'processing' : 'default'}>
-              {loading ? 'Actualizando datos' : 'Datos al dia'}
-            </Tag>
-            <Tooltip title="Recargar datos">
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={cargarDatos}
-                loading={loading}
-              >
-                Actualizar
-              </Button>
-            </Tooltip>
-            {lastUpdated && (
-              <span className="dashboard-last-updated">
-                Últ. act.: {lastUpdated}
-              </span>
-            )}
             {(() => {
               const puedeVerDashboard = usuario?.pantallas?.some(p => p.codigo === 'pdashboard');
               const tienePermisoConfig = usuario?.permisosEspeciales?.some(
@@ -489,24 +590,51 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 <Tooltip title="Configurar dashboard">
                   <Button
                     type="text"
+                    size="small"
                     icon={<SettingOutlined />}
                     onClick={() => navigate('/dashboardconfig')}
-                    style={{ color: '#556ee6' }}
+                    style={{ color: 'var(--paces-primary)' }}
                   />
                 </Tooltip>
               );
             })()}
           </div>
-          <Segmented
-            value={periodo}
-            onChange={(val) => setPeriodo(val as typeof periodo)}
-            options={[
-              { value: 'dia', label: 'Hoy' },
-              { value: 'semana', label: 'Semana' },
-              { value: 'mes', label: 'Mes' },
-              { value: 'ano', label: 'Año' },
-            ]}
-          />
+        </div>
+        <div className="dashboard-hero-actions">
+          <div className="dashboard-hero-actions-top">
+            <Tag icon={<SyncOutlined spin={cargando} />} color={cargando ? 'processing' : 'default'}>
+              {cargando ? 'Actualizando datos' : 'Datos al día'}
+            </Tag>
+            <Tooltip title="Recargar datos">
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={cargarDatos}
+                loading={loading}
+              >
+                Actualizar
+              </Button>
+            </Tooltip>
+            {!cargando && (
+              <span className="dashboard-last-updated">
+                Actualizado {tiempoActualizacion}
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Segmented
+              value={periodo}
+              onChange={(val) => setPeriodo(val as typeof periodo)}
+              options={[
+                { value: 'dia', label: 'Hoy' },
+                { value: 'semana', label: 'Semana' },
+                { value: 'mes', label: 'Mes' },
+                { value: 'ano', label: 'Año' },
+              ]}
+            />
+            <Text className="paces-text-secondary" style={{ fontSize: 11 }}>
+              {periodo === 'dia' ? 'Hoy' : periodo === 'semana' ? 'Últimos 7 días' : periodo === 'ano' ? 'Últimos 12 meses' : 'Últimos 30 días'}
+            </Text>
+          </div>
         </div>
       </div>
 
@@ -536,12 +664,16 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
           {/* ========== FILA 1: KPIs ========== */}
           {isWidgetVisible('KPI_SUMMARY') && (
           <Row gutter={[16, 16]}>
-            {kpiVisibles.map((kpi) => (
+            {kpiVisibles.map((kpi, index) => (
               <Col xs={12} sm={8} lg={6} xl={4} key={kpi.key}>
                 <div
-                  className="dashboard-kpi-card"
+                  className={`dashboard-kpi-card ${index < 2 ? 'dashboard-kpi-card--hero' : ''}`}
                   style={{ '--kpi-accent': kpi.color } as React.CSSProperties}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${kpi.label}: ${formatKPIValue(kpi.valor, kpi.kind)}`}
                   onClick={() => navegarKPI(kpi.path)}
+                  onKeyDown={(e) => activarConTeclado(e, () => navegarKPI(kpi.path))}
                 >
                   <div className="dashboard-kpi-top">
                     <div
@@ -586,6 +718,115 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 </div>
               </Col>
             ))}
+          </Row>
+          )}
+
+          {/* ========== FILA 1B: Info Usuario + Accesos Rápidos ========== */}
+          {(isWidgetVisible('INFO_USUARIO') || isWidgetVisible('ACCESOS_RAPIDOS')) && (
+          <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+            {isWidgetVisible('INFO_USUARIO') && (
+            <Col xs={24} lg={12}>
+              <div className="dashboard-side-card">
+                <div className="dashboard-side-card-header">
+                  <span><UserOutlined /> Información del Usuario</span>
+                </div>
+                <div className="dashboard-side-card-body">
+                  <div className="dashboard-user-summary">
+                    <EntidadImagen
+                      tipo="USUARIO"
+                      entidadID={usuario?.id ?? 0}
+                      fallback={usuario?.nombre?.charAt(0)?.toUpperCase() || 'U'}
+                      size={48}
+                    />
+                    <div className="dashboard-user-meta">
+                      <span className="dashboard-user-name">
+                        {usuario?.nombre || '-'}
+                      </span>
+                      <span className="dashboard-user-handle paces-text-secondary">
+                        @{usuario?.nombreUsuario}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <Row gutter={[16, 12]}>
+                      <Col span={12}>
+                        <Text strong className="paces-text-secondary" style={{ fontSize: 12, display: 'block' }}>
+                          Nombre:
+                        </Text>
+                        <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.nombre || '-'}</Text>
+                      </Col>
+                      <Col span={12}>
+                        <Text strong className="paces-text-secondary" style={{ fontSize: 12, display: 'block' }}>
+                          Usuario:
+                        </Text>
+                        <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.nombreUsuario || '-'}</Text>
+                      </Col>
+                      <Col span={12}>
+                        <Text strong className="paces-text-secondary" style={{ fontSize: 12, display: 'block' }}>
+                          Empleado:
+                        </Text>
+                        <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.empleado || '-'}</Text>
+                      </Col>
+
+                    </Row>
+                  </div>
+                </div>
+              </div>
+            </Col>
+            )}
+            {isWidgetVisible('ACCESOS_RAPIDOS') && (
+            <Col xs={24} lg={12}>
+              <div className="dashboard-side-card">
+                <div className="dashboard-side-card-header">
+                  <span><RocketOutlined /> Accesos Rápidos</span>
+                  <div className="dashboard-quick-meta">
+                    <span className="dashboard-quick-count">
+                      {pantallasVisibles.length} de {todasPantallas.length}
+                    </span>
+                    <Tooltip title="Configurar accesos rápidos">
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<SettingOutlined />}
+                        onClick={() => setConfigOpen(true)}
+                      />
+                    </Tooltip>
+                  </div>
+                </div>
+                <div className="dashboard-side-card-body">
+                  {pantallasVisibles.length === 0 ? (
+                    <div className="dashboard-quick-empty">
+                      <Text className="paces-text-secondary">No hay accesos configurados</Text>
+                      <br />
+                      <Button type="link" size="small" onClick={() => setConfigOpen(true)}>
+                        Configurar ahora
+                      </Button>
+                    </div>
+                  ) : (
+                    <Row gutter={[10, 10]}>
+                      {pantallasVisibles.map((p) => (
+                        <Col span={12} key={p.codigo}>
+                          <div
+                            className="dashboard-quick-item"
+                            role="button"
+                            tabIndex={0}
+                            aria-label={p.nombre}
+                            onClick={() => navigate(`/${p.codigo}`)}
+                            onKeyDown={(e) => activarConTeclado(e, () => navigate(`/${p.codigo}`))}
+                          >
+                            <span className="dashboard-quick-item-icon">
+                              {obtenerIconoModulo(p.modulos?.[0]?.nombre)}
+                            </span>
+                            <span className="dashboard-quick-item-label">{p.nombre}</span>
+                          </div>
+                        </Col>
+                      ))}
+                    </Row>
+                  )}
+                </div>
+              </div>
+            </Col>
+            )}
           </Row>
           )}
 
@@ -715,7 +956,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
           </Row>
 
           {/* ========== FILA 3: NCF Pendientes ========== */}
-          {isWidgetVisible('NCF_PENDIENTES') && (
+{isWidgetVisible('NCF_PENDIENTES') && (
           <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
             <Col xs={24}>
               <div className="dashboard-chart-card dashboard-chart-card-compact">
@@ -727,7 +968,16 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     {pendientesNCF.length > 0 ? `${pendientesNCF.length} pendiente(s)` : <><CheckCircleOutlined /> Al día</>}
                   </span>
                 </div>
-                {pendientesNCF.length > 0 ? (
+                {errorNCF && (
+                  <DashboardBlockError
+                    mensaje={errorNCF}
+                    onRetry={reintentarNCF}
+                    cargando={loadingNCF}
+                  />
+                )}
+                {loadingNCF && pendientesNCF.length === 0 ? (
+                  <Skeleton active paragraph={{ rows: 3 }} title={{ width: '50%' }} />
+                ) : pendientesNCF.length > 0 ? (
                   <Table
                     dataSource={pendientesNCF}
                     rowKey={(r) => r.id ?? `ncf-${r.transaccionID ?? Math.random()}`}
@@ -754,7 +1004,7 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
               </div>
             </Col>
           </Row>
-          )}
+)}
 
           {/* ========== FILA 4B: Docs No Cuadrados ========== */}
           {isWidgetVisible('DOCS_NO_CUADRADOS') && (
@@ -769,7 +1019,16 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                     {docsNoCuadrados.length > 0 ? `${docsNoCuadrados.length} documento(s)` : <><CheckCircleOutlined /> Al día</>}
                   </span>
                 </div>
-                {docsNoCuadrados.length > 0 ? (
+                {errorDocsNC && (
+                  <DashboardBlockError
+                    mensaje={errorDocsNC}
+                    onRetry={reintentarDocsNC}
+                    cargando={loadingDocsNC}
+                  />
+                )}
+                {loadingDocsNC && docsNoCuadrados.length === 0 ? (
+                  <Skeleton active paragraph={{ rows: 3 }} title={{ width: '50%' }} />
+                ) : docsNoCuadrados.length > 0 ? (
                   <Table
                     dataSource={docsNoCuadrados}
                     rowKey={(r) => r.id ?? `doc-${Math.random()}`}
@@ -853,8 +1112,15 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                         value: s.codigo,
                         label: s.nombre,
                       }))}
-                      loading={loadingStock}
+                      loading={loadingSucursales || loadingStock}
                     />
+                    {errorSucursales && (
+                      <DashboardBlockError
+                        mensaje={errorSucursales}
+                        onRetry={reintentarSucursales}
+                        cargando={loadingSucursales}
+                      />
+                    )}
                   </div>
                   {stockNegativo.length > 0 || loadingStock ? (
                     <Table
@@ -892,108 +1158,6 @@ const [docsNoCuadrados, setDocsNoCuadrados] = useState<any[]>([]);
                 </div>
               </Col>
             </Row>
-          )}
-
-          {/* ========== FILA 4: Info Usuario + Accesos Rápidos ========== */}
-          {(isWidgetVisible('INFO_USUARIO') || isWidgetVisible('ACCESOS_RAPIDOS')) && (
-          <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-            {isWidgetVisible('INFO_USUARIO') && (
-            <Col xs={24} lg={12}>
-              <div className="dashboard-side-card">
-                <div className="dashboard-side-card-header">
-                  <span><UserOutlined /> Información del Usuario</span>
-                </div>
-                <div className="dashboard-side-card-body">
-                  <div className="dashboard-user-summary">
-                    <EntidadImagen
-                      tipo="USUARIO"
-                      entidadID={usuario?.id ?? 0}
-                      fallback={usuario?.nombre?.charAt(0)?.toUpperCase() || 'U'}
-                      size={48}
-                    />
-                    <div className="dashboard-user-meta">
-                      <span className="dashboard-user-name">
-                        {usuario?.nombre || '-'}
-                      </span>
-                      <span className="dashboard-user-handle paces-text-secondary">
-                        @{usuario?.nombreUsuario}
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    <Row gutter={[16, 12]}>
-                      <Col span={12}>
-                        <Text strong className="paces-text-secondary" style={{ fontSize: 12, display: 'block' }}>
-                          Nombre:
-                        </Text>
-                        <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.nombre || '-'}</Text>
-                      </Col>
-                      <Col span={12}>
-                        <Text strong className="paces-text-secondary" style={{ fontSize: 12, display: 'block' }}>
-                          Usuario:
-                        </Text>
-                        <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.nombreUsuario || '-'}</Text>
-                      </Col>
-                      <Col span={12}>
-                        <Text strong className="paces-text-secondary" style={{ fontSize: 12, display: 'block' }}>
-                          Empleado:
-                        </Text>
-                        <Text style={{ fontSize: 13, fontWeight: 500 }}>{usuario?.empleado || '-'}</Text>
-                      </Col>
-
-                    </Row>
-                  </div>
-                </div>
-              </div>
-            </Col>
-            )}
-            {isWidgetVisible('ACCESOS_RAPIDOS') && (
-            <Col xs={24} lg={12}>
-              <div className="dashboard-side-card">
-                <div className="dashboard-side-card-header">
-                  <span><RocketOutlined /> Accesos Rápidos</span>
-                  <div className="dashboard-quick-meta">
-                    <span className="dashboard-quick-count">
-                      {pantallasVisibles.length} de {todasPantallas.length}
-                    </span>
-                    <Tooltip title="Configurar accesos rápidos">
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<SettingOutlined />}
-                        onClick={() => setConfigOpen(true)}
-                      />
-                    </Tooltip>
-                  </div>
-                </div>
-                <div className="dashboard-side-card-body">
-                  {pantallasVisibles.length === 0 ? (
-                    <div className="dashboard-quick-empty">
-                      <Text className="paces-text-secondary">No hay accesos configurados</Text>
-                      <br />
-                      <Button type="link" size="small" onClick={() => setConfigOpen(true)}>
-                        Configurar ahora
-                      </Button>
-                    </div>
-                  ) : (
-                    <Row gutter={[10, 10]}>
-                      {pantallasVisibles.map((p) => (
-                        <Col span={12} key={p.codigo}>
-                          <div
-                            className="dashboard-quick-item"
-                            onClick={() => navigate(`/${p.codigo}`)}
-                          >
-                            {p.nombre}
-                          </div>
-                        </Col>
-                      ))}
-                    </Row>
-                  )}
-                </div>
-              </div>
-            </Col>
-            )}
-          </Row>
           )}
         </>
       )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuthStore } from '../../stores/authStore';
-import { Sucursal } from '../../types/auth';
+import type { Sucursal } from '../../types/auth';
 import { Form, Input, Button, Alert } from 'antd';
 import { UserOutlined, LockOutlined, ArrowRightOutlined } from '@ant-design/icons';
 import GenesisLogo from '../../components/GenesisLogo';
@@ -62,7 +62,7 @@ const Login: React.FC = () => {
         contrasena,
         equipo,
         ip,
-        sucursal: securitySucursal as unknown as import('../../types/auth').Sucursal,
+        sucursal: securitySucursal as unknown as Sucursal,
       });
 
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4003/api';
@@ -126,25 +126,29 @@ const Login: React.FC = () => {
               <Alert message={error} type="error" showIcon className="login-alert" />
             )}
 
-            <Form.Item label="Usuario" style={{ marginBottom: 18 }}>
+            <Form.Item label="Usuario" htmlFor="login-usuario" style={{ marginBottom: 18 }}>
               <Input
+                id="login-usuario"
                 prefix={<UserOutlined />}
                 value={nombreUsuario}
                 onChange={(e) => setNombreUsuario(e.target.value)}
                 onKeyUp={handleKeyUp}
                 placeholder="Ej: JUAN.PEREZ"
+                autoComplete="username"
                 autoFocus
                 size="large"
               />
             </Form.Item>
 
-            <Form.Item label="Contraseña" style={{ marginBottom: 22 }}>
+            <Form.Item label="Contraseña" htmlFor="login-contrasena" style={{ marginBottom: 22 }}>
               <Input.Password
+                id="login-contrasena"
                 prefix={<LockOutlined />}
                 value={contrasena}
                 onChange={(e) => setContrasena(e.target.value)}
                 onKeyUp={handleKeyUp}
                 placeholder="Su contraseña"
+                autoComplete="current-password"
                 size="large"
               />
             </Form.Item>

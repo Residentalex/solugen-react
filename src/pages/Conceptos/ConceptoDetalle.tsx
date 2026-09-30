@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Tabs, Tag, Row, Col, Grid, Typography, Descriptions, Table
+  Card, Tabs, Tag, Row, Col, Grid, Typography, Descriptions, Table, message
 } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -68,7 +68,7 @@ const ConceptoDetalle: React.FC = () => {
       });
       setTiposMap(map);
       setTiposDocMap(docMap);
-    }).catch((err) => console.warn('Error al cargar tipos en detalle', err));
+    }).catch((err: any) => message.error(err?.response?.data?.errorMessage || 'Error al cargar tipos en detalle'));
     return () => setPageTitleOverride('');
   }, [setActiveModule, setPageTitleOverride, sucursalActiva]);
 

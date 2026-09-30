@@ -5,6 +5,7 @@ import {
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Empty,
 } from 'antd';
 import {
+  InboxOutlined,
   DeleteOutlined,
   PlusOutlined,
   SearchOutlined,
@@ -15,6 +16,7 @@ import {
   CalendarOutlined,
   HolderOutlined,
   HistoryOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -204,6 +206,7 @@ const CotizacionVentaFormulario: React.FC = () => {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [fechaVencimientoModal, setFechaVencimientoModal] = useState<{ open: boolean; detalleId: number }>({ open: false, detalleId: 0 });
   const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
+  const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
   const [asientosModificados, setAsientosModificados] = useState(false);
   const [impuestosFactura, setImpuestosFactura] = useState<any[]>([]);
   const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
@@ -614,6 +617,7 @@ const CotizacionVentaFormulario: React.FC = () => {
   const handleGenerarAsientos = async () => {
     if (sucursalActiva === undefined) return;
     setGenerandoAsientos(true);
+    setErrorGeneracion(null);
     try {
       const dto = construirDTO();
       const asientosGenerados = await transaccionApi.generarAsientos(sucursalActiva, dto);
@@ -621,7 +625,7 @@ const CotizacionVentaFormulario: React.FC = () => {
       message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
-      message.error(msg);
+      setErrorGeneracion(msg);
     } finally {
       setGenerandoAsientos(false);
     }
@@ -1493,6 +1497,18 @@ const CotizacionVentaFormulario: React.FC = () => {
         />
       )}
 
+      {errorGeneracion && (
+        <Alert
+          message="Error al generar asientos"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          description={errorGeneracion}
+          closable
+          onClose={() => setErrorGeneracion(null)}
+        />
+      )}
+
       <BuscarConceptoModal
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
@@ -1537,7 +1553,7 @@ const CotizacionVentaFormulario: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                   children: (
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
@@ -1603,9 +1619,10 @@ const CotizacionVentaFormulario: React.FC = () => {
                     </>
                   ),
                 },
-                {
-                  key: 'impuestos',
-                  label: `Impuestos (${impuestosFactura.length})`,
+{
+                key: 'impuestos',
+                icon: <FileTextOutlined />,
+                label: `Impuestos (${impuestosFactura.length})`,
                   children: (
                     <>
                       <div style={{ marginBottom: 8 }}>
@@ -1674,7 +1691,7 @@ const CotizacionVentaFormulario: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                 children: (
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>

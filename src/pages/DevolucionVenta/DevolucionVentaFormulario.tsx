@@ -5,6 +5,7 @@ import {
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Dropdown, Empty,
 } from 'antd';
 import {
+  InboxOutlined,
   SaveOutlined,
   CloseOutlined,
   DeleteOutlined,
@@ -45,7 +46,7 @@ import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
-import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
+import { DragHandle, SortableRow } from '../../components/DragSortable';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
@@ -333,6 +334,7 @@ const DevolucionVentaFormulario: React.FC = () => {
 
   // ===== Asientos editables locales =====
   const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
+  const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
   const [asientosModificados, setAsientosModificados] = useState(false);
 
   // ===== Precarga desde PV (si viene query param pvId) =====
@@ -893,13 +895,15 @@ const DevolucionVentaFormulario: React.FC = () => {
   const handleGenerarAsientos = async () => {
     if (sucursalActiva === undefined) return;
     setGenerandoAsientos(true);
+    setErrorGeneracion(null);
     try {
       const dto = construirDTO();
       const asientosGenerados = await transaccionApi.generarAsientos(sucursalActiva, dto);
       setAsientosLocales(asientosGenerados);
       message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
-      message.error(err?.message || 'Error al generar asientos');
+      const msg = err?.message || 'Error al generar asientos';
+      setErrorGeneracion(msg);
     } finally {
       setGenerandoAsientos(false);
     }
@@ -1482,6 +1486,18 @@ const DevolucionVentaFormulario: React.FC = () => {
         />
       )}
 
+      {errorGeneracion && (
+        <Alert
+          message="Error al generar asientos"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          description={errorGeneracion}
+          closable
+          onClose={() => setErrorGeneracion(null)}
+        />
+      )}
+
       <BuscarConceptoModal
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
@@ -1516,7 +1532,7 @@ const DevolucionVentaFormulario: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Productos (${detalles.length}${detalleSearch ? ` filtrados` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detalles.length}${detalleSearch ? ` filtrados` : ''})`,
                   children: (
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1639,7 +1655,7 @@ const DevolucionVentaFormulario: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Productos (${detalles.length}${detalleSearch ? ` filtrados` : ''})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${detalles.length}${detalleSearch ? ` filtrados` : ''})`,
                 children: (
                   <>
                     <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

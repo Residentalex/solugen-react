@@ -549,6 +549,17 @@ const CFacturasElectronicas: React.FC = () => {
     return base;
   }, [vista]);
 
+  const hayBusqueda = (searchTerm ?? '').trim().length > 0;
+
+  // El backend no devuelve el conteo total, solo la pagina solicitada.
+  // Cuando la pagina viene llena el total es un minimo (centinela pagina * tamanoPagina + 1)
+  // usado solo para habilitar el boton de siguiente pagina; por eso showTotal lo rotula
+  // como "al menos N" en lugar de un total exacto. Cuando viene parcial el total es exacto.
+  const paginaLlena = dataTabla.length >= tamanoPagina;
+  const totalRegistros = paginaLlena
+    ? pagina * tamanoPagina + 1
+    : (pagina - 1) * tamanoPagina + dataTabla.length;
+
   const statCardStyle = (fondo: string) => ({
     borderRadius: 12,
     background: `linear-gradient(135deg, ${fondo} 0%, ${token.colorBgContainer} 100%)`,
@@ -744,7 +755,9 @@ const CFacturasElectronicas: React.FC = () => {
           loading={cargandoTabla}
           locale={{
             emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Empty description="No hay comprobantes registrados" />
+              <Empty description={hayBusqueda
+                ? 'No se encontraron comprobantes con los filtros aplicados'
+                : 'No hay comprobantes registrados'} />
             </div>,
           }}
           scroll={{ x: 900 }}
@@ -752,9 +765,11 @@ const CFacturasElectronicas: React.FC = () => {
           pagination={{
             current: pagina,
             pageSize: tamanoPagina,
-            total: dataTabla.length === tamanoPagina ? pagina * tamanoPagina + 1 : (pagina - 1) * tamanoPagina + dataTabla.length,
+            total: totalRegistros,
             showSizeChanger: false,
-            showTotal: (total, range) => `${range[0]}-${range[1]} de ${total}+ registros`,
+            showTotal: (total, range) => paginaLlena
+              ? `${range[0]}-${range[1]} de al menos ${total} registros`
+              : `${range[0]}-${range[1]} de ${total} registros`,
           }}
           onChange={(pagination) => {
             const newPage = pagination.current || 1;

@@ -1,5 +1,6 @@
-﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Modal, Table, Button, Space, message, InputNumber, Tag } from 'antd';
+﻿import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { Modal, Table, Button, Space, message, Input, InputNumber, Tag } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
 import { apiClient } from '../../api/client';
@@ -61,6 +62,8 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   const [documentos, setDocumentos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [searchText, setSearchText] = useState('');
+  const searchRef = useRef<any>(null);
   const [montosPorFila, setMontosPorFila] = useState<Record<string, number>>({});
   const [montoADistribuir, setMontoADistribuir] = useState(0);
   const [distribuido, setDistribuido] = useState(0);
@@ -108,6 +111,24 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   const calcularPendiente = useCallback((doc: any): number => {
     return Math.abs(_obtenerPendienteReal(doc));
   }, [_obtenerPendienteReal]);
+
+  // ===== Filtrado por texto de búsqueda (documento, NCF, doc. asociado) =====
+  const documentosFiltrados = useMemo(() => {
+    const q = (searchText || '').trim().toLowerCase();
+    if (!q) return documentos;
+    return documentos.filter((d: any) => {
+      const documento = obtenerCodigoCompleto(d);
+      const ncf = d?.ncf || d?.nCF || '';
+      const referencia = d?.referencia || '';
+      const numero = d?.noDocumento != null ? String(d.noDocumento) : '';
+      return (
+        documento.toLowerCase().includes(q) ||
+        String(ncf).toLowerCase().includes(q) ||
+        referencia.toLowerCase().includes(q) ||
+        numero.toLowerCase().includes(q)
+      );
+    });
+  }, [documentos, searchText, obtenerCodigoCompleto]);
 
   // ===== Cargar documentos pendientes =====
   const cargar = useCallback(async (): Promise<any[]> => {
@@ -159,6 +180,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   useEffect(() => {
     if (open) {
       setSelectedRowKeys([]);
+      setSearchText('');
       setMontoADistribuir(montoTotal || 0);
       setDistribuido(0);
       setMontosPorFila({});
@@ -198,6 +220,13 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       });
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ===== Focus del Input.Search al abrir (mismo delay 100ms de los demas modales de busqueda) =====
+  useEffect(() => {
+    if (!open) return;
+    const timer = setTimeout(() => { searchRef.current?.focus?.(); }, 100);
+    return () => clearTimeout(timer);
+  }, [open]);
 
   // ===== Verificar SPA bloqueantes para documentos pendientes =====
   useEffect(() => {
@@ -502,8 +531,17 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       width={1280}
       destroyOnHidden
     >
+      <Input.Search
+        ref={searchRef}
+        placeholder="Buscar por documento, NCF o doc. asociado..."
+        allowClear
+        onSearch={(value) => setSearchText(value || '')}
+        onChange={(e) => { if (!e.target.value) setSearchText(''); }}
+        style={{ width: '100%', maxWidth: 400, marginBottom: 16 }}
+        prefix={<SearchOutlined className="paces-text-icon" />}
+      />
       <Table
-        dataSource={documentos}
+        dataSource={documentosFiltrados}
         columns={columnas}
         rowKey={(r) => r.id}
         loading={loading}

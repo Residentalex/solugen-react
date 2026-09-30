@@ -18,6 +18,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { authApi } from '../../api/authApi';
 import EntidadImagen from '../../components/EntidadImagen';
+import { extraerMensajeError } from '../../utils/formats';
 
 const { useBreakpoint } = Grid;
 
@@ -42,6 +43,9 @@ const MiPerfil: React.FC = () => {
   const [recargando, setRecargando] = React.useState(false);
   const [loadingError, setLoadingError] = React.useState(false);
 
+  const screens = useBreakpoint();
+  const isLarge = screens.xxl === true;
+
   const handleRefresh = () => {
     setLoadingError(false);
     handleRecargarPermisos();
@@ -61,18 +65,17 @@ const MiPerfil: React.FC = () => {
         sucursalesPermitidas: sesion.sucursalesPermitidas,
       });
       message.success('Permisos recargados correctamente');
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al recargar permisos');
+    } catch (err: unknown) {
+      message.error(extraerMensajeError(err, 'Error al recargar permisos'));
       setLoadingError(true);
     } finally {
       setRecargando(false);
     }
   };
 
-  if (!usuario) return null;
-
-  const screens = useBreakpoint();
-  const isLarge = screens.xxl === true;
+  if (!usuario) {
+    return null;
+  }
 
   const inicial = usuario.nombre?.charAt(0)?.toUpperCase() || 'U';
   const pantallasUnicas = new Set(usuario.pantallas?.map((p) => p.codigo)).size;

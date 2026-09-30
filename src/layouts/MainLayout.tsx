@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Layout, Spin, message, Dropdown, Select, Input, Tag, Grid } from 'antd';
+import { Layout, Spin, message, Dropdown, Select, Input, Tag, Grid, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { Sucursal, type PantallaDTO, type AuthSucursalPermitidaDTO } from '../types/auth';
 import { useCompanyStore } from '../stores/companyStore';
 import { useUIStore } from '../stores/uiStore';
 import { useNotificacionesStore } from '../stores/notificacionesStore';
-import { useChatStore } from '../stores/chatStore';
 import ChatWidget from '../components/ChatWidget/ChatWidget';
+import ChatInitializer from '../components/ChatWidget/ChatInitializer';
 import EntidadImagen from '../components/EntidadImagen';
 import GenesisLogo from '../components/GenesisLogo';
 import Sidebar from './Sidebar';
@@ -20,6 +20,7 @@ import NotificacionDropdown from '../components/NotificacionDropdown';
 import BuscadorGlobalModal from '../components/BuscadorGlobal/BuscadorGlobalModal';
 import { Outlet } from 'react-router-dom';
 import {
+  CalendarOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   LogoutOutlined,
@@ -129,7 +130,9 @@ const pageTitles: Record<string, string> = {
   FGORC: 'Generador ORC',
   notificaciones: 'Notificaciones',
   MTicket: 'Tickets',
+  Actividades: 'Actividades',
   MApiToken: 'API Tokens',
+  chat: 'Chat interno',
 };
 
 const MainLayout: React.FC = () => {
@@ -151,7 +154,13 @@ const MainLayout: React.FC = () => {
   const pageTitleOverride = useUIStore((s: any) => s.pageTitleOverride);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
   const themeName = useUIStore((s: any) => s.themeName);
+  const overlayAbierto = useUIStore((s) => s.overlayAbierto);
+  const setOverlayAbierto = useUIStore((s) => s.setOverlayAbierto);
   const screens = useBreakpoint();
+  const esEscritorio = screens.lg !== false;
+  const esCompacto = screens.lg === false;
+  const hamburguesaRef = React.useRef<HTMLButtonElement>(null);
+  const overflowPrevioRef = React.useRef<string | undefined>(undefined);
 
 
   useEffect(() => {
@@ -184,12 +193,14 @@ const MainLayout: React.FC = () => {
   // Sincronizar activeModule desde la ruta actual
   useEffect(() => {
     const segmentos = location.pathname.split('/').filter(Boolean);
-    if (segmentos.length > 0) {
-      const codigo = segmentos[0];
-      // Solo sincronizar si es un código de módulo (no rutas tipo /saas, /store, /documentacion)
-      if (codigo && !['saas', 'store', 'documentacion'].includes(codigo)) {
-        setActiveModule(codigo);
-      }
+    if (segmentos.length === 0) {
+      setActiveModule('dashboard');
+      return;
+    }
+    const codigo = segmentos[0];
+    // Solo sincronizar si es un código de módulo (no rutas tipo /saas, /store, /documentacion)
+    if (codigo && !['saas', 'store', 'documentacion'].includes(codigo)) {
+      setActiveModule(codigo);
     }
   }, [location.pathname, setActiveModule]);
 
@@ -233,28 +244,81 @@ const MainLayout: React.FC = () => {
     };
   }, [isAuthenticated]);
 
-  // Chat: conexion SignalR
+  // Chat: conexion SignalR centralizada en ChatInitializer
+  // (compartida con SaasMainLayout para /saas/chat)
+
   useEffect(() => {
-    if (!isAuthenticated) return;
+    setOverlayAbierto(false);
+  }, [location.pathname, setOverlayAbierto]);
 
-    useChatStore.getState().conectarSignalR();
-    useChatStore.getState().cargarConversaciones();
-
-    return () => {
-      useChatStore.getState().desconectarSignalR();
+  useEffect(() => {
+    if (!overlayAbierto) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOverlayAbierto(false);
     };
-  }, [isAuthenticated]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [overlayAbierto, setOverlayAbierto]);
 
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth <= 1600 && !sidebarCollapsed) {
-        setSidebarCollapsed(true);
+    if (!esCompacto) setOverlayAbierto(false);
+  }, [esCompacto, setOverlayAbierto]);
+
+  useEffect(() => {
+    if (!esCompacto || !overlayAbierto) return;
+    overflowPrevioRef.current = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      if (overflowPrevioRef.current !== undefined) {
+        document.body.style.overflow = overflowPrevioRef.current;
+        overflowPrevioRef.current = undefined;
       }
     };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [sidebarCollapsed, setSidebarCollapsed]);
+  }, [esCompacto, overlayAbierto]);
+
+  useEffect(() => {
+    if (!esCompacto || !overlayAbierto) return;
+
+    const sidebar = document.getElementById('sidebar');
+    const selector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const botonHamburguesa = hamburguesaRef.current;
+
+    const obtenerFocusables = (): HTMLElement[] =>
+      Array.from(sidebar?.querySelectorAll<HTMLElement>(selector) ?? []);
+
+    requestAnimationFrame(() => {
+      obtenerFocusables()[0]?.focus();
+    });
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const focusables = obtenerFocusables();
+      if (focusables.length === 0) return;
+      const primero = focusables[0];
+      const ultimo = focusables[focusables.length - 1];
+      const activo = document.activeElement;
+      const dentro = sidebar ? sidebar.contains(activo) : false;
+
+      if (e.shiftKey) {
+        if (!dentro || activo === primero) {
+          e.preventDefault();
+          ultimo.focus();
+        }
+      } else {
+        if (!dentro || activo === ultimo) {
+          e.preventDefault();
+          primero.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      botonHamburguesa?.focus();
+    };
+  }, [esCompacto, overlayAbierto]);
 
   const [searchOpen, setSearchOpen] = React.useState(false);
 
@@ -305,7 +369,8 @@ const MainLayout: React.FC = () => {
     {
       key: 'settings',
       icon: <SettingOutlined />,
-      label: 'Configuración',
+      label: 'Configuración (próximamente)',
+      disabled: true,
     },
     { type: 'divider' as const },
     {
@@ -317,47 +382,87 @@ const MainLayout: React.FC = () => {
   ];
 
   const siderWidth = sidebarCollapsed ? 80 : 250;
+  const siderColapsado = esCompacto ? false : sidebarCollapsed;
+  const menuAbierto = esCompacto ? overlayAbierto : !sidebarCollapsed;
+  const menuLabel = menuAbierto ? 'Cerrar menú' : 'Abrir menú';
+
+  const toggleMenu = () => {
+    if (esEscritorio) {
+      setSidebarCollapsed(!sidebarCollapsed);
+    } else {
+      setOverlayAbierto((v) => !v);
+    }
+  };
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider
-        collapsible
-        collapsed={sidebarCollapsed}
-        onCollapse={setSidebarCollapsed}
-        trigger={null}
-        width={250}
-        className="paces-sidebar"
-        style={{
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          bottom: 0,
-          zIndex: 200,
-        }}
-      >
-        <div className={`sidebar-logo ${sidebarCollapsed ? 'collapsed' : ''}`}>
-          <GenesisLogo size={28} dark={themeName.startsWith('dark-')} showText={!sidebarCollapsed} />
-        </div>
-        <div className="sidebar-menu-wrapper">
-          <Sidebar />
-        </div>
-        <div className="sidebar-footer">
-          <SidebarDocBtn collapsed={sidebarCollapsed} />
-        </div>
-      </Sider>
+      {(!esCompacto || overlayAbierto) && (
+        <Sider
+          collapsible
+          collapsed={siderColapsado}
+          onCollapse={setSidebarCollapsed}
+          trigger={null}
+          width={250}
+          id="sidebar"
+          className="paces-sidebar"
+          style={{
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            height: '100vh',
+            zIndex: esCompacto ? 300 : 200,
+            boxShadow: esCompacto ? '0 0 24px rgba(0,0,0,0.18)' : undefined,
+          }}
+        >
+          <div className={`sidebar-logo ${siderColapsado ? 'collapsed' : ''}`}>
+            <GenesisLogo size={28} dark={themeName.startsWith('dark-')} showText={!siderColapsado} />
+          </div>
+          <div className="sidebar-menu-wrapper">
+            <Sidebar />
+          </div>
+          <div className="sidebar-footer">
+            <SidebarDocBtn collapsed={siderColapsado} />
+          </div>
+        </Sider>
+      )}
 
-      <Layout style={{ marginLeft: siderWidth, transition: 'margin-left 0.2s' }}>
+      {esCompacto && overlayAbierto && (
+        <div
+          aria-hidden="true"
+          onClick={() => setOverlayAbierto(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.45)',
+            zIndex: 250,
+          }}
+        />
+      )}
+
+      <Layout style={{ marginLeft: esEscritorio ? siderWidth : 0, transition: 'margin-left 0.2s' }}>
         <div className="paces-topbar">
           <div className="paces-topbar-left">
-            <button className="paces-hamburger" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
-              {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            </button>
+            <Tooltip title={menuLabel}>
+              <button
+                ref={hamburguesaRef}
+                className="paces-hamburger"
+                aria-label={menuLabel}
+                aria-expanded={menuAbierto}
+                aria-controls="sidebar"
+                onClick={toggleMenu}
+              >
+                {menuAbierto ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
+              </button>
+            </Tooltip>
             <div style={{ cursor: 'pointer', position: 'relative', width: '100%' }} onClick={() => setSearchOpen(true)}>
               <Input.Search
                 placeholder="Buscar...  (Ctrl+K)"
                 size="middle"
                 className="paces-topbar-search"
-                onFocus={(e) => { e.target.blur(); setSearchOpen(true); }}
+                readOnly
+                role="searchbox"
+                aria-label="Búsqueda global. Abrir búsqueda"
+                onPressEnter={() => setSearchOpen(true)}
                 onSearch={() => setSearchOpen(true)}
               />
             </div>
@@ -367,7 +472,15 @@ const MainLayout: React.FC = () => {
             <ThemeSwitcher />
             <IncidenciaButton moduloActual={pageTitle} />
             <NotificacionDropdown />
-            {sucursalesFiltradas.length > 1 && activeModule !== 'dashboard' && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && activeModule !== 'MTicket' && activeModule !== 'notificaciones' && activeModule !== 'MProducto' && (
+            <button
+              className="paces-topbar-action-btn"
+              title="Actividades"
+              aria-label="Actividades"
+              onClick={() => navigate('/Actividades')}
+            >
+              <CalendarOutlined style={{ fontSize: 16 }} />
+            </button>
+            {sucursalesFiltradas.length > 1 && activeModule !== 'dashboard' && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && activeModule !== 'MTicket' && activeModule !== 'notificaciones' && activeModule !== 'MProducto' && activeModule !== 'chat' && activeModule !== 'Actividades' && (
               <Select
                 value={sucursalActiva}
                 onChange={(val) => setSucursalActiva(val)}
@@ -402,15 +515,15 @@ const MainLayout: React.FC = () => {
             <div>
               <h3>{pageTitleOverride || toTitleCase(pageTitle)}</h3>
               <div className="breadcrumb">
-                <span>Inicio</span>
+                <Link to="/">Inicio</Link>
                 {pantallaActual?.modulos?.[0]?.nombre && (
                   <>
                     <span className="paces-text-secondary">/</span>
-                    <span>{pantallaActual.modulos[0].nombre}</span>
+                    <span className="paces-text-secondary">{pantallaActual.modulos[0].nombre}</span>
                   </>
                 )}
                 <span className="paces-text-secondary">/</span>
-                <span>{toTitleCase(pageTitle)}</span>
+                <span className="paces-text-secondary">{toTitleCase(pageTitle)}</span>
               </div>
             </div>
           </div>
@@ -431,7 +544,8 @@ const MainLayout: React.FC = () => {
         <BuscadorGlobalModal open={searchOpen} onClose={() => setSearchOpen(false)} />
       </Layout>
 
-      <ChatWidget />
+      {location.pathname !== '/chat' && <ChatWidget />}
+      <ChatInitializer />
     </Layout>
   );
 };

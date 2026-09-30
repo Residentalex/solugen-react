@@ -4,6 +4,7 @@ import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, message, Tooltip, Modal, Alert, App, Switch, Typography
 } from 'antd';
 import {
+  InboxOutlined,
   LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
   FileTextOutlined, FileSearchOutlined,
@@ -723,7 +724,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
               items={[
                 {
                   key: 'articulos',
-                  label: `Artículos (${detallesFiltrados.length}${usandoEntrada ? '' : (detalleSearch ? `/${detallesFuente.length}` : '')})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${usandoEntrada ? '' : (detalleSearch ? `/${detallesFuente.length}` : '')})`,
                   children: (
                     <>
                       {usandoEntrada && (
@@ -747,6 +748,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
                 },
                 {
                   key: 'documentos',
+                  icon: <FileTextOutlined />,
                   label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <TransaccionesAsociadasCard
@@ -762,9 +764,10 @@ const FacturaSuplidorDetalle: React.FC = () => {
                     <AsientosContableTable asientos={documentoActivo.asientos || []} scroll={{ x: 600 }} rowKey={(r: any) => r.id || r.asientoID} />
                   ),
                 },
-                {
-                  key: 'impuestos',
-                  label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
+{
+               key: 'impuestos',
+               icon: <FileTextOutlined />,
+               label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
                   children: (
                     <TablaImpuestosDetalle dataSource={documentoActivo.impuestosFactura || []} />
                   ),
@@ -873,7 +876,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
             items={[
               {
                 key: 'articulos',
-                label: `Artículos (${detallesFiltrados.length}${usandoEntrada ? '' : (detalleSearch ? `/${detallesFuente.length}` : '')})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${usandoEntrada ? '' : (detalleSearch ? `/${detallesFuente.length}` : '')})`,
                 children: (
                   <>
                     {usandoEntrada && (
@@ -897,6 +900,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
               },
               {
                 key: 'documentos',
+                icon: <FileTextOutlined />,
                 label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                 children: (
                   <TransaccionesAsociadasCard

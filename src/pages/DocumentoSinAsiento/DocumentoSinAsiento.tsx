@@ -289,7 +289,7 @@ const DocumentoSinAsiento: React.FC = () => {
               placeholder="Buscar documento, entidad..."
               allowClear
               onSearch={(val) => setSearchText(val)}
-              style={{ width: 400, marginBottom: 16 }}
+              style={{ width: 400, marginBottom: 16, maxWidth: '100%' }}
               prefix={<SearchOutlined className="paces-text-icon" />}
             />
           </div>

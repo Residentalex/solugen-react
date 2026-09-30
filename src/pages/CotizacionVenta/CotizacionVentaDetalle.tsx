@@ -4,6 +4,7 @@ import {
   Card, Descriptions, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Modal, Tooltip, Alert, App
 } from 'antd';
 import {
+  InboxOutlined,
   LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
   FileTextOutlined, FileSearchOutlined,
@@ -604,7 +605,7 @@ const CotizacionVentaDetalle: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                       <div style={{ minHeight: 220 }}>
@@ -719,7 +720,7 @@ const CotizacionVentaDetalle: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                 children: (
                   <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                     <div style={{ minHeight: 220 }}>

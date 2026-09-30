@@ -259,6 +259,8 @@ export interface LineaZonaConfig {
   condicion?: string;
   /** Si true, la línea no se imprime cuando el valor resuelto está vacío. */
   ocultarSiVacio?: boolean;
+  /** Texto a imprimir cuando el valor de la línea no resuelve (vacío o nulo). Ausente = la línea se omite. */
+  valorPorDefecto?: string;
   /** Label editable (CAMPO / TOTAL / COBRO). Ausente = label natural. */
   label?: string;
   /** Si es false, no se emite el label (solo el valor). Default true. */

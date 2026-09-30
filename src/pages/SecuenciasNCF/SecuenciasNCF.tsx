@@ -60,7 +60,6 @@ const SecuenciasNCF: React.FC = () => {
   const [filtroVencimiento, setFiltroVencimiento] = useState('todas');
   const [pagina, setPagina] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [modalProntoVisible, setModalProntoVisible] = useState(false);
 
   const screens = Grid.useBreakpoint();
   const modalWidth = screens.lg ? 600 : '92vw';
@@ -352,18 +351,22 @@ const SecuenciasNCF: React.FC = () => {
             {totalActivas} activas · {enAlerta} próx. a agotarse · {vencidas} vencidas
           </Text>
         </div>
-        <PermissionGate accion="CREAR">
-          <Button
-            type="default"
-            icon={<PlusOutlined />}
-            onClick={() => setModalProntoVisible(true)}
-          >
-            Nueva Secuencia{' '}
-            <Tag color="orange" style={{ marginLeft: 4, fontSize: 10 }}>
-              Pronto
-            </Tag>
-          </Button>
-        </PermissionGate>
+        <Tooltip title="Disponible próximamente" placement="bottom">
+          <span>
+            <PermissionGate accion="CREAR">
+              <Button
+                type="default"
+                icon={<PlusOutlined />}
+                disabled
+              >
+                Nueva Secuencia{' '}
+                <Tag color="orange" style={{ marginLeft: 4, fontSize: 10 }}>
+                  Pronto
+                </Tag>
+              </Button>
+            </PermissionGate>
+          </span>
+        </Tooltip>
       </div>
 
       {isError && (
@@ -595,26 +598,6 @@ const SecuenciasNCF: React.FC = () => {
             </Descriptions>
           </>
         )}
-      </Modal>
-
-      {/* Modal "Nueva Secuencia - Pronto" */}
-      <Modal
-        title="Nueva Secuencia NCF"
-        open={modalProntoVisible}
-        onCancel={() => setModalProntoVisible(false)}
-        footer={
-          <Button type="primary" onClick={() => setModalProntoVisible(false)}>
-            Entendido
-          </Button>
-        }
-      >
-        <p>
-          La funcionalidad de registro de secuencias NCF está en desarrollo.
-        </p>
-        <p>
-          Mientras tanto, las secuencias se gestionan desde el módulo Desktop o
-          mediante importación desde DGII.
-        </p>
       </Modal>
     </>
   );

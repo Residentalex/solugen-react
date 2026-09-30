@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Card, Table, Typography, Empty, Space, Skeleton } from 'antd';
+import { Card, Table, Typography, Empty, Skeleton } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { formatNumber, formatDate } from '../../utils/formats';
@@ -221,16 +221,7 @@ const TransaccionesAsociadasCard: React.FC<TransaccionesAsociadasCardProps> = ({
   };
 
   return (
-    <Card
-      className="paces-card"
-      size="small"
-      title={
-        <Space size={8}>
-          <FileTextOutlined style={{ color: '#556ee6' }} />
-          <span style={{ fontSize: 14, fontWeight: 600 }}>Documentos Asociados</span>
-        </Space>
-      }
-    >
+    <Card className="paces-card" size="small">
       {renderContent()}
     </Card>
   );

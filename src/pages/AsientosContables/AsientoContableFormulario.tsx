@@ -5,6 +5,7 @@ import {
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Tag, Alert,
 } from 'antd';
 import {
+  InboxOutlined,
   PlusOutlined,
   DeleteOutlined,
   SearchOutlined,
@@ -12,6 +13,7 @@ import {
   ExclamationCircleOutlined,
   BankOutlined,
   HistoryOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -1147,7 +1149,7 @@ const AsientoContableFormulario: React.FC = () => {
             },
             {
               key: 'detalles',
-              label: `Detalles (${detallesEditable.length})`,
+              icon: <InboxOutlined />, label: `Productos/Servicios (${detallesEditable.length})`,
               children: (
 <>
                   <div style={{ marginBottom: 8 }}>
@@ -1257,6 +1259,7 @@ const AsientoContableFormulario: React.FC = () => {
             },
             {
               key: 'documentos',
+              icon: <FileTextOutlined />,
               label: `Documentos Asociados (${documentosAsociados.length})`,
               children: (
                 <>

@@ -6,6 +6,7 @@ import {
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Popover, Empty, Tooltip,
 } from 'antd';
 import {
+  InboxOutlined,
   SaveOutlined,
   CloseOutlined,
   DeleteOutlined,
@@ -19,6 +20,7 @@ import {
   BarcodeOutlined,
   PercentageOutlined,
   HistoryOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -232,6 +234,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
   const [scannerModalOpen, setScannerModalOpen] = useState(false);
   const [generandoAsientos, setGenerandoAsientos] = useState(false);
+  const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
   const [cuentaModalAsientoOpen, setCuentaModalAsientoOpen] = useState(false);
   const [detallesModificados, setDetallesModificados] = useState(false);
   const [modoDescuento, setModoDescuento] = useState<'porcentaje' | 'pesos'>('porcentaje');
@@ -2085,6 +2088,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
   const handleGenerarAsientos = useCallback(async () => {
     if (sucursalActiva === undefined) return;
     setGenerandoAsientos(true);
+    setErrorGeneracion(null);
     try {
       const dto = construirDTO();
       const asientosGenerados = await facturaSuplidorApi.generarAsientos(sucursalActiva, dto);
@@ -2092,7 +2096,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
       message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
-      message.error(msg);
+      setErrorGeneracion(msg);
     } finally {
       setGenerandoAsientos(false);
     }
@@ -2129,6 +2133,18 @@ const FacturaSuplidorFormulario: React.FC = () => {
               Reintentar
             </Button>
           }
+        />
+      )}
+
+      {errorGeneracion && (
+        <Alert
+          message="Error al generar asientos"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          description={errorGeneracion}
+          closable
+          onClose={() => setErrorGeneracion(null)}
         />
       )}
 
@@ -2203,7 +2219,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                   children: (
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
@@ -2263,9 +2279,10 @@ const FacturaSuplidorFormulario: React.FC = () => {
                     </>
                   ),
                 },
-                {
-                  key: 'impuestos',
-                  label: `Impuestos (${impuestosFactura.length})`,
+{
+                key: 'impuestos',
+                icon: <FileTextOutlined />,
+                label: `Impuestos (${impuestosFactura.length})`,
                   children: (
                     <>
                       <div style={{ marginBottom: 8 }}>
@@ -2342,7 +2359,7 @@ const FacturaSuplidorFormulario: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                 children: (
                   <>
                     <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>

@@ -4,6 +4,7 @@ import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Input, Dropdown, Modal, DatePicker, Typography, Tooltip, Descriptions, Alert, App, Badge, Empty, Switch
 } from 'antd';
 import {
+  InboxOutlined,
   ArrowLeftOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -1100,7 +1101,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                   children: (
                     <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1200 }} />
                   ),
@@ -1310,7 +1311,7 @@ const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undef
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                 children: (
                   <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1200 }} />
                 ),

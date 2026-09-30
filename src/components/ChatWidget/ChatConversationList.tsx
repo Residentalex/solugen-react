@@ -7,11 +7,17 @@ import type { ChatParticipanteDTO, ChatConversacionListDTO } from '../../types/c
 
 interface ChatConversationListProps {
   onSelectConversacion: (id: number) => void;
+  onExpand?: () => void;
+  modoPagina?: boolean;
 }
 
 type CreationMode = null | 'individual' | 'grupal';
 
-const ChatConversationList: React.FC<ChatConversationListProps> = ({ onSelectConversacion }) => {
+const ChatConversationList: React.FC<ChatConversationListProps> = ({
+  onSelectConversacion,
+  onExpand,
+  modoPagina = false,
+}) => {
   const conversaciones = useChatStore((s) => s.conversaciones);
   const cargarConversaciones = useChatStore((s) => s.cargarConversaciones);
   const conectado = useChatStore((s) => s.conectado);
@@ -106,7 +112,7 @@ const ChatConversationList: React.FC<ChatConversationListProps> = ({ onSelectCon
           padding: '12px 16px', borderBottom: '1px solid var(--paces-card-border)',
           display: 'flex', alignItems: 'center', gap: 8,
           background: 'var(--paces-bg-container)',
-          borderRadius: '12px 12px 0 0',
+          borderRadius: modoPagina ? 0 : '12px 12px 0 0',
         }}>
           <button onClick={() => { setCreationMode(null); setBusqueda(''); setResultados([]); setSeleccionados([]); }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, fontSize: 16, color: '#556ee6' }}>
@@ -177,13 +183,26 @@ const ChatConversationList: React.FC<ChatConversationListProps> = ({ onSelectCon
       <div style={{
         padding: '12px 16px', borderBottom: '1px solid var(--paces-card-border)',
         display: 'flex', alignItems: 'center', gap: 6,
-        background: 'var(--paces-bg-container)', borderRadius: '12px 12px 0 0',
+        background: 'var(--paces-bg-container)', borderRadius: modoPagina ? 0 : '12px 12px 0 0',
       }}>
         <span style={{ fontWeight: 600, fontSize: 14, flex: 1, color: 'var(--paces-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
           Chat
           {!conectado && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff4d4f' }} title="Desconectado" />}
         </span>
-        <div ref={plusMenuRef} style={{ position: 'relative' }}>
+        <div ref={plusMenuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6 }}>
+          {onExpand && (
+            <button type="button" onClick={onExpand}
+              title="Abrir chat en página completa" aria-label="Abrir chat en página completa"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                fontSize: 16, color: 'var(--paces-text-secondary)', lineHeight: 1,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--paces-bg-layout)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '')}
+            >
+              ⛶
+            </button>
+          )}
           <button onClick={() => setPlusMenuOpen(!plusMenuOpen)} title="Nuevo"
             style={{
               width: 32, height: 32, borderRadius: '50%', background: '#556ee6', border: 'none',

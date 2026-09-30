@@ -6,6 +6,7 @@ import {
 import {
   LockFilled,
   HistoryOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
@@ -423,6 +424,7 @@ const TransaccionBancariaDetalle: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
+                  icon: <FileTextOutlined />,
                   label: `Documentos Relacionados (${(data as any)?.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <TransaccionesAsociadasCard
@@ -511,6 +513,7 @@ const TransaccionBancariaDetalle: React.FC = () => {
             items={[
               {
                 key: 'detalles',
+                icon: <FileTextOutlined />,
                 label: `Documentos Relacionados (${(data as any)?.transaccionesAsociadas?.length || 0})`,
                 children: (
                   <TransaccionesAsociadasCard

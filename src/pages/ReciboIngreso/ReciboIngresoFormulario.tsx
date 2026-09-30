@@ -15,6 +15,7 @@ import {
   PlusOutlined,
   DeleteOutlined,
   HistoryOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -137,6 +138,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   const [transaccionesAsociadas, setTransaccionesAsociadas] = useState<TransaccionAsociadaDTO[]>([]);
   const [cobros, setCobros] = useState<CobroDTO[]>(crearCobrosIniciales());
   const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
+  const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogDTO[]>([]);
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
   const [sucursalesCache, setSucursalesCache] = useState<any[]>([]);
@@ -527,6 +529,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   const handleGenerarAsientos = async () => {
     if (sucursalActiva === undefined) return;
     setSaving(true);
+    setErrorGeneracion(null);
     try {
       const dto = construirDTO();
       const asientosGenerados = await reciboIngresoApi.generarAsientos(sucursalActiva, dto);
@@ -534,7 +537,7 @@ const ReciboIngresoFormulario: React.FC = () => {
       message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
-      message.error(msg);
+      setErrorGeneracion(msg);
     } finally {
       setSaving(false);
     }
@@ -1051,6 +1054,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   // Tab 1: Documentos Relacionados
   tabItems.push({
     key: 'documentos',
+    icon: <FileTextOutlined />,
     label: `Documentos Relacionados (${transaccionesAsociadas.length})`,
     children: (
       <div ref={documentosRef}>
@@ -1219,6 +1223,18 @@ const ReciboIngresoFormulario: React.FC = () => {
               Reintentar
             </Button>
           }
+        />
+      )}
+
+      {errorGeneracion && (
+        <Alert
+          message="Error al generar asientos"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          description={errorGeneracion}
+          closable
+          onClose={() => setErrorGeneracion(null)}
         />
       )}
 

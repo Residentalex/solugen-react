@@ -1,23 +1,16 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useUIStore } from '../stores/uiStore';
+import ChatInitializer from '../components/ChatWidget/ChatInitializer';
+import ChatWidget from '../components/ChatWidget/ChatWidget';
+import BuscadorGlobalModal from '../components/BuscadorGlobal/BuscadorGlobalModal';
 import {
-  Menu, Avatar, Space, Button, Input, Badge, Typography, Dropdown,
+  Menu, Avatar, Space, Button, Input, Badge, Dropdown,
 } from 'antd';
+import type { MenuProps } from 'antd';
+import type { PantallaDTO, ModuloDTO } from '../types/auth';
 import {
-  ControlOutlined,
-  AuditOutlined,
-  InboxOutlined,
-  ShopOutlined,
-  FileTextOutlined,
-  ShoppingCartOutlined,
-  TeamOutlined,
-  WalletOutlined,
-  DollarOutlined,
-  BankOutlined,
-  ExperimentOutlined,
-  AppstoreOutlined,
   DashboardOutlined,
   UserOutlined,
   SettingOutlined,
@@ -27,22 +20,7 @@ import {
   BellOutlined,
   SunOutlined,
 } from '@ant-design/icons';
-
-// ─── Iconos por modulo ───────────────────────────────────────────
-const ICONOS_MODULOS: Record<string, React.ReactNode> = {
-  Administracion: <ControlOutlined />,
-  Contabilidad: <AuditOutlined />,
-  Inventario: <InboxOutlined />,
-  Ventas: <ShopOutlined />,
-  Facturacion: <FileTextOutlined />,
-  Compras: <ShoppingCartOutlined />,
-  'Recursos Humanos': <TeamOutlined />,
-  'Cuentas por Pagar': <WalletOutlined />,
-  'Cuentas por Cobrar': <DollarOutlined />,
-  Bancos: <BankOutlined />,
-  Produccion: <ExperimentOutlined />,
-};
-const ICONO_DEFAULT = <AppstoreOutlined />;
+import { ICONOS_MODULOS, ICONO_DEFAULT } from '../utils/iconosModulo';
 
 // ─── Helpers ─────────────────────────────────────────────────────
 interface ModuloConPantallas {
@@ -62,6 +40,7 @@ function toTitleCase(str?: string | null): string {
 // ─── SaasMainLayout ──────────────────────────────────────────────
 const SaasMainLayout: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const usuario = useAuthStore((s) => s.usuario);
   const logout = useAuthStore((s) => s.logout);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -484,16 +463,21 @@ const SaasMainLayout: React.FC = () => {
             flexShrink: 0,
           }}
         >
-          <Input.Search
-            placeholder="Buscar en el sistema..."
-            style={{ maxWidth: 320 }}
-            prefix={<SearchOutlined style={{ color: '#9ca3af' }} />}
-            onFocus={(e) => {
-              e.target.blur();
-              setSearchOpen(true);
-            }}
-            onSearch={() => setSearchOpen(true)}
-          />
+          <div
+            style={{ cursor: 'pointer', position: 'relative', flexShrink: 0 }}
+            onClick={() => setSearchOpen(true)}
+          >
+            <Input.Search
+              placeholder="Buscar...  (Ctrl+K)"
+              style={{ width: 320 }}
+              readOnly
+              role="searchbox"
+              aria-label="Búsqueda global. Abrir búsqueda"
+              prefix={<SearchOutlined style={{ color: '#9ca3af' }} />}
+              onPressEnter={() => setSearchOpen(true)}
+              onSearch={() => setSearchOpen(true)}
+            />
+          </div>
           <div style={{ flex: 1 }} />
           <Space size="middle">
             <Badge count={3} size="small">
@@ -547,45 +531,19 @@ const SaasMainLayout: React.FC = () => {
         </div>
       </div>
 
-      {/* Buscador global modal — placeholder */}
-      {searchOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            background: 'rgba(0,0,0,0.3)',
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'center',
-            paddingTop: 120,
-          }}
-          onClick={() => setSearchOpen(false)}
-        >
-          <div
-            style={{
-              background: '#fff',
-              borderRadius: 12,
-              padding: 24,
-              width: 560,
-              boxShadow: '0 16px 48px rgba(0,0,0,0.15)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Input.Search
-              placeholder="Buscar modulos, documentos..."
-              size="large"
-              autoFocus
-              style={{ width: '100%' }}
-              prefix={<SearchOutlined style={{ color: '#9ca3af' }} />}
-              onSearch={() => setSearchOpen(false)}
-            />
-            <div style={{ marginTop: 16, fontSize: 12, color: '#9ca3af' }}>
-              Presiona Esc para cerrar
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Chat interno: conexion SignalR compartida con MainLayout */}
+      <ChatInitializer />
+
+      {/* Widget flotante de chat. Se oculta en /saas/chat porque la pagina
+          muestra el mismo chat; al salir, ChatPage restaura la vista del widget. */}
+      {location.pathname !== '/saas/chat' && <ChatWidget rutaExpandir="/saas/chat" />}
+
+      {/* Buscador global: mismo componente que MainLayout, con prefijo /saas */}
+      <BuscadorGlobalModal
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        prefijoRuta="/saas"
+      />
     </div>
   );
 };

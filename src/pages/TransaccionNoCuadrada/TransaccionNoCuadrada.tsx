@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography, Select } from 'antd';
+import { Typography, Select, Alert, Grid, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -37,6 +37,12 @@ const TransaccionNoCuadrada: React.FC = () => {
   const [sucursalFiltro, setSucursalFiltro] = useState<number | undefined>(undefined);
   const [tipoDoc, setTipoDoc] = useState<string | undefined>(undefined);
   const [documentos, setDocumentos] = useState<DocumentoDTO[]>([]);
+  const [sucursalesConError, setSucursalesConError] = useState<number[]>([]);
+
+  /* Contador incremental para descartar respuestas de consultas anteriores */
+  const consultaIdRef = useRef(0);
+
+  const screens = Grid.useBreakpoint();
 
   const rangoDefault = useMemo(() => ({
     desde: formatDateParam(new Date(Date.now() - 30 * 86400000)),
@@ -48,31 +54,44 @@ const TransaccionNoCuadrada: React.FC = () => {
   }, [sucursalActiva]);
 
   const cargarDatos = useCallback(async () => {
+    const id = ++consultaIdRef.current;
     setLoading(true);
+    setLoadingError(false);
+    setSucursalesConError([]);
     try {
       const desde = filtros.desde ?? rangoDefault.desde;
       const hasta = filtros.hasta ?? rangoDefault.hasta;
       if (sucursalFiltro === -1) {
-        const sucursalesIds = (sucursalesDisponibles || [])
+        const sucursalesIds: number[] = (sucursalesDisponibles || [])
           .filter((s: any) => s.sucursal !== undefined)
           .map((s: any) => s.sucursal as number);
-        const resultados = await Promise.all(
-          sucursalesIds.map(suc =>
+        const resultados = await Promise.allSettled(
+          sucursalesIds.map((suc: number) =>
             transaccionApi.obtenerNoCuadrados(suc, desde, hasta, tipoDoc || undefined)
-              .catch(() => [] as any[])
           )
         );
-        const result = resultados.flat();
-        setData(result);
+        if (id !== consultaIdRef.current) return;
+        const filas: TransaccionDTO[] = [];
+        const fallidas: number[] = [];
+        resultados.forEach((r, i) => {
+          if (r.status === 'fulfilled') filas.push(...(r.value || []));
+          else fallidas.push(sucursalesIds[i]);
+        });
+        setData(filas);
+        setSucursalesConError(fallidas);
+        setLoadingError(filas.length === 0 && fallidas.length > 0);
       } else {
         const suc = sucursalFiltro ?? sucursalActiva;
         const result = await transaccionApi.obtenerNoCuadrados(suc, desde, hasta, tipoDoc || undefined);
+        if (id !== consultaIdRef.current) return;
         setData(result);
       }
-    } catch {
+    } catch (err: any) {
+      if (id !== consultaIdRef.current) return;
+      message.error(err?.response?.data?.errorMessage || 'Error al cargar asientos no cuadrados');
       setLoadingError(true);
     } finally {
-      setLoading(false);
+      if (id === consultaIdRef.current) setLoading(false);
     }
   }, [sucursalActiva, sucursalFiltro, rangoDefault, filtros, tipoDoc, sucursalesDisponibles]);
 
@@ -194,57 +213,77 @@ const TransaccionNoCuadrada: React.FC = () => {
     documentos.map((d) => ({ value: d.codigo, label: `${d.codigo} - ${d.nombre || ''}` })),
   [documentos]);
 
+  /* Descripcion de la informacion incompleta cuando solo fallaron algunas sucursales */
+  const avisoSucursalesConError = useMemo(() => {
+    if (sucursalesConError.length === 0) return null;
+    const nombres = sucursalesConError.map((id) => {
+      const s = (sucursalesDisponibles || []).find((x: any) => x.sucursal === id);
+      return s ? (s.nombre || s.codigo || `Sucursal ${id}`) : `Sucursal ${id}`;
+    });
+    const detalle = sucursalesConError.length === 1
+      ? '1 sucursal no respondió'
+      : `${sucursalesConError.length} sucursales no respondieron`;
+    return `Información incompleta: ${detalle} (${nombres.join(', ')}). Los resultados mostrados no incluyen esas sucursales.`;
+  }, [sucursalesConError, sucursalesDisponibles]);
+
   return (
-    <DocumentListadoLayout<TransaccionDTO>
-      columns={columns}
-      data={filteredData}
-      rowKey="id"
-      loading={loading}
-      total={filteredData.length}
-      page={page}
-      pageSize={pageSize}
-      scrollX={1250}
-      selectedRowId={selectedRow?.id}
-      loadingError={loadingError}
-      errorMessage="Error al cargar asientos no cuadrados"
-      onRefresh={handleRefresh}
-      onRowClick={handleRowClick}
-      onPageChange={setPage}
-      toolbarProps={{
-        showFiltros: true,
-        filtros,
-        rangoDefault,
-        opcionesEstado: [],
-        onFiltrosAplicar: (nuevos) => { setFiltros(nuevos); setPage(1); },
-        searchPlaceholder: 'Buscar documento, entidad...',
-        onSearch: handleSearch,
-        pageSize,
-        onPageSizeChange: (v) => { setPageSize(v); setPage(1); },
-        onRefresh: handleRefresh,
-        extraLeft: (
-          <>
-            <SucursalDocumentoSelector
-              value={sucursalFiltro}
-              onChange={(val) => { setSucursalFiltro(val); setPage(1); }}
-              showAllOption
-            />
-            <Select
-              placeholder="Documento"
-              allowClear
-              showSearch
-              style={{ minWidth: 280 }}
-              value={tipoDoc}
-              onChange={(val) => { setTipoDoc(val); setPage(1); }}
-              options={docOptions}
-              size="small"
-              filterOption={(input, option) =>
-                (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-            />
-          </>
-        ),
-      }}
-    />
+    <>
+      {!loadingError && avisoSucursalesConError && (
+        <Alert message={avisoSucursalesConError} type="warning" showIcon style={{ marginBottom: 16 }} />
+      )}
+      <DocumentListadoLayout<TransaccionDTO>
+        columns={columns}
+        data={filteredData}
+        rowKey="id"
+        loading={loading}
+        total={filteredData.length}
+        page={page}
+        pageSize={pageSize}
+        scrollX={1250}
+        selectedRowId={selectedRow?.id}
+        loadingError={loadingError}
+        errorMessage="Error al cargar asientos no cuadrados"
+        onRefresh={handleRefresh}
+        onRowClick={handleRowClick}
+        onPageChange={setPage}
+        toolbarProps={{
+          showFiltros: true,
+          filtros,
+          rangoDefault,
+          opcionesEstado: [],
+          onFiltrosAplicar: (nuevos) => { setFiltros(nuevos); setPage(1); },
+          searchPlaceholder: 'Buscar documento, entidad...',
+          onSearch: handleSearch,
+          pageSize,
+          onPageSizeChange: (v) => { setPageSize(v); setPage(1); },
+          onRefresh: handleRefresh,
+          extraLeft: (
+            <>
+              <SucursalDocumentoSelector
+                value={sucursalFiltro}
+                onChange={(val) => { setSucursalFiltro(val); setPage(1); }}
+                disabled={loading}
+                showAllOption
+              />
+              <Select
+                placeholder="Documento"
+                allowClear
+                showSearch
+                disabled={loading}
+                style={screens.md === true ? { minWidth: 280 } : { width: '100%' }}
+                value={tipoDoc}
+                onChange={(val) => { setTipoDoc(val); setPage(1); }}
+                options={docOptions}
+                size="small"
+                filterOption={(input, option) =>
+                  (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())
+                }
+              />
+            </>
+          ),
+        }}
+      />
+    </>
   );
 };
 

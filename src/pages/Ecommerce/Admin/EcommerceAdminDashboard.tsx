@@ -560,7 +560,7 @@ const EcommerceAdminDashboard: React.FC = () => {
             styles={{ body: { padding: 24 } }}
           >
             <Title level={5} style={{ margin: '0 0 20px 0', fontWeight: 600 }}>Accesos Rápidos</Title>
-            <Row gutter={[12, 12]}>
+            <Row gutter={[12, 12]} justify="space-between">
               {[
                 { icon: <ShoppingOutlined />, label: 'Gestionar Productos', path: '/EProductos', color: '#556ee6' },
                 { icon: <OrderedListOutlined />, label: 'Ver Órdenes', path: '/EOrdenes', color: '#34c38f' },

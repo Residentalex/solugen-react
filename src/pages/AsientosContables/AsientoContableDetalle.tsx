@@ -4,8 +4,10 @@ import {
   Card, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, message, Tooltip, Descriptions, Alert, Switch
 } from 'antd';
 import {
+  InboxOutlined,
   LockFilled,
   HistoryOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -396,13 +398,14 @@ const AsientoContableDetalle: React.FC = () => {
                 },
                 {
                   key: 'detalles',
-                  label: `Detalles (${documentoActivo.detalles?.length || 0})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${documentoActivo.detalles?.length || 0})`,
                   children: (
                     <DetalleMovimientoTable detalles={documentoActivo.detalles || []} scroll={{ x: 1000 }} />
                   ),
                 },
                 {
                   key: 'documentos',
+                  icon: <FileTextOutlined />,
                   label: `Documentos Asociados (${documentoActivo.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <TransaccionesAsociadasCard documentos={documentoActivo.transaccionesAsociadas || []} readOnly />
@@ -494,13 +497,14 @@ const AsientoContableDetalle: React.FC = () => {
               },
               {
                 key: 'detalles',
-                label: `Detalles (${documentoActivo.detalles?.length || 0})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${documentoActivo.detalles?.length || 0})`,
                 children: (
                   <DetalleMovimientoTable detalles={documentoActivo.detalles || []} scroll={{ x: 1000 }} />
                 ),
               },
               {
                 key: 'documentos',
+                icon: <FileTextOutlined />,
                 label: `Documentos Asociados (${documentoActivo.transaccionesAsociadas?.length || 0})`,
                 children: (
                   <TransaccionesAsociadasCard documentos={documentoActivo.transaccionesAsociadas || []} readOnly />

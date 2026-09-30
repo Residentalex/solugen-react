@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Form,
@@ -40,9 +40,21 @@ const PerfilPage: React.FC = () => {
 
   const [editando, setEditando] = useState(false);
   const [loadingPerfil, setLoadingPerfil] = useState(false);
-  const [loadingGuardar, setLoadingGuardar] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
   const [modalClaveOpen, setModalClaveOpen] = useState(false);
-  const [loadingClave, setLoadingClave] = useState(false);
+  const operacionRef = useRef(false);
+
+  const iniciarOperacion = (): boolean => {
+    if (operacionRef.current) return false;
+    operacionRef.current = true;
+    setOcupado(true);
+    return true;
+  };
+
+  const finalizarOperacion = (): void => {
+    operacionRef.current = false;
+    setOcupado(false);
+  };
 
   // Cargar perfil al montar
   useEffect(() => {
@@ -63,15 +75,41 @@ const PerfilPage: React.FC = () => {
     }
   }, [usuario, form]);
 
+  const navegar = (destino: string) => {
+    if (operacionRef.current) return;
+    navigate(destino);
+  };
+
+  const handleEditar = () => {
+    if (operacionRef.current) return;
+    setEditando(true);
+  };
+
+  const handleCancelarEdicion = () => {
+    if (operacionRef.current) return;
+    setEditando(false);
+  };
+
+  const handleAbrirModalClave = () => {
+    if (operacionRef.current) return;
+    setModalClaveOpen(true);
+  };
+
+  const handleCerrarModalClave = () => {
+    if (operacionRef.current) return;
+    setModalClaveOpen(false);
+    formClave.resetFields();
+  };
+
   const handleGuardar = async (values: { nombre: string; telefono: string; direccion: string }) => {
-    setLoadingGuardar(true);
+    if (!iniciarOperacion()) return;
     try {
       await actualizarPerfil(values);
       setEditando(false);
     } catch {
       // Error ya manejado en el store
     } finally {
-      setLoadingGuardar(false);
+      finalizarOperacion();
     }
   };
 
@@ -80,6 +118,7 @@ const PerfilPage: React.FC = () => {
     passwordNueva: string;
     confirmarPasswordNueva: string;
   }) => {
+    if (operacionRef.current) return;
     if (values.passwordNueva !== values.confirmarPasswordNueva) {
       message.error('Las contraseñas no coinciden');
       return;
@@ -89,7 +128,7 @@ const PerfilPage: React.FC = () => {
       return;
     }
 
-    setLoadingClave(true);
+    if (!iniciarOperacion()) return;
     try {
       await cambiarClave({
         passwordActual: values.passwordActual,
@@ -100,11 +139,12 @@ const PerfilPage: React.FC = () => {
     } catch {
       // Error ya manejado en el store
     } finally {
-      setLoadingClave(false);
+      finalizarOperacion();
     }
   };
 
   const handleLogout = () => {
+    if (operacionRef.current) return;
     logout();
     message.info('Sesión cerrada');
     navigate('/store');
@@ -135,7 +175,7 @@ const PerfilPage: React.FC = () => {
     <div className="store-auth-page">
       <div className="store-perfil-container">
         <div style={{ marginBottom: 24 }}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/store')}>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navegar('/store')} disabled={ocupado}>
             Volver a la tienda
           </Button>
         </div>
@@ -169,7 +209,7 @@ const PerfilPage: React.FC = () => {
               Editar perfil
             </Title>
             {!editando && (
-              <Button type="primary" icon={<EditOutlined />} onClick={() => setEditando(true)}>
+              <Button type="primary" icon={<EditOutlined />} onClick={handleEditar} disabled={ocupado}>
                 Editar
               </Button>
             )}
@@ -180,6 +220,7 @@ const PerfilPage: React.FC = () => {
               form={form}
               layout="vertical"
               onFinish={handleGuardar}
+              disabled={ocupado}
               initialValues={{
                 nombre: usuario?.nombre,
                 telefono: usuario?.telefono,
@@ -211,8 +252,8 @@ const PerfilPage: React.FC = () => {
               </Form.Item>
 
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <Button onClick={() => setEditando(false)}>Cancelar</Button>
-                <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loadingGuardar}>
+                <Button onClick={handleCancelarEdicion} disabled={ocupado}>Cancelar</Button>
+                <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={ocupado} disabled={ocupado}>
                   Guardar cambios
                 </Button>
               </div>
@@ -227,13 +268,13 @@ const PerfilPage: React.FC = () => {
             Acciones
           </Title>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <Button icon={<ShoppingOutlined />} onClick={() => navigate('/store/ordenes')}>
+            <Button icon={<ShoppingOutlined />} onClick={() => navegar('/store/ordenes')} disabled={ocupado}>
               Mis Pedidos
             </Button>
-            <Button icon={<LockOutlined />} onClick={() => setModalClaveOpen(true)}>
+            <Button icon={<LockOutlined />} onClick={handleAbrirModalClave} disabled={ocupado}>
               Cambiar contraseña
             </Button>
-            <Button danger icon={<LogoutOutlined />} onClick={handleLogout}>
+            <Button danger icon={<LogoutOutlined />} onClick={handleLogout} disabled={ocupado}>
               Cerrar sesión
             </Button>
           </div>
@@ -244,10 +285,10 @@ const PerfilPage: React.FC = () => {
       <Modal
         title="Cambiar contraseña"
         open={modalClaveOpen}
-        onCancel={() => {
-          setModalClaveOpen(false);
-          formClave.resetFields();
-        }}
+        onCancel={handleCerrarModalClave}
+        closable={!ocupado}
+        maskClosable={!ocupado}
+        keyboard={!ocupado}
         footer={null}
         destroyOnHidden
       >
@@ -256,6 +297,7 @@ const PerfilPage: React.FC = () => {
           layout="vertical"
           onFinish={handleCambiarClave}
           autoComplete="off"
+          disabled={ocupado}
         >
           <Form.Item
             label="Contraseña actual"
@@ -295,15 +337,10 @@ const PerfilPage: React.FC = () => {
           </Form.Item>
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <Button
-              onClick={() => {
-                setModalClaveOpen(false);
-                formClave.resetFields();
-              }}
-            >
+            <Button onClick={handleCerrarModalClave} disabled={ocupado}>
               Cancelar
             </Button>
-            <Button type="primary" htmlType="submit" loading={loadingClave}>
+            <Button type="primary" htmlType="submit" loading={ocupado} disabled={ocupado}>
               Cambiar contraseña
             </Button>
           </div>

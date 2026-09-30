@@ -7,10 +7,16 @@ import { chatApi } from '../../api/chatApi';
 import type { ChatAdjuntoDTO } from '../../types/chat';
 
 interface ChatMessagesProps {
-  onBack: () => void;
+  onBack?: () => void;
+  onExpand?: () => void;
+  modoPagina?: boolean;
 }
 
-const ChatMessages: React.FC<ChatMessagesProps> = ({ onBack }) => {
+const ChatMessages: React.FC<ChatMessagesProps> = ({
+  onBack,
+  onExpand,
+  modoPagina = false,
+}) => {
   const conversacionActiva = useChatStore((s) => s.conversacionActiva);
   const mensajes = useChatStore((s) => s.mensajes);
   const enviarMensaje = useChatStore((s) => s.enviarMensaje);
@@ -166,17 +172,32 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ onBack }) => {
         padding: '12px 16px', borderBottom: '1px solid var(--paces-card-border)',
         display: 'flex', alignItems: 'center', gap: 8,
         background: 'var(--paces-bg-container)',
-        borderRadius: '12px 12px 0 0',
+        borderRadius: modoPagina ? 0 : '12px 12px 0 0',
       }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, fontSize: 16, color: '#556ee6' }}>
-          ←
-        </button>
+        {onBack && (
+          <button type="button" onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, fontSize: 16, color: '#556ee6' }}>
+            ←
+          </button>
+        )}
         {!conectado && (
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ff4d4f', flexShrink: 0 }} title="Desconectado" />
         )}
         <div style={{ flex: 1, fontWeight: 600, fontSize: 14, color: 'var(--paces-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {titulo}
         </div>
+        {onExpand && (
+          <button type="button" onClick={onExpand}
+            title="Abrir chat en página completa" aria-label="Abrir chat en página completa"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
+              fontSize: 16, color: 'var(--paces-text-secondary)', borderRadius: 4, lineHeight: 1,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--paces-bg-layout)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = '')}
+          >
+            ⛶
+          </button>
+        )}
         <div ref={menuRef} style={{ position: 'relative' }}>
           <button onClick={() => setMenuOpen(!menuOpen)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px', fontSize: 18, color: 'var(--paces-text-secondary)', borderRadius: 4 }}
@@ -343,7 +364,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ onBack }) => {
 
       <div style={{
         padding: '8px 12px', borderTop: '1px solid var(--paces-card-border)',
-        background: 'var(--paces-bg-container)', borderRadius: '0 0 12px 12px',
+        background: 'var(--paces-bg-container)', borderRadius: modoPagina ? 0 : '0 0 12px 12px',
       }}>
         {subiendoAdjunto && (
           <div style={{ padding: '4px 0', fontSize: 12, color: 'var(--paces-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -1,199 +1,209 @@
 import React from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { Spin } from 'antd';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { queryClient } from './lib/queryClient';
 import { useAuthStore } from './stores/authStore';
 import Login from './pages/Login/Login';
-import CambiarClave from './pages/CambiarClave/CambiarClave';
+const CambiarClave = React.lazy(() => import('./pages/CambiarClave/CambiarClave'));
 import MainLayout from './layouts/MainLayout';
 import SaasMainLayout from './layouts/SaasMainLayout';
-import Dashboard from './pages/Dashboard/Dashboard';
-import ConfiguracionDashboard from './pages/Dashboard/ConfiguracionDashboard';
-import EntradaAlmacen from './pages/EntradaAlmacen/EntradaAlmacen';
-import EntradaAlmacenDetalle from './pages/EntradaAlmacen/EntradaAlmacenDetalle';
-import EntradaAlmacenFormulario from './pages/EntradaAlmacen/EntradaAlmacenFormulario';
-import SalidaAlmacen from './pages/SalidaAlmacen/SalidaAlmacen';
-import SalidaAlmacenDetalle from './pages/SalidaAlmacen/SalidaAlmacenDetalle';
-import SalidaAlmacenFormulario from './pages/SalidaAlmacen/SalidaAlmacenFormulario';
-import DevolucionCompra from './pages/DevolucionCompra/DevolucionCompra';
-import DevolucionCompraDetalle from './pages/DevolucionCompra/DevolucionCompraDetalle';
-import DevolucionCompraFormulario from './pages/DevolucionCompra/DevolucionCompraFormulario';
-import TransferenciaAlmacen from './pages/TransferenciaAlmacen/TransferenciaAlmacen';
-import TransferenciaAlmacenDetalle from './pages/TransferenciaAlmacen/TransferenciaAlmacenDetalle';
-import TransferenciaAlmacenFormulario from './pages/TransferenciaAlmacen/TransferenciaAlmacenFormulario';
-import DevolucionVenta from './pages/DevolucionVenta/DevolucionVenta';
-import DevolucionVentaDetalle from './pages/DevolucionVenta/DevolucionVentaDetalle';
-import DevolucionVentaFormulario from './pages/DevolucionVenta/DevolucionVentaFormulario';
-import ReporteDevolucionVenta from './pages/ReporteDevolucionVenta/ReporteDevolucionVenta';
-import GeneradorOrdenCompraReporte from './pages/GeneradorOrdenCompraReporte/GeneradorOrdenCompraReporte';
-import CotizacionVenta from './pages/CotizacionVenta/CotizacionVenta';
-import CotizacionVentaDetalle from './pages/CotizacionVenta/CotizacionVentaDetalle';
-import CotizacionVentaFormulario from './pages/CotizacionVenta/CotizacionVentaFormulario';
-import FacturaPOS from './pages/FacturaPOS/FacturaPOS';
-import FacturaPOSDetalle from './pages/FacturaPOS/FacturaPOSDetalle';
-import FacturaPOSFormulario from './pages/FacturaPOS/FacturaPOSFormulario';
-import FacturaCliente from './pages/FacturaCliente/FacturaCliente';
-import FacturaClienteDetalle from './pages/FacturaCliente/FacturaClienteDetalle';
-import FacturaClienteFormulario from './pages/FacturaCliente/FacturaClienteFormulario';
-import FacturaSuplidor from './pages/FacturaSuplidor/FacturaSuplidor';
-import FacturaSuplidorDetalle from './pages/FacturaSuplidor/FacturaSuplidorDetalle';
-import FacturaSuplidorFormulario from './pages/FacturaSuplidor/FacturaSuplidorFormulario';
-import NotaDebito from './pages/NotaDebito/NotaDebito';
-import NotaDebitoDetalle from './pages/NotaDebito/NotaDebitoDetalle';
-import NotaDebitoFormulario from './pages/NotaDebito/NotaDebitoFormulario';
-import NotaCredito from './pages/NotaCredito/NotaCredito';
-import NotaCreditoDetalle from './pages/NotaCredito/NotaCreditoDetalle';
-import NotaCreditoFormulario from './pages/NotaCredito/NotaCreditoFormulario';
-import DistribucionBalance from './pages/DistribucionBalance/DistribucionBalance';
-import DistribucionBalanceDetalle from './pages/DistribucionBalance/DistribucionBalanceDetalle';
-import DistribucionBalanceFormulario from './pages/DistribucionBalance/DistribucionBalanceFormulario';
-import ReciboIngreso from './pages/ReciboIngreso/ReciboIngreso';
-import ReciboIngresoDetalle from './pages/ReciboIngreso/ReciboIngresoDetalle';
-import ReciboIngresoFormulario from './pages/ReciboIngreso/ReciboIngresoFormulario';
-import Usuarios from './pages/Usuarios/Usuarios';
-import UsuarioDetalle from './pages/Usuarios/UsuarioDetalle';
-import UsuarioFormulario from './pages/Usuarios/UsuarioFormulario';
-import Roles from './pages/Roles/Roles';
-import RolFormulario from './pages/Roles/RolFormulario';
-import Modulos from './pages/Modulos/Modulos';
-import ModuloFormulario from './pages/Modulos/ModuloFormulario';
-import ModuloDetalle from './pages/Modulos/ModuloDetalle';
-import Productos from './pages/Productos/Productos';
-import ProductoDetalle from './pages/Productos/ProductoDetalle';
-import ProductoFormulario from './pages/Productos/ProductoFormulario';
-import ProductosImportar from './pages/Productos/ProductosImportar';
-import Monedas from './pages/Monedas/Monedas';
-import Documentos from './pages/Documentos/Documentos';
-import DocumentosDetalle from './pages/Documentos/DocumentosDetalle';
-import DocumentosFormulario from './pages/Documentos/DocumentosFormulario';
-import Conceptos from './pages/Conceptos/Conceptos';
-import ConceptoDetalle from './pages/Conceptos/ConceptoDetalle';
-import ConceptoFormulario from './pages/Conceptos/ConceptoFormulario';
-import Pantallas from './pages/Pantallas/Pantallas';
-import PantallaDetalle from './pages/Pantallas/PantallaDetalle';
-import PantallaFormulario from './pages/Pantallas/PantallaFormulario';
-import TiposCuenta from './pages/TiposCuenta/TiposCuenta';
-import CuentasContables from './pages/CuentasContables/CuentasContables';
-import CuentaContableDetalle from './pages/CuentasContables/CuentaContableDetalle';
-import Impuestos from './pages/Impuestos/Impuestos';
-import AsientosContables from './pages/AsientosContables/AsientosContables';
-import AsientoContableDetalle from './pages/AsientosContables/AsientoContableDetalle';
-import AsientoContableFormulario from './pages/AsientosContables/AsientoContableFormulario';
-import CFacturasElectronicas from './pages/DGII/CFacturasElectronicas';
-import CierreFiscal from './pages/CierreFiscal/CierreFiscal';
-import CierreFiscalDetalle from './pages/CierreFiscal/CierreFiscalDetalle';
-import CierreMes from './pages/CierreMes/CierreMes';
-import SecuenciasNCF from './pages/SecuenciasNCF/SecuenciasNCF';
-import Clientes from './pages/Clientes/Clientes';
-import ClienteDetalle from './pages/Clientes/ClienteDetalle';
-import PuntosVenta from './pages/PuntosVenta/PuntosVenta';
-import MetodosPago from './pages/MetodosPago/MetodosPago';
-import Repostear from './pages/Repostear/Repostear';
-import Acciones from './pages/Acciones/Acciones';
-import PlanesPago from './pages/PlanesPago/PlanesPago';
-import Almacenes from './pages/Almacenes/Almacenes';
-import Denominaciones from './pages/Denominaciones/Denominaciones';
+const Dashboard = React.lazy(() => import('./pages/Dashboard/Dashboard'));
+const ConfiguracionDashboard = React.lazy(() => import('./pages/Dashboard/ConfiguracionDashboard'));
+const EntradaAlmacen = React.lazy(() => import('./pages/EntradaAlmacen/EntradaAlmacen'));
+const EntradaAlmacenDetalle = React.lazy(() => import('./pages/EntradaAlmacen/EntradaAlmacenDetalle'));
+const EntradaAlmacenFormulario = React.lazy(() => import('./pages/EntradaAlmacen/EntradaAlmacenFormulario'));
+const SalidaAlmacen = React.lazy(() => import('./pages/SalidaAlmacen/SalidaAlmacen'));
+const SalidaAlmacenDetalle = React.lazy(() => import('./pages/SalidaAlmacen/SalidaAlmacenDetalle'));
+const SalidaAlmacenFormulario = React.lazy(() => import('./pages/SalidaAlmacen/SalidaAlmacenFormulario'));
+const DevolucionCompra = React.lazy(() => import('./pages/DevolucionCompra/DevolucionCompra'));
+const DevolucionCompraDetalle = React.lazy(() => import('./pages/DevolucionCompra/DevolucionCompraDetalle'));
+const DevolucionCompraFormulario = React.lazy(() => import('./pages/DevolucionCompra/DevolucionCompraFormulario'));
+const TransferenciaAlmacen = React.lazy(() => import('./pages/TransferenciaAlmacen/TransferenciaAlmacen'));
+const TransferenciaAlmacenDetalle = React.lazy(() => import('./pages/TransferenciaAlmacen/TransferenciaAlmacenDetalle'));
+const TransferenciaAlmacenFormulario = React.lazy(() => import('./pages/TransferenciaAlmacen/TransferenciaAlmacenFormulario'));
+const DevolucionVenta = React.lazy(() => import('./pages/DevolucionVenta/DevolucionVenta'));
+const DevolucionVentaDetalle = React.lazy(() => import('./pages/DevolucionVenta/DevolucionVentaDetalle'));
+const DevolucionVentaFormulario = React.lazy(() => import('./pages/DevolucionVenta/DevolucionVentaFormulario'));
+const ReporteDevolucionVenta = React.lazy(() => import('./pages/ReporteDevolucionVenta/ReporteDevolucionVenta'));
+const GeneradorOrdenCompraReporte = React.lazy(() => import('./pages/GeneradorOrdenCompraReporte/GeneradorOrdenCompraReporte'));
+const CotizacionVenta = React.lazy(() => import('./pages/CotizacionVenta/CotizacionVenta'));
+const CotizacionVentaDetalle = React.lazy(() => import('./pages/CotizacionVenta/CotizacionVentaDetalle'));
+const CotizacionVentaFormulario = React.lazy(() => import('./pages/CotizacionVenta/CotizacionVentaFormulario'));
+const FacturaPOS = React.lazy(() => import('./pages/FacturaPOS/FacturaPOS'));
+const FacturaPOSDetalle = React.lazy(() => import('./pages/FacturaPOS/FacturaPOSDetalle'));
+const FacturaPOSFormulario = React.lazy(() => import('./pages/FacturaPOS/FacturaPOSFormulario'));
+const FacturaCliente = React.lazy(() => import('./pages/FacturaCliente/FacturaCliente'));
+const FacturaClienteDetalle = React.lazy(() => import('./pages/FacturaCliente/FacturaClienteDetalle'));
+const FacturaClienteFormulario = React.lazy(() => import('./pages/FacturaCliente/FacturaClienteFormulario'));
+const FacturaSuplidor = React.lazy(() => import('./pages/FacturaSuplidor/FacturaSuplidor'));
+const FacturaSuplidorDetalle = React.lazy(() => import('./pages/FacturaSuplidor/FacturaSuplidorDetalle'));
+const FacturaSuplidorFormulario = React.lazy(() => import('./pages/FacturaSuplidor/FacturaSuplidorFormulario'));
+const NotaDebito = React.lazy(() => import('./pages/NotaDebito/NotaDebito'));
+const NotaDebitoDetalle = React.lazy(() => import('./pages/NotaDebito/NotaDebitoDetalle'));
+const NotaDebitoFormulario = React.lazy(() => import('./pages/NotaDebito/NotaDebitoFormulario'));
+const NotaCredito = React.lazy(() => import('./pages/NotaCredito/NotaCredito'));
+const NotaCreditoDetalle = React.lazy(() => import('./pages/NotaCredito/NotaCreditoDetalle'));
+const NotaCreditoFormulario = React.lazy(() => import('./pages/NotaCredito/NotaCreditoFormulario'));
+const DistribucionBalance = React.lazy(() => import('./pages/DistribucionBalance/DistribucionBalance'));
+const DistribucionBalanceDetalle = React.lazy(() => import('./pages/DistribucionBalance/DistribucionBalanceDetalle'));
+const DistribucionBalanceFormulario = React.lazy(() => import('./pages/DistribucionBalance/DistribucionBalanceFormulario'));
+const ReciboIngreso = React.lazy(() => import('./pages/ReciboIngreso/ReciboIngreso'));
+const ReciboIngresoDetalle = React.lazy(() => import('./pages/ReciboIngreso/ReciboIngresoDetalle'));
+const ReciboIngresoFormulario = React.lazy(() => import('./pages/ReciboIngreso/ReciboIngresoFormulario'));
+const Usuarios = React.lazy(() => import('./pages/Usuarios/Usuarios'));
+const UsuarioDetalle = React.lazy(() => import('./pages/Usuarios/UsuarioDetalle'));
+const UsuarioFormulario = React.lazy(() => import('./pages/Usuarios/UsuarioFormulario'));
+const Roles = React.lazy(() => import('./pages/Roles/Roles'));
+const RolFormulario = React.lazy(() => import('./pages/Roles/RolFormulario'));
+const Modulos = React.lazy(() => import('./pages/Modulos/Modulos'));
+const ModuloFormulario = React.lazy(() => import('./pages/Modulos/ModuloFormulario'));
+const ModuloDetalle = React.lazy(() => import('./pages/Modulos/ModuloDetalle'));
+const Productos = React.lazy(() => import('./pages/Productos/Productos'));
+const ProductoDetalle = React.lazy(() => import('./pages/Productos/ProductoDetalle'));
+const ProductoFormulario = React.lazy(() => import('./pages/Productos/ProductoFormulario'));
+const ProductosImportar = React.lazy(() => import('./pages/Productos/ProductosImportar'));
+const Monedas = React.lazy(() => import('./pages/Monedas/Monedas'));
+const Documentos = React.lazy(() => import('./pages/Documentos/Documentos'));
+const DocumentosDetalle = React.lazy(() => import('./pages/Documentos/DocumentosDetalle'));
+const DocumentosFormulario = React.lazy(() => import('./pages/Documentos/DocumentosFormulario'));
+const Conceptos = React.lazy(() => import('./pages/Conceptos/Conceptos'));
+const ConceptoDetalle = React.lazy(() => import('./pages/Conceptos/ConceptoDetalle'));
+const ConceptoFormulario = React.lazy(() => import('./pages/Conceptos/ConceptoFormulario'));
+const Pantallas = React.lazy(() => import('./pages/Pantallas/Pantallas'));
+const PantallaDetalle = React.lazy(() => import('./pages/Pantallas/PantallaDetalle'));
+const PantallaFormulario = React.lazy(() => import('./pages/Pantallas/PantallaFormulario'));
+const TiposCuenta = React.lazy(() => import('./pages/TiposCuenta/TiposCuenta'));
+const CuentasContables = React.lazy(() => import('./pages/CuentasContables/CuentasContables'));
+const CuentaContableDetalle = React.lazy(() => import('./pages/CuentasContables/CuentaContableDetalle'));
+const Impuestos = React.lazy(() => import('./pages/Impuestos/Impuestos'));
+const AsientosContables = React.lazy(() => import('./pages/AsientosContables/AsientosContables'));
+const AsientoContableDetalle = React.lazy(() => import('./pages/AsientosContables/AsientoContableDetalle'));
+const AsientoContableFormulario = React.lazy(() => import('./pages/AsientosContables/AsientoContableFormulario'));
+const CFacturasElectronicas = React.lazy(() => import('./pages/DGII/CFacturasElectronicas'));
+const CierreFiscal = React.lazy(() => import('./pages/CierreFiscal/CierreFiscal'));
+const CierreFiscalDetalle = React.lazy(() => import('./pages/CierreFiscal/CierreFiscalDetalle'));
+const CierreMes = React.lazy(() => import('./pages/CierreMes/CierreMes'));
+const SecuenciasNCF = React.lazy(() => import('./pages/SecuenciasNCF/SecuenciasNCF'));
+const Clientes = React.lazy(() => import('./pages/Clientes/Clientes'));
+const ClienteDetalle = React.lazy(() => import('./pages/Clientes/ClienteDetalle'));
+const PuntosVenta = React.lazy(() => import('./pages/PuntosVenta/PuntosVenta'));
+const MetodosPago = React.lazy(() => import('./pages/MetodosPago/MetodosPago'));
+const Repostear = React.lazy(() => import('./pages/Repostear/Repostear'));
+const Acciones = React.lazy(() => import('./pages/Acciones/Acciones'));
+const PlanesPago = React.lazy(() => import('./pages/PlanesPago/PlanesPago'));
+const Almacenes = React.lazy(() => import('./pages/Almacenes/Almacenes'));
+const Denominaciones = React.lazy(() => import('./pages/Denominaciones/Denominaciones'));
 import Proximamente from './pages/Proximamente';
-import PermisosEspeciales from './pages/PermisosEspeciales/PermisosEspeciales';
-import OrdenCompra from './pages/OrdenCompra/OrdenCompra';
-import OrdenCompraDetalle from './pages/OrdenCompra/OrdenCompraDetalle';
-import OrdenCompraFormulario from './pages/OrdenCompra/OrdenCompraFormulario';
-import Proveedores from './pages/Proveedores/Proveedores';
-import ProveedorDetalle from './pages/Proveedores/ProveedorDetalle';
-import Bancos from './pages/Bancos/Bancos';
-import Ofertas from './pages/Ofertas/Ofertas';
-import CuentasBancarias from './pages/CuentasBancarias/CuentasBancarias';
-import FTransBanco from './pages/CuentasBancarias/CuentaBancariaDetalle';
-import CuentaBancariaFormulario from './pages/CuentasBancarias/CuentaBancariaFormulario';
-import TransaccionBancariaDetalle from './pages/TransaccionBancaria/TransaccionBancariaDetalle';
-import TransaccionBancariaFormulario from './pages/TransaccionBancaria/TransaccionBancariaFormulario';
-import UnidadesMedida from './pages/UnidadesMedida/UnidadesMedida';
-import CategoriasArticulo from './pages/CategoriasArticulo/CategoriasArticulo';
-import CategoriaArticuloDetalle from './pages/CategoriasArticulo/CategoriaArticuloDetalle';
-import FamiliasArticulo from './pages/FamiliasArticulo/FamiliasArticulo';
-import SolicitudPago from './pages/SolicitudPago/SolicitudPago';
-import SolicitudPagoDetalle from './pages/SolicitudPago/SolicitudPagoDetalle';
-import SolicitudPagoFormulario from './pages/SolicitudPago/SolicitudPagoFormulario';
-import Notificaciones from './pages/Notificaciones/Notificaciones';
-import NotificacionesConfig from './pages/Notificaciones/Configuracion';
-import NotificacionesPersonalizadas from './pages/Notificaciones/NotificacionesPersonalizadas';
-import Recetas from './pages/Recetas/Recetas';
-import Automatizaciones from './pages/Automatizaciones/Automatizaciones';
-import MiPerfil from './pages/MiPerfil/MiPerfil';
-import Servicios from './pages/Servicios/Servicios';
-import ActualizacionPrecio from './pages/ActualizacionPrecio/ActualizacionPrecio';
-import ActualizacionPrecioDetalle from './pages/ActualizacionPrecio/ActualizacionPrecioDetalle';
-import ActualizacionPrecioFormulario from './pages/ActualizacionPrecio/ActualizacionPrecioFormulario';
-import Turnos from './pages/Turnos/Turnos';
-import TurnoDetalle from './pages/Turnos/TurnoDetalle';
-import Conteos from './pages/Conteos/Conteos';
-import ConteoDetalle from './pages/Conteos/ConteoDetalle';
-import ConteoFisicoFormulario from './pages/Conteos/ConteoFisicoFormulario';
-import MovimientosProductos from './pages/MovimientosProductos/MovimientosProductos';
-import ImportarInventario from './pages/ImportarInventario/ImportarInventario';
-import ImportarDocBanco from './pages/ImportarDocBanco/ImportarDocBanco';
-import ActualizacionCostos from './pages/ActualizacionCostos/ActualizacionCostos';
-import AntiguedadSaldos from './pages/AntiguedadSaldos/AntiguedadSaldos';
-import DetalleSuplidor from './pages/AntiguedadSaldos/DetalleSuplidor';
-import AntiguedadSaldosDVC from './pages/AntiguedadSaldosDVC/AntiguedadSaldosDVC';
-import FacturasVencidas from './pages/FacturasVencidas/FacturasVencidas';
-import MayorAuxiliar from './pages/MayorAuxiliar/MayorAuxiliar';
-import DiarioGeneral from './pages/DiarioGeneral/DiarioGeneral';
-import TransaccionNoCuadrada from './pages/TransaccionNoCuadrada/TransaccionNoCuadrada';
-import IntegridadAsientos from './pages/IntegridadAsientos/IntegridadAsientos';
-import DocumentoSinAsiento from './pages/DocumentoSinAsiento/DocumentoSinAsiento';
-import ReporteIntegridadAuxiliares from './pages/ReporteIntegridadAuxiliares/ReporteIntegridadAuxiliares';
-import DocumentosAnulados from './pages/DocumentosAnulados/DocumentosAnulados';
-import CierreInventario from './pages/CierreInventario/CierreInventario';
-import CierreDetalle from './pages/CierreInventario/CierreDetalle';
-import GeneradorORC from './pages/GeneradorORC/GeneradorORC';
-import GeneradorORCDetalle from './pages/GeneradorORC/GeneradorORCDetalle';
-import GeneradorORCFormulario from './pages/GeneradorORC/GeneradorORCFormulario';
-import Rmovdoc from './pages/Rmovdoc/Rmovdoc';
-import RMovimientosPorFecha from './pages/RMovimientosPorFecha/RMovimientosPorFecha';
-import Tickets from './pages/Tickets/Tickets';
-import Empleados from './pages/Empleados/Empleados';
-import EmpleadoDetalle from './pages/Empleados/EmpleadoDetalle';
-import EmpleadoFormulario from './pages/Empleados/EmpleadoFormulario';
-import VisualizarConsulta from './pages/Notificaciones/VisualizarConsulta';
-import PlantillaSuplidor from './pages/PlantillaSuplidor/PlantillaSuplidor';
-import PlantillaSuplidorDetalle from './pages/PlantillaSuplidor/PlantillaSuplidorDetalle';
-import PlantillaSuplidorFormulario from './pages/PlantillaSuplidor/PlantillaSuplidorFormulario';
-import MovimientoPorPlantilla from './pages/MovimientoPorPlantilla/MovimientoPorPlantilla';
-import DocumentacionPage from './pages/Documentacion/DocumentacionPage';
-import RDocNoAutorizado from './pages/RDocNoAutorizado/RDocNoAutorizado';
-import ASPA from './pages/ASPA/ASPA';
-import Store from './pages/Ecommerce/Store';
-import StoreProductoDetalle from './pages/Ecommerce/StoreProductoDetalle';
-import HomePage from './pages/Ecommerce/HomePage';
-import CheckoutPage from './pages/Ecommerce/CheckoutPage';
-import OrdenConfirmacionPage from './pages/Ecommerce/OrdenConfirmacionPage';
-import OrdenesPage from './pages/Ecommerce/OrdenesPage';
-import LoginPage from './pages/Ecommerce/LoginPage';
-import RegistroPage from './pages/Ecommerce/RegistroPage';
-import PerfilPage from './pages/Ecommerce/PerfilPage';
-import EcommerceAdminDashboard from './pages/Ecommerce/Admin/EcommerceAdminDashboard';
-import EcommerceAdminProductos from './pages/Ecommerce/Admin/EcommerceAdminProductos';
-import EcommerceAdminCategorias from './pages/Ecommerce/Admin/EcommerceAdminCategorias';
-import EcommerceAdminBanners from './pages/Ecommerce/Admin/EcommerceAdminBanners';
-import EcommerceAdminOrdenes from './pages/Ecommerce/Admin/EcommerceAdminOrdenes';
-import EcommerceAdminConfig from './pages/Ecommerce/Admin/EcommerceAdminConfig';
-import ApiTokens from './pages/ApiTokens/ApiTokens';
-import DocumentosAutorizados from './pages/DocumentosAutorizados/DocumentosAutorizados';
-import Reporte606 from './pages/Reporte606/Reporte606';
-import DocumentosAplicados from './pages/DocumentosAplicados/DocumentosAplicados';
-import DocumentosCxPAutorizados from './pages/DocumentosCxPAutorizados/DocumentosCxPAutorizados';
-import DocumentosCxPAplicados from './pages/DocumentosCxPAplicados/DocumentosCxPAplicados';
-import TransferenciaSucursales from './pages/TransferenciaSucursales/TransferenciaSucursales';
-import Empresa from './pages/Configuracion/Empresa';
-import ConciliacionBancaria from './pages/ConciliacionBancaria/ConciliacionBancaria';
-import ConciliacionBancariaDetalle from './pages/ConciliacionBancaria/ConciliacionBancariaDetalle';
-import ConciliacionBancariaFormulario from './pages/ConciliacionBancaria/ConciliacionBancariaFormulario';
-import ConfigPedidosYa from './pages/ConfigPedidosYa/ConfigPedidosYa';
-import ReportesModulo from './pages/ReportesModulo/ReportesModulo';
-import VisanetTest from './pages/VisanetTest/VisanetTest';
-import MonitoreoCajas from './pages/MonitoreoCajas/MonitoreoCajas';
-import ReportesConfig from './pages/ReportesConfig/ReportesConfig';
+const PermisosEspeciales = React.lazy(() => import('./pages/PermisosEspeciales/PermisosEspeciales'));
+const OrdenCompra = React.lazy(() => import('./pages/OrdenCompra/OrdenCompra'));
+const OrdenCompraDetalle = React.lazy(() => import('./pages/OrdenCompra/OrdenCompraDetalle'));
+const OrdenCompraFormulario = React.lazy(() => import('./pages/OrdenCompra/OrdenCompraFormulario'));
+const Proveedores = React.lazy(() => import('./pages/Proveedores/Proveedores'));
+const ProveedorDetalle = React.lazy(() => import('./pages/Proveedores/ProveedorDetalle'));
+const Bancos = React.lazy(() => import('./pages/Bancos/Bancos'));
+const Ofertas = React.lazy(() => import('./pages/Ofertas/Ofertas'));
+const CuentasBancarias = React.lazy(() => import('./pages/CuentasBancarias/CuentasBancarias'));
+const FTransBanco = React.lazy(() => import('./pages/CuentasBancarias/CuentaBancariaDetalle'));
+const CuentaBancariaFormulario = React.lazy(() => import('./pages/CuentasBancarias/CuentaBancariaFormulario'));
+const TransaccionBancariaDetalle = React.lazy(() => import('./pages/TransaccionBancaria/TransaccionBancariaDetalle'));
+const TransaccionBancariaFormulario = React.lazy(() => import('./pages/TransaccionBancaria/TransaccionBancariaFormulario'));
+const UnidadesMedida = React.lazy(() => import('./pages/UnidadesMedida/UnidadesMedida'));
+const CategoriasArticulo = React.lazy(() => import('./pages/CategoriasArticulo/CategoriasArticulo'));
+const CategoriaArticuloDetalle = React.lazy(() => import('./pages/CategoriasArticulo/CategoriaArticuloDetalle'));
+const FamiliasArticulo = React.lazy(() => import('./pages/FamiliasArticulo/FamiliasArticulo'));
+const SolicitudPago = React.lazy(() => import('./pages/SolicitudPago/SolicitudPago'));
+const SolicitudPagoDetalle = React.lazy(() => import('./pages/SolicitudPago/SolicitudPagoDetalle'));
+const SolicitudPagoFormulario = React.lazy(() => import('./pages/SolicitudPago/SolicitudPagoFormulario'));
+const Notificaciones = React.lazy(() => import('./pages/Notificaciones/Notificaciones'));
+const NotificacionesConfig = React.lazy(() => import('./pages/Notificaciones/Configuracion'));
+const NotificacionesPersonalizadas = React.lazy(() => import('./pages/Notificaciones/NotificacionesPersonalizadas'));
+const Recetas = React.lazy(() => import('./pages/Recetas/Recetas'));
+const Automatizaciones = React.lazy(() => import('./pages/Automatizaciones/Automatizaciones'));
+const MiPerfil = React.lazy(() => import('./pages/MiPerfil/MiPerfil'));
+const Servicios = React.lazy(() => import('./pages/Servicios/Servicios'));
+const ActualizacionPrecio = React.lazy(() => import('./pages/ActualizacionPrecio/ActualizacionPrecio'));
+const ActualizacionPrecioDetalle = React.lazy(() => import('./pages/ActualizacionPrecio/ActualizacionPrecioDetalle'));
+const ActualizacionPrecioFormulario = React.lazy(() => import('./pages/ActualizacionPrecio/ActualizacionPrecioFormulario'));
+const Turnos = React.lazy(() => import('./pages/Turnos/Turnos'));
+const TurnoDetalle = React.lazy(() => import('./pages/Turnos/TurnoDetalle'));
+const Conteos = React.lazy(() => import('./pages/Conteos/Conteos'));
+const ConteoDetalle = React.lazy(() => import('./pages/Conteos/ConteoDetalle'));
+const ConteoFisicoFormulario = React.lazy(() => import('./pages/Conteos/ConteoFisicoFormulario'));
+const MovimientosProductos = React.lazy(() => import('./pages/MovimientosProductos/MovimientosProductos'));
+const ImportarInventario = React.lazy(() => import('./pages/ImportarInventario/ImportarInventario'));
+const ImportarDocBanco = React.lazy(() => import('./pages/ImportarDocBanco/ImportarDocBanco'));
+const ActualizacionCostos = React.lazy(() => import('./pages/ActualizacionCostos/ActualizacionCostos'));
+const AntiguedadSaldos = React.lazy(() => import('./pages/AntiguedadSaldos/AntiguedadSaldos'));
+const DetalleSuplidor = React.lazy(() => import('./pages/AntiguedadSaldos/DetalleSuplidor'));
+const AntiguedadSaldosDVC = React.lazy(() => import('./pages/AntiguedadSaldosDVC/AntiguedadSaldosDVC'));
+const FacturasVencidas = React.lazy(() => import('./pages/FacturasVencidas/FacturasVencidas'));
+const MayorAuxiliar = React.lazy(() => import('./pages/MayorAuxiliar/MayorAuxiliar'));
+const DiarioGeneral = React.lazy(() => import('./pages/DiarioGeneral/DiarioGeneral'));
+const TransaccionNoCuadrada = React.lazy(() => import('./pages/TransaccionNoCuadrada/TransaccionNoCuadrada'));
+const IntegridadAsientos = React.lazy(() => import('./pages/IntegridadAsientos/IntegridadAsientos'));
+const DocumentoSinAsiento = React.lazy(() => import('./pages/DocumentoSinAsiento/DocumentoSinAsiento'));
+const ReporteIntegridadAuxiliares = React.lazy(() => import('./pages/ReporteIntegridadAuxiliares/ReporteIntegridadAuxiliares'));
+const DocumentosAnulados = React.lazy(() => import('./pages/DocumentosAnulados/DocumentosAnulados'));
+const CierreInventario = React.lazy(() => import('./pages/CierreInventario/CierreInventario'));
+const CierreDetalle = React.lazy(() => import('./pages/CierreInventario/CierreDetalle'));
+const GeneradorORC = React.lazy(() => import('./pages/GeneradorORC/GeneradorORC'));
+const GeneradorORCDetalle = React.lazy(() => import('./pages/GeneradorORC/GeneradorORCDetalle'));
+const GeneradorORCFormulario = React.lazy(() => import('./pages/GeneradorORC/GeneradorORCFormulario'));
+const Rmovdoc = React.lazy(() => import('./pages/Rmovdoc/Rmovdoc'));
+const RMovimientosPorFecha = React.lazy(() => import('./pages/RMovimientosPorFecha/RMovimientosPorFecha'));
+const Tickets = React.lazy(() => import('./pages/Tickets/Tickets'));
+const Empleados = React.lazy(() => import('./pages/Empleados/Empleados'));
+const EmpleadoDetalle = React.lazy(() => import('./pages/Empleados/EmpleadoDetalle'));
+const EmpleadoFormulario = React.lazy(() => import('./pages/Empleados/EmpleadoFormulario'));
+const VisualizarConsulta = React.lazy(() => import('./pages/Notificaciones/VisualizarConsulta'));
+const PlantillaSuplidor = React.lazy(() => import('./pages/PlantillaSuplidor/PlantillaSuplidor'));
+const PlantillaSuplidorDetalle = React.lazy(() => import('./pages/PlantillaSuplidor/PlantillaSuplidorDetalle'));
+const PlantillaSuplidorFormulario = React.lazy(() => import('./pages/PlantillaSuplidor/PlantillaSuplidorFormulario'));
+const MovimientoPorPlantilla = React.lazy(() => import('./pages/MovimientoPorPlantilla/MovimientoPorPlantilla'));
+const DocumentacionPage = React.lazy(() => import('./pages/Documentacion/DocumentacionPage'));
+const RDocNoAutorizado = React.lazy(() => import('./pages/RDocNoAutorizado/RDocNoAutorizado'));
+const ASPA = React.lazy(() => import('./pages/ASPA/ASPA'));
+const StoreProductoDetalle = React.lazy(() => import('./pages/Ecommerce/StoreProductoDetalle'));
+const HomePage = React.lazy(() => import('./pages/Ecommerce/HomePage'));
+const CheckoutPage = React.lazy(() => import('./pages/Ecommerce/CheckoutPage'));
+const OrdenConfirmacionPage = React.lazy(() => import('./pages/Ecommerce/OrdenConfirmacionPage'));
+const OrdenesPage = React.lazy(() => import('./pages/Ecommerce/OrdenesPage'));
+const LoginPage = React.lazy(() => import('./pages/Ecommerce/LoginPage'));
+const RegistroPage = React.lazy(() => import('./pages/Ecommerce/RegistroPage'));
+const PerfilPage = React.lazy(() => import('./pages/Ecommerce/PerfilPage'));
+const EcommerceAdminDashboard = React.lazy(() => import('./pages/Ecommerce/Admin/EcommerceAdminDashboard'));
+const EcommerceAdminProductos = React.lazy(() => import('./pages/Ecommerce/Admin/EcommerceAdminProductos'));
+const EcommerceAdminCategorias = React.lazy(() => import('./pages/Ecommerce/Admin/EcommerceAdminCategorias'));
+const EcommerceAdminBanners = React.lazy(() => import('./pages/Ecommerce/Admin/EcommerceAdminBanners'));
+const EcommerceAdminOrdenes = React.lazy(() => import('./pages/Ecommerce/Admin/EcommerceAdminOrdenes'));
+const EcommerceAdminConfig = React.lazy(() => import('./pages/Ecommerce/Admin/EcommerceAdminConfig'));
+const ApiTokens = React.lazy(() => import('./pages/ApiTokens/ApiTokens'));
+const DocumentosAutorizados = React.lazy(() => import('./pages/DocumentosAutorizados/DocumentosAutorizados'));
+const Reporte606 = React.lazy(() => import('./pages/Reporte606/Reporte606'));
+const DocumentosAplicados = React.lazy(() => import('./pages/DocumentosAplicados/DocumentosAplicados'));
+const DocumentosCxPAutorizados = React.lazy(() => import('./pages/DocumentosCxPAutorizados/DocumentosCxPAutorizados'));
+const DocumentosCxPAplicados = React.lazy(() => import('./pages/DocumentosCxPAplicados/DocumentosCxPAplicados'));
+const TransferenciaSucursales = React.lazy(() => import('./pages/TransferenciaSucursales/TransferenciaSucursales'));
+const Empresa = React.lazy(() => import('./pages/Configuracion/Empresa'));
+const ConciliacionBancaria = React.lazy(() => import('./pages/ConciliacionBancaria/ConciliacionBancaria'));
+const ConciliacionBancariaDetalle = React.lazy(() => import('./pages/ConciliacionBancaria/ConciliacionBancariaDetalle'));
+const ConciliacionBancariaFormulario = React.lazy(() => import('./pages/ConciliacionBancaria/ConciliacionBancariaFormulario'));
+const ConfigPedidosYa = React.lazy(() => import('./pages/ConfigPedidosYa/ConfigPedidosYa'));
+const ReportesModulo = React.lazy(() => import('./pages/ReportesModulo/ReportesModulo'));
+const VisanetTest = React.lazy(() => import('./pages/VisanetTest/VisanetTest'));
+const MonitoreoCajas = React.lazy(() => import('./pages/MonitoreoCajas/MonitoreoCajas'));
+const ReportesConfig = React.lazy(() => import('./pages/ReportesConfig/ReportesConfig'));
+const ChatPage = React.lazy(() => import('./pages/Chat/ChatPage'));
+const ActividadesPage = React.lazy(() => import('./pages/Actividades/ActividadesPage'));
+const ServiciosActividadPage = React.lazy(() => import('./pages/Actividades/ServiciosActividadPage'));
+
+// Pantalla de carga mientras se descarga el chunk de la pagina (React.lazy).
+const PageLoading: React.FC = () => (
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 48 }}>
+    <Spin size="large" />
+  </div>
+);
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -222,7 +232,8 @@ const PantallaGuard: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   if (searchParams.get('skipGuard') === '1') {
     return <>{children}</>;
   }
-  if (codigoRuta && !['dashboard', 'dashboardconfig', 'cambiar-clave', 'MPERFIL', 'MPerfil', 'notificaciones', 'MTicket', 'visualizar-consulta', 'MApiToken', 'Mmodulo', 'RGORC', 'Reportes', 'TVISANET'].includes(codigoRuta) && !codigoRuta.startsWith('Reportes_')) {
+  // El chat interno es transversal: disponible para cualquier usuario autenticado.
+  if (codigoRuta && !['dashboard', 'dashboardconfig', 'cambiar-clave', 'chat', 'MPERFIL', 'MPerfil', 'notificaciones', 'MTicket', 'Actividades', 'visualizar-consulta', 'MApiToken', 'Mmodulo', 'RGORC', 'Reportes', 'TVISANET'].includes(codigoRuta) && !codigoRuta.startsWith('Reportes_')) {
     const tieneAcceso =
       pantallas.some((p) => p.codigo.toLowerCase() === codigoRuta.toLowerCase()) ||
       pantallas.some((p) => p.codigo.toLowerCase() === codigoRutaCompleto.toLowerCase()) ||
@@ -238,6 +249,7 @@ const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
     <BrowserRouter>
+      <React.Suspense fallback={<PageLoading />}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route
@@ -497,7 +509,10 @@ const App: React.FC = () => {
            <Route path="EBanners" element={<EcommerceAdminBanners />} />
            <Route path="EOrdenes" element={<EcommerceAdminOrdenes />} />
            <Route path="EConfig" element={<EcommerceAdminConfig />} />
-           </Route>
+            <Route path="chat" element={<ChatPage />} />
+            <Route path="Actividades" element={<ActividadesPage />} />
+        <Route path="Actividades/Servicios" element={<ServiciosActividadPage />} />
+            </Route>
 
          {/* ═══ RUTAS SAAS (nuevo layout) ════════════════════ */}
         <Route
@@ -745,6 +760,7 @@ const App: React.FC = () => {
            <Route path="EBanners" element={<EcommerceAdminBanners />} />
            <Route path="EOrdenes" element={<EcommerceAdminOrdenes />} />
            <Route path="EConfig" element={<EcommerceAdminConfig />} />
+           <Route path="chat" element={<ChatPage />} />
            </Route>
 
         {/* Rutas de documentación (sin autenticación, fuera de MainLayout) */}
@@ -763,6 +779,7 @@ const App: React.FC = () => {
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </React.Suspense>
     </BrowserRouter>
     </QueryClientProvider>
   );

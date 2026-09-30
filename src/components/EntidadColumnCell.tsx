@@ -25,7 +25,7 @@ const EntidadColumnCell: React.FC<EntidadColumnCellProps> = ({ name, diasCredito
       <div>
         <div><Text>{truncateText(toTitleCase(name))}</Text></div>
         {identificacion && (
-          <div className="paces-text-secondary" style={{ fontSize: 10, lineHeight: 1.4, marginTop: 1 }}>
+          <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.4, marginTop: 1 }}>
             RNC: {identificacion}
           </div>
         )}

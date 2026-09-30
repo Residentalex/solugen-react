@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Card,
@@ -36,6 +36,7 @@ const CheckoutPage: React.FC = () => {
   const { items, totalItems, subtotal, impuestos, total, sessionId, cargarCarrito } = useCarritoStore();
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const procesandoRef = useRef(false);
 
   const isAuthenticated = useEcommerceAuthStore((s) => s.isAuthenticated);
   const usuario = useEcommerceAuthStore((s) => s.usuario);
@@ -67,6 +68,8 @@ const CheckoutPage: React.FC = () => {
     direccion: string;
     notas: string;
   }) => {
+    if (procesandoRef.current) return;
+    procesandoRef.current = true;
     setLoading(true);
     try {
       const orden = await ecommerceApi.crearOrden({
@@ -82,6 +85,7 @@ const CheckoutPage: React.FC = () => {
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al crear la orden');
     } finally {
+      procesandoRef.current = false;
       setLoading(false);
     }
   };
@@ -101,7 +105,7 @@ const CheckoutPage: React.FC = () => {
           image={<ShoppingOutlined style={{ fontSize: 64, color: '#ccc' }} />}
           description="Tu carrito está vacío"
         >
-          <Button type="primary" onClick={() => navigate('/store')}>
+          <Button type="primary" onClick={() => navigate('/store')} disabled={loading}>
             Ir a la tienda
           </Button>
         </Empty>
@@ -182,6 +186,7 @@ const CheckoutPage: React.FC = () => {
               size="large"
               onFinish={handleSubmit}
               autoComplete="off"
+              disabled={loading}
             >
               <Form.Item
                 label="Nombre completo"

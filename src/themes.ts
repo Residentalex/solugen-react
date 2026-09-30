@@ -62,7 +62,7 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     hoverBg: 'rgba(85,110,230,0.08)',
     selectedBg: 'rgba(85,110,230,0.12)',
     tableHeaderFontSize: 13,
-    tableCellFontSize: 12,
+    tableCellFontSize: 13,
   },
   'dark-default': {
     isDark: true,
@@ -86,7 +86,7 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     hoverBg: 'rgba(99,123,240,0.12)',
     selectedBg: 'rgba(99,123,240,0.18)',
     tableHeaderFontSize: 13,
-    tableCellFontSize: 12,
+    tableCellFontSize: 13,
   },
   'light-ocean': {
     isDark: false,
@@ -110,7 +110,7 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     hoverBg: 'rgba(44,142,240,0.08)',
     selectedBg: 'rgba(44,142,240,0.12)',
     tableHeaderFontSize: 13,
-    tableCellFontSize: 12,
+    tableCellFontSize: 13,
   },
   'dark-ocean': {
     isDark: true,
@@ -134,7 +134,7 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     hoverBg: 'rgba(74,158,245,0.12)',
     selectedBg: 'rgba(74,158,245,0.18)',
     tableHeaderFontSize: 13,
-    tableCellFontSize: 12,
+    tableCellFontSize: 13,
   },
   'light-midnight': {
     isDark: false,
@@ -158,7 +158,7 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     hoverBg: 'rgba(99,102,241,0.08)',
     selectedBg: 'rgba(99,102,241,0.12)',
     tableHeaderFontSize: 13,
-    tableCellFontSize: 12,
+    tableCellFontSize: 13,
   },
   'dark-midnight': {
     isDark: true,
@@ -182,7 +182,7 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     hoverBg: 'rgba(124,127,240,0.12)',
     selectedBg: 'rgba(124,127,240,0.18)',
     tableHeaderFontSize: 13,
-    tableCellFontSize: 12,
+    tableCellFontSize: 13,
   },
   'light-rose': {
     isDark: false,
@@ -206,7 +206,7 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     hoverBg: 'rgba(217,70,239,0.08)',
     selectedBg: 'rgba(217,70,239,0.12)',
     tableHeaderFontSize: 13,
-    tableCellFontSize: 12,
+    tableCellFontSize: 13,
   },
   'dark-rose': {
     isDark: true,
@@ -230,7 +230,7 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     hoverBg: 'rgba(229,105,240,0.12)',
     selectedBg: 'rgba(229,105,240,0.18)',
     tableHeaderFontSize: 13,
-    tableCellFontSize: 12,
+    tableCellFontSize: 13,
   },
   'light-amber': {
     isDark: false,
@@ -254,7 +254,7 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     hoverBg: 'rgba(217,119,6,0.08)',
     selectedBg: 'rgba(217,119,6,0.12)',
     tableHeaderFontSize: 13,
-    tableCellFontSize: 12,
+    tableCellFontSize: 13,
   },
   'dark-amber': {
     isDark: true,
@@ -278,7 +278,7 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     hoverBg: 'rgba(230,153,10,0.12)',
     selectedBg: 'rgba(230,153,10,0.18)',
     tableHeaderFontSize: 13,
-    tableCellFontSize: 12,
+    tableCellFontSize: 13,
   },
    'light-genesis': {
      isDark: false,
@@ -301,8 +301,8 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
      topbarSearchBg: '#f8fafc',
      hoverBg: 'rgba(37,99,235,0.08)',
      selectedBg: 'rgba(37,99,235,0.12)',
-      tableHeaderFontSize: 12,
-      tableCellFontSize: 11,
+      tableHeaderFontSize: 13,
+      tableCellFontSize: 12,
     },
   'light-spa': {
     isDark: false,
@@ -325,8 +325,8 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     topbarSearchBg: '#F8F5F1',
     hoverBg:        'rgba(188,109,77,0.10)',
     selectedBg:     'rgba(188,109,77,0.12)',
-    tableHeaderFontSize: 12,
-    tableCellFontSize:   11,
+    tableHeaderFontSize: 13,
+    tableCellFontSize:   12,
   },
   'light-flow': {
     isDark: false,
@@ -349,8 +349,8 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     topbarSearchBg: '#f1f5f9',
     hoverBg: 'rgba(2,132,199,0.06)',
     selectedBg: 'rgba(2,132,199,0.10)',
-    tableHeaderFontSize: 12,
-    tableCellFontSize: 11,
+    tableHeaderFontSize: 13,
+    tableCellFontSize: 12,
   },
   'basic-devexpress': {
     isDark: false,
@@ -373,8 +373,8 @@ export const THEMES: Record<ThemeName, ThemeConfig> = {
     topbarSearchBg: '#f5f5f5',
     hoverBg: 'rgba(74,144,217,0.06)',
     selectedBg: 'rgba(74,144,217,0.10)',
-    tableHeaderFontSize: 12,
-    tableCellFontSize: 11,
+    tableHeaderFontSize: 13,
+    tableCellFontSize: 12,
   },
 };
 

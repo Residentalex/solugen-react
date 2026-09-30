@@ -11,6 +11,7 @@ interface DashboardWidgetState {
   misWidgets: DashboardWidgetDto[];
   loading: boolean;
   saving: boolean;
+  guardando: boolean;
   error: string | null;
 
   // Acciones
@@ -27,6 +28,7 @@ export const useDashboardWidgetStore = create<DashboardWidgetState>((set, get) =
   misWidgets: [],
   loading: false,
   saving: false,
+  guardando: false,
   error: null,
 
   fetchCatalog: async () => {
@@ -82,17 +84,16 @@ export const useDashboardWidgetStore = create<DashboardWidgetState>((set, get) =
   },
 
   guardarConfiguracion: async (rolId: number, configs: DashboardWidgetConfigDto[]) => {
-    set({ saving: true, error: null });
+    set({ saving: true, guardando: true, error: null });
     try {
       await dashboardApi.guardarConfiguracion(rolId, configs);
       message.success('Configuración guardada correctamente');
-      set({ saving: false });
-      // Refrescar los widgets del rol
+      set({ saving: false, guardando: false });
       await get().fetchWidgetsPorRol(rolId);
       return true;
     } catch (err: any) {
       const msg = err?.response?.data?.errorMessage || 'Error al guardar configuración';
-      set({ error: msg, saving: false });
+      set({ error: msg, saving: false, guardando: false });
       message.error(msg);
       return false;
     }

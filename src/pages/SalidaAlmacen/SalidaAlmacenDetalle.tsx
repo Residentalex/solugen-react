@@ -9,6 +9,7 @@ import type { MenuProps } from 'antd';
 import dayjs from 'dayjs';
 
 import {
+  InboxOutlined,
   LockFilled,
   CheckCircleFilled,
   CheckCircleOutlined,
@@ -801,7 +802,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                   children: (
                     <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} />
                   ),
@@ -921,7 +922,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                   children: (
                     <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} />
                   ),

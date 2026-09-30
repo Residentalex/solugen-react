@@ -32,7 +32,7 @@ export async function capturarPantalla(): Promise<CapturaPantalla | null> {
     scrollY: 0,
     useCORS: true,
     logging: false,
-    backgroundColor: getComputedStyle(document.body).backgroundColor || '#ffffff',
+    backgroundColor: resolverFondo(),
     ignoreElements: (el) => el.hasAttribute('data-captura-ocultar'),
     onclone: (doc) => {
       doc.querySelectorAll('[data-captura-ocultar]').forEach((el) => el.remove());
@@ -52,6 +52,20 @@ export async function capturarPantalla(): Promise<CapturaPantalla | null> {
     tipoMime: 'image/jpeg',
     nombreArchivo: `incidencia_${fecha}.jpg`,
   };
+}
+
+function resolverFondo(): string {
+  const candidatos = [
+    getComputedStyle(document.body).backgroundColor,
+    getComputedStyle(document.documentElement).backgroundColor,
+  ];
+
+  for (const color of candidatos) {
+    if (!color || color === 'transparent' || color === 'rgba(0, 0, 0, 0)') continue;
+    return color;
+  }
+
+  return '#ffffff';
 }
 
 function comprimirCanvas(canvas: HTMLCanvasElement, anchoMaximo: number): HTMLCanvasElement {

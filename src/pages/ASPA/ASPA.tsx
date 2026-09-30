@@ -161,7 +161,7 @@ const ASPA: React.FC = () => {
   const handleGenerarLote = async () => {
     if (selectedRowKeys.length === 0) return;
     if (selectedRowKeys.length > 1) {
-      const itemsSeleccionados = data.filter((x: any) => selectedRowKeys.includes(x.id) && (x as any).autorizado && !(x as any).pagoGenerado);
+      const itemsSeleccionados = data.filter((x: any) => selectedRowKeys.includes(x.id) && ((x as any).autorizado || (x as any).anulado) && !(x as any).pagoGenerado);
       setItemsGenerar(itemsSeleccionados as TransaccionBancariaVistaDTO[]);
       setModalGenerarVisible(true);
       return;
@@ -173,7 +173,7 @@ const ASPA: React.FC = () => {
       const idsCreados: number[] = [];
       for (const key of selectedRowKeys) {
         const item = data.find(x => x.id === key);
-        if (item && (item as any).autorizado && !(item as any).pagoGenerado) {
+        if (item && ((item as any).autorizado || (item as any).anulado) && !(item as any).pagoGenerado) {
           try {
             const resultado = await solicitudPagoApi.generarPago(sucursalActiva, Number(key), false);
             idsCreados.push(resultado.id);
@@ -290,19 +290,19 @@ const ASPA: React.FC = () => {
                 </Button>
               )}
             </PermissionGate>
-            <PermissionGate permisoEspecial="pe_generar_DocBancario">
-              {selectedRowKeys.length > 0 && data.some(x => selectedRowKeys.includes(x.id) && (x as any).autorizado && !(x as any).pagoGenerado) && (
-                <Button
-                  type="primary"
-                  icon={<FileAddOutlined />}
-                  loading={generando}
-                  onClick={handleGenerarLote}
-                  style={{ backgroundColor: '#556ee6' }}
-                >
-                  Generar Documento Bancario
-                </Button>
-              )}
-            </PermissionGate>
+<PermissionGate permisoEspecial="pe_generar_DocBancario">
+               {selectedRowKeys.length > 0 && data.some(x => selectedRowKeys.includes(x.id) && ((x as any).autorizado || (x as any).anulado) && !(x as any).pagoGenerado) && (
+                 <Button
+                   type="primary"
+                   icon={<FileAddOutlined />}
+                   loading={generando}
+                   onClick={handleGenerarLote}
+                   style={{ backgroundColor: '#556ee6' }}
+                 >
+                   Generar Documento Bancario
+                 </Button>
+               )}
+             </PermissionGate>
             <div style={{ flex: 1 }} />
             <PermissionGate accion="EXPORTAR">
               <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
@@ -327,12 +327,9 @@ const ASPA: React.FC = () => {
           loading={loading}
           rowSelection={{
             selectedRowKeys,
-            onChange: (keys: React.Key[], selectedRows, info) => {
-              const prev = selectedRowKeysRef.current;
-              // Si preserveSelectedRowKeys no funciona, mantenemos prevKeys y agregamos nuevos
-              const newKeys = Array.from(new Set([...prev, ...keys]));
-              setSelectedRowKeys(newKeys);
-              selectedRowKeysRef.current = newKeys;
+            onChange: (keys: React.Key[]) => {
+              setSelectedRowKeys(keys as React.Key[]);
+              selectedRowKeysRef.current = keys as React.Key[];
             },
             columnWidth: 60,
           }}

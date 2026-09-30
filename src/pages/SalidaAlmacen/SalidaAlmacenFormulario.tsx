@@ -6,6 +6,7 @@ import {
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Popover, Alert, Empty,
 } from 'antd';
 import {
+  InboxOutlined,
   SaveOutlined,
   CloseOutlined,
   DeleteOutlined,
@@ -51,7 +52,7 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
+import { DragHandle, SortableRow } from '../../components/DragSortable';
 import { SalidaAlmacenGuide } from './SalidaAlmacenGuide';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
@@ -156,6 +157,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
   ) ?? false;
   const [generandoAsientos, setGenerandoAsientos] = useState(false);
   const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
+  const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
   const [asientosModificados, setAsientosModificados] = useState(false);
 
   const editValuesRef = useRef<Record<string, any>>({});
@@ -847,6 +849,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
   const handleGenerarAsientos = async () => {
     if (sucursalActiva === undefined) return;
     setGenerandoAsientos(true);
+    setErrorGeneracion(null);
     try {
       const dto = construirDTO();
       const asientosGenerados = await transaccionApi.generarAsientos(sucursalActiva, dto);
@@ -854,7 +857,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
       message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
-      message.error(msg);
+      setErrorGeneracion(msg);
     } finally {
       setGenerandoAsientos(false);
     }
@@ -1416,6 +1419,18 @@ const SalidaAlmacenFormulario: React.FC = () => {
         />
       )}
 
+      {errorGeneracion && (
+        <Alert
+          message="Error al generar asientos"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          description={errorGeneracion}
+          closable
+          onClose={() => setErrorGeneracion(null)}
+        />
+      )}
+
       <BuscarConceptoModal
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
@@ -1448,7 +1463,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                   children: (
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
@@ -1548,7 +1563,7 @@ const SalidaAlmacenFormulario: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                 children: (
                   <>
                     <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>

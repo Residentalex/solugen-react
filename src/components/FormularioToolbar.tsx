@@ -19,7 +19,7 @@ const FormularioToolbar: React.FC<FormularioToolbarProps> = ({
   saving, bloqueado = false, estado, periodo, mode = 'crear', onGuardar, onCancelar, children,
 }) => {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
       {children}
       <div style={{ flex: 1 }} />
       <Space wrap>

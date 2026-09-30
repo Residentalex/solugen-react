@@ -1,7 +1,7 @@
 import React from 'react';
-import { Typography } from 'antd';
+import { Typography, Tooltip } from 'antd';
 import { CalendarOutlined } from '@ant-design/icons';
-import { formatDateRaw } from '../utils/formats';
+import { formatDateRaw, formatDateShort } from '../utils/formats';
 
 const { Text } = Typography;
 
@@ -9,6 +9,8 @@ interface FechaColumnCellProps {
   fecha: string;
   fechaSecundaria?: string;
   labelSecundario?: string;
+  labelSecundarioTitle?: string;
+  secundariaCompacta?: boolean;
   size?: 'small' | 'middle';
 }
 
@@ -16,8 +18,17 @@ const FechaColumnCell: React.FC<FechaColumnCellProps> = ({
   fecha,
   fechaSecundaria,
   labelSecundario = 'Recibo',
+  labelSecundarioTitle,
+  secundariaCompacta = false,
   size = 'middle',
 }) => {
+  const secundariaTexto = fechaSecundaria
+    ? secundariaCompacta
+      ? `${labelSecundario} ${formatDateShort(fechaSecundaria)}`
+      : `${labelSecundario}: ${formatDateRaw(fechaSecundaria)}`
+    : '';
+  const secundariaTitle = `${labelSecundarioTitle ?? labelSecundario}: ${formatDateRaw(fechaSecundaria ?? '')}`;
+
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.35 }}>
       <CalendarOutlined
@@ -40,12 +51,14 @@ const FechaColumnCell: React.FC<FechaColumnCellProps> = ({
           {formatDateRaw(fecha)}
         </div>
         {fechaSecundaria && (
-          <div
-            className="paces-text-secondary"
-            style={{ fontSize: 9, marginTop: 1, lineHeight: 1.2 }}
-          >
-            {labelSecundario}: {formatDateRaw(fechaSecundaria)}
-          </div>
+          <Tooltip title={secundariaTitle} mouseEnterDelay={0.3}>
+            <div
+              className="paces-text-secondary"
+              style={{ fontSize: 11, marginTop: 1, lineHeight: 1.2, whiteSpace: 'nowrap' }}
+            >
+              {secundariaTexto}
+            </div>
+          </Tooltip>
         )}
       </div>
     </div>

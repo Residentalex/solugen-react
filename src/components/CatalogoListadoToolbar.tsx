@@ -1,5 +1,6 @@
-import React from 'react';
-import { Input, Button } from 'antd';
+import React, { useRef, useState } from 'react';
+import { Input, Button, Tooltip } from 'antd';
+import type { InputRef } from 'antd';
 import { SearchOutlined, ReloadOutlined, PlusOutlined, FileExcelOutlined, CopyOutlined } from '@ant-design/icons';
 import PageSizeSelect from './PageSizeSelect';
 import PermissionGate from './PermissionGate';
@@ -41,14 +42,31 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
   exportando = false,
   deshabilitado = false,
 }) => {
+  // El Input.Search es no controlado. Remontarlo garantiza el texto vacío al
+  // limpiar con ESC en cualquier navegador (el borrado nativo de type="search"
+  // no existe en todos) y permite liberar el filtro de verdad.
+  const [searchKey, setSearchKey] = useState(0);
+  const searchRef = useRef<InputRef>(null);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    setSearchKey((k) => k + 1);
+    onSearch('');
+    setTimeout(() => searchRef.current?.focus?.(), 0);
+  };
+
   return (
     <div style={{ padding: '16px 24px 0' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 16, flexWrap: 'wrap' }}>
         <Search
+          key={searchKey}
+          ref={searchRef}
           placeholder={placeholder}
           allowClear
           onSearch={onSearch}
-          style={{ width: 400 }}
+          onKeyDown={handleSearchKeyDown}
+          style={{ width: '100%', maxWidth: 400, minWidth: 200 }}
           prefix={<SearchOutlined className="paces-text-icon" />}
         />
         {filtros}
@@ -64,15 +82,27 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
         {acciones}
         {showClonar && onClonar && (
           <PermissionGate accion="CLONAR">
-            <Button icon={<CopyOutlined />} disabled={clonarDisabled || deshabilitado} onClick={onClonar} />
+            <Tooltip title="Clonar">
+              <Button icon={<CopyOutlined />} aria-label="Clonar" disabled={clonarDisabled || deshabilitado} onClick={onClonar} />
+            </Tooltip>
           </PermissionGate>
         )}
         {onExportarExcel && (
           <PermissionGate accion="EXPORTAR">
-            <Button icon={<FileExcelOutlined />} onClick={onExportarExcel} disabled={deshabilitado} loading={exportando} />
+            <Tooltip title="Exportar a Excel">
+              <Button
+                icon={<FileExcelOutlined />}
+                aria-label="Exportar a Excel"
+                onClick={onExportarExcel}
+                disabled={deshabilitado}
+                loading={exportando}
+              />
+            </Tooltip>
           </PermissionGate>
         )}
-        <Button icon={<ReloadOutlined />} onClick={onReload} disabled={deshabilitado} />
+        <Tooltip title="Actualizar">
+          <Button icon={<ReloadOutlined />} aria-label="Actualizar" onClick={onReload} disabled={deshabilitado} />
+        </Tooltip>
       </div>
     </div>
   );

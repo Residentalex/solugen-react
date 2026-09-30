@@ -201,6 +201,7 @@ const PlantillaSuplidorDetalle: React.FC = () => {
       const res = await plantillaSuplidorApi.imprimir(sucursalActiva, id!);
       const blobUrl = URL.createObjectURL(res);
       window.open(blobUrl, '_blank');
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
     } catch {
       message.error('Error al generar el PDF');
     } finally {

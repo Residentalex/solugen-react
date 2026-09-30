@@ -2,13 +2,17 @@ import React from 'react';
 import { CSS } from '@dnd-kit/utilities';
 import { useSortable } from '@dnd-kit/sortable';
 import { HolderOutlined } from '@ant-design/icons';
+import { DragListenersContext } from './DragSortableContext';
 
-export const DragListenersContext = React.createContext<any>(null);
+export type RowProps = React.HTMLAttributes<HTMLTableRowElement> & {
+  'data-row-key'?: React.Key;
+};
 
-export const SortableRow: React.FC<any> = React.memo(({ children, ...rest }) => {
-  const recordId = rest['data-row-key'];
-  if (!recordId) return <tr {...rest}>{children}</tr>;
-
+const SortableRowDraggable: React.FC<RowProps & { recordId: React.Key }> = ({
+  recordId,
+  children,
+  ...rest
+}) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: recordId });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -21,6 +25,16 @@ export const SortableRow: React.FC<any> = React.memo(({ children, ...rest }) => 
       </tr>
     </DragListenersContext.Provider>
   );
+};
+
+export const SortableRow: React.FC<RowProps> = React.memo((props) => {
+  const recordId = props['data-row-key'];
+
+  if (!recordId) {
+    return <tr {...props} />;
+  }
+
+  return <SortableRowDraggable {...props} recordId={recordId} />;
 });
 
 export const DragHandle: React.FC = () => {

@@ -1,15 +1,17 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  Card, Table, Checkbox, InputNumber, Button, Space, Select, Input,
-  Typography, Row, Col, message, Spin, Alert, Divider
+  Table, Checkbox, InputNumber, Button, Space, Select, Input,
+  Typography, Row, Col, message, Spin, Alert, Divider, Tag
 } from 'antd';
 import {
   SaveOutlined, ReloadOutlined, SettingOutlined
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useDashboardWidgetStore } from '../../stores/dashboardWidgetStore';
+import { rolApi } from '../../api/rolApi';
 import PermissionEspecialGate from '../../components/PermissionEspecialGate';
 import type { DashboardWidgetDto, DashboardWidgetConfigDto } from '../../types/dashboard';
+import type { RolFullDTO } from '../../types/administracion';
 
 const { Text, Title } = Typography;
 
@@ -22,6 +24,17 @@ const zonaWidget = (codigo: string): string => {
   return mapa[codigo?.toLowerCase()] || (codigo ? codigo.toUpperCase() : '-');
 };
 
+const obtenerMensajeError = (error: unknown, mensajePredeterminado: string) => {
+  const apiError = error as {
+    response?: { data?: { errorMessage?: string; message?: string } };
+  };
+  return (
+    apiError.response?.data?.errorMessage ??
+    apiError.response?.data?.message ??
+    (error instanceof Error ? error.message : mensajePredeterminado)
+  );
+};
+
 /**
  * Página de configuración de widgets del dashboard por rol
  *
@@ -29,22 +42,34 @@ const zonaWidget = (codigo: string): string => {
  * Permite ver y modificar qué widgets son visibles para cada rol.
  */
 const ConfiguracionDashboard: React.FC = () => {
-  const usuario = useAuthStore((s) => s.usuario);
-  const { catalog, widgetsPorRol, loading, saving, fetchCatalog, fetchWidgetsPorRol, guardarConfiguracion } =
+  const securitySucursal = useAuthStore((s) => s.securitySucursal);
+  const { catalog, widgetsPorRol, loading, saving, guardando, fetchCatalog, fetchWidgetsPorRol, guardarConfiguracion } =
     useDashboardWidgetStore();
 
   const [rolSeleccionado, setRolSeleccionado] = useState<number | null>(null);
   const [configs, setConfigs] = useState<Map<number, DashboardWidgetConfigDto>>(new Map());
   const [dirty, setDirty] = useState(false);
+  const [roles, setRoles] = useState<RolFullDTO[]>([]);
+  const [cargandoRoles, setCargandoRoles] = useState(false);
 
-  // Lista de roles del usuario actual
-  const rolesDisponibles = useMemo(() => {
-    if (!usuario?.roles) return [];
-    return usuario.roles.map(r => ({
-      value: r.id,
-      label: r.nombre,
-    }));
-  }, [usuario?.roles]);
+  const cargarRoles = useCallback(async () => {
+    setCargandoRoles(true);
+    try {
+      const data = await rolApi.obtenerListado(securitySucursal);
+      setRoles(data ?? []);
+    } catch (err) {
+      setRoles([]);
+      message.error(obtenerMensajeError(err, 'Error al cargar los roles'));
+    } finally {
+      setCargandoRoles(false);
+    }
+  }, [securitySucursal]);
+
+  // Catálogo de roles del sistema (no solo los del usuario actual)
+  const rolesDisponibles = useMemo(
+    () => roles.map((r) => ({ value: r.id, label: r.nombre })),
+    [roles]
+  );
 
   // Widgets actualmente cargados para el rol seleccionado
   const widgetsDelRol = useMemo(() => {
@@ -52,10 +77,17 @@ const ConfiguracionDashboard: React.FC = () => {
     return widgetsPorRol.get(rolSeleccionado) || [];
   }, [widgetsPorRol, rolSeleccionado]);
 
-  // Cargar catálogo al montar
+  // Cargar catálogo de widgets y catálogo de roles al montar
   useEffect(() => {
     fetchCatalog();
   }, [fetchCatalog]);
+
+  useEffect(() => {
+    const temporizadorCarga = window.setTimeout(() => {
+      void cargarRoles();
+    }, 0);
+    return () => window.clearTimeout(temporizadorCarga);
+  }, [cargarRoles]);
 
   // Cuando cambia el rol seleccionado, cargar sus widgets
   useEffect(() => {
@@ -129,7 +161,10 @@ const ConfiguracionDashboard: React.FC = () => {
     setDirty(true);
   };
 
-  const [busquedaWidgets, setBusquedaWidgets] = useState('');
+const [busquedaWidgets, setBusquedaWidgets] = useState('');
+
+  // Candado compartido: mientras se guarda o recarga, bloquear todas las acciones
+  const bloqueado = guardando || saving || loading;
 
   const catalogFiltrado = useMemo(() => {
     if (!busquedaWidgets.trim()) return catalog;
@@ -138,13 +173,13 @@ const ConfiguracionDashboard: React.FC = () => {
       (w) =>
         w.nombre.toLowerCase().includes(q) ||
         (w.codigo && w.codigo.toLowerCase().includes(q)) ||
-        (w.descripcion && w.descripcion.toLowerCase().includes(q))
+        (w.description && w.description.toLowerCase().includes(q))
     );
   }, [catalog, busquedaWidgets]);
 
   const handleGuardar = async () => {
     if (!rolSeleccionado) {
-      message.warning('Seleccione un rol primero');
+      message.warning('Seleccionar un rol primero');
       return;
     }
     const configsArray = Array.from(configs.values());
@@ -158,6 +193,14 @@ const ConfiguracionDashboard: React.FC = () => {
     if (rolSeleccionado) {
       fetchWidgetsPorRol(rolSeleccionado);
     }
+  };
+
+  const handleCambiarRol = (value: number | null) => {
+    if (dirty && !bloqueado) {
+      message.warning('Tiene cambios sin guardar. Guarde o descarte antes de cambiar de rol.');
+      return;
+    }
+    setRolSeleccionado(value);
   };
 
   const columns = [
@@ -224,6 +267,7 @@ const ConfiguracionDashboard: React.FC = () => {
         <Checkbox
           checked={configs.get(record.id)?.visible ?? false}
           onChange={(e) => handleToggleVisible(record.id, e.target.checked)}
+          disabled={bloqueado}
         />
       ),
     },
@@ -240,6 +284,7 @@ const ConfiguracionDashboard: React.FC = () => {
           onChange={(val) => handleOrdenChange(record.id, val)}
           style={{ width: '100%' }}
           placeholder={`Default: ${record.orden}`}
+          disabled={bloqueado}
         />
       ),
     },
@@ -284,15 +329,13 @@ const ConfiguracionDashboard: React.FC = () => {
               style={{ width: '100%', marginTop: 8 }}
               placeholder="Seleccione un rol"
               value={rolSeleccionado}
-              onChange={(value: number | null) => {
-                if (dirty) {
-                  message.warning('Tiene cambios sin guardar. Guarde o descarte antes de cambiar de rol.');
-                  return;
-                }
-                setRolSeleccionado(value);
-              }}
+              onChange={handleCambiarRol}
               options={rolesDisponibles}
-              loading={loading}
+              loading={cargandoRoles}
+              disabled={bloqueado}
+              notFoundContent={cargandoRoles ? 'Cargando roles...' : 'No hay roles disponibles'}
+              showSearch
+              optionFilterProp="label"
             />
           </Col>
           <Col xs={24} sm={16} lg={16} style={{ display: 'flex', alignItems: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
@@ -307,7 +350,7 @@ const ConfiguracionDashboard: React.FC = () => {
             <Button
               icon={<ReloadOutlined />}
               onClick={handleReset}
-              disabled={!rolSeleccionado || loading}
+              disabled={!rolSeleccionado || bloqueado}
             >
               Recargar
             </Button>
@@ -316,20 +359,12 @@ const ConfiguracionDashboard: React.FC = () => {
               icon={<SaveOutlined />}
               onClick={handleGuardar}
               loading={saving}
-              disabled={!rolSeleccionado || !dirty}
+              disabled={!rolSeleccionado || !dirty || bloqueado}
             >
               Guardar Cambios
             </Button>
             {dirty && (
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                padding: '4px 10px', borderRadius: 12, fontSize: 12,
-                background: '#fff8e6', color: '#d48806', border: '1px solid #ffe58f',
-                fontWeight: 500,
-              }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#d48806' }} />
-                {Array.from(configs.values()).filter(c => c.visible !== (widgetsPorRol.get(rolSeleccionado ?? 0)?.find(w => w.id === c.widgetId)?.visible ?? false)).length} cambios
-              </span>
+              <Tag color="warning" icon={<SettingOutlined />}>Cambios pendientes</Tag>
             )}
           </Col>
         </Row>

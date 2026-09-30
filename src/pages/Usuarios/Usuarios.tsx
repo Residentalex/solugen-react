@@ -95,7 +95,7 @@ const Usuarios: React.FC = () => {
     {
       title: 'Usuario',
       key: 'usuario',
-      width: 220,
+      width: 240,
       fixed: 'left',
       render: (_, record) => (
         <Link to={`/MUsuario/${record.id}`} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -107,11 +107,13 @@ const Usuarios: React.FC = () => {
           />
           <div>
             <Text className="paces-text-primary" strong style={{ fontSize: 13, lineHeight: 1.3 }}>
-              {record.nombreUsuario}
+              {record.nombre}
               <RightOutlined style={{ fontSize: 10, marginLeft: 4, opacity: 0.5 }} />
             </Text>
             <br />
-            <Text type="secondary" style={{ lineHeight: 1.3 }}>{record.nombre}</Text>
+            <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.3 }}>
+              <span style={{ fontFamily: 'monospace' }}>{record.nombreUsuario}</span>
+            </Text>
           </div>
         </Link>
       ),
@@ -120,6 +122,7 @@ const Usuarios: React.FC = () => {
       title: 'Roles',
       key: 'roles',
       width: 200,
+      responsive: ['lg'],
       render: (_, record) => {
         const roles = record.roles || [];
         const mostrar = roles.slice(0, 3);
@@ -140,6 +143,7 @@ const Usuarios: React.FC = () => {
       title: 'Sucursales',
       key: 'sucursales',
       width: 200,
+      responsive: ['lg'],
       render: (_, record) => (
         <Space wrap size={2}>
           {(record.sucursalesRoles || []).map((sr) => (
@@ -166,8 +170,11 @@ const Usuarios: React.FC = () => {
         <Tag color={activo ? 'green' : 'default'}>{activo ? 'Activo' : 'Inactivo'}</Tag>
       ),
     },
-
   ];
+
+  const hasSearch = searchText.trim().length > 0;
+  const isEmpty = !data || data.length === 0;
+  const showEmptyText = !isError && isEmpty;
 
   return (
     <>
@@ -203,9 +210,9 @@ const Usuarios: React.FC = () => {
           rowClassName="paces-row-hover"
           className="paces-border-top paces-list-table"
           locale={{
-            emptyText: <div style={{ minHeight: 160, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Empty description="No hay usuarios registrados" />
-            </div>,
+            emptyText: showEmptyText ? (
+              <Empty description={hasSearch ? `Sin resultados para "${searchText}"` : 'No hay usuarios registrados'} />
+            ) : undefined,
           }}
           pagination={{
             current: page,

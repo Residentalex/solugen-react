@@ -6,6 +6,7 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
+  InboxOutlined,
   ArrowLeftOutlined,
   EditOutlined,
   PrinterOutlined,
@@ -735,7 +736,7 @@ const GeneradorORCDetalle: React.FC = () => {
   const tabsItems = [
     {
       key: 'detalles',
-      label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+      icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
       children: detallesTabContent,
     },
     {

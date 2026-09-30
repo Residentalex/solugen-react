@@ -60,6 +60,8 @@ import {
 } from '../../utils/ticketPlantilla';
 import { escposToHtml } from '../../utils/escposToHtml';
 import { formatTicketPOS, formatTicketReciboIngreso, formatTicketVoucherVisanet, resolverRuta } from '../../utils/escpos-formatter';
+import type { OpcionesTicketRender } from '../../utils/escpos-formatter';
+import { validarExpresionesDeConfig } from '../../utils/expresiones';
 import TextAreaAutocompletar from '../../components/TextAreaAutocompletar';
 
 const { Text } = Typography;
@@ -68,6 +70,9 @@ const TAMANO_FUENTE_PREVIEW = 14;
 const TAMANO_FUENTE_B_PREVIEW = 11;
 const FACTOR_ANCHO_CARACTER_MONOESPACIADO = 0.61;
 const PADDING_HORIZONTAL_PREVIEW = 40;
+// El agente de impresion escribe la etiqueta tal cual (sin ": "), asi que el
+// preview usa un espacio en vez del separador legado de impresion.
+const PREVIEW_OPCIONES: OpcionesTicketRender = { separadorEtiqueta: ' ' };
 
 /* ===== Campos calculados (líneas ESQUEMA) ===== */
 const OPCIONES_CALCULO: { label: string; value: TipoCalculoCampo }[] = [
@@ -697,6 +702,23 @@ const ReportesConfigEditor: React.FC<ReportesConfigEditorProps> = ({
     })),
   });
 
+  const reconstruirTextosLibresFaltantes = (configuracion: PlantillaConfig): PlantillaConfig => {
+    const textosLibres = { ...(configuracion.textosLibres || configuracion.campos?.textosLibres || {}) };
+    let cambios = false;
+    for (const zona of (configuracion.zonas || [])) {
+      for (const linea of (zona.lineas || [])) {
+        if (linea.ref?.startsWith('LIBRE:')) {
+          const id = linea.ref.slice(6);
+          if (!textosLibres[id] && linea.label?.trim()) {
+            textosLibres[id] = { texto: linea.label, tamano: 'condensada' };
+            cambios = true;
+          }
+        }
+      }
+    }
+    return cambios ? { ...configuracion, textosLibres } : configuracion;
+  };
+
   useEffect(() => {
     if (!selectedId) { setDetalle(null); setConfig(migrarConfig(esVSNT_CIERRE ? normalizarConfigVSNT_CIERRE(null) : esVSNT_ANULACION ? normalizarConfigVSNT_ANULACION(null) : esVSNT ? normalizarConfigVSNT(null) : esFRI ? normalizarConfigRI(null) : normalizarConfig(null))); setConfigInicial(config); return; }
     let activo = true; setLoading(true); setLoadingError(false);
@@ -751,14 +773,14 @@ const anchoPapelPreview = Math.ceil(
     if (!detalle) return '';
     try {
       const raw = esVSNT_ANULACION
-        ? formatTicketVoucherVisanet(datosEjemploAnulacion, companyEjemplo, previewConfig)
+        ? formatTicketVoucherVisanet(datosEjemploAnulacion, companyEjemplo, previewConfig, PREVIEW_OPCIONES)
         : esVSNT_CIERRE
-          ? formatTicketVoucherVisanet(datosEjemploCierre, companyEjemplo, previewConfig)
+          ? formatTicketVoucherVisanet(datosEjemploCierre, companyEjemplo, previewConfig, PREVIEW_OPCIONES)
           : esVSNT
-            ? formatTicketVoucherVisanet(datosEjemploVoucher, companyEjemplo, previewConfig)
+            ? formatTicketVoucherVisanet(datosEjemploVoucher, companyEjemplo, previewConfig, PREVIEW_OPCIONES)
             : esFRI
-          ? formatTicketReciboIngreso(datosEjemploRecibo, companyEjemplo, previewConfig)
-          : formatTicketPOS(datosEjemploPOS, companyEjemplo, previewConfig);
+          ? formatTicketReciboIngreso(datosEjemploRecibo, companyEjemplo, previewConfig, PREVIEW_OPCIONES)
+          : formatTicketPOS(datosEjemploPOS, companyEjemplo, previewConfig, PREVIEW_OPCIONES);
       const html = escposToHtml(raw, {
         fontSizeBase: TAMANO_FUENTE_PREVIEW,
         fontSizeFuenteB: TAMANO_FUENTE_B_PREVIEW,
@@ -941,25 +963,33 @@ const anchoPapelPreview = Math.ceil(
     });
   };
 
-  const setContenidoLibre = (zIdx: number, lIdx: number, contenido: string) => {
+const setContenidoLibre = (zIdx: number, lIdx: number, contenido: string) => {
     if (ocupadoRef.current || ocupado) return;
     setConfig(prev => {
-      const zonas = [...(prev.zonas || [])];
-      const zonaActual = zonas[zIdx];
-      const lineaActual = zonaActual?.lineas?.[lIdx];
-      if (!zonaActual || !lineaActual) return prev;
-      const ref = String(lineaActual.ref || '');
-      if (!ref.startsWith('LIBRE:')) return actualizarOpcion(prev, { zonas });
-      const id = ref.slice('LIBRE:'.length);
-      const textos = { ...(prev.textosLibres || prev.campos?.textosLibres || {}) };
-      const actual = textos[id] as TextoLibreConfig;
-      textos[id] = {
-        ...(actual && typeof actual !== 'string' ? actual : {}),
-        texto: contenido,
-      };
-      return actualizarOpcion(prev, { zonas, textosLibres: textos });
+        const zonas = [...(prev.zonas || [])];
+        const zonaActual = zonas[zIdx];
+        const lineaActual = zonaActual?.lineas?.[lIdx];
+        if (!zonaActual || !lineaActual) return prev;
+        const ref = String(lineaActual.ref || '');
+        if (!ref.startsWith('LIBRE:')) return actualizarOpcion(prev, { zonas });
+        const id = ref.slice('LIBRE:'.length);
+        const textos = { ...(prev.textosLibres || prev.campos?.textosLibres || {}) };
+        const actual = textos[id] as TextoLibreConfig;
+        textos[id] = {
+            ...(actual && typeof actual !== 'string' ? actual : {}),
+            texto: contenido,
+        };
+        // Also update the line's label to match the text content
+        const zonasConLabelActualizado = [...zonas];
+        const zonaConLabelActualizado = { ...zonasConLabelActualizado[zIdx] };
+        const lineasConLabelActualizado = [...zonaConLabelActualizado.lineas];
+        const lineaConLabelActualizado = { ...lineasConLabelActualizado[lIdx], label: contenido };
+        lineasConLabelActualizado[lIdx] = lineaConLabelActualizado;
+        zonaConLabelActualizado.lineas = lineasConLabelActualizado;
+        zonasConLabelActualizado[zIdx] = zonaConLabelActualizado;
+        return actualizarOpcion(prev, { zonas: zonasConLabelActualizado, textosLibres: textos });
     });
-  };
+};
 
   const setLineaFormato = (zIdx: number, lIdx: number, fmt: FormatoItemTicket | null) => {
     if (ocupadoRef.current || ocupado) return;
@@ -1176,28 +1206,37 @@ const anchoPapelPreview = Math.ceil(
     setModalLibreAbierto(true);
   };
 
-  const guardarLibre = (texto: string, alineacion: AlineacionTicket, negrita: boolean, tamano: TamanoLetraTicket) => {
+const guardarLibre = (texto: string, alineacion: AlineacionTicket, negrita: boolean, tamano: TamanoLetraTicket) => {
     const fmt = construirFormato(alineacion, negrita, tamano, true);
     setConfig((prev) => {
-      const textos = { ...(prev.textosLibres || prev.campos?.textosLibres || {}) };
-      const id = libreTempEditId;
-      if (!id) {
-        const nuevo = `libre_${Date.now()}`;
-        textos[nuevo] = { texto, ...(fmt || {}) };
-        const patch: Partial<PlantillaConfig> = { textosLibres: textos };
-        if (libreTempZonaIdx !== undefined && prev.zonas) {
-          const zonas = [...prev.zonas];
-          zonas[libreTempZonaIdx] = { ...zonas[libreTempZonaIdx], lineas: [...zonas[libreTempZonaIdx].lineas, { ref: `LIBRE:${nuevo}` as LineaZonaConfig['ref'] }] };
-          patch.zonas = zonas;
+        const textos = { ...(prev.textosLibres || prev.campos?.textosLibres || {}) };
+        const id = libreTempEditId;
+        if (!id) {
+            const nuevo = `libre_${Date.now()}`;
+            textos[nuevo] = { texto, ...(fmt || {}) };
+            const patch: Partial<PlantillaConfig> = { textosLibres: textos };
+            if (libreTempZonaIdx !== undefined && prev.zonas) {
+                const zonas = [...prev.zonas];
+                zonas[libreTempZonaIdx] = { ...zonas[libreTempZonaIdx], lineas: [...zonas[libreTempZonaIdx].lineas, { ref: `LIBRE:${nuevo}` as LineaZonaConfig['ref'] }] };
+                patch.zonas = zonas;
+            }
+            return actualizarOpcion(prev, patch);
         }
-        return actualizarOpcion(prev, patch);
-      }
-      const actual = textos[id] as TextoLibreConfig;
-      textos[id] = { ...(actual && typeof actual !== 'string' ? actual : {}), texto, ...(fmt || {}) };
-      return actualizarOpcion(prev, { textosLibres: textos });
+        const actual = textos[id] as TextoLibreConfig;
+        textos[id] = { ...(actual && typeof actual !== 'string' ? actual : {}), texto, ...(fmt || {}) };
+        // Also update the line's label to match the text content
+        const zonasConLabel = [...(prev.zonas || [])];
+        for (const zona of zonasConLabel) {
+            for (const linea of zona.lineas) {
+                if (linea.ref === `LIBRE:${id}`) {
+                    linea.label = texto;
+                }
+            }
+        }
+        return actualizarOpcion(prev, { zonas: zonasConLabel, textosLibres: textos });
     });
     setModalLibreAbierto(false); setLibreTempEditId(undefined); setLibreTempZonaIdx(undefined);
-  };
+};
 
   const abrirModalFirma = (id?: string, zonaIdx?: number) => {
     if (ocupadoRef.current || ocupado) { message.warning('Espere a que termine la operación en curso'); return; }
@@ -1284,7 +1323,8 @@ const anchoPapelPreview = Math.ceil(
     // Validaciones no bloqueantes
   if (!(config.zonas || []).some((z) => z.tipo === 'detalle')) message.warning('No hay zona de tipo "Detalle"');
   if (!(config.zonas || []).some((z) => z.tipo === 'totales')) message.warning('No hay zona de tipo "Totales"');
-  const configuracionParaGuardar = completarEtiquetasPredeterminadas(config);
+  let configuracionParaGuardar = completarEtiquetasPredeterminadas(config);
+  configuracionParaGuardar = reconstruirTextosLibresFaltantes(configuracionParaGuardar);
   setConfig(configuracionParaGuardar);
   try {
     const toSave = (configuracionParaGuardar.zonas && configuracionParaGuardar.zonas.length > 0) ? configuracionParaGuardar : null;
@@ -2066,6 +2106,7 @@ const anchoPapelPreview = Math.ceil(
               const linea = zona?.lineas[lineaActiva.lineaIdx];
               if (!linea) return <Text type="secondary">Línea no encontrada</Text>;
               const ref = linea.ref;
+              const erroresEtiqueta = validarExpresionesDeConfig({ zonas: [{ lineas: [{ label: linea.label }] }] });
               const esCampo = ref.startsWith('CAMPO:');
               const esTotal = ref.startsWith('TOTAL:');
               const esCobro = ref.startsWith('COBRO:');
@@ -2157,8 +2198,16 @@ const anchoPapelPreview = Math.ceil(
                     <Space direction="vertical" style={{ width: '100%', marginTop: 6 }} size={6}>
                       <Input size="small" style={{ width: '100%' }} value={linea.label || ''}
                         disabled={ocupado}
+                        status={erroresEtiqueta.length ? 'error' : undefined}
                         onChange={(e) => setLineaLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, e.target.value)}
                         placeholder={labelDefault} />
+                      {erroresEtiqueta.length > 0 && (
+                        <div style={{ fontSize: 11, color: '#b42318' }}>
+                          {erroresEtiqueta.map((e) => (
+                            <div key={e.expresion}><code>{`{${e.expresion}}`}</code>: {e.error}</div>
+                          ))}
+                        </div>
+                      )}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Switch size="small" checked={linea.mostrarLabel !== false} disabled={ocupado} onChange={(v) => setLineaMostrarLabel(lineaActiva.zonaIdx, lineaActiva.lineaIdx, v)} />
                         <span style={{ fontSize: 12 }}>Mostrar</span>
@@ -2355,6 +2404,13 @@ const anchoPapelPreview = Math.ceil(
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Switch size="small" checked={!!linea.ocultarSiVacio} disabled={ocupado} onChange={(v) => updZonaLineas(lineaActiva.zonaIdx, (l) => { l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], ocultarSiVacio: v || undefined }; return l; })} />
                         <span style={{ fontSize: 12 }}>Ocultar si vacío</span>
+                      </div>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 11 }}>Valor por defecto</Text>
+                        <Input size="small" style={{ width: '100%', marginTop: 2 }} value={linea.valorPorDefecto || ''}
+                          disabled={ocupado}
+                          onChange={(e) => updZonaLineas(lineaActiva.zonaIdx, (l) => { l[lineaActiva.lineaIdx] = { ...l[lineaActiva.lineaIdx], valorPorDefecto: e.target.value || undefined }; return l; })}
+                          placeholder="Ej: 0.00 — se imprime si el valor no resuelve" />
                       </div>
                       <div>
                         <Text type="secondary" style={{ fontSize: 11 }}>Ubicación (padding izq)</Text>

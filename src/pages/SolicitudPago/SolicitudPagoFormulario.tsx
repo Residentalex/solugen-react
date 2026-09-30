@@ -13,6 +13,7 @@ import {
   PlusOutlined,
   DeleteOutlined,
   HistoryOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -115,6 +116,7 @@ const SolicitudPagoFormulario: React.FC = () => {
 
   // Asientos e historial
   const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
+  const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogDTO[]>([]);
 
   // ===== Totales calculados desde documentos seleccionados =====
@@ -290,7 +292,7 @@ nota: res.nota || '',
         retenciones: res.retenciones ?? 0,
         total: res.total ?? totalCalculado,
         tasa: res.tasa ?? 1,
-        nombreBeneficiario: res.nombreBeneficiario || entidad?.beneficiario?.trim() || entidad?.nombre || '',
+        nombreBeneficiario: res.nombreBeneficiario || entidad?.beneficiario?.trim() || '',
       });
       })
       .catch((err: any) => {
@@ -561,6 +563,7 @@ nota: res.nota || '',
       return;
     }
     setSaving(true);
+    setErrorGeneracion(null);
     try {
       const dto = construirDTOGenerarAsientos();
       const asientosGenerados = await solicitudPagoApi.generarAsientos(sucursalActiva, dto);
@@ -571,7 +574,7 @@ nota: res.nota || '',
       message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
-      message.error(msg);
+      setErrorGeneracion(msg);
     } finally {
       setSaving(false);
     }
@@ -800,7 +803,7 @@ subTotal: res.subTotal ?? 0,
         impuestos: res.impuestos ?? 0,
         retenciones: res.retenciones ?? 0,
         tasa: res.tasa ?? 1,
-        nombreBeneficiario: res.nombreBeneficiario || entidadH?.beneficiario?.trim() || entidadH?.nombre || '',
+        nombreBeneficiario: res.nombreBeneficiario || entidadH?.beneficiario?.trim() || '',
       });
       })
       .catch((err: any) => {
@@ -930,7 +933,7 @@ subTotal: res.subTotal ?? 0,
                         const ent = entidadesCache.find((e: any) => e.codigo === val);
                         setSelectedEntidad(ent || null);
                         form.setFieldsValue({
-                          nombreBeneficiario: ent?.beneficiario?.trim() || ent?.nombre || '',
+                          nombreBeneficiario: ent?.beneficiario?.trim() || '',
                         });
                       }}
                       onDropdownVisibleChange={(open) => {
@@ -1103,6 +1106,7 @@ subTotal: res.subTotal ?? 0,
   const tabItems = [
     {
       key: 'documentos',
+      icon: <FileTextOutlined />,
       label: `Documentos Relacionados (${transaccionesAsociadas.length})`,
       children: (
         <div>
@@ -1195,6 +1199,18 @@ subTotal: res.subTotal ?? 0,
               Reintentar
             </Button>
           }
+        />
+      )}
+
+      {errorGeneracion && (
+        <Alert
+          message="Error al generar asientos"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          description={errorGeneracion}
+          closable
+          onClose={() => setErrorGeneracion(null)}
         />
       )}
 

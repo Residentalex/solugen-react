@@ -496,26 +496,29 @@ const DocumentosFormulario: React.FC = () => {
             </Text>
           </div>
 
-          {/* ========================================================== */}
-          {/* 1. Identificación                                           */}
-          {/* ========================================================== */}
-          <Title level={5} style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>
-            Identificación
+{/* ============================================================ */}
+          {/* 1. Información general                                  */}
+          {/* ============================================================ */}
+          <Title level={5} style={{ marginBottom: 12, fontSize: 15, fontWeight: 600 }}>
+            Información general
           </Title>
+          <Text style={{ fontSize: 13, color: '#4B5563', marginBottom: 24, display: 'block' }}>
+            Identificación básica del tipo de documento. El código debe ser único y la longitud define el ancho del código numérico generado.
+          </Text>
 
           <HoverableCard style={{ marginBottom: 32 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
                 <Text style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500, color: '#374151' }}>
                    Código
-                 </Text>
-                 <Input
-                   placeholder="Código del tipo de documento"
-                   value={codigo}
-                   onChange={(e) => setCodigo(e.target.value)}
-                   maxLength={10}
-                   disabled={mode === 'editar' || guardado || saving}
-                 />
+                  </Text>
+                  <Input
+                    placeholder="Código del tipo de documento"
+                    value={codigo}
+                    onChange={(e) => setCodigo(e.target.value)}
+                    maxLength={10}
+                    disabled={mode === 'editar' || guardado || saving}
+                  />
               </div>
               <div>
                 <Text style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 500, color: '#374151' }}>
@@ -561,74 +564,26 @@ const DocumentosFormulario: React.FC = () => {
                       style={{ width: '100%' }}
                       disabled={guardado || saving}
                     />
+                    <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                      Cantidad de dígitos para los códigos generados automáticamente.
+                    </Text>
                   </div>
                 </Col>
               </Row>
             </div>
           </HoverableCard>
 
-          {/* ========================================================== */}
-          {/* 2. Configuración                                           */}
-          {/* ========================================================== */}
-          <Title level={5} style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>
-            Configuración
+          {/* ============================================================ */}
+          {/* 2. Numeración                                         */}
+          {/* ============================================================ */}
+          <Title level={5} style={{ marginBottom: 12, fontSize: 15, fontWeight: 600 }}>
+            Numeración
           </Title>
+          <Text style={{ fontSize: 13, color: '#4B5563', marginBottom: 24, display: 'block' }}>
+            Controla cómo se generan los códigos para los documentos. Cambiar entre modos manual y automático puede afectar los códigos existentes.
+          </Text>
 
-          <HoverableCard style={{ marginBottom: 32 }}>
-            <Row gutter={[16, 20]}>
-              <Col xs={12}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Estado de cuenta</Text>
-                    <Switch checked={estadoCuenta} onChange={setEstadoCuenta} disabled={guardado || saving} />
-                  </div>
-              </Col>
-              <Col xs={12}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Precios con impuestos</Text>
-                    <Switch checked={preciosConImpuestos} onChange={setPreciosConImpuestos} disabled={guardado || saving} />
-                  </div>
-              </Col>
-              <Col xs={12}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Afecta inventario</Text>
-                    <Switch checked={afectaInventario} onChange={setAfectaInventario} disabled={guardado || saving} />
-                  </div>
-              </Col>
-              <Col xs={12}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Requiere asiento</Text>
-                    <Switch checked={requiereAsiento} onChange={setRequiereAsiento} disabled={guardado || saving} />
-                  </div>
-              </Col>
-              <Col xs={12}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Mod. precio</Text>
-                    <Switch checked={modPrecio} onChange={setModPrecio} disabled={guardado || saving} />
-                  </div>
-              </Col>
-              <Col xs={12}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Mod. descripción</Text>
-                    <Switch checked={modDescripcion} onChange={setModDescripcion} disabled={guardado || saving} />
-                  </div>
-              </Col>
-              <Col xs={12}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Trabajar en unidad</Text>
-                    <Switch checked={trabajarEnUnidad} onChange={setTrabajarEnUnidad} disabled={guardado || saving} />
-                  </div>
-              </Col>
-            </Row>
-          </HoverableCard>
-
-          {/* ========================================================== */}
-          {/* 3. Numeración y método                                     */}
-          {/* ========================================================== */}
-          <Title level={5} style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>
-            Numeración y método
-          </Title>
-
-          <HoverableCard style={{ marginBottom: 32 }}>
+          <HoverableCard style={{ marginBottom: 32, borderColor: '#fef3c7', backgroundColor: '#fffbeb' }}>
             <Row gutter={16}>
               <Col xs={24} md={12}>
                 <div>
@@ -640,11 +595,38 @@ const DocumentosFormulario: React.FC = () => {
                       placeholder="Seleccionar tipo de numeración"
                       optionFilterProp="label"
                       value={tipoNumeracion}
-                      onChange={setTipoNumeracion}
+                      onChange={(val) => {
+                        if (val === 1 && tipoNumeracion === 0) {
+                          Modal.confirm({
+                            title: 'Cambiar a numeración automática',
+                            icon: <ExclamationCircleOutlined />,
+                            content: 'Esto generará automáticamente códigos basados en un patrón secuencial. ¿Continuar?',
+                            okText: 'Sí, cambiar a automático',
+                            okType: 'warning',
+                            cancelText: 'Cancelar',
+                            onOk: () => setTipoNumeracion(val),
+                          });
+                        } else if (val === 0 && tipoNumeracion === 1) {
+                          Modal.confirm({
+                            title: 'Cambiar a numeración manual',
+                            icon: <ExclamationCircleOutlined />,
+                            content: 'Los usuarios tendrán que ingresar los códigos manualmente. ¿Continuar?',
+                            okText: 'Sí, cambiar a manual',
+                            okType: 'warning',
+                            cancelText: 'Cancelar',
+                            onOk: () => setTipoNumeracion(val),
+                          });
+                        } else {
+                          setTipoNumeracion(val);
+                        }
+                      }}
                       style={{ width: '100%' }}
                       options={tipoNumeracionOptions}
                       disabled={guardado || saving}
                     />
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                    Genera automáticamente códigos secuenciales para los documentos.
+                  </Text>
                 </div>
               </Col>
               <Col xs={24} md={12}>
@@ -662,20 +644,25 @@ const DocumentosFormulario: React.FC = () => {
                       options={metodoAplicarOptions}
                       disabled={guardado || saving}
                     />
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                    Define cuándo se aplica la numeración a los documentos.
+                  </Text>
                 </div>
               </Col>
             </Row>
           </HoverableCard>
 
-          {/* ========================================================== */}
-          {/* 4. Avanzado                                                */}
-          {/* ========================================================== */}
-          <Title level={5} style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>
-            Avanzado
+          {/* ============================================================ */}
+          {/* 3. Comportamiento contable                                */}
+          {/* ============================================================ */}
+          <Title level={5} style={{ marginBottom: 12, fontSize: 15, fontWeight: 600 }}>
+            Comportamiento contable
           </Title>
+          <Text style={{ fontSize: 13, color: '#4B5563', marginBottom: 24, display: 'block' }}>
+            Define cómo se procesan los aspectos contables y fiscales: origen de asientos, método de posteo, fechas permitidas y afectaciones.
+          </Text>
 
-          <HoverableCard style={{ marginBottom: 32 }}>
-            {/* Primera fila: origenCuenta + tipoImpuesto */}
+          <HoverableCard style={{ marginBottom: 32, borderColor: '#fed7aa', backgroundColor: '#fff7ed' }}>
             <Row gutter={16} style={{ marginBottom: 20 }}>
               <Col xs={24} md={12}>
                 <div>
@@ -696,6 +683,9 @@ const DocumentosFormulario: React.FC = () => {
                     ]}
                     disabled={guardado || saving}
                   />
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                    Define si los asientos contables tendrán debe o haber. Crédito para ventas (ingresos), débito para compras (egresos).
+                  </Text>
                 </div>
               </Col>
               <Col xs={24} md={12}>
@@ -717,6 +707,9 @@ const DocumentosFormulario: React.FC = () => {
                     ]}
                     disabled={guardado || saving}
                   />
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                    Determina si este documento genera impuesto por ventas o compras.
+                  </Text>
                 </div>
               </Col>
             </Row>
@@ -743,6 +736,9 @@ const DocumentosFormulario: React.FC = () => {
                     ]}
                     disabled={guardado || saving}
                   />
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                    Cuando se crean los asientos contables: manualmente, al grabar, al imprimir, o al aplicar el documento.
+                  </Text>
                 </div>
               </Col>
               <Col xs={24} md={12}>
@@ -767,6 +763,9 @@ const DocumentosFormulario: React.FC = () => {
                     ]}
                     disabled={guardado || saving}
                   />
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                    Restringe las fechas permitidas para este tipo de documento (ej: solo fechas después del cierre mensual).
+                  </Text>
                 </div>
               </Col>
             </Row>
@@ -807,6 +806,9 @@ const DocumentosFormulario: React.FC = () => {
                     maxLength={20}
                     disabled={guardado || saving}
                   />
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                    Código del documento que revierte este documento (para cancelaciones).
+                  </Text>
                 </div>
               </Col>
               <Col xs={24} md={12}>
@@ -821,14 +823,56 @@ const DocumentosFormulario: React.FC = () => {
                     maxLength={50}
                     disabled={guardado || saving}
                   />
+                  <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                    Referencia externa del documento (para sistemas externos).
+                  </Text>
                 </div>
               </Col>
             </Row>
           </HoverableCard>
 
-          {/* ========================================================== */}
+          {/* ============================================================ */}
+          {/* 4. Configuración fiscal                                 */}
+          {/* ============================================================ */}
+          <Title level={5} style={{ marginBottom: 12, fontSize: 15, fontWeight: 600 }}>
+            Configuración fiscal
+          </Title>
+          <Text style={{ fontSize: 13, color: '#4B5563', marginBottom: 24, display: 'block' }}>
+            Ajustes relacionados con impuestos y configuración contable de los documentos.
+          </Text>
+
+          <HoverableCard style={{ marginBottom: 32, borderColor: '#e0e7ff', backgroundColor: '#f0f5ff' }}>
+            <Row gutter={[16, 20]}>
+              <Col xs={12}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Estado de cuenta</Text>
+                    <Switch checked={estadoCuenta} onChange={setEstadoCuenta} disabled={guardado || saving} />
+                  </div>
+              </Col>
+              <Col xs={12}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Precios con impuestos</Text>
+                    <Switch checked={preciosConImpuestos} onChange={setPreciosConImpuestos} disabled={guardado || saving} />
+                  </div>
+              </Col>
+              <Col xs={12}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Afecta inventario</Text>
+                    <Switch checked={afectaInventario} onChange={setAfectaInventario} disabled={guardado || saving} />
+                  </div>
+              </Col>
+              <Col xs={12}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Requiere asiento</Text>
+                    <Switch checked={requiereAsiento} onChange={setRequiereAsiento} disabled={guardado || saving} />
+                  </div>
+              </Col>
+            </Row>
+          </HoverableCard>
+
+          {/* ============================================================ */}
           {/* 5. Impresión                                                */}
-          {/* ========================================================== */}
+          {/* ============================================================ */}
           <Title level={5} style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>
             Impresión
           </Title>
@@ -859,8 +903,38 @@ const DocumentosFormulario: React.FC = () => {
             </Row>
           </HoverableCard>
 
+          {/* ============================================================ */}
+          {/* 6. Permisos o restricciones                         */}
+          {/* ============================================================ */}
+          <Title level={5} style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>
+            Permisos o restricciones
+          </Title>
+
+          <HoverableCard style={{ marginBottom: 32 }}>
+            <Row gutter={[16, 20]}>
+              <Col xs={12}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Mod. precio</Text>
+                    <Switch checked={modPrecio} onChange={setModPrecio} disabled={guardado || saving} />
+                  </div>
+              </Col>
+              <Col xs={12}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Mod. descripción</Text>
+                    <Switch checked={modDescripcion} onChange={setModDescripcion} disabled={guardado || saving} />
+                  </div>
+              </Col>
+              <Col xs={12}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Trabajar en unidad</Text>
+                    <Switch checked={trabajarEnUnidad} onChange={setTrabajarEnUnidad} disabled={guardado || saving} />
+                  </div>
+              </Col>
+            </Row>
+          </HoverableCard>
+
 {/* ========================================================== */}
-          {/* 6. Danger Zone (solo en edición de documento persistido)   */}
+          {/* 7. Danger Zone (solo en edición de documento persistido)   */}
           {/* ========================================================== */}
           {mode === 'editar' && (idGuardado || id) && (
             <>

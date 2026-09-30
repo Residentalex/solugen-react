@@ -88,6 +88,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const [selectedEntidad, setSelectedEntidad] = useState<any>(null);
   const [transaccionesAsociadas, setTransaccionesAsociadas] = useState<TransaccionAsociadaDTO[]>([]);
   const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
+  const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogDTO[]>([]);
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
   const [fechaCierreContable, setFechaCierreContable] = useState<string | null>(null);
@@ -466,6 +467,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
   const handleGenerarAsientos = async () => {
     if (sucursalActiva === undefined) return;
     setSaving(true);
+    setErrorGeneracion(null);
     try {
       const dto = construirDTO();
       const asientosGenerados = await distribucionBalanceApi.generarAsientos(sucursalActiva, dto);
@@ -473,7 +475,7 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
       message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
-      message.error(msg);
+      setErrorGeneracion(msg);
     } finally {
       setSaving(false);
     }
@@ -1086,6 +1088,18 @@ const DistribucionBalanceFormulario: React.FC<DistribucionBalanceFormularioProps
               Reintentar
             </Button>
           }
+        />
+      )}
+
+      {errorGeneracion && (
+        <Alert
+          message="Error al generar asientos"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          description={errorGeneracion}
+          closable
+          onClose={() => setErrorGeneracion(null)}
         />
       )}
 

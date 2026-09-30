@@ -38,6 +38,30 @@ import {
   calcularAnchosLinea,
 } from './ticketPlantillaConfig';
 import { evaluarObjeto, evaluarExpresion } from './expresiones';
+
+/**
+ * Separador entre etiqueta y valor en el formato legado (impresion): ": ".
+ * El preview del disenador lo sobreescribe con " " porque el agente de
+ * impresion escribe la etiqueta tal cual, sin agregar ": ".
+ */
+const SEPARADOR_ETIQUETA = ': ';
+
+/** Opciones de render comunes a los tres formateadores de ticket. */
+export interface OpcionesTicketRender {
+  /**
+   * Separador entre etiqueta y valor. Por omision ": " (formato de impresion
+   * legado). El preview del disenador de plantillas pasa " ".
+   */
+  separadorEtiqueta?: string;
+}
+
+/** Comportamiento de una linea cuando su valor no resuelve. */
+export interface OpcionesValorLinea {
+  /** Texto a imprimir cuando el valor no resuelve. Ausente = la linea se omite. */
+  valorPorDefecto?: string;
+  /** Si true, oculta la linea cuando el valor queda vacio (o en cero si es numerico). */
+  ocultarSiVacio?: boolean;
+}
 import type { ContextoDatos } from './expresiones';
 import type { FacturaPOSDTO } from '../types/facturaPOS';
 import type { ReciboIngresoFullDTO } from '../types/reciboIngreso';
@@ -681,6 +705,60 @@ function aplicarFormatoTexto(
 }
 
 /**
+ * Regla del disenador (identica a la del agente de impresion): null, vacio,
+ * espacios, colecciones vacias y el cero de un campo numerico cuentan como
+ * "sin valor".
+ */
+function tieneValorLinea(valor: unknown, tipoDato?: string): boolean {
+  if (valor === null || valor === undefined) return false;
+  if (typeof valor === 'number') return valor !== 0;
+  if (typeof valor !== 'string') return true;
+  const limpio = valor.trim();
+  if (limpio === '' || limpio === '[]' || limpio === '{}') return false;
+  if (tipoDato && ['numero', 'number', 'decimal', 'moneda', 'dinero'].includes(tipoDato.toLowerCase())) {
+    const n = Number(limpio.replace(/,/g, ''));
+    if (limpio !== '' && !Number.isNaN(n)) return n !== 0;
+  }
+  return true;
+}
+
+/**
+ * Valor final de una linea segun su configuracion de vacio. Devuelve null
+ * cuando la linea debe omitirse.
+ * - `valorPorDefecto` y `ocultarSiVacio` se aplican en cualquier tipo de
+ *   linea (CAMPO, ESQUEMA, TOTAL, COBRO, DETALLE, LIBRE, DTO).
+ * - El preview sustituye el dato ausente por '--'; ese marcador cuenta como
+ *   "sin valor" cuando hay default o cuando la linea debe ocultarse.
+ * - El default tiene prioridad sobre el ocultado.
+ * - Sin default ni ocultado, el vacio conserva el legacy: la linea se omite.
+ */
+function resolverValorLinea(valor: unknown, opciones?: OpcionesValorLinea, tipoDato?: string): string | null {
+  const porDefecto = opciones?.valorPorDefecto;
+  const hayDefault = porDefecto !== undefined && porDefecto !== '';
+  const texto = valor === null || valor === undefined ? '' : String(valor);
+  const vacio = texto === '';
+  const placeholder = texto.trim() === '--';
+
+  if (opciones?.ocultarSiVacio) {
+    if (vacio || placeholder || !tieneValorLinea(valor, tipoDato)) return hayDefault ? porDefecto! : null;
+    return texto;
+  }
+  if (hayDefault && (vacio || placeholder)) return porDefecto!;
+  if (!vacio) return texto;
+  return null;
+}
+
+/**
+ * Monto de una linea TOTAL/COBRO. Si el dato de origen no viene en el
+ * documento, se usa `valorPorDefecto` en lugar del 0 de relleno.
+ */
+function montoLineaODefecto(linea: LineaZonaConfig, monto: number, datoOriginal: unknown): string {
+  const ausente = datoOriginal === undefined || datoOriginal === null;
+  if (ausente && linea.valorPorDefecto) return linea.valorPorDefecto;
+  return formatMoney(monto);
+}
+
+/**
  * Linea `label: valor` con formato opcional.
  * Sin formato reproduce el patron natural de los campos del documento:
  * label en negrita + ": " + valor (regresion cero).
@@ -691,10 +769,11 @@ function lineaConFormato(
   label: string,
   valor: string,
   width: number = LINE_LENGTH,
+  sepEtiqueta: string = SEPARADOR_ETIQUETA,
 ): string {
   const texto = fmt?.negrita === true
-    ? CMD_BOLD_ON + label + CMD_BOLD_OFF + ': ' + valor
-    : label + ': ' + valor;
+    ? CMD_BOLD_ON + label + CMD_BOLD_OFF + sepEtiqueta + valor
+    : label + sepEtiqueta + valor;
   return aplicarFormatoTexto(fmt, texto, width);
 }
 
@@ -706,12 +785,13 @@ function lineaConFormatoDual(
   fmt: FormatoItemTicket | undefined,
   fmtLabel: FormatoItemTicket | undefined,
   fmtValor: FormatoItemTicket | undefined,
-  label: string, valor: string, width: number = LINE_LENGTH
+  label: string, valor: string, width: number = LINE_LENGTH,
+  sepEtiqueta: string = SEPARADOR_ETIQUETA,
 ): string {
   const w = Math.max(1, width);
 
   if (fmtLabel || fmtValor) {
-    let lblPart = label + ': ';
+    let lblPart = label + sepEtiqueta;
     if (fmtLabel?.negrita === true) lblPart = CMD_BOLD_ON + lblPart + CMD_BOLD_OFF;
     else if (fmtLabel?.negrita === false) lblPart = CMD_BOLD_OFF + lblPart;
 
@@ -722,7 +802,7 @@ function lineaConFormatoDual(
     return aplicarFormatoTexto(fmt, lblPart + valPart, w);
   }
 
-  return lineaConFormato(fmt, label, valor, w);
+  return lineaConFormato(fmt, label, valor, w, sepEtiqueta);
 }
 
 /**
@@ -752,7 +832,7 @@ function lineaTabular(ctx: Ctx, label: string, valor: string, ancho: number, fmt
     else if (fmtLabel.tamano === 'triple') ctx.p.push(CMD_SIZE_TRIPLE);
   }
   const anchoEtiqueta = Math.max(ancho, label.length + 2);
-  ctx.p.push(right(label + ':', anchoEtiqueta));
+  ctx.p.push(right(label + ctx.sepEtiqueta.trimEnd(), anchoEtiqueta));
   if (fmtLabel) {
     if (fmtLabel.tamano === 'doble' || fmtLabel.tamano === 'doble_altura' || fmtLabel.tamano === 'doble_ancho' || fmtLabel.tamano === 'triple') ctx.p.push(CMD_SIZE_NORMAL);
     else if (fmtLabel.tamano === 'doble_b') ctx.p.push(CMD_SIZE_NORMAL + CMD_FONT_A);
@@ -782,8 +862,12 @@ function lineaTabular(ctx: Ctx, label: string, valor: string, ancho: number, fmt
  * Version sin Ctx para callers que no tienen contexto (ej. renderCampoFPV).
  * Solo formatea el texto sin comandos de formato embebidos.
  */
-function lineaTabularStr(label: string, valor: string, ancho: number, alineacionLabel?: AlineacionTicket): string {
-  const lbl = label + ': ';
+function lineaTabularStr(
+  label: string, valor: string, ancho: number,
+  alineacionLabel?: AlineacionTicket,
+  sepEtiqueta: string = SEPARADOR_ETIQUETA,
+): string {
+  const lbl = label + sepEtiqueta;
   const anchoEtiqueta = Math.max(ancho, lbl.length);
   if (alineacionLabel === 'izquierda') return left(lbl, anchoEtiqueta) + valor;
   if (alineacionLabel === 'centro') return center(lbl, anchoEtiqueta) + valor;
@@ -797,9 +881,10 @@ function lineaTabularStr(label: string, valor: string, ancho: number, alineacion
 function lineaTabularConFormato(
   label: string, valor: string, ancho: number,
   fmtLabel?: FormatoItemTicket,
-  fmtValor?: FormatoItemTicket
+  fmtValor?: FormatoItemTicket,
+  sepEtiqueta: string = SEPARADOR_ETIQUETA,
 ): string {
-  let lblPart = label + ': ';
+  let lblPart = label + sepEtiqueta;
   if (fmtLabel?.negrita === true) lblPart = CMD_BOLD_ON + lblPart + CMD_BOLD_OFF;
   else if (fmtLabel?.negrita === false) lblPart = CMD_BOLD_OFF + lblPart;
 
@@ -854,6 +939,8 @@ function emitirItemEspecial(
   firmas?: Record<string, FirmaConfig>,
   linea?: LineaZonaConfig,
   enGrupo?: boolean,
+  sepEtiqueta: string = SEPARADOR_ETIQUETA,
+  valorOpts?: OpcionesValorLinea,
 ): boolean {
   if (item === 'ESPACIO') {
     parts.push(' ' + LF);
@@ -869,6 +956,7 @@ function emitirItemEspecial(
     // Value/content: prefer textosLibres entry (new-style), fallback to linea.label (legacy)
     const conf: TextoLibreConfig = libre ? (typeof libre === 'string' ? { texto: libre, alineacion: 'centro', negrita: true, tamano: 'normal' } : libre) : { texto: linea?.label || '', alineacion: 'centro', negrita: true, tamano: 'normal' };
     const valor = conf.texto || '';
+    const valorFinal = resolverValorLinea(valor, valorOpts) || '';
     const fmt: FormatoItemTicket = {
       alineacion: conf.alineacion ?? 'centro',
       negrita: conf.negrita ?? true,
@@ -878,8 +966,8 @@ function emitirItemEspecial(
     const mostrarLabel = linea?.mostrarLabel !== false;
     const esLegacySinTextoLibre = !libre && !!linea?.label;
     const label = (mostrarLabel && !esLegacySinTextoLibre && linea?.label && linea?.label !== valor) ? linea?.label : undefined;
-    if (valor || libre || linea?.label) {
-      const textoFinal = label ? (label + ': ' + valor) : valor;
+    if (valorFinal || libre || linea?.label) {
+      const textoFinal = label ? (label + sepEtiqueta + valorFinal) : valorFinal;
       if (enGrupo) {
         // Texto crudo: el grupo lo rellena a su columna con padSegunAlineacion.
         parts.push(textoFinal);
@@ -904,15 +992,16 @@ function emitirItemEspecial(
   if (item.startsWith('DTO:')) {
     const def = camposDTO?.[item.slice('DTO:'.length)];
     if (def) {
-      const valor = formatearValorDTO(resolverRuta(data, def.ruta), def.tipo);
+      const valor = resolverValorLinea(formatearValorDTO(resolverRuta(data, def.ruta), def.tipo), valorOpts, def.tipo);
+      if (valor === null) return true;
       const label = def.label || item;
       if (enGrupo) {
         // Texto crudo (sin padding ni wrap): el grupo lo rellena por columna.
-        parts.push(def.negrita === true ? CMD_BOLD_ON + label + CMD_BOLD_OFF + ': ' + valor : label + ': ' + valor);
+        parts.push(def.negrita === true ? CMD_BOLD_ON + label + CMD_BOLD_OFF + sepEtiqueta + valor : label + sepEtiqueta + valor);
       } else if (tabular) {
-        parts.push(lineaTabularStr(label, valor, tabular.ancho ?? 12, linea?.formato?.alineacion || linea?.formatoLabel?.alineacion || def.alineacion) + LF);
+        parts.push(lineaTabularStr(label, valor, tabular.ancho ?? 12, linea?.formato?.alineacion || linea?.formatoLabel?.alineacion || def.alineacion, sepEtiqueta) + LF);
       } else {
-        parts.push(lineaConFormato(def, label, valor, width));
+        parts.push(lineaConFormato(def, label, valor, width, sepEtiqueta));
       }
     }
     return true;
@@ -960,6 +1049,8 @@ interface Ctx {
   bo: boolean;
   co: boolean;
   forceAl: boolean;
+  /** Separador etiqueta/valor de la linea actual (': ' en impresion, ' ' en preview). */
+  sepEtiqueta: string;
 }
 
 function _al(ctx: Ctx, a: AlineacionTicket | 'left' | 'center' | 'right') {
@@ -1174,9 +1265,10 @@ function aplicarExpresiones(
   }
 }
 
-export function formatTicketPOS(data: any, company?: CompanyInfo, config?: PlantillaConfig): string {
+export function formatTicketPOS(data: any, company?: CompanyInfo, config?: PlantillaConfig, opciones?: OpcionesTicketRender): string {
   const cfg = normalizarConfig(aplicarExpresiones(config, data, company));
   const width = cfg.opciones?.anchoLinea ?? LINE_LENGTH;
+  const sepEtiqueta = opciones?.separadorEtiqueta ?? SEPARADOR_ETIQUETA;
   const zonas = normalizarZonasDetalle(cfg.zonas || [], 'detalles');
 
   // ── DIAGNÓSTICO TEMPORAL TIPO_COMP ──
@@ -1200,7 +1292,7 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
   const camposDTO = cfg.camposDTO || cfg.campos?.camposDTO;
   const firmas = cfg.firmas;
 
-  const ctx: Ctx = { p: [], w: width, al: 'left', bo: false, co: false, forceAl: false };
+  const ctx: Ctx = { p: [], w: width, al: 'left', bo: false, co: false, forceAl: false, sepEtiqueta };
   ctx.p.push(CMD_INIT + CMD_NORMALIZAR);
 
   let maxLabelLenTotales = 0;
@@ -1229,7 +1321,7 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
     if (linea.ref === 'SEPARADOR') { _emitirSep(ctx, linea); return; }
     if (linea.ref === 'ESPACIO') { _emitirEspacio(ctx); return; }
     if (linea.ref.startsWith('LIBRE:') || linea.ref.startsWith('DTO:') || linea.ref.startsWith('FIRMA:')) {
-      emitirItemEspecial(ctx.p, linea.ref, data, width, textosLibres, camposDTO, linea.tabular, linea.mismaLinea, firmas, linea, enGrupo);
+      emitirItemEspecial(ctx.p, linea.ref, data, width, textosLibres, camposDTO, linea.tabular, linea.mismaLinea, firmas, linea, enGrupo, sepEtiqueta, linea);
       return;
     }
 
@@ -1245,7 +1337,7 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
       switch (clave) {
         case 'CODIGO_QR': {
           _aplicarFmt(ctx, fmtOv);
-          const qrRender = renderCampoFPV(clave, data, lblOv, fmtOv, width, linea.tabular, linea.mostrarLabel, fmtLabel, fmtValor, linea.ruta);
+          const qrRender = renderCampoFPV(clave, data, lblOv, fmtOv, width, linea.tabular, linea.mostrarLabel, fmtLabel, fmtValor, linea.ruta, undefined, undefined, undefined, sepEtiqueta, linea);
           if (qrRender) ctx.p.push(qrRender);
           _restaurarFmt(ctx, fmtOv);
           ctx.p.push(CMD_INIT + CMD_NORMALIZAR); // Resetear impresora despues del QR (evita corrupcion de estado)
@@ -1257,7 +1349,7 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
           // no lleva formato de texto, pero si respeta la alineacion de la linea.
           const fmtBc = { ...(fmtOv || {}), alineacion: (fmtOv?.alineacion as any) || 'centro' } as FormatoItemTicket;
           _aplicarFmt(ctx, fmtBc);
-          const bcRender = renderCampoFPV(clave, data, lblOv, fmtOv, width, linea.tabular, linea.mostrarLabel, fmtLabel, fmtValor, linea.ruta, linea.tipoBarcode);
+          const bcRender = renderCampoFPV(clave, data, lblOv, fmtOv, width, linea.tabular, linea.mostrarLabel, fmtLabel, fmtValor, linea.ruta, linea.tipoBarcode, undefined, undefined, sepEtiqueta, linea);
           if (bcRender) ctx.p.push(bcRender);
           _restaurarFmt(ctx, fmtOv);
           ctx.p.push(CMD_INIT + CMD_NORMALIZAR); // Resetear impresora despues del barcode
@@ -1265,7 +1357,7 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
           break;
         }
         default: {
-          const render = renderCampoFPV(clave, data, lblOv, fmtOv, width, linea.tabular, linea.mostrarLabel, fmtLabel, fmtValor, linea.ruta, undefined, linea.tipoDato, linea.formatoDato);
+          const render = renderCampoFPV(clave, data, lblOv, fmtOv, width, linea.tabular, linea.mostrarLabel, fmtLabel, fmtValor, linea.ruta, undefined, linea.tipoDato, linea.formatoDato, sepEtiqueta, linea);
           if (render) ctx.p.push(render);
           _restaurarFmt(ctx, fmtOv);
           break;
@@ -1276,7 +1368,7 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
 
     if (linea.ref.startsWith('ESQUEMA:')) {
       const clave = linea.ref.slice(8);
-      const render = renderCampoEsquema(clave, cfg.esquema, lblOv, fmtOv, width, linea.tabular, linea.mostrarLabel, fmtLabel, fmtValor, linea.tipoDato, linea.formatoDato, linea.calculo);
+      const render = renderCampoEsquema(clave, cfg.esquema, lblOv, fmtOv, width, linea.tabular, linea.mostrarLabel, fmtLabel, fmtValor, linea.tipoDato, linea.formatoDato, linea.calculo, sepEtiqueta, linea);
       if (render) ctx.p.push(render);
       _restaurarFmt(ctx, fmtOv);
       return;
@@ -1306,7 +1398,7 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
         const lbl = lineaLbl || label;
         if (tieneTab) {
         const anchoEtiqueta = Math.max(tabAn, maxLabelLenTotales + 2);
-          const texto = right(lbl + ':', anchoEtiqueta) + right(monto, maxValorLenTotales);
+          const texto = right(lbl + sepEtiqueta.trimEnd(), anchoEtiqueta) + right(monto, maxValorLenTotales);
           // Alineacion por linea: formatoLabel > formatoValor > formato > zona.
           const alineacion = linea.formatoLabel?.alineacion || linea.formatoValor?.alineacion || linea.formato?.alineacion || zonaActualAlineacion;
           if (alineacion === 'izquierda') {
@@ -1317,7 +1409,7 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
             ctx.p.push(rightVisible(texto, width, fmtCombTot?.tamano) + LF);
           }
         } else {
-          const texto = right(lbl, maxLabelLenTotales) + ':  ' + right(monto, maxValorLenTotales);
+          const texto = right(lbl, maxLabelLenTotales) + sepEtiqueta + ' ' + right(monto, maxValorLenTotales);
           const alineacion = linea.formatoLabel?.alineacion || linea.formatoValor?.alineacion || linea.formato?.alineacion || zonaActualAlineacion;
           if (alineacion === 'izquierda') {
             ctx.p.push(texto + LF);
@@ -1333,25 +1425,25 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
       switch (clave) {
         case 'TOTAL_GRAVADO':
           if (tot.mostrarGravado === false) return;
-          emitirTotal('Total Gravado', formatMoney(totalGravado));
+          emitirTotal('Total Gravado', montoLineaODefecto(linea, totalGravado, data.subTotal));
           break;
         case 'SUBTOTAL':
           if (tot.mostrarSubtotal === false) return;
-          emitirTotal('Subtotal', formatMoney(totalGravado));
+          emitirTotal('Subtotal', montoLineaODefecto(linea, totalGravado, data.subTotal));
           break;
         case 'ITBIS':
           if (tot.mostrarItbis === false) return;
-          emitirTotal('Itbis', formatMoney(itbis));
+          emitirTotal('Itbis', montoLineaODefecto(linea, itbis, data.impuestos));
           break;
         case 'DESCUENTO':
           if (tot.mostrarDescuento === false || descuento <= 0) return;
           emitirTotal('Descuento', formatMoney(descuento));
           break;
         case 'TOTAL_EXENTO':
-          emitirTotal('Total Exento', formatMoney(totalExento));
+          emitirTotal('Total Exento', montoLineaODefecto(linea, totalExento, data.totalExento));
           break;
         case 'TOTAL':
-          emitirTotal('Total', formatMoney(data.total));
+          emitirTotal('Total', montoLineaODefecto(linea, Number(data.total) || 0, data.total));
           break;
       }
       _restaurarFmt(ctx, fmtSinAlineacion);
@@ -1632,9 +1724,11 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
               if (!ln.ref.startsWith('DETALLE:')) return;
               const clave = ln.ref.slice(8);
               const valor = renderDetalleCampo(clave, det);
+              const valorFinal = resolverValorLinea(valor, ln, ln.tipoDato);
+              if (valorFinal === null) return;
               textosDet.set(idxLn, ln.mostrarLabel !== false
-                ? (ln.label || CAMPOS_DETALLE_LABELS[clave] || clave) + ': ' + valor
-                : valor);
+                ? (ln.label || CAMPOS_DETALLE_LABELS[clave] || clave) + sepEtiqueta + valorFinal
+                : valorFinal);
             });
             const anchosPorIdx = new Map<number, number>();
             const conteoDet = new Map<number, number>();
@@ -1737,9 +1831,12 @@ function renderCampoFPV(
   ruta?: string,
   tipoBarcode?: 'CODE' | 'CODE128' | 'EAN13',
   tipoDato?: 'texto' | 'fecha' | 'numero' | 'dinero',
-  formato?: string
+  formato?: string,
+  sepEtiqueta: string = SEPARADOR_ETIQUETA,
+  valor?: OpcionesValorLinea,
 ): string | null {
   const w = width ?? LINE_LENGTH;
+  const fmt = fmtOv;
   const defaultLabels: Record<string, string> = {
     NCF: 'NCF', TIPO_COMP: 'TIPO COMP',     CAJERO: 'CAJERO', CAJA: 'CAJA',
     TURNO: 'TURNO', FECHA: 'FECHA', HORA: 'HORA', NO: 'NO',
@@ -1752,7 +1849,6 @@ function renderCampoFPV(
   };
   const lbl = (lblOv !== undefined && lblOv !== '' && lblOv !== defaultLabels[clave])
     ? lblOv : (defaultLabels[clave] || clave);
-  const fmt = fmtOv;
 
   function formatearSegunTipo(valor: any, tipo?: string, fmt2?: string): string {
     if (valor === undefined || valor === null) return '--';
@@ -1874,22 +1970,26 @@ function renderCampoFPV(
   // de la plantilla (antes este early-return lo interceptaba siempre y se veia desplazado).
   if (clave === 'RNC_CLIENTE' && !lblOv && v !== '' && !tabular) {
     const clienteRnc = data.cliente?.identificacion || '';
-    if (!clienteRnc) return null;
-    return aplicarFormatoTexto(fmt, '         RNC: ' + clienteRnc, w);
+    const rncFinal = resolverValorLinea(clienteRnc, valor, 'texto');
+    if (rncFinal === null) return null;
+    return aplicarFormatoTexto(fmt, '         RNC' + sepEtiqueta + rncFinal, w);
   }
 
   // RNC_CLIENTE con label custom
   if (clave === 'RNC_CLIENTE' && lblOv) {
     const clienteRnc = data.cliente?.identificacion || '';
-    if (!clienteRnc) return null;
-    return lineaConFormato(fmt, lbl, clienteRnc, w);
+    const rncFinal = resolverValorLinea(clienteRnc, valor, 'texto');
+    if (rncFinal === null) return null;
+    return lineaConFormato(fmt, lbl, rncFinal, w, sepEtiqueta);
   }
 
-  if (v === '' || v === undefined) return null;
+  const valorFinal = resolverValorLinea(v, valor, tipoDato);
+  if (valorFinal === null) return null;
+  const vResuelta = valorFinal;
 
   // Si mostrarLabel es false, emitir solo el valor con el formato del valor (o label, o general)
   if (mostrarLabel === false) {
-    return aplicarFormatoTexto(fmtValor || fmtLabel || fmt, v, w);
+    return aplicarFormatoTexto(fmtValor || fmtLabel || fmt, vResuelta, w);
   }
 
   if (tabular) {
@@ -1897,31 +1997,32 @@ function renderCampoFPV(
     // Para RNC_CLIENTE tabular: usar el mismo formato de 9 espacios que el default
     if (clave === 'RNC_CLIENTE' && !lblOv) {
       const clienteRnc = data.cliente?.identificacion || '';
-      if (!clienteRnc) return null;
+      const rncFinal = resolverValorLinea(clienteRnc, valor, 'texto');
+      if (rncFinal === null) return null;
       if (fmtLabel || fmtValor) {
     const alineacion = fmtLabel?.alineacion || fmtValor?.alineacion || fmt?.alineacion;
         const fmtComb = { ...fmtLabel, ...fmtValor, ...fmt };
         if (alineacion) fmtComb.alineacion = alineacion;
-        return aplicarFormatoTexto(fmtComb, lineaTabularConFormato('RNC', clienteRnc, tabAn, fmtLabel || fmt, fmtValor), w);
+        return aplicarFormatoTexto(fmtComb, lineaTabularConFormato('RNC', rncFinal, tabAn, fmtLabel || fmt, fmtValor, sepEtiqueta), w);
       }
-      return aplicarFormatoTexto(fmt, lineaTabularStr('RNC', clienteRnc, tabAn, fmt?.alineacion) + LF, w);
+      return aplicarFormatoTexto(fmt, lineaTabularStr('RNC', rncFinal, tabAn, fmt?.alineacion, sepEtiqueta) + LF, w);
     }
     if (fmtLabel || fmtValor) {
       const alineacion = fmtLabel?.alineacion || fmtValor?.alineacion || fmt?.alineacion;
       const fmtComb = { ...fmtLabel, ...fmtValor, ...fmt };
       if (alineacion) fmtComb.alineacion = alineacion;
-      return aplicarFormatoTexto(fmtComb, lineaTabularConFormato(lbl, v, tabAn, fmtLabel || fmt, fmtValor), w);
+      return aplicarFormatoTexto(fmtComb, lineaTabularConFormato(lbl, vResuelta, tabAn, fmtLabel || fmt, fmtValor, sepEtiqueta), w);
     }
-    return aplicarFormatoTexto(fmt, lineaTabularStr(lbl, v, tabAn, fmt?.alineacion), w);
+    return aplicarFormatoTexto(fmt, lineaTabularStr(lbl, vResuelta, tabAn, fmt?.alineacion, sepEtiqueta), w);
   }
 
   // Modo no tabular: si hay formato dual (fmtLabel o fmtValor), intercalar comandos
   if (fmtLabel || fmtValor) {
-    let lblStr = lbl + ': ';
+    let lblStr = lbl + sepEtiqueta;
     if (fmtLabel?.negrita === true) lblStr = CMD_BOLD_ON + lblStr + CMD_BOLD_OFF;
     else if (fmtLabel?.negrita === false) lblStr = CMD_BOLD_OFF + lblStr;
 
-    let valStr = v;
+    let valStr = vResuelta;
     if (fmtValor?.negrita === true) valStr = CMD_BOLD_ON + valStr + CMD_BOLD_OFF;
     else if (fmtValor?.negrita === false) valStr = CMD_BOLD_OFF + valStr;
 
@@ -1933,10 +2034,10 @@ function renderCampoFPV(
   }
 
   if (fmt?.negrita === true || fmt?.negrita === false) {
-    const texto = lbl + ': ' + v;
+    const texto = lbl + sepEtiqueta + vResuelta;
     return aplicarFormatoTexto(fmt, texto, w);
   }
-  const texto = CMD_BOLD_ON + lbl + CMD_BOLD_OFF + ': ' + v;
+  const texto = CMD_BOLD_ON + lbl + CMD_BOLD_OFF + sepEtiqueta + vResuelta;
   return aplicarFormatoTexto(fmt, texto, w);
 }
 
@@ -1959,6 +2060,8 @@ function renderCampoEsquema(
   tipoDato?: 'texto' | 'fecha' | 'numero' | 'dinero',
   formato?: string,
   calculo?: CalculoCampo,
+  sepEtiqueta: string = SEPARADOR_ETIQUETA,
+  valor?: OpcionesValorLinea,
 ): string | null {
   const w = width ?? LINE_LENGTH;
   const fmt = fmtOv;
@@ -1998,11 +2101,16 @@ function renderCampoEsquema(
   const dinamico = calculo?.ruta
     ? agregarArray(calculo.tipo, resolverRuta(esquema, calculo.ruta))
     : resolverRuta(esquema, clave);
-  if (dinamico === undefined || dinamico === null) return null;
-  const v = Array.isArray(dinamico)
-    ? dinamico.map((x: any) => String(x)).join(', ')
-    : (calculo?.tipo === 'COUNT' && !tipoDato ? String(dinamico) : formatearSegunTipo(dinamico));
-  if (v === '' || v === undefined) return null;
+  let v: string | null;
+  if (dinamico === undefined || dinamico === null) {
+    v = valor?.valorPorDefecto !== undefined && valor.valorPorDefecto !== '' ? valor.valorPorDefecto : null;
+  } else {
+    const vCrudo = Array.isArray(dinamico)
+      ? dinamico.map((x: any) => String(x)).join(', ')
+      : (calculo?.tipo === 'COUNT' && !tipoDato ? String(dinamico) : formatearSegunTipo(dinamico));
+    v = resolverValorLinea(vCrudo, valor, tipoDato);
+  }
+  if (v === null) return null;
 
   if (mostrarLabel === false) {
     return aplicarFormatoTexto(fmtValor || fmtLabel || fmt, v, w);
@@ -2014,13 +2122,13 @@ function renderCampoEsquema(
   const alineacion = fmtLabel?.alineacion || fmtValor?.alineacion || fmt?.alineacion;
       const fmtComb = { ...fmtLabel, ...fmtValor, ...fmt };
       if (alineacion) fmtComb.alineacion = alineacion;
-      return aplicarFormatoTexto(fmtComb, lineaTabularConFormato(lbl, v, tabAn, fmtLabel || fmt, fmtValor), w);
+      return aplicarFormatoTexto(fmtComb, lineaTabularConFormato(lbl, v, tabAn, fmtLabel || fmt, fmtValor, sepEtiqueta), w);
     }
-    return aplicarFormatoTexto(fmt, lineaTabularStr(lbl, v, tabAn), w);
+    return aplicarFormatoTexto(fmt, lineaTabularStr(lbl, v, tabAn, undefined, sepEtiqueta), w);
   }
 
   if (fmtLabel || fmtValor) {
-    let lblStr = lbl + ': ';
+    let lblStr = lbl + sepEtiqueta;
     if (fmtLabel?.negrita === true) lblStr = CMD_BOLD_ON + lblStr + CMD_BOLD_OFF;
     else if (fmtLabel?.negrita === false) lblStr = CMD_BOLD_OFF + lblStr;
 
@@ -2036,9 +2144,9 @@ function renderCampoEsquema(
   }
 
   if (fmt?.negrita === true || fmt?.negrita === false) {
-    return aplicarFormatoTexto(fmt, lbl + ': ' + v, w);
+    return aplicarFormatoTexto(fmt, lbl + sepEtiqueta + v, w);
   }
-  const texto = CMD_BOLD_ON + lbl + CMD_BOLD_OFF + ': ' + v;
+  const texto = CMD_BOLD_ON + lbl + CMD_BOLD_OFF + sepEtiqueta + v;
   return aplicarFormatoTexto(fmt, texto, w);
 }
 
@@ -2064,15 +2172,20 @@ function emitirCobroFPVLinea(ctx: Ctx, nombre: string, data: any, cob: any, cfg:
   };
 
   let monto: number;
+  let origen: unknown;
   if (nombre === 'DEVUELTA') {
     monto = Number(c.devuelta) || 0;
-    if (monto <= 0.01) return;
+    origen = c.devuelta;
+    if (monto <= 0.01 && !linea.valorPorDefecto) return;
   } else {
     monto = mapa[nombre];
-    if (monto <= 0) return;
+    origen = c[nombre.toLowerCase()];
+    if (monto <= 0 && !linea.valorPorDefecto) return;
   }
 
-  const montoStr = formatMoney(monto);
+  const montoStr = linea.valorPorDefecto && (origen === undefined || origen === null)
+    ? linea.valorPorDefecto
+    : formatMoney(monto);
   const label = lineaLbl || nombre.replace(/_/g, ' ');
 
   if (linea.mostrarLabel === false) {
@@ -2083,7 +2196,7 @@ function emitirCobroFPVLinea(ctx: Ctx, nombre: string, data: any, cob: any, cfg:
 
   if (tieneTab) {
       const anchoEtiqueta = Math.max(tabAn, maxLabelLenCobros + 2);
-          const texto = right(label + ':', anchoEtiqueta) + right(montoStr, maxValorLenCobros);
+          const texto = right(label + ctx.sepEtiqueta.trimEnd(), anchoEtiqueta) + right(montoStr, maxValorLenCobros);
     // Alineacion por linea: formatoLabel > formatoValor > formato > zona.
     const alineacion = linea.formatoLabel?.alineacion || linea.formatoValor?.alineacion || linea.formato?.alineacion || zonaActualAlineacion;
     if (alineacion === 'izquierda') {
@@ -2094,7 +2207,7 @@ function emitirCobroFPVLinea(ctx: Ctx, nombre: string, data: any, cob: any, cfg:
       ctx.p.push(rightVisible(texto, width, fmtCombCobro?.tamano) + LF);
     }
   } else {
-    const texto = right(label, maxLabelLenCobros) + ':  ' + right(montoStr, maxValorLenCobros);
+    const texto = right(label, maxLabelLenCobros) + ctx.sepEtiqueta + ' ' + right(montoStr, maxValorLenCobros);
     const alineacion = linea.formatoLabel?.alineacion || linea.formatoValor?.alineacion || linea.formato?.alineacion || zonaActualAlineacion;
     if (alineacion === 'izquierda') {
       ctx.p.push(texto + LF);
@@ -2120,7 +2233,9 @@ function renderCampoFRI(
   width?: number,
   mostrarLabel?: boolean,
   fmtLabel?: FormatoItemTicket,  // NUEVO
-  fmtValor?: FormatoItemTicket   // NUEVO
+  fmtValor?: FormatoItemTicket,  // NUEVO
+  sepEtiqueta: string = SEPARADOR_ETIQUETA,
+  valor?: OpcionesValorLinea,
 ): string | null {
   const w = width ?? LINE_LENGTH;
   const fmt = fmtOv;
@@ -2139,87 +2254,100 @@ function renderCampoFRI(
     case 'COMPANIA': {
       const v = data.COMPANIA || '--';
       if (mostrarLabel === false) return aplicarFormatoTexto(fmtValor || fmtLabel || fmt, v, w);
-      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w);
+      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w, sepEtiqueta);
     }
     case 'DIRECCION': {
-      const v = data.DIRECCION;
-      if (!v) return null;
+      const v = resolverValorLinea(data.DIRECCION, valor, 'texto');
+      if (v === null) return null;
       if (mostrarLabel === false) return aplicarFormatoTexto(fmtValor || fmtLabel || fmt, v, w);
-      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w);
+      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w, sepEtiqueta);
     }
     case 'TELEFONO': {
-      const v = data.TELEFONO;
-      if (!v) return null;
+      const v = resolverValorLinea(data.TELEFONO, valor, 'texto');
+      if (v === null) return null;
       if (mostrarLabel === false) return aplicarFormatoTexto(fmtValor || fmtLabel || fmt, v, w);
-      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w);
+      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w, sepEtiqueta);
     }
     case 'RNC': {
-      const v = data.RNC;
-      if (!v) return null;
+      const v = resolverValorLinea(data.RNC, valor, 'texto');
+      if (v === null) return null;
       if (mostrarLabel === false) return aplicarFormatoTexto(fmtValor || fmtLabel || fmt, v, w);
-      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w);
+      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w, sepEtiqueta);
     }
     case 'TITULO': {
       const v = data.TITULO || '--';
       if (!v || v === '--') return null;
       if (mostrarLabel === false) return aplicarFormatoTexto(fmtValor || fmtLabel || fmt, v, w);
-      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w);
+      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w, sepEtiqueta);
     }
     case 'NCF':
-      if (lblOv) return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, data.ncf || '--', w);
+      if (lblOv) return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, data.ncf || '--', w, sepEtiqueta);
       return aplicarFormatoTexto(fmt, CMD_BOLD_ON + 'NCF' + CMD_BOLD_OFF + '         ' + (data.ncf || '--'), w);
     case 'FECHA':
-      if (lblOv) return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, formatDate(data.fechaDocumento), w);
+      if (lblOv) return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, formatDate(data.fechaDocumento), w, sepEtiqueta);
       return aplicarFormatoTexto(fmt, CMD_BOLD_ON + 'FECHA' + CMD_BOLD_OFF + '       ' + formatDate(data.fechaDocumento), w);
     case 'TIPO': {
-      if (!(data.tipo?.codigo || data.tipo?.nombre)) return null;
+      if (!(data.tipo?.codigo || data.tipo?.nombre)) {
+        const def = valor?.valorPorDefecto;
+        if (def === undefined || def === '') return null;
+        return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, def, w, sepEtiqueta);
+      }
       const texto = (data.tipo.codigo || '') + ' ' + (data.tipo.nombre || '');
-      if (lblOv) return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, texto, w);
-      return aplicarFormatoTexto(fmt, 'Tipo: ' + texto, w);
+      if (lblOv) return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, texto, w, sepEtiqueta);
+      return aplicarFormatoTexto(fmt, 'Tipo' + sepEtiqueta + texto, w);
     }
     case 'CONCEPTO': {
-      if (!data.concepto?.nombre) return null;
-      if (lblOv) return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, data.concepto.nombre, w);
-      return aplicarFormatoTexto(fmt, 'Concepto: ' + data.concepto.nombre, w);
+      if (!data.concepto?.nombre) {
+        const def = valor?.valorPorDefecto;
+        if (def === undefined || def === '') return null;
+        return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, def, w, sepEtiqueta);
+      }
+      if (lblOv) return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, data.concepto.nombre, w, sepEtiqueta);
+      return aplicarFormatoTexto(fmt, 'Concepto' + sepEtiqueta + data.concepto.nombre, w);
     }
     case 'ENTIDAD': {
       const nombre = data.entidad?.nombre || data.entidad?.razonSocial || '\u2014';
-      if (lblOv) return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, nombre, w);
+      if (lblOv) return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, nombre, w, sepEtiqueta);
       return aplicarFormatoTexto(fmt, CMD_BOLD_ON + 'ENTIDAD' + CMD_BOLD_OFF + '    ' + nombre, w);
     }
     case 'ENTIDAD_ID': {
-      const id = data.entidad?.identificacion || data.entidad?.rnc || '';
-      if (!id) return null;
-      if (lblOv) return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, id, w);
+      const id = resolverValorLinea(data.entidad?.identificacion || data.entidad?.rnc || '', valor, 'texto');
+      if (id === null) return null;
+      if (lblOv) return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, id, w, sepEtiqueta);
       return aplicarFormatoTexto(fmt, '               ' + id, w);
     }
     case 'NOTA': {
-      if (!data.nota) return null;
-      if (lblOv) return lineSep('-', w) + LF + lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, data.nota, w);
-      return lineSep('-', w) + LF + aplicarFormatoTexto(fmt, 'Nota: ' + data.nota, w);
+      if (!data.nota) {
+        const def = valor?.valorPorDefecto;
+        if (def === undefined || def === '') return null;
+        return lineSep('-', w) + LF + lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, def, w, sepEtiqueta);
+      }
+      if (lblOv) return lineSep('-', w) + LF + lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, data.nota, w, sepEtiqueta);
+      return lineSep('-', w) + LF + aplicarFormatoTexto(fmt, 'Nota' + sepEtiqueta + data.nota, w);
     }
     case 'FECHA_IMPRESION': {
       const lbl = lblOv || 'Fecha imp.';
       const v = new Date().toLocaleString('es-DO');
-      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w);
+      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w, sepEtiqueta);
     }
     case 'HORA_IMPRESION': {
       const lbl = lblOv || 'Hora imp.';
       const v = new Date().toLocaleTimeString('es-DO');
-      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w);
+      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w, sepEtiqueta);
     }
     case 'NUM_DETALLES': {
       const lbl = lblOv || 'Transacc.';
       const v = String(data.transaccionesAsociadas?.length || 0);
-      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w);
+      return lineaConFormatoDual(fmt, fmtLabel, fmtValor, lbl, v, w, sepEtiqueta);
     }
     default: return null;
   }
 }
 
-export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, config?: PlantillaConfig): string {
+export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, config?: PlantillaConfig, opciones?: OpcionesTicketRender): string {
   const cfg = normalizarConfigRI(aplicarExpresiones(config, data, company));
   const width = cfg.opciones?.anchoLinea ?? LINE_LENGTH;
+  const sepEtiqueta = opciones?.separadorEtiqueta ?? SEPARADOR_ETIQUETA;
   const zonas = cfg.zonas || [];
   const cob = cfg.cobros || {};
   const pie = config?.pie?.textoPie ?? cfg.pie?.textoPie ?? 'Gracias por su preferencia!';
@@ -2229,7 +2357,7 @@ export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, conf
   const camposDTO = cfg.camposDTO || cfg.campos?.camposDTO;
   const firmas = cfg.firmas;
 
-  const ctx: Ctx = { p: [], w: width, al: 'left', bo: false, co: false, forceAl: false };
+  const ctx: Ctx = { p: [], w: width, al: 'left', bo: false, co: false, forceAl: false, sepEtiqueta };
   ctx.p.push(CMD_INIT + CMD_NORMALIZAR);
 
   let maxLabelLenTotalesFRI = 0;
@@ -2247,7 +2375,7 @@ export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, conf
     if (linea.ref === 'SEPARADOR') { _emitirSep(ctx, linea); return; }
     if (linea.ref === 'ESPACIO') { _emitirEspacio(ctx); return; }
     if (linea.ref.startsWith('LIBRE:') || linea.ref.startsWith('DTO:') || linea.ref.startsWith('FIRMA:')) {
-      emitirItemEspecial(ctx.p, linea.ref, data, width, textosLibres, camposDTO, linea.tabular, linea.mismaLinea, firmas, linea, enGrupo);
+      emitirItemEspecial(ctx.p, linea.ref, data, width, textosLibres, camposDTO, linea.tabular, linea.mismaLinea, firmas, linea, enGrupo, sepEtiqueta, linea);
       return;
     }
 
@@ -2273,7 +2401,7 @@ export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, conf
           break;
         }
         default: {
-          const render = renderCampoFRI(clave, data, lblOv, fmtOv, width, linea.mostrarLabel, fmtLabel, fmtValor);
+          const render = renderCampoFRI(clave, data, lblOv, fmtOv, width, linea.mostrarLabel, fmtLabel, fmtValor, sepEtiqueta, linea);
           if (render) ctx.p.push(render);
           _restaurarFmt(ctx, fmtOv);
           break;
@@ -2284,7 +2412,7 @@ export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, conf
 
     if (ref.startsWith('ESQUEMA:')) {
       const clave = ref.slice(8);
-      const render = renderCampoEsquema(clave, cfg.esquema, lblOv, fmtOv, width, linea.tabular, linea.mostrarLabel, fmtLabel, fmtValor, linea.tipoDato, linea.formatoDato, linea.calculo);
+      const render = renderCampoEsquema(clave, cfg.esquema, lblOv, fmtOv, width, linea.tabular, linea.mostrarLabel, fmtLabel, fmtValor, linea.tipoDato, linea.formatoDato, linea.calculo, sepEtiqueta, linea);
       if (render) ctx.p.push(render);
       _restaurarFmt(ctx, fmtOv);
       return;
@@ -2307,7 +2435,7 @@ export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, conf
             else { _aplicarFmt(ctx, linea.formatoValor || fmtOv); ctx.p.push(monto + LF); _restaurarFmt(ctx, linea.formatoValor || fmtOv); }
           } else if (tieneTab) {
         const anchoEtiqueta = Math.max(tabAn, maxLabelLenTotalesFRI + 2);
-          const texto = right(lbl + ':', anchoEtiqueta) + right(monto, maxValorLenTotalesFRI);
+          const texto = right(lbl + sepEtiqueta.trimEnd(), anchoEtiqueta) + right(monto, maxValorLenTotalesFRI);
             const alineacion = linea.formatoLabel?.alineacion || linea.formato?.alineacion || fmtOv?.alineacion || zonaActualAlineacionFRI;
             if (alineacion === 'izquierda') {
               ctx.p.push(texto + LF);
@@ -2317,7 +2445,7 @@ export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, conf
               ctx.p.push(rightVisible(texto, width - 2, fmtSinAlineacion?.tamano) + LF);
             }
           } else {
-            const texto = right(lbl, maxLabelLenTotalesFRI) + ':  ' + right(monto, maxValorLenTotalesFRI);
+            const texto = right(lbl, maxLabelLenTotalesFRI) + sepEtiqueta + ' ' + right(monto, maxValorLenTotalesFRI);
             const alineacion = linea.formatoLabel?.alineacion || linea.formato?.alineacion || fmtOv?.alineacion || zonaActualAlineacionFRI;
             if (alineacion === 'izquierda') {
               ctx.p.push(texto + LF);
@@ -2568,9 +2696,11 @@ export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, conf
               if (!ln.ref.startsWith('DETALLE:')) return;
               const clave = ln.ref.slice(8);
               const valor = renderDetalleCampoFRI(clave, doc);
+              const valorFinal = resolverValorLinea(valor, ln, ln.tipoDato);
+              if (valorFinal === null) return;
               textosDet.set(idxLn, ln.mostrarLabel !== false
-                ? (ln.label || CAMPOS_DETALLE_RI_LABELS[clave] || clave) + ': ' + valor
-                : valor);
+                ? (ln.label || CAMPOS_DETALLE_RI_LABELS[clave] || clave) + sepEtiqueta + valorFinal
+                : valorFinal);
             });
             const anchosPorIdx = new Map<number, number>();
             const conteoDet = new Map<number, number>();
@@ -2674,6 +2804,8 @@ function renderCampoVSNT(
   mostrarLabel?: boolean,
   fmtLabel?: FormatoItemTicket,
   fmtValor?: FormatoItemTicket,
+  sepEtiqueta: string = SEPARADOR_ETIQUETA,
+  valor?: OpcionesValorLinea,
 ): string | null {
   const w = width ?? 42;
   const fmt = fmtOv;
@@ -2716,15 +2848,15 @@ function renderCampoVSNT(
     return String(dinamico);
   }
 
-  const v = val();
-  if (v === '' || v === undefined) return null;
+  const v = resolverValorLinea(val(), valor, tipoDato);
+  if (v === null) return null;
 
   if (mostrarLabel === false) {
     return aplicarFormatoTexto(fmtValor || fmtLabel || fmt, v, w);
   }
 
   if (fmtLabel || fmtValor) {
-    let lblStr = lbl + ': ';
+    let lblStr = lbl + sepEtiqueta;
     if (fmtLabel?.negrita === true) lblStr = CMD_BOLD_ON + lblStr + CMD_BOLD_OFF;
     else if (fmtLabel?.negrita === false) lblStr = CMD_BOLD_OFF + lblStr;
 
@@ -2740,9 +2872,9 @@ function renderCampoVSNT(
   }
 
   if (fmt?.negrita === true || fmt?.negrita === false) {
-    return aplicarFormatoTexto(fmt, lbl + ': ' + v, w);
+    return aplicarFormatoTexto(fmt, lbl + sepEtiqueta + v, w);
   }
-  const texto = CMD_BOLD_ON + lbl + CMD_BOLD_OFF + ': ' + v;
+  const texto = CMD_BOLD_ON + lbl + CMD_BOLD_OFF + sepEtiqueta + v;
   return aplicarFormatoTexto(fmt, texto, w);
 }
 
@@ -2793,13 +2925,13 @@ function formatoVoucherHardcoded(data: any, company?: CompanyInfo): string {
  * Recorre las zonas de la config normalizada (todas encabezado_reporte) y emite
  * los campos VSNT con sus labels y formatos editables.
  */
-function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: PlantillaConfig, width: number): string {
+function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: PlantillaConfig, width: number, sepEtiqueta: string = SEPARADOR_ETIQUETA): string {
   const zonas = cfg.zonas || [];
   const textosLibres = cfg.textosLibres || cfg.campos?.textosLibres;
   const camposDTO = cfg.camposDTO || cfg.campos?.camposDTO;
   const firmas = cfg.firmas;
 
-  const ctx: Ctx = { p: [], w: width, al: 'left', bo: false, co: false, forceAl: false };
+  const ctx: Ctx = { p: [], w: width, al: 'left', bo: false, co: false, forceAl: false, sepEtiqueta };
   ctx.p.push(CMD_INIT);
 
   data.COMPANIA = company?.nombre || data?.sucursal?.nombre || 'SOLUGEN S.R.L.';
@@ -2816,19 +2948,19 @@ function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: P
     if (linea.ref === 'SEPARADOR') { _emitirSep(ctx, linea); return; }
     if (linea.ref === 'ESPACIO') { _emitirEspacio(ctx); return; }
     if (linea.ref.startsWith('LIBRE:') || linea.ref.startsWith('DTO:') || linea.ref.startsWith('FIRMA:')) {
-      emitirItemEspecial(ctx.p, linea.ref, data, width, textosLibres, camposDTO, linea.tabular, linea.mismaLinea, firmas, linea, enGrupo);
+      emitirItemEspecial(ctx.p, linea.ref, data, width, textosLibres, camposDTO, linea.tabular, linea.mismaLinea, firmas, linea, enGrupo, sepEtiqueta, linea);
       return;
     }
     if (linea.ref.startsWith('CAMPO:')) {
       const clave = linea.ref.slice(6);
-      const render = renderCampoVSNT(clave, data, linea.label, linea.formato, width, linea.mostrarLabel, linea.formatoLabel || linea.formato, linea.formatoValor);
+      const render = renderCampoVSNT(clave, data, linea.label, linea.formato, width, linea.mostrarLabel, linea.formatoLabel || linea.formato, linea.formatoValor, sepEtiqueta, linea);
       if (render) ctx.p.push(render);
       _restaurarFmt(ctx, linea.formato);
       return;
     }
     if (linea.ref.startsWith('ESQUEMA:')) {
       const clave = linea.ref.slice(8);
-      const render = renderCampoEsquema(clave, cfg.esquema, linea.label, linea.formato, width, linea.tabular, linea.mostrarLabel, linea.formatoLabel || linea.formato, linea.formatoValor, linea.tipoDato, linea.formatoDato, linea.calculo);
+      const render = renderCampoEsquema(clave, cfg.esquema, linea.label, linea.formato, width, linea.tabular, linea.mostrarLabel, linea.formatoLabel || linea.formato, linea.formatoValor, linea.tipoDato, linea.formatoDato, linea.calculo, sepEtiqueta, linea);
       if (render) ctx.p.push(render);
       _restaurarFmt(ctx, linea.formato);
       return;
@@ -2836,9 +2968,10 @@ function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: P
     if (linea.ref.startsWith('DETALLE:')) {
       // Fila de zona detalle (arrayOrigen): valor resuelto de la fila actual
       const clave = linea.ref.slice(8);
-      const valor = renderDetalleCampo(clave, filaActual ?? {});
+      const valor = resolverValorLinea(renderDetalleCampo(clave, filaActual ?? {}), linea, linea.tipoDato);
+      if (valor === null) return;
       const texto = linea.mostrarLabel !== false
-        ? (linea.label || clave) + ': ' + valor
+        ? (linea.label || clave) + sepEtiqueta + valor
         : valor;
       const { antes, despues } = comandosFormato({ ...linea.formato, alineacion: undefined });
       ctx.p.push(antes.join('') + texto + despues.join(''), LF);
@@ -2938,7 +3071,7 @@ function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: P
  * - Con config: recorre las zonas normalizadas contra el default VSNT (ancho 42,
  *   pie vacio, feed de corte 3) y agrega feed + corte al final.
  */
-export function formatTicketVoucherVisanet(data: any, company?: CompanyInfo, config?: PlantillaConfig): string {
+export function formatTicketVoucherVisanet(data: any, company?: CompanyInfo, config?: PlantillaConfig, opciones?: OpcionesTicketRender): string {
   const cfg = normalizarConfigVSNT(aplicarExpresiones(config, data, company));
   const width = cfg.opciones?.anchoLinea ?? 42;
 
@@ -2946,7 +3079,7 @@ export function formatTicketVoucherVisanet(data: any, company?: CompanyInfo, con
     return formatoVoucherHardcoded(data, company);
   }
 
-  const body = formatoVoucherZonas(data, company, cfg, width);
+  const body = formatoVoucherZonas(data, company, cfg, width, opciones?.separadorEtiqueta ?? SEPARADOR_ETIQUETA);
   const feedCorte = cfg.opciones?.feedCorte ?? 3;
   return body + feed(feedCorte) + CMD_CUT;
 }

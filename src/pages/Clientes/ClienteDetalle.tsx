@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, message, Form, Input, Select, Switch, Row, Col, Typography,
   Tabs, Descriptions, InputNumber, Tag, Grid, Divider, DatePicker,
-  Button, Modal, Table,
+  Button, Modal, Table, theme,
 } from 'antd';
 import { CopyOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -65,6 +65,7 @@ const ClienteDetalle: React.FC = () => {
   const [form] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isLarge = screens.xxl === true;
+  const { token } = theme.useToken();
 
   // Estados para catálogos
   const [tiposNCF, setTiposNCF] = useState<TipoComprobanteNCFDTO[]>([]);
@@ -566,7 +567,7 @@ const ClienteDetalle: React.FC = () => {
   // ===== Card: Datos Generales =====
   const renderDatosGenerales = () => (
     <Card title="Datos Generales" className="paces-card" style={{ marginBottom: 16 }}>
-      <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
+      <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }} styles={{ content: { background: 'transparent' } }}>
         {renderCampo('Código',
           esSoloLectura ? (
             <Text style={{ fontFamily: 'monospace' }}>{data?.codigo}</Text>
@@ -745,7 +746,7 @@ const ClienteDetalle: React.FC = () => {
   // ===== Card: Comercial / Financiero =====
   const renderComercialFinanciero = () => (
     <Card title="Comercial / Financiero" className="paces-card" style={{ marginBottom: 16 }}>
-      <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
+      <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }} styles={{ content: { background: 'transparent' } }}>
         {renderCampo('Vendedor',
           esSoloLectura ? (
             <Text>{data?.vendedorNombre || '-'}</Text>
@@ -888,8 +889,8 @@ const ClienteDetalle: React.FC = () => {
           position: 'sticky',
           top: 0,
           zIndex: 10,
-          background: editando && formTouched ? '#fffbe6' : '#fff',
-          borderBottom: '1px solid #f0f0f0',
+          background: editando && formTouched ? token.colorWarningBg : token.colorBgContainer,
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
           padding: '12px 16px',
           borderRadius: 6,
           marginBottom: 16,
@@ -898,11 +899,11 @@ const ClienteDetalle: React.FC = () => {
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: 8,
-          boxShadow: editando && formTouched ? '0 2px 6px rgba(241, 180, 76, 0.3)' : 'none',
+          boxShadow: editando && formTouched ? token.boxShadowSecondary : 'none',
         }}
       >
         <div>
-          <Text strong style={{ fontSize: 15, color: '#1a1a1a' }}>
+          <Text strong style={{ fontSize: 15, color: token.colorTextHeading }}>
             {data?.nombre || data?.codigo || 'Nuevo Cliente'}
           </Text>
           <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
@@ -996,8 +997,8 @@ const ClienteDetalle: React.FC = () => {
               pagination={false}
               scroll={{ y: 400 }}
               onRow={(record) => ({
-                onClick: () => setTipoSeleccionado(record.codigo),
-                style: { cursor: clonando ? 'default' : 'pointer', background: tipoSeleccionado === record.codigo ? '#e6f7ff' : undefined }
+                onClick: () => { if (!clonando) setTipoSeleccionado(record.codigo); },
+                style: { cursor: clonando ? 'default' : 'pointer', background: tipoSeleccionado === record.codigo ? 'var(--paces-selected-bg)' : undefined }
               })}
             />
           </Col>
@@ -1025,7 +1026,7 @@ const ClienteDetalle: React.FC = () => {
               scroll={{ y: 400 }}
               onRow={(record) => ({
                 onClick: () => { if (!clonando) setSelectedEntity(record); },
-                style: { cursor: clonando ? 'default' : 'pointer', background: selectedEntity?.codigo === record.codigo ? '#e6f7ff' : undefined }
+                style: { cursor: clonando ? 'default' : 'pointer', background: selectedEntity?.codigo === record.codigo ? 'var(--paces-selected-bg)' : undefined }
               })}
             />
           </Col>

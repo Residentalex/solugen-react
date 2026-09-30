@@ -1,5 +1,5 @@
 import React from 'react';
-import { Input, Button } from 'antd';
+import { Input, Button, Tooltip } from 'antd';
 import { SearchOutlined, ReloadOutlined, PlusOutlined, EditOutlined, CopyOutlined, PrinterOutlined, FileExcelOutlined } from '@ant-design/icons';
 import FiltrosDocumento from './FiltrosDocumento/FiltrosDocumento';
 import PageSizeSelect from './PageSizeSelect';
@@ -105,7 +105,7 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
             onSearch('');
           }
         }}
-        style={{ width: 400 }}
+        style={{ width: '100%', maxWidth: 400, minWidth: 200 }}
         prefix={<SearchOutlined className="paces-text-icon" />}
       />}
       <PageSizeSelect value={pageSize} onChange={onPageSizeChange} />
@@ -127,20 +127,28 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
       )}
       {showClonar && onClonar && (
         <PermissionGate accion="CREAR">
-          <Button icon={<CopyOutlined />} disabled={clonarDisabled} onClick={onClonar} />
+          <Tooltip title="Clonar">
+            <Button icon={<CopyOutlined />} aria-label="Clonar" disabled={clonarDisabled} onClick={onClonar} />
+          </Tooltip>
         </PermissionGate>
       )}
       {showImprimir && onImprimir && (
         <PermissionGate accion="IMPRIMIR">
-          <Button icon={<PrinterOutlined />} onClick={onImprimir} disabled={imprimirDisabled} />
+          <Tooltip title="Imprimir">
+            <Button icon={<PrinterOutlined />} aria-label="Imprimir" onClick={onImprimir} disabled={imprimirDisabled} />
+          </Tooltip>
         </PermissionGate>
       )}
       {showExportarExcel && onExportarExcel && (
         <PermissionGate accion="EXPORTAR">
-          <Button icon={<FileExcelOutlined />} onClick={onExportarExcel} disabled={exportarExcelDisabled} />
+          <Tooltip title="Exportar a Excel">
+            <Button icon={<FileExcelOutlined />} aria-label="Exportar a Excel" onClick={onExportarExcel} disabled={exportarExcelDisabled} />
+          </Tooltip>
         </PermissionGate>
       )}
-      <Button icon={<ReloadOutlined />} onClick={onRefresh} />
+      <Tooltip title="Actualizar">
+        <Button icon={<ReloadOutlined />} aria-label="Actualizar" onClick={onRefresh} />
+      </Tooltip>
       {extraRight}
     </div>
   );

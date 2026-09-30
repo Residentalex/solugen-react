@@ -1,16 +1,16 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Tree, Input, Tag, Button, message, Card, Modal, Form, Switch, Typography, Select, Alert, Row, Col, Empty, Spin, Pagination } from 'antd';
-import { SearchOutlined, ReloadOutlined, PlusOutlined, FolderOpenOutlined } from '@ant-design/icons';
+import { Tree, Input, Button, message, Card, Modal, Form, Switch, Select, Alert, Row, Col, Empty, Spin, Pagination, Tooltip } from 'antd';
+import { FolderOpenOutlined, FolderOutlined, FileTextOutlined } from '@ant-design/icons';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
 import { monedaApi } from '../../api/monedaApi';
-import PermissionGate from '../../components/PermissionGate';
 import type { TipoCuentaDTO, GrupoCuentaContableDTO, MonedaDTO, CuentaContableDTO, CuentaContableResumenDTO } from '../../types/contabilidad';
 import type { DataNode } from 'antd/es/tree';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import './CuentasContables.css';
 
 const ORIGEN_OPTIONS = [
   { label: 'Débito', value: 0 },
@@ -18,20 +18,72 @@ const ORIGEN_OPTIONS = [
   { label: 'Desconocido', value: 2 },
 ];
 
-const { Text } = Typography;
-
-function toTitleCase(str: string): string {
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-}
+/** Lote usado para traer todos los registros al exportar. */
+const TAMANO_LOTE_EXPORT = 1000;
 
 interface TreeNodeData extends DataNode {
   title: React.ReactNode;
   key: string;
   children?: TreeNodeData[];
   isLeaf?: boolean;
-  // La raíz viene como resumen plano; los hijos vienen como DTO completo.
+  /** true cuando los hijos ya fueron consultados (solo modo arbol). */
+  cargado?: boolean;
+  // La raíz y los resultados de búsqueda vienen como resumen plano; los hijos como DTO completo.
   cuentaData: CuentaContableResumenDTO | CuentaContableDTO;
 }
+
+/** Construye el título de un nodo: columna fija para el código y flexible para el nombre. */
+const buildTitle = (cuenta: { noCuenta: string; nombre?: string }, icono: React.ReactNode): React.ReactNode => (
+  <div className="cuenta-tree-row">
+    <span className="cuenta-tree-codigo">
+      {icono}
+      {cuenta.noCuenta}
+    </span>
+    <Tooltip title={cuenta.nombre ?? ''} placement="topLeft">
+      <span className="cuenta-tree-nombre">{cuenta.nombre ?? ''}</span>
+    </Tooltip>
+  </div>
+);
+
+/** Icono según el estado del nodo: pendiente de cargar, carpeta abierta u hoja. */
+const buildIcon = (node: Pick<TreeNodeData, 'isLeaf' | 'cargado' | 'children'>): React.ReactNode => {
+  if (node.isLeaf === true) return <FileTextOutlined />;
+  if (node.cargado === true) {
+    return node.children && node.children.length > 0 ? <FolderOpenOutlined /> : <FileTextOutlined />;
+  }
+  return <FolderOutlined />;
+};
+
+const buildNodeTitle = (node: TreeNodeData): React.ReactNode => buildTitle(node.cuentaData, buildIcon(node));
+
+const buildNode = (
+  cuenta: CuentaContableResumenDTO | CuentaContableDTO,
+  isLeaf: boolean
+): TreeNodeData => {
+  const node: TreeNodeData = {
+    key: cuenta.noCuenta,
+    title: undefined,
+    isLeaf,
+    cargado: false,
+    cuentaData: cuenta,
+  };
+  node.title = buildNodeTitle(node);
+  return node;
+};
+
+const updateTreeData = (nodes: TreeNodeData[], key: string, children: TreeNodeData[]): TreeNodeData[] => {
+  return nodes.map(node => {
+    if (node.key === key) {
+      const updated: TreeNodeData = { ...node, children, isLeaf: children.length === 0, cargado: true };
+      updated.title = buildNodeTitle(updated);
+      return updated;
+    }
+    if (node.children) {
+      return { ...node, children: updateTreeData(node.children, key, children) };
+    }
+    return node;
+  });
+};
 
 const CuentasContables: React.FC = () => {
   const navigate = useNavigate();
@@ -44,7 +96,8 @@ const CuentasContables: React.FC = () => {
   const [filtro, setFiltro] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  
+  const [refreshKey, setRefreshKey] = useState(0);
+
   // States for create/edit
   const [modalVisible, setModalVisible] = useState(false);
   const [editando, setEditando] = useState<CuentaContableResumenDTO | CuentaContableDTO | null>(null);
@@ -59,133 +112,99 @@ const CuentasContables: React.FC = () => {
 
   // Tree data and loading states
   const [treeData, setTreeData] = useState<TreeNodeData[]>([]);
-  const [loadingKeys, setLoadingKeys] = useState<string[]>([]);
   const [loadedKeys, setLoadedKeys] = useState<string[]>([]);
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [loadingError, setLoadingError] = useState<string | null>(null);
+  const [exportando, setExportando] = useState(false);
 
-const updateTreeData = (nodes: TreeNodeData[], key: string, children: TreeNodeData[]): TreeNodeData[] => {
-  return nodes.map(node => {
-    if (node.key === key) {
-      return { ...node, children, isLeaf: children.length === 0 };
-    }
-    if (node.children) {
-      return { ...node, children: updateTreeData(node.children, key, children) };
-    }
-    return node;
-  });
-};
+  // Ignora respuestas de consultas anteriores que llegan tarde.
+  const requestIdRef = useRef(0);
+  const cargandoKeysRef = useRef<Set<string>>(new Set());
 
-// Load root nodes (cuentas sin cuentaControl) - paginated 25
-const loadRootNodes = useCallback(async () => {
+  // Carga la página actual: con búsqueda consulta todas las cuentas, sin búsqueda solo las raíces.
+  const loadRootNodes = useCallback(async () => {
     if (sucursalActiva === undefined) return;
-    
+
+    const termino = filtro.trim();
     const salto = (page - 1) * pageSize;
+    const requestId = ++requestIdRef.current;
     setLoadingError(null);
+
     try {
-      const result = await cuentaContableApi.obtenerPadresPaginado(
-        sucursalActiva, 
-        pageSize, 
-        salto, 
-        filtro
-      );
-      
-      // Convert flat list to tree nodes for root accounts
-      const rootNodes: TreeNodeData[] = result.data.map(cuenta => ({
-        title: (
-          <span style={{ display: 'flex', alignItems: 'center' }}>
-            <FolderOpenOutlined />
-            <span style={{ marginLeft: 8, fontFamily: 'monospace' }}>
-              <strong>{cuenta.noCuenta}</strong>
-            </span>
-            <span style={{ marginLeft: 8 }}>{toTitleCase(cuenta.nombre ?? '')}</span>
-          </span>
-        ),
-        key: cuenta.noCuenta,
-        isLeaf: false, // Will be determined when loading children
-        cuentaData: cuenta
-      }));
-      
-      setTreeData(rootNodes);
-      setTotalItems(result.total);
+      const response = termino
+        ? await cuentaContableApi.obtenerListadoPaginado(sucursalActiva, pageSize, salto, termino)
+        : await cuentaContableApi.obtenerPadresPaginado(sucursalActiva, pageSize, salto, '');
+
+      if (requestId !== requestIdRef.current) return;
+
+      // En modo búsqueda los resultados son planos: no dependen de cargar el padre.
+      const buscando = termino.length > 0;
+      const nodes = response.data.map((cuenta) => buildNode(cuenta, buscando));
+
+      setTreeData(nodes);
+      setTotalItems(response.total);
       setInitialLoadDone(true);
     } catch (error: any) {
+      if (requestId !== requestIdRef.current) return;
       setInitialLoadDone(false);
       setTreeData([]);
-      setLoadingError(error?.response?.data?.errorMessage || 'Error al cargar cuentas raíz');
-      message.error(error?.response?.data?.errorMessage || 'Error al cargar cuentas raíz');
+      const texto = error?.response?.data?.errorMessage || 'Error al cargar cuentas contables';
+      setLoadingError(texto);
+      message.error(texto);
       console.error(error);
     }
   }, [sucursalActiva, page, pageSize, filtro]);
 
-  // Load children for a specific node
+  // Carga los hijos de un nodo. Sin filtrado local: el árbol siempre muestra la rama completa.
   const loadChildren = useCallback(async (node: TreeNodeData) => {
     const cuentaNo = String(node.key);
+    if (sucursalActiva === undefined) return;
 
-    // Skip if already loading to prevent infinite loop
-    if (loadingKeys.includes(cuentaNo)) {
-      return;
-    }
-
-    setLoadingKeys(prev => [...new Set([...prev, cuentaNo])]);
+    // Evita llamadas duplicadas mientras la misma rama está en vuelo.
+    if (cargandoKeysRef.current.has(cuentaNo)) return;
+    cargandoKeysRef.current.add(cuentaNo);
 
     try {
       const hijos = await cuentaContableApi.obtenerHijos(sucursalActiva, cuentaNo);
-
-      // Filter by search term if exists
-      const filteredHijos = filtro
-        ? hijos.filter(h =>
-            h.noCuenta.toLowerCase().includes(filtro.toLowerCase()) ||
-            (h.nombre?.toLowerCase().includes(filtro.toLowerCase()))
-          )
-        : hijos;
-
-      if (filteredHijos.length === 0) {
-        // Sin hijos: marcar el nodo como hoja
-        setTreeData(prev => updateTreeData(prev, cuentaNo, []));
-      } else {
-        const childNodes: TreeNodeData[] = filteredHijos.map(hijo => ({
-          title: (
-            <span style={{ display: 'flex', alignItems: 'center' }}>
-              <FolderOpenOutlined />
-              <span style={{ marginLeft: 8, fontFamily: 'monospace' }}>
-                <strong>{hijo.noCuenta}</strong>
-              </span>
-              <span style={{ marginLeft: 8 }}>{toTitleCase(hijo.nombre ?? '')}</span>
-            </span>
-          ),
-          key: hijo.noCuenta,
-          // Se asume no-hoja hasta cargar sus hijos; al expandir se corregirá.
-          isLeaf: false,
-          cuentaData: hijo,
-        }));
-
-        // Update tree data by replacing the node with its children (recursive search)
-        setTreeData(prev => updateTreeData(prev, cuentaNo, childNodes));
-      }
-      setLoadedKeys(prev => [...new Set([...prev, cuentaNo])]);
-    } catch (error) {
-      message.error('Error al cargar cuentas hijas');
+      const childNodes = hijos.map((hijo) => buildNode(hijo, false));
+      setTreeData((prev) => updateTreeData(prev, cuentaNo, childNodes));
+      setLoadedKeys((prev) => (prev.includes(cuentaNo) ? prev : [...prev, cuentaNo]));
+    } catch (error: any) {
+      message.error(error?.response?.data?.errorMessage || 'Error al cargar cuentas hijas');
       console.error(error);
     } finally {
-      setLoadingKeys(prev => prev.filter(k => k !== cuentaNo));
+      cargandoKeysRef.current.delete(cuentaNo);
     }
-  }, [sucursalActiva, filtro, loadingKeys]);
+  }, [sucursalActiva]);
+
+  // Registro del módulo y limpieza del toolbar global.
+  useEffect(() => {
+    setActiveModule('MCuentaContable');
+    updateToolbar({});
+    return () => resetToolbar();
+  }, [setActiveModule, updateToolbar, resetToolbar]);
+
+  // Carga de datos: única fuente de disparo de consultas.
+  useEffect(() => {
+    if (sucursalActiva === undefined) return;
+    loadRootNodes();
+  }, [sucursalActiva, loadRootNodes, refreshKey]);
 
   // Load catalog options when modal opens
   useEffect(() => {
     if (!modalVisible || sucursalActiva === undefined) return;
-    
+
     cuentaContableApi.obtenerTipos(sucursalActiva)
       .then(setTipos)
       .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar tipos de cuenta'));
-    
+
     cuentaContableApi.obtenerGrupos(sucursalActiva)
       .then(setGrupos)
       .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar grupos'));
-    
+
     monedaApi.obtenerListado(sucursalActiva)
       .then(setMonedas)
       .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar monedas'));
@@ -195,11 +214,10 @@ const loadRootNodes = useCallback(async () => {
   useEffect(() => {
     const noCuentaEditar = (location.state as any)?.editarNoCuenta;
     if (noCuentaEditar && sucursalActiva !== undefined) {
-      // Find account in tree (simplified - could be enhanced)
       cuentaContableApi.obtenerPorId(sucursalActiva, noCuentaEditar)
         .then(cta => abrirEdicion(cta))
-        .catch(() => message.error('Error al cargar cuenta para editar'));
-      
+        .catch((error: any) => message.error(error?.response?.data?.errorMessage || 'Error al cargar cuenta para editar'));
+
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
@@ -242,7 +260,7 @@ const loadRootNodes = useCallback(async () => {
     try {
       const values = await form.validateFields();
       if (sucursalActiva === undefined) return;
-      
+
       if (editando) {
         await cuentaContableApi.actualizar(sucursalActiva, editando.noCuenta, values);
         message.success('Cuenta contable actualizada correctamente');
@@ -250,11 +268,15 @@ const loadRootNodes = useCallback(async () => {
         await cuentaContableApi.crear(sucursalActiva, values);
         message.success('Cuenta contable creada correctamente');
       }
-      
+
       setModalVisible(false);
 
       // Refresh completo del árbol
-      loadRootNodes();
+      setTreeData([]);
+      setLoadedKeys([]);
+      setExpandedKeys([]);
+      setPage(1);
+      setRefreshKey((k) => k + 1);
     } catch (err: any) {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar cuenta contable');
@@ -264,90 +286,97 @@ const loadRootNodes = useCallback(async () => {
     }
   };
 
+  /** Trae todas las cuentas (o todas las coincidencias del filtro) en lotes. */
+  const obtenerTodasParaExportar = async (termino: string): Promise<CuentaContableResumenDTO[]> => {
+    if (sucursalActiva === undefined) return [];
+    const todas: CuentaContableResumenDTO[] = [];
+    let salto = 0;
+
+    for (;;) {
+      const response = await cuentaContableApi.obtenerListadoPaginado(
+        sucursalActiva,
+        TAMANO_LOTE_EXPORT,
+        salto,
+        termino
+      );
+      todas.push(...response.data);
+      salto += response.data.length;
+      if (response.data.length === 0 || salto >= response.total) break;
+    }
+
+    return todas;
+  };
+
   const handleExportarExcel = async () => {
-    const companyName = await getCompanyName(sucursalActiva);
-    
-    // Flatten tree data for export
-    const flattenTree = (nodes: TreeNodeData[]): any[] => {
-      let result: any[] = [];
-      nodes.forEach(node => {
-        result.push(node.cuentaData);
-        if (node.children) {
-          result = result.concat(flattenTree(node.children));
-        }
-      });
-      return result;
-    };
-    
-    const flatData = flattenTree(treeData);
-    const exportCols = [
-      { title: 'No. Cuenta', dataIndex: 'noCuenta' },
-      { title: 'Nombre', dataIndex: 'nombre' },
-      { title: 'Tipo Cuenta', dataIndex: 'tipoCuenta' },
-      { title: 'Grupo', dataIndex: 'grupoNombre' },
-      { title: 'Moneda', dataIndex: 'monedaCodigo' },
-      { title: 'Origen', dataIndex: 'origen' },
-      { title: 'Activo', dataIndex: 'activo' },
-      { title: 'Centro Costo', dataIndex: 'utilizaCentroCosto' },
-    ];
+    if (exportando) return;
+    setExportando(true);
+    try {
+      const termino = filtro.trim();
+      const [companyName, cuentas] = await Promise.all([
+        getCompanyName(sucursalActiva),
+        obtenerTodasParaExportar(termino),
+      ]);
 
-    const extraerValorExport = (item: CuentaContableResumenDTO | CuentaContableDTO, dataIndex: string): string => {
-      const r = item as CuentaContableResumenDTO;
-      const d = item as CuentaContableDTO;
-      switch (dataIndex) {
-        case 'tipoCuenta':
-          return r.tipoCuenta ?? d.tipoCuenta?.nombre ?? '';
-        case 'grupoNombre':
-          return r.grupoNombre ?? d.grupo?.nombre ?? '';
-        case 'monedaCodigo':
-          return r.monedaCodigo ?? d.moneda?.codigo ?? '';
-        case 'origen':
-          return typeof r.origen === 'string' ? r.origen : String(d.origen ?? '');
-        case 'activo':
-          return typeof r.activo === 'string' ? r.activo : (d.activo ? 'Sí' : 'No');
-        case 'utilizaCentroCosto':
-          return typeof r.utilizaCentroCosto === 'string' ? r.utilizaCentroCosto : (d.utilizaCentroCosto ? 'Sí' : 'No');
-        default:
-          const val = (item as any)[dataIndex];
-          return val != null ? String(val) : '';
+      if (cuentas.length === 0) {
+        message.warning(termino ? `No hay cuentas que coincidan con “${termino}”` : 'No hay cuentas contables para exportar');
+        return;
       }
-    };
 
-    const columnHeaders = exportCols.map(col => col.title);
-    const dataRows = flatData.map((item) =>
-      exportCols.map(col => extraerValorExport(item, col.dataIndex))
-    );
-    
-    exportToExcel({
-      fileName: `CuentasContables_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
-      sheetName: 'CuentasContables',
-      companyName,
-      columnHeaders,
-      dataRows,
-    });
+      const exportCols: { title: string; dataIndex: keyof CuentaContableResumenDTO }[] = [
+        { title: 'No. Cuenta', dataIndex: 'noCuenta' },
+        { title: 'Nombre', dataIndex: 'nombre' },
+        { title: 'Tipo Cuenta', dataIndex: 'tipoCuenta' },
+        { title: 'Grupo', dataIndex: 'grupoNombre' },
+        { title: 'Moneda', dataIndex: 'monedaCodigo' },
+        { title: 'Origen', dataIndex: 'origen' },
+        { title: 'Activo', dataIndex: 'activo' },
+        { title: 'Centro Costo', dataIndex: 'utilizaCentroCosto' },
+      ];
+
+      exportToExcel({
+        fileName: `CuentasContables_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+        sheetName: 'CuentasContables',
+        companyName,
+        columnHeaders: exportCols.map(col => col.title),
+        dataRows: cuentas.map(cuenta => exportCols.map(col => {
+          const valor = cuenta[col.dataIndex];
+          return valor != null ? String(valor) : '';
+        })),
+      });
+
+      message.success(`${cuentas.length} cuenta(s) exportada(s)`);
+    } catch (error: any) {
+      message.error(error?.response?.data?.errorMessage || 'Error al exportar cuentas contables');
+    } finally {
+      setExportando(false);
+    }
   };
 
   const handleSearch = (value: string) => {
-    setFiltro(value);
+    const termino = value.trim();
+    // Invalida cualquier consulta en vuelo antes de que arranque la nueva.
+    requestIdRef.current += 1;
+    setFiltro(termino);
     setPage(1);
-    // Reset tree when search changes
     setTreeData([]);
     setLoadedKeys([]);
-    setLoadingKeys([]);
+    setExpandedKeys([]);
+    cargandoKeysRef.current.clear();
     setInitialLoadDone(false);
   };
 
-  // Initial load
-  useEffect(() => {
-    setActiveModule('MCuentaContable');
-    updateToolbar({});
-    
-    if (sucursalActiva !== undefined) {
-      loadRootNodes();
-    }
-    
-    return () => resetToolbar();
-  }, [setActiveModule, updateToolbar, resetToolbar, sucursalActiva, loadRootNodes]);
+  const handleReload = () => {
+    requestIdRef.current += 1;
+    setSelectedKeys([]);
+    setTreeData([]);
+    setLoadedKeys([]);
+    setExpandedKeys([]);
+    cargandoKeysRef.current.clear();
+    setInitialLoadDone(false);
+    setRefreshKey((k) => k + 1);
+  };
+
+  const hayFiltro = filtro.trim().length > 0;
 
   return (
     <>
@@ -359,13 +388,13 @@ const loadRootNodes = useCallback(async () => {
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={() => { setInitialLoadDone(false); loadRootNodes(); }}>
+            <Button size="small" onClick={handleReload}>
               Reintentar
             </Button>
           }
         />
       )}
-      
+
       <Card
         className="paces-card-erp"
         style={{ borderRadius: 8, overflow: 'hidden' }}
@@ -373,35 +402,48 @@ const loadRootNodes = useCallback(async () => {
       >
         <CatalogoListadoToolbar
           onSearch={handleSearch}
+          placeholder="Buscar cuenta por número o nombre..."
           pageSize={pageSize}
           onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
+          ocultarPageSize
           onNuevo={abrirNuevo}
-          onReload={() => {
-            setPage(1);
-            setTreeData([]);
-            setLoadedKeys([]);
-            setLoadingKeys([]);
-            setInitialLoadDone(false);
-            loadRootNodes();
-          }}
+          onReload={handleReload}
           onExportarExcel={handleExportarExcel}
+          exportando={exportando}
         />
-        
-        <Card
-          style={{ margin: '16px 24px', minHeight: 400, borderRadius: 4, overflow: 'hidden', border: '1px solid #f0f0f0' }}
-        >
+
+        {hayFiltro && (
+          <div className="cuentas-resultado-header">
+            Resultados para <strong>“{filtro.trim()}”</strong> · {totalItems} coincidencia{totalItems === 1 ? '' : 's'}
+          </div>
+        )}
+
+        <div className="cuentas-contables-contenido">
           {!initialLoadDone && !loadingError && sucursalActiva !== undefined ? (
-            <div style={{ textAlign: 'center', padding: '60px 0' }}>
+            <div className="cuentas-contables-estado">
               <Spin size="large" tip="Cargando cuentas contables..." />
             </div>
           ) : loadingError ? (
-            <Empty description="No se pudieron cargar las cuentas contables." />
+            <div className="cuentas-contables-estado">
+              <Empty description="No se pudieron cargar las cuentas contables." />
+            </div>
+          ) : initialLoadDone && treeData.length === 0 ? (
+            <div className="cuentas-contables-estado">
+              <Empty
+                description={
+                  hayFiltro
+                    ? `No se encontraron cuentas para “${filtro.trim()}”`
+                    : 'No hay cuentas contables registradas'
+                }
+              />
+            </div>
           ) : (
             <Tree
               showLine
-              defaultExpandAll={false} // Start collapsed
               loadData={loadChildren as (node: DataNode) => Promise<void>}
               loadedKeys={loadedKeys}
+              expandedKeys={expandedKeys}
+              onExpand={(keys) => setExpandedKeys(keys as string[])}
               treeData={treeData}
               selectedKeys={selectedKeys}
               onSelect={(keys) => {
@@ -410,30 +452,27 @@ const loadRootNodes = useCallback(async () => {
                   navigate(`/MCuentaContable/${keys[0]}`);
                 }
               }}
-              blockNode={true}
+              blockNode
             />
           )}
-        </Card>
+        </div>
 
-        {/* Paginación para cuentas padres */}
-        {initialLoadDone && (
-          <Pagination
-            current={page}
-            pageSize={pageSize}
-            total={totalItems}
-            pageSizeOptions={['25', '50', '100']}
-            showSizeChanger
-            showTotal={(t) => `${t} cuentas raíces`}
-            onChange={(currentPage, size) => {
-              setPage(currentPage);
-              if (size) setPageSize(size);
-              setTreeData([]);
-              setLoadedKeys([]);
-              setLoadingKeys([]);
-              setInitialLoadDone(false);
-              loadRootNodes();
-            }}
-          />
+        {initialLoadDone && !loadingError && (
+          <div className="cuentas-pagination">
+            <Pagination
+              current={page}
+              pageSize={pageSize}
+              total={totalItems}
+              pageSizeOptions={['25', '50', '100']}
+              showSizeChanger
+              showTotal={(t) => (hayFiltro ? `${t} coincidencias` : `${t} cuentas raíz`)}
+              onChange={(currentPage, size) => {
+                setPage(currentPage);
+                if (size) setPageSize(size);
+                setExpandedKeys([]);
+              }}
+            />
+          </div>
         )}
       </Card>
 
@@ -470,7 +509,7 @@ const loadRootNodes = useCallback(async () => {
               </Form.Item>
             </Col>
           </Row>
-          
+
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
@@ -501,7 +540,7 @@ const loadRootNodes = useCallback(async () => {
               </Form.Item>
             </Col>
           </Row>
-          
+
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
@@ -527,7 +566,7 @@ const loadRootNodes = useCallback(async () => {
               </Form.Item>
             </Col>
           </Row>
-          
+
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
@@ -546,7 +585,7 @@ const loadRootNodes = useCallback(async () => {
               </Form.Item>
             </Col>
           </Row>
-          
+
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="utilizaCentroCosto" label="Centro Costo" valuePropName="checked">
@@ -559,7 +598,7 @@ const loadRootNodes = useCallback(async () => {
               </Form.Item>
             </Col>
           </Row>
-          
+
           <Form.Item
             name="nota"
             label="Nota"

@@ -6,6 +6,7 @@ import {
 import ColumnVisibilityToggle from '../../components/ColumnVisibilityToggle';
 import type { ColumnConfig } from '../../components/ColumnVisibilityToggle';
 import {
+  InboxOutlined,
   LockFilled,
   FileTextOutlined,
   FileSearchOutlined,
@@ -493,7 +494,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
       items={[
         {
           key: 'detalles',
-          label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
+          icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
           children: (
             <Table dataSource={detallesFiltrados} columns={detalleColumnsFiltered} rowKey="id" size="small" pagination={false} scroll={{ x: 1000 }} />
           ),

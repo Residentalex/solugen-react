@@ -6,6 +6,7 @@ import {
   Switch, Typography, Empty,
 } from 'antd';
 import {
+  InboxOutlined,
   SaveOutlined,
   CloseOutlined,
   DeleteOutlined,
@@ -15,6 +16,7 @@ import {
   ExclamationCircleOutlined,
   EditOutlined,
   HistoryOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -189,8 +191,9 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   const [devoluciones, setDevoluciones] = useState<DevolucionDTO[]>([]);
   const [impuestosFactura, setImpuestosFactura] = useState<ImpuestoFacturaDTO[]>([]);
   const [medidasCache, setMedidasCache] = useState<UnidadMedidaDTO[]>([]);
-  const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
-  const [logs, setLogs] = useState<LogDTO[]>([]);
+const [asientos, setAsientos] = useState<AsientoContableDTO[]>([]);
+   const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
+   const [logs, setLogs] = useState<LogDTO[]>([]);
   const [fechaCierreContable, setFechaCierreContable] = useState<string | null>(null);
   const [sucursalesCache, setSucursalesCache] = useState<any[]>([]);
   const [selectedSucursal, setSelectedSucursal] = useState<any>(null);
@@ -694,6 +697,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   const handleGenerarAsientos = async () => {
     if (sucursalActiva === undefined) return;
     setSaving(true);
+    setErrorGeneracion(null);
     try {
       const dto = construirDTO();
       const asientosGenerados = await notaCreditoApi.generarAsientos(sucursalActiva, dto);
@@ -701,7 +705,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
       message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
-      message.error(msg);
+      setErrorGeneracion(msg);
     } finally {
       setSaving(false);
     }
@@ -1364,6 +1368,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   // Tab 1: Documentos Relacionados
   tabItems.push({
     key: 'documentos',
+    icon: <FileTextOutlined />,
     label: `Documentos Relacionados (${transaccionesAsociadas.length})`,
     children: (
       <div ref={documentosRef}>
@@ -1389,7 +1394,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   if (tipoEntidad === 'CLI') {
     tabItems.push({
       key: 'articulos',
-      label: `Artículos (${detallesMovimiento.length})`,
+      icon: <InboxOutlined />, label: `Productos/Servicios (${detallesMovimiento.length})`,
       children: (
         <div>
           <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
@@ -1461,6 +1466,7 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
   // Tab 4: Impuestos y Retenciones
   tabItems.push({
     key: 'impuestos',
+    icon: <FileTextOutlined />,
     label: `Impuestos y Retenciones (${impuestosFactura.length})`,
     children: (
       <>
@@ -1538,19 +1544,30 @@ const NotaCreditoFormulario: React.FC<NotaCreditoFormularioProps> = ({ tipoEntid
         <>
           <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
 
-      {loadingError && (
-        <Alert
-          message="Error al cargar formulario de nota de crédito"
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          action={
-            <Button size="small" onClick={handleRefresh}>
-              Reintentar
-            </Button>
-          }
-        />
-      )}
+{loadingError && (
+         <Alert
+           message="Error al cargar formulario de nota de crédito"
+           type="error"
+           showIcon
+           style={{ marginBottom: 16 }}
+           action={
+             <Button size="small" onClick={handleRefresh}>
+               Reintentar
+             </Button>
+           }
+         />
+       )}
+       {errorGeneracion && (
+         <Alert
+           message="Error al generar asientos"
+           type="error"
+           showIcon
+           style={{ marginBottom: 16 }}
+           description={errorGeneracion}
+           closable
+           onClose={() => setErrorGeneracion(null)}
+         />
+       )}
 
       <BuscarConceptoModal
         open={conceptoModalOpen}

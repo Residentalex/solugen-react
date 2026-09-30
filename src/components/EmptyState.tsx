@@ -1,6 +1,7 @@
 import React from 'react';
 import { Typography, Empty, Button, Space } from 'antd';
 import type { ReactNode } from 'react';
+import { InboxOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
 
@@ -21,7 +22,11 @@ const EmptyState: React.FC<EmptyStateProps> = ({
 }) => {
   return (
     <Empty
-      image={icon ?? <Text style={{ fontSize: 48, color: 'var(--paces-text-secondary)' }}>📭</Text>}
+      image={icon ?? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+          <InboxOutlined style={{ fontSize: 48, color: 'var(--paces-text-secondary)' }} />
+        </div>
+      )}
       imageStyle={{ height: 80, marginBottom: 12 }}
       description={(
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>

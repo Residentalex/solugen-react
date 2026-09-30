@@ -5,6 +5,7 @@ import {
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Empty,
 } from 'antd';
 import {
+  InboxOutlined,
   SaveOutlined,
   CloseOutlined,
   DeleteOutlined,
@@ -655,7 +656,7 @@ const OrdenCompraFormulario: React.FC = () => {
           <Tabs defaultActiveKey="detalles" type="card"
             items={[{
               key: 'detalles',
-              label: `Detalles (${detalles.length})`,
+              icon: <InboxOutlined />, label: `Productos/Servicios (${detalles.length})`,
               children: (
                 <>
                   <Button type="dashed" icon={<PlusOutlined />} onClick={handleAgregarFila} style={{ marginBottom: 8, width: '100%' }}>

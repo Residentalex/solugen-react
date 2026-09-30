@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useChatStore } from '../../stores/chatStore';
 import ChatConversationList from './ChatConversationList';
 import ChatMessages from './ChatMessages';
@@ -6,14 +7,29 @@ import ChatMessages from './ChatMessages';
 const CHAT_WIDTH = 360;
 const CHAT_HEIGHT = 480;
 
-const ChatWidget: React.FC = () => {
+interface ChatWidgetProps {
+  /** Ruta a la que navega el boton de expandir (/chat dentro de MainLayout, /saas/chat dentro de SaasMainLayout). */
+  rutaExpandir?: string;
+}
+
+const ChatWidget: React.FC<ChatWidgetProps> = ({ rutaExpandir = '/chat' }) => {
   const viewState = useChatStore((s) => s.viewState);
   const noLeidos = useChatStore((s) => s.noLeidos);
   const abrir = useChatStore((s) => s.abrir);
   const cerrar = useChatStore((s) => s.cerrar);
+  const abrirEnPagina = useChatStore((s) => s.abrirEnPagina);
   const seleccionarConversacion = useChatStore((s) => s.seleccionarConversacion);
   const volverALista = useChatStore((s) => s.volverALista);
+  const navigate = useNavigate();
   const widgetRef = useRef<HTMLDivElement>(null);
+
+  // Transfiere la vista a la pagina de chat conservando la conversacion activa
+  // (abrirEnPagina no limpia conversacionActiva ni abandona el grupo de SignalR).
+  // Al salir de la pagina, ChatPage llama volverAlWidget y el widget la recupera.
+  const handleExpandir = () => {
+    abrirEnPagina();
+    navigate(rutaExpandir);
+  };
 
   // --- Estado y refs para arrastre de la burbuja ---
   const [pos, setPos] = useState(() => {
@@ -165,11 +181,13 @@ const ChatWidget: React.FC = () => {
       {viewState === 'list' && (
         <ChatConversationList
           onSelectConversacion={seleccionarConversacion}
+          onExpand={handleExpandir}
         />
       )}
       {viewState === 'chat' && (
         <ChatMessages
           onBack={volverALista}
+          onExpand={handleExpandir}
         />
       )}
     </div>

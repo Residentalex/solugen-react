@@ -16,6 +16,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   HistoryOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -1068,6 +1069,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
           items={[
             {
               key: 'documentos',
+              icon: <FileTextOutlined />,
               label: `Documentos Asociados (${documentosAsociados.length})`,
               children: (
                 <>

@@ -20,10 +20,16 @@ import {
 import { useCarritoStore } from '../../../stores/useCarritoStore';
 import { useFavoritosStore } from '../../../stores/useFavoritosStore';
 import { useEcommerceAuthStore } from '../../../stores/ecommerceAuthStore';
+import { extraerMensajeError } from '../../../utils/formats';
 import CarritoDrawer from './CarritoDrawer';
 import FavoritosDrawer from './FavoritosDrawer';
 
-const StoreHeader: React.FC = () => {
+interface StoreHeaderProps {
+  /** Deshabilita el buscador mientras hay una consulta en vuelo */
+  buscarDisabled?: boolean;
+}
+
+const StoreHeader: React.FC<StoreHeaderProps> = ({ buscarDisabled = false }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const buscarActual = searchParams.get('buscar') || '';
@@ -40,11 +46,11 @@ const StoreHeader: React.FC = () => {
   const logout = useEcommerceAuthStore((state) => state.logout);
 
   useEffect(() => {
-    cargarCarrito().catch((err: any) => {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar el carrito');
+    cargarCarrito().catch((err: unknown) => {
+      message.error(extraerMensajeError(err, 'Error al cargar el carrito'));
     });
-    cargarFavoritos().catch((err: any) => {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar favoritos');
+    cargarFavoritos().catch((err: unknown) => {
+      message.error(extraerMensajeError(err, 'Error al cargar favoritos'));
     });
   }, [cargarCarrito, cargarFavoritos]);
 
@@ -127,6 +133,7 @@ const StoreHeader: React.FC = () => {
             allowClear
             defaultValue={buscarActual}
             onSearch={handleSearch}
+            disabled={buscarDisabled}
             prefix={<SearchOutlined className="paces-text-icon" />}
           />
         </div>

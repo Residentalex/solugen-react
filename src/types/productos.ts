@@ -124,6 +124,7 @@ export interface ProductoDTO {
   datosExtra?: DatosExtraProductoDTO | null;
   requiereFechaVenc?: boolean;
   diasVencimiento?: number;
+  codigoSuplidor?: string;
   modificaPrecio?: boolean;
   modificaDescripcion?: boolean;
   prodserv?: string;

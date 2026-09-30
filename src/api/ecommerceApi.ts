@@ -47,6 +47,23 @@ export interface CategoriaCatalogoDTO {
   totalProductos: number;
 }
 
+export interface CatalogoProductoDTO {
+  codigo: string;
+  nombre: string;
+  referencia: string;
+  precio: number;
+  precioOferta: number | null;
+  imagenUrl: string;
+  categoria: string;
+  familia: string;
+  unidadMedida: string;
+  activo: boolean;
+  porcentajeImpuesto: number | null;
+  marca: string;
+  existencia: number | null;
+  especificaciones: string;
+}
+
 export interface ProductosPaginadoDTO {
   items: CatalogoProductoDTO[];
   total: number;
@@ -255,13 +272,16 @@ const BASE = '/Ecommerce';
 
 export const ecommerceApi = {
   /** Obtener listado paginado de productos del catálogo */
-  obtenerProductos: async (params?: {
-    categoria?: string;
-    buscar?: string;
-    pagina?: number;
-    tamano?: number;
-  }): Promise<ProductosPaginadoDTO> => {
-    const { data } = await apiClient.get<ApiResponse<ProductosPaginadoDTO>>(`${BASE}/productos`, { params });
+  obtenerProductos: async (
+    params?: {
+      categoria?: string;
+      buscar?: string;
+      pagina?: number;
+      tamano?: number;
+    },
+    signal?: AbortSignal
+  ): Promise<ProductosPaginadoDTO> => {
+    const { data } = await apiClient.get<ApiResponse<ProductosPaginadoDTO>>(`${BASE}/productos`, { params, signal });
     return data.data;
   },
 

@@ -1,42 +1,13 @@
 import React from 'react';
 import { Menu } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { moduloApi } from '../api/moduloApi';
 import { useUIStore } from '../stores/uiStore';
 import type { MenuProps } from 'antd';
 import type { PantallaDTO, ModuloDTO } from '../types/auth';
-import {
-   BankOutlined,
-   ShoppingCartOutlined,
-   DashboardOutlined,
-   AppstoreOutlined,
-   ControlOutlined,
-   AuditOutlined,
-   ShopOutlined,
-   FileTextOutlined,
-   ExperimentOutlined,
-   InboxOutlined,
-   TeamOutlined,
-   WalletOutlined,
-   DollarOutlined,
- } from '@ant-design/icons';
-
-const ICONOS_MODULOS: Record<string, React.ReactNode> = {
-   Administracion: <ControlOutlined />,
-   Contabilidad: <AuditOutlined />,
-   Inventario: <InboxOutlined />,
-   Ventas: <ShopOutlined />,
-   Facturacion: <FileTextOutlined />,
-   Compras: <ShoppingCartOutlined />,
-   'Recursos Humanos': <TeamOutlined />,
-   'Cuentas por Pagar': <WalletOutlined />,
-   'Cuentas por Cobrar': <DollarOutlined />,
-   Bancos: <BankOutlined />,
-   Produccion: <ExperimentOutlined />,
-};
-
-const ICONO_DEFAULT = <AppstoreOutlined />;
+import { DashboardOutlined } from '@ant-design/icons';
+import { ICONOS_MODULOS, ICONO_DEFAULT } from '../utils/iconosModulo';
 
 interface ModuloConPantallas {
   modulo: ModuloDTO;
@@ -67,6 +38,7 @@ const Sidebar: React.FC = () => {
   }, [sucursalActiva]);
 
   const navigate = useNavigate();
+  const location = useLocation();
 
   const menuItems: MenuProps['items'] = React.useMemo(() => {
     const pantallas: PantallaDTO[] = usuario?.pantallas || [];
@@ -222,6 +194,54 @@ const makeKey = (codigo: string) => `${moduloNombre}__${codigo}`;
     return items;
   }, [usuario?.pantallas, modulosOcultosIds]);
 
+  // Key real del item activo (la pantalla, no el modulo) y cadena de submenus que la contiene
+  const selectedPath = React.useMemo<{ key: string; ancestors: string[] }>(() => {
+    const vacio = { key: '', ancestors: [] as string[] };
+    if (!menuItems?.length) return vacio;
+
+    // Reportes consolidados: la ruta es /Reportes/:modulo y el item es <modulo>__Reportes_<modulo>
+    const segmentos = location.pathname.split('/').filter(Boolean);
+    if (segmentos[0] === 'Reportes' && segmentos[1]) {
+      const moduloNombre = decodeURIComponent(segmentos[1]);
+      const itemReporte = menuItems.find(
+        (i: any) => i?.key === `${moduloNombre}__Reportes_${moduloNombre}`
+      );
+      if (itemReporte) return { key: itemReporte.key as string, ancestors: [itemReporte.key as string] };
+    }
+
+    if (!activeModule) return vacio;
+
+    const esActivo = (item: any) =>
+      !!item?.key && (item.key === activeModule || item.key.endsWith(`__${activeModule}`));
+
+    const recorrer = (
+      items: any[],
+      ancestors: string[]
+    ): { key: string; ancestors: string[] } | null => {
+      for (const item of items) {
+        if (!item) continue;
+        if (esActivo(item)) return { key: item.key as string, ancestors };
+        if (item.children?.length) {
+          const encontrado = recorrer(item.children, [...ancestors, item.key as string]);
+          if (encontrado) return encontrado;
+        }
+      }
+      return null;
+    };
+
+    return recorrer(menuItems, []) || vacio;
+  }, [menuItems, activeModule, location.pathname]);
+
+  // Mantener abiertos el modulo y el grupo de la pantalla activa
+  React.useEffect(() => {
+    const { key, ancestors } = selectedPath;
+    if (!key || ancestors.length === 0) return;
+    setOpenKeys((prev) => {
+      const igual = prev.length === ancestors.length && prev.every((k, i) => k === ancestors[i]);
+      return igual ? prev : ancestors;
+    });
+  }, [selectedPath]);
+
   const handleMenuClick = ({ key }: { key: string }) => {
     if (key.startsWith('_grupo_') || key.startsWith('submenu_')) return;
     const codigo = key.includes('__') ? key.split('__')[1] : key;
@@ -261,28 +281,7 @@ const makeKey = (codigo: string) => `${moduloNombre}__${codigo}`;
     <Menu
       mode="inline"
       theme="dark"
-      selectedKeys={
-        activeModule
-          ? (() => {
-              const found = menuItems?.find(
-                (item: any) =>
-                  item?.key === activeModule ||
-                  item?.key?.endsWith(`__${activeModule}`) ||
-                  item?.children?.some(
-                    (child: any) =>
-                      child?.key === activeModule ||
-                      child?.key?.endsWith(`__${activeModule}`) ||
-                      child?.children?.some(
-                        (sub: any) =>
-                          sub?.key === activeModule ||
-                          sub?.key?.endsWith(`__${activeModule}`)
-                      )
-                  )
-              );
-              return found ? [found.key as string] : [];
-            })()
-          : []
-      }
+      selectedKeys={selectedPath.key ? [selectedPath.key] : []}
       openKeys={openKeys}
       defaultOpenKeys={[]}
       style={{ borderRight: 0, fontSize: 13, background: 'transparent' }}

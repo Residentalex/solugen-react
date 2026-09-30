@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, message, Row, Col, Table, Statistic, Typography, Empty, Spin, Skeleton, theme } from 'antd';
+import { Card, Descriptions, Tag, message, Row, Col, Table, Statistic, Typography, Empty, Spin, Skeleton, theme, Breadcrumb } from 'antd';
 import { ArrowUpOutlined, ArrowDownOutlined, SwapOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
@@ -17,6 +17,16 @@ const ORIGEN_LABEL: Record<number, string> = {
   [OrigenCuenta.Debito]: 'Débito',
   [OrigenCuenta.Credito]: 'Crédito',
   [OrigenCuenta.Desconocido]: 'Desconocido',
+};
+
+const buildBreadcrumbPath = (cuenta: CuentaContableDTO | null): string[] => {
+  const path: string[] = [];
+  let current: CuentaContableDTO | null = cuenta;
+  while (current) {
+    path.unshift(current.noCuenta);
+    current = current.cuentaControl as CuentaContableDTO | null;
+  }
+  return path;
 };
 
 const CuentaContableDetalle: React.FC = () => {
@@ -83,8 +93,8 @@ const CuentaContableDetalle: React.FC = () => {
       );
       setMovimientos(result.data);
       setTotalMovimientos(result.total);
-    } catch {
-      message.error('Error al cargar movimientos');
+    } catch (error: any) {
+      message.error(error?.response?.data?.errorMessage || 'Error al cargar movimientos');
     } finally {
       setLoadingMovimientos(false);
     }
@@ -145,6 +155,16 @@ const CuentaContableDetalle: React.FC = () => {
       onRecargar={handleRefresh}
       dataDisponible={!!item}
       onEditar={() => navigate('/MCuentaContable', { state: { editarNoCuenta: noCuenta } })}
+      extraLeft={
+        <Breadcrumb>
+          <Breadcrumb.Item href="/MCuentaContable">Cuentas Contables</Breadcrumb.Item>
+          {buildBreadcrumbPath(item).map((code, idx) => (
+            <Breadcrumb.Item key={code} href={idx === buildBreadcrumbPath(item).length - 1 ? undefined : `/MCuentaContable/${code}`}>
+              {code}
+            </Breadcrumb.Item>
+          ))}
+        </Breadcrumb>
+      }
     >
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={8}>

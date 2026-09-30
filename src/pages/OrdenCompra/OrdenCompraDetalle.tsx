@@ -5,6 +5,7 @@ import {
   Drawer, Avatar, Skeleton, Empty,
 } from 'antd';
 import {
+  InboxOutlined,
   LockFilled,
   FileTextOutlined,
   FileSearchOutlined,
@@ -671,7 +672,7 @@ const OrdenCompraDetalle: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                   children: (
                     <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey={(r: any) => r.id || r.codigo} size="small" pagination={false} scroll={{ x: 1100 }} />
                   ),
@@ -768,7 +769,7 @@ const OrdenCompraDetalle: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                 children: (
                   <Table dataSource={detallesFiltrados} columns={detalleColumns} rowKey={(r: any) => r.id || r.codigo} size="small" pagination={false} scroll={{ x: 1100 }} />
                 ),

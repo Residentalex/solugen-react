@@ -9,6 +9,7 @@ import type { CrearTicketRequest } from '../types/ticket';
 import type { UsuarioDTO } from '../types/administracion';
 import type { CapturaPantalla } from '../utils/capturaPantalla';
 
+const { Text } = Typography;
 const { TextArea } = Input;
 
 interface Props {

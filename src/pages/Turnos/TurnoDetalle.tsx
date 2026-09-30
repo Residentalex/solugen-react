@@ -7,6 +7,7 @@ import {
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
+  InboxOutlined,
   ArrowLeftOutlined, ReloadOutlined, FilterOutlined, FilterFilled,
   DollarCircleOutlined, FileTextOutlined, SwapOutlined,
   CreditCardOutlined, CreditCardFilled, GiftOutlined,
@@ -40,11 +41,15 @@ interface DetalleTurnoFila {
   articulo?: string;
   referencia?: string;
   cantidad?: number | string;
+  precio?: number | string;
   subTotal?: number | string;
+  porcentajeDescuento?: number | string;
   descuento?: number | string;
   impuestos?: number | string;
   total?: number | string;
   impuesto?: { nombre?: string };
+  familia?: { nombre?: string };
+  medida?: { nombre?: string; factor?: number | string };
 }
 
 const aNumero = (v: unknown): number => {
@@ -346,25 +351,34 @@ const [costosSearch, setCostosSearch] = useState('');
     const articulosColumns = [
       {
         title: 'Código',
-        dataIndex: 'codigo',
         key: 'codigo',
         width: 120,
         fixed: 'left' as const,
+        onCell: () => ({ style: { verticalAlign: 'top' } }),
         render: (_: any, record: any) => (
-          <div style={{ fontSize: 14, fontWeight: 500 }}>{record.codigo || '-'}</div>
+          <div style={{ fontSize: 13 }}>
+            <div>{record.codigo || '-'}</div>
+            {record.referencia && (
+              <Tooltip title={record.referencia}>
+                <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                  {record.referencia}
+                </div>
+              </Tooltip>
+            )}
+          </div>
         ),
       },
       {
         title: 'Artículo',
-        dataIndex: 'articulo',
         key: 'articulo',
         ellipsis: true,
+        onCell: () => ({ style: { verticalAlign: 'top' } }),
         render: (_: any, record: any) => (
-          <div style={{ fontSize: 14 }}>
-            <div>{toTitleCase(String(record.articulo ?? ''))}</div>
-            {record.familia?.nombre && (
-              <Tag style={{ fontSize: 11 }}>{toTitleCase(record.familia.nombre)}</Tag>
-            )}
+          <div style={{ fontSize: 13 }}>
+            <div>{toTitleCase(record.articulo || '')}</div>
+            <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, display: 'flex', justifyContent: 'space-between' }}>
+              {record.familia?.nombre ? <Tag style={{ fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{toTitleCase(record.familia.nombre)}</Tag> : null}
+            </div>
           </div>
         ),
       },
@@ -372,10 +386,20 @@ const [costosSearch, setCostosSearch] = useState('');
         title: 'Cantidad',
         dataIndex: 'cantidad',
         key: 'cantidad',
-        width: 100,
+        width: 120,
         align: 'right' as const,
+        onCell: () => ({ style: { verticalAlign: 'top' } }),
         render: (_: any, record: any) => (
-          <div style={{ fontSize: 14 }}>{formatNumber(record.cantidad || 0)}</div>
+          <div>
+            <div>{formatNumber(record.cantidad || 0)}</div>
+            {record.medida?.nombre && (
+              <Tooltip title={record.medida.nombre}>
+                <div className="paces-text-secondary" style={{ fontSize: 11, lineHeight: 1.5, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {record.medida.nombre}
+                </div>
+              </Tooltip>
+            )}
+          </div>
         ),
       },
       {
@@ -384,18 +408,86 @@ const [costosSearch, setCostosSearch] = useState('');
         key: 'precio',
         width: 130,
         align: 'right' as const,
+        onCell: () => ({ style: { verticalAlign: 'top' } }),
+        responsive: ['md' as const, 'lg' as const, 'xl' as const, 'xxl' as const],
+        render: (_: any, record: any) => {
+          const pctDesc = Number(record.porcentajeDescuento) || 0;
+          const factor = Number(record.medida?.factor) || 1;
+          const precioBase = Number(record.precio) || 0;
+          const precioConDescuento = precioBase - ((precioBase * pctDesc) / 100);
+          const precioUnitario = precioConDescuento / factor;
+          return (
+            <div>
+              <div>{formatNumber(precioBase)}</div>
+              <div style={{ fontSize: 11, lineHeight: 1.5, color: '#999' }}>
+                {formatNumber(precioUnitario)} × {factor}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        title: 'Descuento',
+        key: 'descuento',
+        width: 120,
+        align: 'right' as const,
+        onCell: () => ({ style: { verticalAlign: 'top' } }),
+        responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
         render: (_: any, record: any) => (
-          <div style={{ fontFamily: 'monospace', fontSize: 14 }}>{formatCurrency(record.precio || 0)}</div>
+          <div>
+            <div>{formatNumber(record.descuento || 0)}</div>
+            <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+          </div>
         ),
       },
       {
-        title: 'Subtotal',
+        title: 'SubTotal',
+        dataIndex: 'subTotal',
+        key: 'subTotal',
+        width: 120,
+        align: 'right' as const,
+        onCell: () => ({ style: { verticalAlign: 'top' } }),
+        responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
+        render: (_: any, record: any) => (
+          <div>
+            <div>{formatNumber(record.subTotal || 0)}</div>
+            <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+          </div>
+        ),
+      },
+      {
+        title: 'Impuestos',
+        key: 'impuestos',
+        width: 140,
+        align: 'right' as const,
+        onCell: () => ({ style: { verticalAlign: 'top' } }),
+        responsive: ['lg' as const, 'xl' as const, 'xxl' as const],
+        render: (_: any, record: any) => (
+          <div>
+            <div>{formatNumber(record.impuestos || 0)}</div>
+            {record.impuesto?.nombre && (
+              <Tooltip title={record.impuesto.nombre}>
+                <div className="paces-text-secondary" style={{ fontSize: 12, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {toTitleCase(record.impuesto.nombre)}
+                </div>
+              </Tooltip>
+            )}
+          </div>
+        ),
+      },
+      {
+        title: 'Total',
         dataIndex: 'total',
         key: 'total',
-        width: 130,
+        width: 120,
         align: 'right' as const,
+        onCell: () => ({ style: { verticalAlign: 'top', paddingRight: 16 } }),
+        onHeaderCell: () => ({ style: { paddingRight: 16 } }),
         render: (_: any, record: any) => (
-          <div style={{ fontSize: 14 }}>{formatNumber(record.total || 0)}</div>
+          <div>
+            <Text strong>{formatNumber(record.total || 0)}</Text>
+            <div style={{ fontSize: 11, lineHeight: 1.5 }}>&nbsp;</div>
+          </div>
         ),
       },
     ];
@@ -1477,7 +1569,7 @@ const tabsItems = [
      },
      {
        key: 'articulos',
-       label: `Artículos (${detalles.length})`,
+       icon: <InboxOutlined />, label: `Productos/Servicios (${detalles.length})`,
        children: (
          <div>
            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -1498,9 +1590,9 @@ const tabsItems = [
              columns={articulosColumns}
              rowKey={(record: any) => `${record.codigo}-${record.id || record.facturaID || ''}`}
              size="middle"
-             pagination={{ pageSize: 25, showSizeChanger: false, showTotal: (t: number) => `${t} registros` }}
-             scroll={{ x: 1100 }}
-             locale={{ emptyText: 'Sin artículos registrados' }}
+              pagination={{ pageSize: 25, showSizeChanger: false, showTotal: (t: number) => `${t} registros` }}
+              scroll={{ x: 1100 }}
+              locale={{ emptyText: 'Sin artículos registrados' }}
            />
          </div>
        ),

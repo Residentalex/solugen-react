@@ -34,6 +34,10 @@ function mostrarNotificacionChat(remitenteNombre: string, contenido: string, con
 
 type ViewState = 'closed' | 'list' | 'chat';
 
+// Conexion SignalR en curso. Evita que varios consumidores de conectarSignalR
+// (MainLayout y SaasMainLayout montan ChatInitializer) abran conexiones paralelas.
+let conexionEnCurso: Promise<void> | null = null;
+
 interface ChatState {
   viewState: ViewState;
   conversaciones: ChatConversacionListDTO[];
@@ -46,6 +50,8 @@ interface ChatState {
   respondiendoA: { id: number; contenido: string; remitente: string } | null;
 
   abrir: () => void;
+  abrirEnPagina: () => void;
+  volverAlWidget: () => void;
   cerrar: () => void;
   seleccionarConversacion: (id: number) => Promise<void>;
   volverALista: () => void;
@@ -77,6 +83,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
       Notification.requestPermission();
     }
     set({ viewState: 'list' });
+    get().cargarConversaciones();
+  },
+
+  /**
+   * Transfiere el chat del widget flotante a la pagina /chat conservando la
+   * conversacion activa y la suscripcion al grupo de SignalR. No usar `cerrar()`
+   * para esto: `cerrar()` limpia `conversacionActiva` y abandona el grupo.
+   */
+  abrirEnPagina: () => {
+    if (get().conversacionActiva) {
+      set({ viewState: 'chat' });
+    }
+    get().cargarConversaciones();
+  },
+
+  /**
+   * Devuelve el chat al widget flotante al salir de la pagina /chat o /saas/chat,
+   * conservando la conversacion activa y el grupo de SignalR: el widget debe
+   * reaparecer mostrando la conversacion que el usuario estaba viendo.
+   */
+  volverAlWidget: () => {
+    set({ viewState: get().conversacionActiva ? 'chat' : 'list' });
     get().cargarConversaciones();
   },
 
@@ -170,31 +198,43 @@ export const useChatStore = create<ChatState>((set, get) => ({
   conectarSignalR: async () => {
     const usuarioID = useAuthStore.getState().usuario?.id;
     if (!usuarioID) return;
+    // Idempotente: si ya hay conexion activa o en curso, no abrir otra.
+    if (get().conectado) return;
+    if (conexionEnCurso) return conexionEnCurso;
 
-    const conectarConReintento = async (intentos = 5): Promise<void> => {
-      for (let i = 0; i < intentos; i++) {
-        try {
-          await chatHub.connect(usuarioID);
-          chatHub.onMensajeRecibido((mensaje) => {
-            get().agregarMensajeTiempoReal(mensaje);
-          });
-          chatHub.onMensajesLeidos((data) => {
-            get().marcarMensajesLeidos(data.conversacionId);
-          });
-          set({ conectado: true });
-          return;
-        } catch (err) {
-          console.warn(`[SignalR Chat] Intento ${i + 1}/${intentos} fallido:`, err);
-          if (i < intentos - 1) await new Promise((r) => setTimeout(r, 5000));
+    conexionEnCurso = (async () => {
+      const conectarConReintento = async (intentos = 5): Promise<void> => {
+        for (let i = 0; i < intentos; i++) {
+          try {
+            await chatHub.connect(usuarioID);
+            chatHub.onMensajeRecibido((mensaje) => {
+              get().agregarMensajeTiempoReal(mensaje);
+            });
+            chatHub.onMensajesLeidos((data) => {
+              get().marcarMensajesLeidos(data.conversacionId);
+            });
+            set({ conectado: true });
+            return;
+          } catch (err) {
+            console.warn(`[SignalR Chat] Intento ${i + 1}/${intentos} fallido:`, err);
+            if (i < intentos - 1) await new Promise((r) => setTimeout(r, 5000));
+          }
         }
-      }
-      console.error('[SignalR Chat] No se pudo conectar después de varios intentos');
-    };
+        console.error('[SignalR Chat] No se pudo conectar después de varios intentos');
+      };
 
-    await conectarConReintento();
+      await conectarConReintento();
+    })();
+
+    try {
+      await conexionEnCurso;
+    } finally {
+      conexionEnCurso = null;
+    }
   },
 
   desconectarSignalR: () => {
+    conexionEnCurso = null;
     chatHub.disconnect();
     set({ conectado: false });
   },

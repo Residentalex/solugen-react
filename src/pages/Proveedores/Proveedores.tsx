@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Table, Card, Button, Typography, Space, Alert, Empty } from 'antd';
+import { Table, Card, Button, Typography, Space, Alert, Empty, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '../../stores/authStore';
@@ -89,6 +89,7 @@ const Proveedores: React.FC = () => {
       key: 'codigo',
       width: 120,
       fixed: 'left',
+      responsive: ['xs'],
       render: (val: string, record: SuplidorDTO) => (
         <Link to={`/MSUP/${record.codigo}`} className="paces-doc-link">
           <Text strong>{val}</Text>
@@ -100,6 +101,7 @@ const Proveedores: React.FC = () => {
       dataIndex: 'nombre',
       key: 'nombre',
       width: 300,
+      responsive: ['xs'],
       render: (name: string) => (
         <Space>
           <div className="paces-avatar-initials">{(name || '?').charAt(0).toUpperCase()}</div>
@@ -112,6 +114,7 @@ const Proveedores: React.FC = () => {
       dataIndex: 'identificacion',
       key: 'identificacion',
       width: 160,
+      responsive: ['sm'],
       render: (val: string) => <Text>{val || '-'}</Text>,
     },
     {
@@ -119,6 +122,7 @@ const Proveedores: React.FC = () => {
       dataIndex: 'telefono',
       key: 'telefono',
       width: 140,
+      responsive: ['md'],
       render: (val: string) => <Text>{val || '-'}</Text>,
     },
     {
@@ -126,6 +130,7 @@ const Proveedores: React.FC = () => {
       dataIndex: 'diasCredito',
       key: 'diasCredito',
       width: 120,
+      responsive: ['lg'],
       align: 'right',
       render: (val: number) => <Text>{val ?? '-'}</Text>,
     },
@@ -134,8 +139,20 @@ const Proveedores: React.FC = () => {
       dataIndex: 'requiereORC',
       key: 'requiereORC',
       width: 130,
+      responsive: ['xl'],
       align: 'center',
       render: (val: boolean) => <Text>{val ? 'Sí' : 'No'}</Text>,
+    },
+    {
+      title: 'Estado',
+      dataIndex: 'activo',
+      key: 'activo',
+      width: 90,
+      responsive: ['xs'],
+      align: 'center',
+      render: (val: boolean | undefined) => (
+        <Tag color={val ? 'green' : 'default'}>{val ? 'Activo' : 'Inactivo'}</Tag>
+      ),
     },
   ];
 
@@ -172,9 +189,9 @@ const Proveedores: React.FC = () => {
           dataSource={data || []}
           rowKey="codigo"
           loading={isLoading}
-          scroll={{ x: 1100 }}
+          scroll={{ x: 800 }}
           size="middle"
-          rowClassName="paces-row-hover"
+          rowClassName={(record) => record.activo ? 'paces-row-active' : 'paces-row-inactive'}
           onChange={handleTableChange}
           pagination={{
             current: page,
@@ -188,9 +205,8 @@ const Proveedores: React.FC = () => {
               <Empty description="No hay proveedores registrados" />
             </div>,
           }}
-          className="paces-border-top paces-list-table"
-        />
-      </Card>
+          />
+          </Card>
     </>
   );
 };

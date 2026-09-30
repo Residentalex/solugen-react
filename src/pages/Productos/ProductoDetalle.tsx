@@ -11,6 +11,7 @@ import type { TipoImpuesto, AmbitoImpuesto } from '../../types/contabilidad';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import { formatCurrency } from '../../utils/formats';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
+import { FileTextOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
 
@@ -128,6 +129,7 @@ const ProductoDetalle: React.FC = () => {
   const tabItems = [
     {
       key: 'impuestos',
+      icon: <FileTextOutlined />,
       label: `Impuestos (${data.impuestos?.length || 0})`,
       children: data.impuestos && data.impuestos.length > 0 ? (
         <Table

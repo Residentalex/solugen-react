@@ -8,6 +8,7 @@ import dayjs from 'dayjs';
 import ColumnVisibilityToggle from '../../components/ColumnVisibilityToggle';
 import type { ColumnConfig } from '../../components/ColumnVisibilityToggle';
 import {
+  InboxOutlined,
   LockFilled,
   IdcardOutlined,
   PhoneOutlined,
@@ -892,7 +893,7 @@ const DevolucionVentaDetalle: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                       <div style={{ minHeight: 220 }}>
@@ -1136,7 +1137,7 @@ const DevolucionVentaDetalle: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${data.detalles?.length || 0}` : ''})`,
                 children: (
                   <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                     <div style={{ minHeight: 220 }}>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, Table, Button, Tag, Typography, Alert, Empty, Space, Popconfirm, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -29,6 +29,8 @@ const Denominaciones: React.FC = () => {
   const [formularioVisible, setFormularioVisible] = useState(false);
   const [editItem, setEditItem] = useState<DenominacionDTO | null>(null);
   const [eliminandoId, setEliminandoId] = useState<number | null>(null);
+  const eliminandoRef = useRef(false);
+  const bloqueado = eliminandoId !== null;
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['denominaciones', sucursalActiva],
@@ -62,6 +64,7 @@ const Denominaciones: React.FC = () => {
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleExportarExcel = async () => {
+    if (eliminandoRef.current) return;
     const companyName = await getCompanyName(sucursalActiva);
     const dataSource = datosFiltrados;
     const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
@@ -90,12 +93,14 @@ const Denominaciones: React.FC = () => {
   };
 
   const abrirNuevo = () => {
+    if (bloqueado || eliminandoRef.current) return;
     setEditItem(null);
     setFormularioVisible(true);
   };
 
   const abrirEditar = (item: DenominacionDTO) => {
     if (!puedeEditar) return;
+    if (bloqueado || eliminandoRef.current) return;
     setEditItem(item);
     setFormularioVisible(true);
   };
@@ -104,7 +109,14 @@ const Denominaciones: React.FC = () => {
     refetch();
   };
 
+  const handleReload = () => {
+    if (bloqueado || eliminandoRef.current) return;
+    refetch();
+  };
+
   const handleEliminar = async (id: number) => {
+    if (eliminandoRef.current || bloqueado) return;
+    eliminandoRef.current = true;
     setEliminandoId(id);
     try {
       await denominacionApi.eliminar(sucursalActiva, id);
@@ -113,6 +125,7 @@ const Denominaciones: React.FC = () => {
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al eliminar denominación');
     } finally {
+      eliminandoRef.current = false;
       setEliminandoId(null);
     }
   };
@@ -130,6 +143,7 @@ const Denominaciones: React.FC = () => {
             type="link"
             size="small"
             style={{ padding: 0, fontWeight: 500, height: 'auto' }}
+            disabled={bloqueado}
             onClick={() => abrirEditar(record)}
           >
             {toTitleCase(val)}
@@ -195,6 +209,7 @@ const Denominaciones: React.FC = () => {
             okText="Eliminar"
             cancelText="Cancelar"
             okButtonProps={{ danger: true }}
+            disabled={bloqueado}
           >
             <Button
               type="text"
@@ -202,6 +217,7 @@ const Denominaciones: React.FC = () => {
               danger
               icon={<DeleteOutlined />}
               loading={eliminandoId === record.id}
+              disabled={bloqueado && eliminandoId !== record.id}
             />
           </Popconfirm>
         </Space>
@@ -218,7 +234,7 @@ const Denominaciones: React.FC = () => {
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={() => refetch()}>
+            <Button size="small" onClick={handleReload} disabled={bloqueado}>
               Reintentar
             </Button>
           }
@@ -235,8 +251,9 @@ const Denominaciones: React.FC = () => {
           pageSize={pageSize}
           onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
           onNuevo={abrirNuevo}
-          onReload={() => refetch()}
+          onReload={handleReload}
           onExportarExcel={handleExportarExcel}
+          deshabilitado={bloqueado}
         />
         <Table<DenominacionDTO>
           columns={columns}

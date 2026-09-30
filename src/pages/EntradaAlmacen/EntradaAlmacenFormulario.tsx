@@ -5,6 +5,7 @@ import {
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Divider, Alert, Badge, Empty, Tooltip,
 } from 'antd';
 import {
+  InboxOutlined,
   DeleteOutlined,
   PlusOutlined,
   SearchOutlined,
@@ -53,7 +54,7 @@ import TotalesCard from '../../components/TotalesCard';
 import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
+import { DragHandle, SortableRow } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
@@ -312,6 +313,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   ) ?? false;
   const [generandoAsientos, setGenerandoAsientos] = useState(false);
   const [asientosLocales, setAsientosLocales] = useState<any[]>([]);
+  const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
   const [asientosModificados, setAsientosModificados] = useState(false);
 
   // ===== Cargar datos de apoyo al montar =====
@@ -1220,6 +1222,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
   const handleGenerarAsientos = async () => {
     if (sucursalActiva === undefined) return;
     setGenerandoAsientos(true);
+    setErrorGeneracion(null);
     try {
       const dto = construirDTO();
       const asientosGenerados = await transaccionApi.generarAsientos(sucursalActiva, dto);
@@ -1227,7 +1230,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
       message.success(`Se generaron ${asientosGenerados.length} asientos`);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al generar asientos');
-      message.error(msg);
+      setErrorGeneracion(msg);
     } finally {
       setGenerandoAsientos(false);
     }
@@ -2161,6 +2164,18 @@ const EntradaAlmacenFormulario: React.FC = () => {
         />
       )}
 
+      {errorGeneracion && (
+        <Alert
+          message="Error al generar asientos"
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          description={errorGeneracion}
+          closable
+          onClose={() => setErrorGeneracion(null)}
+        />
+      )}
+
       <BuscarConceptoModal
         open={conceptoModalOpen}
         onClose={() => setConceptoModalOpen(false)}
@@ -2286,7 +2301,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                   children: (
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
@@ -2529,7 +2544,7 @@ const EntradaAlmacenFormulario: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                 children: (
                   <>
                     <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>

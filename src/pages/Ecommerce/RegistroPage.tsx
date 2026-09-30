@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, Divider, message } from 'antd';
 import { ArrowLeftOutlined, UserAddOutlined } from '@ant-design/icons';
@@ -12,6 +12,12 @@ const RegistroPage: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const registro = useEcommerceAuthStore((s) => s.registro);
+  const envioRef = useRef(false);
+
+  const navegarSiLibre = (destino: string) => {
+    if (envioRef.current) return;
+    navigate(destino);
+  };
 
   const handleSubmit = async (values: {
     nombre: string;
@@ -30,6 +36,8 @@ const RegistroPage: React.FC = () => {
       return;
     }
 
+    if (envioRef.current) return;
+    envioRef.current = true;
     setLoading(true);
     try {
       await registro({
@@ -45,6 +53,7 @@ const RegistroPage: React.FC = () => {
       const msg = err?.response?.data?.errorMessage || 'Error al crear la cuenta';
       message.error(msg);
     } finally {
+      envioRef.current = false;
       setLoading(false);
     }
   };
@@ -53,7 +62,7 @@ const RegistroPage: React.FC = () => {
     <div className="store-auth-page">
       <div className="store-auth-container">
         <Card className="store-auth-card" bordered={false}>
-          <div className="store-auth-logo" onClick={() => navigate('/store')}>
+          <div className="store-auth-logo" onClick={() => navegarSiLibre('/store')}>
             <div className="genesis-logo-box" style={{ width: 48, height: 48, borderRadius: 12, fontSize: 24 }}>
               G
             </div>
@@ -75,6 +84,7 @@ const RegistroPage: React.FC = () => {
             size="large"
             onFinish={handleSubmit}
             autoComplete="off"
+            disabled={loading}
           >
             <Form.Item
               label="Nombre completo"
@@ -148,6 +158,7 @@ const RegistroPage: React.FC = () => {
                 size="large"
                 icon={<UserAddOutlined />}
                 loading={loading}
+                disabled={loading}
               >
                 Crear Cuenta
               </Button>
@@ -162,7 +173,15 @@ const RegistroPage: React.FC = () => {
 
           <div style={{ textAlign: 'center' }}>
             <Text type="secondary">¿Ya tienes cuenta? </Text>
-            <Link to="/store/login" style={{ fontWeight: 600 }}>
+            <Link
+              to="/store/login"
+              onClick={(e) => { if (envioRef.current) e.preventDefault(); }}
+              style={{
+                fontWeight: 600,
+                pointerEvents: loading ? 'none' : 'auto',
+                opacity: loading ? 0.5 : 1,
+              }}
+            >
               Iniciar sesión
             </Link>
           </div>
@@ -172,7 +191,8 @@ const RegistroPage: React.FC = () => {
           <Button
             type="link"
             icon={<ArrowLeftOutlined />}
-            onClick={() => navigate('/store')}
+            onClick={() => navegarSiLibre('/store')}
+            disabled={loading}
             style={{ color: 'var(--paces-text-secondary)' }}
           >
             Volver a la tienda

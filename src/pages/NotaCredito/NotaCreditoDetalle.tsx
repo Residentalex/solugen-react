@@ -5,6 +5,7 @@ import {
 } from 'antd';
 import type { MenuProps } from 'antd';
 import {
+  InboxOutlined,
   ExclamationCircleOutlined,
   LockFilled,
   IdcardOutlined, PhoneOutlined, EnvironmentOutlined,
@@ -818,6 +819,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
               items={[
                 {
                   key: 'documentos',
+                  icon: <FileTextOutlined />,
                   label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('relacionados')} tip="Cargando documentos...">
@@ -833,6 +835,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                 },
                 {
                   key: 'impuestos',
+                  icon: <FileTextOutlined />,
                   label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('impuestos')} tip="Cargando impuestos...">
@@ -844,7 +847,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                 },
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detalles?.length || 0}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detalles?.length || 0}` : ''})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                       <div style={{ minHeight: 220 }}>
@@ -961,6 +964,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
               items={[
                 {
                   key: 'documentos',
+                  icon: <FileTextOutlined />,
                   label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('relacionados')} tip="Cargando documentos...">
@@ -976,6 +980,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                 },
                 {
                   key: 'impuestos',
+                  icon: <FileTextOutlined />,
                   label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('impuestos')} tip="Cargando impuestos...">
@@ -987,7 +992,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                 },
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detalles?.length || 0}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo?.detalles?.length || 0}` : ''})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                       <div style={{ minHeight: 220 }}>

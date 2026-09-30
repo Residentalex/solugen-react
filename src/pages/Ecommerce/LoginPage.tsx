@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Form, Input, Button, Card, Typography, Divider, message } from 'antd';
-import { ShoppingOutlined, ArrowLeftOutlined, LoginOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, LoginOutlined } from '@ant-design/icons';
 import { useEcommerceAuthStore } from '../../stores/ecommerceAuthStore';
 
 const { Title, Text } = Typography;
@@ -11,8 +11,16 @@ const LoginPage: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const login = useEcommerceAuthStore((s) => s.login);
+  const envioRef = useRef(false);
+
+  const navegarSiLibre = (destino: string) => {
+    if (envioRef.current) return;
+    navigate(destino);
+  };
 
   const handleSubmit = async (values: { email: string; password: string }) => {
+    if (envioRef.current) return;
+    envioRef.current = true;
     setLoading(true);
     try {
       await login(values.email, values.password);
@@ -24,6 +32,7 @@ const LoginPage: React.FC = () => {
       const msg = err?.response?.data?.errorMessage || 'Error al iniciar sesión';
       message.error(msg);
     } finally {
+      envioRef.current = false;
       setLoading(false);
     }
   };
@@ -32,7 +41,7 @@ const LoginPage: React.FC = () => {
     <div className="store-auth-page">
       <div className="store-auth-container">
         <Card className="store-auth-card" bordered={false}>
-          <div className="store-auth-logo" onClick={() => navigate('/store')}>
+          <div className="store-auth-logo" onClick={() => navegarSiLibre('/store')}>
             <div className="genesis-logo-box" style={{ width: 48, height: 48, borderRadius: 12, fontSize: 24 }}>
               G
             </div>
@@ -53,7 +62,7 @@ const LoginPage: React.FC = () => {
             layout="vertical"
             size="large"
             onFinish={handleSubmit}
-            autoComplete="off"
+            disabled={loading}
           >
             <Form.Item
               label="Email"
@@ -63,7 +72,7 @@ const LoginPage: React.FC = () => {
                 { type: 'email', message: 'Ingresa un email válido' },
               ]}
             >
-              <Input placeholder="ejemplo@correo.com" />
+              <Input placeholder="ejemplo@correo.com" autoComplete="email" />
             </Form.Item>
 
             <Form.Item
@@ -71,7 +80,7 @@ const LoginPage: React.FC = () => {
               name="password"
               rules={[{ required: true, message: 'La contraseña es obligatoria' }]}
             >
-              <Input.Password placeholder="Tu contraseña" />
+              <Input.Password placeholder="Tu contraseña" autoComplete="current-password" />
             </Form.Item>
 
             <Form.Item style={{ marginBottom: 0, marginTop: 8 }}>
@@ -82,6 +91,7 @@ const LoginPage: React.FC = () => {
                 size="large"
                 icon={<LoginOutlined />}
                 loading={loading}
+                disabled={loading}
               >
                 Iniciar Sesión
               </Button>
@@ -96,7 +106,15 @@ const LoginPage: React.FC = () => {
 
           <div style={{ textAlign: 'center' }}>
             <Text type="secondary">¿No tienes cuenta? </Text>
-            <Link to="/store/registro" style={{ fontWeight: 600 }}>
+            <Link
+              to="/store/registro"
+              onClick={(e) => { if (envioRef.current) e.preventDefault(); }}
+              style={{
+                fontWeight: 600,
+                pointerEvents: loading ? 'none' : 'auto',
+                opacity: loading ? 0.5 : 1,
+              }}
+            >
               Crear cuenta
             </Link>
           </div>
@@ -106,7 +124,8 @@ const LoginPage: React.FC = () => {
           <Button
             type="link"
             icon={<ArrowLeftOutlined />}
-            onClick={() => navigate('/store')}
+            onClick={() => navegarSiLibre('/store')}
+            disabled={loading}
             style={{ color: 'var(--paces-text-secondary)' }}
           >
             Volver a la tienda

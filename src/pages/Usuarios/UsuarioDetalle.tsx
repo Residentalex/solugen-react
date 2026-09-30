@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { authApi } from '../../api/authApi';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Spin, Button, Space, message, Modal, Alert, Tabs, Typography, Table } from 'antd';
-import { ArrowLeftOutlined, KeyOutlined, StopOutlined, CheckCircleOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { Card, Descriptions, Tag, Spin, Button, Space, message, Modal, Alert, Tabs, Typography, Table, Input, Grid } from 'antd';
+import { ArrowLeftOutlined, KeyOutlined, StopOutlined, CheckCircleOutlined, EditOutlined, PlusOutlined, CopyOutlined, CheckOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { Sucursal } from '../../types/auth';
@@ -122,10 +122,14 @@ const UsuarioDetalle: React.FC = () => {
   const [cargandoPantallas, setCargandoPantallas] = useState(false);
   const [reseteandoClave, setReseteandoClave] = useState(false);
   const [cambiandoEstado, setCambiandoEstado] = useState(false);
+  const [copiado, setCopiado] = useState(false);
+  const [claveReseteada, setClaveReseteada] = useState<string | null>(null);
   const securitySucursal = useAuthStore((s) => s.securitySucursal);
+  const screens = Grid.useBreakpoint();
 
   const ocupado = reseteandoClave || cambiandoEstado;
   const operacionRef = useRef(false);
+  const copiadoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const intentarTomarLock = () => {
     if (operacionRef.current) return false;
@@ -149,6 +153,13 @@ const UsuarioDetalle: React.FC = () => {
       .catch((err) => {
         message.error(err?.response?.data?.errorMessage || 'Error al cargar sucursales');
       });
+  }, []);
+
+  /* limpia el timer del estado "copiado" al desmontar el componente */
+  useEffect(() => {
+    return () => {
+      if (copiadoTimerRef.current) clearTimeout(copiadoTimerRef.current);
+    };
   }, []);
 
   /* ─── carga de datos del usuario ─── */
@@ -240,10 +251,7 @@ const UsuarioDetalle: React.FC = () => {
     setReseteandoClave(true);
     try {
       const nuevaClave = await usuarioApi.resetearPassword(securitySucursal, data.id);
-      Modal.success({
-        title: 'Contraseña reseteada',
-        content: `La nueva contraseña temporal es: ${nuevaClave}`,
-      });
+      setClaveReseteada(nuevaClave);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al resetear contraseña');
     } finally {
@@ -269,6 +277,27 @@ const UsuarioDetalle: React.FC = () => {
       setCambiandoEstado(false);
     }
   }, [data, securitySucursal, ocupado]);
+
+  const handleCopiarClave = () => {
+    if (!claveReseteada) return;
+    navigator.clipboard
+      .writeText(claveReseteada)
+      .then(() => {
+        setCopiado(true);
+        message.success('Contraseña copiada al portapapeles');
+        if (copiadoTimerRef.current) clearTimeout(copiadoTimerRef.current);
+        copiadoTimerRef.current = setTimeout(() => setCopiado(false), 1000);
+      })
+      .catch(() => {
+        message.error('No se pudo copiar la contraseña al portapapeles');
+      });
+  };
+
+  const cerrarModalClave = () => {
+    if (copiadoTimerRef.current) clearTimeout(copiadoTimerRef.current);
+    setCopiado(false);
+    setClaveReseteada(null);
+  };
 
   /* ─── render: Informacion General ─── */
   const renderInfoGeneral = () => {
@@ -398,22 +427,42 @@ const UsuarioDetalle: React.FC = () => {
             </div>
           </div>
 
-          <Space>
-            <Button icon={<EditOutlined />} disabled={ocupado} onClick={() => {
-              if (operacionRef.current || ocupado) return;
-              navigate(`/MUsuario/${data.id}/editar`);
-            }}>Editar</Button>
-            <Button icon={<KeyOutlined />} loading={reseteandoClave} disabled={ocupado} onClick={handleResetPassword}>Resetear contraseña</Button>
-            <Button
-              icon={data.activo ? <StopOutlined /> : <CheckCircleOutlined />}
-              loading={cambiandoEstado}
-              disabled={ocupado}
-              onClick={handleToggleEstado}
-              danger={data.activo}
-            >
-              {data.activo ? 'Desactivar' : 'Activar'}
-            </Button>
-          </Space>
+          {screens.xs ? (
+            <Space direction="vertical" style={{ width: '100%', marginTop: 16 }}>
+              <Button block icon={<EditOutlined />} disabled={ocupado} onClick={() => {
+                if (operacionRef.current || ocupado) return;
+                navigate(`/MUsuario/${data.id}/editar`);
+              }}>Editar</Button>
+              <Button block icon={<KeyOutlined />} loading={reseteandoClave} disabled={ocupado} onClick={handleResetPassword}>Resetear contraseña</Button>
+              <Button
+                block
+                icon={data.activo ? <StopOutlined /> : <CheckCircleOutlined />}
+                loading={cambiandoEstado}
+                disabled={ocupado}
+                onClick={handleToggleEstado}
+                danger={data.activo}
+              >
+                {data.activo ? 'Desactivar' : 'Activar'}
+              </Button>
+            </Space>
+          ) : (
+            <Space wrap>
+              <Button icon={<EditOutlined />} disabled={ocupado} onClick={() => {
+                if (operacionRef.current || ocupado) return;
+                navigate(`/MUsuario/${data.id}/editar`);
+              }}>Editar</Button>
+              <Button icon={<KeyOutlined />} loading={reseteandoClave} disabled={ocupado} onClick={handleResetPassword}>Resetear contraseña</Button>
+              <Button
+                icon={data.activo ? <StopOutlined /> : <CheckCircleOutlined />}
+                loading={cambiandoEstado}
+                disabled={ocupado}
+                onClick={handleToggleEstado}
+                danger={data.activo}
+              >
+                {data.activo ? 'Desactivar' : 'Activar'}
+              </Button>
+            </Space>
+          )}
         </div>
       </Card>
 
@@ -434,6 +483,41 @@ const UsuarioDetalle: React.FC = () => {
           },
         ]}
       />
+
+      <Modal
+        title="Contraseña reseteada"
+        open={claveReseteada !== null}
+        onCancel={cerrarModalClave}
+        closable
+        maskClosable
+        keyboard
+        footer={[
+          <Button key="cerrar" type="primary" onClick={cerrarModalClave}>Cerrar</Button>,
+        ]}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Input
+            style={{
+              width: '100%',
+              backgroundColor: '#f5f5f5',
+              border: '1px solid #d9d9d9',
+              fontFamily: 'monospace',
+              fontSize: 14,
+              color: '#333'
+            }}
+            readOnly
+            value={claveReseteada ?? ''}
+          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              icon={copiado ? <CheckOutlined /> : <CopyOutlined />}
+              onClick={handleCopiarClave}
+            >
+              {copiado ? 'Copiado' : 'Copiar'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
     </div>
   );

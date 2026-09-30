@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Card,
@@ -13,7 +13,10 @@ import {
   Spin,
   Alert,
   Divider,
+  Tooltip,
+  message,
 } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import {
   ShoppingOutlined,
   ArrowLeftOutlined,
@@ -84,59 +87,15 @@ const OrdenesPage: React.FC = () => {
   const [ordenes, setOrdenes] = useState<OrdenConKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingError, setLoadingError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [ordenSeleccionada, setOrdenSeleccionada] = useState<OrdenDTO | null>(null);
+  const [refrescando, setRefrescando] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const operacionRef = useRef(false);
+  const ocupado = loading || refrescando || exportando;
 
-  const cargarOrdenes = useCallback(async () => {
-    setLoading(true);
-    setLoadingError(false);
-    try {
-      const data = await ecommerceApi.listarOrdenes(sessionId);
-      setOrdenes(data.map((o) => ({ ...o, key: o.id })));
-    } catch (err: any) {
-      const msg = err?.response?.data?.errorMessage || 'Error al cargar las órdenes';
-      setLoadingError(true);
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionId]);
-
-  useEffect(() => {
-    cargarOrdenes();
-  }, [cargarOrdenes]);
-
-  const handleVerDetalle = useCallback((orden: OrdenDTO) => {
-    setOrdenSeleccionada(orden);
-    setModalOpen(true);
-  }, []);
-
-  const handleCloseModal = useCallback(() => {
-    setModalOpen(false);
-    setOrdenSeleccionada(null);
-  }, []);
-
-  const handleExportarExcel = async () => {
-    const companyName = await getCompanyName(sucursalActiva);
-    const cols = columns.filter((c) => c.key !== 'acciones');
-    exportToExcel({
-      fileName: `MisOrdenes_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
-      sheetName: 'Mis Órdenes',
-      companyName,
-      columnHeaders: cols.map((c) => c.title as string),
-      dataRows: ordenes.map((item: any) =>
-        cols.map((col) => {
-          const val = item[col.dataIndex as string];
-          return val !== null && val !== undefined ? String(val) : '';
-        })
-      ),
-    });
-  };
-
-  const handleRefresh = useCallback(() => {
-    cargarOrdenes();
-  }, [cargarOrdenes]);
-
-  const columns = [
+  const columns: ColumnsType<OrdenConKey> = [
     {
       title: 'No. Orden',
       dataIndex: 'noOrden',
@@ -146,6 +105,7 @@ const OrdenesPage: React.FC = () => {
         <Button
           type="link"
           style={{ padding: 0, fontWeight: 700, color: '#556ee6' }}
+          disabled={ocupado}
           onClick={() => handleVerDetalle(record)}
         >
           #{noOrden}
@@ -184,6 +144,85 @@ const OrdenesPage: React.FC = () => {
     },
   ];
 
+  const cargarOrdenes = useCallback(async () => {
+    setLoading(true);
+    setLoadingError(false);
+    try {
+      const data = await ecommerceApi.listarOrdenes(sessionId);
+      setOrdenes(data.map((o) => ({ ...o, key: o.id })));
+    } catch (err: any) {
+      const msg = err?.response?.data?.errorMessage || 'Error al cargar las órdenes';
+      setLoadingError(true);
+      setErrorMessage(msg);
+      message.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    cargarOrdenes();
+  }, [cargarOrdenes]);
+
+  const handleVerDetalle = useCallback((orden: OrdenDTO) => {
+    if (operacionRef.current || ocupado) {
+      message.warning('Hay una operación en curso, espere a que termine');
+      return;
+    }
+    setOrdenSeleccionada(orden);
+    setModalOpen(true);
+  }, [ocupado]);
+
+  const handleCloseModal = useCallback(() => {
+    setModalOpen(false);
+    setOrdenSeleccionada(null);
+  }, []);
+
+  const handleExportarExcel = async () => {
+    if (operacionRef.current || ocupado) {
+      message.warning('Hay una operación en curso, espere a que termine');
+      return;
+    }
+    operacionRef.current = true;
+    setExportando(true);
+    try {
+      const companyName = await getCompanyName(sucursalActiva);
+      const cols = columns.filter((c) => c.key !== 'acciones');
+      exportToExcel({
+        fileName: `MisOrdenes_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+        sheetName: 'Mis Órdenes',
+        companyName,
+        columnHeaders: cols.map((c) => c.title as string),
+        dataRows: ordenes.map((item: any) =>
+          cols.map((col) => {
+            const val = item[(col as any).dataIndex as string];
+            return val !== null && val !== undefined ? String(val) : '';
+          })
+        ),
+      });
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al exportar las órdenes');
+    } finally {
+      setExportando(false);
+      operacionRef.current = false;
+    }
+  };
+
+  const handleRefresh = useCallback(async () => {
+    if (operacionRef.current || ocupado) {
+      message.warning('Hay una operación en curso, espere a que termine');
+      return;
+    }
+    operacionRef.current = true;
+    setRefrescando(true);
+    try {
+      await cargarOrdenes();
+    } finally {
+      setRefrescando(false);
+      operacionRef.current = false;
+    }
+  }, [cargarOrdenes, ocupado]);
+
   return (
     <div className="store-page">
       <div className="store-ordenes-page">
@@ -201,6 +240,7 @@ const OrdenesPage: React.FC = () => {
             <Button
               icon={<ArrowLeftOutlined />}
               onClick={() => navigate('/store')}
+              disabled={ocupado}
             >
               Volver a la tienda
             </Button>
@@ -209,9 +249,21 @@ const OrdenesPage: React.FC = () => {
             </Title>
           </div>
           <PermissionGate accion="EXPORTAR">
-            <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />
+            <Tooltip title="Exportar a Excel">
+              <Button
+                icon={<FileExcelOutlined />}
+                onClick={handleExportarExcel}
+                disabled={ocupado}
+                loading={exportando}
+              />
+            </Tooltip>
           </PermissionGate>
-          <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
+          <Button
+            icon={<ReloadOutlined spin={refrescando || loading} />}
+            onClick={handleRefresh}
+            disabled={ocupado}
+            loading={refrescando}
+          >
             Recargar
           </Button>
         </div>
@@ -219,12 +271,18 @@ const OrdenesPage: React.FC = () => {
         {loadingError && (
           <Alert
             message="Error al cargar órdenes"
-            description="No se pudieron cargar tus órdenes. Intenta recargar la página."
+            description={errorMessage || 'No se pudieron cargar tus órdenes. Intenta recargar la página.'}
             type="error"
             showIcon
             style={{ marginBottom: 16 }}
             action={
-              <Button size="small" onClick={handleRefresh} icon={<ReloadOutlined />}>
+              <Button
+                size="small"
+                onClick={handleRefresh}
+                icon={<ReloadOutlined />}
+                disabled={ocupado}
+                loading={refrescando}
+              >
                 Reintentar
               </Button>
             }
@@ -245,6 +303,7 @@ const OrdenesPage: React.FC = () => {
               type="primary"
               icon={<ShoppingOutlined />}
               onClick={() => navigate('/store')}
+              disabled={ocupado}
             >
               Ir a comprar
             </Button>
@@ -262,6 +321,7 @@ const OrdenesPage: React.FC = () => {
               rowKey="id"
               pagination={{
                 showTotal: (t) => `${t} orden${t !== 1 ? 'es' : ''}`,
+                disabled: ocupado,
               }}
               size="middle"
             />

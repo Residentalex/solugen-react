@@ -12,23 +12,25 @@ import { useAuthStore } from '../../stores/authStore';
 const { Text } = Typography;
 
 const ICONOS_SECCION: Record<string, string> = {
-  productos: 'ðŸ“¦',
-  clientes: 'ðŸ‘¤',
-  proveedores: 'ðŸ­',
-  entidades: 'ðŸ¢',
-  documentos: 'ðŸ“„',
+  productos: '📦',
+  clientes: '👤',
+  proveedores: '🏭',
+  entidades: '🏢',
+  documentos: '📄',
 };
 
 interface BuscadorGlobalModalProps {
   open: boolean;
   onClose: () => void;
+  /** Prefijo de ruta al navegar. '' en MainLayout, '/saas' en SaasMainLayout. */
+  prefijoRuta?: string;
 }
 
 const CHIPS_ACCESO_RAPIDO = [
-  { label: 'ðŸ·ï¸  Productos', key: 'productos' as const },
-  { label: 'ðŸ‘¤  Clientes', key: 'MCliente' as const },
-  { label: 'ðŸ¢  Entidades', key: 'entidades' as const },
-  { label: 'ðŸ“„  Documentos', key: 'documentos' as const },
+  { label: '📦  Productos', key: 'productos' as const },
+  { label: '👤  Clientes', key: 'MCliente' as const },
+  { label: '🏢  Entidades', key: 'entidades' as const },
+  { label: '📄  Documentos', key: 'documentos' as const },
   { label: '🔗  Módulos', key: '' as const },
 ];
 
@@ -54,7 +56,7 @@ const DOC_PREFIX_ROUTE: Record<string, string> = {
   SPA: 'FSPA',   // Solicitud de Pago
 };
 
-const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose }) => {
+const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose, prefijoRuta = '' }) => {
   const navigate = useNavigate();
   const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
   const setSucursalActiva = useAuthStore((s: any) => s.setSucursalActiva);
@@ -367,27 +369,27 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
 
     if (item.tipo === 'producto') {
       if (tieneAcceso('MProducto')) {
-        navigate(`/MProducto/${item.codigoReal || ''}`);
+        navigate(`${prefijoRuta}/MProducto/${item.codigoReal || ''}`);
       }
     } else if (item.tipo === 'cliente') {
       if (tieneAcceso('MCliente')) {
-        navigate('/MCliente');
+        navigate(`${prefijoRuta}/MCliente`);
       }
     } else if (item.tipo === 'proveedor') {
       if (tieneAcceso('MProveedor')) {
-        navigate('/MProveedor');
+        navigate(`${prefijoRuta}/MProveedor`);
       }
     } else if (item.tipo === 'documento') {
       const prefijo = (item.titulo || '').split('-')[0];
       const ruta = DOC_PREFIX_ROUTE[prefijo] || 'FENP';
       if (tieneAcceso(ruta)) {
         const transacid = (item.id || '').replace('doc-', '');
-        navigate(`/${ruta}/${transacid}`);
+        navigate(`${prefijoRuta}/${ruta}/${transacid}`);
       }
     } else if (item.tipo === 'entidad') {
       if (tieneAcceso('MCliente')) {
         const codigoEntidad = (item.id || '').replace('ent-', '');
-        navigate(`/MCliente/${codigoEntidad}`);
+        navigate(`${prefijoRuta}/MCliente/${codigoEntidad}`);
       }
     }
     onClose();
@@ -509,7 +511,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
                       return next;
                     });
                   } else if (item.key === 'MCliente') {
-                    navigate('/MCliente');
+                    navigate(`${prefijoRuta}/MCliente`);
                     onClose();
                   } else {
                     onClose();
@@ -550,7 +552,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
       {/* Sin resultados */}
       {searched && !searching && !resultados && (
         <div style={{ textAlign: 'center', padding: '40px 0' }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>ðŸ”</div>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
           <Text type="secondary">Sin resultados para &quot;{searchText}&quot;</Text>
           <br />
           <Text type="secondary" style={{ fontSize: 12 }}>
@@ -564,7 +566,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
         Object.entries(resultados).map(([seccion, items]) => (
           <BuscadorGlobalSeccion
             key={seccion}
-            icono={ICONOS_SECCION[seccion] || 'ðŸ“„'}
+            icono={ICONOS_SECCION[seccion] || '📄'}
             nombre={seccion.charAt(0).toUpperCase() + seccion.slice(1)}
             contador={contadores[seccion] || 0}
           >
@@ -573,7 +575,7 @@ const BuscadorGlobalModal: React.FC<BuscadorGlobalModalProps> = ({ open, onClose
               return (
                 <div key={item.id} data-index={globalIdx}>
                   <BuscadorGlobalResultado
-                    icono={ICONOS_SECCION[seccion] || 'ðŸ“„'}
+                    icono={ICONOS_SECCION[seccion] || '📄'}
                     titulo={item.titulo}
                     subtitulo={item.subtitulo}
                     tag={item.tag}

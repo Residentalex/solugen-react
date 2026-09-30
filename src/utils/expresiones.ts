@@ -535,10 +535,10 @@ function extremos(args: any[], esMin: boolean): number | null {
   return esMin ? Math.min(...pool) : Math.max(...pool);
 }
 
-/** Criterio de SUMIF/COUNTIF: igualdad exacta u operador prefijo (">100", "<>X"). */
+/** Criterio de SUMIF/COUNTIF: igualdad exacta u operador prefijo (">100", "<>X", "=0"). */
 function cumpleCriterio(valor: any, criterio: any): boolean {
   if (typeof criterio === 'string') {
-    const m = criterio.match(/^(>=|<=|<>|!=|>|<)\s*(.*)$/);
+    const m = criterio.match(/^(>=|<=|<>|!=|=|>|<)\s*(.*)$/);
     if (m) {
       const op = m[1] === '!=' ? '<>' : m[1];
       const objetivo = m[2];
@@ -699,8 +699,8 @@ export const FUNCIONES: FuncionDef[] = [
   { nombre: 'COUNT', categoria: 'agregadas', params: 'rango', descripcion: 'Cuenta los elementos no nulos de un rango.', ejemplo: '{COUNT(detalle.codigo)}' },
   { nombre: 'MIN', categoria: 'agregadas', params: 'valor1; valor2; ...', descripcion: 'Minimo entre valores o dentro de un rango.', ejemplo: '{MIN(cobros.monto)}' },
   { nombre: 'MAX', categoria: 'agregadas', params: 'valor1; valor2; ...', descripcion: 'Maximo entre valores o dentro de un rango.', ejemplo: '{MAX(cobros.monto)}' },
-  { nombre: 'SUMIF', categoria: 'agregadas', params: 'rango; criterio; [rangoSuma]', descripcion: 'Suma los valores que cumplen el criterio. Criterio admite ">100", "<>X", etc.', ejemplo: '{SUMIF(cobros.tipo, "EFECTIVO", cobros.mefectivo)}' },
-  { nombre: 'COUNTIF', categoria: 'agregadas', params: 'rango; criterio', descripcion: 'Cuenta los elementos que cumplen el criterio.', ejemplo: '{COUNTIF(detalle.cantidad, ">0")}' },
+  { nombre: 'SUMIF', categoria: 'agregadas', params: 'rango; criterio; [rangoSuma]', descripcion: 'Suma los valores que cumplen el criterio. El criterio admite ">100", ">=100", "<>X", "=0" o el valor exacto sin comillas (0).', ejemplo: '{SUMIF(cobros.tipo, "EFECTIVO", cobros.mefectivo)}' },
+  { nombre: 'COUNTIF', categoria: 'agregadas', params: 'rango; criterio', descripcion: 'Cuenta los elementos que cumplen el criterio. Admite ">0", "<>X", "=0" o el valor exacto sin comillas (0).', ejemplo: '{COUNTIF(detalle.cantidad, ">0")}' },
 
   // ----- Logica -----
   { nombre: 'IF', categoria: 'logica', params: 'condicion; siVerdadero; siFalso', descripcion: 'Devuelve un valor u otro segun la condicion.', ejemplo: '{IF(total > 10000, "GRANDE", "NORMAL")}' },
@@ -899,8 +899,8 @@ function extraerExpresiones(texto: string): string[] {
 }
 
 /**
- * Valida todas las expresiones de una plantilla (textos libres, titulo y pie).
- * Devuelve solo las que tienen error.
+ * Valida todas las expresiones de una plantilla (textos libres, titulo, pie y
+ * las etiquetas de las lineas de zona). Devuelve solo las que tienen error.
  */
 export function validarExpresionesDeConfig(config: any): ResultadoValidacion[] {
   const errores: ResultadoValidacion[] = [];
@@ -922,6 +922,17 @@ export function validarExpresionesDeConfig(config: any): ResultadoValidacion[] {
   }
   revisar(config?.titulo?.texto);
   revisar(config?.pie?.textoPie);
+
+  // Etiquetas y textos de las lineas de zona (el disenador permite escribir
+  // expresiones {..} en la etiqueta de cualquier linea).
+  const zonas = Array.isArray(config?.zonas) ? config.zonas : [];
+  for (const zona of zonas) {
+    const lineas = Array.isArray(zona?.lineas) ? zona.lineas : [];
+    for (const linea of lineas) {
+      revisar(linea?.label);
+      revisar(linea?.condicion);
+    }
+  }
 
   return errores;
 }

@@ -6,6 +6,7 @@ import {
   message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Popover, Alert, Empty,
 } from 'antd';
 import {
+  InboxOutlined,
   SaveOutlined,
   CloseOutlined,
   DeleteOutlined,
@@ -59,7 +60,7 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
+import { DragHandle, SortableRow } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
@@ -646,21 +647,25 @@ const DevolucionCompraFormulario: React.FC = () => {
     }
   };
 
-  const handleGenerarAsientos = async () => {
-    if (sucursalActiva === undefined) return;
-    setGenerandoAsientos(true);
-    try {
-      const dto = construirDTO();
-      const asientosGenerados = await transaccionApi.generarAsientos(sucursalActiva, dto);
-      setAsientosLocales(asientosGenerados);
-      message.success(`Se generaron ${asientosGenerados.length} asientos`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al generar asientos');
-      message.error(msg);
-    } finally {
-      setGenerandoAsientos(false);
-    }
-  };
+   const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
+
+   const handleGenerarAsientos = async () => {
+     if (sucursalActiva === undefined) return;
+     setGenerandoAsientos(true);
+     setErrorGeneracion(null);
+     try {
+       const dto = construirDTO();
+       const asientosGenerados = await transaccionApi.generarAsientos(sucursalActiva, dto);
+       setAsientosLocales(asientosGenerados);
+       message.success(`Se generaron ${asientosGenerados.length} asientos`);
+     } catch (err: any) {
+       const msg = extraerMensajeError(err, 'Error al generar asientos');
+       setErrorGeneracion(msg);
+       message.error(msg);
+     } finally {
+       setGenerandoAsientos(false);
+     }
+   };
 
   // ===== Handlers de Tipo =====
   const handleTipoSelect = (tipoCodigo: string) => {
@@ -1820,7 +1825,7 @@ const DevolucionCompraFormulario: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                   children: (
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
@@ -1873,25 +1878,40 @@ const DevolucionCompraFormulario: React.FC = () => {
                     </>
                   ),
                 },
-                {
-                  key: 'asientos',
-                  label: `Asientos (${data?.asientos?.length || 0})`,
-                  children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
-<AsientosContableEditables
-  asientos={asientosModificados ? asientosLocales : (asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []))}
-  onChange={(nuevosAsientos) => {
-    setAsientosLocales(nuevosAsientos);
-    setAsientosModificados(true);
-  }}
-  editable={true}
-  scroll={{ x: 900 }}
-  onGenerar={handleGenerarAsientos}
-  generando={generandoAsientos}
-/>
-                  ) : (
-                    <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
-                  ),
-                },
+                 {
+                   key: 'asientos',
+                   label: `Asientos (${data?.asientos?.length || 0})`,
+                   children: (
+                     <>
+                       {errorGeneracion && (
+                         <Alert
+                           type="error"
+                           showIcon
+                           closable
+                           onClose={() => setErrorGeneracion(null)}
+                           style={{ marginBottom: 8 }}
+                           message="Error al generar asientos"
+                           description={errorGeneracion}
+                         />
+                       )}
+                       {(permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
+ <AsientosContableEditables
+   asientos={asientosModificados ? asientosLocales : (asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []))}
+   onChange={(nuevosAsientos) => {
+     setAsientosLocales(nuevosAsientos);
+     setAsientosModificados(true);
+   }}
+   editable={true}
+   scroll={{ x: 900 }}
+   onGenerar={handleGenerarAsientos}
+   generando={generandoAsientos}
+ />
+                       ) : (
+                         <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
+                       )}
+                     </>
+                   ),
+                 },
                 {
                   key: 'historial',
                   icon: <HistoryOutlined />, label: `Historial (${data?.logs?.length || 0})`,
@@ -1916,7 +1936,7 @@ const DevolucionCompraFormulario: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                 children: (
                   <>
                     <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>

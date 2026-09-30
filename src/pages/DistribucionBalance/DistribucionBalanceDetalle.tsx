@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import {
   ArrowLeftOutlined, LockFilled, ReloadOutlined,
-  HistoryOutlined,
+  HistoryOutlined, FileTextOutlined,
 } from '@ant-design/icons';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import { useAuthStore } from '../../stores/authStore';
@@ -431,6 +431,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
               items={[
                 {
                   key: 'documentos',
+                  icon: <FileTextOutlined />,
                   label: `Documentos (${debitos.length + creditos.length})`,
                   children: (
                     <DocumentosBalanceCard
@@ -508,6 +509,7 @@ const DistribucionBalanceDetalle: React.FC<DistribucionBalanceDetalleProps> = ({
             items={[
               {
                 key: 'documentos',
+                icon: <FileTextOutlined />,
                 label: `Documentos (${debitos.length + creditos.length})`,
                 children: (
                   <DocumentosBalanceCard

@@ -1,18 +1,22 @@
 ﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Card, Form, Input, DatePicker, Select, Switch, Button, message, Spin, Space,
-  Row, Col, Grid, Descriptions, Alert,
+  Row, Col, Grid, Descriptions, Alert, Table, Modal, Popconfirm, Tooltip,
 } from 'antd';
 import {
   ArrowLeftOutlined, EditOutlined, SaveOutlined, CloseOutlined,
   BankOutlined, CalendarOutlined, SettingOutlined, ShoppingCartOutlined,
+  ApiOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { configuracionApi, type ConfiguracionEmpresa } from '../../api/configuracionApi';
 import { configPedidosYaApi } from '../../api/configPedidosYaApi';
+import { dgiiApiConfigApi } from '../../api/dgiiApiConfigApi';
 import type { ConfigPedidosYaDTO } from '../../types/configPedidosYa';
+import type { DgiiApiConfigDTO, DgiiApiConfigRequest } from '../../types/dgiiApiConfig';
 import { extraerMensajeError } from '../../utils/formats';
 
 const Empresa: React.FC = () => {
@@ -29,6 +33,16 @@ const Empresa: React.FC = () => {
   const savingRef = useRef(false);
   const screens = Grid.useBreakpoint();
   const isLarge = screens.xxl === true;
+
+  // Conexiones a la API DGII (configuracion global, no depende de sucursal)
+  const [dgiiForm] = Form.useForm<DgiiApiConfigRequest>();
+  const [dgiiConexiones, setDgiiConexiones] = useState<DgiiApiConfigDTO[]>([]);
+  const [loadingDgii, setLoadingDgii] = useState(false);
+  const [dgiiModalAbierto, setDgiiModalAbierto] = useState(false);
+  const [dgiiEditando, setDgiiEditando] = useState<DgiiApiConfigDTO | null>(null);
+  const [guardandoDgii, setGuardandoDgii] = useState(false);
+  const [probandoDgii, setProbandoDgii] = useState(false);
+  const [dgiiToggleId, setDgiiToggleId] = useState<number | null>(null);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -69,7 +83,114 @@ const Empresa: React.FC = () => {
     }
   }, [sucursalActiva]);
 
+  const cargarDgii = useCallback(async () => {
+    setLoadingDgii(true);
+    try {
+      setDgiiConexiones(await dgiiApiConfigApi.obtenerTodas());
+    } catch (err: any) {
+      message.error(extraerMensajeError(err, 'Error al cargar las conexiones DGII'));
+    } finally {
+      setLoadingDgii(false);
+    }
+  }, []);
+
   useEffect(() => { cargar(); cargarPedidosYa(); }, [cargar, cargarPedidosYa]);
+  useEffect(() => { cargarDgii(); }, [cargarDgii]);
+
+  const abrirNuevaDgii = () => {
+    setDgiiEditando(null);
+    dgiiForm.resetFields();
+    setDgiiModalAbierto(true);
+  };
+
+  const abrirEditarDgii = (registro: DgiiApiConfigDTO) => {
+    setDgiiEditando(registro);
+    dgiiForm.setFieldsValue({
+      nombre: registro.nombre,
+      url: registro.url,
+      apiKey: '',
+      observacion: registro.observacion ?? '',
+    });
+    setDgiiModalAbierto(true);
+  };
+
+  const handleProbarDgii = async () => {
+    let values: DgiiApiConfigRequest;
+    try {
+      values = await dgiiForm.validateFields(['url']);
+    } catch {
+      return;
+    }
+    setProbandoDgii(true);
+    try {
+      const resultado = await dgiiApiConfigApi.probar({
+        nombre: values.nombre || 'Conexion sin nombre',
+        url: values.url,
+        apiKey: values.apiKey ?? '',
+        observacion: values.observacion ?? '',
+      });
+      if (resultado.exitosa) message.success(resultado.mensaje);
+      else message.warning(resultado.mensaje);
+    } catch (err: any) {
+      message.error(extraerMensajeError(err, 'Error al probar la conexion'));
+    } finally {
+      setProbandoDgii(false);
+    }
+  };
+
+  const handleGuardarDgii = async () => {
+    let values: DgiiApiConfigRequest;
+    try {
+      values = await dgiiForm.validateFields();
+    } catch {
+      return;
+    }
+    setGuardandoDgii(true);
+    try {
+      if (dgiiEditando) {
+        await dgiiApiConfigApi.actualizar(dgiiEditando.id, values);
+        message.success('Conexion actualizada');
+      } else {
+        await dgiiApiConfigApi.crear(values);
+        message.success('Conexion creada');
+      }
+      setDgiiModalAbierto(false);
+      dgiiForm.resetFields();
+      await cargarDgii();
+    } catch (err: any) {
+      message.error(extraerMensajeError(err, 'Error al guardar la conexion'));
+    } finally {
+      setGuardandoDgii(false);
+    }
+  };
+
+  const handleToggleDgii = async (registro: DgiiApiConfigDTO, activar: boolean) => {
+    setDgiiToggleId(registro.id);
+    try {
+      if (activar) {
+        await dgiiApiConfigApi.activar(registro.id);
+        message.success(`Conexion "${registro.nombre}" activada`);
+      } else {
+        await dgiiApiConfigApi.desactivar(registro.id);
+        message.success(`Conexion "${registro.nombre}" desactivada`);
+      }
+      await cargarDgii();
+    } catch (err: any) {
+      message.error(extraerMensajeError(err, 'Error al cambiar el estado de la conexion'));
+    } finally {
+      setDgiiToggleId(null);
+    }
+  };
+
+  const handleEliminarDgii = async (registro: DgiiApiConfigDTO) => {
+    try {
+      await dgiiApiConfigApi.eliminar(registro.id);
+      message.success('Conexion eliminada');
+      await cargarDgii();
+    } catch (err: any) {
+      message.error(extraerMensajeError(err, 'Error al eliminar la conexion'));
+    }
+  };
 
   const handleGuardar = async () => {
     if (savingRef.current) return;
@@ -410,7 +531,171 @@ const Empresa: React.FC = () => {
           )}
         </Row>
       </Card>
+
+      {/* Configuracion global de conexiones API DGII.
+          Fuera del bloque de edicion porque es independiente del formulario
+          de empresa y debe estar disponible siempre. */}
+      <Card
+        className="paces-card"
+        size="small"
+        style={{ marginTop: 16 }}
+        title={
+          <Space>
+            <ApiOutlined className="paces-text-icon" />
+            <span style={{ fontWeight: 600 }}>Conexiones API DGII</span>
+          </Space>
+        }
+        extra={
+          <Space>
+            <Button type="primary" size="small" icon={<PlusOutlined />} onClick={abrirNuevaDgii}>
+              Nueva
+            </Button>
+            <Button size="small" icon={<ReloadOutlined />} onClick={cargarDgii} />
+          </Space>
+        }
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="Solo una conexion puede estar activa a la vez"
+          description="La conexion marcada como Activa es la que usa el backend para enviar a la DGII. Si desactivas todas, se usara la conexion ClaroEcf definida en appsettings.json. Esta configuracion es global de la instalacion (Consolidado), no por sucursal."
+        />
+        <Table
+          className="paces-list-table"
+          size="small"
+          rowKey="id"
+          loading={loadingDgii}
+          dataSource={dgiiConexiones}
+          pagination={dgiiConexiones.length > 10 ? { pageSize: 10, showTotal: (t) => `${t} conexiones` } : false}
+          locale={{ emptyText: 'No hay conexiones configuradas' }}
+          columns={[
+            {
+              title: 'Nombre',
+              dataIndex: 'nombre',
+              render: (v: string) => <span style={{ fontWeight: 500 }}>{v}</span>,
+            },
+            { title: 'URL', dataIndex: 'url', ellipsis: true },
+            {
+              title: 'API key',
+              dataIndex: 'apiKeyEnmascarada',
+              width: 200,
+              render: (v: string) => (
+                <span className="paces-text-secondary" style={{ fontFamily: 'monospace', fontSize: 12 }}>
+                  {v || '-'}
+                </span>
+              ),
+            },
+            {
+              title: 'Activa',
+              dataIndex: 'activa',
+              width: 90,
+              align: 'center',
+              render: (v: boolean, r: DgiiApiConfigDTO) => (
+                <Switch
+                  checked={v}
+                  loading={dgiiToggleId === r.id}
+                  disabled={dgiiToggleId !== null && dgiiToggleId !== r.id}
+                  checkedChildren="Si"
+                  unCheckedChildren="No"
+                  onChange={(checked) => handleToggleDgii(r, checked)}
+                />
+              ),
+            },
+            {
+              title: 'Acciones',
+              key: 'acciones',
+              align: 'right',
+              width: 90,
+              render: (_: unknown, r: DgiiApiConfigDTO) => (
+                <Space size={2}>
+                  <Tooltip title="Editar">
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<EditOutlined />}
+                      onClick={() => abrirEditarDgii(r)}
+                    />
+                  </Tooltip>
+                  <Popconfirm title="Eliminar esta conexion?" onConfirm={() => handleEliminarDgii(r)}>
+                    <Tooltip title="Eliminar">
+                      <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                    </Tooltip>
+                  </Popconfirm>
+                </Space>
+              ),
+            },
+          ]}
+        />
+      </Card>
       </Spin>
+
+      <Modal
+        open={dgiiModalAbierto}
+        title={dgiiEditando ? `Editar conexion: ${dgiiEditando.nombre}` : 'Nueva conexion API DGII'}
+        onCancel={() => setDgiiModalAbierto(false)}
+        onOk={handleGuardarDgii}
+        okText="Guardar"
+        cancelText="Cancelar"
+        confirmLoading={guardandoDgii}
+        maskClosable={false}
+        destroyOnHidden
+      >
+        <Form form={dgiiForm} layout="vertical" size="small" style={{ marginTop: 16 }}>
+          <Form.Item
+            name="nombre"
+            label="Nombre"
+            rules={[{ required: true, message: 'Obligatorio' }]}
+          >
+            <Input placeholder="Ej: Claro e-CF Produccion" />
+          </Form.Item>
+          <Form.Item
+            name="url"
+            label="URL base"
+            rules={[
+              { required: true, message: 'Obligatorio' },
+              { type: 'url', message: 'Debe ser una URL valida (http o https)' },
+            ]}
+          >
+            <Input placeholder="https://e-cfclarocloud.claro.com.do/api/v1/" />
+          </Form.Item>
+          <Form.Item
+            name="apiKey"
+            label="API key"
+            rules={dgiiEditando ? [] : [{ required: true, message: 'Obligatorio' }]}
+          >
+            <Input.Password
+              placeholder={dgiiEditando ? 'Dejar vacio para conservar la actual' : 'Token de la API'}
+              autoComplete="new-password"
+            />
+          </Form.Item>
+          {dgiiEditando && (
+            <Alert
+              type="success"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message="API key guardada"
+              description={
+                <>
+                  Valor almacenado: <code>{dgiiEditando.apiKeyEnmascarada || '(sin valor)'}</code>.{' '}
+                  Deja el campo vacio para conservarla, o escribe un valor nuevo para reemplazarla.
+                </>
+              }
+            />
+          )}
+          <Form.Item name="observacion" label="Observacion">
+            <Input.TextArea rows={2} placeholder="Opcional" />
+          </Form.Item>
+          <Button
+            icon={<ThunderboltOutlined />}
+            onClick={handleProbarDgii}
+            loading={probandoDgii}
+            disabled={guardandoDgii}
+          >
+            Probar conexion
+          </Button>
+        </Form>
+      </Modal>
     </>
   );
 };

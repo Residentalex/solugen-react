@@ -1,9 +1,9 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, Link } from 'react-router-dom';
-import { Table, Card, Input, Button, Typography, Alert, Space, Empty } from 'antd';
+import { useNavigate } from 'react-router-dom';
+import { Table, Card, Input, Button, Typography, Alert, Space, Empty, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined, PlusOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, PlusOutlined, FileExcelOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import FechaColumnCell from '../../components/FechaColumnCell';
@@ -36,10 +36,11 @@ const PlantillaSuplidor: React.FC = () => {
   const setActiveModule = useUIStore((s) => s.setActiveModule);
   const setNuevoCallback = useUIStore((s) => s.setNuevoCallback);
 
-  const [page, setPage] = useState(1);
+const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(FILAS_POR_PAGINA);
   const [searchText, setSearchText] = useState('');
-  const [selectedRow, setSelectedRow] = useState<PlantillaSuplidorDTO | null>(null);
+  const [exportando, setExportando] = useState(false);
+  const exportandoRef = useRef(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['plantillaSuplidor', sucursalActiva, searchText],
@@ -95,6 +96,23 @@ const PlantillaSuplidor: React.FC = () => {
     });
   };
 
+  const handleExportarExcelConFeedback = async () => {
+    if (exportandoRef.current) return;
+    exportandoRef.current = true;
+    setExportando(true);
+    try {
+      message.loading({ content: 'Exportando a Excel...', key: 'exportar' });
+      await handleExportarExcel();
+      message.success({ content: 'Exportación completada', key: 'exportar', duration: 2 });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Error al exportar';
+      message.error({ content: errorMessage, key: 'exportar', duration: 3 });
+    } finally {
+      exportandoRef.current = false;
+      setExportando(false);
+    }
+  };
+
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
@@ -106,7 +124,7 @@ const PlantillaSuplidor: React.FC = () => {
   };
 
   const handleRowClick = (record: PlantillaSuplidorDTO) => {
-    setSelectedRow(record);
+    navigate(`/mplantillasup/${record.id}`);
   };
 
   const columns: ColumnsType<PlantillaSuplidorDTO> = [
@@ -123,9 +141,7 @@ const PlantillaSuplidor: React.FC = () => {
       key: 'numero',
       width: 160,
       render: (num: string, record: PlantillaSuplidorDTO) => (
-        <Link to={`/mplantillasup/${record.id}`} className="paces-doc-link">
-          <Text strong>{num}</Text>
-        </Link>
+        <Text strong>{num}</Text>
       ),
     },
     {
@@ -164,15 +180,17 @@ const PlantillaSuplidor: React.FC = () => {
         className="paces-card-erp"
         style={{ borderRadius: 8, overflow: 'hidden' }}
       >
-        <CatalogoListadoToolbar
-          onSearch={handleSearch}
-          pageSize={25}
-          onPageSizeChange={(v) => {}}
-          ocultarPageSize
-          onNuevo={() => navigate('/mplantillasup/nuevo')}
-          onReload={() => refetch()}
-          onExportarExcel={handleExportarExcel}
-        />
+         <CatalogoListadoToolbar
+           onSearch={handleSearch}
+           pageSize={25}
+           onPageSizeChange={(v) => {}}
+           ocultarPageSize
+           onNuevo={() => navigate('/mplantillasup/nuevo')}
+           onReload={() => refetch()}
+           onExportarExcel={handleExportarExcelConFeedback}
+           exportando={exportando}
+           deshabilitado={exportando}
+         />
 
         <Table<PlantillaSuplidorDTO>
           columns={columns}
@@ -181,9 +199,7 @@ const PlantillaSuplidor: React.FC = () => {
           loading={isLoading}
           scroll={{ x: 600 }}
           size="middle"
-          rowClassName={(record) =>
-            selectedRow?.id === record.id ? 'paces-row-selected' : 'paces-row-hover'
-          }
+           rowClassName={() => 'paces-row-hover'}
           onRow={(record) => ({
             onClick: () => handleRowClick(record),
             style: { cursor: 'pointer' },

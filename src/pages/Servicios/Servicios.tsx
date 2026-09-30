@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Table, Select, Tag, Button, message, Card, Typography, Drawer, Descriptions, Alert, Empty, Space } from 'antd';
+import { Table, Select, Tag, Button, message, Card, Typography, Drawer, Descriptions, Alert, Empty, Grid, Space } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
@@ -16,6 +16,7 @@ const { Text } = Typography;
 
 const Servicios: React.FC = () => {
   const navigate = useNavigate();
+  const screens = Grid.useBreakpoint();
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
@@ -29,6 +30,14 @@ const Servicios: React.FC = () => {
   const [detalleOpen, setDetalleOpen] = useState(false);
 
   const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
+
+  const drawerWidth = screens.md ? 420 : '100%';
+
+  const emptyTextDescripcion = searchText
+    ? 'No se encontraron servicios con la búsqueda actual'
+    : filtroActivo !== 'todos'
+      ? 'No hay servicios que coincidan con el filtro de estado'
+      : 'No hay servicios registrados';
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['servicios', sucursalActiva, page, pageSize, searchText, filtroActivo],
@@ -224,12 +233,13 @@ const Servicios: React.FC = () => {
           scroll={{ x: 1200 }}
           size="middle"
           rowClassName={(record) => {
-    if (!record.activo) return 'paces-row-selected paces-row-unread';
-    return 'paces-row-selected';
-  }}
+            const base = 'paces-row-hover';
+            if (!record.activo) return `${base} paces-row-unread`;
+            return base;
+          }}
           className="paces-border-top paces-list-table"
           locale={{
-            emptyText: isLoading ? ' ' : <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description="No se encontraron servicios" /></div>,
+            emptyText: isLoading ? ' ' : <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description={emptyTextDescripcion} /></div>,
           }}
           pagination={{
             current: page,
@@ -246,7 +256,7 @@ const Servicios: React.FC = () => {
          title={`Servicio: ${detalleItem?.codigo || ''}`}
          open={detalleOpen}
          onClose={() => setDetalleOpen(false)}
-         width={420}
+         width={drawerWidth}
          extra={
            <Tag color={detalleItem?.activo ? 'green' : 'red'}>
              {detalleItem?.activo ? 'Activo' : 'Inactivo'}

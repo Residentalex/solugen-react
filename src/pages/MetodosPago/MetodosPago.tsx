@@ -27,7 +27,7 @@ const MetodosPago: React.FC = () => {
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [detalleItem, setDetalleItem] = useState<MetodoPagoDTO | null>(null);
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['metodosPago', sucursalActiva, page, pageSize, searchText],
     queryFn: async () => {
       if (sucursalActiva === undefined) return { datos: [], total: 0 };
@@ -126,7 +126,8 @@ const MetodosPago: React.FC = () => {
     <>
       {isError && (
         <Alert
-          title="Error al cargar métodos de pago"
+          message="No fue posible cargar los métodos de pago"
+          description={(error as any)?.response?.data?.errorMessage || error?.message}
           type="error"
           showIcon
           style={{ marginBottom: 16 }}

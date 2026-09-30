@@ -5,6 +5,7 @@ import {
 } from 'antd';
 import dayjs from 'dayjs';
 import {
+  InboxOutlined,
   ArrowLeftOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -883,7 +884,7 @@ const FacturaClienteDetalle: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                       <div style={{ minHeight: 220 }}>
@@ -894,6 +895,7 @@ const FacturaClienteDetalle: React.FC = () => {
                 },
                 {
                   key: 'transacciones',
+                  icon: <FileTextOutlined />,
                   label: `Documentos (${data?.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <TransaccionesAsociadasCard
@@ -1013,7 +1015,7 @@ const FacturaClienteDetalle: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${documentoActivo.detalles?.length || 0}` : ''})`,
                 children: (
                   <Spin spinning={seccionesCargando.has('detalles')} tip="Cargando detalles...">
                     <div style={{ minHeight: 220 }}>
@@ -1024,6 +1026,7 @@ const FacturaClienteDetalle: React.FC = () => {
               },
               {
                 key: 'transacciones',
+                icon: <FileTextOutlined />,
                 label: `Documentos (${data?.transaccionesAsociadas?.length || 0})`,
                 children: (
                   <TransaccionesAsociadasCard

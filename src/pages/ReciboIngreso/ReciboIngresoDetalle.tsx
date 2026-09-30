@@ -47,6 +47,14 @@ import { obtenerLogoEscPosBase64 } from '../../utils/logoEscPos';
 function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
 function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
 
+// ===== Pendiente efectivo por fila =====
+// DOCASOC.PENDIENTE puede venir mal (0) cuando en realidad DEBITADO - ACREDITADO != 0.
+// El pendiente efectivo se calcula como max(0, montoOriginal - pagado, saldoPendiente), nunca negativo.
+function pendienteEfectivo(t: any): number {
+  const v = Math.max(0, (t?.montoOriginal || 0) - (t?.pagado || 0), t?.saldoPendiente || 0);
+  return Math.round(v * 100) / 100;
+}
+
 const { Text } = Typography;
 
 const ReciboIngresoDetalle: React.FC = () => {
@@ -235,9 +243,57 @@ const ReciboIngresoDetalle: React.FC = () => {
     { title: 'NCF', dataIndex: 'nCF', key: 'nCF', width: 140, render: (v: string) => v || '-' },
     { title: 'Monto Original', dataIndex: 'montoOriginal', key: 'montoOriginal', width: 130, align: 'right' as const, render: (v: number) => formatNumber(v) },
     { title: 'Pagado', dataIndex: 'pagado', key: 'pagado', width: 120, align: 'right' as const, render: (v: number) => formatNumber(v) },
-    { title: 'Saldo', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
+    { title: 'Saldo', dataIndex: 'saldoPendiente', key: 'saldoPendiente', width: 120, align: 'right' as const, render: (_v: number, record: any) => <strong>{formatNumber(pendienteEfectivo(record))}</strong> },
     { title: 'Monto', dataIndex: 'monto', key: 'monto', width: 120, align: 'right' as const, render: (v: number) => <strong>{formatNumber(v)}</strong> },
   ];
+
+  // ===== Totales de documentos (solo filas visibles, respetan la busqueda) =====
+  const renderTabDocumentos = () => (
+    <Table
+      dataSource={documentosFiltrados}
+      columns={asociadasColumns}
+      rowKey={(r: any) => r.transaccionAsociadaID || r.id}
+      size="small"
+      pagination={false}
+      scroll={{ x: 900 }}
+      summary={() => {
+        const totales = documentosFiltrados.reduce(
+          (acc, d: any) => {
+            acc.montoOriginal += d.montoOriginal || 0;
+            acc.pagado += d.pagado || 0;
+            acc.saldo += pendienteEfectivo(d);
+            acc.monto += d.monto || 0;
+            return acc;
+          },
+          { montoOriginal: 0, pagado: 0, saldo: 0, monto: 0 }
+        );
+
+        return (
+          <Table.Summary fixed="bottom">
+            <Table.Summary.Row style={{ fontWeight: 600, backgroundColor: '#fafafa' }}>
+              <Table.Summary.Cell index={0} align="left">
+                <Text strong>Totales</Text>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell index={1} />
+              <Table.Summary.Cell index={2} />
+              <Table.Summary.Cell index={3} align="right">
+                <Text strong>{formatNumber(totales.montoOriginal)}</Text>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell index={4} align="right">
+                <Text strong>{formatNumber(totales.pagado)}</Text>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell index={5} align="right">
+                <Text strong>{formatNumber(totales.saldo)}</Text>
+              </Table.Summary.Cell>
+              <Table.Summary.Cell index={6} align="right">
+                <Text strong>{formatNumber(totales.monto)}</Text>
+              </Table.Summary.Cell>
+            </Table.Summary.Row>
+          </Table.Summary>
+        );
+      }}
+    />
+  );
 
   // asientoColumns reemplazado por AsientosContableTable compartido
 
@@ -607,10 +663,9 @@ const ReciboIngresoDetalle: React.FC = () => {
               items={[
                 {
                   key: 'documentos',
+                  icon: <FileTextOutlined />,
                   label: `Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`,
-                  children: (
-                    <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 900 }} />
-                  ),
+                  children: renderTabDocumentos(),
                 },
                 {
                   key: 'asientos',
@@ -719,10 +774,9 @@ const ReciboIngresoDetalle: React.FC = () => {
             items={[
               {
                 key: 'documentos',
+                icon: <FileTextOutlined />,
                 label: `Documentos (${documentosFiltrados.length}${detalleSearch ? `/${data.transaccionesAsociadas?.length || 0}` : ''})`,
-                children: (
-                  <Table dataSource={documentosFiltrados} columns={asociadasColumns} rowKey={(r: any) => r.transaccionAsociadaID || r.id} size="small" pagination={false} scroll={{ x: 900 }} />
-                ),
+                children: renderTabDocumentos(),
               },
               {
                 key: 'asientos',

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Space, Button, Modal } from 'antd';
+import { Space, Button, Modal, Tooltip } from 'antd';
 import {
   ArrowLeftOutlined, PrinterOutlined, EditOutlined,
   CheckCircleOutlined, CloseCircleOutlined, RedoOutlined,
@@ -66,15 +66,17 @@ const DetalleToolbar: React.FC<DetalleToolbarProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
       <Button icon={<ArrowLeftOutlined />} onClick={onVolver} disabled={bloqueado}>
         Volver
       </Button>
       <div style={{ flex: 1 }} />
-      <Space>
+      <Space wrap>
         {showImprimir && onImprimir && (
           <PermissionGate codigoPantalla={modulo} accion="IMPRIMIR">
-            <Button icon={<PrinterOutlined />} loading={imprimiendo} disabled={bloqueado} onClick={onImprimir} />
+            <Tooltip title="Imprimir">
+              <Button icon={<PrinterOutlined />} aria-label="Imprimir" loading={imprimiendo} disabled={bloqueado} onClick={onImprimir} />
+            </Tooltip>
           </PermissionGate>
         )}
 

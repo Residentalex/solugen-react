@@ -52,6 +52,8 @@ const Tickets: React.FC = () => {
   const [crearModal, setCrearModal] = useState(false);
   const [creando, setCreando] = useState(false);
   const creandoRef = useRef(false);
+  const [exportando, setExportando] = useState(false);
+  const exportandoRef = useRef(false);
   const [form] = Form.useForm();
   const [usuarios, setUsuarios] = useState<UsuarioDTO[]>([]);
 
@@ -77,24 +79,35 @@ const Tickets: React.FC = () => {
   }, [sucursal]);
 
   const handleExportarExcel = async () => {
-    const companyName = await getCompanyName(sucursal);
-    const cols = columns.filter((c) => c.key !== 'acciones');
-    exportToExcel({
-      fileName: `Tickets_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
-      sheetName: 'Tickets',
-      companyName,
-      columnHeaders: cols.map((c) => c.title as string),
-      dataRows: filtered.map((item: any) =>
-        cols.map((col) => {
-          const val = item[col.dataIndex as string];
-          return val !== null && val !== undefined ? String(val) : '';
-        })
-      ),
-    });
+    if (exportandoRef.current) return;
+    exportandoRef.current = true;
+    setExportando(true);
+    try {
+      const companyName = await getCompanyName(sucursal);
+      const cols = columns.filter((c) => c.key !== 'acciones');
+      exportToExcel({
+        fileName: `Tickets_${new Date().toISOString().slice(0,10).replace(/-/g, '')}`,
+        sheetName: 'Tickets',
+        companyName,
+        columnHeaders: cols.map((c) => c.title as string),
+        dataRows: filtered.map((item: any) =>
+          cols.map((col) => {
+            const val = item[col.dataIndex as string];
+            return val !== null && val !== undefined ? String(val) : '';
+          })
+        ),
+      });
+    } catch {
+      message.error('Error al exportar los tickets a Excel');
+    } finally {
+      exportandoRef.current = false;
+      setExportando(false);
+    }
   };
 
   const handleCrear = useCallback(async () => {
     if (!sucursal || !usuarioID) return;
+    if (exportandoRef.current) return;
     if (creandoRef.current) return;
     creandoRef.current = true;
     setCreando(true);
@@ -147,9 +160,14 @@ const Tickets: React.FC = () => {
       key: 'titulo',
       width: 200,
       render: (text: string, record: TicketDTO) => (
-        <a onClick={() => setTicketModalID(record.id)} style={{ fontWeight: 500 }}>
+        <Button
+          type="link"
+          size="small"
+          style={{ padding: 0, fontWeight: 500 }}
+          onClick={() => setTicketModalID(record.id)}
+        >
           {text}
-        </a>
+        </Button>
       ),
     },
     {
@@ -202,6 +220,8 @@ render: (f: string) => <FechaColumnCell fecha={f} />,
           onNuevo={() => setCrearModal(true)}
           onReload={() => refetch()}
           onExportarExcel={handleExportarExcel}
+          exportando={exportando}
+          deshabilitado={exportando}
           filtros={
             <Select
               placeholder="Estado"

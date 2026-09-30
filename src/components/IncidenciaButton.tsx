@@ -18,15 +18,16 @@ const IncidenciaButton: React.FC<Props> = ({ moduloActual }) => {
     setCapturando(true);
     try {
       const resultado = await capturarPantalla();
-      if (!resultado) {
-        message.warning('No se pudo capturar la pantalla.');
-        return;
-      }
       setCaptura(resultado);
       setAbierto(true);
+      if (!resultado) {
+        message.warning('No se pudo capturar la pantalla. Puedes enviar el ticket de todos modos.');
+      }
     } catch (err) {
       console.error('Error al capturar pantalla', err);
-      message.error('Error al capturar la pantalla.');
+      message.warning('No se pudo capturar la pantalla. Puedes enviar el ticket de todos modos.');
+      setCaptura(null);
+      setAbierto(true);
     } finally {
       setCapturando(false);
     }

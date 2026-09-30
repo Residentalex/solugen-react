@@ -124,6 +124,7 @@ export interface SuplidorDTO {
   requiereORC?: boolean;
   diasCredito?: number;
   beneficiario?: string;
+  activo?: boolean;
 }
 
 export interface OrdenCompraDTO {

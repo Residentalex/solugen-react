@@ -38,6 +38,7 @@ interface UIState {
   sidebarCollapsed: boolean;
   activeModule: string;
   pageTitleOverride: string;
+  overlayAbierto: boolean;
   toolbarState: ToolbarState;
   imprimirCallback?: () => void;
   nuevoCallback?: () => void;
@@ -55,6 +56,7 @@ interface UIState {
   setSidebarCollapsed: (collapsed: boolean) => void;
   setActiveModule: (module: string) => void;
   setPageTitleOverride: (title: string) => void;
+  setOverlayAbierto: (open: boolean) => void;
   updateToolbar: (state: Partial<ToolbarState>) => void;
   resetToolbar: () => void;
   setImprimirCallback: (cb?: () => void) => void;
@@ -114,6 +116,7 @@ export const useUIStore = create<UIState>((set) => ({
   sidebarCollapsed: false,
   activeModule: '',
   pageTitleOverride: '',
+  overlayAbierto: false,
   toolbarState: { ...defaultToolbarState },
   imprimirCallback: undefined,
   nuevoCallback: undefined,
@@ -132,6 +135,7 @@ export const useUIStore = create<UIState>((set) => ({
   setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
   setActiveModule: (module) => set({ activeModule: module }),
   setPageTitleOverride: (title) => set({ pageTitleOverride: title }),
+  setOverlayAbierto: (open) => set({ overlayAbierto: open }),
   updateToolbar: (state) =>
     set((prev) => ({
       toolbarState: { ...prev.toolbarState, ...state },

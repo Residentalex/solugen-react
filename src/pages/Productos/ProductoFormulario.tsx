@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Card, Row, Col, Button, Form, Input, InputNumber, Switch, Select, Tag, Table, Space,
-  message, Spin, Skeleton, Alert, Modal, Typography, Grid, Upload,
+  Card, Row, Col, Button, Form, Input, InputNumber, Switch, Select, Tag, Space,
+  message, Skeleton, Alert, Modal, Typography, Grid, Upload,
 } from 'antd';
+import type { UploadProps } from 'antd';
 import {
-  SaveOutlined, CloseOutlined, ExclamationCircleOutlined, InboxOutlined, DeleteOutlined,
+  ExclamationCircleOutlined, InboxOutlined, DeleteOutlined,
 } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useCompanyStore } from '../../stores/companyStore';
@@ -17,12 +18,12 @@ import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import FormularioToolbar from '../../components/FormularioToolbar';
 import SeleccionarImpuestosModal from '../../components/SeleccionarImpuestosModal';
 import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestosModal';
-import { toTitleCase } from '../../utils/formats';
+import { toTitleCase, extraerMensajeError } from '../../utils/formats';
 import type {
   ProductoDTO, FamiliaArticuloDTO, CategoriaArticuloDTO,
-  UnidadMedidaDTO, DatosExtraProductoDTO, ImpuestoProductoDTO,
+  UnidadMedidaDTO, DatosExtraProductoDTO,
 } from '../../types/productos';
-import type { TipoImpuesto, AmbitoImpuesto } from '../../types/contabilidad';
+import type { TipoImpuesto } from '../../types/contabilidad';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -35,16 +36,6 @@ const TIPO_IMPUESTO_MAP: Record<TipoImpuesto, string> = {
   R: 'Retencion',
 };
 
-const AMBITO_IMPUESTO_MAP: Record<AmbitoImpuesto, string> = {
-  Venta: 'Venta',
-  Compra: 'Compra',
-  Ninguno: 'Ninguno',
-};
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-}
-
 const ProductoFormulario: React.FC = () => {
   const { codigo } = useParams<{ codigo: string }>();
   const navigate = useNavigate();
@@ -52,8 +43,8 @@ const ProductoFormulario: React.FC = () => {
   const mode = codigo ? 'editar' : 'crear';
   const isCloning = !codigo && location.state?.codigoClonar;
 
-  const setActiveModule = useUIStore((s: any) => s.setActiveModule);
-  const resetToolbar = useUIStore((s: any) => s.resetToolbar);
+  const setActiveModule = useUIStore((s) => s.setActiveModule);
+  const resetToolbar = useUIStore((s) => s.resetToolbar);
   const sucursalProductos = useCompanyStore((s) => s.data.sucursalProductos);
 
   const guardandoRef = useRef(false);
@@ -70,7 +61,7 @@ const ProductoFormulario: React.FC = () => {
   const [familias, setFamilias] = useState<FamiliaArticuloDTO[]>([]);
   const [categorias, setCategorias] = useState<CategoriaArticuloDTO[]>([]);
   const [unidades, setUnidades] = useState<UnidadMedidaDTO[]>([]);
-  const [comodines, setComodines] = useState<any[]>([]);
+  const [comodines, setComodines] = useState<ProductoDTO[]>([]);
 
   const [requiereFechaVenc, setRequiereFechaVenc] = useState(false);
 
@@ -86,50 +77,7 @@ const ProductoFormulario: React.FC = () => {
   useEffect(() => {
     setActiveModule('MProducto');
     return () => resetToolbar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setActiveModule, resetToolbar]);
-
-  useEffect(() => {
-    cargarTodo();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codigo, sucursalProductos]);
-
-  const cargarTodo = async () => {
-    setLoading(true);
-    setLoadingError(false);
-    try {
-      const [familiasData, categoriasData, unidadesData, comodinesData] = await Promise.all([
-        familiaArticuloApi.obtenerTodo(sucursalProductos),
-        categoriaArticuloApi.obtenerListado(sucursalProductos),
-        unidadMedidaApi.obtenerListado(sucursalProductos),
-        productoApi.obtenerComodines(sucursalProductos),
-      ]);
-      setFamilias(familiasData || []);
-      setCategorias(categoriasData || []);
-      setUnidades(unidadesData || []);
-      setComodines(comodinesData || []);
-
-      if (mode === 'editar' && codigo) {
-        await cargarProducto(codigo);
-      } else if (isCloning && location.state?.codigoClonar) {
-        await cargarProducto(location.state.codigoClonar);
-      } else {
-        form.setFieldsValue({
-          activo: true,
-          paraVender: true,
-          paraComprar: true,
-          precio: 0,
-          ultimoCosto: 0,
-          prodserv: 'P',
-        });
-        setLoading(false);
-      }
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar datos del formulario');
-      setLoadingError(true);
-      setLoading(false);
-    }
-  };
 
   const cargarProducto = async (prodCodigo: string) => {
     try {
@@ -144,7 +92,7 @@ const ProductoFormulario: React.FC = () => {
         nombre: prod.nombre,
         referenciaInterna: prod.referenciaInterna,
         upc: prod.upc,
-        codigoSuplidor: (prod as any)?.codigoSuplidor || '',
+        codigoSuplidor: prod.codigoSuplidor || '',
         precio: prod.precio,
         ultimoCosto: prod.ultimoCosto,
         familia: prod.familia?.idExterno || undefined,
@@ -190,14 +138,63 @@ const ProductoFormulario: React.FC = () => {
       } else {
         setSelectedImpuestos([]);
       }
-    } catch (err: any) {
-      if (err?.name === 'CanceledError') return;
-      message.error(err?.response?.data?.errorMessage || 'Error al cargar producto');
+    } catch (err) {
+      if (err instanceof Error && err.name === 'CanceledError') return;
+      message.error(extraerMensajeError(err, 'Error al cargar producto'));
       setLoadingError(true);
     } finally {
       setLoading(false);
     }
   };
+
+  const cargarDatos = () =>
+    Promise.all([
+      familiaArticuloApi.obtenerTodo(sucursalProductos),
+      categoriaArticuloApi.obtenerListado(sucursalProductos),
+      unidadMedidaApi.obtenerListado(sucursalProductos),
+      productoApi.obtenerComodines(sucursalProductos),
+    ])
+      .then(([familiasData, categoriasData, unidadesData, comodinesData]) => {
+        setFamilias(familiasData || []);
+        setCategorias(categoriasData || []);
+        setUnidades(unidadesData || []);
+        setComodines(comodinesData || []);
+        setLoadingError(false);
+
+        if (mode === 'editar' && codigo) {
+          return cargarProducto(codigo);
+        }
+        if (isCloning && location.state?.codigoClonar) {
+          return cargarProducto(location.state.codigoClonar);
+        }
+        form.setFieldsValue({
+          activo: true,
+          paraVender: true,
+          paraComprar: true,
+          precio: 0,
+          ultimoCosto: 0,
+          prodserv: 'P',
+        });
+        return undefined;
+      })
+      .catch((err) => {
+        message.error(extraerMensajeError(err, 'Error al cargar datos del formulario'));
+        setLoadingError(true);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+
+  const recargarDatos = async () => {
+    setLoading(true);
+    setLoadingError(false);
+    await cargarDatos();
+  };
+
+  useEffect(() => {
+    void cargarDatos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codigo, sucursalProductos]);
 
   const handleGuardar = async () => {
     if (guardandoRef.current) return;
@@ -233,9 +230,10 @@ const ProductoFormulario: React.FC = () => {
         ? unidades.find((u) => u.idExterno === values.unidadMedidaCompra) || null
         : null;
 
-      const productoControlSelected = values.productoControl
-        ? comodines.find((c: any) => c.codigo === values.productoControl)
-          || { codigo: values.productoControl }
+      const productoControlSelected: ProductoDTO | null = values.productoControl
+        ? comodines.find((c) => c.codigo === values.productoControl)
+          // El backend solo necesita el código del producto control
+          || { codigo: values.productoControl } as ProductoDTO
         : null;
 
       const datosExtra: DatosExtraProductoDTO = {
@@ -288,7 +286,7 @@ const ProductoFormulario: React.FC = () => {
               },
             }))
           : [],
-      } as ProductoDTO & { codigoSuplidor?: string };
+      };
 
       if (mode === 'crear') {
         const creado = await productoApi.crear(sucursalProductos, dto);
@@ -301,9 +299,9 @@ const ProductoFormulario: React.FC = () => {
         message.success('Producto actualizado correctamente');
         navigate('/MProducto/' + codigo, { replace: true });
       }
-    } catch (err: any) {
-      if (err?.errorFields) return;
-      message.error(err?.response?.data?.errorMessage || 'Error al guardar producto');
+    } catch (err) {
+      if (err && typeof err === 'object' && 'errorFields' in err) return;
+      message.error(extraerMensajeError(err, 'Error al guardar producto'));
     } finally {
       guardandoRef.current = false;
       setSaving(false);
@@ -326,7 +324,7 @@ const ProductoFormulario: React.FC = () => {
     });
   };
 
-  const handleImageChange = (info: any) => {
+  const handleImageChange: UploadProps['onChange'] = (info) => {
     if (guardandoRef.current) return;
     const file = info.fileList?.[0]?.originFileObj;
     if (file) {
@@ -350,32 +348,6 @@ const ProductoFormulario: React.FC = () => {
       </div>
     );
   }
-
-  const impuestoColumns = [
-    {
-      title: 'Nombre', key: 'nombre',
-      render: (_: any, r: ImpuestoProductoDTO) => r.impuesto?.nombre ? toTitleCase(r.impuesto.nombre) : '-',
-    },
-    {
-      title: 'Porcentaje (%)', key: 'porcentaje', width: 130, align: 'right' as const,
-      render: (_: any, r: ImpuestoProductoDTO) =>
-        r.impuesto?.porcentaje !== undefined ? formatNumber(r.impuesto.porcentaje) : '-',
-    },
-    {
-      title: 'Tipo', key: 'tipo', width: 120,
-      render: (_: any, r: ImpuestoProductoDTO) =>
-        r.impuesto?.tipo !== undefined
-          ? (TIPO_IMPUESTO_MAP[r.impuesto.tipo] || `Tipo ${r.impuesto.tipo}`)
-          : '-',
-    },
-    {
-      title: 'Ámbito', key: 'ambito', width: 100,
-      render: (_: any, r: ImpuestoProductoDTO) =>
-        r.impuesto?.ambito !== undefined
-          ? (AMBITO_IMPUESTO_MAP[r.impuesto.ambito] || `Ámbito ${r.impuesto.ambito}`)
-          : '-',
-    },
-  ];
 
   const renderRightPanel = () => (
     <>
@@ -657,7 +629,7 @@ const ProductoFormulario: React.FC = () => {
           showIcon
           style={{ marginBottom: 16 }}
           action={
-            <Button size="small" onClick={() => { setLoadingError(false); cargarTodo(); }}>
+            <Button size="small" onClick={() => { void recargarDatos(); }}>
               Reintentar
             </Button>
           }
@@ -781,7 +753,7 @@ const ProductoFormulario: React.FC = () => {
                 <Col xs={24} sm={12} md={8}>
                   <Form.Item name="productoControl" label="Producto Control">
                     <Select allowClear showSearch optionFilterProp="children" placeholder="Seleccionar producto control">
-                      {comodines.map((c: any) => (
+                      {comodines.map((c) => (
                         <Select.Option key={c.codigo || ''} value={c.codigo || ''}>
                           {c.codigo}{c.nombre ? ` - ${toTitleCase(c.nombre)}` : ''}
                         </Select.Option>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Table, Card, Button, Modal, Form, Input, InputNumber, message, Typography, Alert, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -26,6 +26,9 @@ const UnidadesMedida: React.FC = () => {
   const [pageSize, setPageSize] = useState(25);
   const [modalVisible, setModalVisible] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const guardandoRef = useRef(false);
+  const exportandoRef = useRef(false);
   const [form] = Form.useForm();
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -53,26 +56,36 @@ const UnidadesMedida: React.FC = () => {
   }, [setActiveModule, updateToolbar, resetToolbar]);
 
   const handleExportarExcel = async () => {
-    const companyName = await getCompanyName(sucursalActiva);
-    const dataSource = data?.datos || [];
-    const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
-    const columnHeaders = exportCols.map((col: any) => col.title);
-    const dataRows = dataSource.map((item: any) =>
-      exportCols.map((col: any) => {
-        if (col.dataIndex) {
-          const val = item[col.dataIndex];
-          return val != null ? String(val) : '';
-        }
-        return '';
-      })
-    );
-    exportToExcel({
-      fileName: `UnidadesMedida_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
-      sheetName: 'UnidadesMedida',
-      companyName,
-      columnHeaders,
-      dataRows,
-    });
+    if (exportandoRef.current) return;
+    exportandoRef.current = true;
+    setExportando(true);
+    try {
+      const companyName = await getCompanyName(sucursalActiva);
+      const dataSource = data?.datos || [];
+      const exportCols = columns.filter((col: any) => col.title && col.title !== '' && col.title !== 'Acciones');
+      const columnHeaders = exportCols.map((col: any) => col.title);
+      const dataRows = dataSource.map((item: any) =>
+        exportCols.map((col: any) => {
+          if (col.dataIndex) {
+            const val = item[col.dataIndex];
+            return val != null ? String(val) : '';
+          }
+          return '';
+        })
+      );
+      exportToExcel({
+        fileName: `UnidadesMedida_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+        sheetName: 'UnidadesMedida',
+        companyName,
+        columnHeaders,
+        dataRows,
+      });
+    } catch (err: any) {
+      message.error(err?.response?.data?.errorMessage || 'Error al exportar a Excel');
+    } finally {
+      exportandoRef.current = false;
+      setExportando(false);
+    }
   };
 
   const handleSearch = (value: string) => {
@@ -82,16 +95,24 @@ const UnidadesMedida: React.FC = () => {
 
   const abrirNuevo = () => {
     if (!puedeCrear) return;
+    if (guardandoRef.current || guardando) return;
     form.resetFields();
     form.setFieldsValue({ factor: 1 });
     setModalVisible(true);
   };
 
+  const handleCerrarModal = () => {
+    if (guardandoRef.current || guardando) return;
+    setModalVisible(false);
+  };
+
   const guardar = async () => {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
+    setGuardando(true);
     try {
       const values = await form.validateFields();
       if (sucursalActiva === undefined) return;
-      setGuardando(true);
       const payload: UnidadMedidaDTO = {
         nombre: values.nombre,
         codigo: values.codigo,
@@ -106,6 +127,7 @@ const UnidadesMedida: React.FC = () => {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar unidad de medida');
     } finally {
+      guardandoRef.current = false;
       setGuardando(false);
     }
   };
@@ -147,7 +169,7 @@ const UnidadesMedida: React.FC = () => {
     <>
       {isError && (
         <Alert
-          title="Error al cargar unidades de medida"
+          message="Error al cargar unidades de medida"
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
@@ -170,6 +192,7 @@ const UnidadesMedida: React.FC = () => {
           onNuevo={abrirNuevo}
           onReload={() => refetch()}
           onExportarExcel={handleExportarExcel}
+          exportando={exportando}
         />
         <Table<UnidadMedidaDTO>
           columns={columns}
@@ -199,14 +222,19 @@ const UnidadesMedida: React.FC = () => {
       <Modal
         title="Nueva Unidad de Medida"
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={handleCerrarModal}
         onOk={guardar}
         confirmLoading={guardando}
+        okButtonProps={{ loading: guardando, disabled: guardando }}
+        cancelButtonProps={{ disabled: guardando }}
+        closable={!guardando}
+        maskClosable={!guardando}
+        keyboard={!guardando}
         width={480}
         okText="Guardar"
         cancelText="Cancelar"
       >
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }} disabled={guardando}>
           <Form.Item
             name="codigo"
             label="Código"

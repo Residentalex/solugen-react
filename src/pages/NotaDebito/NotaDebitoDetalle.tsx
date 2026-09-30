@@ -429,6 +429,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
               items={[
                 {
                   key: 'documentos',
+                  icon: <FileTextOutlined />,
                   label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('relacionados')} tip="Cargando documentos...">
@@ -446,6 +447,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
                 },
                 {
                   key: 'impuestos',
+                  icon: <FileTextOutlined />,
                   label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('impuestos')} tip="Cargando impuestos...">
@@ -549,6 +551,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
               items={[
                 {
                   key: 'documentos',
+                  icon: <FileTextOutlined />,
                   label: `Documentos (${documentoActivo?.transaccionesAsociadas?.length || 0})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('relacionados')} tip="Cargando documentos...">
@@ -566,6 +569,7 @@ const NotaDebitoDetalle: React.FC<NotaDebitoDetalleProps> = ({ tipoEntidad }) =>
                 },
                 {
                   key: 'impuestos',
+                  icon: <FileTextOutlined />,
                   label: `Impuestos (${documentoActivo.impuestosFactura?.length || 0})`,
                   children: (
                     <Spin spinning={seccionesCargando.has('impuestos')} tip="Cargando impuestos...">

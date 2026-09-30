@@ -501,11 +501,8 @@ const ConceptoFormulario: React.FC = () => {
 
   const handleLimpiarDocAGenerar = () => {
     setDocAGenerarText('');
-    form.setFieldsValue({ docAGenerar: undefined });
-    // Limpiar dependientes
-    handleSucDestChange(undefined);
     setConceptoDestinoText('');
-    form.setFieldsValue({ conceptoDestino: undefined });
+    form.setFieldsValue({ docAGenerar: undefined, sucDest: undefined, conceptoDestino: undefined });
   };
 
   const handleDocumentoSelect = (doc: DocumentoDTO) => {
@@ -556,11 +553,9 @@ const ConceptoFormulario: React.FC = () => {
     setConceptoReplicaModalOpen(true);
   };
 
-  const handleSucursalReplicaChange = (value: string | undefined) => {
-    if (!value) {
-      setConceptoReplicaText('');
-      form.setFieldValue('conceptoReplica', undefined);
-    }
+  const handleSucursalReplicaChange = () => {
+    setConceptoReplicaText('');
+    form.setFieldValue('conceptoReplica', undefined);
   };
 
   // ===== Loading state =====
@@ -595,11 +590,9 @@ const ConceptoFormulario: React.FC = () => {
     }
   };
 
-  const handleSucDestChange = (value: string | undefined) => {
-    if (!value) {
-      setConceptoDestinoText('');
-      form.setFieldValue('conceptoDestino', undefined);
-    }
+  const handleSucDestChange = () => {
+    setConceptoDestinoText('');
+    form.setFieldValue('conceptoDestino', undefined);
   };
 
   // ===== Handlers para Entidades y Documentos =====
@@ -658,50 +651,312 @@ const ConceptoFormulario: React.FC = () => {
     }
   };
 
+  // ===== Definir contenido de tabs una sola vez =====
+  const inventarioTabContent = (
+    <div style={{ paddingTop: 16 }}>
+      <Form form={form} onValuesChange={() => setFormTouched(true)} layout="vertical" size="middle" disabled={saving}>
+        <Row gutter={[16, 24]}>
+          <Col xs={24} sm={12} lg={8}>
+            <Form.Item name="noImpuesto" valuePropName="checked" label="Sin Impuesto" initialValue={false}>
+              <Switch />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} lg={8}>
+            <Form.Item name="noActualizaCostos" valuePropName="checked" label="No Actualiza Costos" initialValue={false}>
+              <Switch />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} lg={8}>
+            <Form.Item name="codAlm" label="Almacen">
+              <Select allowClear placeholder="Seleccionar almacen..." showSearch optionFilterProp="label"
+                options={almacenes.map(a => ({ value: a.codigo, label: a.nombre }))} />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Card className="paces-card" size="small" title="Aplicacion - Generar Documento" style={{ marginBottom: 16 }}>
+          <Row gutter={[16, 24]}>
+            <Col xs={24} sm={12} lg={8}>
+              <Form.Item name="docAGenerar" hidden><Input /></Form.Item>
+              <div>
+                <Text type="secondary" style={{ fontSize: 11 }}>Documento a generar</Text>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 0 }}>
+                  <div style={{ flex: 1 }}>
+                    <Input placeholder="Buscar documento..." value={docAGenerarText} readOnly
+                      suffix={<SearchOutlined />} onClick={() => setDocModalOpen(true)} />
+                  </div>
+                  {docAGenerarText && <Button icon={<CloseOutlined />} onClick={handleLimpiarDocAGenerar} />}
+                </div>
+                <Text type="secondary" style={{ fontSize: 11, display: "block", marginTop: 2 }}>Genera otro documento al aplicar</Text>
+              </div>
+            </Col>
+            <Col xs={24} sm={12} lg={8}>
+              <Form.Item name="sucDest" label="Sucursal destino"
+                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si hay documento a generar</Text>}>
+                <Select allowClear placeholder="Seleccionar sucursal..." showSearch optionFilterProp="label"
+                  disabled={!docAGenerarValue}
+                  options={sucursales.map(s => ({ value: s.codigo, label: toTitleCase(s.nombre) }))}
+                  onChange={handleSucDestChange} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} lg={8}>
+              <Form.Item name="conceptoDestino" hidden><Input /></Form.Item>
+              <div>
+                <Text type="secondary" style={{ fontSize: 11 }}>Concepto destino</Text>
+                <div>
+                  <Input placeholder="Buscar concepto destino..." value={conceptoDestinoText} readOnly
+                    disabled={!sucDestValue} suffix={<SearchOutlined />}
+                    onClick={() => sucDestValue && handleBuscarConceptoDestino()} />
+                </div>
+                <Text type="secondary" style={{ fontSize: 11, display: "block", marginTop: 2 }}>Obligatorio si la sucursal destino es diferente</Text>
+              </div>
+            </Col>
+          </Row>
+        </Card>
+        <Card className="paces-card" size="small" title="Aplicacion - Replicar a Otra Sucursal">
+          <Row gutter={[16, 24]}>
+            <Col xs={24} sm={12} lg={8}>
+              <Form.Item name="replicar" valuePropName="checked" label="Replicar"
+                extra={<Text type="secondary" style={{ fontSize: 11 }}>Replica el mismo documento a otra sucursal</Text>}
+                initialValue={false}>
+                <Switch onChange={handleReplicarChange} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} lg={8}>
+              <Form.Item name="sucursalReplica" label="Sucursal replica"
+                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si Replicar esta activo</Text>}
+                rules={replicarValue ? [{ required: true, message: "Debe seleccionar una sucursal replica" }] : []}>
+                <Select allowClear placeholder="Seleccionar sucursal..." showSearch optionFilterProp="label"
+                  disabled={!replicarValue}
+                  options={sucursales.map(s => ({ value: s.codigo, label: toTitleCase(s.nombre) }))}
+                  onChange={handleSucursalReplicaChange} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} lg={8}>
+              <Form.Item name="conceptoReplica" hidden><Input /></Form.Item>
+              <div>
+                <Text type="secondary" style={{ fontSize: 11 }}>Concepto replica</Text>
+                <div>
+                  <Input placeholder="Buscar concepto replica..." value={conceptoReplicaText} readOnly
+                    disabled={!replicarValue} suffix={<SearchOutlined />}
+                    onClick={() => replicarValue && handleBuscarConceptoReplica()} />
+                </div>
+                  <Text type="secondary" style={{ fontSize: 11, display: "block", marginTop: 2 }}>Concepto que usara en la sucursal replica</Text>
+                </div>
+              </Col>
+            </Row>
+        </Card>
+      </Form>
+    </div>
+  );
+
+  const contabilidadTabContent = (
+    <div style={{ paddingTop: 16 }}>
+      <Form form={form} onValuesChange={() => setFormTouched(true)} layout="vertical" size="middle" disabled={saving}>
+        <Row gutter={[16, 24]}>
+          <Col xs={24} sm={12} lg={8}>
+            <Form.Item name="noAsientos" valuePropName="checked" label="No genera asientos" initialValue={false}>
+              <Switch />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} lg={8}>
+            <Form.Item name="tipoIngreso" label="Tipo Ingreso">
+              <Select allowClear placeholder="Seleccionar tipo..." options={TIPO_INGRESO_OPTIONS} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12} lg={8}>
+            <Form.Item name="cuentaContable" hidden><Input /></Form.Item>
+            <div>
+              <Text type="secondary" style={{ fontSize: 11 }}>Cuenta Contable</Text>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 0 }}>
+                <div style={{ flex: 1 }}>
+                  <Input placeholder="Buscar cuenta contable..." value={cuentaContableText} readOnly
+                    suffix={<SearchOutlined />} onClick={() => setCuentaModalOpen(true)} />
+                </div>
+                {cuentaContableText && <Button icon={<CloseOutlined />} onClick={handleCuentaContableClear} />}
+              </div>
+            </div>
+          </Col>
+        </Row>
+      </Form>
+    </div>
+  );
+
+  const entidadTabContent = (
+    <div style={{ paddingTop: 16 }}>
+      <Button type="dashed" icon={<SearchOutlined />} onClick={() => setEntidadBuscarModalOpen(true)}
+        style={{ marginBottom: 16 }}>
+        Agregar Entidad
+      </Button>
+      {entidades.length > 0 ? (
+        <Table dataSource={entidades} rowKey="codigo" size="small"
+          pagination={{ pageSize: 10, showSizeChanger: false }}
+          columns={[
+            { title: "Codigo", dataIndex: "codigo", width: 120 },
+            { title: "Nombre", dataIndex: "nombre", render: (v: string) => toTitleCase(v) },
+            {
+              title: "Tipo", dataIndex: "tipo", width: 200,
+              render: (v: string, _: any, idx: number) => (
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <Input size="small" value={v} onChange={(e) => {
+                    const newEntidades = [...entidades];
+                    newEntidades[idx] = { ...newEntidades[idx], tipo: e.target.value };
+                    setEntidades(newEntidades);
+                  }} placeholder="Tipo" style={{ width: 60 }} />
+                  {v && tiposMap[v] && <Tag style={{ margin: 0 }}>{v} - {toTitleCase(tiposMap[v])}</Tag>}
+                </div>
+              ),
+            },
+            {
+              title: "Accion", width: 80,
+              render: (_: any, record: any) => (
+                <Button size="small" danger icon={<CloseOutlined />} onClick={() => handleQuitarEntidad(record.codigo)} />
+              ),
+            },
+          ]}
+        />
+      ) : (
+        <Text type="secondary">No hay entidades agregadas</Text>
+      )}
+    </div>
+  );
+
+  const documentosTabContent = (
+    <div style={{ paddingTop: 16 }}>
+      <Button type="dashed" icon={<SearchOutlined />} onClick={() => setAgregarDocModalOpen(true)}
+        style={{ marginBottom: 16 }}>
+        Agregar Documento
+      </Button>
+      {documentosForm.length > 0 ? (
+        <Table dataSource={documentosForm} rowKey="codigo" size="small" pagination={false}
+          columns={[
+            { title: "Codigo", dataIndex: "codigo", width: 120 },
+            { title: "Nombre", dataIndex: "nombre", render: (v: string) => toTitleCase(v) },
+            {
+              title: "Tipos", dataIndex: "tipos", width: "100%",
+              render: (v: string[], record: DocumentoConceptoForm) => {
+                const tiposFiltrados = tiposList.filter(t => t.documento === record?.codigo);
+                const tiposParaSelect = tiposFiltrados.length > 0 ? tiposFiltrados : tiposList;
+                const valor = Array.isArray(v) ? v : [];
+                return (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                    <Select size="small" mode="multiple" value={valor}
+                      onChange={(val: string[]) => handleDocumentoTipoChange(record.codigo, val)}
+                      placeholder="Seleccionar tipos..."
+                      style={{ width: "100%" }}
+                      showSearch optionFilterProp="label" allowClear
+                      options={tiposParaSelect.map(t => ({ value: t.codigo, label: `${t.codigo} - ${t.nombre}` }))} />
+                  </div>
+                );
+              },
+            },
+            {
+              title: "Accion", width: 80,
+              render: (_: any, record: any) => (
+                <Button size="small" danger icon={<CloseOutlined />} onClick={() => handleQuitarDocumentoForm(record.codigo)} />
+              ),
+            },
+          ]}
+        />
+      ) : (
+        <Text type="secondary">No hay documentos agregados</Text>
+      )}
+    </div>
+  );
+
+  const tabsItems = [
+    { key: "inventario", label: "Informacion General", children: inventarioTabContent },
+    { key: "contabilidad", label: "Contabilidad", children: contabilidadTabContent },
+    { key: "entidad", label: "Entidad", children: entidadTabContent },
+    { key: "documentos", label: "Restricciones - Documentos", children: documentosTabContent },
+  ];
+
+  const sidebarOpciones = (
+    <Card className="paces-card" size="small"
+      title={<span style={{ fontSize: 16, fontWeight: 600 }}>Opciones</span>}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div>
+          <Text type="secondary" style={{ fontSize: 12 }}>Activo</Text>
+          <br />
+          <Tag color={activoValue !== false ? "green" : "default"}>
+            {activoValue !== false ? "Activo" : "Inactivo"}
+          </Tag>
+        </div>
+        <div>
+          <Text type="secondary" style={{ fontSize: 12 }}>Sin Impuesto</Text>
+          <br />
+          <Tag color={noImpuestoValue ? "orange" : "default"}>
+            {noImpuestoValue ? "Si" : "No"}
+          </Tag>
+        </div>
+        <div>
+          <Text type="secondary" style={{ fontSize: 12 }}>No Actualiza Costos</Text>
+          <br />
+          <Tag color={noActualizaCostosValue ? "orange" : "default"}>
+            {noActualizaCostosValue ? "Si" : "No"}
+          </Tag>
+        </div>
+        <div>
+          <Text type="secondary" style={{ fontSize: 12 }}>No genera asientos</Text>
+          <br />
+          <Tag color={noAsientosValue ? "orange" : "default"}>
+            {noAsientosValue ? "Si" : "No"}
+          </Tag>
+        </div>
+        <div>
+          <Text type="secondary" style={{ fontSize: 12 }}>Replicar</Text>
+          <br />
+          <Tag color={replicarValue ? "blue" : "default"}>
+            {replicarValue ? "Si" : "No"}
+          </Tag>
+        </div>
+      </div>
+    </Card>
+  );
+
   return (
     <div>
       {/* Encabezado fijo con resumen persistente */}
       <div
         style={{
-          position: 'sticky',
+          position: "sticky",
           top: 0,
           zIndex: 10,
-          background: formTouched ? '#fffbe6' : '#fff',
-          borderBottom: '1px solid #f0f0f0',
-          padding: '12px 16px',
+          background: formTouched ? "#fffbe6" : "#fff",
+          borderBottom: "1px solid #f0f0f0",
+          padding: "12px 16px",
           borderRadius: 6,
           marginBottom: 12,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
           gap: 8,
-          boxShadow: formTouched ? '0 2px 6px rgba(241, 180, 76, 0.25)' : 'none',
+          boxShadow: formTouched ? "0 2px 6px rgba(241, 180, 76, 0.25)" : "none",
         }}
       >
         <div>
-          <Text strong style={{ fontSize: 15, color: '#1a1a1a' }}>
-            {mode === 'crear' ? 'Nuevo Concepto' : `${data?.codigo || ''} - ${data?.nombre || 'Concepto'}`}
+          <Text strong style={{ fontSize: 15, color: "#1a1a1a" }}>
+            {mode === "crear" ? "Nuevo Concepto" : `${data?.codigo || ""} - ${data?.nombre || "Concepto"}`}
           </Text>
-          <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
-            {mode === 'crear' ? 'Configurando nuevo concepto' : `Estado: ${data?.activo ? 'Activo' : 'Inactivo'}`}
+          <Text type="secondary" style={{ fontSize: 12, display: "block" }}>
+            {mode === "crear" ? "Configurando nuevo concepto" : `Estado: ${data?.activo ? "Activo" : "Inactivo"}`}
           </Text>
         </div>
         {formTouched && (
-          <Tag color="warning" style={{ fontSize: 13, padding: '4px 10px', borderRadius: 6 }}>
+          <Tag color="warning" style={{ fontSize: 13, padding: "4px 10px", borderRadius: 6 }}>
             Cambios sin guardar
           </Tag>
         )}
       </div>
 
       {/* Toolbar inline */}
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 16, gap: 8 }}>
         <div style={{ flex: 1 }} />
         <Space wrap>
-          {mode === 'editar' && data && (
-            <Tag color={data.activo ? 'green' : 'default'}>{data.activo ? 'Activo' : 'Inactivo'}</Tag>
+          {mode === "editar" && data && (
+            <Tag color={data.activo ? "green" : "default"}>{data.activo ? "Activo" : "Inactivo"}</Tag>
           )}
-          <PermissionGate accion={mode === 'editar' ? 'EDITAR' : 'CREAR'}>
+          <PermissionGate accion={mode === "editar" ? "EDITAR" : "CREAR"}>
             <Button type="primary" icon={<SaveOutlined />} loading={saving} disabled={saving} onClick={handleGuardar}>
               Guardar
             </Button>
@@ -712,28 +967,20 @@ const ConceptoFormulario: React.FC = () => {
         </Space>
       </div>
 
-      {isLarge ? (<>
+      {/* Layout unificado desktop/mobile */}
+      {isLarge ? (
         <Row gutter={16}>
           <Col xxl={18}>
-            {/* Datos Generales */}
-            {/* Sección: Información General */}
-            <Card className="paces-card" size="small" title="Información General - Datos del Concepto" style={{ marginBottom: 16 }}>
+            <Card className="paces-card" size="small" title="Informacion General - Datos del Concepto" style={{ marginBottom: 16 }}>
               <Form form={form} onValuesChange={() => setFormTouched(true)} layout="vertical" size="middle" disabled={saving} style={{ paddingTop: 24 }}>
                 <Row gutter={[16, 24]}>
                   <Col xs={24} sm={12} lg={8}>
-                    <Form.Item
-                      name="codigo"
-                      label="Código"
-                    >
+                    <Form.Item name="codigo" label="Codigo">
                       <Input disabled placeholder="Auto-generado" />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={8}>
-                    <Form.Item
-                      name="nombre"
-                      label="Nombre"
-                      rules={[{ required: true, message: 'El nombre es requerido' }]}
-                    >
+                    <Form.Item name="nombre" label="Nombre" rules={[{ required: true, message: "El nombre es requerido" }]}>
                       <Input placeholder="Nombre del concepto" />
                     </Form.Item>
                   </Col>
@@ -745,413 +992,24 @@ const ConceptoFormulario: React.FC = () => {
                 </Row>
               </Form>
             </Card>
-
-            {/* Tabs */}
-            <Tabs
-              type="card"
-              items={[
-                {
-                  key: 'inventario',
-                  label: 'Información General',
-                  children: (
-                    <div style={{ paddingTop: 16 }}>
-                      <Form form={form} onValuesChange={() => setFormTouched(true)} layout="vertical" size="middle" disabled={saving}>
-                        <Row gutter={[16, 24]}>
-                          <Col xs={24} sm={12} lg={8}>
-                            <Form.Item name="noImpuesto" valuePropName="checked" label="Sin Impuesto" initialValue={false}>
-                              <Switch />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} sm={12} lg={8}>
-                            <Form.Item name="noActualizaCostos" valuePropName="checked" label="No Actualiza Costos" initialValue={false}>
-                              <Switch />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} sm={12} lg={8}>
-                            <Form.Item name="codAlm" label="Almacén">
-                              <Select
-                                allowClear
-                                placeholder="Seleccionar almacén..."
-                                showSearch
-                                optionFilterProp="label"
-                                options={almacenes.map(a => ({ value: a.codigo, label: a.nombre }))}
-                              />
-                            </Form.Item>
-                          </Col>
-                        </Row>
-
-                        {/* Sección: Aplicación - Generar Documento */}
-                        <Card className="paces-card" size="small" title="Aplicación - Generar Documento" style={{ marginBottom: 16 }}>
-                          <Row gutter={[16, 24]}>
-                            <Col xs={24} sm={12} lg={8}>
-                              <Form.Item name="docAGenerar" hidden>
-                                <Input />
-                              </Form.Item>
-                              <div>
-                                <Text type="secondary" style={{ fontSize: 11 }}>Documento a generar</Text>
-                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-                                  <div style={{ flex: 1 }}>
-                                    <Input
-                                      placeholder="Buscar documento..."
-                                      value={docAGenerarText}
-                                      readOnly
-                                      suffix={<SearchOutlined />}
-                                      onClick={() => setDocModalOpen(true)}
-                                    />
-                                  </div>
-                                  {docAGenerarText && (
-                                    <Button icon={<CloseOutlined />} onClick={handleLimpiarDocAGenerar} />
-                                  )}
-                                </div>
-                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Genera otro documento al aplicar</Text>
-                              </div>
-                            </Col>
-                            <Col xs={24} sm={12} lg={8}>
-                              <Form.Item
-                                name="sucDest"
-                                label="Sucursal destino"
-                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si hay documento a generar</Text>}
-                              >
-                                <Select
-                                  allowClear
-                                  placeholder="Seleccionar sucursal..."
-                                  showSearch
-                                  optionFilterProp="label"
-                                  disabled={!docAGenerarValue}
-                                  options={sucursales.map(s => ({ value: s.codigo, label: toTitleCase(s.nombre) }))}
-                                  onChange={handleSucDestChange}
-                                />
-                              </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={12} lg={8}>
-                              <Form.Item name="conceptoDestino" hidden>
-                                <Input />
-                              </Form.Item>
-                              <div>
-                                <Text type="secondary" style={{ fontSize: 11 }}>Concepto destino</Text>
-                                <div>
-                                  <Input
-                                    placeholder="Buscar concepto destino..."
-                                    value={conceptoDestinoText}
-                                    readOnly
-                                    disabled={!sucDestValue}
-                                    suffix={<SearchOutlined />}
-                                    onClick={() => sucDestValue && handleBuscarConceptoDestino()}
-                                  />
-                                </div>
-                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Obligatorio si la sucursal destino es diferente</Text>
-                              </div>
-                            </Col>
-                          </Row>
-                        </Card>
-
-                        {/* Sección: Aplicación - Replicar a Otra Sucursal */}
-                        <Card className="paces-card" size="small" title="Aplicación - Replicar a Otra Sucursal">
-                          <Row gutter={[16, 24]}>
-                            <Col xs={24} sm={12} lg={8}>
-                              <Form.Item
-                                name="replicar"
-                                valuePropName="checked"
-                                label="Replicar"
-                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Replica el mismo documento a otra sucursal</Text>}
-                                initialValue={false}
-                              >
-                                <Switch onChange={handleReplicarChange} />
-                              </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={12} lg={8}>
-                              <Form.Item
-                                name="sucursalReplica"
-                                label="Sucursal réplica"
-                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si Replicar está activo</Text>}
-                                rules={replicarValue ? [{ required: true, message: 'Debe seleccionar una sucursal réplica' }] : []}
-                              >
-                                <Select
-                                  allowClear
-                                  placeholder="Seleccionar sucursal..."
-                                  showSearch
-                                  optionFilterProp="label"
-                                  disabled={!replicarValue}
-                                  options={sucursales.map(s => ({ value: s.codigo, label: toTitleCase(s.nombre) }))}
-                                  onChange={handleSucursalReplicaChange}
-                                />
-                              </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={12} lg={8}>
-                              <Form.Item name="conceptoReplica" hidden>
-                                <Input />
-                              </Form.Item>
-                              <div>
-                                <Text type="secondary" style={{ fontSize: 11 }}>Concepto réplica</Text>
-                                <div>
-                                  <Input
-                                    placeholder="Buscar concepto réplica..."
-                                    value={conceptoReplicaText}
-                                    readOnly
-                                    disabled={!replicarValue}
-                                    suffix={<SearchOutlined />}
-                                    onClick={() => replicarValue && handleBuscarConceptoReplica()}
-                                  />
-                                </div>
-                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Concepto que usará en la sucursal réplica</Text>
-                              </div>
-                            </Col>
-                          </Row>
-                        </Card>
-                      </Form>
-                    </div>
-                  ),
-                },
-                {
-                  key: 'contabilidad',
-                  label: 'Contabilidad',
-                  children: (
-                    <div style={{ paddingTop: 16 }}>
-                      <Form form={form} onValuesChange={() => setFormTouched(true)} layout="vertical" size="middle" disabled={saving}>
-                        <Row gutter={[16, 24]}>
-                          <Col xs={24} sm={12} lg={8}>
-                            <Form.Item name="noAsientos" valuePropName="checked" label="No genera asientos" initialValue={false}>
-                              <Switch />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24} sm={12} lg={8}>
-                            <Form.Item name="tipoIngreso" label="Tipo Ingreso">
-                              <Select
-                                allowClear
-                                placeholder="Seleccionar tipo..."
-                                options={TIPO_INGRESO_OPTIONS}
-                              />
-                            </Form.Item>
-                          </Col>
-                            <Col xs={24} sm={12} lg={8}>
-                              <Form.Item name="cuentaContable" hidden>
-                                <Input />
-                              </Form.Item>
-                              <div>
-                                <Text type="secondary" style={{ fontSize: 11 }}>Cuenta Contable</Text>
-                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-                                  <div style={{ flex: 1 }}>
-                                    <Input
-                                      placeholder="Buscar cuenta contable..."
-                                      value={cuentaContableText}
-                                      readOnly
-                                      suffix={<SearchOutlined />}
-                                      onClick={() => setCuentaModalOpen(true)}
-                                    />
-                                  </div>
-                                  {cuentaContableText && (
-                                    <Button icon={<CloseOutlined />} onClick={handleCuentaContableClear} />
-                                  )}
-                                </div>
-                              </div>
-                            </Col>
-                          </Row>
-                        </Form>
-                      </div>
-                  ),
-                },
-                {
-                  key: 'entidad',
-                  label: 'Entidad',
-                  children: (
-                    <div style={{ paddingTop: 16 }}>
-                      <Button
-                        type="dashed"
-                        icon={<SearchOutlined />}
-                        onClick={() => setEntidadBuscarModalOpen(true)}
-                        style={{ marginBottom: 16 }}
-                      >
-                        Agregar Entidad
-                      </Button>
-                      {entidades.length > 0 ? (
-                        <Table
-                          dataSource={entidades}
-                          rowKey="codigo"
-                          size="small"
-                          pagination={{ pageSize: 10, showSizeChanger: false }}
-                          columns={[
-                            { title: 'Código', dataIndex: 'codigo', width: 120 },
-                            { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
-                            {
-                              title: 'Tipo',
-                              dataIndex: 'tipo',
-                              width: 200,
-                              render: (v: string, _: any, idx: number) => (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                  <Input
-                                    size="small"
-                                    value={v}
-                                    onChange={(e) => {
-                                      const newEntidades = [...entidades];
-                                      newEntidades[idx] = { ...newEntidades[idx], tipo: e.target.value };
-                                      setEntidades(newEntidades);
-                                    }}
-                                    placeholder="Tipo"
-                                    style={{ width: 60 }}
-                                  />
-                                  {v && tiposMap[v] && (
-                                    <Tag style={{ margin: 0 }}>{v} - {toTitleCase(tiposMap[v])}</Tag>
-                                  )}
-                                </div>
-                              ),
-                            },
-                            {
-                              title: 'Acción',
-                              width: 80,
-                              render: (_: any, record: any) => (
-                                <Button
-                                  size="small"
-                                  danger
-                                  icon={<CloseOutlined />}
-                                  onClick={() => handleQuitarEntidad(record.codigo)}
-                                />
-                              ),
-                            },
-                          ]}
-                        />
-                      ) : (
-                        <Text type="secondary">No hay entidades agregadas</Text>
-                      )}
-                    </div>
-                  ),
-                },
-                {
-                  key: 'documentos',
-                  label: 'Restricciones - Documentos',
-                  children: (
-                    <div style={{ paddingTop: 16 }}>
-                      <Button
-                        type="dashed"
-                        icon={<SearchOutlined />}
-                        onClick={() => setAgregarDocModalOpen(true)}
-                        style={{ marginBottom: 16 }}
-                      >
-                        Agregar Documento
-                      </Button>
-                      {documentosForm.length > 0 ? (
-                        <Table
-                          dataSource={documentosForm}
-                          rowKey="codigo"
-                          size="small"
-                          pagination={false}
-                          columns={[
-                            { title: 'Código', dataIndex: 'codigo', width: 120 },
-                            { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
-                            {
-                              title: 'Tipos',
-                              dataIndex: 'tipos',
-                              width: 300,
-                              render: (v: string[], record: DocumentoConceptoForm) => {
-                                const tiposFiltrados = tiposList.filter(t => t.documento === record?.codigo);
-                                const tiposParaSelect = tiposFiltrados.length > 0 ? tiposFiltrados : tiposList;
-                                const valor = Array.isArray(v) ? v : [];
-                                return (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                  <Select
-                                    size="small"
-                                    mode="multiple"
-                                    value={valor}
-                                    onChange={(val: string[]) => handleDocumentoTipoChange(record.codigo, val)}
-                                    placeholder="Seleccionar tipos..."
-                                    style={{ width: 250 }}
-                                    showSearch
-                                    optionFilterProp="label"
-                                    allowClear
-                                    options={tiposParaSelect.map(t => ({ value: t.codigo, label: `${t.codigo} - ${t.nombre}` }))}
-                                  />
-                                </div>
-                              );},
-                            },
-                            {
-                              title: 'Acción',
-                              width: 80,
-                              render: (_: any, record: any) => (
-                                <Button
-                                  size="small"
-                                  danger
-                                  icon={<CloseOutlined />}
-                                  onClick={() => handleQuitarDocumentoForm(record.codigo)}
-                                />
-                              ),
-                            },
-                          ]}
-                        />
-                      ) : (
-                        <Text type="secondary">No hay entidades agregadas</Text>
-                      )}
-                    </div>
-                  ),
-                },
-              ]}
-            />
+            <Tabs type="card" items={tabsItems} />
           </Col>
-
           <Col xxl={6}>
-            <Card
-              className="paces-card"
-              size="small"
-              title={<span style={{ fontSize: 16, fontWeight: 600 }}>Opciones</span>}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Activo</Text>
-                  <br />
-                  <Tag color={activoValue !== false ? 'green' : 'default'}>
-                    {activoValue !== false ? 'Activo' : 'Inactivo'}
-                  </Tag>
-                </div>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Sin Impuesto</Text>
-                  <br />
-                  <Tag color={noImpuestoValue ? 'orange' : 'default'}>
-                    {noImpuestoValue ? 'Sí' : 'No'}
-                  </Tag>
-                </div>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>No Actualiza Costos</Text>
-                  <br />
-                  <Tag color={noActualizaCostosValue ? 'orange' : 'default'}>
-                    {noActualizaCostosValue ? 'Sí' : 'No'}
-                  </Tag>
-                </div>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>No genera asientos</Text>
-                  <br />
-                  <Tag color={noAsientosValue ? 'orange' : 'default'}>
-                    {noAsientosValue ? 'Sí' : 'No'}
-                  </Tag>
-                </div>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Replicar</Text>
-                  <br />
-                  <Tag color={replicarValue ? 'blue' : 'default'}>
-                    {replicarValue ? 'Sí' : 'No'}
-                  </Tag>
-                </div>
-              </div>
-            </Card>
+            {sidebarOpciones}
           </Col>
         </Row>
-        </>) : (
-        /* === COMPACT/MOBILE LAYOUT (< xxl) === */
+      ) : (
         <div>
           <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
             <Form form={form} onValuesChange={() => setFormTouched(true)} layout="vertical" size="middle" disabled={saving} style={{ paddingTop: 24 }}>
               <Row gutter={[16, 24]}>
                 <Col xs={24}>
-                  <Form.Item
-                    name="codigo"
-                    label="Código"
-                  >
+                  <Form.Item name="codigo" label="Codigo">
                     <Input disabled placeholder="Auto-generado" />
                   </Form.Item>
                 </Col>
                 <Col xs={24}>
-                  <Form.Item
-                    name="nombre"
-                    label="Nombre"
-                    rules={[{ required: true, message: 'El nombre es requerido' }]}
-                  >
+                  <Form.Item name="nombre" label="Nombre" rules={[{ required: true, message: "El nombre es requerido" }]}>
                     <Input placeholder="Nombre del concepto" />
                   </Form.Item>
                 </Col>
@@ -1163,452 +1021,58 @@ const ConceptoFormulario: React.FC = () => {
               </Row>
             </Form>
           </Card>
-
-          <Tabs
-            type="card"
-            items={[
-              {
-                  key: 'inventario',
-                  label: 'Inventario',
-                  children: (
-                    <div style={{ paddingTop: 16 }}>
-                      <Form form={form} onValuesChange={() => setFormTouched(true)} layout="vertical" size="middle" disabled={saving}>
-                        <Row gutter={[16, 24]}>
-                          <Col xs={24}>
-                            <Form.Item name="noImpuesto" valuePropName="checked" label="Sin Impuesto" initialValue={false}>
-                              <Switch />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24}>
-                            <Form.Item name="noActualizaCostos" valuePropName="checked" label="No Actualiza Costos" initialValue={false}>
-                              <Switch />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24}>
-                            <Form.Item name="codAlm" label="Almacén">
-                              <Select
-                                allowClear
-                                placeholder="Seleccionar almacén..."
-                                showSearch
-                                optionFilterProp="label"
-                                options={almacenes.map(a => ({ value: a.codigo, label: a.nombre }))}
-                              />
-                            </Form.Item>
-                          </Col>
-                        </Row>
-
-                        {/* Sección: Aplicación - Generar Documento */}
-                        <Card className="paces-card" size="small" title="Aplicación - Generar Documento" style={{ marginBottom: 16 }}>
-                          <Row gutter={[16, 24]}>
-                            <Col xs={24}>
-                              <Form.Item name="docAGenerar" hidden>
-                                <Input />
-                              </Form.Item>
-                              <div>
-                                <Text type="secondary" style={{ fontSize: 11 }}>Documento a generar</Text>
-                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-                                  <div style={{ flex: 1 }}>
-                                    <Input
-                                      placeholder="Buscar documento..."
-                                      value={docAGenerarText}
-                                      readOnly
-                                      suffix={<SearchOutlined />}
-                                      onClick={() => setDocModalOpen(true)}
-                                    />
-                                  </div>
-                                  {docAGenerarText && (
-                                    <Button icon={<CloseOutlined />} onClick={handleLimpiarDocAGenerar} />
-                                  )}
-                                </div>
-                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Genera otro documento al aplicar</Text>
-                              </div>
-                            </Col>
-                            <Col xs={24}>
-                              <Form.Item
-                                name="sucDest"
-                                label="Sucursal destino"
-                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si hay documento a generar</Text>}
-                              >
-                                <Select
-                                  allowClear
-                                  placeholder="Seleccionar sucursal..."
-                                  showSearch
-                                  optionFilterProp="label"
-                                  disabled={!docAGenerarValue}
-                                  options={sucursales.map(s => ({ value: s.codigo, label: toTitleCase(s.nombre) }))}
-                                  onChange={handleSucDestChange}
-                                />
-                              </Form.Item>
-                            </Col>
-                            <Col xs={24}>
-                              <Form.Item name="conceptoDestino" hidden>
-                                <Input />
-                              </Form.Item>
-                              <div>
-                                <Text type="secondary" style={{ fontSize: 11 }}>Concepto destino</Text>
-                                <div>
-                                  <Input
-                                    placeholder="Buscar concepto destino..."
-                                    value={conceptoDestinoText}
-                                    readOnly
-                                    disabled={!sucDestValue}
-                                    suffix={<SearchOutlined />}
-                                    onClick={() => sucDestValue && handleBuscarConceptoDestino()}
-                                  />
-                                </div>
-                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Obligatorio si la sucursal destino es diferente</Text>
-                              </div>
-                            </Col>
-                          </Row>
-                        </Card>
-
-                        {/* Sección: Aplicación - Replicar a Otra Sucursal */}
-                        <Card className="paces-card" size="small" title="Aplicación - Replicar a Otra Sucursal">
-                          <Row gutter={[16, 24]}>
-                            <Col xs={24}>
-                              <Form.Item
-                                name="replicar"
-                                valuePropName="checked"
-                                label="Replicar"
-                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Replica el mismo documento a otra sucursal</Text>}
-                                initialValue={false}
-                              >
-                                <Switch onChange={handleReplicarChange} />
-                              </Form.Item>
-                            </Col>
-                            <Col xs={24}>
-                              <Form.Item
-                                name="sucursalReplica"
-                                label="Sucursal réplica"
-                                extra={<Text type="secondary" style={{ fontSize: 11 }}>Obligatorio si Replicar está activo</Text>}
-                                rules={replicarValue ? [{ required: true, message: 'Debe seleccionar una sucursal réplica' }] : []}
-                              >
-                                <Select
-                                  allowClear
-                                  placeholder="Seleccionar sucursal..."
-                                  showSearch
-                                  optionFilterProp="label"
-                                  disabled={!replicarValue}
-                                  options={sucursales.map(s => ({ value: s.codigo, label: toTitleCase(s.nombre) }))}
-                                  onChange={handleSucursalReplicaChange}
-                                />
-                              </Form.Item>
-                            </Col>
-                            <Col xs={24}>
-                              <Form.Item name="conceptoReplica" hidden>
-                                <Input />
-                              </Form.Item>
-                              <div>
-                                <Text type="secondary" style={{ fontSize: 11 }}>Concepto réplica</Text>
-                                <div>
-                                  <Input
-                                    placeholder="Buscar concepto réplica..."
-                                    value={conceptoReplicaText}
-                                    readOnly
-                                    disabled={!replicarValue}
-                                    suffix={<SearchOutlined />}
-                                    onClick={() => replicarValue && handleBuscarConceptoReplica()}
-                                  />
-                                </div>
-                                <Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>Concepto que usará en la sucursal réplica</Text>
-                              </div>
-                            </Col>
-                          </Row>
-                        </Card>
-                      </Form>
-                    </div>
-                  ),
-                },
-                {
-                  key: 'contabilidad',
-                  label: 'Contabilidad',
-                  children: (
-                    <div style={{ paddingTop: 16 }}>
-                      <Form form={form} onValuesChange={() => setFormTouched(true)} layout="vertical" size="middle" disabled={saving}>
-                        <Row gutter={[16, 24]}>
-                          <Col xs={24}>
-                            <Form.Item name="noAsientos" valuePropName="checked" label="No genera asientos" initialValue={false}>
-                              <Switch />
-                            </Form.Item>
-                          </Col>
-                          <Col xs={24}>
-                            <Form.Item name="tipoIngreso" label="Tipo Ingreso">
-                              <Select
-                                allowClear
-                                placeholder="Seleccionar tipo..."
-                                options={TIPO_INGRESO_OPTIONS}
-                              />
-                            </Form.Item>
-                          </Col>
-                            <Col xs={24}>
-                              <Form.Item name="cuentaContable" hidden>
-                                <Input />
-                              </Form.Item>
-                              <div>
-                                <Text type="secondary" style={{ fontSize: 11 }}>Cuenta Contable</Text>
-                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0 }}>
-                                  <div style={{ flex: 1 }}>
-                                    <Input
-                                      placeholder="Buscar cuenta contable..."
-                                      value={cuentaContableText}
-                                      readOnly
-                                      suffix={<SearchOutlined />}
-                                      onClick={() => setCuentaModalOpen(true)}
-                                    />
-                                  </div>
-                                  {cuentaContableText && (
-                                    <Button icon={<CloseOutlined />} onClick={handleCuentaContableClear} />
-                                  )}
-                                </div>
-                              </div>
-                            </Col>
-                          </Row>
-                        </Form>
-                      </div>
-                  ),
-                },
-                {
-                  key: 'entidad',
-                  label: 'Entidad',
-                  children: (
-                    <div style={{ paddingTop: 16 }}>
-                      <Button
-                        type="dashed"
-                        icon={<SearchOutlined />}
-                        onClick={() => setEntidadBuscarModalOpen(true)}
-                        style={{ marginBottom: 16 }}
-                      >
-                        Agregar Tipo de Entidad
-                      </Button>
-                      {entidades.length > 0 ? (
-                        <Table
-                          dataSource={entidades}
-                          rowKey="codigo"
-                          size="small"
-                          pagination={false}
-                          columns={[
-                            { title: 'Código', dataIndex: 'codigo', width: 120 },
-                            { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
-                            {
-                              title: 'Tipo',
-                              dataIndex: 'tipo',
-                              render: (v: string, _: any, idx: number) => (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                                  <Input
-                                    size="small"
-                                    value={v}
-                                    onChange={(e) => {
-                                      const newEntidades = [...entidades];
-                                      newEntidades[idx] = { ...newEntidades[idx], tipo: e.target.value };
-                                      setEntidades(newEntidades);
-                                    }}
-                                    placeholder="Tipo"
-                                    style={{ width: 60 }}
-                                  />
-                                  {v && tiposMap[v] && (
-                                    <Tag style={{ margin: 0 }}>{v} - {toTitleCase(tiposMap[v])}</Tag>
-                                  )}
-                                </div>
-                              ),
-                            },
-                            {
-                              title: 'Acción',
-                              width: 80,
-                              render: (_: any, record: any) => (
-                                <Button
-                                  size="small"
-                                  danger
-                                  icon={<CloseOutlined />}
-                                  onClick={() => handleQuitarEntidad(record.codigo)}
-                                />
-                              ),
-                            },
-                          ]}
-                        />
-                      ) : (
-                        <Text type="secondary">No hay tipos de entidad agregados</Text>
-                      )}
-                    </div>
-                  ),
-                },
-                {
-                  key: 'documentos',
-                  label: 'Documentos',
-                  children: (
-                    <div style={{ paddingTop: 16 }}>
-                      <Button
-                        type="dashed"
-                        icon={<SearchOutlined />}
-                        onClick={() => setAgregarDocModalOpen(true)}
-                        style={{ marginBottom: 16 }}
-                      >
-                        Agregar Documento
-                      </Button>
-                      {documentosForm.length > 0 ? (
-                        <Table
-                          dataSource={documentosForm}
-                          rowKey="codigo"
-                          size="small"
-                          pagination={false}
-                          columns={[
-                            { title: 'Código', dataIndex: 'codigo', width: 120 },
-                            { title: 'Nombre', dataIndex: 'nombre', render: (v: string) => toTitleCase(v) },
-                            {
-                              title: 'Tipos',
-                              dataIndex: 'tipos',
-                              render: (v: string[], record: DocumentoConceptoForm) => {
-                                const tiposFiltrados = tiposList.filter(t => t.documento === record?.codigo);
-                                const tiposParaSelect = tiposFiltrados.length > 0 ? tiposFiltrados : tiposList;
-                                const valor = Array.isArray(v) ? v : [];
-                                return (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                                  <Select
-                                    size="small"
-                                    mode="multiple"
-                                    value={valor}
-                                    onChange={(val: string[]) => handleDocumentoTipoChange(record.codigo, val)}
-                                    placeholder="Seleccionar tipos..."
-                                    style={{ width: '100%' }}
-                                    showSearch
-                                    optionFilterProp="label"
-                                    allowClear
-                                    options={tiposParaSelect.map(t => ({ value: t.codigo, label: `${t.codigo} - ${t.nombre}` }))}
-                                  />
-                                </div>
-                              );},
-                            },
-                            {
-                              title: 'Acción',
-                              width: 80,
-                              render: (_: any, record: DocumentoConceptoForm) => (
-                                <Button
-                                  size="small"
-                                  danger
-                                  icon={<CloseOutlined />}
-                                  onClick={() => handleQuitarDocumentoForm(record.codigo)}
-                                />
-                              ),
-                            },
-                          ]}
-                        />
-                      ) : (
-                        <Text type="secondary">No hay documentos agregados</Text>
-                      )}
-                    </div>
-                  ),
-                },
-            ]}
-          />
-
+          <Tabs type="card" items={tabsItems} />
           <div style={{ marginTop: 24 }}>
-            <Card
-              className="paces-card"
-              size="small"
-              title={<span style={{ fontSize: 16, fontWeight: 600 }}>Opciones</span>}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Activo</Text>
-                  <br />
-                  <Tag color={activoValue !== false ? 'green' : 'default'}>
-                    {activoValue !== false ? 'Activo' : 'Inactivo'}
-                  </Tag>
-                </div>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Sin Impuesto</Text>
-                  <br />
-                  <Tag color={noImpuestoValue ? 'orange' : 'default'}>
-                    {noImpuestoValue ? 'Sí' : 'No'}
-                  </Tag>
-                </div>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>No Actualiza Costos</Text>
-                  <br />
-                  <Tag color={noActualizaCostosValue ? 'orange' : 'default'}>
-                    {noActualizaCostosValue ? 'Sí' : 'No'}
-                  </Tag>
-                </div>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>No genera asientos</Text>
-                  <br />
-                  <Tag color={noAsientosValue ? 'orange' : 'default'}>
-                    {noAsientosValue ? 'Sí' : 'No'}
-                  </Tag>
-                </div>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 12 }}>Replicar</Text>
-                  <br />
-                  <Tag color={replicarValue ? 'blue' : 'default'}>
-                    {replicarValue ? 'Sí' : 'No'}
-                  </Tag>
-                </div>
-              </div>
-            </Card>
+            {sidebarOpciones}
           </div>
         </div>
       )}
 
-      {/* Modal Buscar Cuenta Contable */}
+      {/* Modales */}
       <BuscarCuentaInlineModal
         open={cuentaModalOpen}
         onClose={() => setCuentaModalOpen(false)}
         onSelect={handleCuentaContableSelect}
         buscarCuentas={(filtro) => cuentaContableApi.obtenerListadoPaginado(sucursalActiva, 50, 0, filtro).then(r => r.data)}
       />
-
-      {/* Modal Buscar Documento (doc a generar) */}
       <BuscarDocumentoInlineModal
         open={docModalOpen}
         onClose={() => setDocModalOpen(false)}
         onSelect={handleDocumentoSelect}
         documentos={documentos}
       />
-
-      {/* Modal Agregar Documento al concepto */}
       <BuscarDocumentoInlineModal
         open={agregarDocModalOpen}
         onClose={() => setAgregarDocModalOpen(false)}
         onSelect={handleAgregarDocumentoForm}
         documentos={documentos}
       />
-
-      {/* Modal Buscar Entidad */}
       <Modal
         title="Buscar Tipo de Entidad"
         open={entidadBuscarModalOpen}
-        onCancel={() => { setEntidadBuscarModalOpen(false); setEntidadBuscarText(''); setEntidadResultados([]); }}
-        footer={null}
-        width={600}
-        destroyOnClose
+        onCancel={() => { setEntidadBuscarModalOpen(false); setEntidadBuscarText(""); setEntidadResultados([]); }}
+        footer={null} width={600} destroyOnClose
       >
         <Input.Search
           placeholder="Buscar tipo de entidad (CLI, SUP, EMP)..."
-          allowClear
-          onSearch={handleBuscarEntidad}
+          allowClear onSearch={handleBuscarEntidad}
           style={{ marginBottom: 16 }}
         />
         {entidadResultados.length > 0 ? (
-          <Table
-            dataSource={entidadResultados}
-            rowKey="codigo"
-            size="small"
+          <Table dataSource={entidadResultados} rowKey="codigo" size="small"
             pagination={{ pageSize: 10, showSizeChanger: false }}
             columns={[
-              { title: 'Código', dataIndex: 'codigo', width: 100 },
-              { title: 'Descripción', dataIndex: 'nombre', ellipsis: true, render: (v: string) => toTitleCase(v) },
+              { title: "Codigo", dataIndex: "codigo", width: 100 },
+              { title: "Descripcion", dataIndex: "nombre", ellipsis: true, render: (v: string) => toTitleCase(v) },
             ]}
             onRow={(record) => ({
               onClick: () => handleAgregarEntidad(record),
-              style: { cursor: 'pointer' },
+              style: { cursor: "pointer" },
             })}
             locale={{ emptyText: <Empty description="No hay resultados" /> }}
           />
-        ) : (
-          entidadBuscarText && <Empty description="No se encontraron tipos de entidad" />
-        )}
+        ) : entidadBuscarText && <Empty description="No se encontraron tipos de entidad" />}
       </Modal>
-
-      {/* Modal Buscar Concepto Destino */}
       <BuscarConceptoModal
         open={conceptoDestinoModalOpen}
         onClose={() => setConceptoDestinoModalOpen(false)}
@@ -1620,15 +1084,13 @@ const ConceptoFormulario: React.FC = () => {
           return conceptosApi.obtenerConceptos(sucDestSucursal);
         }}
       />
-
-      {/* Modal Buscar Concepto Réplica */}
       <BuscarConceptoModal
         open={conceptoReplicaModalOpen}
         onClose={() => setConceptoReplicaModalOpen(false)}
         onSelect={handleConceptoReplicaSelect}
-        title="Buscar Concepto Réplica"
+        title="Buscar Concepto Replica"
         fetchConceptos={() => {
-          const sucReplicaCod = form.getFieldValue('sucursalReplica');
+          const sucReplicaCod = form.getFieldValue("sucursalReplica");
           const encontrada = sucReplicaCod ? sucursales.find(s => s.codigo === sucReplicaCod) : undefined;
           const sucReplicaSucursal = (encontrada as any)?.sucursal ?? (encontrada as any)?.id ?? sucursalActiva;
           return conceptosApi.obtenerConceptos(sucReplicaSucursal);
@@ -1636,6 +1098,6 @@ const ConceptoFormulario: React.FC = () => {
       />
     </div>
   );
-};
+}
 
 export default ConceptoFormulario;
