@@ -18,15 +18,12 @@ import {
   EyeOutlined,
 } from '@ant-design/icons';
 import { ecommerceApi, type OrdenDTO } from '../../api/ecommerceApi';
+import { formatMoneda } from '../../utils/formats';
 
 const { Text, Title } = Typography;
 
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-DO', {
-    style: 'currency',
-    currency: 'DOP',
-    minimumFractionDigits: 2,
-  }).format(value);
+  return formatMoneda(value);
 }
 
 function formatFecha(fecha: string): string {

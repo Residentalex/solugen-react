@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Card, Table, Button, DatePicker, Typography, Tooltip, Empty, Select } from 'antd';
+import { Card, Table, Button, DatePicker, Typography, Tooltip, Empty} from 'antd';
+import { Select } from '../../components/Select';
 import { SearchOutlined, PrinterOutlined, ReloadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';

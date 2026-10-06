@@ -137,7 +137,8 @@ describe('DevolucionVenta', () => {
       render(<MemoryRouter><DevolucionVenta /></MemoryRouter>);
       await waitFor(() => expect(screen.getByText('DEV001')).toBeInTheDocument());
       const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
-      expect(headers).toEqual(expect.arrayContaining(['Documento', 'Cliente', 'Factura', 'Concepto', 'Almacén', 'NCF', 'Total', 'Estado']));
+      expect(headers).toEqual(expect.arrayContaining(['Documento', 'Cliente', 'Factura', 'Concepto', 'NCF', 'Total', 'Estado']));
+      expect(headers).not.toContain('Almacén');
     });
   });
 });

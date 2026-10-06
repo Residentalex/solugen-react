@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  Table, Card, Button, Modal, Form, Select, Input, Switch, Tag, Tooltip, Alert,
+  Table, Card, Button, Modal, Form,  Input, Switch, Tag, Tooltip, Alert,
   message, Empty, Space, Row, Col, Divider, Typography, Badge,
 } from 'antd';
+import { Select } from '../../components/Select';
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined, SafetyOutlined, TeamOutlined, MailOutlined, BellOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';

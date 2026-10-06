@@ -1,15 +1,18 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
-import { Table, Button, Modal, Form, Input, Select, Switch, Tag, Card, message, Popconfirm, Space } from 'antd';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { Table, Button, Modal, Form, Input,  Switch, Tag, Card, message, Popconfirm, Space } from 'antd';
+import { Select } from '../components/Select';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
-import { cuentaBancariaClienteApi } from '../../../api/cuentaBancariaClienteApi';
-import type { CuentaBancariaClienteDTO } from '../../../types/facturacion';
+import { cuentaBancariaClienteApi } from '../api/cuentaBancariaClienteApi';
+import type { CuentaBancariaClienteDTO } from '../types/facturacion';
+import { useMonedasCatalogo } from '../hooks/useMonedasCatalogo';
+import { toTitleCase } from '../utils/formats';
 
 interface Props {
-  codigoCliente: string;
+  codigoEntidad: string;
   sucursal: number;
 }
 
-const CuentasBancariasTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
+const CuentasBancariasTab: React.FC<Props> = ({ codigoEntidad, sucursal }) => {
   const [data, setData] = useState<CuentaBancariaClienteDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -17,18 +20,26 @@ const CuentasBancariasTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
 
+  // Catalogo MONEDAS real de la sucursal. Antes el Select traia una lista fija embebida
+  // (DOP/USD/EUR) que se desactualizaba contra el maestro MONEDAS.
+  const { monedas, loading: monedasLoading } = useMonedasCatalogo(sucursal);
+  const opcionesMoneda = useMemo(
+    () => monedas.map((m) => ({ value: m.codigo, label: `${m.codigo} - ${toTitleCase(m.nombre || '')}` })),
+    [monedas],
+  );
+
   const cargar = useCallback(async () => {
-    if (!codigoCliente) return;
+    if (!codigoEntidad) return;
     setLoading(true);
     try {
-      const res = await cuentaBancariaClienteApi.listar(sucursal, codigoCliente);
+      const res = await cuentaBancariaClienteApi.listar(sucursal, codigoEntidad);
       setData(res ?? []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar cuentas bancarias');
     } finally {
       setLoading(false);
     }
-  }, [sucursal, codigoCliente]);
+  }, [sucursal, codigoEntidad]);
 
   useEffect(() => {
     cargar();
@@ -59,7 +70,7 @@ const CuentasBancariasTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
 
   const handleEliminar = async (id: string) => {
     try {
-      await cuentaBancariaClienteApi.eliminar(sucursal, codigoCliente, id);
+      await cuentaBancariaClienteApi.eliminar(sucursal, codigoEntidad, id);
       message.success('Cuenta bancaria eliminada correctamente');
       cargar();
     } catch (err: any) {
@@ -84,10 +95,10 @@ const CuentasBancariasTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
       };
 
       if (editRecord?.id) {
-        await cuentaBancariaClienteApi.actualizar(sucursal, codigoCliente, editRecord.id, payload);
+        await cuentaBancariaClienteApi.actualizar(sucursal, codigoEntidad, editRecord.id, payload);
         message.success('Cuenta bancaria actualizada correctamente');
       } else {
-        await cuentaBancariaClienteApi.crear(sucursal, codigoCliente, payload);
+        await cuentaBancariaClienteApi.crear(sucursal, codigoEntidad, payload);
         message.success('Cuenta bancaria creada correctamente');
       }
       setModalVisible(false);
@@ -101,7 +112,7 @@ const CuentasBancariasTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
   };
 
   const columns = [
-    { title: 'CÃ³digo', dataIndex: 'codigo', key: 'codigo', width: 100 },
+    { title: 'Código', dataIndex: 'codigo', key: 'codigo', width: 100 },
     { title: 'Nombre', dataIndex: 'nombre', key: 'nombre', ellipsis: true },
     { title: 'Banco', dataIndex: 'codigoBanco', key: 'codigoBanco', width: 120 },
     { title: 'No. Cuenta', dataIndex: 'cuentaBancaria', key: 'cuentaBancaria', width: 160 },
@@ -123,7 +134,7 @@ const CuentasBancariasTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
       render: (_: any, record: CuentaBancariaClienteDTO) => (
         <Space>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditar(record)} />
-          <Popconfirm title="Â¿Eliminar esta cuenta bancaria?" onConfirm={() => handleEliminar(record.id!)} okText="SÃ­" cancelText="No">
+          <Popconfirm title="¿Eliminar esta cuenta bancaria?" onConfirm={() => handleEliminar(record.id!)} okText="Sí" cancelText="No">
             <Button type="link" size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -164,17 +175,17 @@ const CuentasBancariasTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
         width={560}
       >
         <Form form={form} layout="vertical" size="small">
-          <Form.Item name="codigo" label="CÃ³digo">
-            <Input placeholder="CÃ³digo" maxLength={20} />
+          <Form.Item name="codigo" label="Código">
+            <Input placeholder="Código" maxLength={20} />
           </Form.Item>
           <Form.Item name="nombre" label="Nombre" rules={[{ required: true, message: 'Obligatorio' }]}>
             <Input placeholder="Nombre de la cuenta" maxLength={100} />
           </Form.Item>
           <Form.Item name="codigoBanco" label="Banco">
-            <Input placeholder="CÃ³digo del banco" maxLength={20} />
+            <Input placeholder="Código del banco" maxLength={20} />
           </Form.Item>
           <Form.Item name="cuentaBancaria" label="No. Cuenta" rules={[{ required: true, message: 'Obligatorio' }]}>
-            <Input placeholder="NÃºmero de cuenta" maxLength={30} />
+            <Input placeholder="Número de cuenta" maxLength={30} />
           </Form.Item>
           <Form.Item name="tipoCuenta" label="Tipo Cuenta">
             <Select placeholder="Seleccione tipo"
@@ -185,12 +196,8 @@ const CuentasBancariasTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
             />
           </Form.Item>
           <Form.Item name="codigoMoneda" label="Moneda">
-            <Select placeholder="Seleccione moneda"
-              options={[
-                { value: 'DOP', label: 'DOP - Peso Dominicano' },
-                { value: 'USD', label: 'USD - DÃ³lar Americano' },
-                { value: 'EUR', label: 'EUR - Euro' },
-              ]}
+            <Select placeholder="Seleccione moneda" loading={monedasLoading}
+              options={opcionesMoneda}
             />
           </Form.Item>
           <Form.Item name="numeroCuentaContable" label="No. Cuenta Contable">
@@ -198,10 +205,10 @@ const CuentasBancariasTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
           </Form.Item>
           <Space size={24}>
             <Form.Item name="inactiva" label="Inactiva" valuePropName="checked" style={{ marginBottom: 0 }}>
-              <Switch checkedChildren="SÃ­" unCheckedChildren="No" />
+              <Switch checkedChildren="Sí" unCheckedChildren="No" />
             </Form.Item>
             <Form.Item name="porDefecto" label="Por Defecto" valuePropName="checked" style={{ marginBottom: 0 }}>
-              <Switch checkedChildren="SÃ­" unCheckedChildren="No" />
+              <Switch checkedChildren="Sí" unCheckedChildren="No" />
             </Form.Item>
           </Space>
         </Form>

@@ -35,6 +35,7 @@ import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLa
 import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
+import AdornoDocumentoPagado from '../../components/AdornoDocumentoPagado/AdornoDocumentoPagado';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import TransaccionesAsociadasCard from '../../components/TransaccionesAsociadasCard';
 import TablaImpuestosDetalle from '../../components/TablaImpuestosDetalle';
@@ -392,8 +393,18 @@ const FacturaSuplidorDetalle: React.FC = () => {
 
   // NOTA: el campo `pagado` de transaccionesAsociadas viene en 0; el monto realmente aplicado
   // (coincide con CTRANSAC.ACREDITADO) esta en `monto` (y opcionalmente `descuento`).
-  const totalPagado = (documentoActivo?.transaccionesAsociadas || []).reduce((s: number, t: any) => s + (t.monto || 0) + (t.descuento || 0), 0);
-  const totalPendiente = Math.max(0, (documentoActivo?.total || 0) - totalPagado - (documentoActivo?.retenciones || 0));
+  const totalPagado = (documentoActivo?.transaccionesAsociadas || []).reduce(
+    (suma: number, transaccion: any) => suma
+      + (Number(transaccion.monto) || 0)
+      + (Number(transaccion.descuento) || 0),
+    0,
+  );
+  const totalPendiente = Math.max(
+    0,
+    (Number(documentoActivo?.total) || 0)
+      - totalPagado
+      - (Number(documentoActivo?.retenciones) || 0),
+  );
 
   const detallesFuente = documentoActivo?.entradaAlmacen?.detalles?.length
     ? documentoActivo.entradaAlmacen.detalles
@@ -704,7 +715,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
                 <Descriptions.Item label="Sucursal">{documentoActivo.sucursal?.nombre || documentoActivo.sucursal?.codigo || '-'}</Descriptions.Item>
                 {/* Fila 4 */}
                 <Descriptions.Item label="Nota" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                  <span className="paces-nota-memo">{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -786,6 +797,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
           <Col xxl={6}>
             <EntidadCard entidad={documentoActivo.suplidor} entidadSecundaria={documentoActivo.entidad} fallbackTitulo="Suplidor" />
             <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones ?? 0} total={documentoActivo.total} alignRight={false}
+              adorno={<AdornoDocumentoPagado total={documentoActivo.total} saldoPendiente={totalPendiente} />}
               pagado={totalPagado}
               pendiente={totalPendiente}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
@@ -856,7 +868,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
                 <Descriptions.Item label="Sucursal">{documentoActivo.sucursal?.nombre || documentoActivo.sucursal?.codigo || '-'}</Descriptions.Item>
                 {/* Fila 4 */}
                 <Descriptions.Item label="Nota">
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                  <span className="paces-nota-memo">{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
           </Card>
@@ -935,6 +947,7 @@ const FacturaSuplidorDetalle: React.FC = () => {
 
         <div style={{ marginTop: 24 }}>
           <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} retenciones={documentoActivo.retenciones ?? 0} total={documentoActivo.total} alignRight={true}
+            adorno={<AdornoDocumentoPagado total={documentoActivo.total} saldoPendiente={totalPendiente} />}
               pagado={totalPagado}
               pendiente={totalPendiente}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}

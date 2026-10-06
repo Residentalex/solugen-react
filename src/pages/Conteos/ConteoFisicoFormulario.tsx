@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   Form,
   Input,
-  Select,
   InputNumber,
   Tag,
   Button,
@@ -14,6 +13,7 @@ import {
   Empty,
   Spin,
 } from 'antd';
+import { Select } from '../../components/Select';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { SearchOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';

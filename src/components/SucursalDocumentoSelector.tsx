@@ -1,5 +1,6 @@
 import React from 'react';
-import { Select, Typography } from 'antd';
+import {Typography } from 'antd';
+import { Select } from '../components/Select';
 import { useAuthStore } from '../stores/authStore';
 import { useCompanyStore } from '../stores/companyStore';
 import { Sucursal } from '../types/auth';

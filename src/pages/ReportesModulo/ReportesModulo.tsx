@@ -21,11 +21,14 @@ const ReportesModulo: React.FC = () => {
 
   const reportesFiltrados = useMemo<PantallaDTO[]>(() => {
     if (!usuario?.pantallas || !moduloNombre) return [];
-    return usuario.pantallas.filter((p) => {
-      const perteneceAlModulo = p.modulos?.some((m) => m.nombre === moduloNombre);
-      if (!perteneceAlModulo) return false;
-      return p.esReporte === true || p.grupo?.toLowerCase() === 'reportes';
-    });
+    return usuario.pantallas
+      .filter((p) => {
+        const perteneceAlModulo = p.modulos?.some((m) => m.nombre === moduloNombre);
+        if (!perteneceAlModulo) return false;
+        return p.esReporte === true || p.grupo?.toLowerCase() === 'reportes';
+      })
+      .slice()
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
   }, [usuario?.pantallas, moduloNombre]);
 
   useEffect(() => {

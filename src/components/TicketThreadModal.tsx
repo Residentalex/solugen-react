@@ -1,5 +1,6 @@
-﻿import React, { useEffect, useState } from 'react';
-import { Modal, Typography, Select, Input, Button, Space, Spin, Tag, message, Divider, Empty, Image } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Modal, Typography,  Input, Button, Space, Spin, Tag, message, Divider, Empty, Image } from 'antd';
+import { Select } from '../components/Select';
 import { SendOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../stores/authStore';
 import { ticketApi } from '../api/ticketApi';

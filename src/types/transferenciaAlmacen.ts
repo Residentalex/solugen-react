@@ -60,6 +60,15 @@ export interface DetalleTransferenciaAlmacenDTO {
   nota?: string;
   familia?: { nombre: string; idExterno: string };
   medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
+  porcentajeImpuesto?: number;
+  impuestos?: number;
+  impuesto?: { nombre: string; porcentaje: number; codigo: string; idExterno: string };
+  fechaVencimiento?: string;
+  tieneVencimiento?: boolean;
+  descuento?: number;
+  porcentajeDescuento?: number;
+  costo?: number;
+  precio?: number;
   modificaPrecio?: boolean;
   modificaDescripcion?: boolean;
 }
@@ -86,6 +95,7 @@ export interface TransferenciaAlmacenFullDTO {
   validadoPor?: { id: number; nombre: string; nombreUsuario: string };
 
   subTotal: number;
+  retenciones: number;
   total: number;
 
   detalles: DetalleTransferenciaAlmacenDTO[];

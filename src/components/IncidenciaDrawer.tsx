@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Drawer, Button, Form, Input, Select, Tag, Typography, message, Spin, Tooltip } from 'antd';
+import { Drawer, Button, Form, Input,  Tag, Typography, message, Spin, Tooltip } from 'antd';
+import { Select } from '../components/Select';
 import { SendOutlined, ReloadOutlined, DeleteOutlined, PictureOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';

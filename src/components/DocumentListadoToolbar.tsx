@@ -126,7 +126,7 @@ const DocumentListadoToolbar: React.FC<DocumentListadoToolbarProps> = ({
         </PermissionGate>
       )}
       {showClonar && onClonar && (
-        <PermissionGate accion="CREAR">
+        <PermissionGate accion="CLONAR">
           <Tooltip title="Clonar">
             <Button icon={<CopyOutlined />} aria-label="Clonar" disabled={clonarDisabled} onClick={onClonar} />
           </Tooltip>

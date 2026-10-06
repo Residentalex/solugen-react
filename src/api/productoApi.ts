@@ -161,6 +161,32 @@ export const productoApi = {
     return data.data;
   },
 
+  /** Imagen del producto en PRODSERV.IMAGEN; null si no tiene imagen */
+  obtenerImagen: async (
+    sucursal: number,
+    codigo: string,
+    signal?: AbortSignal
+  ): Promise<Blob | null> => {
+    try {
+      const { data } = await apiClient.get(`${BASE}/${sucursal}/${codigo}/imagen`, {
+        responseType: 'blob',
+        signal,
+      });
+      return data as Blob;
+    } catch (err: any) {
+      if (err?.response?.status === 404) return null;
+      throw err;
+    }
+  },
+
+  guardarImagen: async (sucursal: number, codigo: string, archivo: File): Promise<void> => {
+    const formData = new FormData();
+    formData.append('archivo', archivo);
+    await apiClient.post(`${BASE}/${sucursal}/${codigo}/imagen`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
   /** Precio y oferta actual de un producto en la sucursal activa */
   precioSucursal: async (sucursal: number, codigo: string): Promise<ProductoSucursalDTO | null> => {
     const { data } = await apiClient.get<ApiResponse<ProductoSucursalDTO[]>>(`${BASE}/precioSucursal`, { params: { codigo } });

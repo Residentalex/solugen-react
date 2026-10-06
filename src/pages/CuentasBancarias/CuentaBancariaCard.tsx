@@ -1,7 +1,8 @@
 import React from 'react';
 import { Card, Tag, Typography, Button, Tooltip, Space, App } from 'antd';
 import { CopyOutlined, FileTextOutlined, EditOutlined } from '@ant-design/icons';
-import { getMonedaSucursalActiva } from '../../utils/moneda';
+import { esMonedaDolar, etiquetaMoneda, simboloMoneda } from '../../utils/moneda';
+import { formatMoneda } from '../../utils/formats';
 import PermissionGate from '../../components/PermissionGate';
 import type { CuentaBancariaDTO } from '../../api/cuentaBancariaApi';
 
@@ -48,15 +49,13 @@ function toTitleCase(str: string): string {
 
 function formatBalance(value: number | undefined, moneda: string | undefined): string {
   if (value === undefined || value === null) return '';
-  const monedaDefault = getMonedaSucursalActiva();
-  const symbol = moneda?.toUpperCase() === 'DOLAR' ? 'US$' : (monedaDefault.simbolo || 'RD$');
-  return `${symbol} ${value.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return formatMoneda(value, simboloMoneda(moneda));
 }
 
 function getMonedaInfo(moneda: string | undefined): { label: string; color: string } {
-  if (moneda?.toUpperCase() === 'DOLAR') return { label: 'USD', color: '#10b981' };
-  const monedaDefault = getMonedaSucursalActiva();
-  return { label: monedaDefault.codigo || 'DOP', color: '#556ee6' };
+  const codigo = etiquetaMoneda(moneda);
+  if (esMonedaDolar(codigo)) return { label: codigo, color: '#10b981' };
+  return { label: codigo, color: '#556ee6' };
 }
 
 interface CuentaBancariaCardProps {
@@ -69,7 +68,7 @@ interface CuentaBancariaCardProps {
 const CuentaBancariaCard: React.FC<CuentaBancariaCardProps> = ({ cuenta, onClick, onEditar, index = 0 }) => {
   const { message } = App.useApp();
   const isActive = cuenta.activo;
-  const esUSD = cuenta.moneda?.toUpperCase() === 'DOLAR' || cuenta.moneda?.toUpperCase() === 'USD';
+  const esUSD = esMonedaDolar(cuenta.moneda);
   const monedaInfo = getMonedaInfo(cuenta.moneda);
   const cardClassName = `cuenta-bancaria-card${!isActive ? ' cuenta-inactiva' : ''}${esUSD ? ' cuenta-usd' : ''}`;
   const balanceDisplay = formatBalance(cuenta.balance, cuenta.moneda);

@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Spin, Skeleton, Button, Space, Row, Col, Divider,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Empty,
+  message, Form, Input, InputNumber,  DatePicker, Typography, Modal, Alert, Empty,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   InboxOutlined,
   SaveOutlined,
@@ -26,6 +27,8 @@ import { apiClient } from '../../api/client';
 import type { SuplidorDTO, ConceptoDTO } from '../../types/entradaAlmacen';
 import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useMonedaDocumento } from '../../hooks/useMonedaDocumento';
+import MonedaDocumentoSelect from '../../components/MonedaDocumentoSelect';
 import { formatNumber } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
@@ -139,6 +142,15 @@ const OrdenCompraFormulario: React.FC = () => {
   const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
   const [sucursalDestino, setSucursalDestino] = useState<number | undefined>(undefined);
   const [form] = Form.useForm();
+
+  // Moneda del documento (selector sobre el catalogo de MONEDAS)
+  const { monedas, monedasLoading, monedaCodigo, tasaParaMoneda, seleccionarMoneda } = useMonedaDocumento(
+    sucursalActiva,
+    form,
+    data,
+    setData,
+    selectedConcepto?.moneda,
+  );
 
   useEffect(() => {
     setActiveModule(screenCode);
@@ -341,7 +353,7 @@ const OrdenCompraFormulario: React.FC = () => {
     form.setFieldsValue({
       conceptoNombre: concepto.nombre,
       moneda: monedaObj.nombre,
-      tasa: monedaObj.tasa ?? 1,
+      tasa: tasaParaMoneda(monedaObj),
     });
 
     // === NoImpuesto: si el concepto no acepta impuestos, limpiarlos ===
@@ -644,9 +656,21 @@ const OrdenCompraFormulario: React.FC = () => {
                   </Form.Item>
                 </Col>
 
+                <Col xs={24} sm={12} lg={8}>
+                  <Form.Item style={{ marginBottom: 0 }} label="Moneda">
+                    <MonedaDocumentoSelect
+                      value={monedaCodigo}
+                      onChange={seleccionarMoneda}
+                      monedas={monedas}
+                      loading={monedasLoading}
+                      style={{ width: '100%' }}
+                    />
+                  </Form.Item>
+                </Col>
+
                 <Col xs={24}>
                   <Form.Item name="nota" style={{ marginBottom: 0 }} label="Nota">
-                    <TextArea rows={2} placeholder="Nota..." />
+                    <TextArea rows={3} autoSize={{ minRows: 3, maxRows: 8 }} maxLength={500} showCount placeholder="Nota..." />
                   </Form.Item>
                 </Col>
               </Row>

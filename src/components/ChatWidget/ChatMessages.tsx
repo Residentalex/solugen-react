@@ -90,7 +90,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({
       await chatApi.eliminarConversacion(conversacionActiva);
       message.success('Conversacion eliminada');
       setMenuOpen(false);
-      onBack();
+      onBack?.();
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al eliminar');
     }

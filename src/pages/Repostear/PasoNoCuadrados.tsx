@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { DatePicker, Select, Button, Table, Typography, Space, message, Badge } from 'antd';
+import { DatePicker,  Button, Table, Typography, Space, message, Badge } from 'antd';
+import { Select } from '../../components/Select';
 import { SearchOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { transaccionApi, formatDateParam } from '../../api/transaccionApi';

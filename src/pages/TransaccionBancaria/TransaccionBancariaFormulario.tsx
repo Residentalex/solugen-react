@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Button, Space, Row, Col, Divider, Table,
-  Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, App, Tabs, Tag,
+  Card, Button, Row, Col, Divider, Table,
+  Form, Input, InputNumber,  DatePicker, Typography, Modal, Alert, App, Tabs,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   SaveOutlined,
   CloseOutlined,
@@ -14,7 +15,6 @@ import {
   DollarOutlined,
   PlusOutlined,
   DeleteOutlined,
-  EditOutlined,
   HistoryOutlined,
   FileTextOutlined,
 } from '@ant-design/icons';
@@ -43,10 +43,11 @@ import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLa
 import BuscarDocumentoModal from '../../components/BuscarDocumentoModal/BuscarDocumentoModal';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import LogTable from '../../components/LogTable';
-import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber } from '../../utils/formats';
+import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber, redondear2 } from '../../utils/formats';
 import { toEstadoNum } from '../../utils/estadoDocumento';
+import MemoField from '../../components/MemoField/MemoField';
+import CamposRapidosFila from '../../components/CamposRapidosFila/CamposRapidosFila';
 
-const { TextArea } = Input;
 const { Text } = Typography;
 
 // ===== Componente principal =====
@@ -95,7 +96,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
   // El pendiente efectivo se calcula como max(montoOriginal - pagado, saldoPendiente), nunca negativo.
   const pendienteEfectivo = (t: any): number => {
     const v = Math.max(0, (t.montoOriginal || 0) - (t.pagado || 0), t.saldoPendiente || t.pendiente || 0);
-    return Math.round(v * 100) / 100;
+    return redondear2(v);
   };
 
   // ===== Estado para campos rápidos (Referencia, Tasa) =====
@@ -145,6 +146,13 @@ const TransaccionBancariaFormulario: React.FC = () => {
   // ===== Moneda dinámica desde el concepto seleccionado =====
   const monedaSimbolo = selectedConcepto?.moneda?.simbolo || getMonedaSucursalActiva().simbolo;
   const monedaNombre = selectedConcepto?.moneda?.nombre || getMonedaSucursalActiva().nombre;
+  // Codigo real de MONEDAS.CODIGO. Antes se deducia del simbolo (`'RD$' ? 'DOP' : 'USD'`),
+  // lo que resolvia cualquier otra moneda a USD. `nombre` queda solo como ultimo respaldo.
+  const codigoMonedaDocumento =
+    selectedConcepto?.moneda?.codigo
+    || data?.moneda?.codigo
+    || getMonedaSucursalActiva().codigo
+    || monedaNombre;
 
   // ===== Computed totals desde documentos asociados =====
   const sumaMontos = useMemo(
@@ -186,7 +194,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
   const cargarTiposDocumento = useCallback(async () => {
     setLoadingTipos(true);
     try {
-      const result = await tipoApi.obtenerPorDocumento(sucursalActiva, 'SP');
+      const result = await tipoApi.obtenerPorDocumento(sucursalActiva, 'TRB');
       setTipoDocumentoOpciones(result || []);
     } catch {
       message.error('Error al cargar tipos de documento');
@@ -244,7 +252,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
         impuestos: 0,
         retenciones: 0,
         beneficiario: '',
-      total: values.total ?? totalCalculado,
+        total: totalCalculado,
       });
     }
 
@@ -429,7 +437,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
     const monedaObj = concepto.moneda || getMonedaSucursalActiva();
     setData((prev) => {
       if (!prev) return prev;
-      return { ...prev, codigoMoneda: monedaObj.nombre };
+      return { ...prev, codigoMoneda: monedaObj.codigo || monedaObj.nombre };
     });
 
     form.setFieldsValue({
@@ -526,7 +534,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
       total: totalCalculado,
       tasa: tasaValue,
       nombreBeneficiario: values.beneficiario || undefined,
-      codigoMoneda: monedaSimbolo === 'RD$' ? 'DOP' : (monedaSimbolo === 'US$' ? 'USD' : monedaNombre),
+      codigoMoneda: codigoMonedaDocumento,
       entidad: selectedEntidad ? {
         codigo: selectedEntidad?.codigo || '',
         nombre: selectedEntidad?.nombre || data?.nombreEntidad || '',
@@ -928,73 +936,36 @@ const TransaccionBancariaFormulario: React.FC = () => {
           {/* Fila 5: Nota (span 24) */}
           <Col xs={24}>
             <Form.Item name="nota" style={{ marginBottom: 0 }}>
-              <FloatingField label="Nota">
-                <TextArea rows={3} maxLength={500} showCount />
-              </FloatingField>
+              <MemoField label="Nota" />
             </Form.Item>
           </Col>
 
-          {/* Campos rápidos: Referencia + Tasa */}
-          <Col xs={24}>
-            <div style={{ marginBottom: 8 }}>
-              <Space size={[8, 8]} wrap>
-                {/* Referencia */}
-                {editingField === 'referencia' ? (
-                  <Input
-                    size="small"
-                    style={{ width: 200 }}
-                    placeholder="Referencia"
-                    autoFocus
-                    defaultValue={editingValueRef.current as string}
-                    onChange={(e) => { editingValueRef.current = e.target.value; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : refValue ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
-                    Ref: {refValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
-                    <PlusOutlined /> Referencia
-                  </Tag>
-                )}
-
-                {/* Tasa */}
-                {editingField === 'tasa' ? (
-                  <InputNumber
-                    size="small"
-                    style={{ width: 120 }}
-                    min={0}
-                    step={0.01}
-                    placeholder="Tasa"
-                    autoFocus
-                    defaultValue={editingValueRef.current as number}
-                    onChange={(val) => { editingValueRef.current = val ?? 1; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : tasaValue !== 1 ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
-                    Tasa: {tasaValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
-                    <PlusOutlined /> Tasa
-                  </Tag>
-                )}
-              </Space>
-            </div>
-            {/* Hidden form items para campos rápidos */}
-            <Form.Item name="referencia" hidden><Input /></Form.Item>
-            <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
-          </Col>
+          <CamposRapidosFila
+            referencia={{
+              valor: refValue,
+              editando: editingField === 'referencia',
+              etiqueta: 'Referencia',
+              prefijo: 'Ref: ',
+              placeholder: 'Referencia',
+              onEdit: () => openFieldEditor('referencia'),
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+              onChange: (v) => { editingValueRef.current = v; },
+            }}
+            tasa={{
+              tasa: tasaValue,
+              editable: true,
+              editando: editingField === 'tasa',
+              onEdit: () => openFieldEditor('tasa'),
+              onChange: (v) => { editingValueRef.current = v ?? 1; },
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+            }}
+            ocultos={[
+              { name: 'referencia' },
+              { name: 'tasa', editor: 'number' },
+            ]}
+          />
         </Row>
       </Form>
 
@@ -1057,6 +1028,7 @@ const TransaccionBancariaFormulario: React.FC = () => {
         })()}
         documentosIniciales={documentosAsociados.map((d: any) => d.transaccionAsociadaID ?? d.id)}
         puedeAsignar={true}
+        codigoMonedaPrincipal={codigoMonedaDocumento}
       />
 
       {renderEncabezado()}

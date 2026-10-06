@@ -5,11 +5,11 @@ import {
   Grid,
   Popover,
   Segmented,
-  Select,
   Spin,
   theme,
   Typography,
 } from 'antd';
+import { Select } from '../../../components/Select';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';

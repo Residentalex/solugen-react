@@ -913,6 +913,19 @@ body.theme-liga .paces-sucursal-select .ant-select-selection-item {
   color: var(--paces-primary-hover);
   text-decoration: underline;
 }
+.paces-page-header .paces-page-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.paces-page-header .paces-page-header-help {
+  font-size: 16px;
+  color: var(--paces-text-secondary);
+  cursor: pointer;
+}
+.paces-page-header .paces-page-header-help:hover {
+  color: var(--paces-primary);
+}
 
 /* ===== Content Area ===== */
 .paces-content {
@@ -1362,11 +1375,12 @@ body.theme-liga .paces-login-bg {
 
 .paces-card-erp .ant-table-thead > tr > th {
   padding-top: 10px !important;
-  padding-bottom: 10px !important;
+  padding-bottom: 8px !important;
+  line-height: 1.3 !important;
 }
 
 .paces-card-erp .ant-table-tbody > tr > td {
-  padding-top: 10px !important;
+  padding-top: 6px !important;
   padding-bottom: 10px !important;
 }
 
@@ -1469,12 +1483,39 @@ a:hover {
 .paces-text-placeholder { color: var(--paces-text-secondary) !important; }
 .paces-text-light { color: var(--paces-text-secondary) !important; }
 .paces-text-icon { color: var(--paces-text-secondary) !important; }
+/* Semantica de movimientos de inventario: verde suma stock, rojo lo resta.
+   Reemplaza a los hex sueltos que vivian en los helpers de la pantalla. */
+.paces-text-aumenta { color: #34c38f !important; }
+.paces-text-disminuye { color: #f46a6a !important; }
 .paces-border-top { border-top: 1px solid var(--paces-border) !important; }
 .paces-border-light { border: 1px solid var(--paces-border) !important; }
 .paces-border-bottom-light { border-bottom: 1px solid var(--paces-border-secondary) !important; }
 .paces-bg-light { background: var(--paces-topbar-search-bg) !important; }
 .paces-bg-light-2 { background: var(--paces-topbar-search-bg) !important; }
 .paces-card-erp { box-shadow: var(--paces-shadow-sm); }
+
+/* ===== Nota multilinea estilo memo (pantallas de detalle) ===== */
+/* Bloque de solo lectura que imita el campo memo del formulario: reserva
+   varias lineas, respeta los saltos guardados y no trunca palabras largas. */
+.paces-nota-memo {
+  display: block;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.6;
+  min-height: 5.5em;
+  padding: 6px 8px;
+  border: 1px solid var(--paces-border);
+  border-radius: 4px;
+  background: var(--paces-bg-container);
+  color: var(--paces-text);
+}
+
+/* En modo oscuro el bloque mantiene contraste con el fondo transparente de Descriptions */
+.dark-mode .paces-nota-memo {
+  background: var(--paces-bg-container);
+  border-color: var(--paces-border-secondary);
+}
 
 /* ===== Card body padding reset ===== */
 .paces-card-erp.ant-card > .ant-card-body {

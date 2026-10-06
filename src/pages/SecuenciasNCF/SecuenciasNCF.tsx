@@ -1,10 +1,11 @@
-﻿import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Table, message, Card, Button, Tooltip, Space, Tag, Modal,
-  Descriptions, Typography, Progress, Select, Input, Empty, Grid, Divider,
+  Descriptions, Typography, Progress,  Input, Empty, Grid, Divider,
   Alert,
 } from 'antd';
+import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
 import {
   PlusOutlined, SearchOutlined, ReloadOutlined,
@@ -224,7 +225,7 @@ const SecuenciasNCF: React.FC = () => {
       width: 200,
       render: (_: unknown, record: SecuenciaNCFListDTO) => (
         <Text style={{ fontFamily: 'monospace', fontSize: 11 }}>
-          {record.secuenciaInicial} â†' {record.secuenciaFinal}
+          {record.secuenciaInicial} → {record.secuenciaFinal}
         </Text>
       ),
     },

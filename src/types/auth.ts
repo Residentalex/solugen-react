@@ -40,6 +40,7 @@ export interface ModuloDTO {
   orden: number;
   oculto?: boolean;
   Oculto?: boolean;
+  icono?: string | null;
 }
 
 export interface PantallaEntidadDTO {
@@ -53,6 +54,7 @@ export interface PantallaEntidadDTO {
 export interface PantallaDTO {
   id: number;
   nombre: string;
+  descripcion?: string;
   codigo: string;
   ruta: string;
   esReporte: boolean;

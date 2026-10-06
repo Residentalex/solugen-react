@@ -1,0 +1,32 @@
+.adorno-documento-pagado-contenedor {
+  position: relative;
+  overflow: hidden;
+}
+
+.adorno-documento-pagado {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 3;
+  width: 112px;
+  height: 112px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.adorno-documento-pagado__texto {
+  position: absolute;
+  top: 22px;
+  right: -38px;
+  display: block;
+  width: 150px;
+  padding: 7px 0;
+  transform: rotate(45deg);
+  background: #2eaa4f;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 18%);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+}

@@ -1,3 +1,5 @@
+import { formatMoneda } from '../../../utils/formats';
+
 export interface BeneficioMock {
   id: string;
   icono: string;
@@ -14,11 +16,6 @@ export const mockBeneficios = (): BeneficioMock[] => [
   { id: 'B6', icono: 'SafetyCertificateOutlined', titulo: 'Productos Originales', descripcion: 'Solo vendemos productos 100% originales' },
 ];
 
-/** Formatear moneda en RD$ */
 export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-DO', {
-    style: 'currency',
-    currency: 'DOP',
-    minimumFractionDigits: 2,
-  }).format(value);
+  return formatMoneda(value);
 }

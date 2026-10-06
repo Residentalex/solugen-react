@@ -1,15 +1,15 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Card, message, Popconfirm, Space } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
-import { grupoProductoClienteApi } from '../../../api/grupoProductoClienteApi';
-import type { GrupoProductoClienteDTO } from '../../../types/facturacion';
+import { grupoProductoClienteApi } from '../api/grupoProductoClienteApi';
+import type { GrupoProductoClienteDTO } from '../types/facturacion';
 
 interface Props {
-  codigoCliente: string;
+  codigoEntidad: string;
   sucursal: number;
 }
 
-const GruposProductosTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
+const GruposProductosTab: React.FC<Props> = ({ codigoEntidad, sucursal }) => {
   const [data, setData] = useState<GrupoProductoClienteDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -18,17 +18,17 @@ const GruposProductosTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
   const [form] = Form.useForm();
 
   const cargar = useCallback(async () => {
-    if (!codigoCliente) return;
+    if (!codigoEntidad) return;
     setLoading(true);
     try {
-      const res = await grupoProductoClienteApi.listar(sucursal, codigoCliente);
+      const res = await grupoProductoClienteApi.listar(sucursal, codigoEntidad);
       setData(res ?? []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar grupos de productos');
     } finally {
       setLoading(false);
     }
-  }, [sucursal, codigoCliente]);
+  }, [sucursal, codigoEntidad]);
 
   useEffect(() => {
     cargar();
@@ -52,7 +52,7 @@ const GruposProductosTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
 
   const handleEliminar = async (id: string) => {
     try {
-      await grupoProductoClienteApi.eliminar(sucursal, codigoCliente, id);
+      await grupoProductoClienteApi.eliminar(sucursal, codigoEntidad, id);
       message.success('Grupo de producto eliminado correctamente');
       cargar();
     } catch (err: any) {
@@ -71,10 +71,10 @@ const GruposProductosTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
       };
 
       if (editRecord?.id) {
-        await grupoProductoClienteApi.actualizar(sucursal, codigoCliente, editRecord.id, payload);
+        await grupoProductoClienteApi.actualizar(sucursal, codigoEntidad, editRecord.id, payload);
         message.success('Grupo de producto actualizado correctamente');
       } else {
-        await grupoProductoClienteApi.crear(sucursal, codigoCliente, payload);
+        await grupoProductoClienteApi.crear(sucursal, codigoEntidad, payload);
         message.success('Grupo de producto creado correctamente');
       }
       setModalVisible(false);
@@ -88,7 +88,7 @@ const GruposProductosTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
   };
 
   const columns = [
-    { title: 'CÃ³digo Grupo', dataIndex: 'codigoGrupo', key: 'codigoGrupo', width: 140 },
+    { title: 'Código Grupo', dataIndex: 'codigoGrupo', key: 'codigoGrupo', width: 140 },
     { title: 'Nombre Grupo', dataIndex: 'nombreGrupo', key: 'nombreGrupo', ellipsis: true },
     {
       title: '% Descuento',
@@ -104,7 +104,7 @@ const GruposProductosTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
       render: (_: any, record: GrupoProductoClienteDTO) => (
         <Space>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditar(record)} />
-          <Popconfirm title="Â¿Eliminar este grupo de producto?" onConfirm={() => handleEliminar(record.id!)} okText="SÃ­" cancelText="No">
+          <Popconfirm title="¿Eliminar este grupo de producto?" onConfirm={() => handleEliminar(record.id!)} okText="Sí" cancelText="No">
             <Button type="link" size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -144,8 +144,8 @@ const GruposProductosTab: React.FC<Props> = ({ codigoCliente, sucursal }) => {
         cancelText="Cancelar"
       >
         <Form form={form} layout="vertical" size="small">
-          <Form.Item name="codigoGrupo" label="CÃ³digo Grupo">
-            <Input placeholder="CÃ³digo del grupo" maxLength={20} />
+          <Form.Item name="codigoGrupo" label="Código Grupo">
+            <Input placeholder="Código del grupo" maxLength={20} />
           </Form.Item>
           <Form.Item name="nombreGrupo" label="Nombre Grupo" rules={[{ required: true, message: 'Obligatorio' }]}>
             <Input placeholder="Nombre del grupo" maxLength={100} />

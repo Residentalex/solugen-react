@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Row, Col, Divider, Grid, message, Typography, Descriptions, Alert, Input, Tooltip, Space,
@@ -26,10 +26,12 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { generadorOrcApi } from '../../api/generadorOrcApi';
+import { actualizacionPrecioApi } from '../../api/actualizacionPrecioApi';
 import { entradaAlmacenApi } from '../../api/entradaAlmacenApi';
 import { apiClient } from '../../api/client';
 import type { GeneradorOrdenCompraDTO, DetalleGeneradorDTO } from '../../types/generadorOrc';
 import type { OrdenCompraVistaDTO } from '../../types/entradaAlmacen';
+import type { ActualizacionPrecioDTO } from '../../types/actualizacionPrecio';
 import { formatCurrency, formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { ErrorDetalle } from '../../components';
 import SucursalDocumentoSelector from '../../components/SucursalDocumentoSelector';
@@ -59,6 +61,27 @@ function calcularFilaGORC(fila: DetalleGeneradorDTO): DetalleGeneradorDTO {
   return { ...fila, subTotal, descuento, impuestos, total };
 }
 
+type TipoAdp = 'SUBIDA' | 'BAJA' | 'MIXTA' | 'SIN_CAMBIO' | 'DESCONOCIDO';
+
+const TIPO_ADP_TAG: Record<TipoAdp, { label: string; color: string }> = {
+  SUBIDA: { label: 'Subida', color: 'green' },
+  BAJA: { label: 'Bajada', color: 'red' },
+  MIXTA: { label: 'Mixta', color: 'gold' },
+  SIN_CAMBIO: { label: 'Sin cambio', color: 'default' },
+  DESCONOCIDO: { label: '—', color: 'default' },
+};
+
+// ACTPRECIO no guarda si la actualizacion es de subida o bajada: se deriva de sus lineas.
+function clasificarTipoAdp(lineas: Array<{ precio?: number; precioSug?: number }>): TipoAdp {
+  const cambios = (lineas || []).filter((l) => (l.precioSug ?? 0) !== (l.precio ?? 0));
+  if (cambios.length === 0) return 'SIN_CAMBIO';
+
+  const sube = cambios.some((l) => (l.precioSug ?? 0) > (l.precio ?? 0));
+  const baja = cambios.some((l) => (l.precioSug ?? 0) < (l.precio ?? 0));
+  if (sube && baja) return 'MIXTA';
+  return sube ? 'SUBIDA' : 'BAJA';
+}
+
 const GeneradorORCDetalle: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -80,8 +103,11 @@ const GeneradorORCDetalle: React.FC = () => {
   const [ordenesGeneradas, setOrdenesGeneradas] = useState<OrdenCompraVistaDTO[]>([]);
   const [ordenesLoading, setOrdenesLoading] = useState(false);
 
-  const [adpList, setAdpList] = useState<any[]>([]);
+  const [adpList, setAdpList] = useState<ActualizacionPrecioDTO[]>([]);
   const [adpLoading, setAdpLoading] = useState(false);
+  const [tipoAdp, setTipoAdp] = useState<Record<string, TipoAdp>>({});
+  // Cache en ref: permite clasificar solo las ADP nuevas sin volver a recrear cargarAdp.
+  const tipoAdpCache = useRef<Record<string, TipoAdp>>({});
 
   // Análisis / monitor
   const [analisisOpen, setAnalisisOpen] = useState(false);
@@ -140,6 +166,48 @@ const GeneradorORCDetalle: React.FC = () => {
       })
       .finally(() => setLoading(false));
   }, [id, sucursalActiva, setPageTitleOverride]);
+
+  // Cargar ADP vinculados al GORC.
+  // El useEffect depende de `data` (no de data?.numero) a proposito: despues de aplicar,
+  // el numero no cambia, asi que un effect atado solo al numero nunca se volveria a
+  // disparar y la lista quedaria desactualizada tras Aplicar / Generar OC.
+  const cargarAdp = useCallback(() => {
+    if (!data?.numero) return;
+    setAdpLoading(true);
+    apiClient.get(`/ADP/${sucursalActiva}/filtrar`, {
+      params: { docReferencia: 'GDO-' + data.numero, cantidad: 20 }
+    })
+      .then(async (res) => {
+        const lista: ActualizacionPrecioDTO[] = res.data?.data || [];
+        setAdpList(lista);
+
+        const pendientes = lista.filter((a) => a?.idExterno && !tipoAdpCache.current[a.idExterno]);
+        if (pendientes.length === 0) return;
+
+        const detectados: Record<string, TipoAdp> = {};
+        await Promise.all(pendientes.map(async (adp) => {
+          try {
+            const detalle = await actualizacionPrecioApi.obtenerDetalle(sucursalActiva, adp.idExterno);
+            detectados[adp.idExterno] = clasificarTipoAdp(detalle?.lineas || []);
+          } catch {
+            detectados[adp.idExterno] = 'DESCONOCIDO';
+          }
+        }));
+        tipoAdpCache.current = { ...tipoAdpCache.current, ...detectados };
+        setTipoAdp({ ...tipoAdpCache.current });
+      })
+      .catch((err: unknown) => {
+        const msg = (err as { response?: { data?: { errorMessage?: string } } })?.response?.data?.errorMessage
+          || 'Error al cargar actualizaciones de precio';
+        message.error(msg);
+        setAdpList([]);
+      })
+      .finally(() => setAdpLoading(false));
+  }, [data, sucursalActiva]);
+
+  useEffect(() => {
+    cargarAdp();
+  }, [cargarAdp]);
 
   const handleSeleccionarProductoAnalisis = useCallback((record: DetalleGeneradorDTO) => {
     setAnalisisDetalle(record);
@@ -238,22 +306,6 @@ const GeneradorORCDetalle: React.FC = () => {
       })
       .finally(() => setOrdenesLoading(false));
   }, [id, sucursalActiva, data]);
-
-  // Efecto: cargar ADP vinculados al GORC
-  useEffect(() => {
-    if (!data?.numero) return;
-    setAdpLoading(true);
-    apiClient.get(`/ADP/${sucursalActiva}/filtrar`, {
-      params: { docReferencia: 'GDO-' + data.numero, cantidad: 20 }
-    })
-      .then((res) => setAdpList(res.data?.data || []))
-      .catch((err: any) => {
-        const msg = err?.response?.data?.errorMessage || 'Error al cargar actualizaciones de precio';
-        message.error(msg);
-        setAdpList([]);
-      })
-      .finally(() => setAdpLoading(false));
-  }, [data?.numero, sucursalActiva]);
 
   // Efecto: cargar análisis cuando se abre el Drawer
   useEffect(() => {
@@ -579,7 +631,7 @@ const GeneradorORCDetalle: React.FC = () => {
           <Text strong>{formatCurrency(data.total)}</Text>
         </Descriptions.Item>
         <Descriptions.Item label="Notas:" span={isLarge ? 3 : undefined}>
-          <span style={{ whiteSpace: 'pre-wrap' }}>{data.notas || '-'}</span>
+          <span className="paces-nota-memo">{data.notas || '-'}</span>
         </Descriptions.Item>
       </Descriptions>
       <Divider style={{ margin: '12px 0' }} />
@@ -774,10 +826,11 @@ const GeneradorORCDetalle: React.FC = () => {
           loading={adpLoading}
           scroll={{ x: 800 }}
           columns={[
-            { title: 'Tipo', key: 'tipo', width: 90,
-              render: (_: any, record: any) => {
-                const esN = (record.idExterno || record.documento || '').endsWith('N');
-                return <Tag color={esN ? 'red' : 'green'}>{esN ? 'Bajada' : 'Subida'}</Tag>;
+            { title: 'Tipo', key: 'tipo', width: 110,
+              render: (_: unknown, record: ActualizacionPrecioDTO) => {
+                const tipo = tipoAdp[record.idExterno];
+                const info = tipo ? TIPO_ADP_TAG[tipo] : undefined;
+                return <Tag color={info?.color}>{info?.label ?? '—'}</Tag>;
               },
             },
             { title: 'Documento', dataIndex: 'documento', width: 160 },

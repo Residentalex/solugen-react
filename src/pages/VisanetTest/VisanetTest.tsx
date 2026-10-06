@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Button, Input, InputNumber, Select, Modal, Tag, Typography, Space, Row, Col, Alert, Table, Drawer, Tabs, message, DatePicker, theme, Tooltip } from 'antd';
+import { Card, Button, Input, InputNumber,  Modal, Tag, Typography, Space, Row, Col, Alert, Table, Drawer, Tabs, message, DatePicker, theme, Tooltip } from 'antd';
+import { Select } from '../../components/Select';
 import { ArrowLeftOutlined, CopyOutlined, PrinterOutlined, CreditCardOutlined, StopOutlined, FolderOpenOutlined, FileExcelOutlined, ReloadOutlined, CodeOutlined, HeartOutlined, IdcardOutlined, ReadOutlined, EyeOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';

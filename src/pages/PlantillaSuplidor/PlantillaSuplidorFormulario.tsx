@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Spin, Skeleton, Button, Space, Row, Col, Grid,
-  message, Form, Input, DatePicker, Typography, Modal, Alert, Select, Empty,
+  message, Form, Input, DatePicker, Typography, Modal, Alert,  Empty,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   SaveOutlined, CloseOutlined, DeleteOutlined, PlusOutlined, ExclamationCircleOutlined,
 } from '@ant-design/icons';
@@ -463,7 +464,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
                   </Col>
                   <Col xs={24}>
                     <Form.Item name="notas" label="Notas">
-                      <TextArea rows={2} placeholder="Notas opcionales" />
+                      <TextArea rows={3} autoSize={{ minRows: 3, maxRows: 8 }} maxLength={500} showCount placeholder="Notas opcionales" />
                     </Form.Item>
                   </Col>
                 </Row>
@@ -579,7 +580,7 @@ const PlantillaSuplidorFormulario: React.FC = () => {
                 </Col>
                 <Col xs={24}>
                   <Form.Item name="notas" label="Notas">
-                    <TextArea rows={2} placeholder="Notas opcionales" />
+                    <TextArea rows={3} autoSize={{ minRows: 3, maxRows: 8 }} maxLength={500} showCount placeholder="Notas opcionales" />
                   </Form.Item>
                 </Col>
               </Row>

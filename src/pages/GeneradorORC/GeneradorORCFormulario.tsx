@@ -1,10 +1,11 @@
-﻿import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Avatar, Card, Table, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Checkbox, Select,
+  Avatar, Card, Table, Tag, Spin, Button, Space, Row, Col, Divider, Grid, Checkbox, 
   message, Form, Input, InputNumber, DatePicker, Typography, Modal, Dropdown, Alert, Skeleton, Drawer, Descriptions,
   Tooltip,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   SaveOutlined,
   CloseOutlined,
@@ -107,6 +108,54 @@ function filaVaciaGORC(): DetalleGeneradorDTO {
 function redondearAlFactor(precio: number, factor: number): number {
   if (!factor || factor <= 0) return precio;
   return Math.ceil(precio / factor) * factor;
+}
+
+/** Datos de la ultima compra aplicada (GORC con APLICADA = 'T') para un producto. */
+interface DatosAnterioresHistorial {
+  codigo?: string;
+  costo?: number | null;
+  margen?: number | null;
+  precioSugerido?: number | null;
+  porcientoDescuento?: number | null;
+  fecha?: string | null;
+  medidaId?: number | null;
+}
+
+/** Resuelve un numero historico: usa el valor del ultimo GORC aplicado si es
+ *  mayor a cero; en caso contrario cae al valor cero en lugar de propagar null. */
+function valorHistorico(valor?: number | null): number {
+  return typeof valor === 'number' && isFinite(valor) && valor > 0 ? valor : 0;
+}
+
+/** Cascada unica de resolucion de costo: ultimo GORC aplicado primero, luego
+ *  ultimo costo del maestro de productos. */
+function resolverCostoDesdeHistorial(hist: DatosAnterioresHistorial | null | undefined, costoMaestro?: number | null): number {
+  const costoHistorial = valorHistorico(hist?.costo);
+  if (costoHistorial > 0) return costoHistorial;
+  return valorHistorico(costoMaestro);
+}
+
+/** Porcentaje de descuento: siempre proviene del ultimo GORC aplicado. */
+function resolverDescuentoDesdeHistorial(hist: DatosAnterioresHistorial | null | undefined): number {
+  const descuento = hist?.porcientoDescuento;
+  if (typeof descuento !== 'number' || !isFinite(descuento) || descuento <= 0) return 0;
+  return descuento;
+}
+
+/** Margen y precio sugerido: provienen del ultimo GORC aplicado, con fallback al maestro. */
+function resolverMargenDesdeHistorial(hist: DatosAnterioresHistorial | null | undefined, margenMaestro?: number | null): number {
+  const margen = hist?.margen;
+  if (typeof margen === 'number' && isFinite(margen) && margen > 0) return margen;
+  return valorHistorico(margenMaestro);
+}
+
+function resolverPrecioSugeridoDesdeHistorial(
+  hist: DatosAnterioresHistorial | null | undefined,
+  precioMaestro?: number | null
+): number {
+  const precio = hist?.precioSugerido;
+  if (typeof precio === 'number' && isFinite(precio) && precio > 0) return precio;
+  return valorHistorico(precioMaestro);
 }
 
 /** Normaliza una medida asegurando que tenga nombre, codigo, factor e idExterno.
@@ -698,12 +747,15 @@ const GeneradorORCFormulario: React.FC = () => {
 
       const codigos = productos.map((p) => p.codigo);
 
-      let datosAnteriores: any[] = [];
+      let datosAnteriores: DatosAnterioresHistorial[] = [];
       try {
         datosAnteriores = await generadorOrcApi.obtenerDatosAnteriores(sucursalActiva, codigos);
-      } catch {}
+      } catch (err: any) {
+        const msg = extraerMensajeError(err, 'No se pudo consultar el historial de compra');
+        message.warning(`${msg} Se usará el último costo del maestro.`);
+      }
 
-      const mapDatosAnteriores = new Map<string, any>();
+      const mapDatosAnteriores = new Map<string, DatosAnterioresHistorial>();
       (datosAnteriores || []).forEach((d) => {
         if (d.codigo) mapDatosAnteriores.set(d.codigo, d);
       });
@@ -711,20 +763,21 @@ const GeneradorORCFormulario: React.FC = () => {
       // Construir datos enriquecidos (para guardar en memoria si da NO)
       const todosProductosMaestro = productos.map((prod: ProductoDTO) => {
         const hist = mapDatosAnteriores.get(prod.codigo);
+        const costo = resolverCostoDesdeHistorial(hist, prod.ultimoCosto);
         const impuestoCompra =
           (prod.impuestos || []).find((i) => i.impuesto?.ambito === "Compra")?.impuesto || null;
         return {
           codigo: prod.codigo,
           articulo: prod.nombre || '',
           referencia: prod.referenciaInterna || '',
-          _costo: hist?.costo ?? prod.ultimoCosto ?? 0,
-          _margen: hist?.margen ?? 0,
-          _precioSugerido: hist?.precioSugerido ?? prod.precio ?? 0,
+          _costo: costo,
+          _margen: resolverMargenDesdeHistorial(hist),
+          _precioSugerido: resolverPrecioSugeridoDesdeHistorial(hist, prod.precio),
           _ultimaCompraFecha: hist?.fecha ?? undefined,
-          _porcentajeDescuento: hist?.porcientoDescuento ?? 0,
+          _porcentajeDescuento: resolverDescuentoDesdeHistorial(hist),
           _impuesto: impuestoCompra,
           _medida: normalizarMedida(prod.unidadMedida) ?? normalizarMedida(unidadBase),
-          ultimoCosto: hist?.costo ?? prod.ultimoCosto ?? 0,
+          ultimoCosto: costo,
           medida: normalizarMedida(prod.unidadMedida) ?? normalizarMedida(unidadBase),
         };
       });
@@ -758,12 +811,12 @@ const GeneradorORCFormulario: React.FC = () => {
             cantidadesBonificadas: { OP: 0, HR: 0, VH: 0 },
             existencias: { OP: 0, HR: 0, VH: 0 },
             existenciasFisicas: { OP: 0, HR: 0, VH: 0 },
-            costo: hist?.costo ?? prod.ultimoCosto ?? 0,
+            costo: resolverCostoDesdeHistorial(hist, prod.ultimoCosto),
             ultimaCompraFecha: hist?.fecha ?? undefined,
-            margen: hist?.margen ?? 0,
-            precioSugerido: hist?.precioSugerido ?? prod.precio ?? 0,
+            margen: resolverMargenDesdeHistorial(hist),
+            precioSugerido: resolverPrecioSugeridoDesdeHistorial(hist, prod.precio),
             subTotal: 0,
-            porcentajeDescuento: hist?.porcientoDescuento ?? 0,
+            porcentajeDescuento: resolverDescuentoDesdeHistorial(hist),
             descuento: 0,
             impuestos: 0,
             total: 0,
@@ -879,29 +932,33 @@ const GeneradorORCFormulario: React.FC = () => {
 
       const codigos = productos.map((p) => p.codigo);
 
-      let datosAnteriores: any[] = [];
+      let datosAnteriores: DatosAnterioresHistorial[] = [];
       try {
         datosAnteriores = await generadorOrcApi.obtenerDatosAnteriores(sucursalActiva, codigos);
-      } catch {}
+      } catch (err: any) {
+        const msg = extraerMensajeError(err, 'No se pudo consultar el historial de compra');
+        message.warning(`${msg} Se usará el último costo del maestro.`);
+      }
 
-      const mapDatosAnteriores = new Map<string, any>();
+      const mapDatosAnteriores = new Map<string, DatosAnterioresHistorial>();
       (datosAnteriores || []).forEach((d) => {
         if (d.codigo) mapDatosAnteriores.set(d.codigo, d);
       });
 
       const enriquecidos = productos.map((prod: ProductoDTO) => {
         const hist = mapDatosAnteriores.get(prod.codigo);
+        const costo = resolverCostoDesdeHistorial(hist, prod.ultimoCosto);
         const impuestoCompra =
           (prod.impuestos || []).find((i) => i.impuesto?.ambito === "Compra")?.impuesto || null;
         return {
           codigo: prod.codigo,
           articulo: prod.nombre || '',
           referencia: prod.referenciaInterna || '',
-          _costo: hist?.costo ?? prod.ultimoCosto ?? 0,
-          _margen: hist?.margen ?? 0,
-          _precioSugerido: hist?.precioSugerido ?? prod.precio ?? 0,
+          _costo: costo,
+          _margen: resolverMargenDesdeHistorial(hist),
+          _precioSugerido: resolverPrecioSugeridoDesdeHistorial(hist, prod.precio),
           _ultimaCompraFecha: hist?.fecha ?? undefined,
-          _porcentajeDescuento: hist?.porcientoDescuento ?? 0,
+          _porcentajeDescuento: resolverDescuentoDesdeHistorial(hist),
           _impuesto: impuestoCompra,
           _medida: (() => {
             if (hist?.medidaId && hist.medidaId > 0) {
@@ -910,7 +967,7 @@ const GeneradorORCFormulario: React.FC = () => {
             }
             return normalizarMedida(prod.unidadMedida) ?? normalizarMedida(unidadBase);
           })(),
-          ultimoCosto: hist?.costo ?? prod.ultimoCosto ?? 0,
+          ultimoCosto: costo,
           medida: (() => {
             if (hist?.medidaId && hist.medidaId > 0) {
               const histMedida = medidasCache.find(m => Number(m.idExterno) === Number(hist.medidaId));
@@ -982,13 +1039,19 @@ const GeneradorORCFormulario: React.FC = () => {
         return;
       }
 
-      // Obtener datos históricos de última compra
-      let hist: any = null;
+      // Obtener datos de la última compra aplicada (último GORC con APLICADA = 'T')
+      let hist: DatosAnterioresHistorial | null = null;
       try {
         const datosAnteriores = await generadorOrcApi.obtenerDatosAnteriores(sucursalActiva, [codigo]);
         hist = (datosAnteriores || [])[0] ?? null;
-      } catch {
-        // Silencioso - se usan datos del maestro como fallback
+        if (!hist || hist.costo === undefined || hist.costo === null) {
+          message.warning(
+            `${codigo} no tiene historial de compra aplicada. Se usará el último costo del maestro.`
+          );
+        }
+      } catch (err: any) {
+        const msg = extraerMensajeError(err, 'No se pudo consultar el historial de compra');
+        message.warning(`${msg} Se usará el último costo del maestro.`);
       }
 
       // Obtener existencias reales por sucursal usando el prefijo de cada compañía
@@ -1044,7 +1107,7 @@ const GeneradorORCFormulario: React.FC = () => {
 
       const productoCompacto = {
         codigo: producto.codigo,
-        referencia: producto.referencia || '',
+        referencia: producto.referenciaInterna || '',
         articulo: producto.nombre || '',
         medida: medidaFinal,
         impuesto: impuestoCompra
@@ -1055,11 +1118,11 @@ const GeneradorORCFormulario: React.FC = () => {
               idExterno: impuestoCompra.idExterno || '',
             }
           : null,
-        costo: hist?.costo ?? producto.ultimoCosto ?? 0,
-        margen: hist?.margen ?? 0,
-        precioSugerido: hist?.precioSugerido ?? producto.precio ?? 0,
+        costo: resolverCostoDesdeHistorial(hist, producto.ultimoCosto),
+        margen: resolverMargenDesdeHistorial(hist),
+        precioSugerido: resolverPrecioSugeridoDesdeHistorial(hist, producto.precio),
         ultimaCompraFecha: hist?.fecha ?? undefined,
-        porcentajeDescuento: hist?.porcientoDescuento ?? 0,
+        porcentajeDescuento: resolverDescuentoDesdeHistorial(hist),
         existenciasFisicas,
       };
 
@@ -1158,19 +1221,21 @@ const GeneradorORCFormulario: React.FC = () => {
           plantillaDetallesRef.current = mapPlantilla;
           if (detallesPlantilla && detallesPlantilla.length > 0) {
             const codigos = [...new Set(detallesPlantilla.map((d: any) => d.codigo).filter(Boolean))];
-            let mapDatosAnteriores = new Map<string, any>();
+            let mapDatosAnteriores = new Map<string, DatosAnterioresHistorial>();
             let mapImpuestos = new Map<string, any>();
             let mapMedidasFallback = new Map<string, UnidadMedidaDTO>();
+            let mapMaestro = new Map<string, any>();
             if (codigos.length > 0) {
               try {
                 const [datosAnteriores, productos] = await Promise.all([
                   generadorOrcApi.obtenerDatosAnteriores(sucursalActiva, codigos),
                   productoApi.obtenerPorListaCodigos(sucursalActiva, codigos),
                 ]);
-                (datosAnteriores || []).forEach((d: any) => {
+                (datosAnteriores || []).forEach((d) => {
                   if (d.codigo) mapDatosAnteriores.set(d.codigo, d);
                 });
                 (productos || []).forEach((p: any) => {
+                  mapMaestro.set(p.codigo, p);
                   const impuestoCompra = (p.impuestos || []).find((i: any) => i.impuesto?.ambito === "Compra")?.impuesto || null;
                   if (impuestoCompra) mapImpuestos.set(p.codigo, impuestoCompra);
                   if (p.unidadMedida) {
@@ -1182,11 +1247,15 @@ const GeneradorORCFormulario: React.FC = () => {
                     });
                   }
                 });
-              } catch {}
+              } catch (err: any) {
+                const msg = extraerMensajeError(err, 'No se pudo consultar el historial de compra');
+                message.warning(`${msg} Se usará el último costo del maestro.`);
+              }
             }
 
             const filas: DetalleGeneradorDTO[] = detallesPlantilla.map((d: any) => {
               const hist = mapDatosAnteriores.get(d.codigo);
+              const maestro = mapMaestro.get(d.codigo);
               return {
                 codigo: d.codigo || '',
                 referencia: d.referencia || '',
@@ -1198,17 +1267,13 @@ const GeneradorORCFormulario: React.FC = () => {
                 cantidades: { OP: 0, HR: 0, VH: 0 },
                 cantidadesBonificadas: { OP: 0, HR: 0, VH: 0 },
                 existencias: { OP: 0, HR: 0, VH: 0 },
-              existenciasFisicas: {
-                OP: (p as any)._cantidadesPorPrefijo?.OP || 0,
-                HR: (p as any)._cantidadesPorPrefijo?.HR || 0,
-                VH: (p as any)._cantidadesPorPrefijo?.VH || 0,
-              },
-                costo: hist?.costo ?? 0,
+                existenciasFisicas: { OP: 0, HR: 0, VH: 0 },
+                costo: resolverCostoDesdeHistorial(hist, maestro?.ultimoCosto),
                 ultimaCompraFecha: hist?.fecha ?? undefined,
-                margen: hist?.margen ?? 0,
-                precioSugerido: hist?.precioSugerido ?? 0,
+                margen: resolverMargenDesdeHistorial(hist),
+                precioSugerido: resolverPrecioSugeridoDesdeHistorial(hist, maestro?.precio),
                 subTotal: 0,
-                porcentajeDescuento: 0,
+                porcentajeDescuento: resolverDescuentoDesdeHistorial(hist),
                 descuento: 0,
                 impuestos: 0,
                 total: 0,
@@ -1237,7 +1302,10 @@ const GeneradorORCFormulario: React.FC = () => {
             }
             return;
           }
-        } catch {}
+        } catch (err: any) {
+          const msg = extraerMensajeError(err, 'Error al cargar la plantilla del suplidor');
+          message.warning(msg);
+        }
 
         message.info('No se encontraron conteos físicos para esta plantilla en los últimos 15 días.');
         setConteosPlantilla([]);
@@ -1293,19 +1361,21 @@ const GeneradorORCFormulario: React.FC = () => {
       }
 
       const codigos = [...new Set(todosDetalles.map((d: any) => d.codigo).filter(Boolean))];
-      let mapDatosAnteriores = new Map<string, any>();
+      let mapDatosAnteriores = new Map<string, DatosAnterioresHistorial>();
       let mapImpuestos = new Map<string, any>();
       let mapMedidas = new Map<string, UnidadMedidaDTO>();
+      let mapMaestro = new Map<string, any>();
       if (codigos.length > 0) {
         try {
           const [datosAnteriores, productos] = await Promise.all([
             generadorOrcApi.obtenerDatosAnteriores(sucursalActiva, codigos),
             productoApi.obtenerPorListaCodigos(sucursalActiva, codigos),
           ]);
-          (datosAnteriores || []).forEach((d: any) => {
+          (datosAnteriores || []).forEach((d) => {
             if (d.codigo) mapDatosAnteriores.set(d.codigo, d);
           });
           (productos || []).forEach((p: any) => {
+            mapMaestro.set(p.codigo, p);
             const impuestoCompra = (p.impuestos || []).find((i: any) => i.impuesto?.ambito === "Compra")?.impuesto || null;
             if (impuestoCompra) mapImpuestos.set(p.codigo, impuestoCompra);
             if (p.unidadMedida) {
@@ -1317,20 +1387,24 @@ const GeneradorORCFormulario: React.FC = () => {
               });
             }
           });
-        } catch {}
+        } catch (err: any) {
+          const msg = extraerMensajeError(err, 'No se pudo consultar el historial de compra');
+          message.warning(`${msg} Se usará el último costo del maestro.`);
+        }
       }
 
       // Enriquecer detalles con datos anteriores ANTES de guardar en memoria
       const todosDetallesEnriquecidos = todosDetalles.map((d: any) => {
         const hist = mapDatosAnteriores.get(d.codigo);
+        const maestro = mapMaestro.get(d.codigo);
         const detallePlantilla = plantillaDetallesRef.current.get(d.codigo);
         return {
           ...d,
-          _costo: hist?.costo ?? d.ultimoCosto ?? d.costo ?? 0,
-          _margen: hist?.margen ?? 0,
-          _precioSugerido: hist?.precioSugerido ?? 0,
+          _costo: resolverCostoDesdeHistorial(hist, maestro?.ultimoCosto ?? d.ultimoCosto ?? d.costo),
+          _margen: resolverMargenDesdeHistorial(hist),
+          _precioSugerido: resolverPrecioSugeridoDesdeHistorial(hist, maestro?.precio),
           _ultimaCompraFecha: hist?.fecha ?? undefined,
-          _porcentajeDescuento: hist?.porcientoDescuento ?? 0,
+          _porcentajeDescuento: resolverDescuentoDesdeHistorial(hist),
           _impuesto: mapImpuestos.get(d.codigo) || null,
           _medida: detallePlantilla?.presentacion
             ? { nombre: detallePlantilla.presentacion, codigo: '', factor: 1, idExterno: detallePlantilla.presentacionID || 0 }

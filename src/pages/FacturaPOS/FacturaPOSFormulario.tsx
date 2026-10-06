@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Skeleton, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Empty,
+  message, Form, Input, InputNumber,  DatePicker, Typography, Modal, Dropdown, Alert, Empty,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   InboxOutlined,
   SaveOutlined,
@@ -13,7 +14,6 @@ import {
   SearchOutlined,
   ClearOutlined,
   ExclamationCircleOutlined,
-  EditOutlined,
   MoreOutlined,
   BarcodeOutlined,
   CreditCardOutlined,
@@ -51,14 +51,16 @@ import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useCargaDocumento } from '../../hooks/useCargaDocumento';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
+import { useMonedaDocumento } from '../../hooks/useMonedaDocumento';
+import CamposRapidosFila from '../../components/CamposRapidosFila/CamposRapidosFila';
 import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
+import MemoField from '../../components/MemoField/MemoField';
 
 const { Text } = Typography;
-const { TextArea } = Input;
 
 // ===== Cálculo de fila POS (Precio incluye ITBIS) =====
 function calcularFilaPOS(fila: DetalleFacturaPOSDTO): DetalleFacturaPOSDTO {
@@ -129,6 +131,8 @@ function cobrosVacios(): CobroDTO {
 const FacturaPOSFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const cloneData = (location.state as any)?.cloneData;
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const authUser = useAuthStore((s) => s.usuario);
   const clienteDefectoPOS = useAuthStore((s) => s.clienteDefectoPOS);
@@ -265,10 +269,20 @@ const FacturaPOSFormulario: React.FC = () => {
 
   const [form] = Form.useForm();
 
+  // ===== Moneda del documento (selector sobre el catalogo de MONEDAS) =====
+  const { monedas, monedasLoading, monedaCodigo, tasaEditable, tasaParaMoneda, seleccionarMoneda } = useMonedaDocumento(
+    sucursalActiva,
+    form,
+    data,
+    setData,
+    selectedConcepto?.moneda,
+  );
+
   // ===== Watchers reactivos =====
   const ncfValue = Form.useWatch('ncf', form) || '';
   const refValue = Form.useWatch('referencia', form) || '';
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
+  const diasCreditoValue = Form.useWatch('diasCredito', form) ?? 0;
 
   const sinOC = true;
   const isLarge = screens.xxl === true;
@@ -293,8 +307,57 @@ const FacturaPOSFormulario: React.FC = () => {
     facturaPOSApi.obtenerAlmacenes(sucursalActiva).then(setAlmacenesCache).catch((err) => console.warn('Error al cargar almacenes cache', err));
     unidadMedidaApi.obtenerListado(sucursalActiva).then(setMedidasCache).catch((err) => console.warn('Error al cargar medidas cache', err));
 
+    // ===== Si viene de Clonar =====
+    // Hidrata el documento origen como borrador nuevo. No se llama setData: en modo
+    // crear `construirDTO` resuelve documento/moneda/periodo por defecto, igual que FENP y FFAC.
+    if (mode === 'crear' && cloneData) {
+      setSelectedConcepto(cloneData.concepto || null);
+      setSelectedCliente(cloneData.cliente || null);
+      setSelectedAlmacen(cloneData.almacen || null);
+      setDetalles((cloneData.detalles || []).map((d: DetalleFacturaPOSDTO) => calcularFilaPOS({
+        ...d,
+        porcentajeImpuesto: d.porcentajeImpuesto || (d.impuesto?.porcentaje ?? 0),
+        tieneVencimiento: d.tieneVencimiento ?? false,
+        idTransaccion: 0,
+      })));
+
+      form.setFieldsValue({
+        concepto: cloneData.concepto?.codigo || '',
+        cliente: cloneData.cliente?.codigo || '',
+        almacen: cloneData.almacen?.codigo || '',
+        fechaDocumento: dayjs(),
+        turno: 'POS-001',
+        ncf: '',
+        referencia: cloneData.referencia || '',
+        diasCredito: cloneData.diasCredito || 0,
+        tasa: cloneData.tasa || 1,
+        nota: cloneData.nota || '',
+      });
+
+      // El Select de Cliente se arma con clientesCache; sin esto solo mostraria el codigo
+      facturaPOSApi.obtenerClientes(sucursalActiva)
+        .then(setClientesCache)
+        .catch((err) => console.warn('Error al cargar clientes cache al clonar', err));
+
+      // Enriquecer con batch pricing (badge de precio oferta), igual que en modo editar
+      const codigosUnicos = Array.from(
+        new Set((cloneData.detalles || []).map((d: any) => d.codigo).filter(Boolean))
+      ) as string[];
+      if (codigosUnicos.length > 0) {
+        productoApi.preciosPorSucursal(sucursalActiva, codigosUnicos)
+          .then((mapaPrecios) => {
+            setDetalles((prev) => prev.map((d) => ({
+              ...d,
+              precioOferta: mapaPrecios.get(d.codigo)?.precioOferta ?? 0,
+              precioRegularOferta: mapaPrecios.get(d.codigo)?.precio ?? 0,
+            })));
+          })
+          .catch(() => undefined);
+      }
+    }
+
     // Inicializar valores por defecto en modo crear
-    if (mode === 'crear') {
+    if (mode === 'crear' && !cloneData) {
       form.setFieldsValue({
         fechaDocumento: dayjs(),
         tasa: 1,
@@ -319,7 +382,7 @@ const FacturaPOSFormulario: React.FC = () => {
       resetToolbar();
       setPageTitleOverride('');
     };
-  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form, clienteDefectoPOS, selectedCliente]);
+  }, [setActiveModule, setPageTitleOverride, resetToolbar, mode, sucursalActiva, form, clienteDefectoPOS, selectedCliente, cloneData]);
 
 
 
@@ -448,7 +511,7 @@ const FacturaPOSFormulario: React.FC = () => {
     form.setFieldsValue({
       concepto: concepto.codigo,
       moneda: monedaObj.nombre,
-      tasa: monedaObj.tasa ?? 1,
+      tasa: tasaParaMoneda(monedaObj),
     });
     // Actualizar data local para que la UI lo refleje
     setData((prev) => {
@@ -1123,108 +1186,67 @@ const FacturaPOSFormulario: React.FC = () => {
           </Col>
 
           {/* Fila 4: Campos rápidos (NCF, Referencia, Tasa, Días Crédito) */}
-          <Col xs={24}>
-            <div style={{ marginBottom: 16 }}>
-              <Space size={[8, 8]} wrap>
-                {/* NCF - readonly */}
-                <Tag style={{ fontSize: 14 }}>
-                  NCF: {ncfValue || 'Autogenerado'}
-                </Tag>
-
-                {/* Referencia */}
-                {editingField === 'referencia' ? (
-                  <Input
-                    size="small"
-                    style={{ width: 200 }}
-                    placeholder="Referencia"
-                    autoFocus
-                    defaultValue={editingValueRef.current as string}
-                    onChange={(e) => { editingValueRef.current = e.target.value; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : refValue ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
-                    Ref: {refValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
-                    <PlusOutlined /> Referencia
-                  </Tag>
-                )}
-
-                {/* Tasa */}
-                {editingField === 'tasa' ? (
-                  <InputNumber
-                    size="small"
-                    style={{ width: 120 }}
-                    min={0}
-                    step={0.01}
-                    placeholder="Tasa"
-                    autoFocus
-                    defaultValue={editingValueRef.current as number}
-                    onChange={(val) => { editingValueRef.current = val ?? 1; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : tasaValue !== 1 ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
-                    Tasa: {tasaValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
-                    <PlusOutlined /> Tasa
-                  </Tag>
-                )}
-
-                {/* Días Crédito */}
-                {editingField === 'diasCredito' ? (
-                  <InputNumber
-                    size="small"
-                    style={{ width: 120 }}
-                    min={0}
-                    max={365}
-                    step={1}
-                    placeholder="Días Crédito"
-                    autoFocus
-                    defaultValue={editingValueRef.current as number}
-                    onChange={(val) => { editingValueRef.current = val ?? 0; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('diasCredito')}>
-                    {form.getFieldValue('diasCredito') !== undefined && form.getFieldValue('diasCredito') !== null
-                      ? `Crédito: ${form.getFieldValue('diasCredito')} días`
-                      : <><PlusOutlined /> Días Crédito</>}
-                    {form.getFieldValue('diasCredito') !== undefined && form.getFieldValue('diasCredito') !== null && form.getFieldValue('diasCredito') !== '' && <EditOutlined />}
-                  </Tag>
-                )}
-              </Space>
-            </div>
-            {/* Hidden form items */}
-            <Form.Item name="ncf" hidden><Input /></Form.Item>
-            <Form.Item name="referencia" hidden><Input /></Form.Item>
-            <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
-            <Form.Item name="diasCredito" hidden><InputNumber /></Form.Item>
-            <Form.Item name="moneda" hidden><Input /></Form.Item>
-          </Col>
+          <CamposRapidosFila
+            ncf={{
+              valor: ncfValue,
+              readOnly: true,
+              prefijo: 'NCF: ',
+              textoReadOnly: 'NCF: Autogenerado',
+              onEdit: () => openFieldEditor('ncf'),
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+            }}
+            referencia={{
+              valor: refValue,
+              editando: editingField === 'referencia',
+              etiqueta: 'Referencia',
+              prefijo: 'Ref: ',
+              placeholder: 'Referencia',
+              onEdit: () => openFieldEditor('referencia'),
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+              onChange: (v) => { editingValueRef.current = v; },
+            }}
+            diasCredito={{
+              valor: diasCreditoValue,
+              editando: editingField === 'diasCredito',
+              editor: 'numero',
+              etiqueta: 'Días Crédito',
+              prefijo: 'Crédito: ',
+              sufijo: ' días',
+              placeholder: 'Días Crédito',
+              min: 0,
+              max: 365,
+              step: 1,
+              anchoEditor: 120,
+              onEdit: () => openFieldEditor('diasCredito'),
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+              onChangeNumber: (v) => { editingValueRef.current = v; },
+            }}
+            tasa={{
+              tasa: tasaValue,
+              editable: tasaEditable,
+              editando: editingField === 'tasa',
+              onEdit: () => openFieldEditor('tasa'),
+              onChange: (v) => { editingValueRef.current = v ?? 1; },
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+            }}
+            moneda={{ value: monedaCodigo, onChange: seleccionarMoneda, monedas, loading: monedasLoading }}
+            ocultos={[
+              { name: 'ncf' },
+              { name: 'referencia' },
+              { name: 'tasa', editor: 'number' },
+              { name: 'diasCredito', editor: 'number' },
+              { name: 'moneda' },
+            ]}
+          />
 
           {/* Fila 5: Nota */}
           <Col xs={24}>
             <Form.Item name="nota" style={{ marginBottom: 0 }}>
-              <FloatingField label="Nota">
-                <TextArea rows={3} maxLength={500} />
-              </FloatingField>
+              <MemoField label="Nota" />
             </Form.Item>
           </Col>
         </Row>

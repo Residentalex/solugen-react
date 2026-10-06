@@ -10,6 +10,7 @@ const { Search } = Input;
 interface CatalogoListadoToolbarProps {
   onSearch: (value: string) => void;
   placeholder?: string;
+  maxLength?: number;
   pageSize: number;
   onPageSizeChange: (value: number) => void;
   ocultarPageSize?: boolean;
@@ -28,6 +29,7 @@ interface CatalogoListadoToolbarProps {
 const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
   onSearch,
   placeholder = 'Buscar...',
+  maxLength,
   pageSize,
   onPageSizeChange,
   ocultarPageSize = false,
@@ -63,6 +65,7 @@ const CatalogoListadoToolbar: React.FC<CatalogoListadoToolbarProps> = ({
           key={searchKey}
           ref={searchRef}
           placeholder={placeholder}
+          maxLength={maxLength}
           allowClear
           onSearch={onSearch}
           onKeyDown={handleSearchKeyDown}

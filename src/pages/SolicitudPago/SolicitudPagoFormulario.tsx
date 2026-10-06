@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid,
-  Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Empty, App,
+  Form, Input, InputNumber,  DatePicker, Typography, Modal, Alert, Empty, App,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   SaveOutlined,
   CloseOutlined,
@@ -41,11 +42,11 @@ import LogTable from '../../components/LogTable';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
-import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber, formatDate } from '../../utils/formats';
+import { toTitleCase, extraerMensajeError, toISOFormat, formatNumber, formatDate, redondear2 } from '../../utils/formats';
 import { toEstadoNum } from '../../utils/estadoDocumento';
+import MemoField from '../../components/MemoField/MemoField';
 
 const { Text } = Typography;
-const { TextArea } = Input;
 
 const TIPOS_PAGO = [
   { codigo: 'CHK', nombre: 'Cheque' },
@@ -135,9 +136,9 @@ const SolicitudPagoFormulario: React.FC = () => {
     };
   }, [transaccionesAsociadas, data, form]);
 
-  const totalCalculado = Math.round(
-    (totalesDocs.subTotal - totalesDocs.descuento + totalesDocs.impuestos) * 100
-  ) / 100;
+  const totalCalculado = redondear2(
+    totalesDocs.subTotal - totalesDocs.descuento + totalesDocs.impuestos
+  );
 
   // Si no hay documentos relacionados, usar el total del backend (edicion) o el calculado
   const totalDisplay = totalCalculado;
@@ -467,6 +468,7 @@ nota: res.nota || '',
       tasa: tasaValue,
       simboloMoneda: monedaSimbolo,
       nombreMoneda: monedaNombre,
+      codigoMoneda: monedaCodigo,
       nombreBeneficiario: values.nombreBeneficiario || '',
     };
 
@@ -525,7 +527,7 @@ nota: res.nota || '',
       referencia: values.referencia || '',
       nota: values.nota || '',
       tasa: tasaValue,
-      total: Math.round((totalesDocs.subTotal - totalesDocs.descuento + totalesDocs.impuestos) * 100) / 100,
+      total: totalCalculado,
       subTotal: totalesDocs.subTotal,
       descuento: totalesDocs.descuento,
       impuestos: totalesDocs.impuestos,
@@ -602,7 +604,17 @@ nota: res.nota || '',
       const tieneDocs = transaccionesAsociadas && transaccionesAsociadas.length > 0;
       const dtoConMonto = {
         ...dto,
-        subTotal: monto,
+        // Avance de efectivo (sin documentos): el encabezado debe quedar SubTotal = monto
+        // y sin descuento/impuestos/retenciones, porque el backend recalcula
+        // Total = SubTotal - Descuento + Impuestos e ignora el `total` del cliente
+        // (ver CalcularMontosEncabezado en ServicioSolicitudPago.cs).
+        // Sin forzar estos ceros, una SPA histórica de avance con Descuento/Impuestos
+        // no nulos en modo editar guardaría un total distinto al monto pedido.
+        subTotal: redondear2(monto),
+        descuento: 0,
+        impuestos: 0,
+        retenciones: 0,
+        total: redondear2(monto),
         transaccionesAsociadas: tieneDocs ? transaccionesAsociadas.map((t) => ({
           ...t,
           transaccionAsociadaID: t.transaccionAsociadaID || t.id,
@@ -976,9 +988,7 @@ subTotal: res.subTotal ?? 0,
               {/* Fila 3: Nota + Beneficiario */}
               <Col xs={24} sm={12} lg={16}>
                 <Form.Item name="nota" style={{ marginBottom: 0 }}>
-                  <FloatingField label="Nota">
-                    <TextArea rows={3} maxLength={500} showCount />
-                  </FloatingField>
+                  <MemoField label="Nota" />
                 </Form.Item>
               </Col>
 
@@ -1015,9 +1025,10 @@ subTotal: res.subTotal ?? 0,
   // ===== Pendiente efectivo por fila =====
   // DOCASOC.PENDIENTE puede venir mal (0) cuando en realidad DEBITADO - ACREDITADO != 0.
   // El pendiente efectivo se calcula como max(montoOriginal - pagado, saldoPendiente), nunca negativo.
+  // El backend ya aplica esta misma regla y es la fuente de verdad; esto queda como red de seguridad.
   const pendienteEfectivo = (t: TransaccionAsociadaForm): number => {
     const v = Math.max(0, (t.montoOriginal || 0) - (t.pagado || 0), t.saldoPendiente || 0);
-    return Math.round(v * 100) / 100;
+    return redondear2(v);
   };
 
   // ===== Columnas de documentos relacionados (mismo formato que TransaccionBancaria) =====
@@ -1242,6 +1253,7 @@ subTotal: res.subTotal ?? 0,
         transaccionId={id}
         excluirSpaId={id}
         sucursalForBloqueo={sucursalActiva}
+        codigoMonedaPrincipal={monedaCodigo}
       />
 
       {/* Modal de búsqueda de cuenta contable para asientos manuales */}

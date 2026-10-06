@@ -20,7 +20,7 @@ const LugaresTrabajoTab: React.FC<Props> = ({ data }) => {
     return (
       <Card className="paces-card">
         <div style={{ textAlign: 'center', padding: 24 }} className="paces-text-secondary">
-          <Text type="secondary">Cargando informaciÃ³n del cliente...</Text>
+          <Text type="secondary">Cargando información del cliente...</Text>
         </div>
       </Card>
     );
@@ -77,11 +77,11 @@ const LugaresTrabajoTab: React.FC<Props> = ({ data }) => {
       >
         <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
           {renderCampo('Empresa / Nombre Comercial', data.nombreComercial || data.nombre)}
-          {renderCampo('DirecciÃ³n', data.direccion)}
+          {renderCampo('Dirección', data.direccion)}
           {renderCampo('Contacto', data.contacto)}
           {renderCampo('Email', data.correoElectronico)}
-          {renderCampo('TelÃ©fono 1', data.telefono)}
-          {renderCampo('TelÃ©fono 2', data.telefonoAdicional)}
+          {renderCampo('Teléfono 1', data.telefono)}
+          {renderCampo('Teléfono 2', data.telefonoAdicional)}
           {renderCampo('Fax', data.fax)}
           {renderCampo('Departamento', (data as any).departamento)}
           {renderCampo('Tiempo Laborando', (data as any).tiempoLaborando)}
@@ -90,7 +90,7 @@ const LugaresTrabajoTab: React.FC<Props> = ({ data }) => {
         </Descriptions>
         <div style={{ marginTop: 8 }}>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            * Los campos marcados como pendientes se habilitarÃ¡n cuando estÃ©n disponibles en el formulario principal.
+            * Los campos marcados como pendientes se habilitarán cuando estén disponibles en el formulario principal.
           </Text>
         </div>
       </Card>
@@ -110,8 +110,8 @@ const LugaresTrabajoTab: React.FC<Props> = ({ data }) => {
           <Form.Item name="empresa" label="Empresa / Nombre Comercial">
             <Input placeholder="Nombre de la empresa" maxLength={100} />
           </Form.Item>
-          <Form.Item name="direccion" label="DirecciÃ³n">
-            <Input.TextArea placeholder="DirecciÃ³n del lugar de trabajo" rows={2} maxLength={200} />
+          <Form.Item name="direccion" label="Dirección">
+            <Input.TextArea placeholder="Dirección del lugar de trabajo" rows={2} maxLength={200} />
           </Form.Item>
           <Form.Item name="contacto" label="Contacto">
             <Input placeholder="Nombre del contacto" maxLength={100} />
@@ -119,11 +119,11 @@ const LugaresTrabajoTab: React.FC<Props> = ({ data }) => {
           <Form.Item name="email" label="Email">
             <Input placeholder="correo@ejemplo.com" maxLength={80} />
           </Form.Item>
-          <Form.Item name="telefono1" label="TelÃ©fono 1">
-            <Input placeholder="TelÃ©fono principal" maxLength={20} />
+          <Form.Item name="telefono1" label="Teléfono 1">
+            <Input placeholder="Teléfono principal" maxLength={20} />
           </Form.Item>
-          <Form.Item name="telefono2" label="TelÃ©fono 2">
-            <Input placeholder="TelÃ©fono secundario" maxLength={20} />
+          <Form.Item name="telefono2" label="Teléfono 2">
+            <Input placeholder="Teléfono secundario" maxLength={20} />
           </Form.Item>
           <Form.Item name="fax" label="Fax">
             <Input placeholder="Fax" maxLength={20} />
@@ -138,7 +138,7 @@ const LugaresTrabajoTab: React.FC<Props> = ({ data }) => {
             <Input placeholder="Ingresos mensuales" maxLength={50} />
           </Form.Item>
           <Form.Item name="tiempoLaborando" label="Tiempo Laborando">
-            <Input placeholder="Ej: 3 aÃ±os" maxLength={50} />
+            <Input placeholder="Ej: 3 años" maxLength={50} />
           </Form.Item>
         </Form>
       </Modal>

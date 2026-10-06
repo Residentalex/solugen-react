@@ -45,6 +45,10 @@ export interface TransaccionAsociadaDTO {
   spaDocumento?: string;
   /** ID de la SPA bloqueante */
   spaId?: number;
+  /** Codigo de MONEDAS.CODIGO del documento relacionado. Debe igualar al del documento principal. */
+  codigoMoneda?: string;
+  /** Tasa del documento relacionado frente a la moneda nacional */
+  tasa?: number;
 }
 
 export interface CobroDTO {

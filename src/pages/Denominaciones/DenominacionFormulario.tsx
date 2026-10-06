@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Input, InputNumber, Select, Switch, message } from 'antd';
+import { Modal, Form, Input, InputNumber,  Switch, message } from 'antd';
+import { Select } from '../../components/Select';
 import { denominacionApi } from '../../api/denominacionApi';
 import type { DenominacionDTO } from '../../types/denominacion';
 import { useAuthStore } from '../../stores/authStore';

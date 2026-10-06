@@ -112,9 +112,9 @@ export const solicitudPagoApi = {
     return data.data;
   },
 
-  desaplicar: async (origen: string, documento: string): Promise<void> => {
-    const params = { origen, documento };
-    await apiClient.put(`${BASE}/desaplicar`, null, { params });
+  desaplicar: async (sucursal: number, id: number): Promise<SolicitudPagoDTO> => {
+    const { data } = await apiClient.put<ApiResponse<SolicitudPagoDTO>>(`${BASE}/${sucursal}/desaplicar/${id}`);
+    return data.data;
   },
 
   anular: async (sucursal: number, spa: any): Promise<any> => {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Modal, Table, Tag, Select, message, Spin, Empty, Typography } from 'antd';
+import { Modal, Table, Tag,  message, Spin, Empty, Typography } from 'antd';
+import { Select } from '../../components/Select';
 import { notificacionesApi } from '../../api/notificacionesApi';
 
 const { Text } = Typography;

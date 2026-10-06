@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Tabs, Tag, Button, Space, Row, Col, Grid,
-  message, Form, Input, Select, Switch, Typography, Modal, Alert, Spin, Skeleton,
+  message, Form, Input,  Switch, Typography, Modal, Alert, Spin, Skeleton,
   Table, Empty,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   SearchOutlined, SaveOutlined, CloseOutlined, ExclamationCircleOutlined,
 } from '@ant-design/icons';

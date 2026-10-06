@@ -1,6 +1,5 @@
 import React from 'react';
-import { Select } from 'antd';
-
+import { Select } from '../components/Select';
 interface PageSizeSelectProps {
   value: number;
   onChange: (value: number) => void;

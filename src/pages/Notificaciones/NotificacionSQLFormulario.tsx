@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Modal, Form, Input, Select, InputNumber, Switch, Button, Row, Col, message, Space,
+  Modal, Form, Input,  InputNumber, Switch, Button, Row, Col, message, Space,
 } from 'antd';
+import { Select } from '../../components/Select';
 import { PlusOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { notificacionesApi } from '../../api/notificacionesApi';
 import { useCompanyStore } from '../../stores/companyStore';

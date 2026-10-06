@@ -65,6 +65,13 @@ import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 - Usar `datosFiltrados` si existe, sino la variable de datos completa.
 - No importar `dayjs` solo para el nombre del archivo; usar `new Date().toISOString().slice(0,10).replace(/-/g, '')`.
 
+## Select de Ant Design
+
+- Todo `<Select>` se importa desde el wrapper compartido `src/components/Select.tsx`, nunca directamente de `'antd'`.
+- El wrapper fija `listHeight = 170` (5 filas visibles con scroll despues) y expone `Select.Option` / `Select.OptGroup`.
+- Unica excepcion permitida: importar el tipo `SelectProps` desde `'antd'`, o usar componentes que envuelvan Select (`MonedaDocumentoSelect`, `PageSizeSelect`, `BuscarEntidadSelect`, etc.).
+- Si el modulo ya no usa `<Select>`, no dejar imports del wrapper sin usar; eliminar la linea completa.
+
 ## Referencia bajo demanda
 
 - Cargar `docs-ai/frontend.md` solo si el cambio requiere detalles de estructura, UI o API.
@@ -335,3 +342,31 @@ Si la condición es verdadera → mostrar `AsientosContableEditables` con `onGen
 Si la condición es falsa → mostrar `AsientosContableTable` en modo solo lectura.
 
 El botón GENERAR **nunca** debe estar restringido por `!id` o `disableGenerar={!id}`. El backend acepta `id=0` (documento no persistido).
+
+## Fila de campos rápidos (NCF / Referencia / Tasa / Moneda)
+
+Todo formulario de documento que exponga NCF, Referencia, NCF Modificado, Días Crédito, Tasa o Moneda debe usar el componente compartido `src/components/CamposRapidosFila/CamposRapidosFila.tsx`. **No escribir el markup a mano** (Tags con `padding: '6px 16px'`, `<Space size={[8,8]} wrap>`, editores inline) en ningún `*Formulario.tsx`.
+
+- Orden de render fijo: `ncf`, `ncfModificado`, `referencia`, `diasCredito`, `tasa`, `moneda`.
+- La Tasa se delega a `TagTasaDocumento` y la Moneda a `MonedaDocumentoSelect` via las props `tasa` y `moneda`. No importarlos directamente en la fila.
+- Los `Form.Item` ocultos van en el prop `ocultos` (`{ name, editor?: 'number' }`), NO sueltos en el `Row`. Así quedan siempre dentro del mismo `Col` que la fila.
+- El componente ya emite su `<Col xs={24}>` y su `div` con `marginBottom: 16`: **no envolverlo en otro `Col`** ni pasar `style`.
+- El componente es presentacional: cada formulario conserva su maquina de estado de edicion inline (`editingField`, `editingValueRef`, `editingOriginalValue`, `fieldCloseHandledRef`, `openFieldEditor`, `commitFieldEditor`, `cancelFieldEditor`) y sus confirmaciones de negocio (p. ej. FENP "Actualizar costos" al cambiar la tasa).
+- Pasar `containerRef` solo si el `<XGuide>` del modulo declara la prop `ncfRef` (hoy solo `EntradaAlmacen` y `NotaCredito`).
+- Solo pasar los campos que el dominio del documento tenga. No agregar `moneda` a documentos sin campo `moneda` (`TransaccionBancaria`, `ReciboIngreso`, `DevolucionVenta`).
+
+Ejemplo:
+
+```tsx
+<CamposRapidosFila
+  ncf={{ valor: ncfValue, editando: editingField === 'ncf', etiqueta: 'NCF', prefijo: 'NCF: ',
+    placeholder: 'NCF', maxLength: 19, onEdit: () => openFieldEditor('ncf'),
+    onCommit: commitFieldEditor, onCancel: cancelFieldEditor,
+    onChange: (v) => { editingValueRef.current = v; } }}
+  tasa={{ tasa: tasaValue, editable: tasaEditable, editando: editingField === 'tasa',
+    onEdit: () => openFieldEditor('tasa'), onChange: (v) => { editingValueRef.current = v ?? 1; },
+    onCommit: commitFieldEditor, onCancel: cancelFieldEditor }}
+  moneda={{ value: monedaCodigo, onChange: seleccionarMoneda, monedas, loading: monedasLoading }}
+  ocultos={[{ name: 'ncf' }, { name: 'referencia' }, { name: 'tasa', editor: 'number' }, { name: 'moneda' }]}
+/>
+```

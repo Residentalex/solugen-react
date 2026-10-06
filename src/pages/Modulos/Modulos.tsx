@@ -7,6 +7,8 @@ import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { moduloApi } from '../../api/moduloApi';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import { SelectorIconoModulo } from '../../components/SelectorIconoModulo';
+import { obtenerIconoModulo } from '../../utils/iconosModulo';
 import { toTitleCase } from '../../utils/formats';
 import type { ModuloDTO } from '../../types/auth';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
@@ -59,6 +61,7 @@ const Modulos: React.FC = () => {
           nombre: editingModulo.nombre,
           orden: editingModulo.orden,
           oculto: !!editingModulo.oculto,
+          icono: editingModulo.icono || undefined,
         });
       } else {
         form.resetFields();
@@ -193,6 +196,15 @@ const Modulos: React.FC = () => {
       width: 100,
     },
     {
+      title: 'Icono',
+      dataIndex: 'icono',
+      key: 'icono',
+      width: 90,
+      render: (_: string | undefined, record: ModuloDTO) => (
+        <span className="paces-text-icon">{obtenerIconoModulo(record)}</span>
+      ),
+    },
+    {
       title: 'Acciones',
       key: 'acciones',
       width: 100,
@@ -259,12 +271,18 @@ const Modulos: React.FC = () => {
           >
             <Input placeholder="Nombre del módulo" />
           </Form.Item>
-          <Form.Item
-            name="orden"
+          <Form.Item name="orden"
             label="Orden"
             rules={[{ required: true, message: 'El orden es obligatorio' }]}
           >
             <InputNumber min={0} placeholder="Orden de aparición" />
+          </Form.Item>
+          <Form.Item
+            name="icono"
+            label="Icono del sidebar"
+            extra="Es el icono que se muestra junto al nombre del módulo en el menú lateral. Si se deja vacío se usa el icono por defecto."
+          >
+            <SelectorIconoModulo />
           </Form.Item>
           <Form.Item name="oculto" label="Ocultar del sidebar" valuePropName="checked">
             <Switch checkedChildren="Sí" unCheckedChildren="No" />

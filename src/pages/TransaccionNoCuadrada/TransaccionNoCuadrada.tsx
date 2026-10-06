@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography, Select, Alert, Grid, message } from 'antd';
+import { Typography,  Alert, Grid, message } from 'antd';
+import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
 import { useCompanyStore } from '../../stores/companyStore';

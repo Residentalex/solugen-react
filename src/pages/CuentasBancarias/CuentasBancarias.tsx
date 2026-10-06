@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Row, Col, Card, Input, Select, Button, message, Pagination, Skeleton, Empty, Alert } from 'antd';
+import { Row, Col, Card, Input,  Button, message, Pagination, Skeleton, Empty, Alert } from 'antd';
+import { Select } from '../../components/Select';
 import { SearchOutlined, ReloadOutlined, PlusOutlined, BankOutlined } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
 import { useAuthStore } from '../../stores/authStore';

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Table, Card, Button, Alert, Typography, message, Tag, Select, Empty, Tooltip } from 'antd';
+import { Table, Card, Button, Alert, Typography, message, Tag,  Empty, Tooltip } from 'antd';
+import { Select } from '../../components/Select';
 import { ArrowLeftOutlined, ReloadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { notificacionesApi } from '../../api/notificacionesApi';

@@ -818,6 +818,26 @@ const RE_EXPRESION = /\{([^{}]*)\}/g;
 /** Maximo de pasadas para resolver bloques anidados ({iif({campo} > 0, ...)}). */
 const MAX_PASADAS = 5;
 
+/** Delimitadores de una expresion que no pudo evaluarse (solo preview). */
+export const MARCA_INICIO = '\u0001';
+export const MARCA_FIN = '\u0002';
+
+/**
+ * Resuelve las expresiones fallidas de un texto ya renderizado.
+ * Con `valorPorDefecto` usa ese texto; sin el, restaura el literal original
+ * `{expresion}` para no perder contenido.
+ */
+export function sustituirMarcasFallo(texto: string, valorPorDefecto?: string): string {
+  if (texto.indexOf(MARCA_INICIO) === -1) return texto;
+  return texto.replace(
+    new RegExp(`${MARCA_INICIO}([\\s\\S]*?)${MARCA_FIN}`, 'g'),
+    (_m, expr: string) =>
+      valorPorDefecto !== undefined && valorPorDefecto !== ''
+        ? valorPorDefecto
+        : `{${expr}}`,
+  );
+}
+
 /** Valida la sintaxis de una expresion (sin evaluarla). */
 export function validarExpresion(expresion: string): { ok: boolean; error?: string } {
   try {
@@ -836,9 +856,12 @@ export function evaluarExpresion(expresion: string, ctx: ContextoDatos = {}): an
 
 /**
  * Reemplaza todos los bloques {expresion} de un texto por su valor.
- * Una expresion con error se deja LITERAL (retrocompatibilidad).
+ * Una expresion con error se deja LITERAL (retrocompatibilidad), salvo que se
+ * pase `marcarFallos`: en ese caso el bloque fallido se envuelve con
+ * MARCA_INICIO/MARCA_FIN para que el consumidor (preview del disenador) decida
+ * si usa el `valorPorDefecto` de la linea o restaura el literal.
  */
-export function evaluarTexto(texto: string, ctx: ContextoDatos = {}): string {
+export function evaluarTexto(texto: string, ctx: ContextoDatos = {}, marcarFallos = false): string {
   if (!texto || texto.indexOf('{') === -1) return texto;
   let resultado = texto;
   for (let pasada = 0; pasada < MAX_PASADAS; pasada++) {
@@ -848,7 +871,7 @@ export function evaluarTexto(texto: string, ctx: ContextoDatos = {}): string {
       try {
         return aString(evaluarExpresion(expr, ctx));
       } catch {
-        return completo;
+        return marcarFallos ? MARCA_INICIO + expr + MARCA_FIN : completo;
       }
     });
     if (siguiente === resultado) return resultado;
@@ -859,20 +882,20 @@ export function evaluarTexto(texto: string, ctx: ContextoDatos = {}): string {
 }
 
 /** Aplica evaluarTexto a todos los strings de un objeto/arreglo (recursivo). */
-export function evaluarObjeto<T>(obj: T, ctx: ContextoDatos = {}): T {
+export function evaluarObjeto<T>(obj: T, ctx: ContextoDatos = {}, marcarFallos = false): T {
   try {
-    return recorrer(obj, ctx) as T;
+    return recorrer(obj, ctx, marcarFallos) as T;
   } catch {
     return obj;
   }
 }
 
-function recorrer(v: any, ctx: ContextoDatos): any {
-  if (typeof v === 'string') return evaluarTexto(v, ctx);
-  if (Array.isArray(v)) return v.map((x) => recorrer(x, ctx));
+function recorrer(v: any, ctx: ContextoDatos, marcarFallos: boolean): any {
+  if (typeof v === 'string') return evaluarTexto(v, ctx, marcarFallos);
+  if (Array.isArray(v)) return v.map((x) => recorrer(x, ctx, marcarFallos));
   if (v !== null && v !== undefined && typeof v === 'object' && !(v instanceof Date)) {
     const out: any = {};
-    for (const k of Object.keys(v)) out[k] = recorrer(v[k], ctx);
+    for (const k of Object.keys(v)) out[k] = recorrer(v[k], ctx, marcarFallos);
     return out;
   }
   return v;

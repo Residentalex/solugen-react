@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Table, message, Card, Button, Modal, Form, Input, InputNumber, Select, Switch, Tag, Typography, Alert, Empty } from 'antd';
+import { Table, message, Card, Button, Modal, Form, Input, InputNumber,  Switch, Tag, Typography, Alert, Empty } from 'antd';
+import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';

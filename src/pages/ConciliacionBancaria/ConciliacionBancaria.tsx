@@ -6,7 +6,7 @@ import { conciliacionBancariaApi } from '../../api/conciliacionBancariaApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import { useDocumentoListado } from '../../hooks/useDocumentoListado';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
-import { formatCurrency, formatDate, formatDateParam } from '../../utils/formats';
+import { formatMoneda, formatDate, formatDateParam } from '../../utils/formats';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
 import FechaColumnCell from '../../components/FechaColumnCell';
 import { useAuthStore } from '../../stores/authStore';
@@ -23,6 +23,9 @@ interface ConciliacionRow {
   balLibros: number;
   diferencia: number;
   aplicada: boolean;
+  monedaCodigo?: string;
+  monedaNombre?: string;
+  monedaSimbolo?: string;
 }
 
 const ConciliacionBancaria: React.FC = () => {
@@ -76,6 +79,15 @@ const ConciliacionBancaria: React.FC = () => {
       render: (val: string) => <Text>{val || '-'}</Text>,
     },
     {
+      title: 'Moneda',
+      dataIndex: 'monedaSimbolo',
+      key: 'moneda',
+      width: 100,
+      render: (val: string, record: ConciliacionRow) => (
+        <Text className="paces-text-secondary">{val || record.monedaCodigo || '-'}</Text>
+      ),
+    },
+    {
       title: 'Fecha',
       dataIndex: 'fecha',
       key: 'fecha',
@@ -86,27 +98,31 @@ const ConciliacionBancaria: React.FC = () => {
       title: 'Balance Bancos',
       dataIndex: 'balBancos',
       key: 'balBancos',
-      width: 150,
+      width: 160,
       align: 'right',
-      render: (val: number) => <Text>{formatCurrency(val)}</Text>,
+      render: (val: number, record: ConciliacionRow) => (
+        <Text>{formatMoneda(val, record.monedaSimbolo, record.monedaCodigo)}</Text>
+      ),
     },
     {
       title: 'Balance Libros',
       dataIndex: 'balLibros',
       key: 'balLibros',
-      width: 150,
+      width: 160,
       align: 'right',
-      render: (val: number) => <Text>{formatCurrency(val)}</Text>,
+      render: (val: number, record: ConciliacionRow) => (
+        <Text>{formatMoneda(val, record.monedaSimbolo, record.monedaCodigo)}</Text>
+      ),
     },
     {
       title: 'Diferencia',
       dataIndex: 'diferencia',
       key: 'diferencia',
-      width: 150,
+      width: 160,
       align: 'right',
-      render: (val: number) => (
+      render: (val: number, record: ConciliacionRow) => (
         <Text strong className={val !== 0 ? 'paces-text-error' : ''}>
-          {formatCurrency(val)}
+          {formatMoneda(val, record.monedaSimbolo, record.monedaCodigo)}
         </Text>
       ),
     },
@@ -130,7 +146,7 @@ const ConciliacionBancaria: React.FC = () => {
       total={state.total}
       page={state.page}
       pageSize={state.pageSize}
-      scrollX={1200}
+      scrollX={1300}
       selectedRowId={state.selectedRow?.concilID}
       loadingError={state.loadingError}
       errorMessage="Error al cargar conciliaciones bancarias"

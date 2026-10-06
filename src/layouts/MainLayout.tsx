@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Layout, Spin, message, Dropdown, Select, Input, Tag, Grid, Tooltip } from 'antd';
+import { Layout, Spin, message, Dropdown,  Input, Tag, Grid, Tooltip, Popover } from 'antd';
+import { Select } from '../components/Select';
 import type { MenuProps } from 'antd';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
@@ -27,7 +28,14 @@ import {
   UserOutlined,
   SettingOutlined,
   SearchOutlined,
+  WarningOutlined,
+  BgColorsOutlined,
+  CheckOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons';
+import { THEMES, type ThemeName } from '../themes';
+import useReporteIncidencia from '../hooks/useReporteIncidencia';
+import { useDescripcionesPantallas } from '../hooks/useDescripcionesPantallas';
 
 function toTitleCase(str?: string | null): string {
   if (!str) return '';
@@ -40,6 +48,25 @@ function toTitleCase(str?: string | null): string {
 
 const { Sider } = Layout;
 const { useBreakpoint } = Grid;
+
+const themeList: ThemeName[] = [
+  'light-default', 'dark-default',
+  'light-ocean', 'dark-ocean',
+  'light-midnight', 'dark-midnight',
+  'light-rose', 'dark-rose',
+  'light-amber', 'dark-amber',
+  'light-genesis',
+  'light-spa',
+  'light-flow',
+  'basic-devexpress',
+];
+
+const themeLabel = (name: ThemeName): string =>
+  name === 'light-genesis' ? 'Genesis'
+    : name === 'light-spa' ? 'Spa Soft'
+      : name === 'light-flow' ? 'Flow'
+        : name === 'basic-devexpress' ? 'Basic DevExpress'
+          : name.replace('-', ' ');
 
 const pageTitles: Record<string, string> = {
   Dashboard: 'Dashboard',
@@ -56,6 +83,7 @@ const pageTitles: Record<string, string> = {
   MSincronizacion: 'Sincronización',
   MProducto: 'Productos',
   MAlmacen: 'Almacenes',
+  mActivos: 'Activos Fijos',
   MCliente: 'Clientes',
   MSUP: 'Proveedores',
   FORC: 'Orden de Compra',
@@ -146,7 +174,7 @@ const MainLayout: React.FC = () => {
   const location = useLocation();
   const isDetailPage = /^\/[A-Za-z]+\/\d+$/.test(location.pathname);
   const isFormPage = /^\/[A-Za-z]+\/(nuevo|\d+\/editar)$/.test(location.pathname);
-  const { data, loading, error, fetchInitialConfig } = useCompanyStore();
+  const { data, loading, error, fetchInitialConfig, fetchMonedas } = useCompanyStore();
   const sidebarCollapsed = useUIStore((s: any) => s.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((s: any) => s.setSidebarCollapsed);
   const activeModule = useUIStore((s: any) => s.activeModule);
@@ -154,6 +182,7 @@ const MainLayout: React.FC = () => {
   const pageTitleOverride = useUIStore((s: any) => s.pageTitleOverride);
   const setPageTitleOverride = useUIStore((s: any) => s.setPageTitleOverride);
   const themeName = useUIStore((s: any) => s.themeName);
+  const setTheme = useUIStore((s) => s.setTheme);
   const overlayAbierto = useUIStore((s) => s.overlayAbierto);
   const setOverlayAbierto = useUIStore((s) => s.setOverlayAbierto);
   const screens = useBreakpoint();
@@ -180,6 +209,16 @@ const MainLayout: React.FC = () => {
       fetchInitialConfig(Sucursal.Compra, Sucursal.Consolidado);
     }
   }, [isAuthenticated, data.familias.length, fetchInitialConfig]);
+
+  // El catalogo MONEDAS es por sucursal: se descarga una vez por sucursal y queda cacheado
+  // en el store. Los formularios de documentos lo leen de ahi en vez de pedirlo en cada
+  // apertura. La moneda por defecto no se saca de este catalogo sino de
+  // `sucursales[].parametro.moneda` (PARAMETROS.CODMON), ver utils/moneda.ts.
+  useEffect(() => {
+    if (isAuthenticated && sucursalActiva !== null && sucursalActiva !== undefined) {
+      void fetchMonedas(sucursalActiva);
+    }
+  }, [isAuthenticated, sucursalActiva, fetchMonedas]);
 
   useEffect(() => {
     if (error) message.error(error);
@@ -338,6 +377,17 @@ const MainLayout: React.FC = () => {
   );
   const pageTitle = pantallaActual?.nombre || pageTitles[activeModule] || activeModule || 'Dashboard';
 
+  // Descripcion de la pantalla actual (AUTH_PANTALLA.DESCRIPCION), solo en los listados.
+  // Los listados son las rutas de un solo segmento (/FENP, /FSAP, /MPantalla...); los detalles
+  // (/FENP/123) y formularios (/FENP/nuevo, /FENP/123/editar) tienen mas segmentos y no la muestran.
+  // Si la pantalla no tiene descripcion, no se muestra nada bajo el breadcrumb.
+  const descripcionesPantallas = useDescripcionesPantallas();
+  const segmentosRuta = location.pathname.split('/').filter(Boolean);
+  const esListado = segmentosRuta.length === 1 && segmentosRuta[0]?.toUpperCase() === activeModule?.toUpperCase();
+  const descripcionActual = esListado && activeModule ? descripcionesPantallas[activeModule.toUpperCase()] : undefined;
+
+  const { drawer: incidenciaDrawer, capturando: reportando, abrir: abrirIncidencia } = useReporteIncidencia(pageTitle);
+
   const sucursalesFiltradas = pantallaActual?.sucursalesAutorizadas?.length
     ? sucursalesPermitidas.filter((s: AuthSucursalPermitidaDTO) =>
         pantallaActual!.sucursalesAutorizadas!.some((sa: AuthSucursalPermitidaDTO) => sa.sucursal === s.sucursal)
@@ -356,8 +406,18 @@ const MainLayout: React.FC = () => {
 
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
     if (key === 'profile') navigate('/MPerfil');
+    if (key === 'actividades') navigate('/Actividades');
+    if (key === 'incidencia') abrirIncidencia();
+    if (key.startsWith('tema:')) setTheme(key.slice(5) as ThemeName);
     if (key === 'logout') { logout(); navigate('/login'); }
   };
+
+  const themeSubmenuItems: MenuProps['items'] = themeList.map((name) => ({
+    key: `tema:${name}`,
+    icon: <span style={{ color: THEMES[name].primaryColor, fontSize: 16 }}><BgColorsOutlined /></span>,
+    label: themeLabel(name),
+    extra: themeName === name ? <CheckOutlined style={{ fontSize: 12, color: THEMES[name].primaryColor }} /> : null,
+  }));
 
   const userMenuItems: MenuProps['items'] = [
     {
@@ -365,7 +425,28 @@ const MainLayout: React.FC = () => {
       icon: <UserOutlined />,
       label: 'Mi Perfil',
     },
-    { type: 'divider' as const },
+    ...(esCompacto
+      ? [
+        {
+          key: 'actividades',
+          icon: <CalendarOutlined />,
+          label: 'Actividades',
+        },
+        {
+          key: 'incidencia',
+          icon: <WarningOutlined />,
+          label: 'Reportar incidencia',
+          disabled: reportando,
+        },
+        {
+          key: 'tema',
+          icon: <BgColorsOutlined />,
+          label: 'Tema',
+          children: themeSubmenuItems,
+        },
+        { type: 'divider' as const },
+      ]
+      : []),
     {
       key: 'settings',
       icon: <SettingOutlined />,
@@ -390,7 +471,7 @@ const MainLayout: React.FC = () => {
     if (esEscritorio) {
       setSidebarCollapsed(!sidebarCollapsed);
     } else {
-      setOverlayAbierto((v) => !v);
+      setOverlayAbierto(!overlayAbierto);
     }
   };
 
@@ -469,17 +550,19 @@ const MainLayout: React.FC = () => {
           </div>
 
           <div className="paces-topbar-right">
-            <ThemeSwitcher />
-            <IncidenciaButton moduloActual={pageTitle} />
+            {!esCompacto && <ThemeSwitcher />}
+            {!esCompacto && <IncidenciaButton moduloActual={pageTitle} />}
             <NotificacionDropdown />
-            <button
-              className="paces-topbar-action-btn"
-              title="Actividades"
-              aria-label="Actividades"
-              onClick={() => navigate('/Actividades')}
-            >
-              <CalendarOutlined style={{ fontSize: 16 }} />
-            </button>
+            {!esCompacto && (
+              <button
+                className="paces-topbar-action-btn"
+                title="Actividades"
+                aria-label="Actividades"
+                onClick={() => navigate('/Actividades')}
+              >
+                <CalendarOutlined style={{ fontSize: 16 }} />
+              </button>
+            )}
             {sucursalesFiltradas.length > 1 && activeModule !== 'dashboard' && activeModule !== 'MUsuario' && activeModule !== 'MPerfil' && activeModule !== 'CFacturasElectronicas' && activeModule !== 'ORepostear' && activeModule !== 'MTicket' && activeModule !== 'notificaciones' && activeModule !== 'MProducto' && activeModule !== 'chat' && activeModule !== 'Actividades' && (
               <Select
                 value={sucursalActiva}
@@ -512,8 +595,19 @@ const MainLayout: React.FC = () => {
 
         <div className="paces-page-header">
           <div className="paces-page-header-inner">
-            <div>
-              <h3>{pageTitleOverride || toTitleCase(pageTitle)}</h3>
+<div>
+              <div className="paces-page-header-title">
+                <h3>{pageTitleOverride || toTitleCase(pageTitle)}</h3>
+                {descripcionActual && (
+                  <Popover
+                    title="Ayuda"
+                    trigger="click"
+                    content={<div style={{ maxWidth: 340 }}>{descripcionActual}</div>}
+                  >
+                    <QuestionCircleOutlined className="paces-page-header-help" />
+                  </Popover>
+                )}
+              </div>
               <div className="breadcrumb">
                 <Link to="/">Inicio</Link>
                 {pantallaActual?.modulos?.[0]?.nombre && (
@@ -544,6 +638,7 @@ const MainLayout: React.FC = () => {
         <BuscadorGlobalModal open={searchOpen} onClose={() => setSearchOpen(false)} />
       </Layout>
 
+      {esCompacto && incidenciaDrawer}
       {location.pathname !== '/chat' && <ChatWidget />}
       <ChatInitializer />
     </Layout>

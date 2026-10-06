@@ -860,7 +860,7 @@ const DevolucionVentaDetalle: React.FC = () => {
                   <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+                  <span className="paces-nota-memo">{data.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -1104,7 +1104,7 @@ const DevolucionVentaDetalle: React.FC = () => {
                   <SucursalField codigoSucursal={data.codigoSucursal} sucursal={data.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:">
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span>
+                  <span className="paces-nota-memo">{data.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>

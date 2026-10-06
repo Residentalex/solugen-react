@@ -581,7 +581,7 @@ const CotizacionVentaDetalle: React.FC = () => {
                   {data.usuario?.nombre || data.creadoPor || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota" span={3}>
-                  {data.nota ? <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota}</span> : '-'}
+                  {data.nota ? <span className="paces-nota-memo">{data.nota}</span> : '-'}
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -697,7 +697,7 @@ const CotizacionVentaDetalle: React.FC = () => {
                 <Descriptions.Item label="Creado Por">
                   {data.usuario?.nombre || data.creadoPor || '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+                <Descriptions.Item label="Nota"><span className="paces-nota-memo">{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
 

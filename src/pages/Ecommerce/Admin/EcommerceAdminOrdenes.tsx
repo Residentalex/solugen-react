@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  Table, Input, Button, Card, Select, Tag, Typography, Modal, Descriptions, DatePicker, message, Tooltip, Spin,
+  Table, Input, Button, Card,  Tag, Typography, Modal, Descriptions, DatePicker, message, Tooltip, Spin,
 } from 'antd';
+import { Select } from '../../../components/Select';
 import { SearchOutlined, ReloadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';

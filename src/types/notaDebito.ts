@@ -75,6 +75,10 @@ export interface DocumentoRelacionadoDTO {
   monto: number;
   tipoDocumento?: number;
   origenCuenta?: number;
+  /** Codigo de MONEDAS.CODIGO del documento relacionado. Debe igualar al del documento principal. */
+  codigoMoneda?: string;
+  /** Tasa del documento relacionado frente a la moneda nacional */
+  tasa?: number;
 }
 
 export interface DevolucionAsociadaDTO {

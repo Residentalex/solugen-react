@@ -1,5 +1,6 @@
 import type React from 'react';
-import { Select, Modal, message } from 'antd';
+import {Modal, message } from 'antd';
+import { Select } from '../../components/Select';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 import FloatingField from '../FloatingLabel/FloatingField';
 import { toTitleCase } from '../../utils/formats';

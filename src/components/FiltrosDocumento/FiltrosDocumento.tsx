@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Button, Popover, DatePicker, Select, Badge } from 'antd';
+import { Button, Popover, DatePicker,  Badge } from 'antd';
+import { Select } from '../../components/Select';
 import { FilterOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 

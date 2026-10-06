@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography, Alert, Select, Input } from 'antd';
+import { Typography, Alert,  Input, Spin, message } from 'antd';
+import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
 import { facturaPOSApi } from '../../api/facturaPOSApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
@@ -56,6 +57,38 @@ const FacturaPOS: React.FC = () => {
     tituloError: 'Error al cargar facturas POS',
   });
 
+  const [clonando, setClonando] = useState(false);
+
+  const handleClonar = async () => {
+    if (!state.selectedRow) return;
+    setClonando(true);
+    try {
+      const data = await facturaPOSApi.obtenerPorId(sucursalActiva, state.selectedRow.id);
+      const cloneData = {
+        ...data,
+        id: 0,
+        noDocumento: '',
+        ncf: '',
+        ncfModificado: '',
+        estado: 0,
+        periodo: 0,
+        turno: 'POS-001',
+        cobros: undefined,
+        notasSeguimiento: [],
+        transaccionesAsociadas: [],
+        impuestosFactura: [],
+        vouchers: [],
+        asientos: [],
+        logs: [],
+      };
+      setClonando(false);
+      navigate('/FPV/nuevo', { state: { cloneData } });
+    } catch (err: any) {
+      setClonando(false);
+      message.error(err?.response?.data?.errorMessage || 'Error al obtener datos para clonar');
+    }
+  };
+
   const columns: ColumnsType<FacturaPOSResumenDTO> = [
     {
       title: 'Documento',
@@ -78,6 +111,7 @@ const FacturaPOS: React.FC = () => {
       title: 'Cliente',
       dataIndex: 'cliente',
       key: 'cliente',
+      width: 320,
       render: (name: string, record: FacturaPOSResumenDTO) => (
         <EntidadColumnCell name={name} identificacion={record.clienteIdentificacion} />
       ),
@@ -89,13 +123,6 @@ const FacturaPOS: React.FC = () => {
       width: 280,
       ellipsis: true,
       render: (concepto: string) => <Text>{toTitleCase(concepto) || ''}</Text>,
-    },
-    {
-      title: 'Almacén',
-      dataIndex: 'almacen',
-      key: 'almacen',
-      width: 200,
-      render: (alm: string) => <Text>{toTitleCase(alm) || ''}</Text>,
     },
     {
       title: 'NCF',
@@ -135,6 +162,7 @@ const FacturaPOS: React.FC = () => {
   const customEmptyText = undefined;
 
   return (
+    <Spin spinning={clonando} tip="Clonando factura POS..." size="large">
     <DocumentListadoLayout<FacturaPOSResumenDTO>
       columns={columns}
       data={state.data}
@@ -143,7 +171,7 @@ const FacturaPOS: React.FC = () => {
       total={state.total}
       page={state.page}
       pageSize={state.pageSize}
-      scrollX={1520}
+      scrollX={1400}
       selectedRowId={state.selectedRow?.id}
       loadingError={state.loadingError}
       errorMessage="Error al cargar facturas POS"
@@ -185,12 +213,16 @@ const FacturaPOS: React.FC = () => {
         showEditar: true,
         editarDisabled: !puedeEditar,
         onEditar: () => navigate(`/FPV/${state.selectedRow!.id}/editar`),
+        showClonar: true,
+        clonarDisabled: !state.selectedRow,
+        onClonar: handleClonar,
         showImprimir: true,
         imprimirDisabled: !state.selectedRow,
         onImprimir: actions.handleImprimir,
         onRefresh: actions.handleRefresh,
       }}
     />
+    </Spin>
   );
 };
 

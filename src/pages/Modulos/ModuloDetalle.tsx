@@ -1,6 +1,7 @@
-﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Button, Table, Tag, Modal, Form, Input, Select, Space, Tooltip, Grid, message, Typography } from 'antd';
+import { Card, Descriptions, Button, Table, Tag, Modal, Form, Input,  Space, Tooltip, Grid, message, Typography } from 'antd';
+import { Select } from '../../components/Select';
 import { EditOutlined, DeleteOutlined, PlusOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -9,6 +10,7 @@ import { moduloApi } from '../../api/moduloApi';
 import { configModuloApi } from '../../api/configModuloApi';
 import type { ConfigModuloDTO } from '../../api/configModuloApi';
 import { toTitleCase, extraerMensajeError } from '../../utils/formats';
+import { obtenerIconoModulo } from '../../utils/iconosModulo';
 import PermissionGate from '../../components/PermissionGate';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
 
@@ -199,13 +201,18 @@ const ModuloDetalle: React.FC = () => {
           {/* Datos generales */}
           <Card className="paces-card" style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Title level={4} style={{ margin: 0 }}>{toTitleCase(modulo.nombre)}</Title>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 20, color: '#556ee6' }}>{obtenerIconoModulo(modulo)}</span>
+                <Title level={4} style={{ margin: 0 }}>{toTitleCase(modulo.nombre)}</Title>
+              </span>
             </div>
             <Descriptions bordered size="small" column={isLarge ? 2 : 1}
               styles={{ content: { background: 'transparent' } }}>
               <Descriptions.Item label="ID">{modulo.id}</Descriptions.Item>
               <Descriptions.Item label="Orden">{modulo.orden}</Descriptions.Item>
               <Descriptions.Item label="Nombre">{toTitleCase(modulo.nombre)}</Descriptions.Item>
+              <Descriptions.Item label="Código">{modulo.codigo || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Icono">{modulo.icono || 'Por defecto'}</Descriptions.Item>
             </Descriptions>
           </Card>
 

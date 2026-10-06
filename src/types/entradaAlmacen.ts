@@ -1,3 +1,5 @@
+import type { CategoriaEntidadDTO } from './facturacion';
+
 export interface MovimientoVistaDTO {
   id: number;
   fecha: string;
@@ -82,12 +84,6 @@ export interface ConceptoDTO {
   documentos?: DocumentoDTO[];
 }
 
-export interface MonedaDTO {
-  nombre: string;
-  simbolo: string;
-  codigo: string;
-}
-
 export interface AlmacenDTO {
   nombre: string;
   codigo: string;
@@ -95,6 +91,10 @@ export interface AlmacenDTO {
   fechaCierre?: string;
   idExterno?: string;
   cuentaContable?: string;
+  numeroCuenta?: string;
+  contacto?: string;
+  telefono?: string;
+  direccion?: string;
 }
 
 export interface CompaniaDTO extends EntidadDTO {
@@ -125,12 +125,15 @@ export interface SuplidorDTO {
   diasCredito?: number;
   beneficiario?: string;
   activo?: boolean;
+  categoria?: CategoriaEntidadDTO;
+  moneda?: MonedaDTO;
 }
 
 export interface OrdenCompraDTO {
   id: number;
   noDocumento: string;
   documento?: { codigo: string };
+  detalles?: DetalleOrdenCompraVistaDTO[];
 }
 
 export interface DetalleEntradaAlmacenDTO {
@@ -190,8 +193,10 @@ export interface LogDTO {
   cuentaBancaria?: string;
 }
 
-import type { CuentaContableDTO } from './contabilidad';
+import type { CuentaContableDTO, MonedaDTO } from './contabilidad';
 import type { DocumentoDTO } from './documento';
+
+export type { MonedaDTO } from './contabilidad';
 
 export interface EntradaAlmacenDTO {
   id: number;
@@ -217,7 +222,7 @@ export interface EntradaAlmacenDTO {
   moneda: MonedaDTO;
   almacen: AlmacenDTO;
   suplidor: SuplidorDTO;
-  sucursal: { codigo?: string; nombre?: string };
+  sucursal: { codigo?: string; nombre?: string; identificacion?: string; sucursal?: number };
   codigoSucursal?: string;
   ordenCompra: OrdenCompraDTO;
   detalles: DetalleEntradaAlmacenDTO[];
@@ -286,9 +291,28 @@ export interface ExistenciaDTO {
   codigo: string;
   producto: string;
   cantidad: number;
+  cantidadAlterna?: number;
   costo: number;
+  costoAlterno?: number;
   almacen: string;
   familia: string;
+}
+
+/**
+ * Fila del reporte de existencia de la sucursal activa: un producto con sus
+ * almacenes consolidados. `valor` es el valor total (EXISTENCIA.COSTO lo es) y
+ * `costoUnitario` se deriva de valor / cantidad.
+ */
+export interface ReporteExistenciaDTO {
+  codigo: string;
+  descripcion: string;
+  familia: string;
+  familiaNombre: string;
+  cantidad: number;
+  cantidadAlterna: number;
+  valor: number;
+  costoUnitario: number | null;
+  almacenes: number;
 }
 
 // ===== Tipos para Orden de Compra (ORC) =====
@@ -300,6 +324,7 @@ export interface OrdenCompraVistaDTO {
   concepto: { codigo: string; nombre: string };
   total: number;
   estado: number;
+  detalles?: DetalleOrdenCompraVistaDTO[];
 }
 
 export interface DetalleOrdenCompraVistaDTO {

@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Button, Space, Row, Col, Grid,
-  Form, Input, InputNumber, Select, DatePicker, Typography,
-  Modal, message, Alert, Skeleton, Switch,
+  Form, Input, InputNumber,  DatePicker, Typography,
+  Modal, message, Alert, Spin, Skeleton, Switch,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   PlusOutlined, SaveOutlined, CloseOutlined, SearchOutlined,
   DeleteOutlined, ExclamationCircleOutlined,
@@ -19,11 +20,12 @@ import { familiaArticuloApi } from '../../api/familiaArticuloApi';
 import BuscarProductoModal from '../../components/BuscarProductoModal/BuscarProductoModal';
 import TotalesCard from '../../components/TotalesCard';
 import { formatNumber, toTitleCase, extraerMensajeError, toISOFormat } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import type { ActualizacionPrecioDetalleDTO, ActualizacionPrecioCrearDTO, ActualizacionPrecioLineaCrearDTO } from '../../types/actualizacionPrecio';
-import type { AlmacenDTO } from '../../types/entradaAlmacen';
-import type { FamiliaArticuloDTO } from '../../types/productos';
+import type { AlmacenDTO, FamiliaArticuloDTO } from '../../types/entradaAlmacen';
 
 const { Text } = Typography;
+const { TextArea } = Input;
 
 const ESTADO_TAG: Record<string, { color: string; label: string }> = {
   Pendiente: { color: 'warning', label: 'Pendiente' },
@@ -38,6 +40,14 @@ const BASE_OPTIONS = [
   { value: 'Precio', label: 'Precio' },
   { value: 'Costo', label: 'Costo' },
 ];
+
+function lineaVacia(): ActualizacionPrecioLineaCrearDTO {
+  return {
+    codPro: '', descripcion: '', precio: 0, pAumento: 0, aumento: 0,
+    precioSug: 0, marcada: false, costoPiv: 0, pMargen: 0, impMargen: 0,
+    pMargPM: 0, precioMinSug: 0, precioMin: 0,
+  };
+}
 
 const formatDate = (d: Date): string => dayjs(d).format('YYYY-MM-DD');
 
@@ -66,6 +76,9 @@ const ActualizacionPrecioFormulario: React.FC = () => {
   const [form] = Form.useForm();
   const navigationConfirmedRef = useRef(false);
   const isLarge = screens.xxl === true;
+
+  // Este modulo no maneja documento con moneda: los precios son de la moneda de la empresa.
+  const monedaDefault = getMonedaSucursalActiva();
 
   useEffect(() => {
     setCargaSelectores(true);
@@ -166,7 +179,6 @@ const ActualizacionPrecioFormulario: React.FC = () => {
   };
 
   const handleGuardar = async () => {
-    if (saving) return;
     const error = validarFormulario();
     if (error) { message.error(error); return; }
     const dto = construirDTO();
@@ -210,7 +222,6 @@ const ActualizacionPrecioFormulario: React.FC = () => {
   };
 
   const handleSeleccionarProducto = (producto: any) => {
-    if (saving) return;
     if (lineas.some((l) => l.codPro === producto.codigo)) {
       message.warning(`El producto ${producto.codigo} ya está agregado`);
       return;
@@ -227,7 +238,6 @@ const ActualizacionPrecioFormulario: React.FC = () => {
   };
 
   const handleEliminarLinea = (codPro: string) => {
-    if (saving) return;
     Modal.confirm({
       title: 'Eliminar producto', icon: <ExclamationCircleOutlined />,
       content: '¿Está seguro de eliminar este producto?',
@@ -262,7 +272,6 @@ const ActualizacionPrecioFormulario: React.FC = () => {
       render: (_: any, record: ActualizacionPrecioLineaCrearDTO, idx: number) => (
         <InputNumber size="small" style={{ width: '100%' }} styles={{ input: { textAlign: 'right' } }}
           min={0} step={0.01} precision={2} controls={false} defaultValue={record.pAumento}
-          disabled={saving}
           onChange={(val) => {
             const aumentoPorc = val || 0;
             const aumento = (record.precio * aumentoPorc) / 100;
@@ -282,7 +291,7 @@ const ActualizacionPrecioFormulario: React.FC = () => {
     {
       title: 'Acciones', key: 'acciones', width: 60,
       render: (_: any, record: ActualizacionPrecioLineaCrearDTO) => (
-        <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={() => handleEliminarLinea(record.codPro)} disabled={saving} />
+        <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={() => handleEliminarLinea(record.codPro)} />
       ),
     },
   ];
@@ -353,10 +362,18 @@ const ActualizacionPrecioFormulario: React.FC = () => {
               options={familias.map((f) => ({ value: f.idExterno || f.nombre || '', label: f.nombre || '' }))} allowClear />
           </Form.Item>
         </Col>
-        <Col xs={12} sm={6} lg={8}><Form.Item name="redondear" label="Redondear" valuePropName="checked"><Switch /></Form.Item></Col>
-        <Col xs={12} sm={6} lg={8}><Form.Item name="todosAlm" label="Todos Almacenes" valuePropName="checked"><Switch /></Form.Item></Col>
-        <Col xs={12} sm={6} lg={8}><Form.Item name="todasFam" label="Todas Familias" valuePropName="checked"><Switch /></Form.Item></Col>
-        <Col xs={12} sm={6} lg={8}><Form.Item name="precioAct" label="Precio Actual" valuePropName="checked"><Switch /></Form.Item></Col>
+        <Col xs={12} sm={6} lg={8}>
+          <Form.Item name="redondear" label="Redondear" valuePropName="checked"><Switch /></Form.Item>
+        </Col>
+        <Col xs={12} sm={6} lg={8}>
+          <Form.Item name="todosAlm" label="Todos Almacenes" valuePropName="checked"><Switch /></Form.Item>
+        </Col>
+        <Col xs={12} sm={6} lg={8}>
+          <Form.Item name="todasFam" label="Todas Familias" valuePropName="checked"><Switch /></Form.Item>
+        </Col>
+        <Col xs={12} sm={6} lg={8}>
+          <Form.Item name="precioAct" label="Precio Actual" valuePropName="checked"><Switch /></Form.Item>
+        </Col>
       </Row>
     </>
   );
@@ -364,13 +381,13 @@ const ActualizacionPrecioFormulario: React.FC = () => {
   const contenidoFormulario = (
     <>
       <Card className="paces-card" size="small" title="Datos Generales" style={{ marginBottom: 16 }}>
-        <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }} disabled={saving}>
+        <Form form={form} layout="vertical" size="small" style={{ paddingTop: 24 }}>
           {formFields}
         </Form>
       </Card>
       <div style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setProductoModalOpen(true)} disabled={saving}>Agregar Producto</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setProductoModalOpen(true)}>Agregar Producto</Button>
           <Text type="secondary" style={{ fontSize: 13 }}>{lineas.length} producto(s)</Text>
         </div>
         <Table dataSource={lineas} columns={columnasLineas} rowKey="codPro" size="small"
@@ -382,8 +399,8 @@ const ActualizacionPrecioFormulario: React.FC = () => {
   const contenidoTotales = isLarge ? (
     <Col xxl={6}>
       <TotalesCard subTotal={totalPrecioActual} descuento={0} impuestos={0} total={totalPrecioSug}
-        nota={`Aumento total: ${formatNumber(totalAumento)}`} monedaSimbolo="RD$"
-        monedaNombre="Peso Dominicano" tasa={1} />
+        nota={`Aumento total: ${formatNumber(totalAumento)}`} monedaSimbolo={monedaDefault.simbolo}
+        monedaNombre={monedaDefault.nombre} tasa={1} />
     </Col>
   ) : null;
 
@@ -396,10 +413,10 @@ const ActualizacionPrecioFormulario: React.FC = () => {
         </p>
       </Card>
     )},
-      { key: 'productos', label: 'Productos', children: (
+    { key: 'productos', label: 'Productos', children: (
       <div style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setProductoModalOpen(true)} disabled={saving}>Agregar Producto</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setProductoModalOpen(true)}>Agregar Producto</Button>
           <Text type="secondary" style={{ fontSize: 13 }}>{lineas.length} producto(s)</Text>
         </div>
         <Table dataSource={lineas} columns={columnasLineas} rowKey="codPro" size="small"
@@ -419,9 +436,9 @@ const ActualizacionPrecioFormulario: React.FC = () => {
           {mode === 'editar' && data && (
             <Tag color={(ESTADO_TAG[data.estado] || { color: 'default' }).color}>{data.estado}</Tag>
           )}
-          <Button icon={<SearchOutlined />} onClick={() => setShowPreview(true)} disabled={saving}>Vista Previa</Button>
-          <Button type="primary" icon={<SaveOutlined />} loading={saving} disabled={saving} onClick={handleGuardar}>Guardar</Button>
-          <Button icon={<CloseOutlined />} onClick={handleCancelar} disabled={saving}>Cancelar</Button>
+          <Button icon={<SearchOutlined />} onClick={() => setShowPreview(true)}>Vista Previa</Button>
+          <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleGuardar}>Guardar</Button>
+          <Button icon={<CloseOutlined />} onClick={handleCancelar}>Cancelar</Button>
         </Space>
       </div>
       {isLarge ? (
@@ -435,7 +452,7 @@ const ActualizacionPrecioFormulario: React.FC = () => {
           <div style={{ marginTop: 24 }}>
             <TotalesCard subTotal={totalPrecioActual} descuento={0} impuestos={0} total={totalPrecioSug}
               alignRight nota={`Aumento total: ${formatNumber(totalAumento)}`}
-              monedaSimbolo="RD$" monedaNombre="Peso Dominicano" tasa={1} />
+              monedaSimbolo={monedaDefault.simbolo} monedaNombre={monedaDefault.nombre} tasa={1} />
           </div>
         </div>
       )}
@@ -451,7 +468,7 @@ const ActualizacionPrecioFormulario: React.FC = () => {
           <Text type="secondary">{lineas.length} producto(s) seleccionado(s)</Text>
         </div>
       </Modal>
-      <BuscarProductoModal open={productoModalOpen} onClose={() => { if (!saving) setProductoModalOpen(false); }}
+      <BuscarProductoModal open={productoModalOpen} onClose={() => setProductoModalOpen(false)}
         onSelect={handleSeleccionarProducto} mode="inventario" />
     </div>
   );

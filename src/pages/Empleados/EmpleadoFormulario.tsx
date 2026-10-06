@@ -1,16 +1,17 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Form, Input, Select, Switch, Row, Col, Typography,
+  Card, Form, Input,  Switch, Row, Col, Typography,
   Descriptions, InputNumber, Tag, Grid, DatePicker, message,
 } from 'antd';
+import { Select } from '../../components/Select';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { empleadoApi, type EmpleadoDTO } from '../../api/empleadoApi';
 import { apiClient } from '../../api/client';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
-import { extraerMensajeError, toTitleCase } from '../../utils/formats';
+import { crearFormatterMoneda, crearParserMoneda, extraerMensajeError, toTitleCase } from '../../utils/formats';
 
 const { Text } = Typography;
 
@@ -427,8 +428,8 @@ const EmpleadoFormulario: React.FC = () => {
         )}
         {renderFormItem('salario', 'Salario',
           <InputNumber min={0} step={0.01} style={{ width: '100%' }}
-            formatter={(value) => `RD$ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-            parser={(value) => value?.replace(/RD\$\s?|(,*)/g, '') as any}
+            formatter={crearFormatterMoneda()}
+            parser={crearParserMoneda()}
           />
         )}
       </Row>
@@ -441,7 +442,7 @@ const EmpleadoFormulario: React.FC = () => {
       <Row gutter={[16, 0]}>
         <Col xs={24}>
           <Form.Item name="notas" label="Notas">
-            <Input.TextArea placeholder="Notas sobre el empleado" rows={3} maxLength={1000} />
+            <Input.TextArea placeholder="Notas sobre el empleado" rows={3} autoSize={{ minRows: 3, maxRows: 8 }} maxLength={1000} showCount />
           </Form.Item>
         </Col>
       </Row>

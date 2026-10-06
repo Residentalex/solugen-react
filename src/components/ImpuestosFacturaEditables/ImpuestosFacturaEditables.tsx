@@ -1,5 +1,6 @@
 import React from 'react';
-import { Table, Select, InputNumber } from 'antd';
+import { Table,  InputNumber } from 'antd';
+import { Select } from '../../components/Select';
 import { toTitleCase, formatCurrency } from '../../utils/formats';
 
 export interface ImpuestoFacturaItem {

@@ -100,9 +100,7 @@ const ASPA: React.FC = () => {
       console.log('Consultando documentos no autorizados:', { sucursal, desde, hasta });
       const data = await solicitudPagoApi.obtenerNoAutorizados(sucursal, desde, hasta);
       console.log('Resultado:', data);
-      // Excluir documentos en borrador (estado 0)
-      const dataFiltrada = (data || []).filter((d: any) => d.estado !== 0);
-      return dataFiltrada as any;
+      return data as any;
     },
     reporteBlob: (sucursal: number, desde: string, hasta: string) =>
       documentosReporteApi.imprimirReporte(sucursal, 'autorizados', desde, hasta),
@@ -136,20 +134,24 @@ const ASPA: React.FC = () => {
     setGenerando(true);
     try {
       let exitos = 0;
-      let errores = 0;
+      const errores: string[] = [];
       for (const key of selectedRowKeys) {
         const item = data.find(x => x.id === key);
         if (item && !(item as any).autorizado) {
           try {
             await solicitudPagoApi.autorizar(sucursalActiva, Number(key));
             exitos++;
-          } catch (err) {
-            errores++;
+          } catch (err: any) {
+            errores.push(err?.response?.data?.errorMessage || err?.message || 'Error desconocido');
           }
         }
       }
       if (exitos > 0) message.success(`${exitos} documentos autorizados correctamente.`);
-      if (errores > 0) message.error(`${errores} documentos fallaron.`);
+      if (errores.length === 1) {
+        message.error(errores[0]);
+      } else if (errores.length > 1) {
+        message.error(`${errores.length} documentos fallaron. Primer motivo: ${errores[0]}`);
+      }
       setSelectedRowKeys([]);
       selectedRowKeysRef.current = [];
       handleRefresh();
@@ -169,7 +171,7 @@ const ASPA: React.FC = () => {
     setGenerando(true);
     try {
       let exitos = 0;
-      let errores = 0;
+      const errores: string[] = [];
       const idsCreados: number[] = [];
       for (const key of selectedRowKeys) {
         const item = data.find(x => x.id === key);
@@ -178,13 +180,17 @@ const ASPA: React.FC = () => {
             const resultado = await solicitudPagoApi.generarPago(sucursalActiva, Number(key), false);
             idsCreados.push(resultado.id);
             exitos++;
-          } catch (err) {
-            errores++;
+          } catch (err: any) {
+            errores.push(err?.response?.data?.errorMessage || err?.message || 'Error desconocido');
           }
         }
       }
       if (exitos > 0) message.success(`${exitos} documentos bancarios generados correctamente.`);
-      if (errores > 0) message.error(`${errores} documentos fallaron.`);
+      if (errores.length === 1) {
+        message.error(errores[0]);
+      } else if (errores.length > 1) {
+        message.error(`${errores.length} documentos fallaron. Primer motivo: ${errores[0]}`);
+      }
       setSelectedRowKeys([]);
       selectedRowKeysRef.current = [];
       handleRefresh();

@@ -643,7 +643,7 @@ const DevolucionCompraDetalle: React.FC = () => {
           setImprimiendo(true);
           try {
             try {
-              await documentoImpresionApi.marcarImpreso('DVC', sucursalActiva, parseInt(id));
+              await documentoImpresionApi.marcarImpreso('DVC', sucursalActiva, parseInt(id ?? '0'));
             } catch (errImprimir: any) {
               messageApi.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
               return;
@@ -752,7 +752,7 @@ const DevolucionCompraDetalle: React.FC = () => {
 
                 {/* Fila 3 */}
                 <Descriptions.Item label="Nota:" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                  <span className="paces-nota-memo">{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -872,7 +872,7 @@ const DevolucionCompraDetalle: React.FC = () => {
                   <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:">
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                  <span className="paces-nota-memo">{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>

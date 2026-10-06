@@ -8,7 +8,6 @@ import {
   Form,
   Input,
   InputNumber,
-  Select,
   Switch,
   Checkbox,
   Skeleton,
@@ -23,6 +22,7 @@ import {
   Tabs,
   Empty,
 } from 'antd';
+import { Select } from '../../components/Select';
 import { ExclamationCircleOutlined, DeleteOutlined, FileTextOutlined, TagOutlined, SearchOutlined, PlusOutlined, CheckOutlined, InboxOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -136,6 +136,7 @@ const PantallaFormulario: React.FC = () => {
       form.setFieldsValue({
         codigo: res.codigo,
         nombre: res.nombre,
+        descripcion: res.descripcion,
         tipo: res.tipo,
         modulos: res.modulos?.map((m) => m.id) || [],
         grupo: res.grupo,
@@ -190,6 +191,7 @@ const PantallaFormulario: React.FC = () => {
         id: data?.id || 0,
         codigo: values.codigo,
         nombre: values.nombre,
+        descripcion: values.descripcion || '',
         ruta: values.ruta || '',
         tipo: values.tipo || '',
         grupo: values.grupo || '',
@@ -346,6 +348,16 @@ const PantallaFormulario: React.FC = () => {
             <Col xs={24} sm={12} lg={8}>
               <Form.Item name="ruta" label="Ruta">
                 <Input placeholder="Ej. /admin/pantallas" maxLength={200} />
+              </Form.Item>
+            </Col>
+            <Col xs={24}>
+              <Form.Item name="descripcion" label="Descripción">
+                <Input.TextArea
+                  rows={3}
+                  maxLength={300}
+                  showCount
+                  placeholder="Descripción de la pantalla"
+                />
               </Form.Item>
             </Col>
             <Col xs={12} sm={6} lg={4}>

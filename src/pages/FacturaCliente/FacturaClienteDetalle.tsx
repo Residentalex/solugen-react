@@ -49,6 +49,7 @@ import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLa
 import { formatNumber, toTitleCase, formatDate, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
+import AdornoDocumentoPagado from '../../components/AdornoDocumentoPagado/AdornoDocumentoPagado';
 import DetalleToolbar from '../../components/DetalleToolbar';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import CobrosMinimal from '../../components/CobrosCard/CobrosMinimal';
@@ -327,6 +328,16 @@ const FacturaClienteDetalle: React.FC = () => {
   const estadoInfo = ESTADO_DOCUMENTO_MAP[toEstadoNum(documentoActivo.estado)] || { label: 'Desconocido', color: 'default' };
   const esCerrado = toPeriodoNum(documentoActivo.periodo) === 6;
   const tienePagos = pagosAsociados.length > 0;
+  const totalPagado = pagosAsociados.reduce(
+    (suma: number, transaccion: any) => suma + (Number(transaccion.monto) || 0),
+    0,
+  );
+  const saldoPendiente = Math.max(
+    0,
+    (Number(documentoActivo.total) || 0)
+      - totalPagado
+      - (Number(documentoActivo.retenciones) || 0),
+  );
   const codigoQR = data?.envioDGII?.codigoQR || estadoDGII?.codigoQR;
 
   // ===== Detalles filtrados por búsqueda =====
@@ -865,7 +876,7 @@ const FacturaClienteDetalle: React.FC = () => {
                 </Descriptions.Item>
                 <Descriptions.Item label="Almacen">{documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}</Descriptions.Item>
                 <Descriptions.Item label="Sucursal" span={3}><SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} /></Descriptions.Item>
-                <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
+                <Descriptions.Item label="Nota" span={3}><span className="paces-nota-memo">{documentoActivo.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -938,6 +949,7 @@ const FacturaClienteDetalle: React.FC = () => {
           <Col xxl={6}>
             <EntidadCard entidad={documentoActivo.cliente} fallbackTitulo="Cliente" />
             <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} total={documentoActivo.total} alignRight={false}
+              adorno={<AdornoDocumentoPagado total={documentoActivo.total} saldoPendiente={saldoPendiente} />}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
               tasa={documentoActivo.tasa ?? 1}
@@ -994,7 +1006,7 @@ const FacturaClienteDetalle: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label="Almacen">{documentoActivo.almacen?.nombre ? toTitleCase(documentoActivo.almacen.nombre) : '-'}</Descriptions.Item>
               <Descriptions.Item label="Sucursal"><SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} /></Descriptions.Item>
-              <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
+              <Descriptions.Item label="Nota"><span className="paces-nota-memo">{documentoActivo.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -1067,6 +1079,7 @@ const FacturaClienteDetalle: React.FC = () => {
 
           <div style={{ marginTop: 24 }}>
             <TotalesCard subTotal={documentoActivo.subTotal} descuento={documentoActivo.descuento} impuestos={documentoActivo.impuestos} total={documentoActivo.total} alignRight={true}
+            adorno={<AdornoDocumentoPagado total={documentoActivo.total} saldoPendiente={saldoPendiente} />}
               monedaSimbolo={documentoActivo.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={documentoActivo.moneda?.nombre || monedaDefault.nombre}
               tasa={documentoActivo.tasa ?? 1}

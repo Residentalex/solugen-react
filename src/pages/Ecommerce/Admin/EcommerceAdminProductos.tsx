@@ -1,7 +1,8 @@
-﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  Table, Input, Button, Card, Switch, Modal, Form, InputNumber, Select, Typography, Tooltip, message,
+  Table, Input, Button, Card, Switch, Modal, Form, InputNumber,  Typography, Tooltip, message,
 } from 'antd';
+import { Select } from '../../../components/Select';
 import { SearchOutlined, ReloadOutlined, EditOutlined, PictureOutlined, UploadOutlined, FileExcelOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { ecommerceApi } from '../../../api/ecommerceApi';

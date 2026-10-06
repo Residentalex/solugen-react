@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom';
 import {
   Row, Col, Card, Typography, Button, Space, Tag, message, Spin, Empty,
-  Table, theme, Tooltip, Segmented, Modal, Checkbox, Input, Select, Skeleton,
+  Table, theme, Tooltip, Segmented, Modal, Checkbox, Input,  Skeleton,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   DollarOutlined, ShoppingCartOutlined, FileTextOutlined,
   OrderedListOutlined, TeamOutlined, InboxOutlined,
@@ -815,7 +816,7 @@ const Dashboard: React.FC = () => {
                             onKeyDown={(e) => activarConTeclado(e, () => navigate(`/${p.codigo}`))}
                           >
                             <span className="dashboard-quick-item-icon">
-                              {obtenerIconoModulo(p.modulos?.[0]?.nombre)}
+                              {obtenerIconoModulo(p.modulos?.[0])}
                             </span>
                             <span className="dashboard-quick-item-label">{p.nombre}</span>
                           </div>

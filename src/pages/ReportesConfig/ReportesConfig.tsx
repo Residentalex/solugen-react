@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Card, message, Modal, Form, Input, Select } from 'antd';
+import { Card, message, Modal, Form, Input} from 'antd';
+import { Select } from '../../components/Select';
 import { useUIStore } from '../../stores/uiStore';
 import { reportesConfigApi } from '../../api/reportesConfigApi';
 import type { ReportePlantillaListaDTO } from '../../types/reportesConfig';

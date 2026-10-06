@@ -1,14 +1,14 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Table, Select, Tag, Button, message, Card, Typography, Drawer, Descriptions, Alert, Empty, Grid, Space } from 'antd';
+import { Table,  Tag, Button, Card, Typography, Alert, Empty, Space } from 'antd';
+import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { servicioApi } from '../../api/servicioApi';
-import type { ServicioDTO, ServicioVistaDTO } from '../../types/servicio';
+import type { ServicioVistaDTO } from '../../types/servicio';
 import { formatCurrency, toTitleCase } from '../../utils/formats';
-import { getMonedaSucursalActiva } from '../../utils/moneda';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
@@ -16,7 +16,6 @@ const { Text } = Typography;
 
 const Servicios: React.FC = () => {
   const navigate = useNavigate();
-  const screens = Grid.useBreakpoint();
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
   const updateToolbar = useUIStore((s: any) => s.updateToolbar);
   const resetToolbar = useUIStore((s: any) => s.resetToolbar);
@@ -26,12 +25,8 @@ const Servicios: React.FC = () => {
   const [filtroActivo, setFiltroActivo] = useState<string>('todos');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [detalleItem, setDetalleItem] = useState<ServicioDTO | null>(null);
-  const [detalleOpen, setDetalleOpen] = useState(false);
 
   const soloActivos = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
-
-  const drawerWidth = screens.md ? 420 : '100%';
 
   const emptyTextDescripcion = searchText
     ? 'No se encontraron servicios con la búsqueda actual'
@@ -94,16 +89,6 @@ const Servicios: React.FC = () => {
     setPage(1);
   };
 
-  const abrirDetalle = async (codigo: string) => {
-    try {
-      const item = await servicioApi.obtenerPorCodigo(sucursalActiva, codigo);
-      setDetalleItem(item);
-      setDetalleOpen(true);
-    } catch (err: any) {
-      message.error(err?.response?.data?.errorMessage || 'Error al obtener detalle del servicio');
-    }
-  };
-
   const columns: ColumnsType<ServicioVistaDTO> = [
     {
       title: 'Código',
@@ -112,7 +97,7 @@ const Servicios: React.FC = () => {
       width: 120,
       fixed: 'left',
       render: (val: string) => (
-        <Text strong className="paces-doc-link" onClick={() => abrirDetalle(val)}>
+        <Text strong className="paces-doc-link" onClick={() => navigate(`/MServicio/${val}`)}>
           {val}
         </Text>
       ),
@@ -122,8 +107,11 @@ const Servicios: React.FC = () => {
       dataIndex: 'nombre',
       key: 'nombre',
       width: 320,
-      render: (name: string) => (
-        <Space>
+      render: (name: string, record: ServicioVistaDTO) => (
+        <Space
+          style={{ cursor: 'pointer' }}
+          onClick={() => navigate(`/MServicio/${record.codigo}`)}
+        >
           <div className="paces-avatar-initials">{(name || '?').charAt(0).toUpperCase()}</div>
           <Text>{toTitleCase(name || '')}</Text>
         </Space>
@@ -251,43 +239,6 @@ const Servicios: React.FC = () => {
           }}
         />
       </Card>
-
-<Drawer
-         title={`Servicio: ${detalleItem?.codigo || ''}`}
-         open={detalleOpen}
-         onClose={() => setDetalleOpen(false)}
-         width={drawerWidth}
-         extra={
-           <Tag color={detalleItem?.activo ? 'green' : 'red'}>
-             {detalleItem?.activo ? 'Activo' : 'Inactivo'}
-           </Tag>
-         }
-       >
-         {detalleItem && (
-           <Descriptions column={1} bordered size="small">
-             <Descriptions.Item label="Código">{detalleItem.codigo}</Descriptions.Item>
-             <Descriptions.Item label="Nombre">{toTitleCase(detalleItem.nombre)}</Descriptions.Item>
-             <Descriptions.Item label="Precio">{formatCurrency(detalleItem.precio)}</Descriptions.Item>
-             <Descriptions.Item label="Moneda">{detalleItem.moneda || getMonedaSucursalActiva().codigo}</Descriptions.Item>
-             <Descriptions.Item label="Referencia Interna">
-               {detalleItem.referenciaInterna || '-'}
-             </Descriptions.Item>
-             <Descriptions.Item label="Familia">
-               {detalleItem.familia?.nombre || '-'}
-             </Descriptions.Item>
-             <Descriptions.Item label="Categoría">
-               {detalleItem.categoria?.nombre || '-'}
-             </Descriptions.Item>
-             <Descriptions.Item label="Unidad Medida">
-               {detalleItem.unidadMedida?.nombre || '-'}
-             </Descriptions.Item>
-             <Descriptions.Item label="Para Vender">
-               {detalleItem.paraVender ? 'Sí' : 'No'}
-             </Descriptions.Item>
-             <Descriptions.Item label="Nota">{detalleItem.nota || '-'}</Descriptions.Item>
-           </Descriptions>
-         )}
-       </Drawer>
     </>
   );
 };

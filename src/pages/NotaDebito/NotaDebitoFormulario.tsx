@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert,
+  Card, Table, Tabs, Button, Space, Row, Col, Divider, Grid,
+  message, Form, Input, InputNumber,  DatePicker, Typography, Modal, Alert,
   Switch, Empty,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   InboxOutlined,
   SaveOutlined,
@@ -14,7 +15,6 @@ import {
   SearchOutlined,
   ClearOutlined,
   ExclamationCircleOutlined,
-  EditOutlined,
   HistoryOutlined,
   FileTextOutlined,
 } from '@ant-design/icons';
@@ -57,14 +57,16 @@ import FormularioToolbar, { EstadoTag } from '../../components/FormularioToolbar
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useCargaDocumento } from '../../hooks/useCargaDocumento';
-import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { useMonedaDocumento } from '../../hooks/useMonedaDocumento';
+import CamposRapidosFila from '../../components/CamposRapidosFila/CamposRapidosFila';
+import { formatCurrency, formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError, redondear2 } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import { NotaDebitoGuide } from './NotaDebitoGuide';
 
 const { Text } = Typography;
-const { TextArea } = Input;
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
+import MemoField from '../../components/MemoField/MemoField';
 
 // ===== Calcular totales desde impuestos =====
 function calcularTotales(impuestos: any[], total: number, perdidas: number = 0) {
@@ -350,6 +352,15 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
   const sinOC = true;
   const isLarge = screens.xxl === true;
 
+  // ===== Moneda del documento (selector sobre el catalogo de MONEDAS) =====
+  const { monedas, monedasLoading, monedaCodigo, tasaEditable, tasaParaMoneda, seleccionarMoneda } = useMonedaDocumento(
+    sucursalActiva,
+    form,
+    data,
+    setData,
+    selectedConcepto?.moneda,
+  );
+
   // ===== Watchers =====
   const ncfValue = Form.useWatch('ncf', form) || '';
   const refValue = Form.useWatch('referencia', form) || '';
@@ -583,7 +594,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
     form.setFieldsValue({
       concepto: concepto.codigo,
       moneda: monedaObj.nombre,
-      tasa: monedaObj.tasa ?? 1,
+      tasa: tasaParaMoneda(monedaObj),
     });
 
     // === NoImpuesto: si el concepto no acepta impuestos, limpiarlos ===
@@ -643,6 +654,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       monto: d.monto,
       tipoDocumento: d.tipoDocumento,
       origenCuenta: d.origenCuenta,
+      codigoMoneda: d.codigoMoneda,
+      tasa: d.tasa,
     }]);
     // Auto-asignar NCF Modificado desde el documento
     if (d.nCF) {
@@ -683,6 +696,8 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           esDocumentoInventario: true,
           perdida: 0,
           generarPerdida: false,
+          codigoMoneda: d.codigoMoneda,
+          tasa: d.tasa,
         }));
       return [...prev, ...nuevos];
     });
@@ -1046,7 +1061,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
       align: 'right' as const,
       render: (v: number) => formatNumber(v ?? 0),
     },
-    { title: 'Pendiente', key: 'pendienteCalc', width: 120, align: 'right' as const, render: (_: any, record: any) => <strong>{formatNumber(Math.max(0, Math.round(((record.montoOriginal || 0) - (record.pagado || 0)) * 100) / 100))}</strong> },
+    { title: 'Pendiente', key: 'pendienteCalc', width: 120, align: 'right' as const, render: (_: any, record: any) => <strong>{formatNumber(Math.max(0, redondear2((record.montoOriginal || 0) - (record.pagado || 0))))}</strong> },
     {
       title: 'Monto a Debitar', dataIndex: 'monto', key: 'monto', width: 140, align: 'right' as const,
       render: (_: any, record: DocumentoRelacionadoDTO, idx: number) => {
@@ -1059,7 +1074,7 @@ const NotaDebitoFormulario: React.FC<NotaDebitoFormularioProps> = ({ tipoEntidad
           size="small"
           style={{ width: 120 }}
           min={0}
-          max={Math.max(0, Math.round(((record.montoOriginal || 0) - (record.pagado || 0)) * 100) / 100)}
+          max={Math.max(0, redondear2((record.montoOriginal || 0) - (record.pagado || 0)))}
           step={0.01}
           precision={2}
           value={documentosRelacionados[idx]?.monto}
@@ -1097,7 +1112,7 @@ render: (v: number) => formatNumber(v ?? 0),
       key: 'pendienteCalc',
       width: 120,
       align: 'right' as const,
-      render: (_: any, record: any) => <strong>{formatNumber(Math.max(0, Math.round(((record.montoOriginal || 0) - (record.pagado || 0)) * 100) / 100))}</strong>,
+      render: (_: any, record: any) => <strong>{formatNumber(Math.max(0, redondear2((record.montoOriginal || 0) - (record.pagado || 0))))}</strong>,
     },
     {
       title: 'Monto a Debitar', dataIndex: 'monto', key: 'monto', width: 140, align: 'right' as const,
@@ -1375,132 +1390,67 @@ render: (v: number) => formatNumber(v ?? 0),
             </Form.Item>
           </Col>
 
-          {/* Fila 4: Nota + Botones rápidos */}
-          <Col xs={24} lg={18}>
+          {/* Fila 4: Campos rápidos (NCF, NCF Mod, Referencia, Tasa, Moneda) */}
+          <CamposRapidosFila
+            ncf={{
+              valor: ncfValue,
+              editando: editingField === 'ncf',
+              etiqueta: 'NCF',
+              prefijo: 'NCF: ',
+              placeholder: 'NCF',
+              maxLength: 19,
+              onEdit: () => openFieldEditor('ncf'),
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+              onChange: (v) => { editingValueRef.current = v; },
+            }}
+            ncfModificado={{
+              valor: ncfModificadoVal,
+              editando: editingField === 'ncfModificado',
+              etiqueta: 'NCF Mod',
+              prefijo: 'NCF Mod: ',
+              placeholder: 'NCF Modificado',
+              maxLength: 20,
+              onEdit: () => { setNcfTipo('modificado'); openFieldEditor('ncfModificado'); },
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+              onChange: (v) => { editingValueRef.current = v.toUpperCase(); },
+            }}
+            referencia={{
+              valor: refValue,
+              editando: editingField === 'referencia',
+              etiqueta: 'Referencia',
+              prefijo: 'Ref: ',
+              placeholder: 'Referencia',
+              onEdit: () => openFieldEditor('referencia'),
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+              onChange: (v) => { editingValueRef.current = v; },
+            }}
+            tasa={{
+              tasa: tasaValue,
+              editable: tasaEditable,
+              editando: editingField === 'tasa',
+              onEdit: () => openFieldEditor('tasa'),
+              onChange: (val) => { editingValueRef.current = val ?? 1; },
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+            }}
+            moneda={{ value: monedaCodigo, onChange: seleccionarMoneda, monedas, loading: monedasLoading }}
+            ocultos={[
+              { name: 'ncf' },
+              { name: 'referencia' },
+              { name: 'tasa', editor: 'number' },
+              { name: 'moneda' },
+            ]}
+          />
+
+          {/* Fila 5: Nota */}
+          <Col xs={24}>
             <Form.Item name="nota" style={{ marginBottom: 0 }}>
-              <FloatingField label="Nota">
-                <TextArea rows={2} maxLength={500} showCount placeholder="Nota (máx 500 caracteres)" />
-              </FloatingField>
+              <MemoField label="Nota" />
             </Form.Item>
           </Col>
-
-          <Col xs={24} lg={6}>
-            <Space size={[8, 8]} wrap>
-              {/* NCF */}
-              <div>
-                {editingField === 'ncf' ? (
-                  <Input
-                    size="small"
-                    style={{ width: 200 }}
-                    placeholder="NCF"
-                    maxLength={19}
-                    autoFocus
-                    defaultValue={editingValueRef.current as string}
-                    onChange={(e) => { editingValueRef.current = e.target.value; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : ncfValue ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                    NCF: {ncfValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                    <PlusOutlined /> NCF
-                  </Tag>
-                )}
-              </div>
-
-              {/* NCF Modificado como Tag rápido */}
-              <div>
-                {editingField === 'ncfModificado' ? (
-                  <Input
-                    size="small"
-                    style={{ width: 200 }}
-                    placeholder="NCF Modificado"
-                    maxLength={20}
-                    autoFocus
-                    defaultValue={editingValueRef.current as string}
-                    onChange={(e) => { editingValueRef.current = e.target.value.toUpperCase(); }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-
-                  />
-                ) : ncfModificadoVal ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncfModificado')}>
-                    NCF Mod: {ncfModificadoVal} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => { setNcfTipo('modificado'); openFieldEditor('ncfModificado'); }}>
-                    <PlusOutlined /> NCF Mod
-                  </Tag>
-                )}
-              </div>
-
-              {/* Referencia */}
-              {editingField === 'referencia' ? (
-                <Input
-                  size="small"
-                  style={{ width: 200 }}
-                  placeholder="Referencia"
-                  autoFocus
-                  defaultValue={editingValueRef.current as string}
-                  onChange={(e) => { editingValueRef.current = e.target.value; }}
-                  onPressEnter={() => commitFieldEditor()}
-                  onBlur={() => commitFieldEditor()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                  }}
-                />
-              ) : refValue ? (
-                <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
-                  Ref: {refValue} <EditOutlined />
-                </Tag>
-              ) : (
-                <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
-                  <PlusOutlined /> Referencia
-                </Tag>
-              )}
-
-              {/* Tasa */}
-              {editingField === 'tasa' ? (
-                <InputNumber
-                  size="small"
-                  style={{ width: 120 }}
-                  min={0}
-                  step={0.01}
-                  placeholder="Tasa"
-                  autoFocus
-                  defaultValue={editingValueRef.current as number}
-                  onChange={(val) => { editingValueRef.current = val ?? 1; }}
-                  onPressEnter={() => commitFieldEditor()}
-                  onBlur={() => commitFieldEditor()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                  }}
-                />
-              ) : tasaValue !== 1 ? (
-                <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
-                  Tasa: {tasaValue} <EditOutlined />
-                </Tag>
-              ) : (
-                <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
-                  <PlusOutlined /> Tasa
-                </Tag>
-              )}
-            </Space>
-            <Form.Item name="ncf" hidden><Input /></Form.Item>
-            <Form.Item name="referencia" hidden><Input /></Form.Item>
-            <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
-          </Col>
-
-          <Form.Item name="moneda" hidden><Input /></Form.Item>
         </Row>
       </Form>
         </Col>
@@ -1752,6 +1702,7 @@ label: `Asientos (${asientos.length})`,
           return normalizarOrigen(docConfig?.origenCuenta ?? OrigenCuenta.Desconocido);
         })()}
         montoTotal={Number(form.getFieldValue('total')) || 0}
+        codigoMonedaPrincipal={monedaCodigo}
       />
       {tipoEntidad === 'SUP' && (
         <BuscarDocumentoModal
@@ -1767,6 +1718,7 @@ label: `Asientos (${asientos.length})`,
           })()}
           esDocumentoInventario={true}
           montoTotal={Number(form.getFieldValue('total')) || 0}
+          codigoMonedaPrincipal={monedaCodigo}
         />
       )}
 

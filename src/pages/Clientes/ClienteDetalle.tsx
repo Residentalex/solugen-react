@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, message, Form, Input, Select, Switch, Row, Col, Typography,
+  Card, message, Form, Input,  Switch, Row, Col, Typography,
   Tabs, Descriptions, InputNumber, Tag, Grid, Divider, DatePicker,
   Button, Modal, Table, theme,
 } from 'antd';
+import { Select } from '../../components/Select';
 import { CopyOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
@@ -19,12 +20,11 @@ import ErrorBoundary from '../../components/ErrorBoundary';
 import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
 import { formatCurrency, toISOFormat } from '../../utils/formats';
 import PersonasAutorizadasTab from './components/PersonasAutorizadasTab';
-import GruposProductosTab from './components/GruposProductosTab';
-import CuentasBancariasTab from './components/CuentasBancariasTab';
+import EntidadGruposProductosTab from '../../components/EntidadGruposProductosTab';
+import EntidadCuentasBancariasTab from '../../components/EntidadCuentasBancariasTab';
 import LugaresTrabajoTab from './components/LugaresTrabajoTab';
-import MovimientosTab from './components/MovimientosTab';
-import FacturacionTab from './components/FacturacionTab';
-import ContactosTab from './components/ContactosTab';
+import TabProximamente from '../../components/TabProximamente';
+import EntidadContactosTab from '../../components/EntidadContactosTab';
 
 const { Text } = Typography;
 
@@ -434,7 +434,7 @@ const ClienteDetalle: React.FC = () => {
       key: 'contactos',
       label: 'Contactos',
       children: !esNuevo && codigo ? (
-        <ContactosTab codigoCliente={codigo} />
+        <EntidadContactosTab codigoEntidad={codigo} tipoEntidad="CLI" />
       ) : (
         <div style={{ padding: 16, textAlign: 'center' }} className="paces-text-secondary">
           <Text type="secondary">Guarde el cliente primero para gestionar contactos</Text>
@@ -456,7 +456,7 @@ const ClienteDetalle: React.FC = () => {
       key: 'grupos',
       label: 'Grupos de Productos',
       children: !esNuevo && codigo ? (
-        <GruposProductosTab codigoCliente={codigo} sucursal={sucursalActiva} />
+        <EntidadGruposProductosTab codigoEntidad={codigo} sucursal={sucursalActiva} />
       ) : (
         <div style={{ padding: 16, textAlign: 'center' }} className="paces-text-secondary">
           <Text type="secondary">Guarde el cliente primero para gestionar grupos de productos</Text>
@@ -467,7 +467,7 @@ const ClienteDetalle: React.FC = () => {
       key: 'bancos',
       label: 'Cuentas Bancarias',
       children: !esNuevo && codigo ? (
-        <CuentasBancariasTab codigoCliente={codigo} sucursal={sucursalActiva} />
+        <EntidadCuentasBancariasTab codigoEntidad={codigo} sucursal={sucursalActiva} />
       ) : (
         <div style={{ padding: 16, textAlign: 'center' }} className="paces-text-secondary">
           <Text type="secondary">Guarde el cliente primero para gestionar cuentas bancarias</Text>
@@ -488,12 +488,22 @@ const ClienteDetalle: React.FC = () => {
     {
       key: 'movimientos',
       label: 'Movimientos',
-      children: <MovimientosTab />,
+      children: (
+        <TabProximamente
+          titulo="Módulo de Movimientos"
+          descripcion="Aquí se mostrarán las últimas transacciones del cliente: compras, pagos, notas y ajustes."
+        />
+      ),
     },
     {
       key: 'facturacion',
       label: 'Facturación',
-      children: <FacturacionTab />,
+      children: (
+        <TabProximamente
+          titulo="Módulo de Facturación"
+          descripcion="Aquí se mostrarán los documentos de facturación asociados al cliente."
+        />
+      ),
     },
   ];
 
@@ -734,7 +744,7 @@ const ClienteDetalle: React.FC = () => {
             <div style={{ whiteSpace: 'pre-wrap' }}>{data?.nota || '-'}</div>
           ) : (
             <Form.Item name="nota" noStyle>
-              <Input.TextArea placeholder="Notas del cliente" rows={2} maxLength={500} />
+              <Input.TextArea placeholder="Notas del cliente" rows={3} autoSize={{ minRows: 3, maxRows: 8 }} maxLength={500} showCount />
             </Form.Item>
           ),
           2 // span 2 columnas

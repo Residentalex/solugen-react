@@ -615,7 +615,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
     setImprimiendo(true);
     try {
       try {
-        await documentoImpresionApi.marcarImpreso('SAP', sucursalActiva, parseInt(id));
+        await documentoImpresionApi.marcarImpreso('SAP', sucursalActiva, parseInt(id ?? '0'));
       } catch (errImprimir: any) {
         message.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
         return;
@@ -774,7 +774,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
 
                 {/* Fila 4 */}
                 <Descriptions.Item label="Nota:" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                  <span className="paces-nota-memo">{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -894,7 +894,7 @@ const SalidaAlmacenDetalle: React.FC = () => {
                   <SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} />
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:">
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                  <span className="paces-nota-memo">{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>

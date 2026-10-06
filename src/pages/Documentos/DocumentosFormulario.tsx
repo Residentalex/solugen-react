@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Layout, Menu, Grid, Card, Switch, Button, Modal, Space, Typography,
-  Drawer, Input, Select, InputNumber, message, Row, Col,
+  Drawer, Input,  InputNumber, message, Row, Col,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   DashboardOutlined, ProjectOutlined, RobotOutlined, MessageOutlined, SettingOutlined,
   MenuOutlined, CloseOutlined, ExclamationCircleOutlined,

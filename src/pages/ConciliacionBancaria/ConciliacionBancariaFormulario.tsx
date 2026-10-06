@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Button, Space, Row, Col, Grid, Form, Input, InputNumber, Select, DatePicker, Typography, message, Modal, Alert, Spin, Skeleton, Upload, Divider, Checkbox, Descriptions, Steps,
+  Card, Table, Tabs, Button, Space, Row, Col, Grid, Form, Input, InputNumber,  DatePicker, Typography, message, Modal, Alert, Spin, Skeleton, Upload, Divider, Checkbox, Descriptions, Steps,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   SaveOutlined, CloseOutlined, UploadOutlined, PlusOutlined, DeleteOutlined, CheckCircleFilled, SearchOutlined, ArrowUpOutlined, ArrowDownOutlined, DownloadOutlined, FilterFilled, FilterOutlined, FileTextOutlined, ReloadOutlined, ExclamationCircleOutlined,
 } from '@ant-design/icons';
@@ -15,7 +16,8 @@ import { transaccionBancariaApi } from '../../api/transaccionBancariaApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { entidadApi } from '../../api/entidadApi';
 import BuscarEntidadSelect from '../../components/BuscarEntidadSelect/BuscarEntidadSelect';
-import { toTitleCase, extraerMensajeError, formatCurrency, formatNumber, formatDate } from '../../utils/formats';
+import { toTitleCase, extraerMensajeError, formatMoneda, formatNumber, formatDate } from '../../utils/formats';
+import { getMonedaSucursalActiva, getMonedaPorCodigo, etiquetaMoneda } from '../../utils/moneda';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import FiltroSeleccionDropdown from '../../components/FiltroSeleccionDropdown';
 import type {
@@ -113,6 +115,9 @@ const ConciliacionBancariaFormulario: React.FC = () => {
   const [fechaDocSeleccionada, setFechaDocSeleccionada] = useState<dayjs.Dayjs | null>(null);
   const [conceptoSeleccionado, setConceptoSeleccionado] = useState<string>('');
   const [conceptosDoc, setConceptosDoc] = useState<ConceptoDTO[]>([]);
+  // Tasa del documento bancario a crear. En la moneda de la compania es 1 y no se edita;
+  // en divisa se precarga con MONEDAS.TASA y el usuario puede ajustarla antes de crear.
+  const [tasaDocSeleccionada, setTasaDocSeleccionada] = useState<number>(1);
   const [creandoDoc, setCreandoDoc] = useState(false);
   const [entidadSeleccionada, setEntidadSeleccionada] = useState<{ codigo: string; nombre: string; identificacion?: string; activo?: boolean } | null>(null);
   const [entidadesCache, setEntidadesCache] = useState<{ codigo: string; nombre: string; identificacion?: string; activo?: boolean }[]>([]);
@@ -498,13 +503,90 @@ const balLibrosInicialCargado = useRef(false);
     return valor.replace(/^0+/, '');
   };
 
+  const normalizarNumeroDocumento = (valor: string): string => {
+    const limpio = valor.trim();
+    if (!limpio) return '';
+    return limpio.replace(/^0+/, '') || '0';
+  };
+
   // Normaliza un documento completo "TIPO-NUM" quitando los ceros a la izquierda del número.
   // Ej: "FAC-0100009581" -> "FAC-109581".
   const normalizarDocCompleto = (doc: string): string => {
-    if (!doc) return '';
-    const idx = doc.lastIndexOf('-');
-    if (idx <= 0) return normalizarCeros(doc);
-    return `${doc.slice(0, idx)}-${normalizarCeros(doc.slice(idx + 1))}`;
+    const limpio = doc.trim().toUpperCase();
+    if (!limpio) return '';
+    const idx = limpio.lastIndexOf('-');
+    if (idx <= 0) return normalizarNumeroDocumento(limpio);
+    const tipo = limpio.slice(0, idx).trim();
+    const numero = normalizarNumeroDocumento(limpio.slice(idx + 1));
+    return tipo && numero ? `${tipo}-${numero}` : '';
+  };
+
+  const obtenerTransacIdValido = (valor?: number | null): number | null => {
+    const transacId = Number(valor);
+    return Number.isInteger(transacId) && transacId > 0 ? transacId : null;
+  };
+
+  const obtenerClaveDocumentoTransaccion = (t: TransaccionConciliadaDTO): string =>
+    normalizarDocCompleto(`${t.tipoDoc}-${t.numDoc}`);
+
+  const obtenerClaveDocumentoMovimiento = (m: MovimientoBancarioDTO): string => {
+    if (m.tipoDocConciliado && m.numDocConciliado) {
+      return normalizarDocCompleto(`${m.tipoDocConciliado}-${m.numDocConciliado}`);
+    }
+    return normalizarDocCompleto(m.documento || '');
+  };
+
+  const transaccionEstaConciliada = (
+    candidato: TransaccionConciliadaDTO,
+    lista: MovimientoBancarioDTO[],
+    ordenExcluir?: number,
+  ): boolean => {
+    const candidatoId = obtenerTransacIdValido(candidato.transacId);
+    const claveDocumento = obtenerClaveDocumentoTransaccion(candidato);
+    return lista.some((m) => {
+      if (!m.cotejado || m.orden === ordenExcluir) return false;
+      const movimientoId = obtenerTransacIdValido(m.transacIdConciliado);
+      const coincideTransaccion =
+        candidatoId !== null && movimientoId !== null && movimientoId === candidatoId;
+      const coincideDocumento =
+        Boolean(claveDocumento) && obtenerClaveDocumentoMovimiento(m) === claveDocumento;
+      return coincideTransaccion || coincideDocumento;
+    });
+  };
+
+  const limpiarCotejosDuplicados = (lista: MovimientoBancarioDTO[]): MovimientoBancarioDTO[] => {
+    const transaccionesUsadas = new Set<number>();
+    const documentosUsados = new Set<string>();
+
+    return lista.map((movimiento) => {
+      if (!movimiento.cotejado) return movimiento;
+
+      const transacId = obtenerTransacIdValido(movimiento.transacIdConciliado);
+      const documento = obtenerClaveDocumentoMovimiento(movimiento);
+      const repetido =
+        (transacId !== null && transaccionesUsadas.has(transacId)) ||
+        (Boolean(documento) && documentosUsados.has(documento));
+
+      if (repetido) {
+        return {
+          ...movimiento,
+          cotejado: false,
+          documento: '',
+          tipoDoc: '',
+          nombreTipoDoc: '',
+          entidad: '',
+          transacIdConciliado: undefined,
+          tipoDocConciliado: undefined,
+          numDocConciliado: undefined,
+          nombreTipoDocConciliado: undefined,
+          entidadConciliada: undefined,
+        };
+      }
+
+      if (transacId !== null) transaccionesUsadas.add(transacId);
+      if (documento) documentosUsados.add(documento);
+      return movimiento;
+    });
   };
 
   // Extrae el número de cheque del concepto: el último token numérico de exactamente 6 dígitos.
@@ -734,7 +816,7 @@ const balLibrosInicialCargado = useRef(false);
                       if (!reemplazar) return;
                       // Limpiar DOCTRANS del backend + movimientos en memoria y reimportar desde cero
                       await conciliacionBancariaApi.limpiarDoctrans(sucursalActiva, parseInt(id));
-                      setMovimientos(movsDesdeApi.map((m, i) => ({ ...m, orden: i + 1 })));
+            setMovimientos(limpiarCotejosDuplicados(movsDesdeApi.map((m, i) => ({ ...m, orden: i + 1 }))));
                       setHashArchivoImportado(hashArchivo);
                       setArchivoImportado(file);
                       hashesImportadosRef.current.clear();
@@ -747,14 +829,17 @@ const balLibrosInicialCargado = useRef(false);
                       setHashArchivoImportado(hashArchivo);
                       setMovimientos(prev => {
                         const maxOrden = prev.length > 0 ? Math.max(...prev.map(m => m.orden)) : 0;
-                        return [...prev, ...movsDesdeApi.map((m, i) => ({ ...m, orden: maxOrden + i + 1 }))];
+                return limpiarCotejosDuplicados([
+                    ...prev,
+                    ...movsDesdeApi.map((m, i) => ({ ...m, orden: maxOrden + i + 1 })),
+                ]);
                       });
                       setMovimientosCargados(true);
                       cantidadImportada = movsDesdeApi.length;
                     }
                   } else {
                     const movsLocal = parseCSVaMovimientos(text);
-                    setMovimientos(movsLocal);
+            setMovimientos(limpiarCotejosDuplicados(movsLocal));
                     cantidadImportada = movsLocal.length;
                   }
                   message.success(`${cantidadImportada} movimientos importados`);
@@ -808,7 +893,7 @@ const balLibrosInicialCargado = useRef(false);
           if (!reemplazar) return;
           // Limpiar DOCTRANS del backend + movimientos en memoria y reimportar desde cero
           await conciliacionBancariaApi.limpiarDoctrans(sucursalActiva, parseInt(id));
-          setMovimientos(movsDesdeApi.map((m, i) => ({ ...m, orden: i + 1 })));
+                    setMovimientos(limpiarCotejosDuplicados(movsDesdeApi.map((m, i) => ({ ...m, orden: i + 1 }))));
           setHashArchivoImportado(hashArchivo);
           setArchivoImportado(file);
           hashesImportadosRef.current.clear();
@@ -821,7 +906,10 @@ const balLibrosInicialCargado = useRef(false);
           setHashArchivoImportado(hashArchivo);
           setMovimientos(prev => {
             const maxOrden = prev.length > 0 ? Math.max(...prev.map(m => m.orden)) : 0;
-            return [...prev, ...movsDesdeApi.map((m, i) => ({ ...m, orden: maxOrden + i + 1 }))];
+                        return limpiarCotejosDuplicados([
+                            ...prev,
+                            ...movsDesdeApi.map((m, i) => ({ ...m, orden: maxOrden + i + 1 })),
+                        ]);
           });
           setMovimientosCargados(true);
           cantidadImportada = movsDesdeApi.length;
@@ -830,7 +918,7 @@ const balLibrosInicialCargado = useRef(false);
         // Creación: usar backend con numeroCta para parseo con plantilla
         const { movimientos: movsDesdeApi, hashArchivo } = await conciliacionBancariaApi.importarPreview(sucursalActiva, file, undefined, cuentaTransito, fechaConciliacion?.format('YYYY-MM-DD'));
         setHashArchivoImportado(hashArchivo);
-        setMovimientos(movsDesdeApi.map((m, i) => ({ ...m, orden: i + 1 })));
+                setMovimientos(limpiarCotejosDuplicados(movsDesdeApi.map((m, i) => ({ ...m, orden: i + 1 }))));
         setMovimientosCargados(true);
         cantidadImportada = movsDesdeApi.length;
       }
@@ -932,6 +1020,10 @@ const balLibrosInicialCargado = useRef(false);
   const handleConciliar = async (candidato: TransaccionConciliadaDTO) => {
     if (!movimientoModal || !id) return;
     const mov = movimientoModal;
+    if (transaccionEstaConciliada(candidato, movimientos, mov.orden)) {
+      message.warning('Esta transacción contable ya fue conciliada con otro movimiento bancario');
+      return;
+    }
     setMovimientos((prev) => prev.map((m) =>
       m.orden === mov.orden
         ? {
@@ -958,30 +1050,32 @@ const balLibrosInicialCargado = useRef(false);
 
   const handleConciliarAutomaticos = async () => {
     const transacIds: number[] = [];
-    setMovimientos((prev) => {
-      let next = [...prev];
-      seleccionAuto.forEach((orden) => {
-        const mov = next.find((m) => m.orden === orden);
-        if (!mov) return;
-        const candidatos = candidatosPorMonto.get(mov.monto) || [];
-        if (candidatos.length !== 1) return;
-        const candidato = candidatos[0];
-        transacIds.push(candidato.transacId);
-        next = next.map((m) =>
-          m.orden === mov.orden
-            ? {
-                ...m,
-                documento: `${candidato.tipoDoc}-${candidato.numDoc}`,
-                cotejado: true,
-                tipoDoc: candidato.tipoDoc,
-                nombreTipoDoc: candidato.nombreTipoDoc || '',
-                entidad: candidato.entidad,
-              }
-            : m
-        );
-      });
-      return next;
+    let movimientosActualizados = [...movimientos];
+    seleccionAuto.forEach((orden) => {
+      const mov = movimientosActualizados.find((m) => m.orden === orden);
+      if (!mov) return;
+      const candidatos = candidatosPorMonto.get(mov.monto) || [];
+      if (candidatos.length !== 1) return;
+      const candidato = candidatos[0];
+      if (transaccionEstaConciliada(candidato, movimientosActualizados, mov.orden)) return;
+      transacIds.push(candidato.transacId);
+      movimientosActualizados = movimientosActualizados.map((m) =>
+        m.orden === mov.orden
+          ? {
+              ...m,
+              documento: `${candidato.tipoDoc}-${candidato.numDoc}`,
+              cotejado: true,
+              tipoDoc: candidato.tipoDoc,
+              nombreTipoDoc: candidato.nombreTipoDoc || '',
+              entidad: candidato.entidad,
+              transacIdConciliado: candidato.transacId,
+              tipoDocConciliado: candidato.tipoDoc,
+              numDocConciliado: candidato.numDoc,
+            }
+          : m
+      );
     });
+    setMovimientos(movimientosActualizados);
     setModalAuto(false);
     setSeleccionAuto([]);
     if (transacIds.length === 0) {
@@ -1005,6 +1099,13 @@ const balLibrosInicialCargado = useRef(false);
     setConceptosDoc([]);
     setEntidadSeleccionada(null);
     setEntidadesCache([]);
+    // El documento nace en la moneda de la conciliacion. En la moneda de la compania el tipo
+    // de cambio es 1; en divisa se precarga MONEDAS.TASA para que el usuario solo confirme o
+    // corrija, porque el maestro puede estar desactualizado o la cuenta sin tasa cargada.
+    const tasaCatalogo = getMonedaPorCodigo(monedaConciliacionCodigo)?.tasa;
+    setTasaDocSeleccionada(
+      esMonedaDivisa && tasaCatalogo && tasaCatalogo > 0 ? Number(tasaCatalogo) : 1
+    );
   };
 
   // Carga conceptos disponibles para el tipo de documento seleccionado.
@@ -1035,6 +1136,12 @@ const balLibrosInicialCargado = useRef(false);
       message.warning('Complete todos los campos para crear el documento, incluyendo la cuenta bancaria');
       return;
     }
+    // En divisa la tasa debe ser informada: sin ella el documento quedaria valuado como si
+    // fuera en moneda nacional, que es el error que motivó mostrar el campo.
+    if (esMonedaDivisa && !(tasaDocSeleccionada > 0)) {
+      message.warning(`Ingrese la tasa de cambio para la moneda ${etiquetaMoneda(monedaConciliacionCodigo)}`);
+      return;
+    }
     setCreandoDoc(true);
     try {
       const dto = {
@@ -1049,7 +1156,9 @@ const balLibrosInicialCargado = useRef(false);
         nota: modalCrearDoc.concepto,
         estado: 1, // Validado (aplicado)
         total: modalCrearDoc.monto,
-        tasa: 1,
+        // El documento se crea en la moneda de la conciliacion, no en la de la compania.
+        codigoMoneda: monedaConciliacionCodigo || undefined,
+        tasa: esMonedaDivisa ? Number(tasaDocSeleccionada) : 1,
         descuento: 0,
         impuestos: 0,
       };
@@ -1088,8 +1197,12 @@ const balLibrosInicialCargado = useRef(false);
   // Marca una transacción en tránsito como conciliada: la agrega a movimientos como cotejada.
   const handleMarcarConciliado = (t: TransaccionConciliadaDTO) => {
     const documento = `${t.tipoDoc}-${t.numDoc}`;
+    if (transaccionEstaConciliada(t, movimientos)) {
+      message.warning('Esta transacción contable ya fue conciliada con otro movimiento bancario');
+      return;
+    }
     setMovimientos((prev) => {
-      if (prev.some((m) => m.documento === documento)) return prev; // evitar duplicados
+      if (transaccionEstaConciliada(t, prev)) return prev;
       const nuevo: MovimientoBancarioDTO = {
         orden: prev.length > 0 ? Math.max(...prev.map((m) => m.orden)) + 1 : 1,
         ctaBanc: '',
@@ -1114,14 +1227,6 @@ const balLibrosInicialCargado = useRef(false);
   };
 
   // ===== Derivaciones para tabs (conciliadas / resumen / tránsito) =====
-  // Deriva el tipo de documento del movimiento; si viene vacío, lo extrae del documento "FAC-0100009581".
-  const derivarTipoDoc = (m: MovimientoBancarioDTO): string => {
-    if (m.tipoDoc) return m.tipoDoc;
-    const doc = m.documento || '';
-    const idx = doc.indexOf('-');
-    return idx > 0 ? doc.slice(0, idx) : '';
-  };
-
   // Cuenta de la conciliación o, en su defecto, la cuenta del TXT normalizada.
   const cuentaTransito = data?.numeroCta || (movimientos[0]?.ctaBanc ? normalizarCeros(movimientos[0].ctaBanc) : '');
 
@@ -1131,6 +1236,25 @@ const balLibrosInicialCargado = useRef(false);
   const fechaConciliacion = Form.useWatch('fecha', form);
   const numeroCtaForm = Form.useWatch('numeroCta', form);
   const diferencia = Number(balBancos) - Number(balLibros);
+
+  // Los montos de la conciliacion estan expresados en la moneda de la cuenta bancaria (CTASBANC.CODMON).
+  const cuentaSeleccionada = useMemo(
+    () => cuentasBancarias.find((c) => c.numeroCta === numeroCtaForm),
+    [cuentasBancarias, numeroCtaForm]
+  );
+  const fmtMonto = useCallback(
+    (v: number) => formatMoneda(v, cuentaSeleccionada?.monedaSimbolo, cuentaSeleccionada?.monedaCodigo),
+    [cuentaSeleccionada]
+  );
+
+  // Moneda de la conciliacion = moneda de la cuenta bancaria, resuelta por el backend en
+  // ConciliacionBancariaSQL (CTASBANC.CODMON -> PARAMETROS.CODMON -> 'DOP'). El documento
+  // bancario que se crea desde un movimiento debe nacer en esa misma moneda, no en la de la
+  // compania, porque los montos del movimiento ya estan expresados en ella.
+  const monedaConciliacionCodigo = (cuentaSeleccionada?.monedaCodigo || data?.monedaCodigo || '').trim();
+  const monedaCompania = getMonedaSucursalActiva();
+  const esMonedaDivisa = !!monedaConciliacionCodigo
+    && monedaConciliacionCodigo.toUpperCase() !== (monedaCompania.codigo || 'DOP').toUpperCase();
 
   // Auto-popular balLibros en modo crear: cuando se selecciona cuenta bancaria y fecha,
   // obtener el saldo según libros (DTRANS_CONT) hasta la fecha seleccionada.
@@ -1196,7 +1320,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
     if (mode !== 'editar' || !id) return;
     try {
       const res = await conciliacionBancariaApi.obtenerMovimientos(sucursalActiva, parseInt(id));
-      setMovimientos(res);
+                setMovimientos(limpiarCotejosDuplicados(res));
       setMovimientosCargados(true);
     } catch (err: any) {
       const msg = extraerMensajeError(err, 'Error al cargar los movimientos');
@@ -1343,24 +1467,31 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fechaConciliacion]);
 
-  // Claves de los documentos cotejados para excluir del tránsito.
-  // Se usa el documento completo, no solo la referencia, para no ocultar otros documentos
-  // distintos que compartan el mismo NUM_DOC.
-  const clavesCotejados = useMemo(() => {
-    const set = new Set<string>();
-    movimientos.filter((m) => m.cotejado && m.documento).forEach((m) => {
-      set.add(normalizarDocCompleto(m.documento!));
+  // Identidades ya conciliadas. El ID es canónico; el documento se usa solo
+  // para registros heredados que todavía no tienen transacIdConciliado.
+  const identidadesCotejadas = useMemo(() => {
+    const transacIds = new Set<number>();
+    const documentosHeredados = new Set<string>();
+    movimientos.filter((m) => m.cotejado).forEach((m) => {
+      const transacId = obtenerTransacIdValido(m.transacIdConciliado);
+      if (transacId !== null) {
+        transacIds.add(transacId);
+        return;
+      }
+      const claveDocumento = obtenerClaveDocumentoMovimiento(m);
+      if (claveDocumento) documentosHeredados.add(claveDocumento);
     });
-    return set;
+    return { transacIds, documentosHeredados };
   }, [movimientos]);
 
-  // Transacciones en tránsito (DOCTRANS) que NO matchearon con los movimientos cotejados.
+  // Transacciones en tránsito (DOCTRANS) que todavía no fueron asignadas.
   const transaccionesEnTransito = useMemo(() => {
     return transaccionesSinConciliar.filter((t) => {
-      if (!t.tipoDoc || !t.numDoc) return true;
-      return !clavesCotejados.has(normalizarDocCompleto(`${t.tipoDoc}-${t.numDoc}`));
+      const transacId = obtenerTransacIdValido(t.transacId);
+      if (transacId !== null && identidadesCotejadas.transacIds.has(transacId)) return false;
+      return !identidadesCotejadas.documentosHeredados.has(obtenerClaveDocumentoTransaccion(t));
     });
-  }, [transaccionesSinConciliar, clavesCotejados]);
+  }, [transaccionesSinConciliar, identidadesCotejadas]);
 
   // Índice de transacciones en tránsito por monto: se conserva para la selección manual.
   const candidatosPorMonto = useMemo(() => {
@@ -1409,17 +1540,15 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
     });
     if (!allHaveOne) return false;
     
-    // Verificar que los candidatos no se repitan entre los movimientos seleccionados
-    // (cada documento en tránsito solo puede ser usado una vez)
-    const candidatosSeleccionados = seleccionAuto.map((orden) => {
+    // Cada transacción contable solo puede asignarse una vez en el mismo lote.
+    const transacIdsSeleccionados = seleccionAuto.map((orden) => {
       const mov = movimientos.find((m) => m.orden === orden);
       if (!mov) return null;
       const candidatos = candidatosPorMonto.get(mov.monto) || [];
-      return candidatos[0] ? `${candidatos[0].tipoDoc}-${candidatos[0].numDoc}` : null;
-    }).filter(Boolean);
-    
-    const uniqueCandidatos = new Set(candidatosSeleccionados);
-    return uniqueCandidatos.size === candidatosSeleccionados.length;
+      return obtenerTransacIdValido(candidatos[0]?.transacId);
+    });
+    if (transacIdsSeleccionados.some((transacId) => transacId === null)) return false;
+    return new Set(transacIdsSeleccionados).size === transacIdsSeleccionados.length;
   }, [seleccionAuto, movimientos, candidatosPorMonto]);
 
   // Candidatos visibles en el modal abierto (mismo monto; selección manual).
@@ -1428,32 +1557,12 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
     return candidatosPorMonto.get(movimientoModal.monto) || [];
   }, [movimientoModal, candidatosPorMonto]);
 
-  // Resumen del Libro del Mayor "en vivo": agrupa por tipo de documento los movimientos
-  // cotejados del estado (se actualiza mientras se concilia, sin guardar). El signo sigue el
-  // criterio del backend (débito negativo, crédito positivo).
-  const resumenLibrosEnVivo = useMemo<ResumenTipoDocumentoDTO[]>(() => {
-    const map = new Map<string, ResumenTipoDocumentoDTO>();
-    movimientos.filter((m) => m.cotejado).forEach((m) => {
-      const tipoDoc = derivarTipoDoc(m);
-      if (!tipoDoc) return;
-      const montoConSigno = (m.debCred || 'D') === 'D'
-        ? -(Number(m.monto) || 0)
-        : (Number(m.monto) || 0);
-      const existing = map.get(tipoDoc);
-      if (existing) {
-        existing.cantidad += 1;
-        existing.montoTotal += montoConSigno;
-      } else {
-        map.set(tipoDoc, {
-          tipoDoc,
-          nombreTipoDoc: m.nombreTipoDoc || '',
-          cantidad: 1,
-          montoTotal: montoConSigno,
-        });
-      }
-    });
-    return Array.from(map.values());
-  }, [movimientos]);
+  // El Libro Mayor es información contable calculada por el backend. Se conserva la misma
+  // fuente que usa la vista de detalle para no mezclarla con movimientos bancarios importados.
+  const resumenLibrosContable = useMemo<ResumenTipoDocumentoDTO[]>(
+    () => resumenGeneral?.resumenLibros ?? [],
+    [resumenGeneral]
+  );
 
   // Resumen de transacciones en tránsito agrupadas por tipo de documento.
   // El signo sigue el criterio del backend (débito negativo, crédito positivo).
@@ -1511,19 +1620,19 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       return Array.from(map.values());
     })();
 
-    const balanceConciliadoLibros = resumenGeneral.balanceInicialLibros + resumenLibrosEnVivo.reduce((s, r) => s + r.montoTotal, 0);
+    const balanceConciliadoLibros = resumenGeneral.balanceConciliadoLibros;
     const balanceConciliadoBanco = balBancosResumen + resumenTransitoEnVivo.reduce((s, r) => s + r.montoTotal, 0);
 
     return {
       balanceInicialLibros: resumenGeneral.balanceInicialLibros,
-      resumenLibros: resumenLibrosEnVivo,
+      resumenLibros: resumenLibrosContable,
       balanceConciliadoLibros,
       balanceBancos: balBancosResumen,
       resumenTransito: resumenTransitoEnVivo,
       balanceConciliadoBanco,
       diferencia: balanceConciliadoBanco - balanceConciliadoLibros,
     };
-  }, [resumenGeneral, resumenLibrosEnVivo, transaccionesEnTransito, balBancosResumen]);
+  }, [resumenGeneral, resumenLibrosContable, transaccionesEnTransito, balBancosResumen]);
 
   // ===== Datos filtrados por tab (búsqueda + filtros tipo Excel) =====
   const datosConciliadas = useMemo(() => {
@@ -1543,12 +1652,12 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
         if (key === 'numRef') return filtro.valor.includes(m.numRef || '');
         if (key === 'documento') return filtro.valor.includes(m.documento || '');
         if (key === 'concepto') return filtro.valor.includes(m.concepto || '');
-        if (key === 'monto') return filtro.valor.includes(formatCurrency(m.monto));
+        if (key === 'monto') return filtro.valor.includes(fmtMonto(m.monto));
         return true;
       });
     });
     return result;
-  }, [movimientos, searchConcil, filtrosConciliadas, formatCurrency]);
+  }, [movimientos, searchConcil, filtrosConciliadas, fmtMonto]);
 
   const datosSinConciliar = useMemo(() => {
     let result = movimientos.filter((m) => !m.cotejado);
@@ -1569,15 +1678,15 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
         if (key === 'documento') return filtro.valor.includes(m.documento || '');
         if (key === 'concepto') return filtro.valor.includes(m.concepto || '');
         if (key === 'entidad') return filtro.valor.includes(m.entidad || '');
-        if (key === 'monto') return filtro.valor.includes(formatCurrency(m.monto));
+        if (key === 'monto') return filtro.valor.includes(fmtMonto(m.monto));
         return true;
       });
     });
     return result;
-  }, [movimientos, searchSinConcil, filtrosSinConciliar, formatCurrency]);
+  }, [movimientos, searchSinConcil, filtrosSinConciliar, fmtMonto]);
 
   const datosResumen = useMemo(() => {
-    let result = resumenLibrosEnVivo;
+    let result = resumenLibrosContable;
     if (searchResumen) {
       const q = searchResumen.toLowerCase();
       result = result.filter((r) =>
@@ -1592,7 +1701,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       }
     });
     return result;
-  }, [resumenLibrosEnVivo, searchResumen, filtrosResumen]);
+  }, [resumenLibrosContable, searchResumen, filtrosResumen]);
 
   const datosTransito = useMemo(() => {
     let result = transaccionesEnTransito;
@@ -1658,12 +1767,12 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
         </Table.Summary.Cell>
         <Table.Summary.Cell index={ini + 4}>
           <Space size={12}>
-            <Text>Débitos <Text strong>{formatCurrency(t.debitos)}</Text></Text>
-            <Text>Créditos <Text strong>{formatCurrency(t.creditos)}</Text></Text>
+            <Text>Débitos <Text strong>{fmtMonto(t.debitos)}</Text></Text>
+            <Text>Créditos <Text strong>{fmtMonto(t.creditos)}</Text></Text>
           </Space>
         </Table.Summary.Cell>
         <Table.Summary.Cell index={ini + 5} align="right">
-          <Text strong style={{ color: 'var(--paces-primary)' }}>{formatCurrency(t.monto)}</Text>
+          <Text strong style={{ color: 'var(--paces-primary)' }}>{fmtMonto(t.monto)}</Text>
         </Table.Summary.Cell>
         <Table.Summary.Cell index={ini + 6} />
       </Table.Summary.Row>
@@ -1685,7 +1794,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
           <Text strong>Totales</Text>
         </Table.Summary.Cell>
         <Table.Summary.Cell index={5} align="right">
-          <Text strong style={{ color: 'var(--paces-primary)' }}>{formatCurrency(monto)}</Text>
+          <Text strong style={{ color: 'var(--paces-primary)' }}>{fmtMonto(monto)}</Text>
         </Table.Summary.Cell>
         <Table.Summary.Cell index={6} />
       </Table.Summary.Row>
@@ -1704,7 +1813,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
           <Text>{formatNumber(cantidad)}</Text>
         </Table.Summary.Cell>
         <Table.Summary.Cell index={2} align="right">
-          <Text strong style={{ color: 'var(--paces-primary)' }}>{formatCurrency(monto)}</Text>
+          <Text strong style={{ color: 'var(--paces-primary)' }}>{fmtMonto(monto)}</Text>
         </Table.Summary.Cell>
       </Table.Summary.Row>
     );
@@ -1841,13 +1950,13 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       render: (val: number, record: MovimientoBancarioDTO) => {
         const monto = Number(val) || 0;
         const signo = (record.debCred === 'C' ? 1 : -1);
-        return <Text strong>{formatCurrency(signo * monto)}</Text>;
+        return <Text strong>{fmtMonto(signo * monto)}</Text>;
       },
       filterDropdown: ({ confirm, clearFilters }: any) => (
         <FiltroSeleccionDropdown
           dataSource={movimientos}
           dataIndex="monto"
-          render={(r: MovimientoBancarioDTO) => formatCurrency(r.monto)}
+          render={(r: MovimientoBancarioDTO) => fmtMonto(r.monto)}
           placeholder="Monto..."
           filtroKey="monto"
           filtrosActivos={filtrosActivos}
@@ -1937,11 +2046,11 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       width: 150,
       align: 'right' as const,
       sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.montoTotal || 0) - Number(b.montoTotal || 0),
-      render: (val: number) => <Text strong>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text strong>{fmtMonto(val)}</Text>,
     },
   ];
 
-  const columnasResumenConciliados = construirColumnasResumen(filtrosResumen, setFiltrosResumen, resumenLibrosEnVivo);
+  const columnasResumenConciliados = construirColumnasResumen(filtrosResumen, setFiltrosResumen, resumenLibrosContable);
   const columnasResumenTransitoTab = construirColumnasResumen(filtrosResumenTransito, setFiltrosResumenTransito, resumenTransito);
 
   // Columnas de transacciones en tránsito (con filtros tipo Excel)
@@ -2056,7 +2165,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       width: 130,
       align: 'right' as const,
       sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => Number(a.monto || 0) - Number(b.monto || 0),
-      render: (val: number) => <Text strong>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text strong>{fmtMonto(val)}</Text>,
     },
     {
       title: 'D/C',
@@ -2124,7 +2233,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       width: 130,
       align: 'right' as const,
       sorter: (a: TransaccionConciliadaDTO, b: TransaccionConciliadaDTO) => Number(a.monto || 0) - Number(b.monto || 0),
-      render: (val: number) => <Text strong>{formatCurrency(val)}</Text>,
+      render: (val: number) => <Text strong>{fmtMonto(val)}</Text>,
     },
     {
       title: '',
@@ -2159,6 +2268,9 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
           action={<Button size="small" onClick={() => window.location.reload()}>Reintentar</Button>}
         />
       )}
+
+      {/* Loading a pantalla completa durante la importación del archivo */}
+      <Spin fullscreen spinning={importando} size="large" description="Importando archivo, por favor espere..." />
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 8 }}>
@@ -2249,7 +2361,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                       >
                         {cuentasBancarias.map((cta) => (
                           <Select.Option key={cta.numeroCta} value={cta.numeroCta}>
-                            {cta.numeroCta} - {cta.nombre}
+                            {cta.numeroCta} - {cta.nombre} ({cta.monedaSimbolo || cta.monedaCodigo || '-'})
                           </Select.Option>
                         ))}
                       </Select>
@@ -2317,7 +2429,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                   {/* Nota */}
                   <Col xs={24}>
                     <Form.Item name="notas" label="Notas">
-                      <TextArea rows={1} />
+                      <TextArea rows={3} autoSize={{ minRows: 3, maxRows: 8 }} maxLength={500} showCount />
                     </Form.Item>
                   </Col>
                 </Row>
@@ -2330,18 +2442,22 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
             <Card className="paces-card">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                  <span className="paces-text-secondary">Moneda</span>
+                  <span>{cuentaSeleccionada?.monedaNombre ? `${toTitleCase(cuentaSeleccionada.monedaNombre)} (${cuentaSeleccionada.monedaSimbolo || cuentaSeleccionada.monedaCodigo})` : '-'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
                   <span className="paces-text-secondary">Balance Bancos</span>
-                  <span>{formatCurrency(Number(balBancos))}</span>
+                  <span>{fmtMonto(Number(balBancos))}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
                   <span className="paces-text-secondary">Balance Libros</span>
-                  <span>{formatCurrency(Number(balLibros))}</span>
+                  <span>{fmtMonto(Number(balLibros))}</span>
                 </div>
                 <Divider style={{ margin: '8px 0' }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
                   <span>Diferencia</span>
                   <span style={{ color: diferencia !== 0 ? '#ff4d4f' : 'var(--paces-primary)' }}>
-                    {formatCurrency(diferencia)}
+                    {fmtMonto(diferencia)}
                   </span>
                 </div>
               </div>
@@ -2382,7 +2498,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                     >
                       {cuentasBancarias.map((cta) => (
                         <Select.Option key={cta.numeroCta} value={cta.numeroCta}>
-                          {cta.numeroCta} - {cta.nombre}
+{cta.numeroCta} - {cta.nombre} ({cta.monedaSimbolo || cta.monedaCodigo || '-'})
                         </Select.Option>
                       ))}
                     </Select>
@@ -2438,7 +2554,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                 </Col>
                 <Col xs={24}>
                   <Form.Item name="notas" label="Notas">
-                    <TextArea rows={1} />
+                    <TextArea rows={3} autoSize={{ minRows: 3, maxRows: 8 }} maxLength={500} showCount />
                   </Form.Item>
                 </Col>
               </Row>
@@ -2450,7 +2566,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
               <span>Diferencia</span>
               <span style={{ color: diferencia !== 0 ? '#ff4d4f' : 'var(--paces-primary)' }}>
-                {formatCurrency(diferencia)}
+                {fmtMonto(diferencia)}
               </span>
             </div>
           </Card>
@@ -2522,7 +2638,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                     }>
                       <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
                         <Descriptions.Item label="Balance inicial en libros">
-                          <Text strong>{formatCurrency(resumenGeneralEnVivo!.balanceInicialLibros)}</Text>
+                          <Text strong>{fmtMonto(resumenGeneralEnVivo!.balanceInicialLibros)}</Text>
                         </Descriptions.Item>
                         <Descriptions.Item label="Período">
                           {data?.fechaAnt ? `${formatDate(data?.fechaAnt ?? '')} → ${formatDate(data?.fecha ?? '')}` : '-'}
@@ -2539,7 +2655,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                           { title: 'Cantidad', dataIndex: 'cantidad', align: 'right' as const, width: 120,
                             render: (v: number) => formatNumber(v) },
                           { title: 'Monto', dataIndex: 'montoTotal', align: 'right' as const, width: 160,
-                            render: (v: number) => <Text strong>{formatCurrency(v)}</Text> },
+                            render: (v: number) => <Text strong>{fmtMonto(v)}</Text> },
                         ]}
                         rowKey="tipoDoc"
                         size="small"
@@ -2552,7 +2668,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                       <Divider style={{ margin: '12px 0' }} />
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 16, fontWeight: 700 }}>
                         <span>Balance conciliado en libros:</span>
-                        <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneralEnVivo!.balanceConciliadoLibros)}</span>
+                        <span style={{ color: 'var(--paces-primary)' }}>{fmtMonto(resumenGeneralEnVivo!.balanceConciliadoLibros)}</span>
                       </div>
                     </Card>
 
@@ -2572,7 +2688,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                     }>
                       <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
                         <Descriptions.Item label="Balance según estado bancario">
-                          <Text strong>{formatCurrency(resumenGeneralEnVivo!.balanceBancos)}</Text>
+                          <Text strong>{fmtMonto(resumenGeneralEnVivo!.balanceBancos)}</Text>
                         </Descriptions.Item>
                       </Descriptions>
 
@@ -2586,7 +2702,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                           { title: 'Cantidad', dataIndex: 'cantidad', align: 'right' as const, width: 120,
                             render: (v: number) => formatNumber(v) },
                           { title: 'Monto', dataIndex: 'montoTotal', align: 'right' as const, width: 160,
-                            render: (v: number) => <Text strong>{formatCurrency(v)}</Text> },
+                            render: (v: number) => <Text strong>{fmtMonto(v)}</Text> },
                         ]}
                         rowKey="tipoDoc"
                         size="small"
@@ -2599,7 +2715,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                       <Divider style={{ margin: '12px 0' }} />
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 16, fontWeight: 700 }}>
                         <span>Balance conciliado banco + tránsito:</span>
-                        <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneralEnVivo!.balanceConciliadoBanco)}</span>
+                        <span style={{ color: 'var(--paces-primary)' }}>{fmtMonto(resumenGeneralEnVivo!.balanceConciliadoBanco)}</span>
                       </div>
                     </Card>
 
@@ -2609,7 +2725,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 18, fontWeight: 700 }}>
                         <span>Diferencia</span>
                         <span style={{ color: resumenGeneralEnVivo!.diferencia === 0 ? '#34c38f' : '#ff4d4f' }}>
-                          {formatCurrency(resumenGeneralEnVivo!.diferencia)}
+                          {fmtMonto(resumenGeneralEnVivo!.diferencia)}
                         </span>
                       </div>
                     </Card>
@@ -2779,7 +2895,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
       {/* Modal de documentos candidatos con el mismo monto (específico de esta pantalla) */}
       <Modal
         title={movimientoModal
-          ? `Documentos con el mismo monto (${formatCurrency(movimientoModal.monto)})`
+          ? `Documentos con el mismo monto (${fmtMonto(movimientoModal.monto)})`
           : 'Documentos con el mismo monto'}
         open={!!movimientoModal}
         onCancel={() => setMovimientoModal(null)}
@@ -2805,7 +2921,7 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
                     <Text strong>Totales</Text>
                   </Table.Summary.Cell>
                   <Table.Summary.Cell index={3} align="right">
-                    <Text strong style={{ color: 'var(--paces-primary)' }}>{formatCurrency(monto)}</Text>
+                    <Text strong style={{ color: 'var(--paces-primary)' }}>{fmtMonto(monto)}</Text>
                   </Table.Summary.Cell>
                   <Table.Summary.Cell index={4} />
                 </Table.Summary.Row>
@@ -2829,11 +2945,31 @@ const [cargandoFechaAnt, setCargandoFechaAnt] = useState(false);
           <>
             <Descriptions bordered size="small" column={1} style={{ marginBottom: 16 }}>
               <Descriptions.Item label="Monto">
-                <Text strong>{formatCurrency(modalCrearDoc.monto)}</Text>
+                <Text strong>{fmtMonto(modalCrearDoc.monto)}</Text>
               </Descriptions.Item>
               <Descriptions.Item label="Referencia">{modalCrearDoc.numRef || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Moneda">
+                {cuentaSeleccionada?.monedaNombre || etiquetaMoneda(monedaConciliacionCodigo)}
+                {esMonedaDivisa ? ' (divisa)' : ''}
+              </Descriptions.Item>
             </Descriptions>
             <Form layout="vertical" size="small">
+              <Form.Item
+                label="Tasa de cambio"
+                required={esMonedaDivisa}
+                extra={esMonedaDivisa ? undefined : 'El documento se crea en la moneda de la compañía, por lo que la tasa es 1.'}
+              >
+                <InputNumber
+                  value={esMonedaDivisa ? tasaDocSeleccionada : 1}
+                  onChange={(v) => setTasaDocSeleccionada(Number(v ?? 0))}
+                  min={0}
+                  step={0.01}
+                  precision={4}
+                  disabled={!esMonedaDivisa}
+                  style={{ width: '100%' }}
+                  placeholder={esMonedaDivisa ? 'Ingrese la tasa' : '1'}
+                />
+              </Form.Item>
               <Form.Item label="Tipo de documento" required>
                 <Select
                   value={tipoDocSeleccionado || undefined}

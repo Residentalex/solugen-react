@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Card, Table, Typography, Select, Input, Button, Spin, Alert, Space } from 'antd';
+import { Card, Table, Typography,  Input, Button, Spin, Alert, Space } from 'antd';
+import { Select } from '../../components/Select';
 import { SearchOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';

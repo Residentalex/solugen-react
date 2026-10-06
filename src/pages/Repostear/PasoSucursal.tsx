@@ -78,11 +78,7 @@ const PasoSucursal: React.FC<Props> = ({ value, onChange }) => {
   const SUCURSALES: { value: Sucursal; label: string; icon: React.ReactNode }[] = obtenerSucursalesConConsolidado(sucursalesData);
 
   const sucursalesMostrar = SUCURSALES.filter((s) =>
-    sucursalesPermitidas.some((sp) =>
-      typeof sp.sucursal === 'string'
-        ? sucursalId(sp.sucursal) === s.value
-        : sp.sucursal === s.value
-    )
+    sucursalesPermitidas.some((sp) => sp.sucursal === s.value)
   );
 
   return (

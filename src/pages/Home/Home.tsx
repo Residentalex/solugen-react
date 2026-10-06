@@ -1,7 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
-import { Layout, Typography, Button, Card, Space, Select, Tag } from 'antd';
+import { Layout, Typography, Button, Card, Space,  Tag } from 'antd';
+import { Select } from '../../components/Select';
 import type { SelectProps } from 'antd';
 import GenesisLogo from '../../components/GenesisLogo';
 

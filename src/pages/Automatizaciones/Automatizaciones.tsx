@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Card,
@@ -6,7 +6,6 @@ import {
   Button,
   Row,
   Col,
-  Select,
   Input,
   Tag,
   Badge,
@@ -26,6 +25,7 @@ import {
   Descriptions,
   Drawer,
 } from 'antd';
+import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined,
@@ -53,7 +53,7 @@ import { TiempoEjecucionCell } from './components/TiempoEjecucionCell';
 
 const { Text, Title } = Typography;
 
-// â”€â”€ Constantes â”€â”€
+// ── Constantes ──
 
 const MODULO_MAP: Record<string, { label: string; color: string }> = {
   Inventario: { label: 'Inventario', color: 'blue' },
@@ -74,7 +74,7 @@ interface TemplateFormState {
   cron: string;
 }
 
-// â”€â”€ Helpers â”€â”€
+// ── Helpers ──
 
 function formatFecha(val: string | null): string {
   if (!val) return '-';
@@ -143,7 +143,7 @@ function buildInitialFormState(template: JobTemplate): TemplateFormState {
   };
 }
 
-// â”€â”€ Componente principal â”€â”€
+// ── Componente principal ──
 
 const Automatizaciones: React.FC = () => {
   const setActiveModule = useUIStore((s) => s.setActiveModule);
@@ -153,7 +153,7 @@ const Automatizaciones: React.FC = () => {
   const sucursalesPermitidas = useAuthStore((s) => s.sucursalesPermitidas);
   const sucursalesData = useCompanyStore((s) => s.data.sucursales);
 
-  // â”€â”€ Jobs state â”€â”€
+  // ── Jobs state ──
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [searchText, setSearchText] = useState('');
@@ -192,7 +192,7 @@ const Automatizaciones: React.FC = () => {
     job: null,
   });
 
-  // â”€â”€ Templates state â”€â”€
+  // ── Templates state ──
   const [templates, setTemplates] = useState<JobTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -203,11 +203,11 @@ const Automatizaciones: React.FC = () => {
   const [templateFiltroModulo, setTemplateFiltroModulo] = useState<string | undefined>(undefined);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // â”€â”€ UI state â”€â”€
+  // ── UI state ──
   const [activeTab, setActiveTab] = useState('jobs');
   const [templateConfigModal, setTemplateConfigModal] = useState({ visible: false });
 
-  // â”€â”€ Sucursales â”€â”€
+  // ── Sucursales ──
   const sucursalOptions = useMemo(() => {
     // Mapa de nombre mostrado a nombre del enum (sin espacios)
     const nombreAEnum: Record<string, string> = {
@@ -228,7 +228,7 @@ const Automatizaciones: React.FC = () => {
       .map((s) => ({ value: s.nombre, label: s.nombre }));
   }, [sucursalesPermitidas, sucursalesData]);
 
-  // â”€â”€ Computed â”€â”€
+  // ── Computed ──
   const selectedTemplate = useMemo(
     () => templates.find((t) => t.tipoJobId === selectedTemplateId) || null,
     [templates, selectedTemplateId],
@@ -249,7 +249,7 @@ const Automatizaciones: React.FC = () => {
   const jobsActivos = useMemo(() => jobs.filter((j) => j.activo).length, [jobs]);
 
 
-  // â”€â”€ Cargar templates â”€â”€
+  // ── Cargar templates ──
   const cargarTemplates = useCallback(async () => {
     setTemplatesLoading(true);
     try {
@@ -263,7 +263,7 @@ const Automatizaciones: React.FC = () => {
     }
   }, []);
 
-  // â”€â”€ Inicializar â”€â”€
+  // ── Inicializar ──
   useEffect(() => {
     setActiveModule('MAutomatizacion');
     updateToolbar({});
@@ -275,7 +275,7 @@ const Automatizaciones: React.FC = () => {
     };
   }, [setActiveModule, updateToolbar, resetToolbar, cargarTemplates, refetch]);
 
-  // â”€â”€ Auto-refresh (solo en tab jobs y sin modal abierto) â”€â”€
+  // ── Auto-refresh (solo en tab jobs y sin modal abierto) ──
   useEffect(() => {
     if (autoRefresh && activeTab === 'jobs') {
       intervalRef.current = setInterval(() => {
@@ -292,7 +292,7 @@ const Automatizaciones: React.FC = () => {
     };
   }, [autoRefresh, activeTab, errorModal.visible, refetch]);
 
-  // â”€â”€ Exportar Excel â”€â”€
+  // ── Exportar Excel ──
   // Aplana columnas agrupadas (children) y excluye acciones, sin conversiones
   // forzadas: trabaja sobre ColumnsType<T> con angostamiento por 'in'.
   interface ColumnaExportPlana<T extends object> {
@@ -343,7 +343,7 @@ const Automatizaciones: React.FC = () => {
     });
   };
 
-  // â”€â”€ Handlers jobs â”€â”€
+  // ── Handlers jobs ──
 
   const handleSearch = (value: string) => {
     setSearchText(value);
@@ -389,7 +389,7 @@ const Automatizaciones: React.FC = () => {
     setDetalleJobModal({ visible: true, job });
   };
 
-  // â”€â”€ Handlers KPI â”€â”€
+  // ── Handlers KPI ──
 
   const handleKpiClick = (cell: 'total' | 'exitosos' | 'fallidos' | 'activos') => {
     if (kpiActiveCell === cell) {
@@ -408,7 +408,7 @@ const Automatizaciones: React.FC = () => {
     }
   };
 
-  // â”€â”€ Handlers templates â”€â”€
+  // ── Handlers templates ──
 
   const handleSelectTemplate = (tipoJobId: string) => {
     if (isFormDirty) {
@@ -547,7 +547,7 @@ const Automatizaciones: React.FC = () => {
     setTemplateSearchText(value);
   };
 
-  // â”€â”€ Verificar si form es valido para habilitar boton â”€â”€
+  // ── Verificar si form es valido para habilitar boton ──
   const isFormValid = useMemo(() => {
     if (!selectedTemplate || !templateForm) return false;
     for (const p of selectedTemplate.parametros) {
@@ -561,7 +561,7 @@ const Automatizaciones: React.FC = () => {
     return true;
   }, [selectedTemplate, templateForm]);
 
-  // â”€â”€ Filtros de jobs â”€â”€
+  // ── Filtros de jobs ──
   const modulosDisponibles = useMemo(() => {
     const modulos = new Set<string>();
     jobs.forEach((j) => {
@@ -592,7 +592,7 @@ const Automatizaciones: React.FC = () => {
     return result;
   }, [jobs, kpiActiveCell, filtroModulo, searchText]);
 
-  // â”€â”€ Templates modulos y filtro â”€â”€
+  // ── Templates modulos y filtro ──
   const modulosTemplates = useMemo(() => {
     const modulos = new Set<string>();
     templates.forEach((t) => {
@@ -617,7 +617,7 @@ const Automatizaciones: React.FC = () => {
     return result;
   }, [templates, templateFiltroModulo, templateSearchText]);
 
-  // â”€â”€ Columnas de la tabla â”€â”€
+  // ── Columnas de la tabla ──
   const columns: ColumnsType<JobHangfire> = [
     {
       title: 'Nombre',
@@ -721,7 +721,7 @@ const Automatizaciones: React.FC = () => {
     },
   ];
 
-  // â”€â”€ Render: Cabecera de pagina â”€â”€
+  // ── Render: Cabecera de pagina ──
   const renderPageHeader = () => (
     <div
       style={{
@@ -750,7 +750,7 @@ const Automatizaciones: React.FC = () => {
     </div>
   );
 
-  // â”€â”€ Render: KPI Strip â”€â”€
+  // ── Render: KPI Strip ──
   const renderKpiStrip = () => {
     const cells = [
       {
@@ -809,7 +809,7 @@ const Automatizaciones: React.FC = () => {
     );
   };
 
-  // â”€â”€ Render: Toolbar de tabla â”€â”€
+  // ── Render: Toolbar de tabla ──
   const renderTableToolbar = () => (
     <CatalogoListadoToolbar
       onSearch={handleSearch}
@@ -841,7 +841,7 @@ const Automatizaciones: React.FC = () => {
       }
     />)
 
-  // â”€â”€ Render: Tabla de jobs â”€â”€
+  // ── Render: Tabla de jobs ──
   const renderJobsTable = () => {
     const noJobsAtAll = jobs.length === 0 && !isLoading;
     const noResults = filteredJobs.length === 0 && jobs.length > 0 && !isLoading;
@@ -914,7 +914,7 @@ const Automatizaciones: React.FC = () => {
     );
   };
 
-  // â”€â”€ Render: Drawer de detalle de job â”€â”€
+  // ── Render: Drawer de detalle de job ──
   const renderDetalleJobDrawer = () => (
     <Drawer
       open={detalleJobModal.visible}
@@ -977,7 +977,7 @@ const Automatizaciones: React.FC = () => {
     </Drawer>
   );
 
-  // â”€â”€ Render: Drawer de error mejorado â”€â”€
+  // ── Render: Drawer de error mejorado ──
   const renderErrorDrawer = () => (
     <Drawer
       open={errorModal.visible}
@@ -1038,7 +1038,7 @@ const Automatizaciones: React.FC = () => {
     </Drawer>
   );
 
-  // â”€â”€ Render: Template List (columna izquierda) â”€â”€
+  // ── Render: Template List (columna izquierda) ──
   const renderTemplateList = () => {
     return (
       <Card
@@ -1187,7 +1187,7 @@ const Automatizaciones: React.FC = () => {
     );
   };
 
-  // â”€â”€ Render: Contenido interno del formulario de plantilla (sin Card wrapper) â”€â”€
+  // ── Render: Contenido interno del formulario de plantilla (sin Card wrapper) ──
   const renderTemplateFormContent = () => {
     if (!selectedTemplate || !templateForm) {
       return <Text className="paces-text-secondary">Seleccione una plantilla para configurarla</Text>;
@@ -1437,7 +1437,7 @@ const Automatizaciones: React.FC = () => {
     );
   };
 
-  // â”€â”€ Render: Contenido del tab Jobs â”€â”€
+  // ── Render: Contenido del tab Jobs ──
   const renderJobsTab = () => (
     <>
       {renderJobsTable()}
@@ -1446,7 +1446,7 @@ const Automatizaciones: React.FC = () => {
     </>
   );
 
-  // â”€â”€ Render: Drawer de configuración de plantilla â”€â”€
+  // ── Render: Drawer de configuración de plantilla ──
   const renderTemplateConfigDrawer = () => (
     <Drawer
       open={templateConfigModal.visible}
@@ -1487,7 +1487,7 @@ const Automatizaciones: React.FC = () => {
     </Drawer>
   );
 
-  // â”€â”€ Render: Contenido del tab Registrar â”€â”€
+  // ── Render: Contenido del tab Registrar ──
   const renderRegistrarTab = () => {
     if (templatesLoading && templates.length === 0) {
       return (
@@ -1517,7 +1517,7 @@ const Automatizaciones: React.FC = () => {
     );
   };
 
-  // â”€â”€ Render principal â”€â”€
+  // ── Render principal ──
   // Memoizar tabs para evitar re-render completo al escribir en el formulario
   // Se renderiza directo (sin useMemo intermedio): las funciones render se recrean
   // en cada render y memoizarlas con deps parciales dejaba closures obsoletos.

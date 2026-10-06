@@ -20,7 +20,7 @@ import {
   BellOutlined,
   SunOutlined,
 } from '@ant-design/icons';
-import { ICONOS_MODULOS, ICONO_DEFAULT } from '../utils/iconosModulo';
+import { obtenerIconoModulo } from '../utils/iconosModulo';
 
 // ─── Helpers ─────────────────────────────────────────────────────
 interface ModuloConPantallas {
@@ -220,7 +220,7 @@ const SaasMainLayout: React.FC = () => {
         if (!children || children.length === 0) return null;
         return {
           key: modulo.nombre,
-          icon: ICONOS_MODULOS[modulo.nombre] || ICONO_DEFAULT,
+          icon: obtenerIconoModulo(modulo),
           label: modulo.nombre,
           children,
         };

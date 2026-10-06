@@ -24,6 +24,7 @@ interface TotalesCardProps {
   impuestosInformativos?: ImpuestoInformativo[];
   pagado?: number;
   pendiente?: number;
+  adorno?: React.ReactNode;
 }
 
 const TotalesCard: React.FC<TotalesCardProps> = ({
@@ -31,6 +32,7 @@ const TotalesCard: React.FC<TotalesCardProps> = ({
   alignRight = false, monedaSimbolo, monedaNombre, tasa, hideTitle = false,
   impuestosInformativos = [],
   pagado, pendiente,
+  adorno,
   children,
 }) => {
   const monedaDefault = getMonedaSucursalActiva();
@@ -40,9 +42,10 @@ const TotalesCard: React.FC<TotalesCardProps> = ({
   return (
     <Card
     title={hideTitle ? null : <span style={{ fontSize: 16, fontWeight: 600 }}>Totales</span>}
-    className="paces-card"
+    className={`paces-card${adorno ? ' adorno-documento-pagado-contenedor' : ''}`}
     style={{ marginBottom: 16 }}
   >
+    {adorno}
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, textAlign: alignRight ? 'right' : undefined }}>
       {monedaSimbolo && tasa !== undefined && (
         <div style={{ display: 'flex', justifyContent: alignRight ? 'flex-end' : 'space-between', gap: 16 }}>

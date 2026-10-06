@@ -12,6 +12,11 @@ export interface ConciliacionBancariaDTO {
   /** Calculado por el backend */
   diferencia: number;
 
+  // Moneda de la cuenta bancaria (CTASBANC.CODMON)
+  monedaCodigo?: string;
+  monedaNombre?: string;
+  monedaSimbolo?: string;
+
   // Relaciones (cargadas en detalle)
   movimientos?: MovimientoBancarioDTO[];
   ajustes?: AjusteConciliacionDTO[];
@@ -27,6 +32,9 @@ export interface ConciliacionBancariaVistaDTO {
   balLibros: number;
   diferencia: number;
   aplicada: boolean;
+  monedaCodigo?: string;
+  monedaNombre?: string;
+  monedaSimbolo?: string;
 }
 
 /** Movimiento bancario importado (DARCHCON) */
@@ -117,6 +125,9 @@ export interface CuentaBancariaDTO {
   nombre: string;
   banco: string;
   idExterno?: string;
+  monedaCodigo?: string;
+  monedaNombre?: string;
+  monedaSimbolo?: string;
 }
 
 /** DTO para exportar movimientos del libro del mayor (DTRANS_CONT) */

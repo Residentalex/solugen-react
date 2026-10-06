@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Table, Card, Input, Typography, Alert, Button, Select, Switch, Space, Popover, Badge, DatePicker, Empty, Tooltip, Tag } from 'antd';
+import { Table, Card, Input, Typography, Alert, Button,  Switch, Space, Popover, Badge, DatePicker, Empty, Tooltip, Tag } from 'antd';
+import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined,
@@ -49,6 +50,7 @@ const ALL_COLUMNS_CONFIG: ColumnConfig[] = [
   { key: 'fecha', label: 'Fecha', defaultVisible: true },
   { key: 'documento', label: 'Documento', defaultVisible: true },
   { key: 'articulo', label: 'Artículo', defaultVisible: true },
+  { key: 'familia', label: 'Familia', defaultVisible: true },
   { key: 'almacen', label: 'Almacén', defaultVisible: true },
   { key: 'cantidad', label: 'Cantidad', defaultVisible: true },
   { key: 'costo', label: 'Costo', defaultVisible: true },
@@ -64,6 +66,17 @@ const DEFAULT_VISIBLE_KEYS = ALL_COLUMNS_CONFIG
   .map((c) => c.key);
 
 const LS_VISIBLE_COLUMNS_KEY = 'movProd_visibleColumns';
+
+// Anexa al listado guardado las columnas nuevas marcadas como visibles por
+// defecto, sin pisar las que el usuario haya ocultado explicitamente.
+function fusionarColumnasVisibles(guardadas: string[]): string[] {
+  const validas = ALL_COLUMNS_CONFIG.map((c) => c.key);
+  const guardadasValidas = guardadas.filter((k) => validas.includes(k));
+  const faltantes = ALL_COLUMNS_CONFIG
+    .filter((c) => c.defaultVisible !== false && !guardadasValidas.includes(c.key))
+    .map((c) => c.key);
+  return [...guardadasValidas, ...faltantes];
+}
 
 function formatDateParam(d: Date): string {
   const y = d.getFullYear();
@@ -140,7 +153,7 @@ const MovimientosProductos: React.FC = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return fusionarColumnasVisibles(parsed);
         }
       }
     } catch {
@@ -235,12 +248,13 @@ const MovimientosProductos: React.FC = () => {
 
   const handleExportarExcel = async () => {
     const companyName = await getCompanyName(sucursalActiva);
-    const columnHeaders = ['Fecha', 'Documento', 'Código', 'Artículo', 'Almacén', 'Cantidad', 'Costo', 'Tipo Doc.', 'Entidad'];
+    const columnHeaders = ['Fecha', 'Documento', 'Código', 'Artículo', 'Familia', 'Almacén', 'Cantidad', 'Costo', 'Tipo Doc.', 'Entidad'];
     const dataRows = datosFiltrados.map((r) => [
       formatDate(r.fecha),
       r.documento,
       r.codigo,
       toTitleCase(r.articulo) || '-',
+      toTitleCase(r.familia) || '-',
       toTitleCase(r.almacen),
       r.cantidad ?? 0,
       r.costo ?? 0,
@@ -257,6 +271,7 @@ const MovimientosProductos: React.FC = () => {
         { wch: 18 },
         { wch: 14 },
         { wch: 30 },
+        { wch: 20 },
         { wch: 18 },
         { wch: 12 },
         { wch: 14 },
@@ -275,7 +290,8 @@ const MovimientosProductos: React.FC = () => {
     const t = searchText.toLowerCase();
     return data.filter(d =>
       d.codigo?.toLowerCase().includes(t) ||
-      d.articulo?.toLowerCase().includes(t)
+      d.articulo?.toLowerCase().includes(t) ||
+      d.familia?.toLowerCase().includes(t)
     );
   }, [data, searchText]);
 
@@ -477,6 +493,10 @@ const MovimientosProductos: React.FC = () => {
     </div>
   );
 
+  const celdaWrap = () => ({
+    style: { verticalAlign: 'top' as const, whiteSpace: 'normal' as const, wordBreak: 'break-word' as const },
+  });
+
   const ALL_COLUMN_DEFS: ColumnsType<MovimientoDTO> = [
     {
       title: 'Fecha',
@@ -495,26 +515,29 @@ const MovimientosProductos: React.FC = () => {
     {
       title: 'Artículo',
       key: 'articulo',
-      ellipsis: true,
-      render: (_: unknown, record: MovimientoDTO) => {
-        const fullText = record.articulo
-          ? `${record.codigo} - ${toTitleCase(record.articulo)}`
-          : record.codigo;
-        return (
-          <Tooltip title={fullText}>
-            <Text>
-              <Text strong>{record.codigo}</Text>
-              {record.articulo ? <Text> - {toTitleCase(record.articulo)}</Text> : null}
-            </Text>
-          </Tooltip>
-        );
-      },
+      width: 260,
+      onCell: celdaWrap,
+      render: (_: unknown, record: MovimientoDTO) => (
+        <Text>
+          <Text strong>{record.codigo}</Text>
+          {record.articulo ? <Text> - {toTitleCase(record.articulo)}</Text> : null}
+        </Text>
+      ),
+    },
+    {
+      title: 'Familia',
+      dataIndex: 'familia',
+      key: 'familia',
+      width: 150,
+      onCell: celdaWrap,
+      render: (val: string) => <Text>{toTitleCase(val) || '-'}</Text>,
     },
     {
       title: 'Almacén',
       dataIndex: 'almacen',
       key: 'almacen',
       width: 150,
+      onCell: celdaWrap,
       render: (val: string) => <Text>{toTitleCase(val)}</Text>,
     },
     {
@@ -552,14 +575,15 @@ const MovimientosProductos: React.FC = () => {
       dataIndex: 'entidad',
       key: 'entidad',
       width: 180,
+      onCell: celdaWrap,
       render: (val: string) => <Text>{toTitleCase(val) || '-'}</Text>,
     },
     {
       title: 'Referencia/Concepto',
       dataIndex: 'referencia',
       key: 'referencia',
-      width: 200,
-      ellipsis: true,
+      width: 220,
+      onCell: celdaWrap,
       render: (val: string) => <Text>{val || '-'}</Text>,
     },
     {
@@ -567,6 +591,7 @@ const MovimientosProductos: React.FC = () => {
       dataIndex: 'usuario',
       key: 'usuario',
       width: 120,
+      onCell: celdaWrap,
       render: (val: string) => {
         const display = val?.trim() || '-';
         return <Text>{toTitleCase(display)}</Text>;
@@ -729,7 +754,7 @@ const MovimientosProductos: React.FC = () => {
           dataSource={datosPaginados}
           rowKey={(record) => `${record.documento}-${record.codigo}-${record.almacen}`}
           loading={loading}
-          scroll={{ x: 900 }}
+          scroll={{ x: 1310 }}
           size="middle"
           onChange={handleTableChange}
           pagination={{

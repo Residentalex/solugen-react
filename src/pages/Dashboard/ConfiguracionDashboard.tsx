@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
-  Table, Checkbox, InputNumber, Button, Space, Select, Input,
+  Table, Checkbox, InputNumber, Button, Space,  Input,
   Typography, Row, Col, message, Spin, Alert, Divider, Tag
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   SaveOutlined, ReloadOutlined, SettingOutlined
 } from '@ant-design/icons';

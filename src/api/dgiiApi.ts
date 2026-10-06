@@ -80,7 +80,8 @@ export const dgiiApi = {
       const result = await extraerDatos<{ isSuccess: boolean; errorMessage?: string; urlCodigoQr?: string; eNCF?: string; codigoSeguridad?: string; estadoeCF?: string }>(sendResp);
       return result;
     } else if (tipoNum === TIPO_DEV) {
-      const loadResp = await apiClient.get(`/DEV/${sucursal}/${transaccionID}`);
+      const prefix = tipoDocumento === 'NC' ? 'Transaccion' : 'DEV';
+      const loadResp = await apiClient.get(`/${prefix}/${sucursal}/${transaccionID}`);
       const doc = await extraerDatos(loadResp);
       const sendResp = await apiClient.post(`/ecf/${sucursal}/NotaCredito/enviar`, doc);
       const body = sendResp.data;

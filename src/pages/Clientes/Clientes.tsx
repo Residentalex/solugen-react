@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Card, Table, Button, Select, Tag, Typography, Alert, Empty, Space,
+  Card, Table, Button,  Tag, Typography, Alert, Empty, Space,
 } from 'antd';
+import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
 import { useQuery } from '@tanstack/react-query';
 import { useUIStore } from '../../stores/uiStore';

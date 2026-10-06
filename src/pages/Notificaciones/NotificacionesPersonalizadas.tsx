@@ -1,7 +1,8 @@
-﻿import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  Table, Card, Button, Tag, Tooltip, message, Input, Select, Alert, Space, Popconfirm, Empty,
+  Table, Card, Button, Tag, Tooltip, message, Input,  Alert, Space, Popconfirm, Empty,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   SearchOutlined, ReloadOutlined, PlusOutlined, EditOutlined,
   PlayCircleOutlined, PoweroffOutlined, DeleteOutlined, FileExcelOutlined,

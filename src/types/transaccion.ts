@@ -136,3 +136,43 @@ export interface TipoDocumentoDTO {
   nombre: string;
   documento?: string;
 }
+
+/**
+ * Una fila por documento asociado al que el documento que se aplica le imputa un monto.
+ * El saldo parte del historial de pagos ya aplicados, no solo del monto registrado.
+ */
+export interface ValidacionPagoDTO {
+  transaccionAsociada: number;
+  tipoDocumentoAsociado?: string;
+  noDocumentoAsociado?: string;
+  total: number;
+  montoAplicar: number;
+  pagadoHistorico: number;
+  /** Parte del historial aplicada por documentos del mismo tipo que el que se aplica. */
+  pagadoMismoTipo: number;
+  saldo: number;
+  saldoResultante: number;
+  esSobrepago: boolean;
+}
+
+/** Otro documento del mismo tipo, sin aplicar, que compite por el mismo documento asociado. */
+export interface PagoPendienteDuplicadoDTO {
+  transaccionAsociada: number;
+  tipoDocumentoAsociado?: string;
+  noDocumentoAsociado?: string;
+  transaccionPago: number;
+  tipoDocumentoPago?: string;
+  noDocumentoPago?: string;
+  fechaPago?: string;
+  monto: number;
+}
+
+/** Historial de pagos de un documento antes de aplicarlo. */
+export interface ValidacionPagosDTO {
+  transaccion: number;
+  documentosAsociados: ValidacionPagoDTO[];
+  pagosPendientesDuplicados: PagoPendienteDuplicadoDTO[];
+  montoSobrepago: number;
+  tieneErrores: boolean;
+  mensaje?: string | null;
+}

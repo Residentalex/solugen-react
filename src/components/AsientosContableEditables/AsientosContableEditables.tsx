@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { Table, InputNumber, Button, Tag, Tooltip, Empty, Popconfirm } from 'antd';
 import { CheckCircleOutlined, ExclamationCircleOutlined, ThunderboltOutlined, DeleteOutlined } from '@ant-design/icons';
-import { toTitleCase } from '../../utils/formats';
+import { toTitleCase, redondear2 } from '../../utils/formats';
 import { formatNumber, esDebito, esCredito } from '../../utils/contabilidad';
 
 interface AsientosContableEditablesProps {
@@ -42,7 +42,7 @@ const AsientosContableEditables: React.FC<AsientosContableEditablesProps> = ({
     onChange(
       (asientos || []).map((r: any, i: number) => {
         if (i !== index) return r;
-        const montoRedondeado = Math.round(val * 100) / 100;
+        const montoRedondeado = redondear2(val);
         const upd: any = { ...r, monto: montoRedondeado, generado: false };
         if (montoRedondeado > 0 && r.monto === 0) {
           upd.tipoAsiento = field === 'debito' ? 'D' : 'C';

@@ -28,17 +28,12 @@ import { useCarritoStore } from '../../stores/useCarritoStore';
 import { useFavoritosStore } from '../../stores/useFavoritosStore';
 import StoreHeader from './components/StoreHeader';
 import './Ecommerce.css';
-import { toTitleCase } from '../../utils/formats';
+import { toTitleCase, formatMoneda } from '../../utils/formats';
 
 const { Text, Title } = Typography;
 
-/** Formatear moneda en RD$ */
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-DO', {
-    style: 'currency',
-    currency: 'DOP',
-    minimumFractionDigits: 2,
-  }).format(value);
+  return formatMoneda(value);
 }
 
 const StoreProductoDetalle: React.FC = () => {

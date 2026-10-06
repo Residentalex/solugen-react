@@ -1,4 +1,4 @@
-import { getMonedaSucursalActiva } from './moneda';
+import { getMonedaSucursalActiva, simboloMoneda } from './moneda';
 
 export function toTitleCase(s: string): string {
   if (!s) return '';
@@ -55,8 +55,79 @@ export function formatCurrency(n: number, currency?: string): string {
   return new Intl.NumberFormat('es-DO', { style: 'currency', currency: c, minimumFractionDigits: 2 }).format(n);
 }
 
+/**
+ * Formatea un monto con el simbolo de la moneda indicada por el documento.
+ * A diferencia de `formatCurrency`, no usa `Intl` con codigo ISO, porque los
+ * codigos de `MONEDAS` no son necesariamente ISO validos (ej: 'RD$') y
+ * `Intl.NumberFormat` lanza RangeError con esos valores.
+ *
+ * @param n       Monto a formatear
+ * @param simbolo Simbolo de la moneda (ej: 'US$', 'RD$'). Si falta, usa el de la sucursal activa.
+ * @param codigo  Codigo de moneda. Solo se usa para derivar el simbolo si no viene `simbolo`.
+ */
+export function formatMoneda(
+  n: number,
+  simbolo?: string | null,
+  codigo?: string | null
+): string {
+  const simboloFinal =
+    (simbolo && simbolo.trim()) ||
+    (codigo ? simboloMoneda(codigo) : '') ||
+    getMonedaSucursalActiva().simbolo ||
+    'RD$';
+  return `${simboloFinal} ${formatNumber(n)}`;
+}
+
 export function formatNumber(n: number): string {
   return new Intl.NumberFormat('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+
+/**
+ * `formatter` de `InputNumber` para montos: inyecta el simbolo real y aplica
+ * `formatNumber` (separador de miles y 2 decimales).
+ *
+ * Usar siempre junto con `crearParserMoneda`.
+ */
+export function crearFormatterMoneda(simbolo?: string | null) {
+  const simboloFinal = (simbolo?.trim() || getMonedaSucursalActiva().simbolo) + ' ';
+  return (value?: string | number): string | undefined => {
+    if (value === undefined || value === null || value === '') return '';
+    const n = typeof value === 'number' ? value : Number(String(value).replace(/,/g, ''));
+    if (!Number.isFinite(n)) return String(value);
+    return simboloFinal + formatNumber(n);
+  };
+}
+
+/**
+ * `parser` de `InputNumber` para montos.
+ *
+ * Descarta todo lo que no sea parte del numero (simbolo, espacios, letras) en vez de
+ * buscar el simbolo esperado con un replace. Asi el campo sigue funcionando cuando el
+ * simbolo cambia y no hay que actualizarlo en cada catalogo de moneda nuevo.
+ */
+export function crearParserMoneda() {
+  return (value?: string): string | undefined => {
+    if (value === undefined || value === null) return value;
+    const limpio = value.replace(/[^\d,.-]/g, '').replace(/,/g, '');
+    return limpio === '' ? undefined : limpio;
+  };
+}
+
+/**
+ * Redondea un número a 2 decimales con criterio AwayFromZero (el mismo que usa
+ * el backend al persistir montos). Evita los residuos de coma flotante del tipo
+ * `2167.92000000001` que aparecen al restar montos en JavaScript.
+ *
+ * PRECONDICIÓN: la entrada debe tener como máximo 2 decimales significativos
+ * (ser múltiplo de 0.01 o venir ya redondeada del backend). Usa `Math.round`,
+ * que sufre el bug clásico `redondear2(1.005) === 1` porque
+ * `1.005 * 100 === 100.49999999999999`. Hoy esa entrada no es alcanzable porque
+ * todas las fuentes son decimales exactos del backend o resultados ya redondeados.
+ * No cambies su semántica: el backend usa `decimal` exacto y ambos deben coincidir.
+ */
+export function redondear2(val: number): number {
+  const signo = val < 0 ? -1 : 1;
+  return (signo * Math.round(Math.abs(val) * 100)) / 100;
 }
 
 export function getInitials(name: string): string {

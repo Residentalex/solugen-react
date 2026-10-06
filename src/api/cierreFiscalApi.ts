@@ -36,8 +36,10 @@ export interface ResultadoCierre {
 const BASE = 'CierreFiscal';
 
 export const cierreFiscalApi = {
-  listarCierres: async (): Promise<CierreFiscalItem[]> => {
-    const { data } = await apiClient.get<ApiResponse<CierreFiscalItem[]>>(`${BASE}/Listar`);
+  listarCierres: async (sucursal: number): Promise<CierreFiscalItem[]> => {
+    const { data } = await apiClient.get<ApiResponse<CierreFiscalItem[]>>(`${BASE}/Listar`, {
+      params: { sucursal }
+    });
     return data.data ?? [];
   },
 

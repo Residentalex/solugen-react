@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Modal, Descriptions } from 'antd';
-import { Table, Tabs, Tag, Button, Tooltip, message, Card, Input, Empty, Row, Col, Select, Skeleton, Alert } from 'antd';
+import { Table, Tabs, Tag, Button, Tooltip, message, Card, Input, Empty, Row, Col,  Skeleton, Alert } from 'antd';
+import { Select } from '../../components/Select';
 import { SearchOutlined, ReloadOutlined, SendOutlined, CheckOutlined, ClockCircleOutlined, BellOutlined, WarningOutlined, CloseCircleOutlined, FileExcelOutlined, HistoryOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';

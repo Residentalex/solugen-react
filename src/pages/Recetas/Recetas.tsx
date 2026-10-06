@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Table, Input, Select, Button, Typography, message, Tag, Alert, Empty, Divider } from 'antd';
+import { Card, Table, Input,  Button, Typography, message, Tag, Alert, Empty, Divider } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, ReloadOutlined, ArrowLeftOutlined, CalculatorOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { recetaApi } from '../../api/recetaApi';
 import type { ProductoRecetaDTO, IngredienteDTO } from '../../types/receta';
-import { formatCurrency } from '../../utils/formats';
+import { formatCurrency, toTitleCase } from '../../utils/formats';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
@@ -15,11 +15,6 @@ const { Text } = Typography;
 
 function formatDecimal(n: number): string {
   return n.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function toTitleCase(str: string): string {
-  if (!str) return str;
-  return str.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 const Recetas: React.FC = () => {
@@ -41,7 +36,7 @@ const Recetas: React.FC = () => {
     queryFn: async () => {
       if (sucursalActiva === undefined) return [];
       const result = await recetaApi.obtenerProductosConReceta(sucursalActiva);
-      return result;
+      return result.map((p) => ({ ...p, nombre: toTitleCase(p.nombre) }));
     },
     enabled: sucursalActiva !== undefined,
     placeholderData: (prev) => prev,
@@ -59,7 +54,15 @@ const Recetas: React.FC = () => {
     setLoadingIngredientes(true);
     try {
       const result = await recetaApi.obtenerIngredientes(sucursalActiva, codigo);
-      setIngredientes(result);
+      setIngredientes(
+        result.map((ing) => ({
+          ...ing,
+          nombre: toTitleCase(ing.nombre),
+          unidadMedida: ing.unidadMedida
+            ? { ...ing.unidadMedida, nombre: toTitleCase(ing.unidadMedida.nombre ?? '') }
+            : ing.unidadMedida,
+        }))
+      );
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al consultar receta');
       setIngredientes([]);

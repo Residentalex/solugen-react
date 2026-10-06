@@ -45,6 +45,19 @@ export interface EmpleadoDTO {
   notas?: string;
 }
 
+export interface EmpleadoListadoDTO {
+  id?: number;
+  codigo: string;
+  nombre: string;
+  cedula?: string;
+  depto?: string;
+  deptoNombre?: string;
+  cargo?: string;
+  cargoNombre?: string;
+  sucursal?: string;
+  sucursalNombre?: string;
+}
+
 export const empleadoApi = {
   obtenerTodos: async (sucursal: number): Promise<EmpleadoDTO[]> => {
     const { data } = await apiClient.get<ApiResponse<EmpleadoDTO[]>>(`/Empleado/${sucursal}`);
@@ -59,7 +72,7 @@ export const empleadoApi = {
     return data.data || [];
   },
 
-  obtenerListado: async (sucursal: number, busqueda: string, cantidad: number, salto: number): Promise<{ datos: EmpleadoDTO[]; total: number }> => {
+  obtenerListado: async (sucursal: number, busqueda: string, cantidad: number, salto: number): Promise<{ datos: EmpleadoListadoDTO[]; total: number }> => {
     const params: Record<string, string | number> = { cantidad, salto };
     if (busqueda) params.busqueda = busqueda;
     const { data } = await apiClient.get(`/Empleado/${sucursal}/listado`, { params });

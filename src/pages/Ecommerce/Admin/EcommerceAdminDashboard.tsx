@@ -15,6 +15,7 @@ import {
   WalletOutlined, ShopOutlined
 } from '@ant-design/icons';
 import { ecommerceApi } from '../../../api/ecommerceApi';
+import { formatMoneda } from '../../../utils/formats';
 import type {
   AdminDashboardResumenDTO,
   AdminOrdenListadoDTO,
@@ -206,7 +207,7 @@ const EcommerceAdminDashboard: React.FC = () => {
       align: 'right' as const,
       sorter: (a: AdminOrdenListadoDTO, b: AdminOrdenListadoDTO) => a.total - b.total,
       render: (val: number) => (
-        <Text strong style={{ color: token.colorText }}>RD$ {val.toLocaleString('es-DO', { minimumFractionDigits: 2 })}</Text>
+        <Text strong style={{ color: token.colorText }}>{formatMoneda(val ?? 0)}</Text>
       ),
     },
     {
@@ -482,7 +483,7 @@ const EcommerceAdminDashboard: React.FC = () => {
               <div style={{ marginTop: 20, padding: 16, borderRadius: 14, background: 'linear-gradient(135deg, var(--paces-primary) 0%, var(--paces-primary-hover) 100%)', textAlign: 'center' }}>
                 <Text style={{ color: '#fff', fontSize: 11, opacity: 0.85, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Ingresos Completados</Text>
                 <div style={{ color: '#fff', fontSize: 24, fontWeight: 700, marginTop: 4 }}>
-                  RD$ {totalIngresos.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  {formatMoneda(totalIngresos)}
                 </div>
               </div>
             )}

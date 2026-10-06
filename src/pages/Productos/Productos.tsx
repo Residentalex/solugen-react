@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Table, Tag, Button, Card, Select, Typography, Tooltip, Alert, Empty, Space } from 'antd';
+import { Table, Tag, Button, Card,  Typography, Tooltip, Alert, Empty, Space } from 'antd';
+import { Select } from '../../components/Select';
 import { UploadOutlined, CopyOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';

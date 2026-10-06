@@ -60,3 +60,18 @@ export interface DetalleGeneradorDTO {
   total: number;
   ultimaCompraFecha?: string;
 }
+
+/** Datos de la ultima compra aplicada de un producto, devueltos por
+ *  POST /GORC/{sucursal}/datosAnterioresORC. Corresponden a la ultima fila de
+ *  DGENORC cuyo GENORC tiene APLICADA = 'T', ordenada por fecha e ID descendente. */
+export interface DatosAnterioresORCDTO {
+  codigo: string;
+  costo: number;
+  margen: number;
+  precioSugerido: number;
+  margenOP: number;
+  precioSugeridoOP: number;
+  porcientoDescuento: number;
+  fecha?: string | null;
+  medidaId: number;
+}

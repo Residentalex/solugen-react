@@ -37,6 +37,7 @@ import ModalSeleccionarImpresoraPOS from '../../components/ModalSeleccionarImpre
 import { formatNumber, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { resolveEstado, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
+import AdornoDocumentoPagado from '../../components/AdornoDocumentoPagado/AdornoDocumentoPagado';
 import { useQZTray } from '../../hooks/useQZTray';
 import { useCargaDocumento } from '../../hooks/useCargaDocumento';
 import { reportesConfigApi } from '../../api/reportesConfigApi';
@@ -232,7 +233,7 @@ const FacturaPOSDetalle: React.FC = () => {
   const esCerrado = toPeriodoNum(data.periodo) === 6;
 
   const totalPagado = (data.cobros || []).reduce((sum: number, c: any) => sum + (Number(c.pago) || 0), 0);
-  const saldoPendiente = (data.total || 0) - totalPagado;
+  const saldoPendiente = Math.max(0, (Number(data.total) || 0) - totalPagado);
 
   // ═══ Filtrado y totales de detalles ═══
   const detallesFiltrados = detalleSearch
@@ -878,7 +879,7 @@ const FacturaPOSDetalle: React.FC = () => {
                     </div>
                   )}
                 </Descriptions.Item>
-                <Descriptions.Item label="Nota" span={3}><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+                <Descriptions.Item label="Nota" span={3}><span className="paces-nota-memo">{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -1092,6 +1093,7 @@ const FacturaPOSDetalle: React.FC = () => {
           <Col xxl={6}>
             <EntidadCard entidad={data.cliente} entidadSecundaria={data.entidad} fallbackTitulo="Cliente" />
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={false}
+              adorno={<AdornoDocumentoPagado total={data.total} saldoPendiente={saldoPendiente} />}
               monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}
@@ -1153,7 +1155,7 @@ const FacturaPOSDetalle: React.FC = () => {
                     </div>
                   )}
                 </Descriptions.Item>
-                <Descriptions.Item label="Nota"><span style={{ whiteSpace: 'pre-wrap' }}>{data.nota || '-'}</span></Descriptions.Item>
+                <Descriptions.Item label="Nota"><span className="paces-nota-memo">{data.nota || '-'}</span></Descriptions.Item>
               </Descriptions>
             </Card>
 
@@ -1359,6 +1361,7 @@ const FacturaPOSDetalle: React.FC = () => {
 
           <div style={{ marginTop: 24 }}>
             <TotalesCard subTotal={data.subTotal} descuento={data.descuento} impuestos={data.impuestos} total={data.total} alignRight={true}
+            adorno={<AdornoDocumentoPagado total={data.total} saldoPendiente={saldoPendiente} />}
               monedaSimbolo={data.moneda?.simbolo || monedaDefault.simbolo}
               monedaNombre={data.moneda?.nombre || monedaDefault.nombre}
               tasa={data.tasa ?? 1}

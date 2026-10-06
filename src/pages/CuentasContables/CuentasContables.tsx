@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Tree, Input, Button, message, Card, Modal, Form, Switch, Select, Alert, Row, Col, Empty, Spin, Pagination, Tooltip } from 'antd';
+import { Tree, Input, Button, message, Card, Modal, Form, Switch,  Alert, Row, Col, Empty, Spin, Pagination, Tooltip } from 'antd';
+import { Select } from '../../components/Select';
 import { FolderOpenOutlined, FolderOutlined, FileTextOutlined } from '@ant-design/icons';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
-import { monedaApi } from '../../api/monedaApi';
-import type { TipoCuentaDTO, GrupoCuentaContableDTO, MonedaDTO, CuentaContableDTO, CuentaContableResumenDTO } from '../../types/contabilidad';
+import { useMonedasCatalogo } from '../../hooks/useMonedasCatalogo';
+import type { TipoCuentaDTO, GrupoCuentaContableDTO, CuentaContableDTO, CuentaContableResumenDTO } from '../../types/contabilidad';
 import type { DataNode } from 'antd/es/tree';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import './CuentasContables.css';
@@ -108,7 +109,7 @@ const CuentasContables: React.FC = () => {
   // Options for selects in modal
   const [tipos, setTipos] = useState<TipoCuentaDTO[]>([]);
   const [grupos, setGrupos] = useState<GrupoCuentaContableDTO[]>([]);
-  const [monedas, setMonedas] = useState<MonedaDTO[]>([]);
+  const { monedas } = useMonedasCatalogo(sucursalActiva);
 
   // Tree data and loading states
   const [treeData, setTreeData] = useState<TreeNodeData[]>([]);
@@ -204,10 +205,6 @@ const CuentasContables: React.FC = () => {
     cuentaContableApi.obtenerGrupos(sucursalActiva)
       .then(setGrupos)
       .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar grupos'));
-
-    monedaApi.obtenerListado(sucursalActiva)
-      .then(setMonedas)
-      .catch(err => message.error(err?.response?.data?.errorMessage || 'Error al cargar monedas'));
   }, [modalVisible, sucursalActiva]);
 
   // Handle navigation from detail (Editar)
@@ -603,7 +600,7 @@ const CuentasContables: React.FC = () => {
             name="nota"
             label="Nota"
           >
-            <Input.TextArea rows={3} placeholder="Nota opcional" maxLength={500} />
+            <Input.TextArea rows={3} autoSize={{ minRows: 3, maxRows: 8 }} maxLength={500} showCount placeholder="Nota opcional" />
           </Form.Item>
         </Form>
       </Modal>

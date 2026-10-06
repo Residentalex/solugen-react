@@ -13,7 +13,7 @@ import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 
 const { Text } = Typography;
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ───────── helpers ───────── */
 
 function toTitleCase(str: string): string {
   if (!str) return str;
@@ -41,7 +41,7 @@ function getVigencia(item: OfertaDTO): { text: string; color: string } {
   return { text: 'Vigente', color: 'green' };
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€ componente â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ───────── componente ───────── */
 
 const Ofertas: React.FC = () => {
   const setActiveModule = useUIStore((s: any) => s.setActiveModule);
@@ -112,7 +112,7 @@ const Ofertas: React.FC = () => {
     setDetalleVisible(true);
   };
 
-  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€ columnas â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  /* ───────── columnas ───────── */
 
   const columns: ColumnsType<OfertaDTO> = [
     {
@@ -172,7 +172,7 @@ const Ofertas: React.FC = () => {
     },
   ];
 
-  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€ render â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+  /* ───────── render ───────── */
 
   return (
     <>
@@ -232,7 +232,7 @@ const Ofertas: React.FC = () => {
         />
       </Card>
 
-      {/* â”€â”€ Modal detalle â”€â”€ */}
+      {/* ── Modal detalle ── */}
       <Modal
         title={`Oferta: ${detalleItem?.nombre || ''}`}
         open={detalleVisible}
@@ -258,7 +258,7 @@ const Ofertas: React.FC = () => {
                   {getVigencia(detalleItem).text}
                 </Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Aplica CrÃ©dito">
+              <Descriptions.Item label="Aplica Crédito">
                 {detalleItem.aplicaClienteCredito ? 'Sí' : 'No'}
               </Descriptions.Item>
             </Descriptions>

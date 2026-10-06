@@ -1,8 +1,8 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Card, Table, Button, Modal, Descriptions, Typography, Empty } from 'antd';
+import { Alert, Card, Table, Button, Typography, Empty } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -23,8 +23,6 @@ const Almacenes: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [detalleVisible, setDetalleVisible] = useState(false);
-  const [detalleItem, setDetalleItem] = useState<AlmacenDTO | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['almacenes', sucursalActiva, page, pageSize, searchText],
@@ -78,9 +76,8 @@ const Almacenes: React.FC = () => {
     setPage(1);
   };
 
-  const abrirDetalle = (item: AlmacenDTO) => {
-    setDetalleItem(item);
-    setDetalleVisible(true);
+const abrirDetalle = (item: AlmacenDTO) => {
+    navigate(`/MAlmacen/${item.idExterno || item.codigo}`);
   };
 
   const columns: ColumnsType<AlmacenDTO> = [
@@ -167,30 +164,6 @@ const Almacenes: React.FC = () => {
         />
       </Card>
 
-      <Modal
-        title={`Detalle: ${detalleItem?.nombre || ''}`}
-        open={detalleVisible}
-        onCancel={() => setDetalleVisible(false)}
-        footer={null}
-        width={520}
-      >
-        {detalleItem && (
-          <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
-            <Descriptions.Item label="Código">{detalleItem.codigo}</Descriptions.Item>
-            <Descriptions.Item label="Nombre">{detalleItem.nombre}</Descriptions.Item>
-            <Descriptions.Item label="Cuenta Contable">
-              <Text style={{ fontFamily: 'monospace' }}>{detalleItem.cuentaContable || '-'}</Text>
-            </Descriptions.Item>
-            <Descriptions.Item label="ID Externo">{detalleItem.idExterno || '-'}</Descriptions.Item>
-            <Descriptions.Item label="Fecha Inicial">
-              {detalleItem.fechaInicial ? new Date(detalleItem.fechaInicial).toLocaleDateString('es-DO') : '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="Fecha Cierre">
-              {detalleItem.fechaCierre ? new Date(detalleItem.fechaCierre).toLocaleDateString('es-DO') : '-'}
-            </Descriptions.Item>
-          </Descriptions>
-        )}
-      </Modal>
     </>
   );
 };

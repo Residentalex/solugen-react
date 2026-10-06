@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Table, Input, Select, Tag, Button, message, Space, Card, Typography, Alert, Empty } from 'antd';
+import { Table, Input,  Tag, Button, message, Space, Card, Typography, Alert, Empty } from 'antd';
 import { PlusOutlined, SearchOutlined, ReloadOutlined, RightOutlined } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
 import EntidadImagen from '../../components/EntidadImagen';

@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  Card, Table, Input, Select, Button, Typography, message, Spin,
+  Card, Table, Input,  Button, Typography, message, Spin,
   DatePicker, Space, Row, Col, Empty, Modal,
 } from 'antd';
+import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined, ReloadOutlined, FileExcelOutlined,

@@ -134,7 +134,7 @@ const Monedas: React.FC = () => {
         tasa: values.tasa ?? 1,
       };
       if (editando) {
-        await monedaApi.actualizar(sucursalActiva, editando.id, payload);
+        await monedaApi.actualizar(sucursalActiva, editando.id ?? 0, payload);
         message.success('Moneda actualizada correctamente');
       } else {
         await monedaApi.crear(sucursalActiva, payload);

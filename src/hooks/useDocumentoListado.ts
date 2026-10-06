@@ -86,7 +86,11 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
   const filtrosRef = useRef(filtros);
   filtrosRef.current = filtros;
 
+  /* Contador para descartar respuestas de peticiones obsoletas */
+  const requestIdRef = useRef(0);
+
   const cargarDatos = useCallback(async (pagina: number, filas: number, busqueda: string) => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const cfg = configRef.current;
@@ -125,12 +129,17 @@ export function useDocumentoListado<T extends { id: number; documento?: string }
         );
       }
 
+      /* Si otra peticion se disparo despues, esta respuesta ya no aplica */
+      if (requestId !== requestIdRef.current) return;
+
       setData(result.data);
       setTotal(result.total);
     } catch {
+      if (requestId !== requestIdRef.current) return;
       setLoadingError(true);
     } finally {
-      setLoading(false);
+      /* Solo la peticion vigente puede apagar el loading */
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [sucursalActiva, rangoDefault, config.modulo]);
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { Table, Select, Button, message, Card, Typography, DatePicker, InputNumber, Empty, Input, Alert } from 'antd';
+import { Table,  Button, message, Card, Typography, DatePicker, InputNumber, Empty, Input, Alert } from 'antd';
+import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
 import { SaveOutlined, SearchOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -277,23 +278,30 @@ const ActualizacionCostos: React.FC = () => {
       title: 'Documento',
       dataIndex: 'documento',
       key: 'documento',
-      width: 95,
+      width: 130,
       render: (val: string) => <Text strong>{val}</Text>,
-    },
-    {
-      title: 'Código',
-      dataIndex: 'codigo',
-      key: 'codigo',
-      width: 75,
-      render: (val: string) => <Text>{val}</Text>,
     },
     {
       title: 'Producto',
       dataIndex: 'producto',
       key: 'producto',
-      width: 250,
-      ellipsis: true,
-      render: (val: string) => <Text>{toTitleCase(val)}</Text>,
+      width: 270,
+      onCell: () => ({ style: { verticalAlign: 'top' } }),
+      render: (val: string, record: DetalleActualizacionCostoDTO) => (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {toTitleCase(val)}
+          </div>
+          {record.codigo && (
+            <div
+              className="paces-text-secondary"
+              style={{ fontSize: 11, lineHeight: 1.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >
+              {record.codigo}
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       title: 'Costo Anterior',
@@ -468,7 +476,7 @@ const ActualizacionCostos: React.FC = () => {
           dataSource={datosFiltrados}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 1050 }}
+          scroll={{ x: 1145 }}
           size="middle"
           locale={{
             emptyText: <div style={{ minHeight: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Empty description={emptyDescription} /></div>,
@@ -492,7 +500,7 @@ const ActualizacionCostos: React.FC = () => {
               type="primary"
               icon={<SaveOutlined />}
               loading={saving}
-              disabled={!hasChanges || bloqueado}
+              disabled={data.length === 0 || bloqueado}
               onClick={handleActualizar}
             >
               Actualizar

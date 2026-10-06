@@ -463,7 +463,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
 
         {/* Fila 3 */}
         <Descriptions.Item label="Nota:" span={columnCount}>
-          <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+          <span className="paces-nota-memo">{documentoActivo.nota || '-'}</span>
         </Descriptions.Item>
       </Descriptions>
     </Card>
@@ -546,7 +546,7 @@ const TransferenciaAlmacenDetalle: React.FC = () => {
           setImprimiendo(true);
           try {
             try {
-              await documentoImpresionApi.marcarImpreso('TRP', sucursalActiva, parseInt(id));
+              await documentoImpresionApi.marcarImpreso('TRP', sucursalActiva, parseInt(id ?? '0'));
             } catch (errImprimir: any) {
               messageApi.error(errImprimir?.response?.data?.errorMessage || errImprimir?.response?.data?.ErrorMessage || 'Error al marcar el documento como impreso');
               return;

@@ -1,15 +1,15 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Form, Input, InputNumber, Button, message, Typography, Switch } from 'antd';
-import { SaveOutlined, CloseOutlined } from '@ant-design/icons';
+import { Card, Col, Form, Input, InputNumber, Modal, Row, Switch, message } from 'antd';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
-import { moduloApi } from '../../api/moduloApi';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import DetalleCatalogoLayout from '../../components/DetalleCatalogoLayout';
+import { SelectorIconoModulo } from '../../components/SelectorIconoModulo';
+import { moduloApi } from '../../api/moduloApi';
+import { obtenerIconoModulo } from '../../utils/iconosModulo';
 import { toTitleCase } from '../../utils/formats';
-
-const { Text } = Typography;
 
 const ModuloFormulario: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -22,43 +22,79 @@ const ModuloFormulario: React.FC = () => {
 
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const savingLockRef = useRef(false);
+  const [guardando, setGuardando] = useState(false);
+  const [errorCarga, setErrorCarga] = useState(false);
+  const [mensajeError, setMensajeError] = useState('');
+  const [modulo, setModulo] = useState<{ id: number; nombre: string; icono?: string | null } | null>(null);
+  const guardandoRef = useRef(false);
   const navigationConfirmedRef = useFormularioNavigation();
 
-  const mode: 'crear' | 'editar' = id && id !== 'nuevo' ? 'editar' : 'crear';
+  const modo: 'crear' | 'editar' = id && id !== 'nuevo' ? 'editar' : 'crear';
 
   useEffect(() => {
     setActiveModule(screenCode);
-    const title = mode === 'crear' ? 'Nuevo Módulo' : 'Editar Módulo';
-    setPageTitleOverride(title);
+    setPageTitleOverride(modo === 'crear' ? 'Nuevo Módulo' : 'Editar Módulo');
 
-    if (mode === 'editar' && id && id !== 'nuevo') {
-      setLoading(true);
-      moduloApi.obtenerTodo(sucursalActiva).then((modulos) => {
-        const modulo = modulos.find((m) => m.id === Number(id));
-        if (modulo) {
-          form.setFieldsValue({ codigo: modulo.codigo || '', nombre: modulo.nombre, orden: modulo.orden, oculto: !!modulo.oculto });
-        } else {
-          message.error('Módulo no encontrado');
-          navigate('/Mmodulo', { replace: true });
-        }
-      }).catch(() => {
-        message.error('Error al cargar módulo');
-      }).finally(() => setLoading(false));
+    return () => {
+      resetToolbar();
+      setPageTitleOverride('');
+    };
+  }, [setActiveModule, setPageTitleOverride, resetToolbar, screenCode, modo]);
+
+  const cargar = useCallback(async () => {
+    if (sucursalActiva === undefined) return;
+
+    setLoading(true);
+    setErrorCarga(false);
+    setMensajeError('');
+
+    try {
+      if (modo === 'crear') {
+        setModulo(null);
+        form.resetFields();
+        return;
+      }
+
+      const modulos = await moduloApi.obtenerTodo(sucursalActiva);
+      const encontrado = modulos.find((m) => m.id === Number(id));
+
+      if (!encontrado) {
+        setErrorCarga(true);
+        setMensajeError('El módulo no existe.');
+        return;
+      }
+
+      setModulo({ id: encontrado.id, nombre: encontrado.nombre, icono: encontrado.icono });
+      form.setFieldsValue({
+        codigo: encontrado.codigo || '',
+        nombre: encontrado.nombre,
+        orden: encontrado.orden,
+        icono: encontrado.icono || undefined,
+        oculto: !!encontrado.oculto,
+      });
+    } catch (err: any) {
+      setErrorCarga(true);
+      setMensajeError(err?.response?.data?.errorMessage || 'Error al cargar el módulo');
+    } finally {
+      setLoading(false);
     }
+  }, [id, modo, sucursalActiva, form]);
 
-    return () => { resetToolbar(); setPageTitleOverride(''); };
-  }, [setActiveModule, setPageTitleOverride, resetToolbar, screenCode, mode, id, sucursalActiva, form, navigate]);
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
 
-const handleGuardar = async () => {
-    if (savingLockRef.current) return;
-    savingLockRef.current = true;
-    setSaving(true);
+  const iconoIngresado = Form.useWatch('icono', form);
+  const nombreIngresado = Form.useWatch('nombre', form);
+
+  const handleGuardar = async () => {
+    if (guardandoRef.current) return;
+    guardandoRef.current = true;
+    setGuardando(true);
     try {
       const values = await form.validateFields();
 
-      if (mode === 'crear') {
+      if (modo === 'crear') {
         const result = await moduloApi.crear(sucursalActiva, values);
         message.success('Módulo creado correctamente');
         navigationConfirmedRef.current = true;
@@ -73,50 +109,113 @@ const handleGuardar = async () => {
       if (err?.errorFields) return;
       message.error(err?.response?.data?.errorMessage || 'Error al guardar');
     } finally {
-      setSaving(false);
-      savingLockRef.current = false;
+      setGuardando(false);
+      guardandoRef.current = false;
     }
   };
 
   const handleCancelar = () => {
-    if (saving) return;
-    navigationConfirmedRef.current = true;
-    navigate('/Mmodulo', { replace: true });
+    Modal.confirm({
+      title: 'Cancelar',
+      content: 'Los cambios no guardados se perderán. ¿Está seguro que desea salir?',
+      okText: 'Salir',
+      cancelText: 'Seguir editando',
+      onOk: () => {
+        navigationConfirmedRef.current = true;
+        navigate('/Mmodulo', { replace: true });
+      },
+    });
   };
 
   return (
-    <Card className="paces-card-erp" style={{ borderRadius: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 24 }}>
-        <Text strong style={{ fontSize: 16 }}>
-          {mode === 'crear' ? 'Nuevo Módulo' : 'Editar Módulo'}
-        </Text>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button icon={<CloseOutlined />} onClick={handleCancelar} disabled={saving}>Cancelar</Button>
-          <Button type="primary" icon={<SaveOutlined />} onClick={handleGuardar} loading={saving}>
-            Guardar
-          </Button>
-        </div>
-      </div>
+    <DetalleCatalogoLayout
+      rutaVolver="/Mmodulo"
+      loading={loading}
+      mensajeLoading={modo === 'crear' ? 'Preparando formulario...' : 'Cargando módulo...'}
+      loadingError={errorCarga}
+      mensajeError={mensajeError || 'Error al cargar el módulo'}
+      onRecargar={cargar}
+      dataDisponible={modo === 'crear' || !!modulo}
+      modo={modo}
+      onGuardar={handleGuardar}
+      guardando={guardando}
+      onVolver={handleCancelar}
+    >
+      <Form form={form} layout="vertical" size="small" disabled={guardando}>
+        <Card title="Datos Generales" className="paces-card" style={{ marginBottom: 16 }}>
+          <Row gutter={[16, 0]}>
+            <Col xs={24} sm={12} lg={6}>
+              <Form.Item
+                name="codigo"
+                label="Código"
+                rules={[
+                  { required: true, message: 'El código es obligatorio' },
+                  { max: 30, message: 'Máximo 30 caracteres' },
+                ]}
+              >
+                <Input placeholder="Ej: CONTAB" maxLength={30} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} lg={12}>
+              <Form.Item
+                name="nombre"
+                label="Nombre del módulo"
+                rules={[
+                  { required: true, message: 'El nombre es requerido' },
+                  { max: 120, message: 'Máximo 120 caracteres' },
+                ]}
+              >
+                <Input placeholder="Ej: Contabilidad" maxLength={120} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} lg={6}>
+              <Form.Item
+                name="orden"
+                label="Orden"
+                rules={[{ required: true, message: 'El orden es requerido' }]}
+              >
+                <InputNumber min={0} max={999} style={{ width: '100%' }} placeholder="0" />
+              </Form.Item>
+            </Col>
+          </Row>
 
-      <Form form={form} layout="vertical" size="small" style={{ maxWidth: 600 }} disabled={saving}>
-        <Form.Item name="codigo" label="Código"
-          rules={[{ required: true, message: 'El código es obligatorio' }]}
-        >
-          <Input placeholder="Ej: CONTAB" />
-        </Form.Item>
-        <Form.Item name="nombre" label="Nombre del Módulo"
-          rules={[{ required: true, message: 'El nombre es requerido' }]}>
-          <Input placeholder="Ej: Generador ORC" />
-        </Form.Item>
-        <Form.Item name="orden" label="Orden"
-          rules={[{ required: true, message: 'El orden es requerido' }]}>
-          <InputNumber min={0} max={999} style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item name="oculto" label="Ocultar del sidebar" valuePropName="checked">
-          <Switch checkedChildren="Sí" unCheckedChildren="No" />
-        </Form.Item>
+          <Row gutter={[16, 0]}>
+            <Col xs={24} sm={12} lg={8}>
+              <Form.Item
+                name="icono"
+                label="Icono del sidebar"
+                tooltip="Es el icono que se muestra junto al nombre del módulo en el menú lateral. Si se deja vacío se usa el icono por defecto."
+              >
+                <SelectorIconoModulo />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} lg={8}>
+              <Form.Item name="oculto" label="Ocultar del sidebar" valuePropName="checked">
+                <Switch checkedChildren="Sí" unCheckedChildren="No" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={24} lg={8}>
+              <Form.Item label="Vista previa en el menú">
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '5px 12px',
+                    borderRadius: 4,
+                    background: '#001529',
+                    color: 'rgba(255,255,255,0.85)',
+                  }}
+                >
+                  {obtenerIconoModulo({ nombre: nombreIngresado, icono: iconoIngresado })}
+                  <span className="menu-module-label">{toTitleCase(nombreIngresado || '') || 'Nombre del módulo'}</span>
+                </span>
+              </Form.Item>
+            </Col>
+          </Row>
+        </Card>
       </Form>
-    </Card>
+    </DetalleCatalogoLayout>
   );
 };
 

@@ -37,7 +37,7 @@ import {
   CAMPOS_TICKET_LABELS_VSNT,
   calcularAnchosLinea,
 } from './ticketPlantillaConfig';
-import { evaluarObjeto, evaluarExpresion } from './expresiones';
+import { evaluarObjeto, evaluarExpresion, MARCA_INICIO, sustituirMarcasFallo } from './expresiones';
 
 /**
  * Separador entre etiqueta y valor en el formato legado (impresion): ": ".
@@ -53,6 +53,18 @@ export interface OpcionesTicketRender {
    * legado). El preview del disenador de plantillas pasa " ".
    */
   separadorEtiqueta?: string;
+  /**
+   * Solo para el preview del disenador: una expresion que no compila se
+   * resuelve con el `valorPorDefecto` de la linea en vez de quedar literal.
+   * La impresion real nunca lo activa.
+   */
+  marcarExpresionFallida?: boolean;
+  /**
+   * Solo para el preview del disenador: un texto libre con saltos de linea se
+   * emite como bloque propio para que se vean en la vista previa. El agrupado
+   * por `lineaNum` los aplana a espacios porque ahi no caben.
+   */
+  conservarSaltosTextoLibre?: boolean;
 }
 
 /** Comportamiento de una linea cuando su valor no resuelve. */
@@ -553,6 +565,7 @@ function renderLineasAgrupadas(
   widthLocal: number,
   ctxP: string[],
   emitirLinea: (ln: LineaZonaConfig, enGrupo?: boolean) => void,
+  esBloqueMultilinea?: (ln: LineaZonaConfig) => boolean,
 ) {
   const buffer: string[] = [];
   const flush = () => { if (buffer.length > 0) { ctxP.push(...buffer, LF); buffer.length = 0; } };
@@ -567,7 +580,7 @@ function renderLineasAgrupadas(
   let indice = 0;
   while (indice < lineas.length) {
     const ln = lineas[indice];
-    if (ln.lineaNum === undefined || esLineaEstructural(ln)) {
+    if (ln.lineaNum === undefined || esLineaEstructural(ln) || esBloqueMultilinea?.(ln)) {
       flush();
       emitirLinea(ln);
       indice += 1;
@@ -1250,25 +1263,64 @@ function renderDetalleCampoFRI(
  * Aplica el motor de expresiones ({...}) sobre la configuracion de plantilla
  * antes de normalizarla. Ante cualquier error devuelve la config original
  * (retrocompatibilidad total).
+ * Con `marcarFallos` (solo preview) las expresiones que no compilan quedan
+ * envueltas con marcas para que la linea use su `valorPorDefecto`.
  */
 function aplicarExpresiones(
   config: PlantillaConfig | undefined,
   data: any,
   company?: CompanyInfo,
+  marcarFallos = false,
 ): PlantillaConfig | undefined {
   if (!config) return config;
   try {
     const ctx: ContextoDatos = { data, company, config };
-    return evaluarObjeto(config, ctx);
+    return evaluarObjeto(config, ctx, marcarFallos);
   } catch {
     return config;
   }
 }
 
+/**
+ * Solo para el preview: un texto libre con saltos debe emitirse como bloque
+ * propio, fuera del agrupado por `lineaNum` (que aplana los saltos a espacios).
+ */
+function predicadoTextoLibreMultilinea(
+  cfg: PlantillaConfig,
+  opciones?: OpcionesTicketRender,
+): (ln: LineaZonaConfig) => boolean {
+  if (!opciones?.conservarSaltosTextoLibre) return () => false;
+  const textosLibres = cfg.textosLibres || cfg.campos?.textosLibres;
+  return (ln) => {
+    if (!ln.ref.startsWith('LIBRE:')) return false;
+    const id = ln.ref.slice('LIBRE:'.length);
+    const texto = textosLibres?.[id];
+    const contenido = typeof texto === 'string' ? texto : texto?.texto;
+    return typeof contenido === 'string' && contenido.includes('\n');
+  };
+}
+
+/**
+ * Sustituye las marcas de expresion fallida en lo que la linea ha escrito en
+ * el buffer: con `valorPorDefecto` usa ese texto, y sin el restaura el literal
+ * original. No hace nada si el marcado no esta activo.
+ *
+ * El tramo se une primero porque el ajuste de linea puede partir una marca
+ * entre varias entradas del buffer; el contenido final es identico porque el
+ * ticket se arma con ctx.p.join('').
+ */
+function resolverMarcasDeLinea(ctx: Ctx, desde: number, valorPorDefecto?: string): void {
+  const tramo = ctx.p.slice(desde).join('');
+  if (tramo.indexOf(MARCA_INICIO) === -1) return;
+  ctx.p.length = desde;
+  ctx.p.push(sustituirMarcasFallo(tramo, valorPorDefecto));
+}
+
 export function formatTicketPOS(data: any, company?: CompanyInfo, config?: PlantillaConfig, opciones?: OpcionesTicketRender): string {
-  const cfg = normalizarConfig(aplicarExpresiones(config, data, company));
+  const cfg = normalizarConfig(aplicarExpresiones(config, data, company, opciones?.marcarExpresionFallida === true));
   const width = cfg.opciones?.anchoLinea ?? LINE_LENGTH;
   const sepEtiqueta = opciones?.separadorEtiqueta ?? SEPARADOR_ETIQUETA;
+  const esBloqueMultilinea = predicadoTextoLibreMultilinea(cfg, opciones);
   const zonas = normalizarZonasDetalle(cfg.zonas || [], 'detalles');
 
   // ── DIAGNÓSTICO TEMPORAL TIPO_COMP ──
@@ -1309,6 +1361,13 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
   data.TITULO = tituloTexto;
 
   function emitirLinea(linea: LineaZonaConfig, enGrupo?: boolean) {
+    // Preview: una expresion que no compila se resuelve con valorPorDefecto.
+    const desde = ctx.p.length;
+    emitirLineaContenido(linea, enGrupo);
+    resolverMarcasDeLinea(ctx, desde, linea.valorPorDefecto);
+  }
+
+  function emitirLineaContenido(linea: LineaZonaConfig, enGrupo?: boolean) {
     // Evaluar condición si existe — si es falsy, no emitir nada
     if (linea.condicion && linea.condicion.trim()) {
       try {
@@ -1464,7 +1523,7 @@ export function formatTicketPOS(data: any, company?: CompanyInfo, config?: Plant
 
   function emitirLineasConBuffer(lineas: LineaZonaConfig[]) {
     if (lineas.some((l) => l.lineaNum !== undefined)) {
-      renderLineasAgrupadas(lineas, width, ctx.p, emitirLinea);
+      renderLineasAgrupadas(lineas, width, ctx.p, emitirLinea, esBloqueMultilinea);
       return;
     }
     const buffer: string[] = [];
@@ -2345,9 +2404,10 @@ function renderCampoFRI(
 }
 
 export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, config?: PlantillaConfig, opciones?: OpcionesTicketRender): string {
-  const cfg = normalizarConfigRI(aplicarExpresiones(config, data, company));
+  const cfg = normalizarConfigRI(aplicarExpresiones(config, data, company, opciones?.marcarExpresionFallida === true));
   const width = cfg.opciones?.anchoLinea ?? LINE_LENGTH;
   const sepEtiqueta = opciones?.separadorEtiqueta ?? SEPARADOR_ETIQUETA;
+  const esBloqueMultilinea = predicadoTextoLibreMultilinea(cfg, opciones);
   const zonas = cfg.zonas || [];
   const cob = cfg.cobros || {};
   const pie = config?.pie?.textoPie ?? cfg.pie?.textoPie ?? 'Gracias por su preferencia!';
@@ -2372,6 +2432,13 @@ export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, conf
   data.TITULO = tituloTexto;
 
   function emitirLinea(linea: LineaZonaConfig, enGrupo?: boolean) {
+    // Preview: una expresion que no compila se resuelve con valorPorDefecto.
+    const desde = ctx.p.length;
+    emitirLineaContenido(linea, enGrupo);
+    resolverMarcasDeLinea(ctx, desde, linea.valorPorDefecto);
+  }
+
+  function emitirLineaContenido(linea: LineaZonaConfig, enGrupo?: boolean) {
     if (linea.ref === 'SEPARADOR') { _emitirSep(ctx, linea); return; }
     if (linea.ref === 'ESPACIO') { _emitirEspacio(ctx); return; }
     if (linea.ref.startsWith('LIBRE:') || linea.ref.startsWith('DTO:') || linea.ref.startsWith('FIRMA:')) {
@@ -2490,7 +2557,7 @@ export function formatTicketReciboIngreso(data: any, company?: CompanyInfo, conf
 
   function emitirLineasConBuffer(lineas: LineaZonaConfig[]) {
     if (lineas.some((l) => l.lineaNum !== undefined)) {
-      renderLineasAgrupadas(lineas, width, ctx.p, emitirLinea);
+      renderLineasAgrupadas(lineas, width, ctx.p, emitirLinea, esBloqueMultilinea);
       return;
     }
     const buffer: string[] = [];
@@ -2806,6 +2873,7 @@ function renderCampoVSNT(
   fmtValor?: FormatoItemTicket,
   sepEtiqueta: string = SEPARADOR_ETIQUETA,
   valor?: OpcionesValorLinea,
+  tipoDato?: 'texto' | 'fecha' | 'numero' | 'dinero',
 ): string | null {
   const w = width ?? 42;
   const fmt = fmtOv;
@@ -2925,7 +2993,7 @@ function formatoVoucherHardcoded(data: any, company?: CompanyInfo): string {
  * Recorre las zonas de la config normalizada (todas encabezado_reporte) y emite
  * los campos VSNT con sus labels y formatos editables.
  */
-function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: PlantillaConfig, width: number, sepEtiqueta: string = SEPARADOR_ETIQUETA): string {
+function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: PlantillaConfig, width: number, sepEtiqueta: string = SEPARADOR_ETIQUETA, esBloqueMultilinea: (ln: LineaZonaConfig) => boolean = () => false): string {
   const zonas = cfg.zonas || [];
   const textosLibres = cfg.textosLibres || cfg.campos?.textosLibres;
   const camposDTO = cfg.camposDTO || cfg.campos?.camposDTO;
@@ -2945,6 +3013,13 @@ function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: P
   let filaActual: Record<string, any> | null = null;
 
   function emitirLinea(linea: LineaZonaConfig, enGrupo?: boolean) {
+    // Preview: una expresion que no compila se resuelve con valorPorDefecto.
+    const desde = ctx.p.length;
+    emitirLineaContenido(linea, enGrupo);
+    resolverMarcasDeLinea(ctx, desde, linea.valorPorDefecto);
+  }
+
+  function emitirLineaContenido(linea: LineaZonaConfig, enGrupo?: boolean) {
     if (linea.ref === 'SEPARADOR') { _emitirSep(ctx, linea); return; }
     if (linea.ref === 'ESPACIO') { _emitirEspacio(ctx); return; }
     if (linea.ref.startsWith('LIBRE:') || linea.ref.startsWith('DTO:') || linea.ref.startsWith('FIRMA:')) {
@@ -2953,7 +3028,7 @@ function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: P
     }
     if (linea.ref.startsWith('CAMPO:')) {
       const clave = linea.ref.slice(6);
-      const render = renderCampoVSNT(clave, data, linea.label, linea.formato, width, linea.mostrarLabel, linea.formatoLabel || linea.formato, linea.formatoValor, sepEtiqueta, linea);
+      const render = renderCampoVSNT(clave, data, linea.label, linea.formato, width, linea.mostrarLabel, linea.formatoLabel || linea.formato, linea.formatoValor, sepEtiqueta, linea, linea.tipoDato);
       if (render) ctx.p.push(render);
       _restaurarFmt(ctx, linea.formato);
       return;
@@ -2983,7 +3058,7 @@ function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: P
   // se impriman en la misma linea fisica del ticket.
   function emitirLineasConBuffer(lineas: LineaZonaConfig[]) {
     if (lineas.some((l) => l.lineaNum !== undefined)) {
-      renderLineasAgrupadas(lineas, width, ctx.p, emitirLinea);
+      renderLineasAgrupadas(lineas, width, ctx.p, emitirLinea, esBloqueMultilinea);
       return;
     }
     const buffer: string[] = [];
@@ -3072,14 +3147,14 @@ function formatoVoucherZonas(data: any, company: CompanyInfo | undefined, cfg: P
  *   pie vacio, feed de corte 3) y agrega feed + corte al final.
  */
 export function formatTicketVoucherVisanet(data: any, company?: CompanyInfo, config?: PlantillaConfig, opciones?: OpcionesTicketRender): string {
-  const cfg = normalizarConfigVSNT(aplicarExpresiones(config, data, company));
+  const cfg = normalizarConfigVSNT(aplicarExpresiones(config, data, company, opciones?.marcarExpresionFallida === true));
   const width = cfg.opciones?.anchoLinea ?? 42;
 
   if (!config) {
     return formatoVoucherHardcoded(data, company);
   }
 
-  const body = formatoVoucherZonas(data, company, cfg, width, opciones?.separadorEtiqueta ?? SEPARADOR_ETIQUETA);
+  const body = formatoVoucherZonas(data, company, cfg, width, opciones?.separadorEtiqueta ?? SEPARADOR_ETIQUETA, predicadoTextoLibreMultilinea(cfg, opciones));
   const feedCorte = cfg.opciones?.feedCorte ?? 3;
   return body + feed(feedCorte) + CMD_CUT;
 }

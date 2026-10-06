@@ -4,15 +4,12 @@ import { Drawer, List, Button, InputNumber, Skeleton, Empty, Typography, Divider
 import { DeleteOutlined, ShoppingCartOutlined } from '@ant-design/icons';
 import { useCarritoStore } from '../../../stores/useCarritoStore';
 import { message } from 'antd';
+import { formatMoneda } from '../../../utils/formats';
 
 const { Text, Title } = Typography;
 
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-DO', {
-    style: 'currency',
-    currency: 'DOP',
-    minimumFractionDigits: 2,
-  }).format(value);
+  return formatMoneda(value);
 }
 
 interface CarritoDrawerProps {

@@ -86,7 +86,7 @@ export const ModalGenerarDocBancario: React.FC<Props> = ({ visible, onCancel, it
         } catch (e: any) {
           setProgresos((prev) => {
             const next = [...prev];
-            next[idx] = { ...next[idx], status: 'error', documentoGenerado: `Error: ${e?.message || 'desconocido'}` };
+            next[idx] = { ...next[idx], status: 'error', documentoGenerado: `Error: ${e?.response?.data?.errorMessage || e?.message || 'desconocido'}` };
             return next;
           });
         }
@@ -108,12 +108,20 @@ const columns: ColumnsType<ProgresoItem> = [
      { title: 'Total', dataIndex: 'total', width: 100, align: 'right', render: (t: number) => <Text strong>{t ? t.toFixed(2) : '-'}</Text> },
      {
        title: 'Estado',
-       width: 220,
+       width: 280,
        render: (_: any, record: ProgresoItem) => {
          if (record.status === 'pending') return <Tag>Pendiente</Tag>;
          if (record.status === 'creating') return <Progress percent={50} size="small" status="active" format={() => 'Creando...'} />;
          if (record.status === 'done') return <Tag color="green">Generado: {record.documentoGenerado}</Tag>;
-         return <Tag color="red">Error</Tag>;
+         const motivo = (record.documentoGenerado || 'Error desconocido').replace(/^Error:\s*/i, '');
+         return (
+           <Space direction="vertical" size={4} style={{ width: '100%' }}>
+             <Tag color="red">Error</Tag>
+             <Text type="danger" style={{ whiteSpace: 'normal', wordBreak: 'break-word', fontSize: 12 }}>
+               {motivo}
+             </Text>
+           </Space>
+         );
        },
      },
      {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography, message, Select } from 'antd';
+import { Typography, message} from 'antd';
+import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
 import { asientoContableApi } from '../../api/asientoContableApi';
 import { documentosApi } from '../../api/documentosApi';
@@ -39,31 +40,21 @@ const AsientosContables: React.FC = () => {
       .catch((err) => console.warn('Error al cargar documentos para filtro', err));
   }, [sucursalActiva]);
 
-  /* Contador para evitar condiciones de carrera entre fetches */
-  const fetchIdRef = useRef(0);
   const tipoDocRef = useRef<string>();
 
   const { state, rangoDefault, puedeEditar, tipoDoc, actions } = useDocumentoListado<TransaccionVistaDTO>({
     modulo: screenCode,
-    fetchVista: async (sucursal, desde, hasta, filas, salto, estado) => {
-      const id = ++fetchIdRef.current;
-      const result = await asientoContableApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado, tipoDocRef.current);
-      if (id !== fetchIdRef.current) return { data: [], total: 0 };
-      return result;
-    },
-    fetchFiltrar: async (sucursal, params) => {
-      const id = ++fetchIdRef.current;
-      const result = await asientoContableApi.filtrarConAsientos(sucursal, {
+    fetchVista: async (sucursal, desde, hasta, filas, salto, estado) =>
+      asientoContableApi.obtenerVista(sucursal, desde, hasta, filas, salto, estado, tipoDocRef.current),
+    fetchFiltrar: async (sucursal, params) =>
+      asientoContableApi.filtrarConAsientos(sucursal, {
         cantidad: params.cantidad,
         salto: params.salto,
         desde: params.desde,
         hasta: params.hasta,
         documento: params.documento,
         tipoDoc: tipoDocRef.current,
-      });
-      if (id !== fetchIdRef.current) return { data: [], total: 0 };
-      return result;
-    },
+      }),
     reporteUrl: () => '',
     tituloReporte: 'AsientoContable',
     tituloError: 'Error al cargar asientos contables',

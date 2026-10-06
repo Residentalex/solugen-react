@@ -7,40 +7,47 @@ const BASE_EMAIL = '/EntidadEmail';
 const BASE_CONT = '/EntidadContacto';
 const BASE_DIR = '/EntidadDireccion';
 
+// CLIENTES.codigo y SUPLIDORES.codigo comparten espacio de nombres, por lo que
+// las tablas de contacto exigen el tipo de entidad para no mezclar datos entre
+// un cliente y un proveedor homonimos.
+export type TipoEntidadContacto = 'CLI' | 'SUP';
+
+const params = (tipoEntidad: TipoEntidadContacto) => ({ tipoEntidad });
+
 export const entidadContactoApi = {
   // Teléfonos
-  obtenerTelefonos: async (sucursal: number, codigoEntidad: string): Promise<EntidadTelefonoDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<EntidadTelefonoDTO[]>>(`${BASE_TEL}/${sucursal}/${codigoEntidad}`);
+  obtenerTelefonos: async (sucursal: number, codigoEntidad: string, tipoEntidad: TipoEntidadContacto): Promise<EntidadTelefonoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<EntidadTelefonoDTO[]>>(`${BASE_TEL}/${sucursal}/${codigoEntidad}`, { params: params(tipoEntidad) });
     return data.data || [];
   },
-  guardarTelefonos: async (sucursal: number, codigoEntidad: string, items: EntidadTelefonoDTO[]): Promise<void> => {
-    await apiClient.post(`${BASE_TEL}/${sucursal}/${codigoEntidad}`, items);
+  guardarTelefonos: async (sucursal: number, codigoEntidad: string, items: EntidadTelefonoDTO[], tipoEntidad: TipoEntidadContacto): Promise<void> => {
+    await apiClient.post(`${BASE_TEL}/${sucursal}/${codigoEntidad}`, items, { params: params(tipoEntidad) });
   },
 
   // Emails
-  obtenerEmails: async (sucursal: number, codigoEntidad: string): Promise<EntidadEmailDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<EntidadEmailDTO[]>>(`${BASE_EMAIL}/${sucursal}/${codigoEntidad}`);
+  obtenerEmails: async (sucursal: number, codigoEntidad: string, tipoEntidad: TipoEntidadContacto): Promise<EntidadEmailDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<EntidadEmailDTO[]>>(`${BASE_EMAIL}/${sucursal}/${codigoEntidad}`, { params: params(tipoEntidad) });
     return data.data || [];
   },
-  guardarEmails: async (sucursal: number, codigoEntidad: string, items: EntidadEmailDTO[]): Promise<void> => {
-    await apiClient.post(`${BASE_EMAIL}/${sucursal}/${codigoEntidad}`, items);
+  guardarEmails: async (sucursal: number, codigoEntidad: string, items: EntidadEmailDTO[], tipoEntidad: TipoEntidadContacto): Promise<void> => {
+    await apiClient.post(`${BASE_EMAIL}/${sucursal}/${codigoEntidad}`, items, { params: params(tipoEntidad) });
   },
 
   // Contactos
-  obtenerContactos: async (sucursal: number, codigoEntidad: string): Promise<EntidadContactoDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<EntidadContactoDTO[]>>(`${BASE_CONT}/${sucursal}/${codigoEntidad}`);
+  obtenerContactos: async (sucursal: number, codigoEntidad: string, tipoEntidad: TipoEntidadContacto): Promise<EntidadContactoDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<EntidadContactoDTO[]>>(`${BASE_CONT}/${sucursal}/${codigoEntidad}`, { params: params(tipoEntidad) });
     return data.data || [];
   },
-  guardarContactos: async (sucursal: number, codigoEntidad: string, items: EntidadContactoDTO[]): Promise<void> => {
-    await apiClient.post(`${BASE_CONT}/${sucursal}/${codigoEntidad}`, items);
+  guardarContactos: async (sucursal: number, codigoEntidad: string, items: EntidadContactoDTO[], tipoEntidad: TipoEntidadContacto): Promise<void> => {
+    await apiClient.post(`${BASE_CONT}/${sucursal}/${codigoEntidad}`, items, { params: params(tipoEntidad) });
   },
 
   // Direcciones
-  obtenerDirecciones: async (sucursal: number, codigoEntidad: string): Promise<EntidadDireccionDTO[]> => {
-    const { data } = await apiClient.get<ApiResponse<EntidadDireccionDTO[]>>(`${BASE_DIR}/${sucursal}/${codigoEntidad}`);
+  obtenerDirecciones: async (sucursal: number, codigoEntidad: string, tipoEntidad: TipoEntidadContacto): Promise<EntidadDireccionDTO[]> => {
+    const { data } = await apiClient.get<ApiResponse<EntidadDireccionDTO[]>>(`${BASE_DIR}/${sucursal}/${codigoEntidad}`, { params: params(tipoEntidad) });
     return data.data || [];
   },
-  guardarDirecciones: async (sucursal: number, codigoEntidad: string, items: EntidadDireccionDTO[]): Promise<void> => {
-    await apiClient.post(`${BASE_DIR}/${sucursal}/${codigoEntidad}`, items);
+  guardarDirecciones: async (sucursal: number, codigoEntidad: string, items: EntidadDireccionDTO[], tipoEntidad: TipoEntidadContacto): Promise<void> => {
+    await apiClient.post(`${BASE_DIR}/${sucursal}/${codigoEntidad}`, items, { params: params(tipoEntidad) });
   },
 };

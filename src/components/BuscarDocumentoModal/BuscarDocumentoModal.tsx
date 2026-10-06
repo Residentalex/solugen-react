@@ -4,7 +4,7 @@ import { SearchOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
 import { apiClient } from '../../api/client';
-import { formatDate, formatNumber } from '../../utils/formats';
+import { formatDate, formatNumber, redondear2 } from '../../utils/formats';
 import { OrigenCuenta } from '../../types/contabilidad';
 
 interface BuscarDocumentoModalProps {
@@ -28,6 +28,12 @@ interface BuscarDocumentoModalProps {
   excluirSpaId?: number;
   /** Sucursal para el endpoint de bloqueo */
   sucursalForBloqueo?: number;
+  /**
+   * Codigo de MONEDAS.CODIGO del documento principal. La moneda del documento principal y la de
+   * los documentos relacionados debe ser igual: cuando se informa, el modal marca y bloquea la
+   * seleccion de documentos cuya moneda no coincide.
+   */
+  codigoMonedaPrincipal?: string;
 }
 
 /** Normaliza origenCuenta (string o number) al enum numerico OrigenCuenta */
@@ -44,7 +50,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   open, onClose, onSelect, tipoEntidad, codEntidad, origen,
   esDocumentoInventario, montoTotal,
   documentosIniciales, documentoEnviado, puedeAsignar = true,
-  transaccionId, excluirSpaId, sucursalForBloqueo,
+  transaccionId, excluirSpaId, sucursalForBloqueo, codigoMonedaPrincipal,
 }) => {
   const TIPO_DOC_CODES: string[] = [
     'AID','AIC','ABN','AJA','CBI','CDC','CHK','CHN','CIE','CIT',
@@ -76,6 +82,31 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
 
   const sucursalBloqueo = sucursalForBloqueo ?? sucursalActiva;
 
+  // Subconjunto del documento pendiente que necesita la regla de moneda. El endpoint devuelve el
+  // objeto completo, pero para esta regla solo importan el codigo y la moneda.
+  interface DocumentoPendienteLike {
+    id?: number;
+    codigoMoneda?: string;
+    moneda?: { codigo?: string } | null;
+  }
+
+  // ===== Moneda: debe coincidir con la del documento principal =====
+  const monedaPrincipal = (codigoMonedaPrincipal ?? '').trim() || null;
+
+  /** Moneda de un documento pendiente, tal como la expone el endpoint de pendientes. */
+  const monedaDocumento = useCallback((doc: DocumentoPendienteLike): string | null => {
+    const codigo = doc?.codigoMoneda ?? doc?.moneda?.codigo;
+    return typeof codigo === 'string' && codigo.trim() !== '' ? codigo.trim() : null;
+  }, []);
+
+  /** true solo cuando ambas monedas se conocen y son distintas. */
+  const monedaDistinta = useCallback((doc: DocumentoPendienteLike): boolean => {
+    if (!monedaPrincipal) return false;
+    const delDocumento = monedaDocumento(doc);
+    if (!delDocumento) return false;
+    return delDocumento.toUpperCase() !== monedaPrincipal.toUpperCase();
+  }, [monedaPrincipal, monedaDocumento]);
+
   // ===== Helper: construir codigo completo del documento =====
   const obtenerCodigoCompleto = useCallback((doc: any): string => {
     const codigoTipo = doc?.documento?.codigo
@@ -86,8 +117,14 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   }, []);
 
   // ===== Helper: obtener pendiente real (puede ser negativo en caso de sobrepago) =====
-  // Infiere el tipo de documento desde los valores numéricos sin depender de documento.origenCuenta
+  // Contracto nuevo del backend: `pendiente` ya viene calculado y con signo
+  // (negativo = sobrepago). Es la fuente de verdad.
   const _obtenerPendienteReal = useCallback((doc: any): number => {
+    if (typeof doc?.pendiente === 'number') return doc.pendiente;
+
+    // ===== FALLBACK TEMPORAL (solo si el backend desplegado aún no trae `pendiente`) =====
+    // Inferir el pendiente desde los valores numéricos total/creditos/debitos.
+    // Eliminar este bloque cuando el fix del backend esté desplegado en todos los ambientes.
     const total = doc?.total || 0;
     const creditos = doc?.creditos || 0;
     const debitos = doc?.debitos || 0;
@@ -108,8 +145,25 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
   }, []);
 
   // ===== Cálculo de pendiente para UI (nunca negativo) =====
+  // `doc.pendiente` ya viene con signo controlado por el backend; se descarta el
+  // tramo negativo (sobrepago) que se maneja aparte vía `esSobrepago`.
   const calcularPendiente = useCallback((doc: any): number => {
-    return Math.abs(_obtenerPendienteReal(doc));
+    return Math.max(0, _obtenerPendienteReal(doc));
+  }, [_obtenerPendienteReal]);
+
+  // ===== Helper: montos financieros unificados de un documento =====
+  // Fuente única de verdad para montoOriginal/pagado/saldoPendiente, compartida por
+  // las columnas y por handleConfirm. Consume el contracto nuevo del backend
+  // (`montoOriginal`/`pagado`/`pendiente` en decimal) con fallback temporal a los
+  // valores numéricos cuando el backend desplegado aún no los expone.
+  const _obtenerMontosFinancieros = useCallback((doc: any) => {
+    const pendienteReal = _obtenerPendienteReal(doc);
+    const esSobrepago = doc?.esSobrepago ?? (pendienteReal < 0);
+    const montoOriginal = redondear2(doc?.montoOriginal ?? (doc?.total || 0));
+    // FALLBACK temporal: si el backend aún no trae `pagado`, inferirlo (redondeado).
+    const pagado = redondear2(doc?.pagado ?? ((doc?.total || 0) - pendienteReal));
+    const saldoPendiente = redondear2(esSobrepago ? Math.abs(pendienteReal) : pendienteReal);
+    return { pendienteReal, esSobrepago, montoOriginal, pagado, saldoPendiente };
   }, [_obtenerPendienteReal]);
 
   // ===== Filtrado por texto de búsqueda (documento, NCF, doc. asociado) =====
@@ -198,7 +252,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
             if (!doc) return;
             const pendienteReal = _obtenerPendienteReal(doc);
             const pendiente = calcularPendiente(doc);
-            if (pendienteReal < 0) {
+            if (doc?.esSobrepago ?? (pendienteReal < 0)) {
               // Sobrepago: asignar valor absoluto
               const asignar = Math.min(Math.abs(pendienteReal), restante);
               montosIniciales[String(id)] = asignar;
@@ -326,7 +380,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
         const yaAsignado = Object.values(nuevos).reduce((s, v) => s + v, 0);
         const disponible = montoADistribuir > 0 ? montoADistribuir - yaAsignado : Math.abs(pendienteReal);
 
-        if (pendienteReal < 0) {
+        if (doc?.esSobrepago ?? (pendienteReal < 0)) {
           // Sobrepago: asignar valor absoluto
           nuevos[String(key)] = Math.min(Math.abs(pendienteReal), Math.max(0, disponible));
           return;
@@ -345,7 +399,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       const doc = documentos.find((d) => d.id === id);
       if (!doc) return s;
       const pendienteReal = _obtenerPendienteReal(doc);
-      if (pendienteReal < 0) {
+      if (doc?.esSobrepago ?? (pendienteReal < 0)) {
         return s + Math.abs(pendienteReal);
       }
       const p = calcularPendiente(doc);
@@ -374,7 +428,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
       }
       const pendienteReal = _obtenerPendienteReal(doc);
       const pendiente = calcularPendiente(doc);
-      if (pendienteReal < 0) {
+      if (doc?.esSobrepago ?? (pendienteReal < 0)) {
         const asignar = Math.min(Math.abs(pendienteReal), restante);
         nuevosMontos[key] = asignar;
         restante -= asignar;
@@ -405,24 +459,29 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
     },
     { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 140, render: (v: string) => v || '-' },
     {
+      title: 'Moneda', key: 'moneda', width: 100,
+      render: (_: unknown, r: DocumentoPendienteLike) => {
+        const codigo = monedaDocumento(r);
+        if (!codigo) return '-';
+        const distinta = monedaDistinta(r);
+        return (
+          <Tag color={distinta ? 'red' : 'default'} style={{ margin: 0 }}>
+            {codigo.toUpperCase()}
+          </Tag>
+        );
+      },
+    },
+    {
       title: 'Total', dataIndex: 'total', key: 'total', width: 120, align: 'right' as const,
       render: (v: number) => formatNumber(v || 0),
     },
     {
       title: 'Abonado', key: 'abonado', width: 120, align: 'right' as const,
-      render: (_: any, r: any) => {
-        const total = r?.total || 0;
-        const pendienteReal = _obtenerPendienteReal(r);
-        const abonado = total - pendienteReal;
-        return formatNumber(Math.max(0, abonado));
-      },
+      render: (_: any, r: any) => formatNumber(_obtenerMontosFinancieros(r).pagado),
     },
     {
       title: 'Saldo Pendiente', key: 'saldo', width: 120, align: 'right' as const,
-      render: (_: any, r: any) => {
-        const pendienteReal = _obtenerPendienteReal(r);
-        return <strong>{formatNumber(Math.abs(pendienteReal))}</strong>;
-      },
+      render: (_: any, r: any) => <strong>{formatNumber(_obtenerMontosFinancieros(r).saldoPendiente)}</strong>,
     },
     {
       title: 'Doc. Asociado',
@@ -439,7 +498,7 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
         const pendienteReal = _obtenerPendienteReal(record);
         const pendiente = calcularPendiente(record);
         const estaSeleccionado = selectedRowKeys.includes(record.id);
-        const maxMonto = pendienteReal < 0 ? Math.abs(pendienteReal) : pendiente;
+        const maxMonto = (record?.esSobrepago ?? pendienteReal < 0) ? Math.abs(pendienteReal) : pendiente;
         return (
           <InputNumber
             size="small"
@@ -462,30 +521,49 @@ const BuscarDocumentoModal: React.FC<BuscarDocumentoModalProps> = ({
 
   // ===== Confirmar selección =====
   const handleConfirm = () => {
-    const selected = selectedRowKeys
+    const docsSeleccionados = selectedRowKeys
       .filter((key) => !bloqueosMap[Number(key)]?.bloqueado)
-      .map((key) => {
-        const doc = documentos.find((d) => d.id === key);
-        const pendienteReal = _obtenerPendienteReal(doc);
-        const pendiente = calcularPendiente(doc);
-        const montoFila = montosPorFila[String(key)] ?? pendiente;
-        const esSobrepago = pendienteReal < 0;
-        return {
-          transaccionAsociadaID: doc?.id,
-          id: doc?.id,
-          documento: obtenerCodigoCompleto(doc),
-          nCF: doc?.ncf,
-          ncf: doc?.ncf,
-          montoOriginal: doc?.total || 0,
-          pagado: (doc?.total || 0) - pendienteReal,
-          saldoPendiente: pendiente,
-          monto: Math.min(montoFila, esSobrepago ? Math.abs(pendienteReal) : pendiente),
-          fecha: doc?.fechaDocumento,
-          tipoDocumento: doc?.tipoDocumento,
-          codigoSucursal: doc?.codigoSucursal,
-          sucursal: doc?.sucursal?.nombre,
-        };
-      });
+      .map((key) => documentos.find((d) => d.id === key));
+
+    // La moneda del documento principal y la de los relacionados debe ser igual.
+    const incompatibles = docsSeleccionados.filter((d) => monedaDistinta(d));
+
+    if (incompatibles.length > 0) {
+      const detalle = incompatibles
+        .map((d) => `${obtenerCodigoCompleto(d)} (${(monedaDocumento(d) ?? '').toUpperCase()})`)
+        .join(', ');
+      message.error(
+        `La moneda del documento (${monedaPrincipal!.toUpperCase()}) debe ser igual a la de los documentos relacionados. ` +
+        `Documentos con moneda distinta: ${detalle}.`
+      );
+      return;
+    }
+
+    const selected = docsSeleccionados.map((doc) => {
+      const { pendienteReal, esSobrepago, montoOriginal, pagado, saldoPendiente } =
+        _obtenerMontosFinancieros(doc);
+      const pendiente = calcularPendiente(doc);
+      const montoFila = montosPorFila[String(doc?.id)] ?? pendiente;
+
+      return {
+        transaccionAsociadaID: doc?.id,
+        id: doc?.id,
+        documento: obtenerCodigoCompleto(doc),
+        nCF: doc?.ncf,
+        ncf: doc?.ncf,
+        montoOriginal,
+        pagado,
+        saldoPendiente,
+        monto: redondear2(Math.min(montoFila, esSobrepago ? Math.abs(pendienteReal) : pendiente)),
+        fecha: doc?.fechaDocumento,
+        tipoDocumento: doc?.tipoDocumento,
+        codigoSucursal: doc?.codigoSucursal,
+        sucursal: doc?.sucursal?.nombre,
+        codigoMoneda: doc?.codigoMoneda ?? doc?.moneda?.codigo,
+        moneda: doc?.moneda,
+        tasa: doc?.tasa,
+      };
+    });
     onSelect(selected);
     onClose();
   };

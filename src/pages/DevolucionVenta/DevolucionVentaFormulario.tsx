@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Dropdown, Empty,
+  message, Form, Input, InputNumber,  DatePicker, Typography, Modal, Alert, Dropdown, Empty,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   InboxOutlined,
   SaveOutlined,
@@ -19,7 +20,6 @@ import {
   RedoOutlined,
   RollbackOutlined,
   HolderOutlined,
-  EditOutlined,
   HistoryOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
@@ -40,7 +40,6 @@ import type {
 import type { UnidadMedidaDTO } from '../../types/productos';
 import type { DetalleDevolucionVentaDTO, DevolucionVentaFullDTO } from '../../types/devolucionVenta';
 import LogTable from '../../components/LogTable';
-import BuscarConceptoModal from '../../components/BuscarConceptoModal/BuscarConceptoModal';
 import { unidadMedidaApi } from '../../api/unidadMedidaApi';
 
 import EntidadCard from '../../components/EntidadCard';
@@ -60,9 +59,10 @@ import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLa
 import AsientosContableEditables from '../../components/AsientosContableEditables/AsientosContableEditables';
 import AsientosContableTable from '../../components/AsientosContableTable';
 import { transaccionApi } from '../../api/transaccionApi';
+import MemoField from '../../components/MemoField/MemoField';
+import CamposRapidosFila from '../../components/CamposRapidosFila/CamposRapidosFila';
 
 const { Text } = Typography;
-const { TextArea } = Input;
 
 // ===== Cálculo de fila para DEV =====
 function calcularFila(fila: DetalleDevolucionVentaDTO): DetalleDevolucionVentaDTO {
@@ -93,6 +93,12 @@ function calcularFila(fila: DetalleDevolucionVentaDTO): DetalleDevolucionVentaDT
     impuestos,
     total,
   };
+}
+
+// ===== Etiqueta legible del documento (factura referencia) =====
+function etiquetaDocumento(doc: any, noDocumento?: string): string {
+  if (doc && typeof doc === 'object') return `${doc.codigo || ''}-${noDocumento || ''}`;
+  return (doc as string) || noDocumento || '';
 }
 
 function filaVacia(): DetalleDevolucionVentaDTO {
@@ -127,23 +133,42 @@ const BuscarFacturaModal: React.FC<BuscarFacturaModalProps> = ({ open, onClose, 
   const sucursalActiva = useAuthStore((s) => s.sucursalActiva);
   const [facturas, setFacturas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const searchRef = useRef<any>(null);
 
   useEffect(() => {
     if (!open) return;
     setLoading(true);
+    setSearchText('');
     const hoy = dayjs();
     const desde = hoy.subtract(90, 'day');
     const fmt = (d: dayjs.Dayjs) => d.format('YYYYMMDDHHmmss');
-    facturaPOSApi.obtenerVista(sucursalActiva, fmt(desde), fmt(hoy), 50, 0)
-      .then(setFacturas)
-      .catch(() => message.error('Error al cargar facturas'))
+    facturaPOSApi.obtenerVista(sucursalActiva, fmt(desde), fmt(hoy), 200, 0)
+      // obtenerVista devuelve { data, total }
+      .then((res) => setFacturas(Array.isArray(res?.data) ? res.data : []))
+      .catch((err) => message.error(extraerMensajeError(err, 'Error al cargar facturas')))
       .finally(() => setLoading(false));
   }, [open, sucursalActiva]);
 
+  // Foco del buscador al abrir (mismo delay de los demas modales de busqueda)
+  useEffect(() => {
+    if (!open) return;
+    const timer = setTimeout(() => { searchRef.current?.focus?.(); }, 100);
+    return () => clearTimeout(timer);
+  }, [open]);
+
+  const facturasFiltradas = facturas.filter((f) => {
+    if (!searchText) return true;
+    const q = searchText.toLowerCase();
+    return [f.documento, f.ncf, f.entidad, f.identificacion, f.referencia, f.concepto]
+      .some((v) => (v || '').toString().toLowerCase().includes(q));
+  });
+
   const columns = [
-    { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 140 },
+    { title: 'Documento', dataIndex: 'documento', key: 'documento', width: 240 },
     { title: 'Fecha', dataIndex: 'fecha', key: 'fecha', width: 110,
       render: (v: string) => formatDate(v) },
+    { title: 'NCF', dataIndex: 'ncf', key: 'ncf', width: 190 },
     { title: 'Cliente', dataIndex: 'entidad', key: 'entidad', ellipsis: true,
       render: (v: string) => toTitleCase(v || '') },
     { title: 'Total', dataIndex: 'total', key: 'total', width: 130, align: 'right' as const,
@@ -156,16 +181,26 @@ const BuscarFacturaModal: React.FC<BuscarFacturaModalProps> = ({ open, onClose, 
       open={open}
       onCancel={onClose}
       footer={null}
-      width={800}
+      width={1280}
       destroyOnHidden
     >
+      <Input.Search
+        ref={searchRef}
+        placeholder="Buscar por documento, NCF, cliente o RNC..."
+        allowClear
+        onSearch={(value) => setSearchText(value || '')}
+        onChange={(e) => { if (!e.target.value) setSearchText(''); }}
+        style={{ width: '100%', maxWidth: 500, marginBottom: 16 }}
+        prefix={<SearchOutlined className="paces-text-icon" />}
+      />
       <Table
-        dataSource={facturas}
+        dataSource={facturasFiltradas}
         columns={columns}
         rowKey="id"
         loading={loading}
         size="small"
-        pagination={{ pageSize: 10, showSizeChanger: false }}
+        scroll={{ x: 900 }}
+        pagination={{ pageSize: 10, showSizeChanger: false, showTotal: (t) => `${t} facturas` }}
         onRow={(record) => ({
           onClick: () => {
             onSelect(record);
@@ -266,15 +301,17 @@ const DevolucionVentaFormulario: React.FC = () => {
 
   const [searchParams] = useSearchParams();
   const pvId = searchParams.get('pvId');
-  const [desdePV, setDesdePV] = useState(false);
+  // La Factura Referencia es obligatoria: todo el documento se deriva de ella
+  const desdePV = !!selectedFactura;
 
   const [form] = Form.useForm();
 
   const ncfValue = Form.useWatch('ncf', form) || '';
   const tasaValue = Form.useWatch('tasa', form) ?? 1;
 
+  const monedaDefault = getMonedaSucursalActiva();
+
   const editValuesRef = useRef<Record<string, any>>({});
-  const impuestosBackupRef = useRef<Map<number, { impuesto?: any; porcentajeImpuesto: number }>>(new Map());
   const navigationConfirmedRef = useFormularioNavigation();
 
   const sensors = useSensors(
@@ -337,92 +374,85 @@ const DevolucionVentaFormulario: React.FC = () => {
   const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
   const [asientosModificados, setAsientosModificados] = useState(false);
 
+  // ===== Cargar todo el documento a partir de la Factura Referencia =====
+  const aplicarFacturaReferencia = useCallback(async (facturaId: number) => {
+    const facturaFull = await devolucionVentaApi.obtenerFacturaPOS(sucursalActiva, facturaId);
+    if (!facturaFull) {
+      message.error('Factura no encontrada');
+      return;
+    }
+
+    setSelectedFactura({
+      id: facturaFull.id,
+      documento: facturaFull.documento,
+      noDocumento: facturaFull.noDocumento,
+      fechaDocumento: facturaFull.fechaDocumento,
+    });
+
+    // Concepto, cliente y almacén provienen de la factura
+    setSelectedConcepto(facturaFull.concepto || null);
+    setSelectedCliente(facturaFull.cliente || null);
+    setSelectedAlmacen(facturaFull.almacen || null);
+
+    if (facturaFull.cliente) {
+      devolucionVentaApi.obtenerClientes(sucursalActiva)
+        .then((res: any) => setClientesCache(Array.isArray(res) ? res : []))
+        .catch((err) => console.warn('Error al cargar clientes cache', err));
+    }
+
+    const fechaActual = form.getFieldValue('fechaDocumento');
+    form.setFieldsValue({
+      concepto: facturaFull.concepto?.codigo || '',
+      cliente: facturaFull.cliente?.codigo || '',
+      almacen: facturaFull.almacen?.codigo || '',
+      fechaDocumento: mode === 'crear' ? dayjs() : (fechaActual || dayjs()),
+      moneda: facturaFull.moneda?.nombre || 'Peso Dominicano',
+      tasa: facturaFull.tasa || 1,
+    });
+
+    // Moneda para el TotalesCard
+    setFullData((prev: any) => {
+      if (!prev) return prev;
+      return { ...prev, moneda: facturaFull.moneda || null };
+    });
+
+    // Detalles de la factura, con la cantidad a devolver en 0
+    const nuevosDetalles: DetalleDevolucionVentaDTO[] = (facturaFull.detalles || []).map((d: any, idx: number) => ({
+      id: -(idx + 1),
+      idTransaccion: 0,
+      idAsociado: d.id,
+      codigo: d.codigo || '',
+      articulo: d.articulo || '',
+      referencia: d.referencia || '',
+      cantidad: 0, // El usuario elige cuánto devolver
+      cantidadOriginal: d.cantidad || 0, // Cantidad original de la PV
+      costo: d.costo || 0,
+      precio: d.precio || 0,
+      subTotal: 0,
+      porcentajeDescuento: d.porcentajeDescuento || 0,
+      descuento: 0,
+      porcentajeImpuesto: d.porcentajeImpuesto || 0,
+      impuestos: 0,
+      total: 0,
+      tipoArticulo: d.tipoArticulo || 'Producto',
+      tieneVencimiento: d.tieneVencimiento || false,
+      familia: d.familia,
+      medida: d.medida,
+      impuesto: d.impuesto,
+    }));
+
+    setDetalles(nuevosDetalles.map((d) => calcularFila(d)));
+    message.success(
+      `Factura ${etiquetaDocumento(facturaFull.documento, facturaFull.noDocumento)} cargada: ${nuevosDetalles.length} detalle(s). Indique la cantidad a devolver.`
+    );
+  }, [form, mode, sucursalActiva, setFullData]);
+
   // ===== Precarga desde PV (si viene query param pvId) =====
   useEffect(() => {
     if (mode !== 'crear' || !pvId) return;
-
     const cargarDesdePV = async () => {
       try {
-        const facturaFull = await devolucionVentaApi.obtenerFacturaPOS(sucursalActiva, parseInt(pvId));
-        if (!facturaFull) {
-          message.error('Factura POS no encontrada');
-          return;
-        }
-
-        setDesdePV(true);
-
-        // Crear objeto de factura simplificado para selectedFactura
-        const facturaObj = {
-          id: facturaFull.id,
-          documento: facturaFull.documento,
-          noDocumento: facturaFull.noDocumento,
-          fechaDocumento: facturaFull.fechaDocumento,
-        };
-        setSelectedFactura(facturaObj);
-
-        // Precargar concepto
-        if (facturaFull.concepto) {
-          setSelectedConcepto(facturaFull.concepto);
-        }
-
-        // Precargar cliente
-        if (facturaFull.cliente) {
-          setSelectedCliente(facturaFull.cliente);
-          // Cargar clientes cache para el Select
-          devolucionVentaApi.obtenerClientes(sucursalActiva)
-            .then(setClientesCache)
-            .catch(() => {});
-        }
-
-        // Precargar almacén
-        if (facturaFull.almacen) {
-          setSelectedAlmacen(facturaFull.almacen);
-        }
-
-        // Setear valores del formulario
-        form.setFieldsValue({
-          concepto: facturaFull.concepto?.codigo || '',
-          cliente: facturaFull.cliente?.codigo || '',
-          almacen: facturaFull.almacen?.codigo || '',
-          fechaDocumento: dayjs(),
-          moneda: facturaFull.moneda?.nombre || 'Peso Dominicano',
-          tasa: facturaFull.tasa || 1,
-        });
-
-        // Actualizar data para moneda en TotalesCard
-        setFullData((prev: any) => {
-          if (!prev) return prev;
-          return { ...prev, moneda: facturaFull.moneda || null };
-        });
-
-        // Precargar detalles desde la PV
-        if (facturaFull.detalles && facturaFull.detalles.length > 0) {
-          const nuevosDetalles: DetalleDevolucionVentaDTO[] = facturaFull.detalles.map((d: any, idx: number) => ({
-            id: -(idx + 1),
-            idTransaccion: 0,
-            idAsociado: d.id,
-            codigo: d.codigo || '',
-            articulo: d.articulo || '',
-            referencia: d.referencia || '',
-            cantidad: 0, // Default 0 — el usuario elige cuánto devolver
-            cantidadOriginal: d.cantidad || 0, // Guardar cantidad original de la PV
-            costo: d.costo || 0,
-            precio: d.precio || 0,
-            subTotal: 0,
-            porcentajeDescuento: d.porcentajeDescuento || 0,
-            descuento: 0,
-            porcentajeImpuesto: d.porcentajeImpuesto || 0,
-            impuestos: 0,
-            total: 0,
-            tipoArticulo: d.tipoArticulo || 'Producto',
-            tieneVencimiento: d.tieneVencimiento || false,
-            familia: d.familia,
-            medida: d.medida,
-            impuesto: d.impuesto,
-          }));
-          setDetalles(nuevosDetalles.map((d) => calcularFila(d)));
-          message.success(`Se cargaron ${nuevosDetalles.length} detalles de la factura POS`);
-        }
+        await aplicarFacturaReferencia(parseInt(pvId, 10));
       } catch (err: any) {
         const msg = extraerMensajeError(err, 'Error al cargar la factura POS');
         message.error(msg);
@@ -430,7 +460,7 @@ const DevolucionVentaFormulario: React.FC = () => {
     };
 
     cargarDesdePV();
-  }, [mode, pvId, sucursalActiva, form]);
+  }, [mode, pvId, sucursalActiva, aplicarFacturaReferencia]);
 
   // ===== Handlers =====
   const handleCancelar = () => {
@@ -457,21 +487,22 @@ const DevolucionVentaFormulario: React.FC = () => {
   // Validación del formulario
   const validarFormulario = (): string | null => {
     const values = form.getFieldsValue();
+    if (!selectedFactura) return 'Debe seleccionar la Factura Referencia para poder continuar';
     if (!selectedConcepto) return 'Debe elegir un Concepto para poder continuar';
     if (!selectedCliente && !values.cliente) return 'El cliente es requerido';
     if (!selectedAlmacen && !values.almacen) return 'El almacén es requerido';
     if (detalles.length === 0) return 'No se puede crear un documento de DEVOLUCIÓN VENTA sin detalle.';
     if (!detalles.some((d) => (d.cantidad || 0) > 0)) return 'Debe tener al menos un detalle con cantidad > 0';
 
-    // Si viene desde PV, validar que ninguna cantidad a devolver exceda la cantidad original
+    // Con factura referencia, ninguna cantidad a devolver puede exceder la original
     if (desdePV) {
       const excedido = detalles.find((d) => (d.cantidadOriginal || 0) > 0 && (d.cantidad || 0) > (d.cantidadOriginal || 0));
       if (excedido) {
         return `La cantidad a devolver del artículo "${excedido.articulo}" (${excedido.cantidad}) excede la cantidad original de la factura (${excedido.cantidadOriginal})`;
       }
-      // La nota es obligatoria para devoluciones desde factura POS
+      // La nota es obligatoria en devoluciones con factura referencia
       if (!values.nota || !values.nota.trim()) {
-        return 'La nota es obligatoria para devoluciones desde factura POS';
+        return 'La nota es obligatoria para devoluciones con factura referencia';
       }
     }
 
@@ -588,20 +619,16 @@ const DevolucionVentaFormulario: React.FC = () => {
     setSaving(true);
     try {
       if (mode === 'crear') {
-        if (desdePV && pvId) {
-          const dto = construirDTO();
-          const detallesValidos = dto.detalles || [];
-          const result = await devolucionVentaApi.crearDesdePV(sucursalActiva, parseInt(pvId), { detalles: detallesValidos });
-          message.success('Devolución de venta creada exitosamente');
-          navigationConfirmedRef.current = true;
-          navigate(`/FDEV/${result.id}`, { replace: true });
-        } else {
-          const dto = construirDTO();
-          const result = await devolucionVentaApi.crear(sucursalActiva, dto);
-          message.success('Devolución de venta creada exitosamente');
-          navigationConfirmedRef.current = true;
-          navigate(`/FDEV/${result.id}`, { replace: true });
-        }
+        // La factura referencia es obligatoria: el encabezado se arma en el backend desde la PV
+        const dto = construirDTO();
+        const result = await devolucionVentaApi.crearDesdePV(
+          sucursalActiva,
+          selectedFactura.id,
+          { detalles: dto.detalles || [], nota: dto.nota }
+        );
+        message.success('Devolución de venta creada exitosamente');
+        navigationConfirmedRef.current = true;
+        navigate(`/FDEV/${result.id}`, { replace: true });
       } else {
         const dto = construirDTO();
         await devolucionVentaApi.actualizar(sucursalActiva, dto);
@@ -632,171 +659,47 @@ const DevolucionVentaFormulario: React.FC = () => {
     });
   };
 
-  // ===== Handlers de concepto =====
-  const handleConceptoSelect = (concepto: ConceptoDTO) => {
-    setSelectedConcepto(concepto);
-
-    // === ConfigurarMoneda (siempre desde concepto) ===
-    const monedaObj = concepto.moneda || getMonedaSucursalActiva();
-    form.setFieldsValue({
-      concepto: concepto.codigo,
-      moneda: monedaObj.nombre,
-      tasa: monedaObj.tasa ?? 1,
-    });
-    // Actualizar data local para que la UI lo refleje
-    setFullData((prev: any) => {
-      if (!prev) return prev;
-      return { ...prev, moneda: monedaObj };
-    });
-
-    // Cargar clientes
-    devolucionVentaApi.obtenerClientes(sucursalActiva)
-      .then((ents) => setClientesCache(ents))
-      .catch((err) => console.warn('Error al cargar clientes cache al cambiar concepto', err));
-
-    // === ValidarImpuestosProducto (con backup/restore) ===
-    const prevNoImpuesto = selectedConcepto?.noImpuesto;
-
-    if (concepto.noImpuesto) {
-      // Guardar backup de impuestos actuales antes de limpiarlos
-      const hayImpuestos = detalles.some((d) => (d.porcentajeImpuesto || 0) > 0);
-      if (hayImpuestos) {
-        const backup = new Map<number, { impuesto?: any; porcentajeImpuesto: number }>();
-        detalles.forEach((d) => {
-          if ((d.porcentajeImpuesto || 0) > 0) {
-            backup.set(d.id, { impuesto: d.impuesto, porcentajeImpuesto: d.porcentajeImpuesto || 0 });
-          }
-        });
-        impuestosBackupRef.current = backup;
-
-        message.warning('El Concepto no acepta Impuestos, por lo que serán eliminados.');
-        setDetalles((prev) =>
-          prev.map((d) => calcularFila({ ...d, porcentajeImpuesto: 0, impuesto: undefined }))
-        );
+  // ===== Handlers de factura referencia =====
+  const handleFacturaSelect = (factura: any) => {
+    const cargar = async () => {
+      try {
+        await aplicarFacturaReferencia(factura.id);
+      } catch (err: any) {
+        message.error(extraerMensajeError(err, 'Error al cargar la factura'));
       }
-    } else if (prevNoImpuesto && !concepto.noImpuesto) {
-      // Restaurar impuestos desde backup
-      const backup = impuestosBackupRef.current;
-      if (backup.size > 0) {
-        setDetalles((prev) =>
-          prev.map((d) => {
-            const saved = backup.get(d.id);
-            if (saved) {
-              return calcularFila({ ...d, impuesto: saved.impuesto, porcentajeImpuesto: saved.porcentajeImpuesto });
-            }
-            return d;
-          })
-        );
-        impuestosBackupRef.current = new Map();
-      }
-    }
+    };
 
-    // Si el concepto tiene almacén por defecto
-    if (concepto.almacen?.codigo) {
-      const alm = almacenesCache.find((a) => a.codigo === concepto.almacen!.codigo);
-      if (alm) {
-        setSelectedAlmacen(alm);
-        form.setFieldsValue({ almacen: alm.codigo });
-      }
-    }
-  };
-
-  const handleConceptoSearchClick = () => {
-    setConceptoModalOpen(true);
-  };
-
-  const [conceptoModalOpen, setConceptoModalOpen] = useState(false);
-  const [conceptoSearchText, setConceptoSearchText] = useState('');
-
-  const handleConceptoClear = () => {
-    setSelectedConcepto(null);
-    setConceptoSearchText('');
-    setClientesCache([]);
-    form.setFieldsValue({ concepto: '', cliente: undefined });
-  };
-
-  // ===== Handlers de factura origen =====
-  const handleFacturaSelect = async (factura: any) => {
-    setSelectedFactura(factura);
-    // Cargar detalle completo de la factura para clonar sus líneas
-    try {
-      const facturaFull = await devolucionVentaApi.obtenerFacturaPOS(sucursalActiva, factura.id);
-      if (facturaFull?.detalles && facturaFull.detalles.length > 0) {
-        // Confirmar antes de reemplazar detalles existentes
-        if (detalles.length > 0) {
-          Modal.confirm({
-            title: '¿Reemplazar detalles?',
-            icon: <ExclamationCircleOutlined />,
-            content: 'Al seleccionar una factura se reemplazarán los detalles actuales por los de la factura. ¿Desea continuar?',
-            okText: 'Sí, reemplazar',
-            cancelText: 'No',
-            onOk: () => {
-              setDesdePV(true);
-              const nuevosDetalles: DetalleDevolucionVentaDTO[] = facturaFull.detalles.map((d: any, idx: number) => ({
-                id: -(idx + 1),
-                idTransaccion: 0,
-                idAsociado: d.id,
-                codigo: d.codigo || '',
-                articulo: d.articulo || '',
-                referencia: d.referencia || '',
-                cantidad: 0, // Default 0 — el usuario elige cuánto devolver
-                cantidadOriginal: d.cantidad || 0, // Cantidad original de la PV
-                costo: d.costo || 0,
-                precio: d.precio || 0,
-                subTotal: 0,
-                porcentajeDescuento: d.porcentajeDescuento || 0,
-                descuento: 0,
-                porcentajeImpuesto: d.porcentajeImpuesto || 0,
-                impuestos: 0,
-                total: 0,
-                tipoArticulo: d.tipoArticulo || 'Producto',
-                tieneVencimiento: d.tieneVencimiento || false,
-                familia: d.familia,
-                medida: d.medida,
-                impuesto: d.impuesto,
-              }));
-              setDetalles(nuevosDetalles.map((d) => calcularFila(d)));
-              message.success(`Se cargaron ${nuevosDetalles.length} detalles de la factura`);
-            },
-          });
-        } else {
-          setDesdePV(true);
-          const nuevosDetalles: DetalleDevolucionVentaDTO[] = facturaFull.detalles.map((d: any, idx: number) => ({
-            id: -(idx + 1),
-            idTransaccion: 0,
-            idAsociado: d.id,
-            codigo: d.codigo || '',
-            articulo: d.articulo || '',
-            referencia: d.referencia || '',
-            cantidad: 0, // Default 0 — el usuario elige cuánto devolver
-            cantidadOriginal: d.cantidad || 0, // Cantidad original de la PV
-            costo: d.costo || 0,
-            precio: d.precio || 0,
-            subTotal: 0,
-            porcentajeDescuento: d.porcentajeDescuento || 0,
-            descuento: 0,
-            porcentajeImpuesto: d.porcentajeImpuesto || 0,
-            impuestos: 0,
-            total: 0,
-            tipoArticulo: d.tipoArticulo || 'Producto',
-            tieneVencimiento: d.tieneVencimiento || false,
-            familia: d.familia,
-            medida: d.medida,
-            impuesto: d.impuesto,
-          }));
-          setDetalles(nuevosDetalles.map((d) => calcularFila(d)));
-          message.success(`Se cargaron ${nuevosDetalles.length} detalles de la factura`);
-        }
-      }
-    } catch {
-      message.error('Error al cargar los detalles de la factura');
+    // En edición puede haber datos cargados que se reemplazarán
+    if (detalles.length > 0 || selectedConcepto) {
+      Modal.confirm({
+        title: '¿Reemplazar los datos actuales?',
+        icon: <ExclamationCircleOutlined />,
+        content: 'Al seleccionar la factura se reemplazarán el concepto, cliente, almacén y los detalles actuales por los de la factura. ¿Desea continuar?',
+        okText: 'Sí, reemplazar',
+        cancelText: 'No',
+        onOk: cargar,
+      });
+    } else {
+      cargar();
     }
   };
 
   const handleFacturaClear = () => {
+    // Sin factura referencia no hay documento: se limpia todo lo derivado de ella
     setSelectedFactura(null);
-    setDesdePV(false);
-    form.setFieldsValue({ referencia: '' });
+    setSelectedConcepto(null);
+    setSelectedCliente(null);
+    setSelectedAlmacen(null);
+    setClientesCache([]);
+    setDetalles([]);
+    form.setFieldsValue({
+      concepto: '',
+      cliente: undefined,
+      almacen: undefined,
+      referencia: '',
+      moneda: getMonedaSucursalActiva().nombre,
+      tasa: 1,
+    });
   };
 
   // ===== Handlers de detalles =====
@@ -1243,47 +1146,34 @@ const DevolucionVentaFormulario: React.FC = () => {
         <Col xs={24} xxl={18}>
           <Form form={form} layout="vertical" size="middle" style={{ paddingTop: 24 }}>
         <Row gutter={[16, 24]}>
-          {/* Fila 1: Factura Referencia */}
+          {/* Fila 1: Factura Referencia (obligatoria, punto de partida del documento) */}
           <Col xs={24} sm={12} lg={9}>
             <div>
-              <FloatingField label="Factura Referencia">
+              <FloatingField label="Factura Referencia" required>
                 <Input
                   placeholder=" "
-                  value={selectedFactura
-                    ? `${typeof selectedFactura.documento === 'object' ? (selectedFactura.documento?.codigo || '') + '-' + (selectedFactura.noDocumento || '') : selectedFactura.documento}`
-                    : ''}
+                  value={selectedFactura ? etiquetaDocumento(selectedFactura.documento, selectedFactura.noDocumento) : ''}
                   readOnly
                   suffix={
-                    !desdePV ? (
                     <Space size={4}>
                       <SearchOutlined onClick={() => setFacturaModalOpen(true)} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
                       {selectedFactura && <ClearOutlined onClick={handleFacturaClear} style={{ cursor: 'pointer' }} />}
                     </Space>
-                    ) : undefined
                   }
-                  onClick={desdePV ? undefined : () => setFacturaModalOpen(true)}
+                  onClick={() => setFacturaModalOpen(true)}
                 />
               </FloatingField>
             </div>
           </Col>
 
-          {/* Fila 1: Concepto */}
+          {/* Concepto: proviene de la factura referencia */}
           <Col xs={24} sm={12} lg={15}>
             <div>
               <FloatingField label="Concepto" required>
                 <Input
                   placeholder=" "
-                  value={selectedConcepto ? `${selectedConcepto.codigo || ''} - ${toTitleCase(selectedConcepto.nombre)}` : conceptoSearchText}
+                  value={selectedConcepto ? `${selectedConcepto.codigo || ''} - ${toTitleCase(selectedConcepto.nombre)}` : ''}
                   readOnly
-                  suffix={
-                    !desdePV ? (
-                    <Space size={4}>
-                      <SearchOutlined onClick={handleConceptoSearchClick} style={{ cursor: 'pointer', color: 'rgba(0,0,0,0.45)' }} />
-                      {selectedConcepto && <ClearOutlined onClick={handleConceptoClear} style={{ cursor: 'pointer' }} />}
-                    </Space>
-                    ) : undefined
-                  }
-                  onClick={desdePV ? undefined : handleConceptoSearchClick}
                 />
               </FloatingField>
               <ConceptoInfoLabel concepto={selectedConcepto} />
@@ -1372,62 +1262,54 @@ const DevolucionVentaFormulario: React.FC = () => {
           </Col>
 
           {/* Fila 4: Botones rápidos NCF + Tasa */}
-          <Col xs={24}>
-            <div style={{ marginBottom: 16 }}>
-              <Space size={[8, 8]} wrap>
-                {/* NCF */}
-                <div>
-                  {editingField === 'ncf' ? (
-                    <Input size="small" style={{ width: 200 }} placeholder="NCF" maxLength={19}
-                      autoFocus defaultValue={editingValueRef.current as string}
-                      onChange={(e) => { editingValueRef.current = e.target.value; }}
-                      onPressEnter={() => commitFieldEditor()}
-                      onBlur={() => commitFieldEditor()}
-                      onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); } }}
-                    />
-                  ) : ncfValue ? (
-                    <Tag style={{ fontSize: 14, padding: '6px 16px', cursor: desdePV ? 'default' : 'pointer' }} onClick={desdePV ? undefined : () => openFieldEditor('ncf')}>
-                      NCF: {ncfValue} {!desdePV && <EditOutlined />}
-                    </Tag>
-                  ) : (
-                    !desdePV ? (
-                    <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
-                      <PlusOutlined /> NCF
-                    </Tag>
-                    ) : null
-                  )}
-                </div>
-                {/* Tasa */}
-                <div>
-                  {editingField === 'tasa' ? (
-                    <InputNumber size="small" style={{ width: 120 }} min={0} step={0.01} precision={4}
-                      autoFocus defaultValue={editingValueRef.current as number}
-                      onChange={(val) => { editingValueRef.current = val ?? 0; }}
-                      onPressEnter={() => commitFieldEditor()}
-                      onBlur={() => commitFieldEditor()}
-                      onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); } }}
-                    />
-                  ) : (
-                    <Tag style={{ fontSize: 14, padding: '6px 16px', cursor: desdePV ? 'default' : 'pointer' }} onClick={desdePV ? undefined : () => openFieldEditor('tasa')}>
-                      Tasa: {tasaValue} {!desdePV && <EditOutlined />}
-                    </Tag>
-                  )}
-                </div>
-              </Space>
-            </div>
-          </Col>
+          <CamposRapidosFila
+            ncf={
+              desdePV
+                ? ncfValue
+                  ? {
+                      valor: ncfValue,
+                      readOnly: true,
+                      prefijo: 'NCF: ',
+                      onEdit: () => openFieldEditor('ncf'),
+                      onCommit: commitFieldEditor,
+                      onCancel: cancelFieldEditor,
+                    }
+                  : undefined
+                : {
+                    valor: ncfValue,
+                    editando: editingField === 'ncf',
+                    etiqueta: 'NCF',
+                    prefijo: 'NCF: ',
+                    placeholder: 'NCF',
+                    maxLength: 19,
+                    onEdit: () => openFieldEditor('ncf'),
+                    onCommit: commitFieldEditor,
+                    onCancel: cancelFieldEditor,
+                    onChange: (v) => { editingValueRef.current = v; },
+                  }
+            }
+            tasa={{
+              tasa: tasaValue,
+              editable: !desdePV,
+              editando: editingField === 'tasa',
+              onEdit: () => openFieldEditor('tasa'),
+              onChange: (v) => { editingValueRef.current = v ?? 0; },
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+            }}
+            ocultos={[
+              { name: 'ncf' },
+              { name: 'tasa', editor: 'number' },
+            ]}
+          />
 
           {/* Fila 5: Nota */}
           <Col xs={24}>
             <Form.Item name="nota" style={{ marginBottom: 0 }}>
-              <FloatingField label="Nota">
-                <TextArea rows={3} maxLength={500} showCount />
-              </FloatingField>
+              <MemoField label="Nota" />
             </Form.Item>
           </Col>
         </Row>
-            <Form.Item name="ncf" hidden><Input /></Form.Item>
-            <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
       </Form>
         </Col>
         <Col xs={24} xxl={6}>
@@ -1438,8 +1320,8 @@ const DevolucionVentaFormulario: React.FC = () => {
               impuestos={totales.impuestos}
               total={totales.total}
               hideTitle
-              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || 'RD$'}
-              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || 'Peso Dominicano'}
+              monedaSimbolo={data?.moneda?.simbolo || selectedConcepto?.moneda?.simbolo || monedaDefault.simbolo}
+              monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || monedaDefault.nombre}
               tasa={tasaValue ?? data?.tasa ?? 1}
             />
           </div>
@@ -1452,16 +1334,29 @@ const DevolucionVentaFormulario: React.FC = () => {
     <div>
       <FormularioToolbar saving={saving} estado={estado} periodo={data?.periodo} onGuardar={handleGuardar} onCancelar={handleCancelar} />
 
+      {!selectedFactura && (
+        <Alert
+          message="Paso 1: seleccione la Factura Referencia"
+          description="La devolución se construye a partir de la factura: concepto, cliente, almacén, moneda y productos se cargan automáticamente. Luego indique la cantidad a devolver de cada línea."
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          closable={false}
+          action={
+            <Button size="small" type="primary" icon={<SearchOutlined />} onClick={() => setFacturaModalOpen(true)}>
+              Buscar factura
+            </Button>
+          }
+        />
+      )}
+
       {desdePV && selectedFactura && (
         <Alert
           message={
             <span>
-              Devolución desde PV:{' '}
-              <Text strong>
-                {typeof selectedFactura.documento === 'object'
-                  ? `${selectedFactura.documento?.codigo || ''}-${selectedFactura.noDocumento || ''}`
-                  : selectedFactura.documento || `PV-${selectedFactura.noDocumento}`}
-              </Text>
+              Devolución desde la factura{' '}
+              <Text strong>{etiquetaDocumento(selectedFactura.documento, selectedFactura.noDocumento)}</Text>
+              {detalles.length > 0 && detalles.every((d) => (d.cantidad || 0) === 0) && ' — indique la cantidad a devolver de cada línea'}
             </span>
           }
           type="info"
@@ -1497,14 +1392,6 @@ const DevolucionVentaFormulario: React.FC = () => {
           onClose={() => setErrorGeneracion(null)}
         />
       )}
-
-      <BuscarConceptoModal
-        open={conceptoModalOpen}
-        onClose={() => setConceptoModalOpen(false)}
-        onSelect={handleConceptoSelect}
-        sucursal={sucursalActiva}
-        documento="DEV"
-      />
 
       <BuscarProductoModal
         open={productoModalOpen}
@@ -1583,7 +1470,7 @@ const DevolucionVentaFormulario: React.FC = () => {
                         locale={{
                           emptyText: (
                             <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <Empty description="Sin registros" />
+                              <Empty description={selectedFactura ? 'Sin registros' : 'Seleccione la factura referencia para cargar los productos'} />
                             </div>
                           ),
                         }}
@@ -1706,7 +1593,7 @@ const DevolucionVentaFormulario: React.FC = () => {
                       locale={{
                         emptyText: (
                           <div style={{ minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Empty description="Sin registros" />
+                            <Empty description={selectedFactura ? 'Sin registros' : 'Seleccione la factura referencia para cargar los productos'} />
                           </div>
                         ),
                       }}

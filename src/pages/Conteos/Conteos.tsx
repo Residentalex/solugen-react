@@ -1,29 +1,27 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Table,
   Card,
   DatePicker,
-  Input,
   Tag,
   Button,
   Typography,
   Alert,
   Empty,
   Tooltip,
-  Badge,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, ReloadOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { conteoApi } from '../../api/conteoApi';
 import type { ConteoFisicoDTO, DetalleConteoFisicoDTO } from '../../types/conteo';
 import { formatCurrency } from '../../utils/formats';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
-import { message } from 'antd';
 import CatalogoListadoToolbar from '../../components/CatalogoListadoToolbar';
+import FechaColumnCell from '../../components/FechaColumnCell';
 
 const { Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -75,10 +73,15 @@ function formatDateParam(d: Date): string {
   return `${y}${m}${day}${hh}${mm}${ss}`;
 }
 
+// Valores del enum Metodos.Enums.Estado (SolugenApi-0.2/Metodos/Enums/Estado.cs):
+// Borrador=0, Validado=1, Autorizado=2, Anulado=3, Pagado=4, Abierto=5, Cerrado=6
+// El controller asigna Estado.Cerrado o Estado.Aberto en ConteoFisicoController.ObtenerListadoResumido.
+const ESTADO_ABIERTO = 5;
+const ESTADO_CERRADO = 6;
+
 const ESTADO_TAG: Record<number, { color: string; label: string }> = {
-  0: { color: 'default', label: 'Borrador' },
-  1: { color: 'success', label: 'Cerrado' },
-  2: { color: 'processing', label: 'Abierto' },
+  [ESTADO_ABIERTO]: { color: 'processing', label: 'Abierto' },
+  [ESTADO_CERRADO]: { color: 'success', label: 'Cerrado' },
 };
 
 const Conteos: React.FC = () => {
@@ -172,20 +175,6 @@ const Conteos: React.FC = () => {
     navigate(`/FConteos/${record.documento}`, { state: record });
   };
 
-  const puedeEditar = (record: ConteoFisicoDTO) => {
-    const periodoAbierto = record.periodo !== 1;
-    const noBloqueado = !record.bloqueado;
-    return periodoAbierto && noBloqueado;
-  };
-
-  const manejarEditar = (record: ConteoFisicoDTO) => {
-    if (!puedeEditar(record)) {
-      message.error('No se puede editar: el periodo está cerrado o el conteo está bloqueado');
-      return;
-    }
-    navigate(`/FConteos/editar/${record.documento}`, { state: record });
-  };
-
   const calcularAvance = (record: ConteoFisicoDTO) => {
     const detalles = record.detalles || [];
     if (detalles.length === 0) return 0;
@@ -200,15 +189,6 @@ const Conteos: React.FC = () => {
       return diff > 0.01;
     }).length;
   };
-
-  const resumen = useMemo(() => {
-    const datos = data?.datos || [];
-    const abiertos = datos.filter((r: ConteoFisicoDTO) => r.periodo === 2).length;
-    const cerrados = datos.filter((r: ConteoFisicoDTO) => r.periodo === 1).length;
-    const borradores = datos.filter((r: ConteoFisicoDTO) => r.periodo === 0).length;
-    const conDiferencias = datos.filter((r: ConteoFisicoDTO) => contarDiferencias(r) > 0).length;
-    return { abiertos, cerrados, borradores, conDiferencias };
-  }, [data?.datos]);
 
   const columns: ColumnsType<ConteoFisicoDTO> = [
     {
@@ -304,42 +284,6 @@ const Conteos: React.FC = () => {
         return <Text strong style={{ color, textAlign: 'right' }}>{diff}</Text>;
       },
     },
-    {
-      title: 'Acciones',
-      key: 'acciones',
-      width: 120,
-      render: (doc: string, record: ConteoFisicoDTO) => {
-        const puede = puedeEditar(record);
-        const diff = contarDiferencias(record);
-        return (
-          <div style={{ display: 'flex', gap: 4 }}>
-            <Tooltip title={puede ? 'Editar conteo' : 'Edición bloqueada'}>
-              <a
-                href="javascript:void(0)"
-                onClick={() => puede && manejarEditar(record)}
-                style={{ color: puede ? '#1890ff' : '#aaa', cursor: puede ? 'pointer' : 'not-allowed' }}
-              >
-                <EditOutlined />
-              </a>
-            </Tooltip>
-            <Tooltip title="Ver detalle">
-              <a
-                href="javascript:void(0)"
-                onClick={() => abrirDetalle(record)}
-                style={{ color: '#1890ff', cursor: 'pointer' }}
-              >
-                <EyeOutlined />
-              </a>
-            </Tooltip>
-            {diff > 0 && (
-              <Tooltip title={`${diff} diferencia(s) detectada(s)`}>
-                <Badge count={diff} size="small" style={{ backgroundColor: '#f46a6a' }} />
-              </Tooltip>
-            )}
-          </div>
-        );
-      },
-    },
   ];
 
   return (
@@ -378,37 +322,6 @@ const Conteos: React.FC = () => {
             />
           }
         />
-        {/* Resumen */}
-        <div style={{ display: 'flex', gap: 12, padding: '8px 24px', flexWrap: 'wrap' }}>
-          <Tooltip title="Conteos abiertos">
-            <Badge count={resumen.abiertos} style={{ backgroundColor: '#1890ff' }}>
-              <Card size="small" style={{ width: 100, textAlign: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 11 }}>Abiertos</Text>
-              </Card>
-            </Badge>
-          </Tooltip>
-          <Tooltip title="Conteos cerrados">
-            <Badge count={resumen.cerrados} style={{ backgroundColor: '#52c41a' }}>
-              <Card size="small" style={{ width: 100, textAlign: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 11 }}>Cerrados</Text>
-              </Card>
-            </Badge>
-          </Tooltip>
-          <Tooltip title="Borradores">
-            <Badge count={resumen.borradores} style={{ backgroundColor: '#8c8c8c' }}>
-              <Card size="small" style={{ width: 100, textAlign: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 11 }}>Borradores</Text>
-              </Card>
-            </Badge>
-          </Tooltip>
-          <Tooltip title="Con diferencias">
-            <Badge count={resumen.conDiferencias} style={{ backgroundColor: resumen.conDiferencias > 0 ? '#f46a6a' : '#52c41a' }}>
-              <Card size="small" style={{ width: 110, textAlign: 'center' }}>
-                <Text type="secondary" style={{ fontSize: 11 }}>Diferencias</Text>
-              </Card>
-            </Badge>
-          </Tooltip>
-        </div>
 
         <Table<ConteoFisicoDTO>
           columns={columns}

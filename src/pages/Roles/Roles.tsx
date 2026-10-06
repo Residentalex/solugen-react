@@ -1,15 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Tag, Button, Spin, message, Empty, Grid, Tooltip, Avatar, Alert, Modal, Descriptions, Typography, Input, Space, Table } from 'antd';
-import { PlusOutlined, EditOutlined, EyeOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Link, useNavigate } from 'react-router-dom';
+import { Card, Row, Col, Tag, Button, Spin, message, Empty, Grid, Tooltip, Avatar, Alert, Input, Space } from 'antd';
+import { PlusOutlined, EditOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 import { rolApi } from '../../api/rolApi';
-import type { ColumnsType } from 'antd/es/table';
 import type { RolFullDTO } from '../../types/administracion';
-
-const { Text } = Typography;
 
 type ApiError = {
   response?: {
@@ -40,9 +37,6 @@ const Roles: React.FC = () => {
   const [roles, setRoles] = useState<RolFullDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
-  const [detalleVisible, setDetalleVisible] = useState(false);
-  const [detalleItem, setDetalleItem] = useState<RolFullDTO | null>(null);
-  const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [searchText, setSearchText] = useState('');
 
   const cargarRoles = useCallback(async () => {
@@ -71,108 +65,12 @@ const Roles: React.FC = () => {
     };
   }, [setActiveModule, updateToolbar, resetToolbar, cargarRoles]);
 
-  const abrirDetalle = async (rol: RolFullDTO) => {
-    setDetalleItem(rol);
-    setDetalleVisible(true);
-    setCargandoDetalle(true);
-    try {
-      const completo = await rolApi.obtenerPorId(securitySucursal, rol.id);
-      setDetalleItem(completo);
-    } catch (error) {
-      message.error(obtenerMensajeError(error, 'Error al cargar detalle del rol'));
-    } finally {
-      setCargandoDetalle(false);
-    }
-  };
-
   const handleRefresh = useCallback(() => {
     cargarRoles();
   }, [cargarRoles]);
 
   const isSmall = !screens.md;
   const cardSpan = isSmall ? 24 : screens.xl ? 8 : screens.lg ? 12 : 12;
-
-  const columns: ColumnsType<RolFullDTO> = [
-    {
-      title: 'Nombre',
-      dataIndex: 'nombre',
-      key: 'nombre',
-      render: (text, record) => (
-        <Text strong className="paces-doc-link" style={{ cursor: 'pointer' }} onClick={() => abrirDetalle(record)}>
-          {text}
-        </Text>
-      ),
-    },
-    {
-      title: 'Descripción',
-      dataIndex: 'descripcion',
-      key: 'descripcion',
-      render: (text) => <Text type="secondary">{text || 'Sin descripción'}</Text>,
-    },
-    {
-      title: 'Estado',
-      dataIndex: 'activo',
-      key: 'activo',
-      render: (activo) => (
-        <Tag color={activo ? 'green' : 'default'}>
-          {activo ? 'Activo' : 'Inactivo'}
-        </Tag>
-      ),
-    },
-    {
-      title: 'Usuarios',
-      key: 'usuarios',
-      render: (_, record) => {
-        const count = record.cantidadUsuarios ?? record.nombresUsuarios?.length ?? 0;
-        if (count === 0) return <Text type="secondary">Sin usuarios</Text>;
-        return (
-          <Avatar.Group max={{ count: 3, style: { backgroundColor: '#f0f0f0', color: '#595959', fontSize: 11, fontWeight: 600 } }}>
-            {(record.nombresUsuarios || []).slice(0, 3).map((nombre, i) => {
-              const inicial = nombre.trim().charAt(0).toUpperCase();
-              const colores = ['#556ee6', '#f46a6a', '#34c38f', '#f1b44c', '#50a5f1', '#f46a6a', '#e060a0', '#7c6bcb'];
-              return (
-                <Avatar key={`${record.id}-${i}`} style={{ backgroundColor: colores[i % colores.length], verticalAlign: 'middle', fontSize: 11 }} size={24}>
-                  {inicial}
-                </Avatar>
-              );
-            })}
-          </Avatar.Group>
-        );
-      },
-    },
-    {
-      title: 'Permisos',
-      key: 'permisos',
-      render: (_, record) => {
-        const pantallas = record.pantallas || [];
-        const totalAcciones = pantallas.reduce((acc, p) => acc + (p.acciones?.length || 0), 0);
-        return (
-          <span>
-            {pantallas.length} pantalla{pantallas.length !== 1 ? 's' : ''} · {totalAcciones} acción{totalAcciones !== 1 ? 'es' : ''}
-          </span>
-        );
-      },
-    },
-    {
-      title: 'Acciones',
-      key: 'acciones',
-      width: 90,
-      fixed: 'right' as const,
-      align: 'center',
-      render: (_, record) => (
-        <Space size={4}>
-          <Tooltip title="Ver detalle">
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => abrirDetalle(record)} />
-          </Tooltip>
-          <PermissionGate accion="EDITAR">
-            <Tooltip title="Editar rol">
-              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => navigate(`/MROL/${record.id}/editar`)} />
-            </Tooltip>
-          </PermissionGate>
-        </Space>
-      ),
-    },
-  ];
 
   const rolesFiltrados = searchText
     ? roles.filter((r) => {
@@ -230,7 +128,7 @@ const Roles: React.FC = () => {
       <Spin spinning={loading}>
         {rolesFiltrados.length === 0 && !loading ? (
           <Empty description={searchText ? 'No hay roles que coincidan con la búsqueda' : 'No hay roles registrados'} />
-        ) : isSmall ? (
+        ) : (
           <Row gutter={[16, 16]}>
             {rolesFiltrados.map((rol) => (
               <Col key={rol.id} span={cardSpan}>
@@ -241,7 +139,13 @@ const Roles: React.FC = () => {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{rol.nombre}</div>
+                      <Link
+                        to={`/MROL/${rol.id}`}
+                        className="paces-doc-link"
+                        style={{ fontSize: 16, fontWeight: 600, marginBottom: 4, display: 'inline-block' }}
+                      >
+                        {rol.nombre}
+                      </Link>
                       <div className="paces-text-muted" style={{ fontSize: 13, lineHeight: 1.4, marginBottom: 8 }}>
                         {rol.descripcion || 'Sin descripción'}
                       </div>
@@ -293,11 +197,6 @@ const Roles: React.FC = () => {
                   </div>
 
                   <div className="paces-border-top" style={{ display: 'flex', gap: 8, paddingTop: 12, marginTop: 'auto' }}>
-                    <Tooltip title="Ver detalle">
-                      <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => abrirDetalle(rol)}>
-                        Ver detalle
-                      </Button>
-                    </Tooltip>
                     <PermissionGate accion="EDITAR">
                       <Tooltip title="Editar rol">
                         <Button type="link" size="small" icon={<EditOutlined />} onClick={() => navigate(`/MROL/${rol.id}/editar`)}>
@@ -310,82 +209,8 @@ const Roles: React.FC = () => {
               </Col>
             ))}
           </Row>
-        ) : (
-          <Table
-            columns={columns}
-            dataSource={rolesFiltrados}
-            rowKey="id"
-            pagination={{
-              showTotal: (t) => `${t} roles`,
-              pageSize: 15,
-            }}
-            scroll={{ x: 900 }}
-            size="middle"
-          />
         )}
       </Spin>
-
-      <Modal
-        title={`Detalle del Rol: ${detalleItem?.nombre || ''}`}
-        open={detalleVisible}
-        onCancel={() => setDetalleVisible(false)}
-        footer={null}
-        width={640}
-      >
-        <Spin spinning={cargandoDetalle}>
-          {detalleItem && (
-            <>
-              <Descriptions column={1} bordered size="small" style={{ marginTop: 16 }}>
-                <Descriptions.Item label="Nombre">{detalleItem.nombre}</Descriptions.Item>
-                <Descriptions.Item label="Descripción">{detalleItem.descripcion || '-'}</Descriptions.Item>
-                <Descriptions.Item label="Estado">
-                  <Tag color={detalleItem.activo ? 'green' : 'default'}>{detalleItem.activo ? 'Activo' : 'Inactivo'}</Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="Usuarios">
-                  {detalleItem.cantidadUsuarios != null ? detalleItem.cantidadUsuarios : (detalleItem.nombresUsuarios?.length || 0)}
-                </Descriptions.Item>
-              </Descriptions>
-
-              <div style={{ marginTop: 24 }}>
-                <h5 style={{ marginBottom: 12, fontWeight: 600 }}>Pantallas y Permisos ({detalleItem.pantallas?.length || 0})</h5>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {(detalleItem.pantallas || []).map((pp) => (
-                    <Card key={pp.id} size="small" className="paces-card" style={{ borderRadius: 6 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text strong>{pp.nombre}</Text>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          {pp.acciones.map((acc) => (
-                            <Tag key={acc} color="blue" style={{ fontSize: 11 }}>{acc}</Tag>
-                          ))}
-                        </div>
-                      </div>
-                      {/* Permisos especiales */}
-                      {pp.permisosEspeciales && pp.permisosEspeciales.length > 0 && (
-                        <div style={{ display: 'flex', gap: 4, marginTop: 8, marginLeft: 8 }}>
-                          {pp.permisosEspeciales.map((pe) => (
-                            <Tag key={pe} color="green" style={{ fontSize: 10 }}>{pe}</Tag>
-                          ))}
-                        </div>
-                      )}
-                    </Card>
-                  ))}
-                </div>
-              </div>
-
-              {detalleItem.nombresUsuarios && detalleItem.nombresUsuarios.length > 0 && (
-                <div style={{ marginTop: 16 }}>
-                  <h5 style={{ marginBottom: 8, fontWeight: 600 }}>Usuarios Asignados</h5>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {detalleItem.nombresUsuarios.map((nombre, i) => (
-                      <Tag key={i} color="geekblue">{nombre}</Tag>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </Spin>
-      </Modal>
     </>
   );
 };

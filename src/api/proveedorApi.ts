@@ -13,6 +13,16 @@ export const proveedorApi = {
     return data.data;
   },
 
+  crear: async (sucursal: number, proveedor: SuplidorDTO): Promise<SuplidorDTO> => {
+    const { data } = await apiClient.post<ApiResponse<SuplidorDTO>>(`${BASE}/${sucursal}`, proveedor);
+    return data.data;
+  },
+
+  actualizar: async (sucursal: number, proveedor: SuplidorDTO): Promise<SuplidorDTO> => {
+    const { data } = await apiClient.put<ApiResponse<SuplidorDTO>>(`${BASE}/${sucursal}`, proveedor);
+    return data.data;
+  },
+
   obtenerPorCodigo: async (sucursal: number, codigo: string): Promise<SuplidorDTO> => {
     const { data } = await apiClient.get<SuplidorDTO>(`${BASE}/${sucursal}/${codigo}`);
     return data;

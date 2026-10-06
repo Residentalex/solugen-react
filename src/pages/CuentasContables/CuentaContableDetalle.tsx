@@ -196,7 +196,7 @@ const CuentaContableDetalle: React.FC = () => {
               <Descriptions.Item label="Centro Costo">
                 {item?.utilizaCentroCosto ? 'Sí' : 'No'}
               </Descriptions.Item>
-              <Descriptions.Item label="Nota">{item?.nota || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Nota"><span className="paces-nota-memo">{item?.nota || '-'}</span></Descriptions.Item>
             </Descriptions>
           </Card>
         </Col>

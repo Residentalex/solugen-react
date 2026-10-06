@@ -98,13 +98,6 @@ const CotizacionVenta: React.FC = () => {
       ),
     },
     {
-      title: 'NCF',
-      dataIndex: 'ncf',
-      key: 'ncf',
-      width: 150,
-      render: (ncf: string) => <Text>{ncf || ''}</Text>,
-    },
-    {
       title: 'Estado',
       dataIndex: 'estado',
       key: 'estado',
@@ -124,7 +117,7 @@ const CotizacionVenta: React.FC = () => {
       total={state.total}
       page={state.page}
       pageSize={state.pageSize}
-      scrollX={1370}
+      scrollX={1220}
       selectedRowId={state.selectedRow?.id}
       loadingError={state.loadingError}
       errorMessage="Error al cargar cotizaciones"

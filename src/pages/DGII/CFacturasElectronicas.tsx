@@ -7,7 +7,6 @@ import {
   Radio,
   Table,
   Button,
-  Select,
   Input,
   message,
   Modal,
@@ -15,6 +14,7 @@ import {
   Empty,
   theme,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   FileDoneOutlined,
   FileSyncOutlined,

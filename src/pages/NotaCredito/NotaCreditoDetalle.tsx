@@ -794,7 +794,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                 <Descriptions.Item label="NCF Modificado:">{(documentoActivo as any).ncfModificado || '-'}</Descriptions.Item>
 
                 <Descriptions.Item label="Nota:" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{toTitleCase(documentoActivo.nota || '') || '-'}</span>
+                  <span className="paces-nota-memo">{toTitleCase(documentoActivo.nota || '') || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -939,7 +939,7 @@ const NotaCreditoDetalle: React.FC<NotaCreditoDetalleProps> = ({ tipoEntidad }) 
                 <Descriptions.Item label="NCF Modificado:">{(documentoActivo as any).ncfModificado || '-'}</Descriptions.Item>
 
                 <Descriptions.Item label="Nota:" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{toTitleCase(documentoActivo.nota || '') || '-'}</span>
+                  <span className="paces-nota-memo">{toTitleCase(documentoActivo.nota || '') || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
           </Card>

@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { GeneradorOrdenCompraDTO, DetalleGeneradorDTO } from '../types/generadorOrc';
+import type { GeneradorOrdenCompraDTO, DatosAnterioresORCDTO } from '../types/generadorOrc';
 import type { OrdenCompraDTO, OrdenCompraVistaDTO } from '../types/entradaAlmacen';
 import type { ApiResponse } from '../types/auth';
 
@@ -47,8 +47,8 @@ export const generadorOrcApi = {
     return data.data;
   },
 
-  obtenerDatosAnteriores: async (sucursal: number, codigos: string[]): Promise<DetalleGeneradorDTO[]> => {
-    const { data } = await apiClient.post<ApiResponse<DetalleGeneradorDTO[]>>(`${BASE}/${sucursal}/datosAnterioresORC`, codigos);
+  obtenerDatosAnteriores: async (sucursal: number, codigos: string[]): Promise<DatosAnterioresORCDTO[]> => {
+    const { data } = await apiClient.post<ApiResponse<DatosAnterioresORCDTO[]>>(`${BASE}/${sucursal}/datosAnterioresORC`, codigos);
     return data.data;
   },
 

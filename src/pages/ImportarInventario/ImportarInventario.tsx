@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom';
 import {
   Card, Table, Button, Space, Row, Col, Grid, Steps,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Descriptions, Alert,
+  message, Form, Input, InputNumber,  DatePicker, Typography, Modal, Descriptions, Alert,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   SaveOutlined,
   CloseOutlined,
@@ -1043,7 +1044,7 @@ const ImportarInventario: React.FC = () => {
           {/* Fila 3: Nota */}
           <Col xs={24}>
             <Form.Item name="nota" label="Nota" style={{ marginBottom: 0 }}>
-              <TextArea rows={3} placeholder="Nota opcional del documento..." />
+              <TextArea rows={3} autoSize={{ minRows: 3, maxRows: 8 }} maxLength={500} showCount placeholder="Nota opcional del documento..." />
             </Form.Item>
           </Col>
         </Row>

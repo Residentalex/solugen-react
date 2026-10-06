@@ -1,9 +1,10 @@
-﻿import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, Link } from 'react-router-dom';
 import {
-  Table, Button, Select, Tag, message, Empty, Alert, Card, Typography, Tooltip,
+  Table, Button,  Tag, message, Empty, Alert, Card, Typography, Tooltip,
 } from 'antd';
+import { Select } from '../../components/Select';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useUIStore } from '../../stores/uiStore';

@@ -1,8 +1,9 @@
-﻿import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
-  Card, Table, Input, Select, Button, Typography, message, Spin, DatePicker, Checkbox,
+  Card, Table, Input,  Button, Typography, message, Spin, DatePicker, Checkbox,
   Modal, Space, Row, Col, Empty, Tabs, Dropdown, Tooltip,
 } from 'antd';
+import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
 import {
   SearchOutlined, ReloadOutlined, PrinterOutlined, DownloadOutlined, CloseOutlined, EyeOutlined,
@@ -764,64 +765,6 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
     },
   ];
 
-  /* ───── Summary row ───── */
-
-  const renderSummaryDetallado = () => (
-    <Table.Summary fixed>
-      <Table.Summary.Row>
-        <Table.Summary.Cell index={0} colSpan={3}>
-          <Text strong style={{ fontSize: 13 }}>Totales</Text>
-        </Table.Summary.Cell>
-        <Table.Summary.Cell index={3} align="right">
-          <Text strong className="paces-text-total">{formatCurrency(summaryTotals.total)}</Text>
-        </Table.Summary.Cell>
-        <Table.Summary.Cell index={4} align="right">
-          <Text strong>{formatCurrency(summaryTotals.m0_30)}</Text>
-        </Table.Summary.Cell>
-        <Table.Summary.Cell index={5} align="right">
-          <Text strong>{formatCurrency(summaryTotals.m31_60)}</Text>
-        </Table.Summary.Cell>
-        <Table.Summary.Cell index={6} align="right">
-          <Text strong>{formatCurrency(summaryTotals.m61_90)}</Text>
-        </Table.Summary.Cell>
-        <Table.Summary.Cell index={7} align="right">
-          <Text strong>{formatCurrency(summaryTotals.m91_120)}</Text>
-        </Table.Summary.Cell>
-        <Table.Summary.Cell index={8} align="right">
-          <Text strong>{formatCurrency(summaryTotals.mMas120)}</Text>
-        </Table.Summary.Cell>
-      </Table.Summary.Row>
-    </Table.Summary>
-  );
-
-  const renderSummaryResumen = () => (
-    <Table.Summary fixed>
-      <Table.Summary.Row>
-        <Table.Summary.Cell index={0}>
-          <Text strong style={{ fontSize: 13 }}>Totales</Text>
-        </Table.Summary.Cell>
-        <Table.Summary.Cell index={1} align="right">
-          <Text strong className="paces-text-total">{formatCurrency(summaryTotals.total)}</Text>
-        </Table.Summary.Cell>
-        <Table.Summary.Cell index={2} align="right">
-          <Text strong>{formatCurrency(summaryTotals.m0_30)}</Text>
-        </Table.Summary.Cell>
-        <Table.Summary.Cell index={3} align="right">
-          <Text strong>{formatCurrency(summaryTotals.m31_60)}</Text>
-        </Table.Summary.Cell>
-        <Table.Summary.Cell index={4} align="right">
-          <Text strong>{formatCurrency(summaryTotals.m61_90)}</Text>
-        </Table.Summary.Cell>
-        <Table.Summary.Cell index={5} align="right">
-          <Text strong>{formatCurrency(summaryTotals.m91_120)}</Text>
-        </Table.Summary.Cell>
-        <Table.Summary.Cell index={6} align="right">
-          <Text strong>{formatCurrency(summaryTotals.mMas120)}</Text>
-        </Table.Summary.Cell>
-      </Table.Summary.Row>
-    </Table.Summary>
-  );
-
   /* ───── Paginación ───── */
 
   const paginationProps = {
@@ -942,7 +885,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
 
             <Col xs={24} sm={12} md={2}>
               <div style={{ marginBottom: 4 }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>&nbsp;</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>Vista</Text>
               </div>
               <Checkbox checked={detallado} onChange={(e) => setDetallado(e.target.checked)} disabled={procesando}>
                 Detallado
@@ -970,78 +913,17 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
         </div>
       ) : data.length > 0 ? (
         <>
-          {/* ───── Resumen de rangos (siempre visible) ───── */}
-          <Card
-            className="paces-card-erp"
-            style={{ borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}
-            styles={{ body: { padding: 0 } }}
-          >
-            <div style={{ padding: '16px 24px' }}>
-              <Row gutter={[16, 12]} align="middle">
-                <Col xs={24} sm={12} md={4}>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                    Total
-                  </div>
-                  <Text strong className="paces-text-total" style={{ fontSize: 24 }}>
-                    {formatCurrency(summaryTotals.total)}
-                  </Text>
-                </Col>
-                <Col xs={24} sm={12} md={4}>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                    0-30 días
-                  </div>
-                  <Text strong style={{ fontSize: 24, color: '#52c41a' }}>
-                    {formatCurrency(summaryTotals.m0_30)}
-                  </Text>
-                </Col>
-                <Col xs={24} sm={12} md={4}>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                    31-60 días
-                  </div>
-                  <Text strong style={{ fontSize: 24, color: '#1890ff' }}>
-                    {formatCurrency(summaryTotals.m31_60)}
-                  </Text>
-                </Col>
-              </Row>
-              <Row gutter={[16, 12]} align="middle" style={{ marginTop: 8 }}>
-                <Col xs={24} sm={12} md={4}>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                    61-90 días
-                  </div>
-                  <Text strong style={{ fontSize: 24, color: '#1890ff' }}>
-                    {formatCurrency(summaryTotals.m61_90)}
-                  </Text>
-                </Col>
-                <Col xs={24} sm={12} md={4}>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                    91-120 días
-                  </div>
-                  <Text strong style={{ fontSize: 24, color: '#faad14' }}>
-                    {formatCurrency(summaryTotals.m91_120)}
-                  </Text>
-                </Col>
-                <Col xs={24} sm={12} md={4}>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                    Más 120 días
-                  </div>
-                  <Text strong style={{ fontSize: 24, color: '#f5222d' }}>
-                    {formatCurrency(summaryTotals.mMas120)}
-                  </Text>
-                </Col>
-              </Row>
-            </div>
-          </Card>
-
           {/* ───── Resultados principales ───── */}
           <Card
             className="paces-card-erp"
             styles={{ body: { padding: 0 } }}
             style={{ borderRadius: 8, overflow: 'hidden' }}
           >
-            {/* Encabezado de resultados (no-print) */}
-            <div className="no-print" style={{ padding: '16px 24px 0' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 12, flexWrap: 'wrap' }}>
-                <div style={{ flex: 1 }}>
+            {/* Encabezado de resultados (visible en impresión) */}
+            <div style={{ padding: '16px 24px 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: 12 }}>
+                {/* Izquierda: título */}
+                <div style={{ flex: 1, minWidth: 200 }}>
                   <Text strong style={{ fontSize: 14 }}>
                     {nomEntidad || 'Todas las entidades'}
                   </Text>
@@ -1049,13 +931,32 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                     {nomEntidad ? nomEntidad : `${resumenData.length} ${entidadLabel}s registrados`}
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    Saldo total
-                  </Text>
-                  <Text strong className="paces-text-total" style={{ fontSize: 20 }}>
-                    {formatCurrency(summaryTotals.total)}
-                  </Text>
+                {/* Derecha: totales compactos */}
+                <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#666' }}>Total</div>
+                    <Text strong className="paces-text-total" style={{ fontSize: 18 }}>{formatCurrency(summaryTotals.total)}</Text>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#666' }}>0-30 días</div>
+                    <Text strong style={{ fontSize: 18, color: '#52c41a' }}>{formatCurrency(summaryTotals.m0_30)}</Text>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#666' }}>31-60 días</div>
+                    <Text strong style={{ fontSize: 18, color: '#1890ff' }}>{formatCurrency(summaryTotals.m31_60)}</Text>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#666' }}>61-90 días</div>
+                    <Text strong style={{ fontSize: 18, color: '#1890ff' }}>{formatCurrency(summaryTotals.m61_90)}</Text>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#666' }}>91-120 días</div>
+                    <Text strong style={{ fontSize: 18, color: '#faad14' }}>{formatCurrency(summaryTotals.m91_120)}</Text>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#666' }}>Más 120 días</div>
+                    <Text strong style={{ fontSize: 18, color: '#f5222d' }}>{formatCurrency(summaryTotals.mMas120)}</Text>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1074,7 +975,7 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                       handleSearch('');
                     }
                   }}
-                  style={{ width: 400 }}
+                  style={{ width: '100%', maxWidth: 400 }}
                   prefix={<SearchOutlined className="paces-text-icon" />}
                 />
                 <Select
@@ -1082,12 +983,11 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                   value={pageSize}
                   onChange={(v) => { setPageSize(v); setPage(1); }}
                   disabled={procesando}
-                  options={[
-                    { value: 25, label: '25' },
-                    { value: 50, label: '50' },
-                    { value: 100, label: '100' },
-                  ]}
-                />
+                >
+                  <Select.Option value={25}>25</Select.Option>
+                  <Select.Option value={50}>50</Select.Option>
+                  <Select.Option value={100}>100</Select.Option>
+                </Select>
                 <div style={{ flex: 1 }} />
                 <Tooltip title="Imprimir PDF">
                   <Button icon={<PrinterOutlined />} onClick={handlePrint} loading={imprimiendo} disabled={procesando} />
@@ -1103,7 +1003,9 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                   ] }}
                   trigger={['click']}
                 >
-                  <Button icon={<MoreOutlined />} title="Más acciones" disabled={procesando} />
+                  <Tooltip title="Más acciones">
+                    <Button icon={<MoreOutlined />} disabled={procesando} />
+                  </Tooltip>
                 </Dropdown>
               </div>
             </div>
@@ -1118,7 +1020,6 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                 scroll={{ x: 1300 }}
                 size="middle"
                 pagination={paginationProps}
-                summary={renderSummaryDetallado}
                 className="paces-border-top paces-list-table"
               />
             ) : (
@@ -1130,13 +1031,18 @@ const AntiguedadSaldos: React.FC<{ tipoEntidad: string }> = ({ tipoEntidad }) =>
                 scroll={{ x: 1100 }}
                 size="middle"
                 pagination={paginationProps}
-                summary={renderSummaryResumen}
                 className="paces-border-top paces-list-table"
               />
             )}
           </Card>
         </>
-      ) : null}
+      ) : (
+        <Card className="paces-card-erp" style={{ borderRadius: 8, overflow: 'hidden' }}>
+          <div style={{ padding: 48, textAlign: 'center' }}>
+            <Empty description="No se encontraron registros" />
+          </div>
+        </Card>
+      )}
 
       {/* ───── Modal búsqueda entidad ───── */}
       {esCxP ? (

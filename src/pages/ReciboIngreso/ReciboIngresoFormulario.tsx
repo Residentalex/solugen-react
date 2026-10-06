@@ -2,17 +2,17 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Alert, Popover, Empty,
+  Card, Table, Tabs, Spin, Button, Space, Row, Col, Divider, Grid,
+  message, Form, Input, InputNumber,  DatePicker, Typography, Modal, Alert, Popover, Empty,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   SaveOutlined,
   CloseOutlined,
   ExclamationCircleOutlined,
   SearchOutlined,
-  ClearOutlined,
-  EditOutlined,
-  PlusOutlined,
+ClearOutlined,
+PlusOutlined,
   DeleteOutlined,
   HistoryOutlined,
   FileTextOutlined,
@@ -46,13 +46,14 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import GuidePopover from '../../components/GuidePopover/GuidePopover';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
-import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
+import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError, redondear2 } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
+import MemoField from '../../components/MemoField/MemoField';
+import CamposRapidosFila from '../../components/CamposRapidosFila/CamposRapidosFila';
 
 const { Text } = Typography;
-const { TextArea } = Input;
 
 const MEDIO_COBRO_LABELS: Record<string, string> = {
   Efectivo: 'Efectivo',
@@ -640,7 +641,7 @@ const ReciboIngresoFormulario: React.FC = () => {
   // El pendiente efectivo se calcula como max(montoOriginal - pagado, saldoPendiente), nunca negativo.
   const pendienteEfectivo = (t: TransaccionAsociadaDTO): number => {
     const v = Math.max(0, (t.montoOriginal || 0) - (t.pagado || 0), t.saldoPendiente || 0);
-    return Math.round(v * 100) / 100;
+    return redondear2(v);
   };
 
   // ===== Columnas =====
@@ -927,12 +928,51 @@ const ReciboIngresoFormulario: React.FC = () => {
             </Form.Item>
           </Col>
 
-          {/* Fila 5: Nota */}
+          {/* Fila 5: Campos rápidos (NCF, Referencia, Tasa) */}
+          <CamposRapidosFila
+            ncf={{
+              valor: ncfValue,
+              editando: editingField === 'ncf',
+              etiqueta: 'NCF',
+              prefijo: 'NCF: ',
+              placeholder: 'NCF',
+              maxLength: 19,
+              onEdit: () => openFieldEditor('ncf'),
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+              onChange: (v) => { editingValueRef.current = v; },
+            }}
+            referencia={{
+              valor: refValue,
+              editando: editingField === 'referencia',
+              etiqueta: 'Referencia',
+              prefijo: 'Ref: ',
+              placeholder: 'Referencia',
+              onEdit: () => openFieldEditor('referencia'),
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+              onChange: (v) => { editingValueRef.current = v; },
+            }}
+            tasa={{
+              tasa: tasaValue,
+              editable: true,
+              editando: editingField === 'tasa',
+              onEdit: () => openFieldEditor('tasa'),
+              onChange: (v) => { editingValueRef.current = v ?? 1; },
+              onCommit: commitFieldEditor,
+              onCancel: cancelFieldEditor,
+            }}
+            ocultos={[
+              { name: 'ncf' },
+              { name: 'referencia' },
+              { name: 'tasa', editor: 'number' },
+            ]}
+          />
+
+          {/* Fila 6: Nota */}
           <Col xs={24}>
             <Form.Item name="nota" style={{ marginBottom: 0 }}>
-              <FloatingField label="Nota">
-                <TextArea rows={3} maxLength={500} showCount />
-              </FloatingField>
+              <MemoField label="Nota" />
             </Form.Item>
           </Col>
         </Row>
@@ -950,96 +990,6 @@ const ReciboIngresoFormulario: React.FC = () => {
               monedaNombre={data?.moneda?.nombre || selectedConcepto?.moneda?.nombre || getMonedaSucursalActiva().nombre}
               tasa={tasaValue ?? data?.tasa ?? 1}
             />
-          </div>
-          <Form.Item name="ncf" hidden><Input /></Form.Item>
-          <Form.Item name="referencia" hidden><Input /></Form.Item>
-          <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
-          <div style={{ marginTop: 16 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {/* NCF */}
-              <div>
-                {editingField === 'ncf' ? (
-                  <Input
-                    size="small"
-                    style={{ width: '100%' }}
-                    placeholder="NCF"
-                    maxLength={19}
-                    autoFocus
-                    defaultValue={editingValueRef.current as string}
-                    onChange={(e) => { editingValueRef.current = e.target.value; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : ncfValue ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
-                    NCF: {ncfValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
-                    <PlusOutlined /> NCF
-                  </Tag>
-                )}
-              </div>
-
-              {/* Referencia */}
-              <div>
-                {editingField === 'referencia' ? (
-                  <Input
-                    size="small"
-                    style={{ width: '100%' }}
-                    placeholder="Referencia"
-                    autoFocus
-                    defaultValue={editingValueRef.current as string}
-                    onChange={(e) => { editingValueRef.current = e.target.value; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : refValue ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
-                    Ref: {refValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
-                    <PlusOutlined /> Referencia
-                  </Tag>
-                )}
-              </div>
-
-              {/* Tasa */}
-              <div>
-                {editingField === 'tasa' ? (
-                  <InputNumber
-                    size="small"
-                    style={{ width: '100%' }}
-                    min={0}
-                    step={0.01}
-                    placeholder="Tasa"
-                    autoFocus
-                    defaultValue={editingValueRef.current as number}
-                    onChange={(val) => { editingValueRef.current = val ?? 1; }}
-                    onPressEnter={() => commitFieldEditor()}
-                    onBlur={() => commitFieldEditor()}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                    }}
-                  />
-                ) : tasaValue !== 1 ? (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
-                    Tasa: {tasaValue} <EditOutlined />
-                  </Tag>
-                ) : (
-                  <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('tasa')}>
-                    <PlusOutlined /> Tasa
-                  </Tag>
-                )}
-              </div>
-            </div>
           </div>
         </Col>
       </Row>
@@ -1259,6 +1209,7 @@ const ReciboIngresoFormulario: React.FC = () => {
           .map(t => t.id || t.transaccionAsociadaID)
           .filter((id): id is number => id != null && id > 0)}
         documentoEnviado={data?.noDocumento ? `${documentCode}-${data.noDocumento}` : undefined}
+        codigoMonedaPrincipal={data?.moneda?.codigo || selectedConcepto?.moneda?.codigo || getMonedaSucursalActiva().codigo}
       />
 
       {isLarge ? (

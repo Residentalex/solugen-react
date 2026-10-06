@@ -16,7 +16,6 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { solicitudPagoApi } from '../../api/solicitudPagoApi';
-import { transaccionApi } from '../../api/transaccionApi';
 import { documentoRelacionApi } from '../../api/documentoRelacionApi';
 import type { DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
 import { apiClient } from '../../api/client';
@@ -34,6 +33,7 @@ import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
+import PermissionGate from '../../components/PermissionGate';
 
 const { Text } = Typography;
 
@@ -190,8 +190,7 @@ const SolicitudPagoDetalle: React.FC = () => {
     if (!id || !data) return;
     setSaving(true);
     try {
-      const documento = `${data.documento?.codigo || data.documento || ''}-${data.noDocumento}`;
-      await transaccionApi.desaplicar(sucursalActiva, documento);
+      await solicitudPagoApi.desaplicar(sucursalActiva, Number(id));
       message.success('Documento desaplicado exitosamente');
       handleRefresh();
     } catch (err: any) {
@@ -357,7 +356,7 @@ const SolicitudPagoDetalle: React.FC = () => {
         onAplicar={handleAplicar}
         onAnular={handleAnular}
         onRevisado={handleRevisado}
-        onDesaplicar={handleDesaplicar}
+        onDesaplicar={data?.autorizado ? undefined : handleDesaplicar}
         onReversar={handleReversar}
         showImprimir={true}
         imprimiendo={imprimiendo}
@@ -386,7 +385,7 @@ extraButtons={id ? (
                 style={{ marginLeft: 8 }}
               />
             )}
-            { (toEstadoNum(data?.estado) === 1 || toEstadoNum(data?.estado) === 3) && (data as any)?.tipoPagoCodigo && (
+            { (toEstadoNum(data?.estado) === 1 || toEstadoNum(data?.estado) === 3) && data?.autorizado && (data as any)?.tipoPagoCodigo && (
               <>
                 <Divider type="vertical" />
                 {pagoGeneradoDoc ? (
@@ -396,17 +395,19 @@ extraButtons={id ? (
                     </Button>
                   </Tooltip>
                 ) : (
-                  <Tooltip title="Generar documento de pago">
-                    <Button
-                      type="primary"
-                      icon={<BankOutlined />}
-                      onClick={handleGenerarPago}
-                      loading={saving || cargandoRelacion}
-                      disabled={cargandoRelacion || (!!data.pagoGenerado && !pagoGeneradoDoc)}
-                    >
-                      {`Generar ${(data as any)?.tipoPagoCodigo}`}
-                    </Button>
-                  </Tooltip>
+                  <PermissionGate permisoEspecial="pe_generar_DocBancario">
+                    <Tooltip title="Generar documento de pago">
+                      <Button
+                        type="primary"
+                        icon={<BankOutlined />}
+                        onClick={handleGenerarPago}
+                        loading={saving || cargandoRelacion}
+                        disabled={cargandoRelacion || (!!data.pagoGenerado && !pagoGeneradoDoc)}
+                      >
+                        {`Generar ${(data as any)?.tipoPagoCodigo}`}
+                      </Button>
+                    </Tooltip>
+                  </PermissionGate>
                 )}
               </>
             )}
@@ -463,7 +464,7 @@ extraButtons={id ? (
                   )}
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota" span={2}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{toTitleCase(documentoActivo.nota || '') || '-'}</span>
+                  <span className="paces-nota-memo">{toTitleCase(documentoActivo.nota || '') || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -563,7 +564,7 @@ extraButtons={id ? (
                 )}
               </Descriptions.Item>
               <Descriptions.Item label="Nota">
-                <span style={{ whiteSpace: 'pre-wrap' }}>{toTitleCase(documentoActivo.nota || '') || '-'}</span>
+                <span className="paces-nota-memo">{toTitleCase(documentoActivo.nota || '') || '-'}</span>
               </Descriptions.Item>
               <Descriptions.Item label="Beneficiario">{(data as any)?.nombreBeneficiario || '-'}</Descriptions.Item>
             </Descriptions>

@@ -27,9 +27,11 @@ import { useAplicar } from '../../hooks/useAplicar';
 import { ModalProgreso } from '../../components/ModalProgreso/ModalProgreso';
 import ModalAnular from '../../components/ModalAnular/ModalAnular';
 import ModalDesaplicar from '../../components/ModalDesaplicar/ModalDesaplicar';
+import ModalValidarPagos from '../../components/ModalValidarPagos/ModalValidarPagos';
 import ModalVisorScanner from '../../components/ModalVisorScanner/ModalVisorScanner';
 import ModalSeleccionarImpresoraPOS from '../../components/ModalSeleccionarImpresoraPOS/ModalSeleccionarImpresoraPOS';
 import { documentoRelacionApi, type DocumentoRelacionDTO } from '../../api/documentoRelacionApi';
+import type { ValidacionPagosDTO } from '../../types/transaccion';
 import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import DocumentosRelacionadosCard from '../../components/DocumentosRelacionadosCard';
@@ -80,6 +82,9 @@ const ReciboIngresoDetalle: React.FC = () => {
   const [documentosRelacionados, setDocumentosRelacionados] = React.useState<DocumentoRelacionDTO[]>([]);
   const [modalAnularOpen, setModalAnularOpen] = useState(false);
   const [modalDesaplicarOpen, setModalDesaplicarOpen] = useState(false);
+  const [modalValidarPagosOpen, setModalValidarPagosOpen] = useState(false);
+  const [validacionPagos, setValidacionPagos] = useState<ValidacionPagosDTO | null>(null);
+  const [loadingValidacionPagos, setLoadingValidacionPagos] = useState(false);
   const [pagosAsociados, setPagosAsociados] = useState<any[]>([]);
   const monedaDefault = getMonedaSucursalActiva();
   const screens = Grid.useBreakpoint();
@@ -316,7 +321,19 @@ const ReciboIngresoDetalle: React.FC = () => {
     }
   };
 
-  const handleAplicar = () => {
+  const ejecutarAplicar = () => {
+    if (!id) return;
+    setOperacionTitulo(`Aplicando FRI-${data?.noDocumento || id}`);
+    operacion.ejecutar(
+      `/Transaccion/${sucursalActiva}/aplicar/${id}`,
+      () => {
+        setModalValidarPagosOpen(false);
+        handleRefresh();
+      }
+    );
+  };
+
+  const handleAplicar = async () => {
     if (!id) return;
 
     // Validar FechaPermitida del documento
@@ -329,11 +346,32 @@ const ReciboIngresoDetalle: React.FC = () => {
       }
     }
 
-    setOperacionTitulo(`Aplicando FRI-${data?.noDocumento || id}`);
-    operacion.ejecutar(
-      `/Transaccion/${sucursalActiva}/aplicar/${id}`,
-      handleRefresh
-    );
+    // Consultar el historial de pagos antes de aplicar: el backend tambien valida, esto solo
+    // permite mostrar el detalle y evitar un error en crudo.
+    setValidacionPagos(null);
+    setLoadingValidacionPagos(true);
+    setModalValidarPagosOpen(true);
+
+    try {
+      const validacion = await transaccionApi.obtenerValidacionPagos(sucursalActiva, parseInt(id));
+      setValidacionPagos(validacion);
+
+      const sinDocumentosRelacionados =
+        (validacion.documentosAsociados?.length ?? 0) === 0 &&
+        (validacion.pagosPendientesDuplicados?.length ?? 0) === 0;
+
+      // Sin documentos relacionados no hay historial que mostrar: se aplica directo.
+      if (sinDocumentosRelacionados) {
+        setModalValidarPagosOpen(false);
+        ejecutarAplicar();
+      }
+    } catch (err: any) {
+      setModalValidarPagosOpen(false);
+      const msg = err?.response?.data?.errorMessage || 'Error al validar el historial de pagos';
+      message.error(msg);
+    } finally {
+      setLoadingValidacionPagos(false);
+    }
   };
 
   const handleAnularConfirm = async (dataAnular: { fecha: string; motivo: string }) => {
@@ -643,7 +681,7 @@ const ReciboIngresoDetalle: React.FC = () => {
               {(data.nota) && (
                 <div style={{ marginTop: 12, padding: '0 16px 16px' }}>
                   <Text strong style={{ fontSize: 13, color: '#595959' }}>Nota:</Text>
-                  <div style={{ whiteSpace: 'pre-wrap', marginTop: 4, fontSize: 13 }}>{data.nota}</div>
+                  <div className="paces-nota-memo" style={{ marginTop: 4 }}>{data.nota || '-'}</div>
                 </div>
               )}
             </Card>
@@ -754,7 +792,7 @@ const ReciboIngresoDetalle: React.FC = () => {
             {(data.nota) && (
             <div style={{ marginTop: 12, padding: '0 16px 16px' }}>
                 <Text strong style={{ fontSize: 13, color: '#595959' }}>Nota:</Text>
-                 <div style={{ whiteSpace: 'pre-wrap', marginTop: 4, fontSize: 13 }}>{data.nota}</div>
+                 <div className="paces-nota-memo" style={{ marginTop: 4 }}>{data.nota || '-'}</div>
                </div>
              )}
            </Card>
@@ -850,6 +888,17 @@ const ReciboIngresoDetalle: React.FC = () => {
         onClose={() => setModalDesaplicarOpen(false)}
         onConfirm={handleDesaplicarConfirm}
         tituloDocumento={`${data.documento.codigo}-${data.noDocumento}`}
+      />
+
+      {/* Modal de validación del historial de pagos antes de aplicar */}
+      <ModalValidarPagos
+        open={modalValidarPagosOpen}
+        loading={loadingValidacionPagos}
+        validacion={validacionPagos}
+        documento={`${data.documento.codigo}-${data.noDocumento}`}
+        onClose={() => setModalValidarPagosOpen(false)}
+        onConfirm={ejecutarAplicar}
+        confirmLoading={operacion.loading}
       />
 
       {/* Modal de Progreso para Aplicar/Postear */}

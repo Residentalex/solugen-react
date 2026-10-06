@@ -314,7 +314,7 @@ const PlantillaSuplidorDetalle: React.FC = () => {
                   {toTitleCase(data?.nombreSuplidor || '-')}
                 </Descriptions.Item>
                 <Descriptions.Item label="Notas" span={2}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{data?.notas || '-'}</span>
+                  <span className="paces-nota-memo">{data?.notas || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -369,7 +369,7 @@ const PlantillaSuplidorDetalle: React.FC = () => {
                 {data?.detalles?.length || 0}
               </Descriptions.Item>
               <Descriptions.Item label="Notas">
-                <span style={{ whiteSpace: 'pre-wrap' }}>{data?.notas || '-'}</span>
+                <span className="paces-nota-memo">{data?.notas || '-'}</span>
               </Descriptions.Item>
             </Descriptions>
           </Card>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Select, Input, Button, message } from 'antd';
+import {Input, Button, message } from 'antd';
+import { Select } from '../../components/Select';
 import { SearchOutlined } from '@ant-design/icons';
 import { tipoApi } from '../../api/tipoApi';
 import FloatingField from '../FloatingLabel/FloatingField';

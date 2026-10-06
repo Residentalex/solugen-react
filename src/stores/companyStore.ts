@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { apiClient } from '../api/client';
 import { Sucursal } from '../types/auth';
+import type { MonedaDTO } from '../types/contabilidad';
 
 interface CompanyData {
   familias: any[];
@@ -18,13 +19,17 @@ interface CompanyData {
   unidadBase: any;
   sucursalClientes: number;
   sucursalProductos: number;
+  /** Catalogo MONEDAS indexado por sucursal. Se carga una vez por sucursal y se reutiliza. */
+  monedas: Record<number, MonedaDTO[]>;
 }
 
 interface CompanyState {
   data: CompanyData;
   loading: boolean;
   error: string;
+  monedasCargando: number[];
   fetchInitialConfig: (sucursalCompra: number, sucursalContable: number) => Promise<void>;
+  fetchMonedas: (sucursal: number, force?: boolean) => Promise<void>;
   clear: () => void;
 }
 
@@ -44,12 +49,14 @@ const initialState: CompanyData = {
   unidadBase: null,
   sucursalClientes: Sucursal.Consolidado,
   sucursalProductos: Sucursal.Compra,
+  monedas: {},
 };
 
-export const useCompanyStore = create<CompanyState>((set) => ({
+export const useCompanyStore = create<CompanyState>((set, get) => ({
   data: initialState,
   loading: false,
   error: '',
+  monedasCargando: [],
 
   fetchInitialConfig: async (sucursalCompra, sucursalContable) => {
     set({ loading: true, error: '' });
@@ -92,6 +99,9 @@ export const useCompanyStore = create<CompanyState>((set) => ({
           unidadBase: config.unidadBase || null,
           sucursalClientes: config.sucursalClientes ?? Sucursal.Consolidado,
           sucursalProductos: config.sucursalProductos ?? Sucursal.Compra,
+          // El catalogo de monedas no viene en la configuracion inicial: se conserva
+          // lo ya descargado para no obligar a los formularios a pedirlo otra vez.
+          monedas: get().data.monedas,
         },
         loading: false,
       });
@@ -100,5 +110,30 @@ export const useCompanyStore = create<CompanyState>((set) => ({
     }
   },
 
-  clear: () => set({ data: initialState, loading: false, error: '' }),
+  fetchMonedas: async (sucursal, force = false) => {
+    // OJO: Sucursal.OrensePlaza es 0, hay que comparar por null/undefined y no por
+    // falsy o el catalogo nunca se carga en esa sucursal.
+    if (sucursal === null || sucursal === undefined) return;
+
+    const { monedas, monedasCargando } = get();
+    if (!force && (monedas[sucursal] || monedasCargando.includes(sucursal))) return;
+
+    set({ monedasCargando: [...monedasCargando, sucursal] });
+    try {
+      const { data: json } = await apiClient.get(`/Moneda/${sucursal}`);
+      const lista: MonedaDTO[] = Array.isArray(json?.data) ? json.data : [];
+      set((state) => ({
+        data: {
+          ...state.data,
+          monedas: { ...state.data.monedas, [sucursal]: lista },
+        },
+        monedasCargando: state.monedasCargando.filter((s) => s !== sucursal),
+      }));
+    } catch (err: any) {
+      set((state) => ({ monedasCargando: state.monedasCargando.filter((s) => s !== sucursal) }));
+      set({ error: err?.response?.data?.errorMessage || err.message || 'Error al cargar las monedas' });
+    }
+  },
+
+  clear: () => set({ data: initialState, loading: false, error: '', monedasCargando: [] }),
 }));

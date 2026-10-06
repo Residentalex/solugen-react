@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Select, Input, message, Card, Segmented } from 'antd';
+import { Modal, Form,  Input, message, Card, Segmented } from 'antd';
+import { Select } from '../../components/Select';
 import {
   WarningOutlined,
   InfoCircleOutlined,

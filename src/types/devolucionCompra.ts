@@ -79,7 +79,7 @@ export interface DetalleDevolucionCompraDTO {
   impuestos: number;
   total: number;
   familia?: { nombre: string; idExterno: string };
-  medida?: { nombre: string; codigo: string; factor: number; idExterno: number };
+  medida?: { nombre: string; codigo: string; factor: number; idExterno: number | string };
   tipoArticulo: string;
   nota: string;
   tieneVencimiento?: boolean;
@@ -106,7 +106,8 @@ export interface DevolucionCompraFullDTO {
   almacen: AlmacenDTO | null;
   suplidor: SuplidorDTO | null;
   entidad?: SuplidorDTO | null;
-  tipo: TipoDTO | null;
+  codigoTipo?: string;
+  tipo?: TipoDTO | null;
   entrada: EntradaReferenciaDTO | null;
   moneda: MonedaDTO | null;
   documento: DocumentoDTO;
@@ -115,6 +116,7 @@ export interface DevolucionCompraFullDTO {
   subTotal: number;
   descuento: number;
   impuestos: number;
+  retenciones: number;
   total: number;
 
   detalles: DetalleDevolucionCompraDTO[];

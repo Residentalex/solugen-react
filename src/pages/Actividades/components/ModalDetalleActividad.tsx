@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Button, Descriptions, Modal, Select, Tag } from 'antd';
+import { Button, Descriptions, Modal,  Tag } from 'antd';
+import { Select } from '../../../components/Select';
 import dayjs from 'dayjs';
 import { ESTADOS_ACTIVIDAD } from '../../../types/actividad';
 import type { ActividadDTO } from '../../../types/actividad';

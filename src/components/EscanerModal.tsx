@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Modal, Select, Button, message, Spin, Space, Typography, Alert, Input } from 'antd';
+import { Modal,  Button, message, Spin, Space, Typography, Alert, Input } from 'antd';
+import { Select } from '../components/Select';
 import { ScanOutlined, ReloadOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;

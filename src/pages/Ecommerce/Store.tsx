@@ -21,15 +21,11 @@ import {
 } from '@ant-design/icons';
 import { ecommerceApi } from '../../api/ecommerceApi';
 import type { CatalogoProductoDTO, CategoriaCatalogoDTO } from '../../api/ecommerceApi';
+import { formatMoneda } from '../../utils/formats';
 import './Ecommerce.css';
 
-/** Formatear moneda en RD$ */
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-DO', {
-    style: 'currency',
-    currency: 'DOP',
-    minimumFractionDigits: 2,
-  }).format(value);
+  return formatMoneda(value);
 }
 
 const PAGE_SIZE = 20;

@@ -380,7 +380,7 @@ const AsientoContableDetalle: React.FC = () => {
                   {documentoActivo.ncfModificado || '-'}
                 </Descriptions.Item>
                 <Descriptions.Item label="Nota:" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                  <span className="paces-nota-memo">{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -468,7 +468,7 @@ const AsientoContableDetalle: React.FC = () => {
               <Descriptions.Item label="Referencia:">{documentoActivo.referencia || '-'}</Descriptions.Item>
               <Descriptions.Item label="Sucursal:"><SucursalField codigoSucursal={documentoActivo.codigoSucursal} sucursal={documentoActivo.sucursal} /></Descriptions.Item>
               <Descriptions.Item label="NCF Modificado:">{documentoActivo.ncfModificado || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Nota:"><span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span></Descriptions.Item>
+              <Descriptions.Item label="Nota:"><span className="paces-nota-memo">{documentoActivo.nota || '-'}</span></Descriptions.Item>
             </Descriptions>
           </Card>
 

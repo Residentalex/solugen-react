@@ -7,7 +7,7 @@ import { useUIStore } from '../stores/uiStore';
 import type { MenuProps } from 'antd';
 import type { PantallaDTO, ModuloDTO } from '../types/auth';
 import { DashboardOutlined } from '@ant-design/icons';
-import { ICONOS_MODULOS, ICONO_DEFAULT } from '../utils/iconosModulo';
+import { obtenerIconoModulo } from '../utils/iconosModulo';
 
 interface ModuloConPantallas {
   modulo: ModuloDTO;
@@ -183,7 +183,7 @@ const makeKey = (codigo: string) => `${moduloNombre}__${codigo}`;
 
         return {
           key: modulo.nombre,
-          icon: ICONOS_MODULOS[modulo.nombre] || ICONO_DEFAULT,
+          icon: obtenerIconoModulo(modulo),
           label: <span className="menu-module-label">{modulo.nombre}</span>,
           children,
         };

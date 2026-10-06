@@ -1,0 +1,1 @@
+export { default as SelectorIconoModulo } from './SelectorIconoModulo';

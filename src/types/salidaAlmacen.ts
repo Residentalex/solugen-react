@@ -93,6 +93,7 @@ export interface SalidaAlmacenFullDTO {
   subTotal: number;
   descuento: number;
   impuestos: number;
+  retenciones: number;
   total: number;
 
   // Detalles

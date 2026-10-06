@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Table,
@@ -7,7 +7,6 @@ import {
   Modal,
   Form,
   Input,
-  Select,
   Switch,
   Tag,
   message,
@@ -17,6 +16,7 @@ import {
   Typography,
   Empty,
 } from 'antd';
+import { Select } from '../../components/Select';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import PermissionGate from '../../components/PermissionGate';

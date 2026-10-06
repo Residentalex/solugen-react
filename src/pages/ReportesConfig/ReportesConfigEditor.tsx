@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Card, Spin, Alert, Button, Switch, Select, Input, InputNumber, Tag, Row, Col, Grid, message, Modal, Tooltip, Typography, Divider, Space, Popover, Dropdown, Segmented, Radio, Upload, Checkbox,
+  Card, Spin, Alert, Button, Switch,  Input, InputNumber, Tag, Row, Col, Grid, message, Modal, Tooltip, Typography, Divider, Space, Popover, Dropdown, Segmented, Radio, Upload, Checkbox,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   ArrowUpOutlined, ArrowDownOutlined, SaveOutlined, UndoOutlined, RollbackOutlined, EyeOutlined, EyeInvisibleOutlined,
   CodeOutlined, FileTextOutlined, CopyOutlined,
@@ -70,9 +71,16 @@ const TAMANO_FUENTE_PREVIEW = 14;
 const TAMANO_FUENTE_B_PREVIEW = 11;
 const FACTOR_ANCHO_CARACTER_MONOESPACIADO = 0.61;
 const PADDING_HORIZONTAL_PREVIEW = 40;
-// El agente de impresion escribe la etiqueta tal cual (sin ": "), asi que el
-// preview usa un espacio en vez del separador legado de impresion.
-const PREVIEW_OPCIONES: OpcionesTicketRender = { separadorEtiqueta: ' ' };
+// El preview del disenador: la etiqueta se separa con espacio (el agente de
+// impresion escribe la etiqueta tal cual), una expresion que no compila se
+// resuelve con el 'Valor por defecto' de la linea en vez de quedar literal, y
+// los textos libres con saltos se muestran tal cual (el agrupado por lineaNum
+// los aplana a espacios).
+const PREVIEW_OPCIONES: OpcionesTicketRender = {
+  separadorEtiqueta: ' ',
+  marcarExpresionFallida: true,
+  conservarSaltosTextoLibre: true,
+};
 
 /* ===== Campos calculados (líneas ESQUEMA) ===== */
 const OPCIONES_CALCULO: { label: string; value: TipoCalculoCampo }[] = [
@@ -2106,7 +2114,15 @@ const guardarLibre = (texto: string, alineacion: AlineacionTicket, negrita: bool
               const linea = zona?.lineas[lineaActiva.lineaIdx];
               if (!linea) return <Text type="secondary">Línea no encontrada</Text>;
               const ref = linea.ref;
+              // Valida las expresiones del texto que el usuario escribe para esta
+              // linea: la etiqueta y, si es LIBRE, el contenido libre (que es
+              // donde se terminan escribiendo las expresiones de calculo).
+              const idLibre = ref.startsWith('LIBRE:') ? ref.slice('LIBRE:'.length) : '';
+              const contenidoLibre = idLibre ? textoLibrePorId(idLibre)?.texto : undefined;
               const erroresEtiqueta = validarExpresionesDeConfig({ zonas: [{ lineas: [{ label: linea.label }] }] });
+              const erroresContenido = contenidoLibre === undefined
+                ? []
+                : validarExpresionesDeConfig({ textosLibres: { [idLibre]: { texto: contenidoLibre } } });
               const esCampo = ref.startsWith('CAMPO:');
               const esTotal = ref.startsWith('TOTAL:');
               const esCobro = ref.startsWith('COBRO:');
@@ -2138,12 +2154,19 @@ const guardarLibre = (texto: string, alineacion: AlineacionTicket, negrita: bool
                         <TextAreaAutocompletar
                           opciones={rutasEsquema}
                           rows={3}
-                          style={{ width: '100%', marginTop: 2 }}
+                          style={{ width: '100%', marginTop: 2, borderColor: erroresContenido.length ? '#ff4d4f' : undefined }}
                           value={(textoLibrePorId(ref.slice('LIBRE:'.length))?.texto || '')}
                           disabled={ocupado}
                           onChange={(e) => setContenidoLibre(lineaActiva.zonaIdx, lineaActiva.lineaIdx, e.target.value)}
                           placeholder="Escribe el texto libre (Enter para varias líneas). Escribe {, {{ o dentro de CONCAT(...) para ver sugerencias..."
                         />
+                        {erroresContenido.length > 0 && (
+                          <div style={{ fontSize: 11, color: '#b42318', marginTop: 4 }}>
+                            {erroresContenido.map((e) => (
+                              <div key={e.expresion}><code>{`{${e.expresion}}`}</code>: {e.error}</div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#556ee6', marginTop: 2 }}>{ref}</div>

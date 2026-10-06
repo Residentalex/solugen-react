@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Typography, Select, Popover, Button } from 'antd';
+import { Typography,  Popover, Button } from 'antd';
+import { Select } from '../../components/Select';
 import { FilterOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
-import { empleadoApi, type EmpleadoDTO } from '../../api/empleadoApi';
+import { empleadoApi, type EmpleadoListadoDTO } from '../../api/empleadoApi';
 import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
 import EntidadImagen from '../../components/EntidadImagen';
 import { toTitleCase } from '../../utils/formats';
@@ -23,7 +24,7 @@ const Empleados: React.FC = () => {
   const sucursal = useAuthStore((s) => s.compania);
   const setActiveModule = useUIStore((s) => s.setActiveModule);
 
-  const [data, setData] = useState<EmpleadoDTO[]>([]);
+  const [data, setData] = useState<EmpleadoListadoDTO[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [loadingError, setLoadingError] = useState(false);
@@ -77,7 +78,7 @@ const Empleados: React.FC = () => {
     navigate('/MEMP/nuevo');
   }, [navigate]);
 
-  const columns: ColumnsType<EmpleadoDTO> = [
+  const columns: ColumnsType<EmpleadoListadoDTO> = [
     {
       title: 'Empleado',
       key: 'empleado',
@@ -103,21 +104,21 @@ const Empleados: React.FC = () => {
     },
     {
       title: 'Cédula',
-      key: 'identificacion',
+      key: 'cedula',
       width: 130,
-      render: (_, record) => record.identificacion || '-',
+      render: (_, record) => record.cedula || '-',
     },
     {
       title: 'Departamento',
       key: 'departamento',
       width: 160,
-      render: (_, record) => record.departamento?.nombre || '-',
+      render: (_, record) => record.deptoNombre || '-',
     },
     {
       title: 'Cargo',
-      key: 'posicion',
+      key: 'cargo',
       width: 160,
-      render: (_, record) => record.posicion?.nombre || '-',
+      render: (_, record) => record.cargoNombre || '-',
     },
   ];
 
@@ -155,7 +156,7 @@ const Empleados: React.FC = () => {
   );
 
   return (
-    <DocumentListadoLayout<EmpleadoDTO>
+    <DocumentListadoLayout<EmpleadoListadoDTO>
       columns={columns}
       data={data}
       rowKey="codigo"

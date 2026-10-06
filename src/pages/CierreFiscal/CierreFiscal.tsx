@@ -13,6 +13,10 @@ const { Text } = Typography;
 
 const PAGE_SIZE = 50;
 
+const TIPO_CIERRE_FISCAL = 'T';
+const ETIQUETA_CIERRE_FISCAL = 'Cierre Fiscal';
+const ETIQUETA_NORMAL = 'Normal';
+
 const CierreFiscal: React.FC = () => {
   const navigate = useNavigate();
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
@@ -32,10 +36,11 @@ const CierreFiscal: React.FC = () => {
   // Carga de datos
   // ============================================================
   const cargarCierres = useCallback(async () => {
+    if (sucursalActiva === undefined) return;
     setLoading(true);
     setLoadingError(false);
     try {
-      const data = await cierreFiscalApi.listarCierres();
+      const data = await cierreFiscalApi.listarCierres(sucursalActiva);
       setCierres(data);
       setPage(1);
     } catch (err: any) {
@@ -45,7 +50,7 @@ const CierreFiscal: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sucursalActiva]);
 
   // Toolbar y carga inicial
   useEffect(() => {
@@ -131,10 +136,11 @@ const CierreFiscal: React.FC = () => {
       key: 'tipo',
       width: 130,
       render: (val: string) => {
-        const esCierre = val === 'CIE' || val === 'T';
+        const valor = (val ?? '').trim();
+        const esCierreFiscal = valor === TIPO_CIERRE_FISCAL;
         return (
-          <Tag color={esCierre ? 'processing' : 'success'} style={{ margin: 0, borderRadius: 4 }}>
-            {esCierre ? 'Cierre Fiscal' : val || '---'}
+          <Tag color={esCierreFiscal ? 'processing' : 'default'} style={{ margin: 0, borderRadius: 4 }}>
+            {esCierreFiscal ? ETIQUETA_CIERRE_FISCAL : ETIQUETA_NORMAL}
           </Tag>
         );
       },

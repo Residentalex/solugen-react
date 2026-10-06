@@ -1,19 +1,22 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Card, Table, Button, Input, Select, message, Alert } from 'antd';
+import { Card, Table, Button, Input,  message, Alert } from 'antd';
+import { Select } from '../components/Select';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
-import { useAuthStore } from '../../../stores/authStore';
-import { entidadContactoApi } from '../../../api/entidadContactoApi';
-import type { EntidadTelefonoDTO, EntidadEmailDTO, EntidadDireccionDTO } from '../../../types/facturacion';
+import { useAuthStore } from '../stores/authStore';
+import { entidadContactoApi } from '../api/entidadContactoApi';
+import type { TipoEntidadContacto } from '../api/entidadContactoApi';
+import type { EntidadTelefonoDTO, EntidadEmailDTO, EntidadDireccionDTO } from '../types/facturacion';
 
 interface ContactosTabProps {
-  codigoCliente: string;
+  codigoEntidad: string;
+  tipoEntidad: TipoEntidadContacto;
 }
 
 const TIPOS_TELEFONO = ['Principal', 'Oficina', 'Celular', 'Fax', 'Otro'];
 const TIPOS_EMAIL = ['Principal', 'Facturación', 'Cobros', 'Otro'];
 const TIPOS_DIRECCION = ['Principal', 'Cobros', 'Envío', 'Otra'];
 
-const ContactosTab: React.FC<ContactosTabProps> = ({ codigoCliente }) => {
+const ContactosTab: React.FC<ContactosTabProps> = ({ codigoEntidad, tipoEntidad }) => {
   const sucursalActiva = useAuthStore((s: any) => s.sucursalActiva);
 
   // Teléfonos
@@ -34,16 +37,16 @@ const ContactosTab: React.FC<ContactosTabProps> = ({ codigoCliente }) => {
     setLoadingTel(true); setLoadingEmail(true); setLoadingDir(true);
     try {
       const [tels, mails, dirs] = await Promise.all([
-        entidadContactoApi.obtenerTelefonos(sucursalActiva, codigoCliente),
-        entidadContactoApi.obtenerEmails(sucursalActiva, codigoCliente),
-        entidadContactoApi.obtenerDirecciones(sucursalActiva, codigoCliente),
+        entidadContactoApi.obtenerTelefonos(sucursalActiva, codigoEntidad, tipoEntidad),
+        entidadContactoApi.obtenerEmails(sucursalActiva, codigoEntidad, tipoEntidad),
+        entidadContactoApi.obtenerDirecciones(sucursalActiva, codigoEntidad, tipoEntidad),
       ]);
-      setTelefonos(tels.length > 0 ? tels : [{ id: 0, codigoEntidad: codigoCliente, tipo: 'Principal', numero: '', extension: '', principal: true }]);
-      setEmails(mails.length > 0 ? mails : [{ id: 0, codigoEntidad: codigoCliente, tipo: 'Principal', email: '', principal: true }]);
-      setDirecciones(dirs.length > 0 ? dirs : [{ id: 0, codigoEntidad: codigoCliente, tipo: 'Principal', direccion: '', ciudad: '', provincia: '', sector: '', principal: true }]);
+      setTelefonos(tels.length > 0 ? tels : [{ id: 0, codigoEntidad: codigoEntidad, tipo: 'Principal', numero: '', extension: '', principal: true }]);
+      setEmails(mails.length > 0 ? mails : [{ id: 0, codigoEntidad: codigoEntidad, tipo: 'Principal', email: '', principal: true }]);
+      setDirecciones(dirs.length > 0 ? dirs : [{ id: 0, codigoEntidad: codigoEntidad, tipo: 'Principal', direccion: '', ciudad: '', provincia: '', sector: '', principal: true }]);
     } catch { message.error('Error al cargar datos de contacto'); }
     finally { setLoadingTel(false); setLoadingEmail(false); setLoadingDir(false); }
-  }, [sucursalActiva, codigoCliente]);
+  }, [sucursalActiva, codigoEntidad, tipoEntidad]);
 
   useEffect(() => { cargarTodo(); }, [cargarTodo]);
 
@@ -59,9 +62,9 @@ const ContactosTab: React.FC<ContactosTabProps> = ({ codigoCliente }) => {
     setGuardando(true);
     try {
       await Promise.all([
-        entidadContactoApi.guardarTelefonos(sucursalActiva, codigoCliente, telefonos.filter(t => t.numero)),
-        entidadContactoApi.guardarEmails(sucursalActiva, codigoCliente, emails.filter(e => e.email)),
-        entidadContactoApi.guardarDirecciones(sucursalActiva, codigoCliente, direcciones.filter(d => d.direccion)),
+entidadContactoApi.guardarTelefonos(sucursalActiva, codigoEntidad, telefonos.filter(t => t.numero), tipoEntidad),
+        entidadContactoApi.guardarEmails(sucursalActiva, codigoEntidad, emails.filter(e => e.email), tipoEntidad),
+        entidadContactoApi.guardarDirecciones(sucursalActiva, codigoEntidad, direcciones.filter(d => d.direccion), tipoEntidad),
       ]);
       message.success('Datos de contacto guardados correctamente');
     } catch { message.error('Error al guardar datos de contacto'); }
@@ -79,7 +82,7 @@ const ContactosTab: React.FC<ContactosTabProps> = ({ codigoCliente }) => {
 
       {/* === Teléfonos === */}
       <Card size="small" title="Teléfonos" extra={
-        <Button size="small" icon={<PlusOutlined />} onClick={() => setTelefonos([...telefonos, { id: 0, codigoEntidad: codigoCliente, tipo: 'Celular', numero: '', extension: '', principal: false }])}>
+        <Button size="small" icon={<PlusOutlined />} onClick={() => setTelefonos([...telefonos, { id: 0, codigoEntidad: codigoEntidad, tipo: 'Celular', numero: '', extension: '', principal: false }])}>
           Agregar
         </Button>
       } style={{ marginBottom: 16 }}>
@@ -101,7 +104,7 @@ const ContactosTab: React.FC<ContactosTabProps> = ({ codigoCliente }) => {
 
       {/* === Emails === */}
       <Card size="small" title="Correos Electrónicos" extra={
-        <Button size="small" icon={<PlusOutlined />} onClick={() => setEmails([...emails, { id: 0, codigoEntidad: codigoCliente, tipo: 'Otro', email: '', principal: false }])}>
+        <Button size="small" icon={<PlusOutlined />} onClick={() => setEmails([...emails, { id: 0, codigoEntidad: codigoEntidad, tipo: 'Otro', email: '', principal: false }])}>
           Agregar
         </Button>
       } style={{ marginBottom: 16 }}>
@@ -120,7 +123,7 @@ const ContactosTab: React.FC<ContactosTabProps> = ({ codigoCliente }) => {
 
       {/* === Direcciones === */}
       <Card size="small" title="Direcciones" extra={
-        <Button size="small" icon={<PlusOutlined />} onClick={() => setDirecciones([...direcciones, { id: 0, codigoEntidad: codigoCliente, tipo: 'Otra', direccion: '', ciudad: '', provincia: '', sector: '', principal: false }])}>
+        <Button size="small" icon={<PlusOutlined />} onClick={() => setDirecciones([...direcciones, { id: 0, codigoEntidad: codigoEntidad, tipo: 'Otra', direccion: '', ciudad: '', provincia: '', sector: '', principal: false }])}>
           Agregar
         </Button>
       } style={{ marginBottom: 16 }}>

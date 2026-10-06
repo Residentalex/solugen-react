@@ -38,6 +38,7 @@ export interface SolicitudPagoDTO {
   cuentaBancaria: string;
   nota: string;
   revisado?: boolean;
+  autorizado?: boolean;
   tasa: number;
   moneda?: { simbolo: string; nombre: string };
   transaccionesAsociadas: import('./reciboIngreso').TransaccionAsociadaDTO[];
@@ -62,6 +63,8 @@ export interface SolicitudPagoCrearDTO {
   tasa: number;
   simboloMoneda: string;
   nombreMoneda: string;
+  /** Codigo de MONEDAS.CODIGO. Fuente de verdad de la moneda; simbolo y nombre son descriptivos. */
+  codigoMoneda?: string;
   nombreBeneficiario?: string;
   transaccionesAsociadas?: import('./reciboIngreso').TransaccionAsociadaDTO[];
   asientos?: import('./entradaAlmacen').AsientoContableDTO[];

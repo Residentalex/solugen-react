@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Card, Table, Typography, Empty, Skeleton } from 'antd';
+import { Card, Table, Typography, Empty, Skeleton, Tag } from 'antd';
 import { FileTextOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { formatNumber, formatDate } from '../../utils/formats';
@@ -22,6 +22,10 @@ export interface DocumentoAsociadoItem {
   perdida?: number;
   descuento?: number;
   esDocumentoInventario?: boolean;
+  /** Codigo de MONEDAS.CODIGO. Debe igualar al del documento principal. */
+  codigoMoneda?: string;
+  /** Tasa del documento relacionado frente a la moneda nacional */
+  tasa?: number;
 }
 
 export interface TransaccionesAsociadasCardProps {

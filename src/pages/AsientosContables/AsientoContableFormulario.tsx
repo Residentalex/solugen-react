@@ -1,15 +1,15 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Tabs, Button, Space, Row, Col, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Tag, Alert,
+  Card, Table, Tabs, Button, Row, Col, Grid,
+  message, Form, Input, InputNumber,  DatePicker, Typography, Modal, Alert,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
   InboxOutlined,
   PlusOutlined,
   DeleteOutlined,
   SearchOutlined,
-  EditOutlined,
   ExclamationCircleOutlined,
   BankOutlined,
   HistoryOutlined,
@@ -22,7 +22,7 @@ import { useUIStore } from '../../stores/uiStore';
 import { transaccionApi } from '../../api/transaccionApi';
 import { conceptosApi } from '../../api/conceptosApi';
 import { cuentaContableApi } from '../../api/cuentaContableApi';
-import { monedaApi } from '../../api/monedaApi';
+import { useMonedasCatalogo } from '../../hooks/useMonedasCatalogo';
 import { cuentaBancariaApi, type CuentaBancariaDTO } from '../../api/cuentaBancariaApi';
 import type { TransaccionDTO, TransaccionAsientoDTO } from '../../types/transaccion';
 import type { ConceptoDTO, EntidadDTO } from '../../types/entradaAlmacen';
@@ -31,7 +31,7 @@ import { OrigenCuenta } from '../../types/contabilidad';
 import type { DetalleMovimientoDTO } from '../../types/notaCredito';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
-import { toTitleCase, formatNumber, extraerMensajeError, toISOFormat } from '../../utils/formats';
+import { toTitleCase, formatNumber, extraerMensajeError, toISOFormat, redondear2 } from '../../utils/formats';
 import { toPeriodoNum } from '../../utils/estadoDocumento';
 import { esDebito, esCredito } from '../../utils/contabilidad';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
@@ -43,8 +43,9 @@ import FloatingField from '../../components/FloatingLabel/FloatingField';
 import '../../components/FloatingLabel/FloatingField.css';
 import LogTable from '../../components/LogTable';
 import CobrosCard from '../../components/CobrosCard';
+import MemoField from '../../components/MemoField/MemoField';
+import CamposRapidosFila from '../../components/CamposRapidosFila/CamposRapidosFila';
 
-const { TextArea } = Input;
 const { Text } = Typography;
 
 // ===== Helper: asiento vacío =====
@@ -63,7 +64,7 @@ function asientoVacio(): TransaccionAsientoDTO {
 // El pendiente efectivo se calcula como max(montoOriginal - pagado, saldoPendiente), nunca negativo.
 function pendienteEfectivo(t: any): number {
   const v = Math.max(0, (t?.montoOriginal || 0) - (t?.pagado || 0), t?.saldoPendiente || t?.pendiente || 0);
-  return Math.round(v * 100) / 100;
+  return redondear2(v);
 }
 
 // ===== Componente principal =====
@@ -95,7 +96,7 @@ const AsientoContableFormulario: React.FC = () => {
   const [selectedEntidad, setSelectedEntidad] = useState<EntidadDTO | null>(null);
 
   // ===== Campos editables nuevos (Moneda, Sucursal, Cta Bancaria, Beneficiario, Detalles, Docs) =====
-  const [monedasCache, setMonedasCache] = useState<MonedaDTO[]>([]);
+  const { monedas: monedasCache } = useMonedasCatalogo(sucursalActiva);
   const [selectedMoneda, setSelectedMoneda] = useState<string>('');
   const [sucursalesCache, setSucursalesCache] = useState<any[]>([]);
   const [selectedSucursal, setSelectedSucursal] = useState<string>('');
@@ -140,10 +141,7 @@ const AsientoContableFormulario: React.FC = () => {
         console.warn('Error al cargar cuentas contables', err);
       });
 
-    // Cargar catálogos editables: monedas, cuentas bancarias y sucursales
-    monedaApi.obtenerListado(sucursalActiva)
-      .then(setMonedasCache)
-      .catch((err: any) => console.warn('Error al cargar monedas', err));
+    // Cargar cuentas editables: cuentas bancarias y sucursales
     cuentaBancariaApi.obtenerListado(sucursalActiva)
       .then(setCuentasBancarias)
       .catch((err: any) => console.warn('Error al cargar cuentas bancarias', err));
@@ -1002,71 +1000,40 @@ const AsientoContableFormulario: React.FC = () => {
                 </Col>
 
                 {/* Fila 4: Campos rápidos (NCF, Referencia) */}
-                <Col xs={24}>
-                  <div style={{ marginBottom: 16 }}>
-                    <Space size={[8, 8]} wrap>
-                      {/* NCF */}
-                      {editingField === 'ncf' ? (
-                        <Input
-                          size="small"
-                          style={{ width: 200 }}
-                          placeholder="NCF"
-                          maxLength={19}
-                          autoFocus
-                          defaultValue={editingValueRef.current as string}
-                          onChange={(e) => { editingValueRef.current = e.target.value; }}
-                          onPressEnter={() => commitFieldEditor()}
-                          onBlur={() => commitFieldEditor()}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                          }}
-                        />
-                      ) : ncfValue ? (
-                        <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
-                          NCF: {ncfValue} <EditOutlined />
-                        </Tag>
-                      ) : (
-                        <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('ncf')}>
-                          <PlusOutlined /> NCF
-                        </Tag>
-                      )}
-
-                      {/* Referencia */}
-                      {editingField === 'referencia' ? (
-                        <Input
-                          size="small"
-                          style={{ width: 200 }}
-                          placeholder="Referencia"
-                          autoFocus
-                          defaultValue={editingValueRef.current as string}
-                          onChange={(e) => { editingValueRef.current = e.target.value; }}
-                          onPressEnter={() => commitFieldEditor()}
-                          onBlur={() => commitFieldEditor()}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                          }}
-                        />
-                      ) : refValue ? (
-                        <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
-                          Ref: {refValue} <EditOutlined />
-                        </Tag>
-                      ) : (
-                        <Tag style={{ cursor: 'pointer', fontSize: 14, padding: '6px 16px' }} onClick={() => openFieldEditor('referencia')}>
-                          <PlusOutlined /> Referencia
-                        </Tag>
-                      )}
-                    </Space>
-                  </div>
-                  <Form.Item name="ncf" hidden><Input /></Form.Item>
-                  <Form.Item name="referencia" hidden><Input /></Form.Item>
-                </Col>
+                <CamposRapidosFila
+                  ncf={{
+                    valor: ncfValue,
+                    editando: editingField === 'ncf',
+                    etiqueta: 'NCF',
+                    prefijo: 'NCF: ',
+                    placeholder: 'NCF',
+                    maxLength: 19,
+                    onEdit: () => openFieldEditor('ncf'),
+                    onCommit: commitFieldEditor,
+                    onCancel: cancelFieldEditor,
+                    onChange: (v) => { editingValueRef.current = v; },
+                  }}
+                  referencia={{
+                    valor: refValue,
+                    editando: editingField === 'referencia',
+                    etiqueta: 'Referencia',
+                    prefijo: 'Ref: ',
+                    placeholder: 'Referencia',
+                    onEdit: () => openFieldEditor('referencia'),
+                    onCommit: commitFieldEditor,
+                    onCancel: cancelFieldEditor,
+                    onChange: (v) => { editingValueRef.current = v; },
+                  }}
+                  ocultos={[
+                    { name: 'ncf' },
+                    { name: 'referencia' },
+                  ]}
+                />
 
                 {/* Fila 5: Nota */}
                 <Col xs={24}>
                   <Form.Item name="nota" style={{ marginBottom: 0 }}>
-                    <FloatingField label="Nota">
-                      <TextArea rows={3} />
-                    </FloatingField>
+                    <MemoField label="Nota" />
                   </Form.Item>
                 </Col>
               </Row>

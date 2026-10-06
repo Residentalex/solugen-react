@@ -1,17 +1,17 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Card, Form, Input, Select, Switch, Button, message, Row, Col, Divider, Spin } from 'antd';
+import { Card, Form, Input,  Switch, Button, message, Row, Col, Divider, Spin } from 'antd';
+import { Select } from '../../components/Select';
 import { SaveOutlined, CloseOutlined, BankOutlined, UserOutlined, FileTextOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { cuentaBancariaApi } from '../../api/cuentaBancariaApi';
 import { bancoApi, type BancoDTO } from '../../api/bancoApi';
-import { monedaApi } from '../../api/monedaApi';
-import type { MonedaDTO } from '../../types/contabilidad';
 import type { CuentaBancariaDTO } from '../../api/cuentaBancariaApi';
 import PlantillaImportacion from '../../components/PlantillaImportacion';
 import { toTitleCase } from '../../utils/formats';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
+import { useMonedasCatalogo } from '../../hooks/useMonedasCatalogo';
 
 const { TextArea } = Input;
 
@@ -34,7 +34,7 @@ const CuentaBancariaFormulario: React.FC<Props> = ({ mode }) => {
   const [cuentaContable, setCuentaContable] = useState('');
   const [noCuenta, setNoCuenta] = useState('');
   const [bancos, setBancos] = useState<BancoDTO[]>([]);
-  const [monedas, setMonedas] = useState<MonedaDTO[]>([]);
+  const { monedas } = useMonedasCatalogo(sucursalActiva);
 
   const cuentaContableWatcher = Form.useWatch('cuentaContable', form);
 
@@ -43,12 +43,8 @@ const CuentaBancariaFormulario: React.FC<Props> = ({ mode }) => {
   const cargarCatalogos = useCallback(async () => {
     if (sucursalActiva === undefined) return;
     try {
-      const [listaBancos, listaMonedas] = await Promise.all([
-        bancoApi.obtenerListado(sucursalActiva),
-        monedaApi.obtenerListado(sucursalActiva),
-      ]);
+      const listaBancos = await bancoApi.obtenerListado(sucursalActiva);
       setBancos(listaBancos || []);
-      setMonedas(listaMonedas || []);
     } catch (err: any) {
       message.error(err?.response?.data?.errorMessage || 'Error al cargar bancos y monedas');
     }
@@ -289,7 +285,7 @@ const CuentaBancariaFormulario: React.FC<Props> = ({ mode }) => {
                   name="nota"
                   label="Observaciones"
                 >
-                  <TextArea rows={2} placeholder="Notas u observaciones adicionales" />
+                  <TextArea rows={3} autoSize={{ minRows: 3, maxRows: 8 }} maxLength={500} showCount placeholder="Notas u observaciones adicionales" />
                 </Form.Item>
               </Col>
               <Col xs={24} lg={8}>

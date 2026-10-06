@@ -101,13 +101,6 @@ const DevolucionVenta: React.FC = () => {
       render: (concepto: string) => <Text>{toTitleCase(concepto) || ''}</Text>,
     },
     {
-      title: 'Almacén',
-      dataIndex: 'almacen',
-      key: 'almacen',
-      width: 200,
-      render: (almacen: string) => <Text>{toTitleCase(almacen) || ''}</Text>,
-    },
-    {
       title: 'NCF',
       dataIndex: 'ncf',
       key: 'ncf',
@@ -144,7 +137,7 @@ const DevolucionVenta: React.FC = () => {
       total={state.total}
       page={state.page}
       pageSize={state.pageSize}
-      scrollX={1490}
+      scrollX={1290}
       selectedRowId={state.selectedRow?.id}
       loadingError={state.loadingError}
       errorMessage="Error al cargar devoluciones de venta"

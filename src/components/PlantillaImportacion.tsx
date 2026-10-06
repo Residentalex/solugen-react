@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Table, Button, Modal, Form, Input, Select, Switch, InputNumber, message, Popconfirm, Space, Tag, Empty, Tooltip, Typography, Row, Col, Divider } from 'antd';
+import { Card, Table, Button, Modal, Form, Input,  Switch, InputNumber, message, Popconfirm, Space, Tag, Empty, Tooltip, Typography, Row, Col, Divider } from 'antd';
+import { Select } from '../components/Select';
 import { PlusOutlined, EditOutlined, DeleteOutlined, FileExcelOutlined, SaveOutlined, CloseOutlined, ReloadOutlined, ProfileOutlined, ColumnHeightOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../stores/authStore';
 import { plantillaImportacionApi } from '../api/plantillaImportacionApi';

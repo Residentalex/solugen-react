@@ -1,18 +1,19 @@
 import React from 'react';
+import dayjs from 'dayjs';
 import { useNavigate, Link } from 'react-router-dom';
-import { Typography, message, Button, Space, Tag, DatePicker, Select, Checkbox, Input, Tooltip } from 'antd';
+import { Typography, message, Button, Space, Tag, DatePicker,  Checkbox, Input, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { solicitudPagoApi } from '../../../api/solicitudPagoApi';
-import DocumentListadoLayout from '../../../layouts/DocumentListadoLayout';
-import { useDocumentoListado } from '../../../hooks/useDocumentoListado';
-import { useAuthStore } from '../../../stores/authStore';
-import EntidadColumnCell from '../../../components/EntidadColumnCell';
-import EstadoColumnCell from '../../../components/EstadoColumnCell';
-import FechaColumnCell from '../../../components/FechaColumnCell';
-import { formatCurrency, formatDateRaw, toTitleCase } from '../../../utils/formats';
-import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../../utils/estadoDocumento';
-import type { TransaccionBancariaVistaDTO } from '../../../types/transaccion';
-import { useScreenConfig } from '../../../hooks/useScreenConfig';
+import { solicitudPagoApi } from '../../api/solicitudPagoApi';
+import DocumentListadoLayout from '../../layouts/DocumentListadoLayout';
+import { useDocumentoListado } from '../../hooks/useDocumentoListado';
+import { useAuthStore } from '../../stores/authStore';
+import EntidadColumnCell from '../../components/EntidadColumnCell';
+import EstadoColumnCell from '../../components/EstadoColumnCell';
+import FechaColumnCell from '../../components/FechaColumnCell';
+import { formatCurrency, formatDateRaw, toTitleCase } from '../../utils/formats';
+import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
+import type { TransaccionBancariaVistaDTO } from '../../types/transaccion';
+import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, FileAddOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -32,7 +33,7 @@ const RDocAutorizado: React.FC = () => {
   const [generandoLote, setGenerandoLote] = React.useState(false);
 
   // Verificar permiso para generar documentos
-  const puedeGenerar = usuario?.permisosEspeciales?.some(p => p.codigo === 'pe_generar_spa' && p.valor) || false;
+  const puedeGenerar = usuario?.permisosEspeciales?.some(p => p.codigo?.toUpperCase() === 'PE_GENERAR_DOCBANCARIO' && p.valor) || false;
 
   const { state, rangoDefault, puedeEditar, actions } = useDocumentoListado<TransaccionBancariaVistaDTO>({
     modulo: screenCode,
@@ -134,8 +135,8 @@ const RDocAutorizado: React.FC = () => {
   const handleFiltrosFecha = () => {
     actions.handleFiltrosAplicar({
       ...state.filtros,
-      desde: fechaDesde ? fechaDesde.CadenaAFecha() : null,
-      hasta: fechaHasta ? fechaHasta.CadenaAFecha() : null,
+        desde: fechaDesde || undefined,
+        hasta: fechaHasta || undefined,
     });
   };
 
@@ -277,14 +278,14 @@ const RDocAutorizado: React.FC = () => {
             <Space wrap size="small">
               <DatePicker
                 placeholder="Desde"
-                value={fechaDesde ? new Date(fechaDesde) : null}
+              value={fechaDesde ? dayjs(fechaDesde, 'YYYYMMDD') : null}
                 onChange={(date) => setFechaDesde(date ? date.format('YYYYMMDD') : '')}
                 format="YYYYMMDD"
                 disabled={generandoLote}
               />
               <DatePicker
                 placeholder="Hasta"
-                value={fechaHasta ? new Date(fechaHasta) : null}
+              value={fechaHasta ? dayjs(fechaHasta, 'YYYYMMDD') : null}
                 onChange={(date) => setFechaHasta(date ? date.format('YYYYMMDD') : '')}
                 format="YYYYMMDD"
                 disabled={generandoLote}

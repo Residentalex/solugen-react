@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, DatePicker, Drawer, Form, Input, Select, Space } from 'antd';
+import { Button, DatePicker, Drawer, Form, Input,  Space } from 'antd';
+import { Select } from '../../../components/Select';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { ESTADOS_ACTIVIDAD } from '../../../types/actividad';

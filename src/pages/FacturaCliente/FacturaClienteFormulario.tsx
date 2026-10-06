@@ -3,9 +3,11 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Divider, Grid,
-  message, Form, Input, InputNumber, Select, DatePicker, Typography, Modal, Dropdown, Alert, Popover, Empty,
+  message, Form, Input, InputNumber,  DatePicker, Typography, Modal, Dropdown, Alert, Popover, Empty,
 } from 'antd';
+import { Select } from '../../components/Select';
 import {
+  InboxOutlined,
   SaveOutlined,
   CloseOutlined,
   DeleteOutlined,
@@ -13,11 +15,11 @@ import {
   SearchOutlined,
   ClearOutlined,
   ExclamationCircleOutlined,
-  EditOutlined,
   MoreOutlined,
   CalendarOutlined,
   HolderOutlined,
   HistoryOutlined,
+  FileTextOutlined,
 } from '@ant-design/icons';
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -49,19 +51,21 @@ import AsientosContableTable from '../../components/AsientosContableTable';
 import { transaccionApi } from '../../api/transaccionApi';
 import SeleccionarImpuestosModal from '../../components/SeleccionarImpuestosModal';
 import type { ImpuestoSeleccionado } from '../../components/SeleccionarImpuestosModal';
-import { DragHandle, SortableRow, DragListenersContext } from '../../components/DragSortable';
+import { DragHandle, SortableRow } from '../../components/DragSortable';
 import { useFormularioNavigation } from '../../hooks/useFormularioNavigation';
 import { useCargaDocumento } from '../../hooks/useCargaDocumento';
 import { useScreenConfig } from '../../hooks/useScreenConfig';
 import { useDocumentoConfig } from '../../hooks/useDocumentoConfig';
+import { useMonedaDocumento } from '../../hooks/useMonedaDocumento';
+import CamposRapidosFila from '../../components/CamposRapidosFila/CamposRapidosFila';
 import { formatNumber, toTitleCase, formatDate, parseDateRaw, toISOFormat, extraerMensajeError } from '../../utils/formats';
 import { getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum } from '../../utils/estadoDocumento';
 import CamposRestringidosAlert from '../../components/CamposRestringidosAlert';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
+import MemoField from '../../components/MemoField/MemoField';
 
 const { Text } = Typography;
-const { TextArea } = Input;
 
 // ===== Cálculo de fila para FFAC (Precio × Cantidad) =====
 function calcularFila(fila: DetalleFacturaClienteDTO): DetalleFacturaClienteDTO {
@@ -210,6 +214,7 @@ const FacturaClienteFormulario: React.FC = () => {
   const [asientosModificados, setAsientosModificados] = useState(false);
   const [impuestosFactura, setImpuestosFactura] = useState<any[]>([]);
   const [modalImpuestosOpen, setModalImpuestosOpen] = useState(false);
+  const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
 
   // Cache de medidas
   const [medidasCache, setMedidasCache] = useState<any[]>([]);
@@ -307,6 +312,15 @@ const FacturaClienteFormulario: React.FC = () => {
   };
 
   const [form] = Form.useForm();
+
+  // ===== Moneda del documento (selector sobre el catalogo de MONEDAS) =====
+  const { monedas, monedasLoading, monedaCodigo, tasaEditable, tasaParaMoneda, seleccionarMoneda } = useMonedaDocumento(
+    sucursalActiva,
+    form,
+    data,
+    setData,
+    selectedConcepto?.moneda,
+  );
 
   // ===== Watchers reactivos =====
   const ncfValue = Form.useWatch('ncf', form) || '';
@@ -625,7 +639,7 @@ const FacturaClienteFormulario: React.FC = () => {
     form.setFieldsValue({
       concepto: concepto.codigo,
       moneda: monedaObj.nombre,
-      tasa: monedaObj.tasa ?? 1,
+      tasa: tasaParaMoneda(monedaObj),
     });
     // Actualizar data local para que la UI lo refleje
     setData((prev) => {
@@ -811,21 +825,23 @@ const FacturaClienteFormulario: React.FC = () => {
   function esDebito(tipo: any): boolean { return tipo === 'D' || tipo === 0; }
   function esCredito(tipo: any): boolean { return tipo === 'C' || tipo === 1; }
 
-  const handleGenerarAsientos = async () => {
-    if (sucursalActiva === undefined) return;
-    setGenerandoAsientos(true);
-    try {
-      const dto = construirDTO();
-      const asientosGenerados = await transaccionApi.generarAsientos(sucursalActiva, dto);
-      setAsientosLocales(asientosGenerados);
-      message.success(`Se generaron ${asientosGenerados.length} asientos`);
-    } catch (err: any) {
-      const msg = extraerMensajeError(err, 'Error al generar asientos');
-      message.error(msg);
-    } finally {
-      setGenerandoAsientos(false);
-    }
-  };
+   const handleGenerarAsientos = async () => {
+     if (sucursalActiva === undefined) return;
+     setGenerandoAsientos(true);
+     setErrorGeneracion(null);
+     try {
+       const dto = construirDTO();
+       const asientosGenerados = await transaccionApi.generarAsientos(sucursalActiva, dto);
+       setAsientosLocales(asientosGenerados);
+       message.success(`Se generaron ${asientosGenerados.length} asientos`);
+     } catch (err: any) {
+       const msg = extraerMensajeError(err, 'Error al generar asientos');
+       setErrorGeneracion(msg);
+       message.error(msg);
+     } finally {
+       setGenerandoAsientos(false);
+     }
+   };
 
   const handleRefresh = useCallback(() => {
     if (mode === 'crear') return;
@@ -1294,106 +1310,53 @@ const FacturaClienteFormulario: React.FC = () => {
                 </Form.Item>
               </Col>
 
-              {/* Fila 4: Campos rápidos (NCF, Referencia, Tasa, Días Crédito) */}
-              <Col xs={24}>
-                <div style={{ marginBottom: 16 }}>
-                  <Space size={[8, 8]} wrap>
-                    {/* NCF */}
-                    <div>
-                      {editingField === 'ncf' ? (
-                        <Input
-                          size="small"
-                          style={{ width: 200 }}
-                          placeholder="NCF"
-                          maxLength={19}
-                          autoFocus
-                          defaultValue={editingValueRef.current as string}
-                          onChange={(e) => { editingValueRef.current = e.target.value; }}
-                          onPressEnter={() => commitFieldEditor()}
-                          onBlur={() => commitFieldEditor()}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                          }}
-                        />
-                      ) : ncfValue ? (
-                        <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                          NCF: {ncfValue} <EditOutlined />
-                        </Tag>
-                      ) : (
-                        <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('ncf')}>
-                          <PlusOutlined /> NCF
-                        </Tag>
-                      )}
-                    </div>
-
-                    {/* Referencia */}
-                    {editingField === 'referencia' ? (
-                      <Input
-                        size="small"
-                        style={{ width: 200 }}
-                        placeholder="Referencia"
-                        autoFocus
-                        defaultValue={editingValueRef.current as string}
-                        onChange={(e) => { editingValueRef.current = e.target.value; }}
-                        onPressEnter={() => commitFieldEditor()}
-                        onBlur={() => commitFieldEditor()}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                        }}
-                      />
-                    ) : refValue ? (
-                      <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
-                        Ref: {refValue} <EditOutlined />
-                      </Tag>
-                    ) : (
-                      <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('referencia')}>
-                        <PlusOutlined /> Referencia
-                      </Tag>
-                    )}
-
-                    {/* Tasa */}
-                    {editingField === 'tasa' ? (
-                      <InputNumber
-                        size="small"
-                        style={{ width: 120 }}
-                        min={0}
-                        step={0.01}
-                        placeholder="Tasa"
-                        autoFocus
-                        defaultValue={editingValueRef.current as number}
-                        onChange={(val) => { editingValueRef.current = val ?? 1; }}
-                        onPressEnter={() => commitFieldEditor()}
-                        onBlur={() => commitFieldEditor()}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Escape') { e.stopPropagation(); cancelFieldEditor(); }
-                        }}
-                      />
-                    ) : tasaValue !== 1 ? (
-                      <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
-                        Tasa: {tasaValue} <EditOutlined />
-                      </Tag>
-                    ) : (
-                      <Tag style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => openFieldEditor('tasa')}>
-                        <PlusOutlined /> Tasa
-                      </Tag>
-                    )}
-
-                    {/* Días Crédito - eliminado */}
-                  </Space>
-                </div>
-                {/* Hidden form items para campos rápidos */}
-                <Form.Item name="ncf" hidden><Input /></Form.Item>
-                <Form.Item name="referencia" hidden><Input /></Form.Item>
-                <Form.Item name="tasa" hidden><InputNumber /></Form.Item>
-                <Form.Item name="moneda" hidden><Input /></Form.Item>
-              </Col>
+              {/* Fila 4: Campos rápidos (NCF, Referencia, Tasa, Moneda) */}
+              <CamposRapidosFila
+                ncf={{
+                  valor: ncfValue,
+                  editando: editingField === 'ncf',
+                  etiqueta: 'NCF',
+                  prefijo: 'NCF: ',
+                  placeholder: 'NCF',
+                  maxLength: 19,
+                  onEdit: () => openFieldEditor('ncf'),
+                  onCommit: commitFieldEditor,
+                  onCancel: cancelFieldEditor,
+                  onChange: (v) => { editingValueRef.current = v; },
+                }}
+                referencia={{
+                  valor: refValue,
+                  editando: editingField === 'referencia',
+                  etiqueta: 'Referencia',
+                  prefijo: 'Ref: ',
+                  placeholder: 'Referencia',
+                  onEdit: () => openFieldEditor('referencia'),
+                  onCommit: commitFieldEditor,
+                  onCancel: cancelFieldEditor,
+                  onChange: (v) => { editingValueRef.current = v; },
+                }}
+                tasa={{
+                  tasa: tasaValue,
+                  editable: tasaEditable,
+                  editando: editingField === 'tasa',
+                  onEdit: () => openFieldEditor('tasa'),
+                  onChange: (v) => { editingValueRef.current = v ?? 1; },
+                  onCommit: commitFieldEditor,
+                  onCancel: cancelFieldEditor,
+                }}
+                moneda={{ value: monedaCodigo, onChange: seleccionarMoneda, monedas, loading: monedasLoading }}
+                ocultos={[
+                  { name: 'ncf' },
+                  { name: 'referencia' },
+                  { name: 'tasa', editor: 'number' },
+                  { name: 'moneda' },
+                ]}
+              />
 
               {/* Fila 5: Nota */}
               <Col xs={24}>
                 <Form.Item name="nota" style={{ marginBottom: 0 }}>
-                  <FloatingField label="Nota">
-                    <TextArea rows={3} />
-                  </FloatingField>
+                  <MemoField label="Nota" />
                 </Form.Item>
               </Col>
             </Row>
@@ -1546,7 +1509,7 @@ const FacturaClienteFormulario: React.FC = () => {
               items={[
                 {
                   key: 'detalles',
-                  label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
+                  icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                   children: (
                     <>
                       <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
@@ -1612,9 +1575,10 @@ const FacturaClienteFormulario: React.FC = () => {
                     </>
                   ),
                 },
-                {
-                  key: 'impuestos',
-                  label: `Impuestos (${impuestosFactura.length})`,
+{
+                key: 'impuestos',
+                icon: <FileTextOutlined />,
+                label: `Impuestos (${impuestosFactura.length})`,
                   children: (
                     <>
                       <div style={{ marginBottom: 8 }}>
@@ -1639,25 +1603,40 @@ const FacturaClienteFormulario: React.FC = () => {
                     </>
                   ),
                 },
-                {
-                  key: 'asientos',
-                  label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
-                  children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
-<AsientosContableEditables
-  asientos={asientosModificados ? asientosLocales : (asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []))}
-  onChange={(nuevosAsientos) => {
-    setAsientosLocales(nuevosAsientos);
-    setAsientosModificados(true);
-  }}
-  editable={true}
-  scroll={{ x: 900 }}
-  onGenerar={handleGenerarAsientos}
-  generando={generandoAsientos}
-/>
-                  ) : (
-                    <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
-                  ),
-                },
+{
+                   key: 'asientos',
+                   label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
+                   children: (
+                     <>
+                       {errorGeneracion && (
+                         <Alert
+                           type="error"
+                           showIcon
+                           closable
+                           onClose={() => setErrorGeneracion(null)}
+                           style={{ marginBottom: 8 }}
+                           message="Error al generar asientos"
+                           description={errorGeneracion}
+                         />
+                       )}
+                       {(permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
+ <AsientosContableEditables
+   asientos={asientosModificados ? asientosLocales : (asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []))}
+   onChange={(nuevosAsientos) => {
+     setAsientosLocales(nuevosAsientos);
+     setAsientosModificados(true);
+   }}
+   editable={true}
+   scroll={{ x: 900 }}
+   onGenerar={handleGenerarAsientos}
+   generando={generandoAsientos}
+ />
+                       ) : (
+                         <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
+                       )}
+                     </>
+                   ),
+                 },
                 ...(data?.logs && data.logs.length > 0
                   ? [{
                       key: 'historial',
@@ -1683,7 +1662,7 @@ const FacturaClienteFormulario: React.FC = () => {
             items={[
               {
                 key: 'detalles',
-                label: `Detalles (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
+                icon: <InboxOutlined />, label: `Productos/Servicios (${detallesFiltrados.length}${detalleSearch ? `/${detalles.length}` : ''})`,
                 children: (
                   <>
                     <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} ref={agregarFilaRef}>
@@ -1776,25 +1755,40 @@ const FacturaClienteFormulario: React.FC = () => {
                   </>
                 ),
               },
-              {
-                key: 'asientos',
-                label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
-                children: (permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
-<AsientosContableEditables
-  asientos={asientosModificados ? asientosLocales : (asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []))}
-  onChange={(nuevosAsientos) => {
-    setAsientosLocales(nuevosAsientos);
-    setAsientosModificados(true);
-  }}
-  editable={true}
-  scroll={{ x: 900 }}
-  onGenerar={handleGenerarAsientos}
-  generando={generandoAsientos}
-/>
-                ) : (
-                  <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
-                ),
-              },
+{
+                 key: 'asientos',
+                 label: `Asientos (${asientosLocales.length || data?.asientos?.length || 0})`,
+                 children: (
+                   <>
+                     {errorGeneracion && (
+                       <Alert
+                         type="error"
+                         showIcon
+                         closable
+                         onClose={() => setErrorGeneracion(null)}
+                         style={{ marginBottom: 8 }}
+                         message="Error al generar asientos"
+                         description={errorGeneracion}
+                       />
+                     )}
+                     {(permisoModificarAsientos && estado === 0 && !selectedConcepto?.noAsientos) ? (
+ <AsientosContableEditables
+   asientos={asientosModificados ? asientosLocales : (asientosLocales.length > 0 ? asientosLocales : (data?.asientos || []))}
+   onChange={(nuevosAsientos) => {
+     setAsientosLocales(nuevosAsientos);
+     setAsientosModificados(true);
+   }}
+   editable={true}
+   scroll={{ x: 900 }}
+   onGenerar={handleGenerarAsientos}
+   generando={generandoAsientos}
+ />
+                     ) : (
+                       <AsientosContableTable asientos={data?.asientos || []} scroll={{ x: 900 }} />
+                     )}
+                   </>
+                 ),
+               },
               ...(data?.logs && data.logs.length > 0
                 ? [{
                     key: 'historial',

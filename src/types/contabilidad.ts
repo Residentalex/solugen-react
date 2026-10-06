@@ -1,9 +1,10 @@
 export interface MonedaDTO {
-  id: number;
   nombre: string;
   simbolo: string;
   codigo: string;
-  tasa: number;
+  /** El backend si los envia, pero el fallback local de utils/moneda.ts no los incluye. */
+  id?: number;
+  tasa?: number;
   idExterno?: string;
 }
 
@@ -182,6 +183,15 @@ export interface TransaccionDTO {
   concepto: ConceptoApiDTO;
   /** Objeto Entidad del backend */
   entidad: EntidadApiDTO;
+  /**
+   * Campos calculados del endpoint de documentos pendientes
+   * (`GET /Transaccion/{sucursal}/pendiente/{codEntidad}` y `pendienteInv`).
+   * Opcionales para no romper a los otros consumidores del endpoint.
+   */
+  montoOriginal?: number;
+  pagado?: number;
+  pendiente?: number;
+  esSobrepago?: boolean;
 }
 
 // --- Movimientos de Cuenta ---
@@ -219,4 +229,52 @@ export interface SecuenciaNCFListDTO {
   minimo: number;
   fechaVencimiento?: string;
   activo: boolean;
+}
+
+// --- Reporte Asientos de Inventario ---
+
+/**
+ * Fila del reporte de asientos de inventario, agrupada por cuenta contable y tipo de documento.
+ * Mapeo exacto de `ReporteAsientosInventarioItem` (backend).
+ */
+export interface ReporteAsientosInventarioItem {
+  cuentaContableNoCuenta: string;
+  cuentaContableNombre: string;
+  documentoNombre: string;
+  debitos: number;
+  creditos: number;
+  montoAuxiliar: number;
+}
+
+/**
+ * Envoltura de la respuesta de datos.
+ * Mapeo exacto de `ReporteAsientosInventarioDatosResponse` (backend).
+ */
+export interface ReporteAsientosInventarioDatosResponse {
+  items: ReporteAsientosInventarioItem[];
+}
+
+/**
+ * Fila con columnas calculadas (derivadas en frontend con un reduce puro).
+ * - balance = debitos - creditos
+ * - diferencia = (debitos - creditos) - montoAuxiliar
+ * No hay saldo acumulado ni saldo corriente: todo es reduce puro, sin estado entre filas.
+ */
+export interface ReporteAsientosInventarioItemCalculado extends ReporteAsientosInventarioItem {
+  balance: number;
+  diferencia: number;
+}
+
+/**
+ * Montos agregados (5 columnas). Se usa tanto para el subtotal por cuenta contable
+ * como para los totales generales, que tienen la misma forma.
+ * - balance = debitos - creditos
+ * - diferencia = (debitos - creditos) - montoAuxiliar
+ */
+export interface ReporteAsientosInventarioTotales {
+  debitos: number;
+  creditos: number;
+  montoAuxiliar: number;
+  balance: number;
+  diferencia: number;
 }

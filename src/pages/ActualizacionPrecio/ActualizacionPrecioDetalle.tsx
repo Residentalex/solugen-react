@@ -14,6 +14,7 @@ import { actualizacionPrecioApi } from '../../api/actualizacionPrecioApi';
 import PermissionGate from '../../components/PermissionGate';
 import TotalesCard from '../../components/TotalesCard';
 import { formatDate, formatNumber, toTitleCase, extraerMensajeError } from '../../utils/formats';
+import { getMonedaSucursalActiva } from '../../utils/moneda';
 import type { ActualizacionPrecioDetalleDTO, ActualizacionPrecioLineaDTO } from '../../types/actualizacionPrecio';
 
 const { Text } = Typography;
@@ -39,6 +40,9 @@ const ActualizacionPrecioDetalle: React.FC = () => {
   const [loadingError, setLoadingError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [detalleSearch, setDetalleSearch] = useState('');
+
+  // Este modulo no maneja documento con moneda: los precios son de la moneda de la empresa.
+  const monedaDefault = getMonedaSucursalActiva();
 
   const screens = Grid.useBreakpoint();
 
@@ -413,8 +417,8 @@ const ActualizacionPrecioDetalle: React.FC = () => {
               impuestos={0}
               total={totalPrecioSug}
               nota={`Aumento total: ${formatNumber(totalAumento)}`}
-              monedaSimbolo="RD$"
-              monedaNombre="Peso Dominicano"
+              monedaSimbolo={monedaDefault.simbolo}
+              monedaNombre={monedaDefault.nombre}
               tasa={1}
             />
           </Col>
@@ -430,8 +434,8 @@ const ActualizacionPrecioDetalle: React.FC = () => {
               total={totalPrecioSug}
               alignRight
               nota={`Aumento total: ${formatNumber(totalAumento)}`}
-              monedaSimbolo="RD$"
-              monedaNombre="Peso Dominicano"
+              monedaSimbolo={monedaDefault.simbolo}
+              monedaNombre={monedaDefault.nombre}
               tasa={1}
             />
           </div>

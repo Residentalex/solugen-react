@@ -4,14 +4,14 @@ import {
   Card, Table, Tabs, Tag, Spin, Button, Space, Row, Col, Grid, Typography, Descriptions, Alert, message, Modal, Input, Divider, Tooltip,
 } from 'antd';
 import {
-  ArrowLeftOutlined, EditOutlined, CheckCircleOutlined, CheckCircleFilled, CloseCircleOutlined, CloseCircleFilled, SearchOutlined, PrinterOutlined, DownloadOutlined, FileExcelOutlined,
+  ArrowLeftOutlined, EditOutlined, CheckCircleOutlined, CheckCircleFilled, CloseCircleOutlined, CloseCircleFilled, SearchOutlined, PrinterOutlined, DownloadOutlined, FileExcelOutlined, DeleteOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { apiClient } from '../../api/client';
 import { conciliacionBancariaApi } from '../../api/conciliacionBancariaApi';
 import PermissionGate from '../../components/PermissionGate';
-import { formatCurrency, formatNumber, formatDate, extraerMensajeError, toTitleCase } from '../../utils/formats';
+import { formatMoneda, formatNumber, formatDate, extraerMensajeError, toTitleCase } from '../../utils/formats';
 import dayjs from 'dayjs';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
 import type { ConciliacionBancariaDTO, MovimientoBancarioDTO, TransaccionConciliadaDTO, ResumenTipoDocumentoDTO, ResumenGeneralConciliacionDTO } from '../../types/conciliacionBancaria';
@@ -236,6 +236,31 @@ const ConciliacionBancariaDetalle: React.FC = () => {
           if (transaccionesCargadas) cargarTransaccionesDetalle();
         } catch (err: any) {
           const msg = extraerMensajeError(err, 'Error al desaplicar');
+          message.error(msg);
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
+  };
+
+  const handleEliminar = () => {
+    if (!data) return;
+
+    Modal.confirm({
+      title: 'Eliminar conciliación',
+      content: `¿Está seguro de eliminar la conciliación N° ${data.concilID}? Se eliminarán sus movimientos y ajustes asociados. Esta acción no se puede deshacer.`,
+      okText: 'Sí, eliminar',
+      cancelText: 'Cancelar',
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setSaving(true);
+        try {
+          await conciliacionBancariaApi.eliminar(sucursalActiva, data.concilID);
+          message.success('Conciliación eliminada exitosamente');
+          navigate('/FConcil');
+        } catch (err: any) {
+          const msg = extraerMensajeError(err, 'Error al eliminar la conciliación');
           message.error(msg);
         } finally {
           setSaving(false);
@@ -513,6 +538,9 @@ const ConciliacionBancariaDetalle: React.FC = () => {
   const isLarge = screens.xxl === true;
   const diferencia = data.diferencia ?? (data.balBancos - data.balLibros);
 
+  // Los montos de la conciliacion estan en la moneda de la cuenta bancaria (CTASBANC.CODMON)
+  const fmtMonto = (v: number) => formatMoneda(v, data.monedaSimbolo, data.monedaCodigo);
+
   // ===== Columnas de movimientos bancarios =====
   const movimientoColumns = [
     {
@@ -699,6 +727,18 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               </Button>
             </PermissionGate>
           )}
+          {!data.aplicada && (
+            <PermissionGate accion="ANULAR">
+              <Button
+                icon={<DeleteOutlined />}
+                onClick={handleEliminar}
+                loading={saving}
+                danger
+              >
+                Eliminar
+              </Button>
+            </PermissionGate>
+          )}
         </Space>
       </div>
 
@@ -723,13 +763,16 @@ const ConciliacionBancariaDetalle: React.FC = () => {
               <Descriptions bordered size="small" column={3} styles={{ content: { background: 'transparent' } }}>
                 <Descriptions.Item label="N° Conciliación">{data.concilID}</Descriptions.Item>
                 <Descriptions.Item label="Cuenta Bancaria">{data.numeroCta || '-'}</Descriptions.Item>
+                <Descriptions.Item label="Moneda">
+                  {data.monedaNombre ? `${toTitleCase(data.monedaNombre)} (${data.monedaSimbolo || data.monedaCodigo})` : '-'}
+                </Descriptions.Item>
                 <Descriptions.Item label="Fecha">{formatDate(data.fecha)}</Descriptions.Item>
                 <Descriptions.Item label="Fecha Período Anterior">{data.fechaAnt ? formatDate(data.fechaAnt) : '-'}</Descriptions.Item>
-                <Descriptions.Item label="Balance Bancos">{formatCurrency(data.balBancos)}</Descriptions.Item>
-                <Descriptions.Item label="Balance Libros">{formatCurrency(data.balLibros)}</Descriptions.Item>
+                <Descriptions.Item label="Balance Bancos">{fmtMonto(data.balBancos)}</Descriptions.Item>
+                <Descriptions.Item label="Balance Libros">{fmtMonto(data.balLibros)}</Descriptions.Item>
                 <Descriptions.Item label="Diferencia">
                   <Text strong className={diferencia !== 0 ? 'paces-text-error' : ''}>
-                    {formatCurrency(diferencia)}
+                    {fmtMonto(diferencia)}
                   </Text>
                 </Descriptions.Item>
                 <Descriptions.Item label="Archivo">{data.archivo || '-'}</Descriptions.Item>
@@ -739,7 +782,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                   </Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label="Notas" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.notas || '-'}</span>
+                  <span className="paces-nota-memo">{data.notas || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -781,7 +824,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                     }>
                       <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
                         <Descriptions.Item label="Balance inicial en libros">
-                          <Text strong>{formatCurrency(resumenGeneralEnVivo!.balanceInicialLibros)}</Text>
+                          <Text strong>{fmtMonto(resumenGeneralEnVivo!.balanceInicialLibros)}</Text>
                         </Descriptions.Item>
                         <Descriptions.Item label="Período">
                           {data.fechaAnt ? `${formatDate(data.fechaAnt)} → ${formatDate(data.fecha)}` : '-'}
@@ -803,7 +846,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                             render: (v: number) => formatNumber(v) },
                           { title: 'Monto', dataIndex: 'montoTotal', align: 'right' as const, width: 160,
                             sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.montoTotal || 0) - Number(b.montoTotal || 0),
-                            render: (v: number) => <Text strong>{formatCurrency(v)}</Text> },
+                            render: (v: number) => <Text strong>{fmtMonto(v)}</Text> },
                         ]}
                         rowKey="tipoDoc"
                         size="small"
@@ -815,7 +858,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                       <Divider style={{ margin: '12px 0' }} />
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 16, fontWeight: 700 }}>
                         <span>Balance conciliado en libros:</span>
-                        <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneralEnVivo!.balanceConciliadoLibros)}</span>
+                        <span style={{ color: 'var(--paces-primary)' }}>{fmtMonto(resumenGeneralEnVivo!.balanceConciliadoLibros)}</span>
                       </div>
                     </Card>
 
@@ -835,7 +878,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                     }>
                       <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
                         <Descriptions.Item label="Balance según estado bancario">
-                          <Text strong>{formatCurrency(resumenGeneralEnVivo!.balanceBancos)}</Text>
+                          <Text strong>{fmtMonto(resumenGeneralEnVivo!.balanceBancos)}</Text>
                         </Descriptions.Item>
                       </Descriptions>
 
@@ -854,7 +897,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                             render: (v: number) => formatNumber(v) },
                           { title: 'Monto', dataIndex: 'montoTotal', align: 'right' as const, width: 160,
                             sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.montoTotal || 0) - Number(b.montoTotal || 0),
-                            render: (v: number) => <Text strong>{formatCurrency(v)}</Text> },
+                            render: (v: number) => <Text strong>{fmtMonto(v)}</Text> },
                         ]}
                         rowKey="tipoDoc"
                         size="small"
@@ -866,7 +909,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                       <Divider style={{ margin: '12px 0' }} />
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 16, fontWeight: 700 }}>
                         <span>Balance conciliado banco + tránsito:</span>
-                        <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneralEnVivo!.balanceConciliadoBanco)}</span>
+                        <span style={{ color: 'var(--paces-primary)' }}>{fmtMonto(resumenGeneralEnVivo!.balanceConciliadoBanco)}</span>
                       </div>
                     </Card>
 
@@ -876,7 +919,7 @@ const ConciliacionBancariaDetalle: React.FC = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 18, fontWeight: 700 }}>
                         <span>Diferencia</span>
                         <span style={{ color: resumenGeneralEnVivo!.diferencia === 0 ? '#34c38f' : '#ff4d4f' }}>
-                          {formatCurrency(resumenGeneralEnVivo!.diferencia)}
+                          {fmtMonto(resumenGeneralEnVivo!.diferencia)}
                         </span>
                       </div>
                     </Card>
@@ -940,7 +983,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                                 <Text strong style={{ paddingLeft: 8 }}>Total</Text>
                               </Table.Summary.Cell>
                               <Table.Summary.Cell index={3} align="right">
-                                <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                                <Text strong style={{ color: 'var(--paces-primary)' }}>{fmtMonto(total)}</Text>
                               </Table.Summary.Cell>
                               <Table.Summary.Cell index={4} />
                               <Table.Summary.Cell index={5} />
@@ -998,7 +1041,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                               <Text strong style={{ paddingLeft: 8 }}>Total</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={3} align="right">
-                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{fmtMonto(total)}</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={4} />
                             <Table.Summary.Cell index={5} />
@@ -1062,7 +1105,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                               <Text strong style={{ paddingLeft: 8 }}>Total</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={3} align="right">
-                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{fmtMonto(total)}</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={4} />
                           </Table.Summary.Row>
@@ -1131,7 +1174,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                               <Text strong style={{ paddingLeft: 8 }}>Total</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={3} align="right">
-                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{fmtMonto(total)}</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={4} />
                           </Table.Summary.Row>
@@ -1150,17 +1193,21 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
             <Card className="paces-card" style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                  <span className="paces-text-secondary">Moneda</span>
+                  <span>{data.monedaSimbolo || data.monedaCodigo || '-'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
                   <span className="paces-text-secondary">Balance Bancos</span>
-                  <span>{formatCurrency(data.balBancos)}</span>
+                  <span>{fmtMonto(data.balBancos)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
                   <span className="paces-text-secondary">Balance Libros</span>
-                  <span>{formatCurrency(data.balLibros)}</span>
+                  <span>{fmtMonto(data.balLibros)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
                   <span>Diferencia</span>
                   <span style={{ color: diferencia !== 0 ? '#ff4d4f' : 'var(--paces-primary)' }}>
-                    {formatCurrency(diferencia)}
+                    {fmtMonto(diferencia)}
                   </span>
                 </div>
               </div>
@@ -1211,18 +1258,21 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
             <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
               <Descriptions.Item label="N° Conciliación">{data.concilID}</Descriptions.Item>
               <Descriptions.Item label="Cuenta Bancaria">{data.numeroCta || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Moneda">
+                {data.monedaNombre ? `${toTitleCase(data.monedaNombre)} (${data.monedaSimbolo || data.monedaCodigo})` : '-'}
+              </Descriptions.Item>
               <Descriptions.Item label="Fecha">{formatDate(data.fecha)}</Descriptions.Item>
               <Descriptions.Item label="Fecha Período Anterior">{data.fechaAnt ? formatDate(data.fechaAnt) : '-'}</Descriptions.Item>
-              <Descriptions.Item label="Balance Bancos">{formatCurrency(data.balBancos)}</Descriptions.Item>
-              <Descriptions.Item label="Balance Libros">{formatCurrency(data.balLibros)}</Descriptions.Item>
+              <Descriptions.Item label="Balance Bancos">{fmtMonto(data.balBancos)}</Descriptions.Item>
+              <Descriptions.Item label="Balance Libros">{fmtMonto(data.balLibros)}</Descriptions.Item>
               <Descriptions.Item label="Diferencia">
                 <Text strong className={diferencia !== 0 ? 'paces-text-error' : ''}>
-                  {formatCurrency(diferencia)}
+                  {fmtMonto(diferencia)}
                 </Text>
               </Descriptions.Item>
               <Descriptions.Item label="Archivo">{data.archivo || '-'}</Descriptions.Item>
               <Descriptions.Item label="Notas" span={1}>
-                <span style={{ whiteSpace: 'pre-wrap' }}>{data.notas || '-'}</span>
+                <span className="paces-nota-memo">{data.notas || '-'}</span>
               </Descriptions.Item>
             </Descriptions>
           </Card>
@@ -1263,7 +1313,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                    }>
                      <Descriptions bordered size="small" column={2} styles={{ content: { background: 'transparent' } }}>
                        <Descriptions.Item label="Balance inicial en libros">
-                         <Text strong>{formatCurrency(resumenGeneralEnVivo!.balanceInicialLibros)}</Text>
+                         <Text strong>{fmtMonto(resumenGeneralEnVivo!.balanceInicialLibros)}</Text>
                        </Descriptions.Item>
                        <Descriptions.Item label="Período">
                          {data.fechaAnt ? `${formatDate(data.fechaAnt)} → ${formatDate(data.fecha)}` : '-'}
@@ -1285,7 +1335,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                            render: (v: number) => formatNumber(v) },
                          { title: 'Monto', dataIndex: 'montoTotal', align: 'right' as const, width: 160,
                            sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.montoTotal || 0) - Number(b.montoTotal || 0),
-                           render: (v: number) => <Text strong>{formatCurrency(v)}</Text> },
+                           render: (v: number) => <Text strong>{fmtMonto(v)}</Text> },
                        ]}
                        rowKey="tipoDoc"
                        size="small"
@@ -1297,7 +1347,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                      <Divider style={{ margin: '12px 0' }} />
                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 16, fontWeight: 700 }}>
                        <span>Balance conciliado en libros:</span>
-                       <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneralEnVivo!.balanceConciliadoLibros)}</span>
+                       <span style={{ color: 'var(--paces-primary)' }}>{fmtMonto(resumenGeneralEnVivo!.balanceConciliadoLibros)}</span>
                      </div>
                    </Card>
 
@@ -1317,7 +1367,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                    }>
                      <Descriptions bordered size="small" column={1} styles={{ content: { background: 'transparent' } }}>
                        <Descriptions.Item label="Balance según estado bancario">
-                         <Text strong>{formatCurrency(resumenGeneralEnVivo!.balanceBancos)}</Text>
+                         <Text strong>{fmtMonto(resumenGeneralEnVivo!.balanceBancos)}</Text>
                        </Descriptions.Item>
                      </Descriptions>
 
@@ -1336,7 +1386,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                            render: (v: number) => formatNumber(v) },
                          { title: 'Monto', dataIndex: 'montoTotal', align: 'right' as const, width: 160,
                            sorter: (a: ResumenTipoDocumentoDTO, b: ResumenTipoDocumentoDTO) => Number(a.montoTotal || 0) - Number(b.montoTotal || 0),
-                           render: (v: number) => <Text strong>{formatCurrency(v)}</Text> },
+                           render: (v: number) => <Text strong>{fmtMonto(v)}</Text> },
                        ]}
                        rowKey="tipoDoc"
                        size="small"
@@ -1348,7 +1398,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                      <Divider style={{ margin: '12px 0' }} />
                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 16, fontSize: 16, fontWeight: 700 }}>
                        <span>Balance conciliado banco + tránsito:</span>
-                       <span style={{ color: 'var(--paces-primary)' }}>{formatCurrency(resumenGeneralEnVivo!.balanceConciliadoBanco)}</span>
+                       <span style={{ color: 'var(--paces-primary)' }}>{fmtMonto(resumenGeneralEnVivo!.balanceConciliadoBanco)}</span>
                      </div>
                    </Card>
 
@@ -1358,7 +1408,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 18, fontWeight: 700 }}>
                       <span>Diferencia</span>
                       <span style={{ color: resumenGeneralEnVivo!.diferencia === 0 ? '#34c38f' : '#ff4d4f' }}>
-                        {formatCurrency(resumenGeneralEnVivo!.diferencia)}
+                        {fmtMonto(resumenGeneralEnVivo!.diferencia)}
                       </span>
                     </div>
                   </Card>
@@ -1422,7 +1472,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                               <Text strong style={{ paddingLeft: 8 }}>Total</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={3} align="right">
-                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{fmtMonto(total)}</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={4} />
                             <Table.Summary.Cell index={5} />
@@ -1480,7 +1530,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                               <Text strong style={{ paddingLeft: 8 }}>Total</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={3} align="right">
-                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{fmtMonto(total)}</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={4} />
                             <Table.Summary.Cell index={5} />
@@ -1544,7 +1594,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                               <Text strong style={{ paddingLeft: 8 }}>Total</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={3} align="right">
-                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{fmtMonto(total)}</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={4} />
                           </Table.Summary.Row>
@@ -1613,7 +1663,7 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
                               <Text strong style={{ paddingLeft: 8 }}>Total</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={3} align="right">
-                              <Text strong style={{ color: 'var(--paces-primary)' }}>{formatNumber(total)}</Text>
+                              <Text strong style={{ color: 'var(--paces-primary)' }}>{fmtMonto(total)}</Text>
                             </Table.Summary.Cell>
                             <Table.Summary.Cell index={4} />
                           </Table.Summary.Row>
@@ -1632,17 +1682,21 @@ const total = items.reduce((sum, m) => sum + (m.debCred === 'C' ? m.monto : -m.m
             <Card className="paces-card">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
+                  <span className="paces-text-secondary">Moneda</span>
+                  <span>{data.monedaSimbolo || data.monedaCodigo || '-'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
                   <span className="paces-text-secondary">Balance Bancos</span>
-                  <span>{formatCurrency(data.balBancos)}</span>
+                  <span>{fmtMonto(data.balBancos)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
                   <span className="paces-text-secondary">Balance Libros</span>
-                  <span>{formatCurrency(data.balLibros)}</span>
+                  <span>{fmtMonto(data.balLibros)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 16, fontWeight: 700 }}>
                   <span>Diferencia</span>
                   <span style={{ color: diferencia !== 0 ? '#ff4d4f' : 'var(--paces-primary)' }}>
-                    {formatCurrency(diferencia)}
+                    {fmtMonto(diferencia)}
                   </span>
                 </div>
               </div>

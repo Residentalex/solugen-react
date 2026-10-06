@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Table, DatePicker, message, Typography, Button, Alert, Space, Tag } from 'antd';
+import { Card, Table, DatePicker, message, Button, Alert, Space, Tag } from 'antd';
 import { FileExcelOutlined, ReloadOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { cierreMesApi } from '../../api/cierreMesApi';
@@ -8,8 +8,6 @@ import type { Dayjs } from 'dayjs';
 import { useAuthStore } from '../../stores/authStore';
 import PermissionGate from '../../components/PermissionGate';
 import { exportToExcel, getCompanyName } from '../../utils/exportToExcel';
-
-const { Title, Text } = Typography;
 
 const CierreMes: React.FC = () => {
   const [datos, setDatos] = useState<CierreMesDTO[]>([]);
@@ -168,12 +166,6 @@ const CierreMes: React.FC = () => {
           gap: 8,
         }}
       >
-        <div>
-          <Title level={4} style={{ margin: 0 }}>Cierre de Mes</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            Gestión de fechas de cierre por sucursal
-          </Text>
-        </div>
         <div style={{ flex: 1 }} />
         <PermissionGate accion="EXPORTAR">
           <Button icon={<FileExcelOutlined />} onClick={handleExportarExcel} />

@@ -651,7 +651,7 @@ const OrdenCompraDetalle: React.FC = () => {
                 </Descriptions.Item>
                 {data.nota && (
                   <Descriptions.Item label="Nota" span={3}>
-                    <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota}</span>
+                    <span className="paces-nota-memo">{data.nota}</span>
                   </Descriptions.Item>
                 )}
               </Descriptions>
@@ -748,7 +748,7 @@ const OrdenCompraDetalle: React.FC = () => {
               </Descriptions.Item>
               {data.nota && (
                 <Descriptions.Item label="Nota" span={1}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{data.nota}</span>
+                  <span className="paces-nota-memo">{data.nota}</span>
                 </Descriptions.Item>
               )}
             </Descriptions>

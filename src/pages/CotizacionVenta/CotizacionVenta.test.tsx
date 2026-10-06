@@ -137,7 +137,7 @@ describe('CotizacionVenta', () => {
       render(<MemoryRouter><CotizacionVenta /></MemoryRouter>);
       await waitFor(() => expect(screen.getByText('COT001')).toBeInTheDocument());
       const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
-      expect(headers).toEqual(expect.arrayContaining(['Documento', 'Cliente', 'Concepto', 'NCF', 'Total', 'Estado']));
+      expect(headers).toEqual(expect.arrayContaining(['Documento', 'Cliente', 'Concepto', 'Total', 'Estado']));
     });
   });
 });

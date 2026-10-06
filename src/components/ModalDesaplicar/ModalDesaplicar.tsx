@@ -1,5 +1,6 @@
-﻿import React, { useState, useEffect } from 'react';
-import { Modal, Select, Typography, Divider, Input, Button, Space } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Modal,  Typography, Divider, Input, Button, Space } from 'antd';
+import { Select } from '../../components/Select';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;

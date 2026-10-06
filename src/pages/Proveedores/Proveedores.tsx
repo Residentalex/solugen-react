@@ -89,7 +89,6 @@ const Proveedores: React.FC = () => {
       key: 'codigo',
       width: 120,
       fixed: 'left',
-      responsive: ['xs'],
       render: (val: string, record: SuplidorDTO) => (
         <Link to={`/MSUP/${record.codigo}`} className="paces-doc-link">
           <Text strong>{val}</Text>
@@ -101,7 +100,6 @@ const Proveedores: React.FC = () => {
       dataIndex: 'nombre',
       key: 'nombre',
       width: 300,
-      responsive: ['xs'],
       render: (name: string) => (
         <Space>
           <div className="paces-avatar-initials">{(name || '?').charAt(0).toUpperCase()}</div>
@@ -148,7 +146,6 @@ const Proveedores: React.FC = () => {
       dataIndex: 'activo',
       key: 'activo',
       width: 90,
-      responsive: ['xs'],
       align: 'center',
       render: (val: boolean | undefined) => (
         <Tag color={val ? 'green' : 'default'}>{val ? 'Activo' : 'Inactivo'}</Tag>
@@ -180,7 +177,7 @@ const Proveedores: React.FC = () => {
           onSearch={handleSearch}
           pageSize={pageSize}
           onPageSizeChange={(v) => { setPageSize(v); setPage(1); }}
-          onNuevo={() => navigate('/MProveedor/nuevo')}
+          onNuevo={() => navigate('/MSUP/nuevo')}
           onReload={() => refetch()}
           onExportarExcel={handleExportarExcel}
         />
@@ -191,7 +188,8 @@ const Proveedores: React.FC = () => {
           loading={isLoading}
           scroll={{ x: 800 }}
           size="middle"
-          rowClassName={(record) => record.activo ? 'paces-row-active' : 'paces-row-inactive'}
+          className="paces-border-top paces-list-table"
+          rowClassName="paces-row-hover"
           onChange={handleTableChange}
           pagination={{
             current: page,

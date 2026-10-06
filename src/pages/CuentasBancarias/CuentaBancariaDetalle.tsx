@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Card, Table, Button, Spin, Alert, Empty, Typography, Tag, Row, Col, Grid, message, Select
-} from 'antd';
+  Card, Table, Button, Spin, Alert, Empty, Typography, Tag, Row, Col, Grid, message} from 'antd';
+import { Select } from '../../components/Select';
 import {
   BankOutlined, LeftOutlined, RightOutlined
 } from '@ant-design/icons';
@@ -13,8 +13,8 @@ import { cuentaBancariaApi } from '../../api/cuentaBancariaApi';
 import type { CuentaBancariaDTO } from '../../api/cuentaBancariaApi';
 import DocumentListadoToolbar from '../../components/DocumentListadoToolbar';
 import EstadoColumnCell from '../../components/EstadoColumnCell';
-import { formatDateRaw } from '../../utils/formats';
-import { getMonedaSucursalActiva } from '../../utils/moneda';
+import { formatDateRaw, formatMoneda } from '../../utils/formats';
+import { esMonedaDolar, etiquetaMoneda, simboloMoneda } from '../../utils/moneda';
 import { ESTADO_OPCIONES_BORRADOR_APLICADO_ANULADO } from '../../utils/estadoDocumento';
 import type { TransaccionVistaDTO } from '../../types/transaccion';
 import './CuentaBancariaDetalle.css';
@@ -25,9 +25,7 @@ const { Text } = Typography;
 
 function formatCurrency(value: number | null | undefined, moneda?: string): string {
   if (value === null || value === undefined) return '-';
-  const monedaDefault = getMonedaSucursalActiva();
-  const symbol = moneda?.toUpperCase() === 'DOLAR' || moneda?.toUpperCase() === 'USD' ? 'US$' : (monedaDefault.simbolo || 'RD$');
-  return `${symbol} ${value.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return formatMoneda(value, simboloMoneda(moneda));
 }
 
 function toTitleCase(str: string): string {
@@ -44,8 +42,9 @@ function maskAccountNumber(noCuenta: string): string {
 }
 
 function getMonedaInfo(moneda: string | undefined): { label: string; color: string } {
-  if (moneda?.toUpperCase() === 'DOLAR') return { label: 'USD', color: '#10b981' };
-  return { label: 'DOP', color: '#556ee6' };
+  const codigo = etiquetaMoneda(moneda);
+  if (esMonedaDolar(codigo)) return { label: codigo, color: '#10b981' };
+  return { label: codigo, color: '#556ee6' };
 }
 
 function hashCode(str: string): number {
@@ -80,7 +79,7 @@ interface ActiveCardProps {
 }
 
 const ActiveCard: React.FC<ActiveCardProps> = ({ cuenta }) => {
-  const esUSD = cuenta.moneda?.toUpperCase() === 'DOLAR' || cuenta.moneda?.toUpperCase() === 'USD';
+  const esUSD = esMonedaDolar(cuenta.moneda);
   const monedaInfo = getMonedaInfo(cuenta.moneda);
   const balanceDisplay = formatCurrency(cuenta.balance, cuenta.moneda);
   const hasBalance = cuenta.balance !== undefined && cuenta.balance !== null;

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Card, Descriptions, Tag, Button, Space, message, Alert, Tabs, Table, Typography, Grid, Row, Col } from 'antd';
+import { Card, Descriptions, Tag, Button, Space, message, Alert, Table, Typography, Grid, Row, Col } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useUIStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -154,7 +154,7 @@ const PantallaDetalle: React.FC = () => {
               <Descriptions.Item label="Código">
                 <Text code>{data.codigo}</Text>
               </Descriptions.Item>
-              <Descriptions.Item label="Nombre">{data.nombre}</Descriptions.Item>
+              <Descriptions.Item label="Nombre" span={2}>{data.nombre}</Descriptions.Item>
               <Descriptions.Item label="Ruta">{data.ruta || '-'}</Descriptions.Item>
               <Descriptions.Item label="Grupo">{data.grupo || '-'}</Descriptions.Item>
               <Descriptions.Item label="Tipo">{data.tipo || '-'}</Descriptions.Item>
@@ -163,89 +163,68 @@ const PantallaDetalle: React.FC = () => {
               <Descriptions.Item label="Activo">
                 <Tag color={data.activo ? 'green' : 'red'}>{data.activo ? 'Activo' : 'Inactivo'}</Tag>
               </Descriptions.Item>
+              <Descriptions.Item label="Descripción" span={3}>
+                {data.descripcion || '-'}
+              </Descriptions.Item>
             </Descriptions>
           </Card>
 
-          {/* Tabs */}
-          <Tabs
-            type="card"
-            defaultActiveKey="acciones"
-            items={[
-              {
-                key: 'acciones',
-                label: 'Acciones',
-                children: (
-                  <div style={{ padding: '16px 0' }}>
-                    {data.acciones && data.acciones.length > 0 ? (
-                      <Space wrap size={4}>
-                        {data.acciones.map((a) => (
-                          <Tag key={a} color="processing">{a}</Tag>
-                        ))}
-                      </Space>
-                    ) : (
-                      <Text type="secondary">Sin acciones asignadas</Text>
-                    )}
-                  </div>
-                ),
-              },
-              {
-                key: 'modulos',
-                label: 'Módulos',
-                children: (
-                  <div style={{ padding: '16px 0' }}>
-                    {modulosItems}
-                  </div>
-                ),
-              },
-              {
-                key: 'permisos',
-                label: 'Permisos Especiales',
-                children: (
-                  <div style={{ padding: '16px 0' }}>
-                    {permisosLoading ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Text type="secondary">Cargando permisos...</Text>
-                        <LoadingSpinner mensaje="" />
-                      </div>
-                    ) : permisosError ? (
-                      <>
-                        <Text type="secondary">No fue posible cargar los permisos</Text>
-                        <Button size="small" type="link" onClick={cargarPermisos}>
-                          Reintentar
-                        </Button>
-                      </>
-                    ) : (
-                      <div>
-                        {(() => {
-                          const asignados = permisosEspeciales.filter((p) => p.asignado);
-                          return asignados.length > 0 ? (
-                            <Space wrap size={4}>
-                              {asignados.map((p) => (
-                                <Tag key={p.id} color="green">
-                                  {p.nombre || p.codigo}
-                                </Tag>
-                              ))}
-                            </Space>
-                          ) : (
-                            <Text type="secondary">No hay permisos especiales asignados</Text>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                ),
-              },
-              {
-                key: 'entidades',
-                label: 'Entidades',
-                children: (
-                  <div style={{ padding: '16px 0' }}>
-                    {entidadesItems}
-                  </div>
-                ),
-              },
-            ]}
-          />
+          {/* Acciones */}
+          <Card title="Acciones" className="paces-card" style={{ marginBottom: 8 }}>
+            {data.acciones && data.acciones.length > 0 ? (
+              <Space wrap size={4}>
+                {data.acciones.map((a) => (
+                  <Tag key={a} color="processing">{a}</Tag>
+                ))}
+              </Space>
+            ) : (
+              <Text type="secondary">Sin acciones asignadas</Text>
+            )}
+          </Card>
+
+          {/* Módulos */}
+          <Card title="Módulos" className="paces-card" style={{ marginBottom: 8 }}>
+            {modulosItems}
+          </Card>
+
+          {/* Permisos Especiales */}
+          <Card title="Permisos Especiales" className="paces-card" style={{ marginBottom: 8 }}>
+            {permisosLoading ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Text type="secondary">Cargando permisos...</Text>
+                <LoadingSpinner mensaje="" />
+              </div>
+            ) : permisosError ? (
+              <>
+                <Text type="secondary">No fue posible cargar los permisos</Text>
+                <Button size="small" type="link" onClick={cargarPermisos}>
+                  Reintentar
+                </Button>
+              </>
+            ) : (
+              <div>
+                {(() => {
+                  const asignados = permisosEspeciales.filter((p) => p.asignado);
+                  return asignados.length > 0 ? (
+                    <Space wrap size={4}>
+                      {asignados.map((p) => (
+                        <Tag key={p.id} color="green">
+                          {p.nombre || p.codigo}
+                        </Tag>
+                      ))}
+                    </Space>
+                  ) : (
+                    <Text type="secondary">No hay permisos especiales asignados</Text>
+                  );
+                })()}
+              </div>
+            )}
+          </Card>
+
+          {/* Entidades */}
+          <Card title="Entidades" className="paces-card" style={{ marginBottom: 8 }}>
+            {entidadesItems}
+          </Card>
         </Col>
         {isLarge && (
           <Col xxl={6}>

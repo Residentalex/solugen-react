@@ -18,16 +18,13 @@ import { CheckCircleOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { useCarritoStore } from '../../stores/useCarritoStore';
 import { ecommerceApi } from '../../api/ecommerceApi';
 import { useEcommerceAuthStore } from '../../stores/ecommerceAuthStore';
+import { formatMoneda } from '../../utils/formats';
 
 const { Text, Title } = Typography;
 const { TextArea } = Input;
 
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('es-DO', {
-    style: 'currency',
-    currency: 'DOP',
-    minimumFractionDigits: 2,
-  }).format(value);
+  return formatMoneda(value);
 }
 
 const CheckoutPage: React.FC = () => {
@@ -224,7 +221,7 @@ const CheckoutPage: React.FC = () => {
               </Form.Item>
 
               <Form.Item label="Notas adicionales" name="notas">
-                <TextArea rows={2} placeholder="Instrucciones especiales, referencias, etc. (opcional)" />
+                <TextArea rows={3} autoSize={{ minRows: 3, maxRows: 8 }} maxLength={500} showCount placeholder="Instrucciones especiales, referencias, etc. (opcional)" />
               </Form.Item>
 
               <Form.Item style={{ marginBottom: 0, marginTop: 8 }}>

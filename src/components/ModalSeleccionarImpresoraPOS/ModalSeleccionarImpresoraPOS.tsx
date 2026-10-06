@@ -1,5 +1,6 @@
 import React from 'react';
-import { Modal, Radio, Select, Space } from 'antd';
+import { Modal, Radio,  Space } from 'antd';
+import { Select } from '../../components/Select';
 
 // ===== Tipos =====
 export interface ModalSeleccionarImpresoraPOSProps {

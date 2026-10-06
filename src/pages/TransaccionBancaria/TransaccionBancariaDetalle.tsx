@@ -23,7 +23,7 @@ import EntidadCard from '../../components/EntidadCard';
 import TotalesCard from '../../components/TotalesCard';
 import ConceptoInfoLabel from '../../components/ConceptoInfoLabel/ConceptoInfoLabel';
 import { formatNumber, toTitleCase, formatDate } from '../../utils/formats';
-import { getMonedaSucursalActiva } from '../../utils/moneda';
+import { getMonedaPorCodigo, getMonedaSucursalActiva } from '../../utils/moneda';
 import { ESTADO_DOCUMENTO_MAP, toEstadoNum, toPeriodoNum } from '../../utils/estadoDocumento';
 import ErrorDetalle from '../../components/ErrorDetalle';
 import type { TransaccionDTO } from '../../types/transaccion';
@@ -56,8 +56,13 @@ function strVal(val: any, fallback = '-'): string {
 
 // Normaliza TransaccionDTO a un objeto compatible con el template existente
 function normalizarTransaccion(t: TransaccionDTO): any {
-  const monedaSimbolo = t.codigoMoneda === 'DOP' ? 'RD$' : t.codigoMoneda === 'USD' ? 'US$' : '$';
-  const monedaNombre = t.codigoMoneda || '';
+  // El simbolo y el nombre salen del catalogo MONEDAS. Antes se deducia con un ternario
+  // binario (`'DOP' ? 'RD$' : 'USD' ? 'US$' : '$'`), que etiquetaba cualquier otra moneda
+  // como '$'. Si el catalogo aun no esta cargado se cae a la moneda de la sucursal activa.
+  const monedaCatalogo = getMonedaPorCodigo(t.codigoMoneda);
+  const monedaSucursal = getMonedaSucursalActiva();
+  const monedaSimbolo = monedaCatalogo?.simbolo?.trim() || monedaSucursal.simbolo;
+  const monedaNombre = monedaCatalogo?.nombre?.trim() || t.codigoMoneda || monedaSucursal.nombre;
   return {
     ...t,
     // Alias para compatibilidad con el template
@@ -412,7 +417,7 @@ const TransaccionBancariaDetalle: React.FC = () => {
 
                 {/* Fila 4: Nota (span 3) */}
                 <Descriptions.Item label="Nota" span={3}>
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                  <span className="paces-nota-memo">{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -502,7 +507,7 @@ const TransaccionBancariaDetalle: React.FC = () => {
                 </Descriptions.Item>
                 <Descriptions.Item label="Beneficiario">{(documentoActivo as any)?.nombreBeneficiario || '-'}</Descriptions.Item>
                 <Descriptions.Item label="Nota">
-                  <span style={{ whiteSpace: 'pre-wrap' }}>{documentoActivo.nota || '-'}</span>
+                  <span className="paces-nota-memo">{documentoActivo.nota || '-'}</span>
                 </Descriptions.Item>
               </Descriptions>
           </Card>

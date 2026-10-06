@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Typography, message, Select, DatePicker } from 'antd';
+import { Typography, message,  DatePicker } from 'antd';
+import { Select } from '../../components/Select';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuthStore } from '../../stores/authStore';

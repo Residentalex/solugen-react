@@ -4,6 +4,7 @@ export interface MovimientoDTO {
   documento: string;
   codigo: string;
   articulo: string;
+  familia?: string;
   cantidad: number;
   costo: number;
   almacen: string;
